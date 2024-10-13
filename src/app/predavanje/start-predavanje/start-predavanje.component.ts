@@ -56,7 +56,9 @@ export class StartPredavanjeComponent implements OnInit {
       this.predavanjeService.startPredavanje(cmd).subscribe(
         (predavanje) => {
           console.log('Lecture started successfully:', predavanje);
-          // Redirect to live lecture screen with the lecture ID
+          
+          this.router.navigate(['/predavanje','live', predavanje.id])
+
         },
         (error) => {
           console.error('Error starting lecture', error);

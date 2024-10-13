@@ -5,7 +5,7 @@ import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-preda
 
 const routes: Routes = [
   {path:"predavanje/start", component: StartPredavanjeComponent},
-  {path:"predavanje/live", component: LivePredavanjeComponent}
+  {path:"predavanje/live/:id", component: LivePredavanjeComponent}
 ];
 
 @NgModule({
