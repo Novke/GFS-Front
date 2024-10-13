@@ -1,1 +1,35 @@
-<p>start-predavanje works!</p>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <h2 class="text-center mb-4">Započni predavanje</h2>
+        
+        <form (ngSubmit)="startLecture()">
+          <!-- Group Selection -->
+          <div class="form-group mb-3">
+            <label for="group" class="form-label">Izaberi grupu:</label>
+            <select [(ngModel)]="izabranaGrupa" id="group" name="group" class="form-select" required>
+              <option value="" disabled>Select a group</option>
+              <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
+            </select>
+          </div>
+  
+          <!-- Subject Selection -->
+          <div class="form-group mb-3">
+            <label for="subject" class="form-label">Izaberi predmet:</label>
+            <select [(ngModel)]="izabranPredmet" id="subject" name="subject" class="form-select" required>
+              <option value="" disabled>Select a subject</option>
+              <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
+            </select>
+          </div>
+  
+          <!-- Submit Button -->
+          <div class="text-center">
+            <button type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet">
+              Pokreni
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
