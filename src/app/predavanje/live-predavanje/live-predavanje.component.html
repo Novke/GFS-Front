@@ -1,1 +1,51 @@
-<p>live-predavanje works!</p>
+<div class="container mt-4">
+    <h2>Detalji Predavanja</h2>
+
+    <form *ngIf="livePredavanje" #predavanjeForm="ngForm">
+
+
+        <div class="row">
+            <div class="form-group col">
+                <label for="rb">Predavanje broj</label>
+                <input type="number" class="form-control" id="rb" [(ngModel)]="livePredavanje.rb" name="rb" required
+                    min="1" />
+            </div>
+
+            <div class="form-group col">
+                <label for="tema">Tema</label>
+                <input type="text" class="form-control" id="tema" [(ngModel)]="livePredavanje.tema" name="tema"
+                    required />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="posecenost">Posecenost (%)</label>
+            <input type="number" class="form-control" id="posecenost" [(ngModel)]="livePredavanje.posecenost"
+                name="posecenost" required min="0" max="100" />
+        </div>
+
+        <div class="form-group">
+            <label for="datum">Datum</label>
+            <input type="date" class="form-control" id="datum" [(ngModel)]="livePredavanje.datum" name="datum"
+                required />
+        </div>
+
+        <div class="form-group">
+            <label>Predmet</label>
+            <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
+        </div>
+
+        <div class="form-group">
+            <label>Grupa</label>
+            <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
+        </div>
+
+        <button type="submit" class="btn btn-primary" [disabled]="!predavanjeForm.form.valid">
+            Sačuvaj Promene
+        </button>
+    </form>
+
+    <div *ngIf="!livePredavanje" class="alert alert-warning mt-3">
+        Nema dostupnih podataka o predavanju.
+    </div>
+</div>

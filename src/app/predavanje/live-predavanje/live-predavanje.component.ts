@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { PredavanjeService } from '../predavanje.service';
+import { PredavanjeDetails } from '../models/predavanje.model';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -8,17 +10,43 @@ import { ActivatedRoute } from '@angular/router';
 })
 export class LivePredavanjeComponent implements OnInit {
 
-  lectureId: number | null = null;
+  id: number | null = null;
+  livePredavanje : PredavanjeDetails = {
+    id: 0,
+    rb: 0,
+    datum: new Date(),
+    tema: '',
+    posecenost: 0,
+    predmet: { id: 0, naziv: '' },
+    grupa: { id: 0, naziv: '', godinaUpisa: 0 },
+    aktivnosti: []
+  };
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(
+    private route: ActivatedRoute,
+    private predavanjeService: PredavanjeService) {}
 
   ngOnInit() {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id');
-      this.lectureId = id !== null ? Number(id) : null;
+      this.id = id !== null ? Number(id) : null;
 
-      if (!this.lectureId) console.log("NIJE BROJ!!!")
+      if (!this.id) {
+        console.log("NIJE BROJ!!!")
+      }
+        else {
+          this.ucitajPredavanje(Number(id));
+
+          console.log(this.livePredavanje)
+        }
     });
   }
 
+  ucitajPredavanje(id: number) {
+    this.predavanjeService.getPredavanjeDetails(id).subscribe(
+        result => this.livePredavanje = result
+    );
+  }
+
 }
+

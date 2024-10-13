@@ -9,7 +9,7 @@ import { FormsModule } from '@angular/forms';
 @NgModule({
   declarations: [
     // StartPredavanjeComponent, //prebaceno u AppModule nije radio StartPredavanje
-    LivePredavanjeComponent
+    // LivePredavanjeComponent
   ],
   imports: [
     CommonModule,
