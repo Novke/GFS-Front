@@ -98,9 +98,9 @@
                   <!-- Grouped action buttons -->
                   <td class="text-center">
                     <div class="btn-group" role="group">
-                      <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)">-</button>
-                      <button class="btn btn-sm btn-secondary mx-1" (click)="dodajZadatak(a.student.id)">1</button>
-                      <button class="btn btn-sm btn-secondary" (click)="dodajZadatakZvezdica(a.student.id)">*</button>
+                      <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)" [disabled]="tipEquals(a, 'PRISUSTVO')">-</button>
+                      <button class="btn btn-sm btn-secondary mx-1" (click)="dodajZadatak(a.student.id)" [disabled]="tipEquals(a, 'ZADATAK')">1</button>
+                      <button class="btn btn-sm btn-secondary" (click)="dodajZadatakZvezdica(a.student.id)" [disabled]="tipEquals(a, 'SA_ZVEZDICOM')">*</button>
                     </div>
                   </td>
 

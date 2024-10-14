@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
-import { GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
+import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -167,6 +167,10 @@ export class LivePredavanjeComponent implements OnInit {
         return num===0
       }
     )
+  }
+
+  tipEquals(a: AktivnostInfo, tip: string){
+    return a.tip === tip;
   }
 
 
