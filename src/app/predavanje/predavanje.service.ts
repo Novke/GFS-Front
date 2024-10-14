@@ -46,8 +46,18 @@ export class PredavanjeService {
     return this.http.delete<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/prisustvo/${studentId}`)
   }
 
-  // dodajAktivnost(predavanjeId: number, studentId: number, tip: string): Observable<PredavanjeDetails> {
-  //   const studentCmd: PredavanjeStudentId = { id: studentId };
-  //   return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/${tip}`, studentCmd);
-  // }
+  dodajZadatak(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
+    const cmd : PredavanjeStudentId = {id: studentId}
+    return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/zadatak`, cmd)
+  }
+  
+  skloniZadatak(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
+    return this.http.delete<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/zadatak/${studentId}`)
+  }
+
+  dodajZadatakZvezdica(studentId: number, predavanjeId: number): Observable<PredavanjeDetails>{
+    const cmd : PredavanjeStudentId = {id: studentId}
+    return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/zvezdica`, cmd)
+  }
+
 }

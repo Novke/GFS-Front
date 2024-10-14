@@ -123,6 +123,30 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
+  dodajZadatak(studentId: number){
+    this.predavanjeService.dodajZadatak(studentId, this.livePredavanje.id).subscribe(
+      result => {
+        this.osveziPredavanje(result)
+      }
+    )
+  }
+
+  skloniZadatak(studentId: number){
+    this.predavanjeService.skloniZadatak(studentId, this.livePredavanje.id).subscribe(
+      result => {
+        this.osveziPredavanje(result)
+      }
+    )
+  }
+
+  dodajZadatakZvezdica(studentId: number){
+    this.predavanjeService.dodajZadatakZvezdica(studentId, this.livePredavanje.id).subscribe(
+      result => {
+        this.osveziPredavanje(result)
+      }
+    )
+  }
+
   osveziPredavanje(result: PredavanjeDetails){
     this.livePredavanje = result
 

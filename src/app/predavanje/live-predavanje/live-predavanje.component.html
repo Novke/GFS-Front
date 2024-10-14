@@ -82,7 +82,10 @@
                 <strong>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</strong> - {{ a.tip }} <br>
                 <small>{{ a.napomene }}</small>
               </div>
-              <button class="btn btn-sm btn-danger ml-3" (click)="skloniPrisutnog(a.student.id)">-</button>
+              <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)">0</button>
+              <button class="btn btm-sm btn-secondary" (click)="dodajZadatak(a.student.id)">1</button>
+              <button class="btn btm-sm btn-secondary" (click)="dodajZadatakZvezdica(a.student.id)">*</button>
+              <button class="btn btn-sm btn-danger ml-3" (click)="skloniPrisutnog(a.student.id)">X</button>
             </li>
           </ul>
         </div>
