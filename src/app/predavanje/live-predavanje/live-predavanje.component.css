@@ -1,0 +1,12 @@
+table th, table td {
+    vertical-align: middle; 
+  }
+  
+  table th {
+    white-space: nowrap; 
+  }
+  
+  .table .text-center {
+    text-align: center;
+  }
+  

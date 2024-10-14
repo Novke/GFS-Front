@@ -47,52 +47,76 @@
     </div>
   
     <div class="row mt-5">
-      <div class="col-md-6">
-        <h3>Studenti u Grupi</h3>
-        <div class="table-responsive">
-          <table class="table table-striped table-bordered">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Student</th>
-                <th>Indeks</th>
-                <th>Dodaj</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let s of studentiZaDodavanje; let i = index">
-                <td>{{ i + 1 }}</td>
-                <td>{{ s.ime }} {{ s.prezime }}</td>
-                <td>{{ s.indeks }}</td>
-                <td>
-                  <button class="btn btn-sm btn-primary" (click)="dodajPrisutnog(s.id)"> + </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <div class="col-md-4">
+            <h3>Studenti u Grupi</h3>
+            <div class="table-responsive">
+              <table class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th style="width: 28px;">#</th>
+                    <th>Student</th>
+                    <th class="text-center" style="width: 120px;">Indeks</th>
+                    <th class="text-center" style="width: 50px;">Dodaj</th> 
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of studentiZaDodavanje; let i = index">
+                    <td>{{ i + 1 }}</td>
+                    <td>{{ s.ime }} {{ s.prezime }}</td>
+                    <td class="text-center text-nowrap">{{ s.indeks }}</td> <!-- No wrapping for Indeks -->
+                    <td class="text-center">
+                      <button class="btn btn-sm btn-primary" (click)="dodajPrisutnog(s.id)"> + </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
   
-      <div class="col-md-6">
+      <div class="col-md-8">
         <h3>Aktivnosti</h3>
         <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
-          <ul class="list-group">
-            <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let a of livePredavanje.aktivnosti">
-              <div>
-                <strong>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</strong> - {{ a.tip }} <br>
-                <small>{{ a.napomene }}</small>
-              </div>
-              <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)">0</button>
-              <button class="btn btm-sm btn-secondary" (click)="dodajZadatak(a.student.id)">1</button>
-              <button class="btn btm-sm btn-secondary" (click)="dodajZadatakZvezdica(a.student.id)">*</button>
-              <button class="btn btn-sm btn-danger ml-3" (click)="skloniPrisutnog(a.student.id)">X</button>
-            </li>
-          </ul>
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Student</th>
+                  <th>Tip Aktivnosti</th>
+                  <th>Napomene</th>
+                  <th class="text-center">Akcije</th>
+                  <th class="text-center">Ukloni</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let a of livePredavanje.aktivnosti; let i = index">
+                  <td>{{ i + 1 }}</td>
+                  <td>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</td>
+                  <td>{{ a.tip }}</td>
+                  <td>{{ a.napomene }}</td>
+                  <!-- Grouped action buttons -->
+                  <td class="text-center">
+                    <div class="btn-group" role="group">
+                      <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)">-</button>
+                      <button class="btn btn-sm btn-secondary mx-1" (click)="dodajZadatak(a.student.id)">1</button>
+                      <button class="btn btn-sm btn-secondary" (click)="dodajZadatakZvezdica(a.student.id)">*</button>
+                    </div>
+                  </td>
+
+                  <td class="text-center">
+                    <button class="btn btn-sm btn-danger" (click)="skloniPrisutnog(a.student.id)">X</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
         <ng-template #noActivities>
           <p class="alert alert-info">Nema prisutnih.</p>
         </ng-template>
       </div>
+      
     </div>
   </div>
   
