@@ -67,12 +67,7 @@ export class LivePredavanjeComponent implements OnInit {
   ucitajPredavanje(id: number) {
     this.predavanjeService.getPredavanjeDetails(id).subscribe(
       result => {
-        this.livePredavanje = result
-
-        this.novDatum = result.datum;
-        this.novRb = result.rb;
-        this.novaTema = result.tema;
-        this.novaPosecenost = result.posecenost;
+        this.osveziPredavanje(result)
 
         this.ucitajGrupu()
       }
@@ -105,12 +100,7 @@ export class LivePredavanjeComponent implements OnInit {
       cmd)
       .subscribe(
         result => {
-          this.livePredavanje = result
-
-          this.novDatum = result.datum;
-          this.novRb = result.rb;
-          this.novaTema = result.tema;
-          this.novaPosecenost = result.posecenost;
+          this.osveziPredavanje(result)
         }
       );
   }
@@ -118,10 +108,28 @@ export class LivePredavanjeComponent implements OnInit {
   dodajPrisutnog(studentId: number){
     this.predavanjeService.dodajPrisutnog(studentId, this.livePredavanje.id).subscribe(
       result => {
-        this.livePredavanje = result
-        this.osveziStudenteZaDodavanje();
+        this.osveziPredavanje(result)
+        this.osveziStudenteZaDodavanje()
       }
     )
+  }
+
+  skloniPrisutnog(studentId: number){
+    this.predavanjeService.skloniPrisutnog(studentId, this.livePredavanje.id).subscribe(
+      result => {
+        this.osveziPredavanje(result)
+        this.osveziStudenteZaDodavanje()
+      }
+    )
+  }
+
+  osveziPredavanje(result: PredavanjeDetails){
+    this.livePredavanje = result
+
+          this.novDatum = result.datum;
+          this.novRb = result.rb;
+          this.novaTema = result.tema;
+          this.novaPosecenost = result.posecenost;
   }
 
   osveziStudenteZaDodavanje(){

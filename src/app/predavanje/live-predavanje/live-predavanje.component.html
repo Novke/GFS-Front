@@ -77,9 +77,12 @@
         <h3>Aktivnosti</h3>
         <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
           <ul class="list-group">
-            <li class="list-group-item" *ngFor="let a of livePredavanje.aktivnosti">
-              <strong>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</strong> - {{ a.tip }} <br>
-              <small>{{ a.napomene }}</small>
+            <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let a of livePredavanje.aktivnosti">
+              <div>
+                <strong>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</strong> - {{ a.tip }} <br>
+                <small>{{ a.napomene }}</small>
+              </div>
+              <button class="btn btn-sm btn-danger ml-3" (click)="skloniPrisutnog(a.student.id)">-</button>
             </li>
           </ul>
         </div>
