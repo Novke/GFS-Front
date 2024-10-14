@@ -52,6 +52,15 @@ export class LivePredavanjeComponent implements OnInit {
     });
   }
 
+  areFieldsTouched() : boolean {
+    return (
+      this.novRb !== this.livePredavanje.rb ||
+      this.novaTema !== this.livePredavanje.tema ||
+      this.novaPosecenost !== this.livePredavanje.posecenost ||
+      this.novDatum !== this.livePredavanje.datum
+    );
+  }
+
   ucitajPredavanje(id: number) {
     this.predavanjeService.getPredavanjeDetails(id).subscribe(
       result => {
