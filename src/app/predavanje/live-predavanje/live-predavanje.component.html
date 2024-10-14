@@ -1,79 +1,92 @@
 <div class="container mt-4">
     <h2>Detalji Predavanja</h2>
-
+  
     <form (ngSubmit)="updatePredavanje()" *ngIf="livePredavanje" #predavanjeForm="ngForm">
-
-
-        <div class="row">
-            <div class="form-group col">
-                <label for="rb">Predavanje broj</label>
-                <input [(ngModel)]="novRb" type="number" class="form-control" id="rb" name="rb" required
-                    min="1" />
-            </div>
-
-            <div class="form-group col">
-                <label for="tema">Tema</label>
-                <input [(ngModel)]="novaTema" type="text" class="form-control" id="tema" name="tema"
-                    required />
-            </div>
+      <div class="row">
+        <div class="form-group col">
+          <label for="rb">Predavanje broj</label>
+          <input [(ngModel)]="novRb" type="number" class="form-control" id="rb" name="rb" required min="1" />
         </div>
-
-        <div class="form-group">
-            <label for="posecenost">Posecenost</label>
-            <input [(ngModel)]="novaPosecenost" type="number" class="form-control" id="posecenost"
-                name="posecenost" required min="0" max="100" />
+  
+        <div class="form-group col">
+          <label for="tema">Tema</label>
+          <input [(ngModel)]="novaTema" type="text" class="form-control" id="tema" name="tema" required />
         </div>
-
-        <div class="form-group">
-            <label for="datum">Datum</label>
-            <input [(ngModel)]="novDatum" type="date" class="form-control" id="datum" name="datum"
-                required />
+      </div>
+  
+      <div class="form-group">
+        <label for="posecenost">Posecenost</label>
+        <input [(ngModel)]="novaPosecenost" type="number" class="form-control" id="posecenost" name="posecenost"
+          required min="0" max="100" />
+      </div>
+  
+      <div class="form-group">
+        <label for="datum">Datum</label>
+        <input [(ngModel)]="novDatum" type="date" class="form-control" id="datum" name="datum" required />
+      </div>
+  
+      <div class="row">
+        <div class="form-group col">
+          <label>Predmet</label>
+          <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
         </div>
-
-        <div class="row">
-            <div class="form-group col">
-                <label>Predmet</label>
-                <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
-            </div>
-    
-            <div class="form-group col">
-                <label>Grupa</label>
-                <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
-            </div>
+  
+        <div class="form-group col">
+          <label>Grupa</label>
+          <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
         </div>
-
-        <button type="submit" class="btn btn-primary mt-4" [disabled]="!predavanjeForm.form.valid || !areFieldsTouched()">
-            Sačuvaj
-        </button>
+      </div>
+  
+      <button type="submit" class="btn btn-primary mt-4" [disabled]="!predavanjeForm.form.valid || !areFieldsTouched()">
+        Sačuvaj
+      </button>
     </form>
-
+  
     <div *ngIf="!livePredavanje" class="alert alert-warning mt-3">
-        Nema dostupnih podataka o predavanju.
+      Nema dostupnih podataka o predavanju.
     </div>
-
-    <h3 class="mt-5">Studenti u Grupi</h3>
-    <div class="table-responsive">
-        <table class="table table-striped table-bordered">
+  
+    <div class="row mt-5">
+      <div class="col-md-6">
+        <h3>Studenti u Grupi</h3>
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered">
             <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Ime</th>
-                    <th>Prezime</th>
-                    <th>Indeks</th>
-                    <th>Akcija</th> <!-- Action column -->
-                </tr>
+              <tr>
+                <th>#</th>
+                <th>Student</th>
+                <th>Indeks</th>
+                <th>Dodaj</th>
+              </tr>
             </thead>
             <tbody>
-                <tr *ngFor="let s of liveGrupa.studenti; let i = index">
-                    <td>{{ i + 1 }}</td> <!-- Row number -->
-                    <td>{{ s.ime }}</td>
-                    <td>{{ s.prezime }}</td>
-                    <td>{{ s.indeks }}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary" (click)="dodajPrisutnog(s.id)"> + </button>
-                    </td>
-                </tr>
+              <tr *ngFor="let s of studentiZaDodavanje; let i = index">
+                <td>{{ i + 1 }}</td>
+                <td>{{ s.ime }} {{ s.prezime }}</td>
+                <td>{{ s.indeks }}</td>
+                <td>
+                  <button class="btn btn-sm btn-primary" (click)="dodajPrisutnog(s.id)"> + </button>
+                </td>
+              </tr>
             </tbody>
-        </table>
+          </table>
+        </div>
+      </div>
+  
+      <div class="col-md-6">
+        <h3>Aktivnosti</h3>
+        <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
+          <ul class="list-group">
+            <li class="list-group-item" *ngFor="let a of livePredavanje.aktivnosti">
+              <strong>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</strong> - {{ a.tip }} <br>
+              <small>{{ a.napomene }}</small>
+            </li>
+          </ul>
+        </div>
+        <ng-template #noActivities>
+          <p class="alert alert-info">Nema prisutnih.</p>
+        </ng-template>
+      </div>
     </div>
-</div>
+  </div>
+  

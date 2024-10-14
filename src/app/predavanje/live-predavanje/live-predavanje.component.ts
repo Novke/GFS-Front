@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
-import { GrupaDetails, PredavanjeDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
+import { GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -11,6 +11,7 @@ import { GrupaDetails, PredavanjeDetails, UpdatePredavanjeCmd } from '../models/
 export class LivePredavanjeComponent implements OnInit {
 
   id: number | null = null;
+
   livePredavanje: PredavanjeDetails = {
     id: 0,
     rb: 0,
@@ -28,6 +29,8 @@ export class LivePredavanjeComponent implements OnInit {
     godinaUpisa: 0,
     studenti: []
   }
+
+  studentiZaDodavanje: StudentDetails[] = []
 
   novRb: number = 0;
   novaTema: string = '';
@@ -82,6 +85,7 @@ export class LivePredavanjeComponent implements OnInit {
     this.predavanjeService.getGrupaDetails(id).subscribe(
       result => {
         this.liveGrupa = result
+        this.osveziStudenteZaDodavanje()
       }
     )
 
@@ -115,7 +119,20 @@ export class LivePredavanjeComponent implements OnInit {
     this.predavanjeService.dodajPrisutnog(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.livePredavanje = result
-        console.log(this.livePredavanje.aktivnosti)
+        this.osveziStudenteZaDodavanje();
+      }
+    )
+  }
+
+  osveziStudenteZaDodavanje(){
+    this.studentiZaDodavanje = this.liveGrupa.studenti.filter(
+      s => {
+        const num =  this.livePredavanje.aktivnosti.filter(
+          a => {
+            return a.student.id === s.id
+          }
+        ).length
+        return num===0
       }
     )
   }
