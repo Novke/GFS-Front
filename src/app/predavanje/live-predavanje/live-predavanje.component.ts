@@ -111,6 +111,15 @@ export class LivePredavanjeComponent implements OnInit {
       );
   }
 
+  dodajPrisutnog(studentId: number){
+    this.predavanjeService.dodajPrisutnog(studentId, this.livePredavanje.id).subscribe(
+      result => {
+        this.livePredavanje = result
+        console.log(this.livePredavanje.aktivnosti)
+      }
+    )
+  }
+
 
 }
 

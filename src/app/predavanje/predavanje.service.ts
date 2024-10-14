@@ -37,6 +37,11 @@ export class PredavanjeService {
     return this.http.put<PredavanjeDetails>(`${this.apiUrl}/predavanja/${id}`, cmd); 
   }
 
+  dodajPrisutnog(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
+    const cmd : PredavanjeStudentId = {id: studentId}
+    return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/prisustvo`, cmd)
+  }
+
   // dodajAktivnost(predavanjeId: number, studentId: number, tip: string): Observable<PredavanjeDetails> {
   //   const studentCmd: PredavanjeStudentId = { id: studentId };
   //   return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/${tip}`, studentCmd);

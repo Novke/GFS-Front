@@ -50,4 +50,30 @@
     <div *ngIf="!livePredavanje" class="alert alert-warning mt-3">
         Nema dostupnih podataka o predavanju.
     </div>
+
+    <h3 class="mt-5">Studenti u Grupi</h3>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Ime</th>
+                    <th>Prezime</th>
+                    <th>Indeks</th>
+                    <th>Akcija</th> <!-- Action column -->
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let s of liveGrupa.studenti; let i = index">
+                    <td>{{ i + 1 }}</td> <!-- Row number -->
+                    <td>{{ s.ime }}</td>
+                    <td>{{ s.prezime }}</td>
+                    <td>{{ s.indeks }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" (click)="dodajPrisutnog(s.id)"> + </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
