@@ -11,7 +11,7 @@ import { GrupaDetails, PredavanjeDetails, UpdatePredavanjeCmd } from '../models/
 export class LivePredavanjeComponent implements OnInit {
 
   id: number | null = null;
-  livePredavanje : PredavanjeDetails = {
+  livePredavanje: PredavanjeDetails = {
     id: 0,
     rb: 0,
     datum: new Date(),
@@ -52,7 +52,7 @@ export class LivePredavanjeComponent implements OnInit {
     });
   }
 
-  areFieldsTouched() : boolean {
+  areFieldsTouched(): boolean {
     return (
       this.novRb !== this.livePredavanje.rb ||
       this.novaTema !== this.livePredavanje.tema ||
@@ -70,8 +70,21 @@ export class LivePredavanjeComponent implements OnInit {
         this.novRb = result.rb;
         this.novaTema = result.tema;
         this.novaPosecenost = result.posecenost;
+
+        this.ucitajGrupu()
       }
     );
+  }
+
+  ucitajGrupu() {
+    const id = this.livePredavanje.grupa.id;
+
+    this.predavanjeService.getGrupaDetails(id).subscribe(
+      result => {
+        this.liveGrupa = result
+      }
+    )
+
   }
 
   updatePredavanje() {

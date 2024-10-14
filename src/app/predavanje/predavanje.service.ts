@@ -29,6 +29,10 @@ export class PredavanjeService {
     return this.http.get<PredavanjeDetails>(`${this.apiUrl}/predavanja/${id}`);
   }
 
+  getGrupaDetails(id: number): Observable<GrupaDetails> {
+    return this.http.get<GrupaDetails>(`${this.apiUrl}/grupe/${id}`);
+  }
+
   updatePredavanje(id: number, cmd: UpdatePredavanjeCmd): Observable<PredavanjeDetails> {
     return this.http.put<PredavanjeDetails>(`${this.apiUrl}/predavanja/${id}`, cmd); 
   }
