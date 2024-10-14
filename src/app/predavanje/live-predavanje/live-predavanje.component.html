@@ -1,47 +1,49 @@
 <div class="container mt-4">
     <h2>Detalji Predavanja</h2>
 
-    <form *ngIf="livePredavanje" #predavanjeForm="ngForm">
+    <form (ngSubmit)="updatePredavanje()" *ngIf="livePredavanje" #predavanjeForm="ngForm">
 
 
         <div class="row">
             <div class="form-group col">
                 <label for="rb">Predavanje broj</label>
-                <input type="number" class="form-control" id="rb" [(ngModel)]="livePredavanje.rb" name="rb" required
+                <input [(ngModel)]="novRb" type="number" class="form-control" id="rb" name="rb" required
                     min="1" />
             </div>
 
             <div class="form-group col">
                 <label for="tema">Tema</label>
-                <input type="text" class="form-control" id="tema" [(ngModel)]="livePredavanje.tema" name="tema"
+                <input [(ngModel)]="novaTema" type="text" class="form-control" id="tema" name="tema"
                     required />
             </div>
         </div>
 
         <div class="form-group">
-            <label for="posecenost">Posecenost (%)</label>
-            <input type="number" class="form-control" id="posecenost" [(ngModel)]="livePredavanje.posecenost"
+            <label for="posecenost">Posecenost</label>
+            <input [(ngModel)]="novaPosecenost" type="number" class="form-control" id="posecenost"
                 name="posecenost" required min="0" max="100" />
         </div>
 
         <div class="form-group">
             <label for="datum">Datum</label>
-            <input type="date" class="form-control" id="datum" [(ngModel)]="livePredavanje.datum" name="datum"
+            <input [(ngModel)]="novDatum" type="date" class="form-control" id="datum" name="datum"
                 required />
         </div>
 
-        <div class="form-group">
-            <label>Predmet</label>
-            <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
+        <div class="row">
+            <div class="form-group col">
+                <label>Predmet</label>
+                <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
+            </div>
+    
+            <div class="form-group col">
+                <label>Grupa</label>
+                <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>Grupa</label>
-            <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
-        </div>
-
-        <button type="submit" class="btn btn-primary" [disabled]="!predavanjeForm.form.valid">
-            Sačuvaj Promene
+        <button type="submit" class="btn btn-primary mt-4" [disabled]="!predavanjeForm.form.valid">
+            Sačuvaj
         </button>
     </form>
 

@@ -28,6 +28,13 @@ export interface StartPredavanjeCmd {
     naziv: string;
     godinaUpisa: number
   }
+
+  export interface GrupaDetails {
+    id: number;
+    naziv: string;
+    godinaUpisa: number;
+    studenti: StudentDetails[];
+  }
   
   export interface AktivnostInfo {
     id: number;
@@ -43,3 +50,17 @@ export interface StartPredavanjeCmd {
     indeks: string;
   }
   
+  export interface StudentDetails {
+    id: number;
+    ime: string;
+    prezime: string;
+    indeks: string;
+    aktivnosti: AktivnostInfo[];
+  }
+
+  export interface UpdatePredavanjeCmd {
+    rb:number,
+    datum:Date,
+    tema:string,
+    posecenost:number
+  }

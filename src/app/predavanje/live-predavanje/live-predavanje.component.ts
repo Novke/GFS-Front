@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
-import { PredavanjeDetails } from '../models/predavanje.model';
+import { GrupaDetails, PredavanjeDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -22,9 +22,21 @@ export class LivePredavanjeComponent implements OnInit {
     aktivnosti: []
   };
 
+  liveGrupa: GrupaDetails = {
+    id: 0,
+    naziv: '',
+    godinaUpisa: 0,
+    studenti: []
+  }
+
+  novRb: number = 0;
+  novaTema: string = '';
+  novDatum = new Date();
+  novaPosecenost: number = 0;
+
   constructor(
     private route: ActivatedRoute,
-    private predavanjeService: PredavanjeService) {}
+    private predavanjeService: PredavanjeService) { }
 
   ngOnInit() {
     this.route.paramMap.subscribe(params => {
@@ -34,19 +46,49 @@ export class LivePredavanjeComponent implements OnInit {
       if (!this.id) {
         console.log("NIJE BROJ!!!")
       }
-        else {
-          this.ucitajPredavanje(Number(id));
-
-          console.log(this.livePredavanje)
-        }
+      else {
+        this.ucitajPredavanje(Number(id));
+      }
     });
   }
 
   ucitajPredavanje(id: number) {
     this.predavanjeService.getPredavanjeDetails(id).subscribe(
-        result => this.livePredavanje = result
+      result => {
+        this.livePredavanje = result
+
+        this.novDatum = result.datum;
+        this.novRb = result.rb;
+        this.novaTema = result.tema;
+        this.novaPosecenost = result.posecenost;
+      }
     );
   }
+
+  updatePredavanje() {
+
+    const cmd: UpdatePredavanjeCmd = {
+      rb: this.novRb,
+      datum: this.novDatum,
+      posecenost: this.novaPosecenost,
+      tema: this.novaTema
+    }
+
+    this.predavanjeService.updatePredavanje(
+      this.livePredavanje.id,
+      cmd)
+      .subscribe(
+        result => {
+          this.livePredavanje = result
+
+          this.novDatum = result.datum;
+          this.novRb = result.rb;
+          this.novaTema = result.tema;
+          this.novaPosecenost = result.posecenost;
+        }
+      );
+  }
+
 
 }
 
