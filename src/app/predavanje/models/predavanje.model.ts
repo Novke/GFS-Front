@@ -68,3 +68,13 @@ export interface StartPredavanjeCmd {
   export interface UpdateAktivnostNapomenaCmd {
     napomene: string
   }
+
+
+
+  export const tipAktivnosti = {
+    PRISUSTVO : "PRISUSTVO",
+    ZADATAK : "ZADATAK",
+    SA_ZVEZDICOM : "SA_ZVEZDICOM"
+  }
+
+  

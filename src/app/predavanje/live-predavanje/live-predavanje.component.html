@@ -1,55 +1,112 @@
 <div class="container mt-4">
-    <h2>Detalji Predavanja</h2>
-
-    <form (ngSubmit)="updatePredavanje()" *ngIf="livePredavanje" #predavanjeForm="ngForm">
-        <div class="row">
-            <div class="form-group col">
-                <label for="rb">Predavanje broj</label>
-                <input [(ngModel)]="novRb" type="number" class="form-control" id="rb" name="rb" required min="1" />
-            </div>
-
-            <div class="form-group col">
-                <label for="tema">Tema</label>
-                <input [(ngModel)]="novaTema" type="text" class="form-control" id="tema" name="tema" required />
-            </div>
-        </div>
-
-        <div class="form-group d-flex align-items-center mt-3">
-            <label for="posecenost" class="mr-2 mb-0">Posecenost</label>
-            <input [(ngModel)]="novaPosecenost" type="number" class="form-control mx-2" id="posecenost"
-                name="posecenost" required min="0" max="100" />
-            <button class="btn btn-primary" (click)="updatePosecenost()">Izračunaj</button>
-            <div class="col-md-9"></div>
-        </div>
-
-        <div class="form-group">
-            <label for="datum">Datum</label>
-            <input [(ngModel)]="novDatum" type="date" class="form-control" id="datum" name="datum" required />
-        </div>
-
-        <div class="row">
-            <div class="form-group col">
-                <label>Predmet</label>
-                <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
-            </div>
-
-            <div class="form-group col">
-                <label>Grupa</label>
-                <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary mt-4"
-            [disabled]="!predavanjeForm.form.valid || !areFieldsTouched()">
-            Sačuvaj
-        </button>
-    </form>
-
-    <div *ngIf="!livePredavanje" class="alert alert-warning mt-3">
-        Nema dostupnih podataka o predavanju.
-    </div>
-
     <div class="row mt-5">
+        <div class="col">
+            <h2>Detalji Predavanja</h2>
+
+            <form (ngSubmit)="updatePredavanje()" *ngIf="livePredavanje" #predavanjeForm="ngForm">
+                <div class="row">
+                    <div class="form-group col">
+                        <label for="rb">Predavanje broj</label>
+                        <input [(ngModel)]="novRb" type="number" class="form-control" id="rb" name="rb" required
+                            min="1" />
+                    </div>
+
+                    <div class="form-group col">
+                        <label for="tema">Tema</label>
+                        <input [(ngModel)]="novaTema" type="text" class="form-control" id="tema" name="tema" required />
+                    </div>
+                </div>
+
+                <div class="form-group d-flex align-items-center mt-3">
+                    <label for="posecenost" class="mr-2 mb-0">Posecenost</label>
+                    <input [(ngModel)]="novaPosecenost" type="number" class="form-control mx-2" id="posecenost"
+                        name="posecenost" required min="0" max="100" />
+                    <button class="btn btn-primary" (click)="updatePosecenost()">Izračunaj</button>
+                    <!-- GAP NAKON IZRACUNAJ DUGMETA -->
+                    <div class="col-md-7"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="datum">Datum</label>
+                    <input [(ngModel)]="novDatum" type="date" class="form-control" id="datum" name="datum" required />
+                </div>
+
+                <div class="row">
+                    <div class="form-group col">
+                        <label>Predmet</label>
+                        <input type="text" class="form-control" [value]="livePredavanje.predmet.naziv" readonly />
+                    </div>
+
+                    <div class="form-group col">
+                        <label>Grupa</label>
+                        <input type="text" class="form-control" [value]="livePredavanje.grupa.naziv" readonly />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary mt-4"
+                    [disabled]="!predavanjeForm.form.valid || !areFieldsTouched()">
+                    Sačuvaj
+                </button>
+            </form>
+
+            <div *ngIf="!livePredavanje" class="alert alert-warning mt-3">
+                Nema dostupnih podataka o predavanju.
+            </div>
+
+            <div class="row mt-5">
+
+                <div class="col">
+                    <h3>Prisutni</h3>
+                    <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Student</th>
+                                        <th>Tip Aktivnosti</th>
+                                        <th>Napomene</th>
+                                        <th class="text-center">Akcije</th>
+                                        <th class="text-center">Ukloni</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr *ngFor="let a of livePredavanje.aktivnosti; let i = index">
+                                        <td>{{ i + 1 }}</td>
+                                        <td>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</td>
+                                        <td>{{ a.tip }}</td>
+                                        <!-- <td>{{ a.napomene }}</td> -->
+                                        <td>
+                                            <input type="text" class="form-control" [(ngModel)]="updatedNapomene[a.id]"
+                                                (keyup)="updateAktivnostNapomena(a.id)">
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group" role="group">
+                                                <button *ngFor="let tip of tipKeys"
+                                                    class="btn btn-sm btn-primary mx-1"
+                                                    (click)="handleTipAction(tip, a.student.id)"
+                                                    [disabled]="tipEquals(a, tip)">
+                                                    {{ buttonLabel(tip) }}
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-secondary"
+                                                (click)="skloniPrisutnog(a.student.id)">X</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <ng-template #noActivities>
+                        <p class="alert alert-info">Nema prisutnih.</p>
+                    </ng-template>
+                </div>
+
+            </div>
+        </div>
         <div class="col-md-4">
             <h3>Studenti u Grupi</h3>
             <div class="table-responsive">
@@ -75,58 +132,5 @@
                 </table>
             </div>
         </div>
-
-
-        <div class="col-md-8">
-            <h3>Prisutni</h3>
-            <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
-                <div class="table-responsive">
-                    <table class="table table-striped table-bordered">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Student</th>
-                                <th>Tip Aktivnosti</th>
-                                <th>Napomene</th>
-                                <th class="text-center">Akcije</th>
-                                <th class="text-center">Ukloni</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr *ngFor="let a of livePredavanje.aktivnosti; let i = index">
-                                <td>{{ i + 1 }}</td>
-                                <td>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</td>
-                                <td>{{ a.tip }}</td>
-                                <!-- <td>{{ a.napomene }}</td> -->
-                                <td>
-                                    <input type="text" class="form-control" [(ngModel)]="updatedNapomene[a.id]" (keyup)="updateAktivnostNapomena(a.id)"> 
-                                </td>
-                                <td class="text-center">
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-secondary" (keyup)="skloniZadatak(a.student.id)"
-                                            [disabled]="tipEquals(a, 'PRISUSTVO')">-</button>
-                                        <button class="btn btn-sm btn-secondary mx-1"
-                                            (click)="dodajZadatak(a.student.id)"
-                                            [disabled]="tipEquals(a, 'ZADATAK')">1</button>
-                                        <button class="btn btn-sm btn-secondary"
-                                            (click)="dodajZadatakZvezdica(a.student.id)"
-                                            [disabled]="tipEquals(a, 'SA_ZVEZDICOM')">*</button>
-                                    </div>
-                                </td>
-
-                                <td class="text-center">
-                                    <button class="btn btn-sm btn-danger"
-                                        (click)="skloniPrisutnog(a.student.id)">X</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <ng-template #noActivities>
-                <p class="alert alert-info">Nema prisutnih.</p>
-            </ng-template>
-        </div>
-
     </div>
 </div>

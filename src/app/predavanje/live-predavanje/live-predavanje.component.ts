@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
-import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd } from '../models/predavanje.model';
+import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd, tipAktivnosti } from '../models/predavanje.model';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -197,9 +197,39 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  tipEquals(a: AktivnostInfo, tip: string) {
-    return a.tip === tip;
+  tipEquals(a: AktivnostInfo, key: string) {
+    return a.tip === key;
   }
+
+  tipKeys = Object.keys(tipAktivnosti); 
+
+  handleTipAction(tip: string, studentId: number) {
+    switch (tip) {
+      case tipAktivnosti.PRISUSTVO:
+        this.skloniZadatak(studentId);
+        break;
+      case tipAktivnosti.ZADATAK:
+        this.dodajZadatak(studentId);
+        break;
+      case tipAktivnosti.SA_ZVEZDICOM:
+        this.dodajZadatakZvezdica(studentId);
+        break;
+    }
+  }
+
+  buttonLabel(tip: string): string {
+    switch (tip) {
+      case tipAktivnosti.PRISUSTVO:
+        return "-";
+      case tipAktivnosti.ZADATAK:
+        return "1";
+      case tipAktivnosti.SA_ZVEZDICOM:
+        return "*";
+      default:
+        return "";
+    }
+  }
+
 
 
 }
