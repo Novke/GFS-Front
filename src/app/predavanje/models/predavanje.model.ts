@@ -64,3 +64,7 @@ export interface StartPredavanjeCmd {
     tema:string,
     posecenost:number
   }
+
+  export interface UpdateAktivnostNapomenaCmd {
+    napomene: string
+  }

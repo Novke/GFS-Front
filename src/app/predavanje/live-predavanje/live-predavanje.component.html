@@ -97,11 +97,13 @@
                                 <td>{{ i + 1 }}</td>
                                 <td>{{ a.student.ime }} {{ a.student.prezime }} {{ a.student.indeks }}</td>
                                 <td>{{ a.tip }}</td>
-                                <td>{{ a.napomene }}</td>
-                                <!-- Grouped action buttons -->
+                                <!-- <td>{{ a.napomene }}</td> -->
+                                <td>
+                                    <input type="text" class="form-control" [(ngModel)]="updatedNapomene[a.id]" (keyup)="updateAktivnostNapomena(a.id)"> 
+                                </td>
                                 <td class="text-center">
                                     <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-secondary" (click)="skloniZadatak(a.student.id)"
+                                        <button class="btn btn-sm btn-secondary" (keyup)="skloniZadatak(a.student.id)"
                                             [disabled]="tipEquals(a, 'PRISUSTVO')">-</button>
                                         <button class="btn btn-sm btn-secondary mx-1"
                                             (click)="dodajZadatak(a.student.id)"

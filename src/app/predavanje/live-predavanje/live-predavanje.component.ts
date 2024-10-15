@@ -37,6 +37,8 @@ export class LivePredavanjeComponent implements OnInit {
   novDatum = new Date();
   novaPosecenost: number = 0;
 
+  updatedNapomene: { [key: number]: string } = {};
+
   constructor(
     private route: ActivatedRoute,
     private predavanjeService: PredavanjeService) { }
@@ -105,7 +107,7 @@ export class LivePredavanjeComponent implements OnInit {
       );
   }
 
-  dodajPrisutnog(studentId: number){
+  dodajPrisutnog(studentId: number) {
     this.predavanjeService.dodajPrisutnog(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -114,7 +116,7 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  skloniPrisutnog(studentId: number){
+  skloniPrisutnog(studentId: number) {
     this.predavanjeService.skloniPrisutnog(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -123,7 +125,7 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  updatePosecenost(){
+  updatePosecenost() {
     this.predavanjeService.updatePosecenost(this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -131,7 +133,7 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  dodajZadatak(studentId: number){
+  dodajZadatak(studentId: number) {
     this.predavanjeService.dodajZadatak(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -139,7 +141,7 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  skloniZadatak(studentId: number){
+  skloniZadatak(studentId: number) {
     this.predavanjeService.skloniZadatak(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -147,7 +149,7 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  dodajZadatakZvezdica(studentId: number){
+  dodajZadatakZvezdica(studentId: number) {
     this.predavanjeService.dodajZadatakZvezdica(studentId, this.livePredavanje.id).subscribe(
       result => {
         this.osveziPredavanje(result)
@@ -155,29 +157,47 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
-  osveziPredavanje(result: PredavanjeDetails){
-    this.livePredavanje = result
+  osveziPredavanje(result: PredavanjeDetails) {
+    this.livePredavanje = result;
 
-          this.novDatum = result.datum;
-          this.novRb = result.rb;
-          this.novaTema = result.tema;
-          this.novaPosecenost = result.posecenost;
+    this.updatedNapomene = {};
+    this.livePredavanje.aktivnosti.forEach(a => {
+      this.updatedNapomene[a.id] = a.napomene
+    })
+
+    this.novDatum = result.datum;
+    this.novRb = result.rb;
+    this.novaTema = result.tema;
+    this.novaPosecenost = result.posecenost;
   }
 
-  osveziStudenteZaDodavanje(){
+  osveziStudenteZaDodavanje() {
     this.studentiZaDodavanje = this.liveGrupa.studenti.filter(
       s => {
-        const num =  this.livePredavanje.aktivnosti.filter(
+        const num = this.livePredavanje.aktivnosti.filter(
           a => {
             return a.student.id === s.id
           }
         ).length
-        return num===0
+        return num === 0
       }
     )
   }
 
-  tipEquals(a: AktivnostInfo, tip: string){
+  updateAktivnostNapomena(aktivnostId: number) {
+    const value = this.updatedNapomene[aktivnostId]
+    this.predavanjeService.updateAktivnostiNapomena(aktivnostId, value).subscribe(
+      result => {
+        //ne treba nista jos
+      },
+      error => {
+        //mozda
+        // this.updatedNapomene[aktivnostId]=this.livePredavanje.aktivnosti.filter(a => a.id === aktivnostId).at(0)?.napomene;
+      }
+    )
+  }
+
+  tipEquals(a: AktivnostInfo, tip: string) {
     return a.tip === tip;
   }
 
