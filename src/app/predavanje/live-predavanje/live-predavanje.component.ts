@@ -123,6 +123,14 @@ export class LivePredavanjeComponent implements OnInit {
     )
   }
 
+  updatePosecenost(){
+    this.predavanjeService.updatePosecenost(this.livePredavanje.id).subscribe(
+      result => {
+        this.osveziPredavanje(result)
+      }
+    )
+  }
+
   dodajZadatak(studentId: number){
     this.predavanjeService.dodajZadatak(studentId, this.livePredavanje.id).subscribe(
       result => {

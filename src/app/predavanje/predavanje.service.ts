@@ -37,6 +37,10 @@ export class PredavanjeService {
     return this.http.put<PredavanjeDetails>(`${this.apiUrl}/predavanja/${id}`, cmd); 
   }
 
+  updatePosecenost(predavanjeId: number): Observable<PredavanjeDetails>{
+    return this.http.put<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/posecenost`, null);
+  }
+
   dodajPrisutnog(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
     const cmd : PredavanjeStudentId = {id: studentId}
     return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/prisustvo`, cmd)
