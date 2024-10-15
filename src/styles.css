@@ -1,1 +1,14 @@
-@import "~bootstrap/dist/css/bootstrap.min.css"
+@import "~bootstrap/dist/css/bootstrap.min.css";
+
+.btn-primary {
+    background-color: #e96989;
+    /* color: #010101; */
+  }
+  
+  .btn-primary:hover {
+    background-color: #d95979;
+  }
+
+  .btn-primary:disabled {
+    background-color: #ff7f9f;
+  }
