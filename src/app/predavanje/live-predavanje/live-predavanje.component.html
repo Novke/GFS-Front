@@ -56,7 +56,14 @@
             <div class="row mt-5">
 
                 <div class="col">
-                    <h3>Prisutni</h3>
+                    <div class="row mb-3">
+                        <h3 class="col">Prisutni</h3>
+                        <div class="col-auto">
+                            <button class="btn btn-primary" 
+                            (click)="toggleModal()" 
+                            *ngIf="livePredavanje.aktivnosti.length<liveGrupa.studenti.length">Dodaj</button>
+                        </div>
+                    </div>
                     <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
                         <div class="table-responsive">
                             <table class="table table-striped table-bordered">
@@ -82,8 +89,7 @@
                                         </td>
                                         <td class="text-center">
                                             <div class="btn-group" role="group">
-                                                <button *ngFor="let tip of tipKeys"
-                                                    class="btn btn-sm btn-primary mx-1"
+                                                <button *ngFor="let tip of tipKeys" class="btn btn-sm btn-primary mx-1"
                                                     (click)="handleTipAction(tip, a.student.id)"
                                                     [disabled]="tipEquals(a, tip)">
                                                     {{ buttonLabel(tip) }}
@@ -101,15 +107,18 @@
                         </div>
                     </div>
                     <ng-template #noActivities>
-                        <p class="alert alert-info">Nema prisutnih.</p>
+                        <p class="alert alert-info" (click)="toggleModal()">Nema prisutnih.</p>
                     </ng-template>
                 </div>
 
             </div>
         </div>
-        <div class="col-md-4">
-            <h3>Studenti u Grupi</h3>
-            <div class="table-responsive">
+        <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
+            <div class="modal-content table-responsive">
+                <div class="row mb-5">
+                    <h3 class="col">Studenti u Grupi</h3>
+                    <button class="btn col btn-secondary mx-3 col-md-1" (click)="toggleModal()">X</button>
+                </div>
                 <table class="table table-striped table-bordered">
                     <thead>
                         <tr>

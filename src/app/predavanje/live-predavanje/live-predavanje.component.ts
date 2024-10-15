@@ -39,6 +39,8 @@ export class LivePredavanjeComponent implements OnInit {
 
   updatedNapomene: { [key: number]: string } = {};
 
+  showModal: boolean = false;
+
   constructor(
     private route: ActivatedRoute,
     private predavanjeService: PredavanjeService) { }
@@ -55,6 +57,10 @@ export class LivePredavanjeComponent implements OnInit {
         this.ucitajPredavanje(Number(id));
       }
     });
+  }
+
+  toggleModal(){
+    this.showModal = !this.showModal;
   }
 
   areFieldsTouched(): boolean {
