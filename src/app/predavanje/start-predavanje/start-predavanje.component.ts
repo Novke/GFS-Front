@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
-import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../models/predavanje.model';
+import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/predavanje.model';
 
 @Component({
   selector: 'app-start-predavanje',
