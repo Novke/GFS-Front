@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeStudentId, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
+import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, PredavanjeStudentId, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
 
 @Injectable({
   providedIn: 'root'
@@ -67,6 +67,15 @@ export class PredavanjeService {
   updateAktivnostiNapomena(aktivnostId: number, value: string) {
     const cmd : UpdateAktivnostNapomenaCmd = {napomene:value}
     return this.http.put<AktivnostInfo>(`${this.apiUrl}/predavanja/aktivnost/${aktivnostId}`, cmd)
+  }
+
+  searchPredavanja(predmetId: number, grupaId: number){
+    return this.http.get<PredavanjeInfo[]>(`${this.apiUrl}/predavanja/search`, {
+      params: {
+        predmet: predmetId.toString(),
+        grupa: grupaId.toString()
+      }
+    });
   }
 
 }

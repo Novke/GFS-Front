@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { DodajDomaciCmd, GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-nov-domaci',
@@ -19,7 +20,8 @@ export class NovDomaciComponent implements OnInit{
 
   constructor(
     private domaciService: DomaciService,
-    private predavanjaService: PredavanjeService){
+    private predavanjaService: PredavanjeService,
+    private router: Router){
   }
 
   ngOnInit(): void {
@@ -39,8 +41,17 @@ export class NovDomaciComponent implements OnInit{
     }
 
     this.domaciService.dodajDomaci(cmd).subscribe(
-      result => console.log("ID =", result.id)
+      result => this.router.navigate([`/domaci/${result.id}/evidentiranje`])
     )
+  }
+
+  autoPretrazivanjePredavanja(){
+    if (!this.izabranaGrupa || !this.izabranPredmet) return
+
+    this.predavanjaService.searchPredavanja(this.izabranPredmet, this.izabranaGrupa).subscribe(
+      result => this.predavanja = result
+    )
+
   }
 
 }

@@ -7,7 +7,8 @@
             <form (submit)="dodajDomaci()">
                 <div class="form-group mb-3">
                     <label for="select-predmet" class="form-label">Izaberi predmet</label>
-                    <select [(ngModel)]="izabranPredmet" id="select-predmet" name="predmet" class="form-select" required>
+                    <select [(ngModel)]="izabranPredmet" id="select-predmet" name="predmet" class="form-select" required
+                    (change)="autoPretrazivanjePredavanja()">
                         <option value="" disabled>Izaberi predmet *</option>
                         <option *ngFor="let p of predmeti" [ngValue]="p.id">{{p.naziv}}</option>
                     </select>
@@ -15,7 +16,8 @@
             
                 <div class="form-group mb-3">
                     <label for="select-grupa" class="form-label">Izaberi grupu</label>
-                    <select [(ngModel)]="izabranaGrupa" id="select-grupa" name="grupa" class="form-select" required>
+                    <select [(ngModel)]="izabranaGrupa" id="select-grupa" name="grupa" class="form-select" required
+                    (change)="autoPretrazivanjePredavanja()">
                         <option value="" disabled>Izaberi grupu *</option>
                         <option *ngFor="let g of grupe" [ngValue]="g.id">{{g.naziv}}</option>
                     </select>
@@ -26,7 +28,7 @@
                     <select [(ngModel)]="izabranoPredavanje" id="select-predavanje" name="predavanje" class="form-select"
                     [disabled]="!izabranPredmet || !izabranaGrupa"
                     >
-                        <option value="" disabled>Izaberi predavanje</option>
+                        <option value="" *ngIf="predavanja.length===0" disabled>Nema predavanja za date filtere</option>
                          <option *ngFor="let p of predavanja" [ngValue]="p.id">P{{p.rb}}: {{p.tema}} - {{p.datum | date : 'd. MMM. y'}}</option>
                     </select>
 

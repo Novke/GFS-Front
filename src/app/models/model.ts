@@ -91,4 +91,3 @@ export interface DodajDomaciCmd {
     grupaId: number,
     predmetId: number
 }
-  
