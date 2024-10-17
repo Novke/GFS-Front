@@ -8,7 +8,7 @@
           <div class="form-group mb-3">
             <label for="group" class="form-label">Izaberi grupu:</label>
             <select [(ngModel)]="izabranaGrupa" id="group" name="group" class="form-select" required>
-              <option value="" disabled>Select a group</option>
+              <!-- <option value="" disabled>Izaberi grupu</option> -->
               <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
             </select>
           </div>
@@ -17,7 +17,7 @@
           <div class="form-group mb-3">
             <label for="subject" class="form-label">Izaberi predmet:</label>
             <select [(ngModel)]="izabranPredmet" id="subject" name="subject" class="form-select" required>
-              <option value="" disabled>Select a subject</option>
+              <!-- <option value="" disabled>Izaberi predmet</option> -->
               <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
             </select>
           </div>

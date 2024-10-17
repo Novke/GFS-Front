@@ -7,7 +7,7 @@
             <form (submit)="dodajDomaci()">
                 <div class="form-group mb-3">
                     <label for="select-predmet" class="form-label">Izaberi predmet</label>
-                    <select id="select-predmet" class="form-select" required>
+                    <select [(ngModel)]="izabranPredmet" id="select-predmet" name="predmet" class="form-select" required>
                         <option value="" disabled>Izaberi predmet *</option>
                         <option *ngFor="let p of predmeti" [ngValue]="p.id">{{p.naziv}}</option>
                     </select>
@@ -15,15 +15,17 @@
             
                 <div class="form-group mb-3">
                     <label for="select-grupa" class="form-label">Izaberi grupu</label>
-                    <select id="select-grupa" class="form-select" required>
+                    <select [(ngModel)]="izabranaGrupa" id="select-grupa" name="grupa" class="form-select" required>
                         <option value="" disabled>Izaberi grupu *</option>
                         <option *ngFor="let g of grupe" [ngValue]="g.id">{{g.naziv}}</option>
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group mb-3">
                     <label>Izaberi predavanje</label>
-                    <select id="select-predavanje" class="form-select">
+                    <select [(ngModel)]="izabranoPredavanje" id="select-predavanje" name="predavanje" class="form-select"
+                    [disabled]="!izabranPredmet || !izabranaGrupa"
+                    >
                         <option value="" disabled>Izaberi predavanje</option>
                          <option *ngFor="let p of predavanja" [ngValue]="p.id">P{{p.rb}}: {{p.tema}} - {{p.datum | date : 'd. MMM. y'}}</option>
                     </select>
@@ -31,8 +33,8 @@
                 </div>
         
                 <div class="text-center">
-                    <button type="submit" class="btn btn-primary btn-block"
-                    [disabled]="!izabranPredmet && !izabranaGrupa">Dodaj</button>
+                    <button type="submit" class="btn btn-primary"
+                    [disabled]="!izabranPredmet || !izabranaGrupa">Dodaj</button>
                 </div>
             </form>
         </div>
