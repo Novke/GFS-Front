@@ -69,12 +69,26 @@ export interface StartPredavanjeCmd {
     napomene: string
   }
 
-
-
   export const tipAktivnosti = {
     PRISUSTVO : "PRISUSTVO",
     ZADATAK : "ZADATAK",
     SA_ZVEZDICOM : "SA_ZVEZDICOM"
   }
 
+export interface PredavanjeInfo {
+    id: number,
+    rb: number,
+    datum: Date,
+    tema: String
+}
+
+export interface DomaciInfo {
+    id: number
+}
+
+export interface DodajDomaciCmd {
+    predavanjeId: number | undefined,
+    grupaId: number,
+    predmetId: number
+}
   

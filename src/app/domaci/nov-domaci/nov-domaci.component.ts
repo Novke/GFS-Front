@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/domaci.model';
+import { Component, OnInit } from '@angular/core';
+import { DodajDomaciCmd, GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 
 @Component({
