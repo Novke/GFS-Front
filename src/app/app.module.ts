@@ -7,12 +7,16 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { StartPredavanjeComponent } from './predavanje/start-predavanje/start-predavanje.component';
 import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-predavanje.component';
+import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.component';
+import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     StartPredavanjeComponent,
-    LivePredavanjeComponent
+    LivePredavanjeComponent,
+    EvidentiranjeComponent,
+    NovDomaciComponent
   ],
   imports: [
     BrowserModule,

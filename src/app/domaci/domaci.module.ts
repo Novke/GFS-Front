@@ -1,12 +1,10 @@
-import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EvidentiranjeComponent } from './evidentiranje/evidentiranje.component';
+import { NgModule } from '@angular/core';
 
 
 
 @NgModule({
   declarations: [
-    EvidentiranjeComponent
   ],
   imports: [
     CommonModule
