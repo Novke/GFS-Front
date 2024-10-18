@@ -91,3 +91,21 @@ export interface DodajDomaciCmd {
     grupaId: number,
     predmetId: number
 }
+
+export interface DomaciGrupaInfo {
+  id: number;
+  naziv: string;
+  godinaUpisa: number;
+  studenti: StudentInfo[];
+}
+
+export interface DomaciDetails {
+
+  id: number,
+  predmet: PredmetInfo,
+  text: string,
+  datum: Date,
+  grupa: DomaciGrupaInfo,
+  predavanje: PredavanjeDetails
+
+}
