@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { DomaciDetails } from 'src/app/models/model';
+import { DomaciDetails, tipAktivnosti } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute } from '@angular/router';
 
@@ -52,7 +52,13 @@ export class EvidentiranjeComponent implements OnInit{
   izracunajAktivne(){
     if (!this.domaci  || !this.domaci.studenti) return 0;
     return this.domaci?.studenti.filter(
-      a => a.tip === "ZADATAK" || a.tip === "SA_ZVEZDICOM"
+      a => a.tip === tipAktivnosti.ZADATAK || a.tip === tipAktivnosti.SA_ZVEZDICOM
     ).length
+  }
+
+  aktivnost2String(aktivnost: string): string{
+    if (!aktivnost) return "/"
+    if (aktivnost===tipAktivnosti.ZADATAK || aktivnost === tipAktivnosti.SA_ZVEZDICOM) return "Da"
+    return "Ne"
   }
 }
