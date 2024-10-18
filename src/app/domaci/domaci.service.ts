@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { DodajDomaciCmd, DomaciInfo } from '../models/model';
+import { DodajDomaciCmd, DomaciDetails, DomaciInfo } from '../models/model';
 import { Observable } from 'rxjs';
 
 @Injectable({
@@ -14,6 +14,10 @@ export class DomaciService {
 
   dodajDomaci(cmd: DodajDomaciCmd){
     return this.http.post<DomaciInfo>(`${this.apiUrl}/domaci`, cmd)
+  }
+
+  viewDomaci(id: number){
+    return this.http.get<DomaciDetails>(`${this.apiUrl}/domaci/${id}`)
   }
 
 }
