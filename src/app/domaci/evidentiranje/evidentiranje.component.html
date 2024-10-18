@@ -1,8 +1,8 @@
 <div class="container mt-5">
     <div class="row">
         <div class="col">
-
             <h2>{{domaci?.predavanje?.rb}}. Predavanje</h2>
+
             <div class="row col-md-7 my-3">
                 <div class="col">
                     <label class="form-label" for="tema">Tema</label>
@@ -10,8 +10,9 @@
                 </div>
                 <div class="col col-md-3">
                     <label class="form-label" for="datum">Datum</label>
-                    <input class="form-control" id="datum" disabled [value]="domaci?.predavanje?.datum | date : 'd. MMM y.' ">
-                </div>     
+                    <input class="form-control" id="datum" disabled
+                        [value]="domaci?.predavanje?.datum | date : 'd. MMM y.'">
+                </div>
             </div>
 
             <div class="row">
@@ -43,14 +44,42 @@
                                 <td>{{s.indeks}}-{{s.godina}}</td>
                                 <td>{{aktivnost2String(s.tip)}}</td>
                                 <td>{{s.bodovi}}</td>
-                                <button class="btn btn-primary">Edit</button>
+                                <td>
+                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)">Edit</button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
 
+            <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Evidentiraj domaci: {{selectedStudent?.ime}} {{selectedStudent?.prezime}}</h5>
+                    </div>
+                    <div class="modal-body" *ngIf="selectedStudent">
+                        <div class="form-group">
+                            <label for="editBodovi">Bodovi (0-10)</label>
+                            <input type="number" id="editBodovi" [(ngModel)]="selectedStudent.bodovi"
+                                class="form-control" min="0" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label for="editNapomene">Napomene</label>
+                            <input type="text" id="editNapomene" [(ngModel)]="selectedStudent.uradjenDomaciNapomene"
+                                class="form-control">
+                        </div>
+                        <div class="form-group form-check">
+                            <input type="checkbox" id="editPrepisivanje" [(ngModel)]="selectedStudent.prepisivanje" class="form-check-input">
+                            <label for="editPrepisivanje" class="form-check-label">Prepisivanje</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" (click)="closeModal()">Close</button>
+                        <button class="btn btn-primary" (click)="saveChanges()">Save Changes</button>
+                    </div>
                 </div>
             </div>
 
         </div>
     </div>
-</div>

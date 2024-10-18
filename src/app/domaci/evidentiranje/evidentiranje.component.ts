@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { DomaciDetails, tipAktivnosti } from 'src/app/models/model';
+import { DomaciDetails, DomaciStudentiInfo, tipAktivnosti } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute } from '@angular/router';
 
@@ -11,18 +11,17 @@ import { ActivatedRoute } from '@angular/router';
 export class EvidentiranjeComponent implements OnInit{
 
   id: number | null = null;
-  domaci: DomaciDetails | undefined
+  domaci: DomaciDetails | undefined;
+  showModal = false;
+
+  selectedStudent: DomaciStudentiInfo | null = null;
 
   constructor(
     private domaciService: DomaciService,
     private route: ActivatedRoute
-  ){
-
-  }
-
+  ){}
 
   ngOnInit(): void {
-
     this.route.paramMap.subscribe(
       params => {
         const id = params.get('id')
@@ -36,29 +35,48 @@ export class EvidentiranjeComponent implements OnInit{
   private ucitajDomaci(){
     this.domaciService.viewDomaci(Number(this.id)).subscribe(
       result => {
-        this.domaci = result
-        console.log("Podaci:", result)
+        this.domaci = result;
+        console.log("Podaci:", result);
       }
     )
   }
 
   izracunajPrisutne(){
-    if (!this.domaci  || !this.domaci.studenti) return 0;
-    return this.domaci?.studenti.filter(
-      a => a.tip
-    ).length
+    if (!this.domaci || !this.domaci.studenti) return 0;
+    return this.domaci.studenti.filter(a => a.tip).length;
   }
 
   izracunajAktivne(){
-    if (!this.domaci  || !this.domaci.studenti) return 0;
-    return this.domaci?.studenti.filter(
+    if (!this.domaci || !this.domaci.studenti) return 0;
+    return this.domaci.studenti.filter(
       a => a.tip === tipAktivnosti.ZADATAK || a.tip === tipAktivnosti.SA_ZVEZDICOM
-    ).length
+    ).length;
   }
 
-  aktivnost2String(aktivnost: string): string{
-    if (!aktivnost) return "/"
-    if (aktivnost===tipAktivnosti.ZADATAK || aktivnost === tipAktivnosti.SA_ZVEZDICOM) return "Da"
-    return "Ne"
+  aktivnost2String(aktivnost: string): string {
+    if (!aktivnost) return "/";
+    if (aktivnost === tipAktivnosti.ZADATAK || aktivnost === tipAktivnosti.SA_ZVEZDICOM) return "Da";
+    return "Ne";
+  }
+
+  openEditModal(student: DomaciStudentiInfo) {
+    this.selectedStudent = { ...student };
+    this.showModal = true;
+  }
+
+  closeModal() {
+    this.showModal = false;
+    this.selectedStudent = null;
+  }
+
+  //TODO
+  saveChanges() {
+    if (this.selectedStudent && this.domaci) {
+      const index = this.domaci.studenti.findIndex(s => s.studentId === this.selectedStudent?.studentId);
+      if (index > -1) {
+        this.domaci.studenti[index] = { ...this.selectedStudent };
+      }
+    }
+    this.closeModal();
   }
 }

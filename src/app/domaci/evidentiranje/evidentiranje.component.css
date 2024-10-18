@@ -1,0 +1,20 @@
+.modal-content {
+    width: 50%; /* Adjust the width to 50% of the screen */
+    margin: 5% auto; /* Center the modal horizontally */
+    padding: 20px;
+}
+
+.form-control-sm {
+    font-size: 0.875rem; 
+    padding: 5px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header .close {
+    font-size: 1.5rem;
+}
