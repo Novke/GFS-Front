@@ -96,7 +96,17 @@ export interface DomaciGrupaInfo {
   id: number;
   naziv: string;
   godinaUpisa: number;
-  studenti: StudentInfo[];
+}
+
+export interface DomaciStudentiInfo {
+  studentId: number;  
+  domaciId: number;        
+  ime: string;             
+  prezime: string;        
+  indeks: string;         
+  godina: number;          
+  tip: string;      
+  napomene: string;        
 }
 
 export interface DomaciDetails {
@@ -106,6 +116,7 @@ export interface DomaciDetails {
   text: string,
   datum: Date,
   grupa: DomaciGrupaInfo,
-  predavanje: PredavanjeDetails
+  predavanje: PredavanjeInfo,
+  studenti: DomaciStudentiInfo[]
 
 }

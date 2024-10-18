@@ -41,4 +41,18 @@ export class EvidentiranjeComponent implements OnInit{
       }
     )
   }
+
+  izracunajPrisutne(){
+    if (!this.domaci  || !this.domaci.studenti) return 0;
+    return this.domaci?.studenti.filter(
+      a => a.tip
+    ).length
+  }
+
+  izracunajAktivne(){
+    if (!this.domaci  || !this.domaci.studenti) return 0;
+    return this.domaci?.studenti.filter(
+      a => a.tip === "ZADATAK" || a.tip === "SA_ZVEZDICOM"
+    ).length
+  }
 }
