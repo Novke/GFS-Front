@@ -106,7 +106,11 @@ export interface DomaciStudentiInfo {
   indeks: string;         
   godina: number;          
   tip: string;      
-  napomene: string;        
+  predavanjaNapomene: string;
+  uradjenDomaciId: number | null;
+  bodovi: number;
+  uradjenDomaciNapomene: string;   
+  prepisivanje: boolean;
 }
 
 export interface DomaciDetails {
