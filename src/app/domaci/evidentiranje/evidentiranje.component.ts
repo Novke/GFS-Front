@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { DomaciDetails, DomaciStudentiInfo, tipAktivnosti } from 'src/app/models/model';
+import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute } from '@angular/router';
 
@@ -72,10 +72,18 @@ export class EvidentiranjeComponent implements OnInit{
   //TODO
   saveChanges() {
     if (this.selectedStudent && this.domaci) {
-      const index = this.domaci.studenti.findIndex(s => s.studentId === this.selectedStudent?.studentId);
-      if (index > -1) {
-        this.domaci.studenti[index] = { ...this.selectedStudent };
+      
+      const cmd : CreateUradjenDomaciCmd = {
+        studentId: this.selectedStudent.studentId,
+        bodovi: this.selectedStudent.bodovi,
+        domaciId: Number(this.id),
+        napomene: this.selectedStudent.uradjenDomaciNapomene,
+        prepisivanje: this.selectedStudent.prepisivanje
       }
+
+      this.domaciService.evidentirajDomaci(cmd).subscribe(
+        result => this.domaci = result
+      )
     }
     this.closeModal();
   }

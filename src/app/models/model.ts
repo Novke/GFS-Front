@@ -124,3 +124,11 @@ export interface DomaciDetails {
   studenti: DomaciStudentiInfo[]
 
 }
+
+export interface CreateUradjenDomaciCmd {
+  studentId: number,
+  domaciId: number,
+  bodovi: number,
+  napomene: string,
+  prepisivanje: boolean
+}
