@@ -59,6 +59,12 @@ export class EvidentiranjeComponent implements OnInit{
     return "Ne";
   }
 
+  bodovi2String(student: DomaciStudentiInfo){
+    if (student.oslobodjen) return "OSLOBODJEN"
+    if (student.bodovi) return student.bodovi.toString()
+    return ""
+  }
+
   openEditModal(student: DomaciStudentiInfo) {
     this.selectedStudent = { ...student };
     this.showModal = true;
@@ -86,5 +92,11 @@ export class EvidentiranjeComponent implements OnInit{
       )
     }
     this.closeModal();
+  }
+
+  oslobodi(){
+    this.domaciService.oslobodiDomaceg(Number(this.id)).subscribe(
+      result => this.domaci = result
+    )
   }
 }

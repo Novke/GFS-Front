@@ -24,6 +24,13 @@
                 </div>
             </div>
 
+            <!-- Add button aligned to the right corner -->
+            <div class="row mb-3">
+                <div class="col text-right">
+                    <button class="btn btn-primary" (click)="oslobodi()" *ngIf="domaci?.predavanje">Oslobodi</button>
+                </div>
+            </div>
+
             <div>
                 <div class="table-responsive">
                     <table class="table table-striped table-bordered">
@@ -43,9 +50,9 @@
                                 <td>{{s.ime}} {{s.prezime}}</td>
                                 <td>{{s.indeks}}-{{s.godina}}</td>
                                 <td>{{aktivnost2String(s.tip)}}</td>
-                                <td>{{s.bodovi}}</td>
+                                <td>{{bodovi2String(s)}}</td>
                                 <td>
-                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)">Edit</button>
+                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)" [disabled]="s.oslobodjen"> E </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -83,3 +90,4 @@
 
         </div>
     </div>
+</div>

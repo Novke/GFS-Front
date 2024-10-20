@@ -111,6 +111,7 @@ export interface DomaciStudentiInfo {
   bodovi: number;
   uradjenDomaciNapomene: string;   
   prepisivanje: boolean;
+  oslobodjen: boolean;
 }
 
 export interface DomaciDetails {

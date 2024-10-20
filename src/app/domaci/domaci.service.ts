@@ -24,4 +24,8 @@ export class DomaciService {
     return this.http.post<DomaciDetails>(`${this.apiUrl}/domaci/evidentiraj`, cmd)
   }
 
+  oslobodiDomaceg(id: number){
+    return this.http.post<DomaciDetails>(`${this.apiUrl}/domaci/${id}/oslobodi`, null)
+  }
+
 }
