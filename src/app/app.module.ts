@@ -10,6 +10,8 @@ import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-preda
 import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.component';
 import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { MatToolbarModule } from '@angular/material/toolbar'
+import { MatButtonModule } from '@angular/material/button'
 
 @NgModule({
   declarations: [
@@ -24,7 +26,9 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
     AppRoutingModule,
     HttpClientModule,
     FormsModule,
-    BrowserAnimationsModule
+    BrowserAnimationsModule,
+    MatToolbarModule,
+    MatButtonModule
   ],
   providers: [],
   bootstrap: [AppComponent]

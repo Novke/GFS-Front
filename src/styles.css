@@ -12,5 +12,15 @@
   .btn-primary:disabled {
     background-color: #ff7f9f;
   }
+
+  .mat-toolbar-row {
+    background-color: #e96989;
+    color: white
+  }
+
+  .mat-toolbar-row:hover {
+    background-color: #d95979;
+  }
+
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
