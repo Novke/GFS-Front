@@ -12,3 +12,5 @@
   .btn-primary:disabled {
     background-color: #ff7f9f;
   }
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }

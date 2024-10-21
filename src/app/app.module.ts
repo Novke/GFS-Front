@@ -9,6 +9,7 @@ import { StartPredavanjeComponent } from './predavanje/start-predavanje/start-pr
 import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-predavanje.component';
 import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.component';
 import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 @NgModule({
   declarations: [
@@ -22,7 +23,8 @@ import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
     BrowserModule,
     AppRoutingModule,
     HttpClientModule,
-    FormsModule
+    FormsModule,
+    BrowserAnimationsModule
   ],
   providers: [],
   bootstrap: [AppComponent]
