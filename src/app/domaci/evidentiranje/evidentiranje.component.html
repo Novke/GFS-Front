@@ -1,33 +1,36 @@
 <div class="container mt-5">
     <div class="row">
         <div class="col">
-            <h2>{{domaci?.predavanje?.rb}}. Predavanje</h2>
+            <div *ngIf="domaci?.predavanje">
+                <h2>{{domaci?.predavanje?.rb}}. Predavanje</h2>
 
-            <div class="row col-md-7 my-3">
-                <div class="col">
-                    <label class="form-label" for="tema">Tema</label>
-                    <input class="form-control" id="tema" disabled [value]="domaci?.predavanje?.tema">
+                <div class="row col-md-7 my-3">
+                    <div class="col">
+                        <label class="form-label" for="tema">Tema</label>
+                        <input class="form-control" id="tema" disabled [value]="domaci?.predavanje?.tema">
+                    </div>
+                    <div class="col col-md-3">
+                        <label class="form-label" for="datum">Datum</label>
+                        <input class="form-control" id="datum" disabled
+                            [value]="domaci?.predavanje?.datum | date : 'd. MMM y.'">
+                    </div>
                 </div>
-                <div class="col col-md-3">
-                    <label class="form-label" for="datum">Datum</label>
-                    <input class="form-control" id="datum" disabled
-                        [value]="domaci?.predavanje?.datum | date : 'd. MMM y.'">
-                </div>
-            </div>
 
-            <div class="row">
-                <div class="col">
-                    <label class="form-label">Prisutnih: {{izracunajPrisutne()}}</label>
+                <div class="row">
+                    <div class="col">
+                        <label class="form-label">Prisutnih: {{izracunajPrisutne()}}</label>
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Aktivnih: {{izracunajAktivne()}}</label>
+                    </div>
                 </div>
-                <div class="col">
-                    <label class="form-label">Aktivnih: {{izracunajAktivne()}}</label>
-                </div>
-            </div>
 
-            <!-- Add button aligned to the right corner -->
-            <div class="row mb-3">
-                <div class="col text-right">
-                    <button class="btn btn-primary" (click)="oslobodi()" *ngIf="domaci?.predavanje">Oslobodi</button>
+                <!-- Add button aligned to the right corner -->
+                <div class="row mb-3">
+                    <div class="col text-right">
+                        <button class="btn btn-primary" (click)="oslobodi()"
+                            >Oslobodi</button>
+                    </div>
                 </div>
             </div>
 
@@ -52,7 +55,8 @@
                                 <td>{{aktivnost2String(s.tip)}}</td>
                                 <td>{{bodovi2String(s)}}</td>
                                 <td>
-                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)" [disabled]="s.oslobodjen"> E </button>
+                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
+                                        [disabled]="s.oslobodjen"> E </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -63,7 +67,8 @@
             <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Evidentiraj domaci: {{selectedStudent?.ime}} {{selectedStudent?.prezime}}</h5>
+                        <h5 class="modal-title">Evidentiraj domaci: {{selectedStudent?.ime}}
+                            {{selectedStudent?.prezime}}</h5>
                     </div>
                     <div class="modal-body" *ngIf="selectedStudent">
                         <div class="form-group">
@@ -77,7 +82,8 @@
                                 class="form-control">
                         </div>
                         <div class="form-group form-check">
-                            <input type="checkbox" id="editPrepisivanje" [(ngModel)]="selectedStudent.prepisivanje" class="form-check-input">
+                            <input type="checkbox" id="editPrepisivanje" [(ngModel)]="selectedStudent.prepisivanje"
+                                class="form-check-input">
                             <label for="editPrepisivanje" class="form-check-label">Prepisivanje</label>
                         </div>
                     </div>
