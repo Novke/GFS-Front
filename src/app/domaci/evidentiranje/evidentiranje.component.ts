@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti } from 'src/app/models/model';
+import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti, UpdateDomaciCmd } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute } from '@angular/router';
 
@@ -12,6 +12,8 @@ export class EvidentiranjeComponent implements OnInit{
 
   id: number | null = null;
   domaci: DomaciDetails | undefined;
+  novText: string = 'DOMAĆI NIJE UČITAN'
+  novDatum: Date = new Date()
   showModal = false;
 
   selectedStudent: DomaciStudentiInfo | null = null;
@@ -35,10 +37,15 @@ export class EvidentiranjeComponent implements OnInit{
   private ucitajDomaci(){
     this.domaciService.viewDomaci(Number(this.id)).subscribe(
       result => {
-        this.domaci = result;
-        console.log("Podaci:", result);
+        this.popuniPolja(result);
       }
     )
+  }
+
+  private popuniPolja(result: DomaciDetails){
+    this.domaci = result
+    this.novText = result.text
+    this.novDatum = result.datum
   }
 
   izracunajPrisutne(){
@@ -75,7 +82,6 @@ export class EvidentiranjeComponent implements OnInit{
     this.selectedStudent = null;
   }
 
-  //TODO
   saveChanges() {
     if (this.selectedStudent && this.domaci) {
       
@@ -88,7 +94,7 @@ export class EvidentiranjeComponent implements OnInit{
       }
 
       this.domaciService.evidentirajDomaci(cmd).subscribe(
-        result => this.domaci = result
+        result => this.popuniPolja(result)
       )
     }
     this.closeModal();
@@ -97,6 +103,21 @@ export class EvidentiranjeComponent implements OnInit{
   oslobodi(){
     this.domaciService.oslobodiDomaceg(Number(this.id)).subscribe(
       result => this.domaci = result
+    )
+  }
+
+  jesuLiPoljaNepromenjena(): boolean{
+    return this.novDatum === this.domaci?.datum && this.novText === this.domaci.text
+  }
+
+  azuriraj(){
+    const cmd : UpdateDomaciCmd = {
+      datum: this.novDatum,
+      text: this.novText
+    }
+
+    this.domaciService.azurirajDomaci(Number(this.id), cmd).subscribe(
+      result => this.popuniPolja(result)
     )
   }
 }

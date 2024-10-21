@@ -133,3 +133,8 @@ export interface CreateUradjenDomaciCmd {
   napomene: string,
   prepisivanje: boolean
 }
+
+export interface UpdateDomaciCmd {
+  text: string,
+  datum: Date
+}

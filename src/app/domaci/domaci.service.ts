@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciInfo } from '../models/model';
+import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciInfo, UpdateDomaciCmd } from '../models/model';
 import { Observable } from 'rxjs';
 
 @Injectable({
@@ -24,8 +24,12 @@ export class DomaciService {
     return this.http.post<DomaciDetails>(`${this.apiUrl}/domaci/evidentiraj`, cmd)
   }
 
-  oslobodiDomaceg(id: number){
-    return this.http.post<DomaciDetails>(`${this.apiUrl}/domaci/${id}/oslobodi`, null)
+  oslobodiDomaceg(domaciId: number){
+    return this.http.post<DomaciDetails>(`${this.apiUrl}/domaci/${domaciId}/oslobodi`, null)
+  }
+
+  azurirajDomaci(domaciId: number, cmd: UpdateDomaciCmd){
+    return this.http.put<DomaciDetails>(`${this.apiUrl}/domaci/${domaciId}`, cmd);
   }
 
 }
