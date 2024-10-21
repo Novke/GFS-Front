@@ -110,6 +110,14 @@ export class EvidentiranjeComponent implements OnInit{
     return this.novDatum === this.domaci?.datum && this.novText === this.domaci.text
   }
 
+  jesuLiOslobadjani(): boolean{
+
+    return this.domaci?.studenti.filter(
+      s => s.oslobodjen
+    ).length === this.izracunajAktivne()
+
+  }
+
   azuriraj(){
     const cmd : UpdateDomaciCmd = {
       datum: this.novDatum,

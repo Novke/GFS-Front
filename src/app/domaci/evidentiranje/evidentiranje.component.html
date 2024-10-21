@@ -48,8 +48,8 @@
 
                 <div class="row my-3">
                     <div class="col text-right">
-                        <button class="btn btn-primary" (click)="oslobodi()"
-                            >Oslobodi aktivne</button>
+                        <button class="btn btn-primary" 
+                        (click)="oslobodi()" [disabled]="jesuLiOslobadjani()">Oslobodi aktivne</button>
                     </div>
                 </div>
             </div>
@@ -74,7 +74,7 @@
                                 <td>{{s.indeks}}-{{s.godina}}</td>
                                 <td>{{aktivnost2String(s.tip)}}</td>
                                 <td>{{bodovi2String(s)}}</td>
-                                <td>
+                                <td class="text-center">
                                     <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
                                         [disabled]="s.oslobodjen"> E </button>
                                 </td>
