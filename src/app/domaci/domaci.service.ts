@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciInfo, UpdateDomaciCmd } from '../models/model';
+import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciId, DomaciInfo, UpdateDomaciCmd } from '../models/model';
 
 @Injectable({
   providedIn: 'root'
@@ -12,7 +12,7 @@ export class DomaciService {
   constructor(private http: HttpClient) { }
 
   dodajDomaci(cmd: DodajDomaciCmd){
-    return this.http.post<DomaciInfo>(`${this.apiUrl}/domaci`, cmd)
+    return this.http.post<DomaciId>(`${this.apiUrl}/domaci`, cmd)
   }
 
   viewDomaci(id: number){
@@ -33,6 +33,10 @@ export class DomaciService {
 
   zavrsiPregledanje(domaciId: number){
     return this.http.patch<void>(`${this.apiUrl}/domaci/${domaciId}`, null)
+  }
+
+  vratiDomaceIzGrupe(grupaId: number, predmetId: number){
+    return this.http.get<DomaciInfo[]>(`${this.apiUrl}/domaci/grupa/${grupaId}/predmet/${predmetId}`)
   }
 
 }

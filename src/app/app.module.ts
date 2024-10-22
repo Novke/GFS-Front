@@ -15,6 +15,7 @@ import { MatButtonModule } from '@angular/material/button'
 import { MatCardModule } from '@angular/material/card'
 import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domaceg.component';
 import { FlexModule } from '@angular/flex-layout'
+import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component';
 
 @NgModule({
   declarations: [
@@ -23,7 +24,8 @@ import { FlexModule } from '@angular/flex-layout'
     LivePredavanjeComponent,
     EvidentiranjeComponent,
     NovDomaciComponent,
-    PregledDomacegComponent
+    PregledDomacegComponent,
+    DomaciListComponent
   ],
   imports: [
     BrowserModule,

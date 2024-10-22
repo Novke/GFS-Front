@@ -82,7 +82,7 @@ export interface PredavanjeInfo {
     tema: String
 }
 
-export interface DomaciInfo {
+export interface DomaciId {
     id: number
 }
 
@@ -138,4 +138,11 @@ export interface CreateUradjenDomaciCmd {
 export interface UpdateDomaciCmd {
   text: string,
   datum: Date
+}
+
+export interface DomaciInfo {
+  id: number,
+  naslov: string,
+  text: string,
+  pregledan: boolean
 }
