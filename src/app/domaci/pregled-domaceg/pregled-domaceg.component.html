@@ -1,1 +1,47 @@
-<p>pregled-domaceg works!</p>
+<div class="container mt-5">
+    <div class="row">
+        <div class="col">
+
+            <h1 class="text-center">Domaći</h1>
+
+            <div class="container mt-5">
+
+                <div class="row">
+                    <div class="col">
+                        <label for="grupaNaziv">Grupa</label>
+                        <h2 id="grupaNaziv">{{domaci?.grupa?.naziv}}</h2>
+                    </div>
+                    <div class="col">
+                        <label for="grupaNaziv">Predmet</label>
+                        <h2 id="grupaNaziv">{{domaci?.predmet?.naziv}}</h2>
+                    </div>
+
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="domaciDatum">Datum</label>
+                    <input type="date" id="domaciDatum" class="form-control" name="domaciDatum" [ngModel]="domaci?.datum" disabled>
+                </div>
+            
+                <div class="form-group mb-3">
+                    <label for="domaciOpis">Opis</label>
+                    <textarea id="domaciOpis" class="form-control" name="domaciOpis" rows="3" disabled></textarea>
+                </div>
+            </div>
+
+            <div class="container">
+                <div fxLayout="row wrap" fxLayoutGap="50px grid">
+                    <div *ngFor="let s of domaci?.studenti">
+                        <mat-card class="domaci-card">
+                            <mat-card-content>
+                                <mat-card-title>{{student2string(s)}}</mat-card-title>
+                                <mat-card-subtitle class="my-2" style="font-weight: 500;">{{bodovi2string(s)}}</mat-card-subtitle>
+                                <mat-card-subtitle style="font-weight: 200;">{{napomene2string(s)}}</mat-card-subtitle>
+                            </mat-card-content>
+                        </mat-card>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

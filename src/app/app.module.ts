@@ -12,6 +12,9 @@ import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatToolbarModule } from '@angular/material/toolbar'
 import { MatButtonModule } from '@angular/material/button'
+import { MatCardModule } from '@angular/material/card'
+import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domaceg.component';
+import { FlexModule } from '@angular/flex-layout'
 
 @NgModule({
   declarations: [
@@ -19,7 +22,8 @@ import { MatButtonModule } from '@angular/material/button'
     StartPredavanjeComponent,
     LivePredavanjeComponent,
     EvidentiranjeComponent,
-    NovDomaciComponent
+    NovDomaciComponent,
+    PregledDomacegComponent
   ],
   imports: [
     BrowserModule,
@@ -28,7 +32,9 @@ import { MatButtonModule } from '@angular/material/button'
     FormsModule,
     BrowserAnimationsModule,
     MatToolbarModule,
-    MatButtonModule
+    MatButtonModule,
+    MatCardModule,
+    FlexModule
   ],
   providers: [],
   bootstrap: [AppComponent]
