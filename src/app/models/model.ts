@@ -120,6 +120,7 @@ export interface DomaciDetails {
   predmet: PredmetInfo,
   text: string,
   datum: Date,
+  pregledan: Boolean
   grupa: DomaciGrupaInfo,
   predavanje: PredavanjeInfo,
   studenti: DomaciStudentiInfo[]

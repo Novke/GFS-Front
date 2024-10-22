@@ -49,7 +49,7 @@
                 <div class="row my-3">
                     <div class="col text-right">
                         <button class="btn btn-primary" 
-                        (click)="oslobodi()" [disabled]="jesuLiOslobadjani()">Oslobodi aktivne</button>
+                        (click)="oslobodi()" [disabled]="domaci?.pregledan || jesuLiOslobadjani()">Oslobodi aktivne</button>
                     </div>
                 </div>
             </div>
@@ -76,12 +76,16 @@
                                 <td>{{bodovi2String(s)}}</td>
                                 <td class="text-center">
                                     <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
-                                        [disabled]="s.oslobodjen"> E </button>
+                                        [disabled]="domaci?.pregledan || s.oslobodjen"> E </button>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+            <div>
+                <button class="btn btn-primary my-3" 
+                (click)="zavrsi()" [disabled]="domaci?.pregledan">Završi</button>
             </div>
 
             <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">

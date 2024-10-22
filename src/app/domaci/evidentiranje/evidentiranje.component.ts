@@ -8,7 +8,7 @@ import { ActivatedRoute } from '@angular/router';
   templateUrl: './evidentiranje.component.html',
   styleUrls: ['./evidentiranje.component.css']
 })
-export class EvidentiranjeComponent implements OnInit{
+export class EvidentiranjeComponent implements OnInit {
 
   id: number | null = null;
   domaci: DomaciDetails | undefined;
@@ -21,7 +21,7 @@ export class EvidentiranjeComponent implements OnInit{
   constructor(
     private domaciService: DomaciService,
     private route: ActivatedRoute
-  ){}
+  ) { }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(
@@ -34,7 +34,7 @@ export class EvidentiranjeComponent implements OnInit{
     )
   }
 
-  private ucitajDomaci(){
+  private ucitajDomaci() {
     this.domaciService.viewDomaci(Number(this.id)).subscribe(
       result => {
         this.popuniPolja(result);
@@ -42,18 +42,18 @@ export class EvidentiranjeComponent implements OnInit{
     )
   }
 
-  private popuniPolja(result: DomaciDetails){
+  private popuniPolja(result: DomaciDetails) {
     this.domaci = result
     this.novText = result.text
     this.novDatum = result.datum
   }
 
-  izracunajPrisutne(){
+  izracunajPrisutne() {
     if (!this.domaci || !this.domaci.studenti) return 0;
     return this.domaci.studenti.filter(a => a.tip).length;
   }
 
-  izracunajAktivne(){
+  izracunajAktivne() {
     if (!this.domaci || !this.domaci.studenti) return 0;
     return this.domaci.studenti.filter(
       a => a.tip === tipAktivnosti.ZADATAK || a.tip === tipAktivnosti.SA_ZVEZDICOM
@@ -66,7 +66,7 @@ export class EvidentiranjeComponent implements OnInit{
     return "Ne";
   }
 
-  bodovi2String(student: DomaciStudentiInfo){
+  bodovi2String(student: DomaciStudentiInfo) {
     if (student.oslobodjen) return "OSLOBODJEN"
     if (student.bodovi) return student.bodovi.toString()
     return ""
@@ -84,8 +84,8 @@ export class EvidentiranjeComponent implements OnInit{
 
   saveChanges() {
     if (this.selectedStudent && this.domaci) {
-      
-      const cmd : CreateUradjenDomaciCmd = {
+
+      const cmd: CreateUradjenDomaciCmd = {
         studentId: this.selectedStudent.studentId,
         bodovi: this.selectedStudent.bodovi,
         domaciId: Number(this.id),
@@ -100,17 +100,17 @@ export class EvidentiranjeComponent implements OnInit{
     this.closeModal();
   }
 
-  oslobodi(){
+  oslobodi() {
     this.domaciService.oslobodiDomaceg(Number(this.id)).subscribe(
       result => this.domaci = result
     )
   }
 
-  jesuLiPoljaNepromenjena(): boolean{
+  jesuLiPoljaNepromenjena(): boolean {
     return this.novDatum === this.domaci?.datum && this.novText === this.domaci.text
   }
 
-  jesuLiOslobadjani(): boolean{
+  jesuLiOslobadjani(): boolean {
 
     return this.domaci?.studenti.filter(
       s => s.oslobodjen
@@ -118,8 +118,8 @@ export class EvidentiranjeComponent implements OnInit{
 
   }
 
-  azuriraj(){
-    const cmd : UpdateDomaciCmd = {
+  azuriraj() {
+    const cmd: UpdateDomaciCmd = {
       datum: this.novDatum,
       text: this.novText
     }
@@ -127,5 +127,17 @@ export class EvidentiranjeComponent implements OnInit{
     this.domaciService.azurirajDomaci(Number(this.id), cmd).subscribe(
       result => this.popuniPolja(result)
     )
+  }
+
+  zavrsi() {
+    if (window.confirm("Da li si siguran da želiš da završiš sa pregledanjem domaćeg?")) {
+      this.domaciService.zavrsiPregledanje(Number(this.id))
+      .subscribe(
+        () => console.log("Uspesno"),
+        error => console.log("Greska", error)
+        )
+
+
+    }
   }
 }

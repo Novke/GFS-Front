@@ -1,7 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciInfo, UpdateDomaciCmd } from '../models/model';
-import { Observable } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -29,7 +28,11 @@ export class DomaciService {
   }
 
   azurirajDomaci(domaciId: number, cmd: UpdateDomaciCmd){
-    return this.http.put<DomaciDetails>(`${this.apiUrl}/domaci/${domaciId}`, cmd);
+    return this.http.put<DomaciDetails>(`${this.apiUrl}/domaci/${domaciId}`, cmd)
+  }
+
+  zavrsiPregledanje(domaciId: number){
+    return this.http.patch<void>(`${this.apiUrl}/domaci/${domaciId}`, null)
   }
 
 }
