@@ -4,11 +4,13 @@ import { StartPredavanjeComponent } from './predavanje/start-predavanje/start-pr
 import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-predavanje.component';
 import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.component';
 import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
+import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domaceg.component';
 
 const routes: Routes = [
   {path:"predavanje/start", component: StartPredavanjeComponent},
   {path:"predavanje/live/:id", component: LivePredavanjeComponent},
   {path:"domaci/:id/evidentiranje", component: EvidentiranjeComponent},
+  {path:"domaci/:id/pregled", component: PregledDomacegComponent},
   {path:"domaci", component: NovDomaciComponent}
 ];
 

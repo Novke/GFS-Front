@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti, UpdateDomaciCmd } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
   selector: 'app-evidentiranje',
@@ -20,7 +20,8 @@ export class EvidentiranjeComponent implements OnInit {
 
   constructor(
     private domaciService: DomaciService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) { }
 
   ngOnInit(): void {
@@ -133,7 +134,7 @@ export class EvidentiranjeComponent implements OnInit {
     if (window.confirm("Da li si siguran da želiš da završiš sa pregledanjem domaćeg?")) {
       this.domaciService.zavrsiPregledanje(Number(this.id))
       .subscribe(
-        () => console.log("Uspesno"),
+        () => this.router.navigate(['domaci', this.id, 'pregled']),
         error => console.log("Greska", error)
         )
 
