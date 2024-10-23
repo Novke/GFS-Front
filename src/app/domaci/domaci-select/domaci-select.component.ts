@@ -47,4 +47,8 @@ export class DomaciSelectComponent {
     } 
   }
 
+  new(){
+    this.router.navigate(['domaci/new'])
+  }
+
 }
