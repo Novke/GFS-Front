@@ -67,4 +67,12 @@ export class DomaciListComponent implements OnInit{
     }
   }
 
+  go2domaci(domaci: DomaciInfo){
+    if (domaci.pregledan){
+      this.router.navigate(['/domaci', domaci.id, 'pregled'])
+    } else {
+      this.router.navigate(['/domaci', domaci.id, 'evidentiranje'])
+    }
+  }
+
 }

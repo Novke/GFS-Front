@@ -15,7 +15,8 @@
         <div class="container">
             <mat-list *ngFor="let d of domaci; let i = index">
                 <mat-divider></mat-divider>
-                <mat-list-item>
+                <mat-list-item (click)="go2domaci(d)"
+                [ngClass]="{'pregledan-background': d.pregledan}">
                     <!-- <mat-icon></mat-icon> -->
                      <div matListItemTitle>{{i+1}}. {{d.naslov}}</div>
                      <div matListItemLine>{{d.datum | date : 'd. MMMM y.'}}</div>
