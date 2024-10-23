@@ -16,6 +16,7 @@ import { MatCardModule } from '@angular/material/card'
 import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domaceg.component';
 import { FlexModule } from '@angular/flex-layout'
 import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component';
+import { MatListModule } from '@angular/material/list';
 
 @NgModule({
   declarations: [
@@ -36,7 +37,8 @@ import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component'
     MatToolbarModule,
     MatButtonModule,
     MatCardModule,
-    FlexModule
+    FlexModule,
+    MatListModule
   ],
   providers: [],
   bootstrap: [AppComponent]

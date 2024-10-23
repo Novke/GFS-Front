@@ -1,1 +1,27 @@
-<p>domaci-list works!</p>
+<div class="container mt-5">
+    <div>
+        <div mat-subheader class="text-center">Svi domaći</div>
+        <div class="row my-4">
+            <div class="col text-center">
+                <label for="predmet" class="form-label">Predmet</label>
+                <input class="form-control" id="predmet" [value]="predmet?.naziv" disabled>
+            </div>
+            <div class="col text-center">
+                <label for="grupa" class="form-label">Grupa</label>
+                <input class="form-control" id="grupa" [value]="grupa?.naziv" disabled>
+            </div>
+        </div>
+
+        <div class="container">
+            <mat-list *ngFor="let d of domaci; let i = index">
+                <mat-divider></mat-divider>
+                <mat-list-item>
+                    <!-- <mat-icon></mat-icon> -->
+                     <div matListItemTitle>{{i+1}}. {{d.naslov}}</div>
+                     <div matListItemLine>{{d.datum | date : 'd. MMMM y.'}}</div>
+                     <span matListItemLine>{{d.pregledan ? 'PREGLEDAN' : ''}}</span>
+                </mat-list-item>
+            </mat-list>
+        </div>
+    </div>
+</div>

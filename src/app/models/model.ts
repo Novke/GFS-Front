@@ -144,5 +144,6 @@ export interface DomaciInfo {
   id: number,
   naslov: string,
   text: string,
+  datum: Date,
   pregledan: boolean
 }
