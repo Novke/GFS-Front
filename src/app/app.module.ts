@@ -17,6 +17,7 @@ import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domace
 import { FlexModule } from '@angular/flex-layout'
 import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component';
 import { MatListModule } from '@angular/material/list';
+import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.component';
 
 @NgModule({
   declarations: [
@@ -26,7 +27,8 @@ import { MatListModule } from '@angular/material/list';
     EvidentiranjeComponent,
     NovDomaciComponent,
     PregledDomacegComponent,
-    DomaciListComponent
+    DomaciListComponent,
+    DomaciSelectComponent
   ],
   imports: [
     BrowserModule,

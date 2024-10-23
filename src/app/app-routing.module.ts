@@ -6,6 +6,7 @@ import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.com
 import { NovDomaciComponent } from './domaci/nov-domaci/nov-domaci.component';
 import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domaceg.component';
 import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component';
+import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.component';
 
 const routes: Routes = [
   {path:"predavanje/start", component: StartPredavanjeComponent},
@@ -13,7 +14,8 @@ const routes: Routes = [
   {path:"domaci/:id/evidentiranje", component: EvidentiranjeComponent},
   {path:"domaci/:id/pregled", component: PregledDomacegComponent},
   {path:"domaci/grupa/:grupaId/predmet/:predmetId", component: DomaciListComponent},
-  {path:"domaci", component: NovDomaciComponent}
+  {path:"domaci", component: DomaciSelectComponent},
+  {path:"domaci/new", component: NovDomaciComponent}
 ];
 
 @NgModule({
