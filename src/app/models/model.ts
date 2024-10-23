@@ -118,6 +118,7 @@ export interface DomaciDetails {
 
   id: number,
   predmet: PredmetInfo,
+  naslov: string,
   text: string,
   datum: Date,
   pregledan: Boolean
@@ -137,7 +138,8 @@ export interface CreateUradjenDomaciCmd {
 
 export interface UpdateDomaciCmd {
   text: string,
-  datum: Date
+  datum: Date,
+  naslov: string
 }
 
 export interface DomaciInfo {

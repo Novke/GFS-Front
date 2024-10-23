@@ -13,6 +13,7 @@ export class EvidentiranjeComponent implements OnInit {
   id: number | null = null;
   domaci: DomaciDetails | undefined;
   novText: string = 'DOMAĆI NIJE UČITAN'
+  novNaslov: string = ''
   novDatum: Date = new Date()
   showModal = false;
 
@@ -47,6 +48,7 @@ export class EvidentiranjeComponent implements OnInit {
     this.domaci = result
     this.novText = result.text
     this.novDatum = result.datum
+    this.novNaslov = result.naslov
   }
 
   izracunajPrisutne() {
@@ -108,7 +110,9 @@ export class EvidentiranjeComponent implements OnInit {
   }
 
   jesuLiPoljaNepromenjena(): boolean {
-    return this.novDatum === this.domaci?.datum && this.novText === this.domaci.text
+    return this.novDatum === this.domaci?.datum && 
+    this.novText === this.domaci.text &&
+    this.novNaslov === this.domaci.naslov
   }
 
   jesuLiOslobadjani(): boolean {
@@ -122,7 +126,8 @@ export class EvidentiranjeComponent implements OnInit {
   azuriraj() {
     const cmd: UpdateDomaciCmd = {
       datum: this.novDatum,
-      text: this.novText
+      text: this.novText,
+      naslov: this.novNaslov
     }
 
     this.domaciService.azurirajDomaci(Number(this.id), cmd).subscribe(
