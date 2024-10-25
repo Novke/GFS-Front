@@ -89,7 +89,7 @@
                                 <td>{{bodovi2String(s)}}</td>
                                 <td class="text-center">
                                     <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
-                                        [disabled]="domaci?.pregledan || s.oslobodjen"> E </button>
+                                        [disabled]="domaci.pregledan || s.oslobodjen"> E </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -97,7 +97,7 @@
                 </div>
             </div>
             <div>
-                <button class="btn btn-primary my-3" (click)="zavrsi()" [disabled]="domaci?.pregledan"
+                <button class="btn btn-primary my-3" (click)="zavrsi()" [disabled]="domaci.pregledan"
                     *ngIf="domaci">Završi</button>
             </div>
 
