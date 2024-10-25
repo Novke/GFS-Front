@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti, UpdateDomaciCmd } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-evidentiranje',
@@ -139,7 +140,8 @@ export class EvidentiranjeComponent implements OnInit {
     if (window.confirm("Da li si siguran da želiš da završiš sa pregledanjem domaćeg?")) {
       this.domaciService.zavrsiPregledanje(Number(this.id))
       .subscribe(
-        () => this.router.navigate(['domaci', this.id, 'pregled']),
+        () => this.router.navigate([AppRoutes.domaciPregled(Number(this.id))]),
+
         error => console.log("Greska", error)
         )
 

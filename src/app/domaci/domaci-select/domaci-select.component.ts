@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { AppRoutes } from 'src/app/app.routes';
 import { GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 
@@ -43,12 +44,12 @@ export class DomaciSelectComponent {
 
   go(): void {
     if (this.izabranaGrupa && this.izabranPredmet) {
-      this.router.navigate(['domaci', 'grupa', this.izabranaGrupa, 'predmet', this.izabranPredmet])
+      this.router.navigate([AppRoutes.domaciGrupaPredmet(this.izabranaGrupa, this.izabranPredmet)])
     } 
   }
 
   new(){
-    this.router.navigate(['domaci/new'])
+    this.router.navigate([AppRoutes.domaciNew])
   }
 
 }

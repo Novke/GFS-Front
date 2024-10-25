@@ -3,6 +3,7 @@ import { DomaciInfo, GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-domaci-list',
@@ -69,9 +70,9 @@ export class DomaciListComponent implements OnInit{
 
   go2domaci(domaci: DomaciInfo){
     if (domaci.pregledan){
-      this.router.navigate(['/domaci', domaci.id, 'pregled'])
+      this.router.navigate([AppRoutes.domaciPregled(domaci.id)])
     } else {
-      this.router.navigate(['/domaci', domaci.id, 'evidentiranje'])
+      this.router.navigate([AppRoutes.domaciEvidentiranje(domaci.id)])
     }
   }
 

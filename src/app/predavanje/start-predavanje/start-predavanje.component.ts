@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/model';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-start-predavanje',
@@ -57,7 +58,7 @@ export class StartPredavanjeComponent implements OnInit {
         (predavanje) => {
           console.log('Lecture started successfully:', predavanje);
           
-          this.router.navigate(['/predavanje','live', predavanje.id])
+          this.router.navigate([AppRoutes.predavanjeLive(predavanje.id)])
 
         },
         (error) => {

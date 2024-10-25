@@ -3,6 +3,7 @@ import { DodajDomaciCmd, GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/
 import { DomaciService } from '../domaci.service';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { Router } from '@angular/router';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-nov-domaci',
@@ -41,7 +42,7 @@ export class NovDomaciComponent implements OnInit{
     }
 
     this.domaciService.dodajDomaci(cmd).subscribe(
-      result => this.router.navigate([`/domaci/${result.id}/evidentiranje`])
+      result => this.router.navigate([AppRoutes.domaciEvidentiranje(result.id)])
     )
   }
 
