@@ -8,9 +8,11 @@ import { PregledDomacegComponent } from './domaci/pregled-domaceg/pregled-domace
 import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component';
 import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.component';
 import { AppRoutes } from './app.routes';
+import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predavanje-select.component';
 
 
 const routes: Routes = [
+  { path: AppRoutes.predavanjeSelect, component: PredavanjeSelectComponent},
   { path: AppRoutes.predavanjeStart, component: StartPredavanjeComponent },
   { path: AppRoutes.predavanjeLive(':id'), component: LivePredavanjeComponent },
   { path: AppRoutes.domaciEvidentiranje(':id'), component: EvidentiranjeComponent },

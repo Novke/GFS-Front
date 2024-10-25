@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { SelectBaseComponent } from 'src/app/components/select-base.component';
 import { AppRoutes } from 'src/app/app.routes';
-import { GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 
 @Component({
@@ -9,47 +9,18 @@ import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
   templateUrl: './domaci-select.component.html',
   styleUrls: ['./domaci-select.component.css']
 })
-export class DomaciSelectComponent {
-  grupe: GrupaInfo[] = [];
-  predmeti: PredmetInfo[] = [];
-  izabranaGrupa : number = 0;
-  izabranPredmet : number= 0;
-
-
-  constructor(private predavanjeService: PredavanjeService, private router: Router) {}
-
-  ngOnInit(): void {
-    this.loadGroupsAndSubjects();
+export class DomaciSelectComponent extends SelectBaseComponent {
+  constructor(predavanjeService: PredavanjeService, private router: Router) {
+    super(predavanjeService);
   }
 
-  loadGroupsAndSubjects(): void {
-    this.predavanjeService.getGrupe().subscribe(
-      (groups) => {
-        this.grupe = groups;
-      },
-      (error) => {
-        console.error('Error fetching groups', error);
-      }
-    );
-
-    this.predavanjeService.getPredmeti().subscribe(
-      (subjects) => {
-        this.predmeti = subjects;
-      },
-      (error) => {
-        console.error('Error fetching subjects', error);
-      }
-    );
-  }
-
-  go(): void {
+  override onSubmit(): void {
     if (this.izabranaGrupa && this.izabranPredmet) {
-      this.router.navigate([AppRoutes.domaciGrupaPredmet(this.izabranaGrupa, this.izabranPredmet)])
-    } 
+      this.router.navigate([AppRoutes.domaciGrupaPredmet(this.izabranaGrupa, this.izabranPredmet)]);
+    }
   }
 
-  new(){
-    this.router.navigate([AppRoutes.domaciNew])
+  override onNew(): void {
+    this.router.navigate([AppRoutes.domaciNew]);
   }
-
 }
