@@ -80,7 +80,8 @@ export interface PredavanjeInfo {
     id: number,
     rb: number,
     datum: Date,
-    tema: String
+    tema: String,
+    zavrseno: boolean
 }
 
 export interface DomaciId {

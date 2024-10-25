@@ -1,1 +1,26 @@
-<p>predavanje-list works!</p>
+<div class="container mt-5">
+    <div>
+        <div mat-subheader class="text-center">Sva predavanja</div>
+    </div>
+    <div class="row my-4">
+        <div class="col text-center">
+            <label for="predmet" class="form-label">Predmet</label>
+            <input class="form-control" id="predmet" [value]="predmet?.naziv" disabled>
+        </div>
+        <div class="col text-center">
+            <label for="grupa" class="form-label">Grupa</label>
+            <input class="form-control" id="grupa" [value]="grupa?.naziv" disabled>
+        </div>
+    </div>
+
+    <div class="container">
+        <mat-list *ngFor="let p of predavanja; let i = index">
+            <mat-divider></mat-divider>
+            <mat-list-item (click)="go2predavanje(p)">
+                <div matListItemTitle>{{i+1}} {{p.tema}}</div>
+                <div matListItemLine>{{p.datum | date : 'd. MMMM y.'}}</div>
+                <span matListItemLine>{{p.zavrseno ? 'ZAVRŠENO' : ''}}</span>
+            </mat-list-item>
+        </mat-list>
+    </div>
+</div>

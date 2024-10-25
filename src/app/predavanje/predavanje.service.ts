@@ -87,4 +87,8 @@ export class PredavanjeService {
     return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}`, null)
   }
 
+  vratiPredavanjaGrupaPredmet(grupaId: number, predmetId: number){
+    return this.http.get<PredavanjeInfo[]>(`${this.apiUrl}/predavanja/grupa/${grupaId}/predmet/${predmetId}`)
+  }
+
 }

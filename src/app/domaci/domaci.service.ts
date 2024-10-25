@@ -35,7 +35,7 @@ export class DomaciService {
     return this.http.patch<void>(`${this.apiUrl}/domaci/${domaciId}`, null)
   }
 
-  vratiDomaceIzGrupe(grupaId: number, predmetId: number){
+  vratiDomaceGrupaPredmet(grupaId: number, predmetId: number){
     return this.http.get<DomaciInfo[]>(`${this.apiUrl}/domaci/grupa/${grupaId}/predmet/${predmetId}`)
   }
 

@@ -60,7 +60,7 @@ export class DomaciListComponent implements OnInit{
 
   private ucitajDomace(){
     if (this.grupaId && this.predmetId) {
-      this.domaciService.vratiDomaceIzGrupe(Number(this.grupaId), Number(this.predmetId)).subscribe(
+      this.domaciService.vratiDomaceGrupaPredmet(Number(this.grupaId), Number(this.predmetId)).subscribe(
         result => {
           this.domaci = result
         }
