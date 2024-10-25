@@ -59,6 +59,10 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "host": "sistem.gfs",
+            "port": 4200
+          },
           "configurations": {
             "production": {
               "browserTarget": "gfs-front:build:production"

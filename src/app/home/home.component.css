@@ -1,0 +1,15 @@
+
+/* Title style */
+.home-page h1 {
+    font-size: 3rem;  /* Slightly larger than display-4 */
+    color: darkgray;     /* Bootstrap primary color or any preferred color */
+    font-weight: 700;
+  }
+  
+  .home-page .welcome-text {
+    font-size: 4rem;   /* Makes the "DOBRODOŠLI!" text huge */
+    font-weight: 900;
+    color: black;    /* Bright color for emphasis */
+    margin-top: 20px;
+  }
+  

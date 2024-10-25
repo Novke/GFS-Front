@@ -11,9 +11,11 @@ import { AppRoutes } from './app.routes';
 import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predavanje-select.component';
 import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje-list.component';
 import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
+import { HomeComponent } from './home/home.component';
 
 
 const routes: Routes = [
+  { path: AppRoutes.home, component: HomeComponent},
   { path: AppRoutes.predavanjeSelect, component: PredavanjeSelectComponent},
   { path: AppRoutes.predavanjeStart, component: StartPredavanjeComponent },
   { path: AppRoutes.predavanjeGrupaPredmet(':grupaId', ':predmetId'), component: PredavanjeListComponent},

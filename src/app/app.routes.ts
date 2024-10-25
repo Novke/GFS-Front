@@ -1,4 +1,5 @@
 export const AppRoutes = {
+    home: "",
     predavanjeSelect: "predavanje",
     predavanjeStart: "predavanje/start",
     predavanjeLive: (id: number | string) => `predavanje/live/${id}`,
