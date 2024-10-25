@@ -148,4 +148,8 @@ export class EvidentiranjeComponent implements OnInit {
 
     }
   }
+
+  navigatePregled(){
+    if (this.id) this.router.navigate([AppRoutes.domaciPregled(Number(this.id))])
+  }
 }

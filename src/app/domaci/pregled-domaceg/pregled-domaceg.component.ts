@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { DomaciDetails, DomaciStudentiInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-pregled-domaceg',
@@ -55,5 +56,9 @@ export class PregledDomacegComponent implements OnInit {
 
   napomene2string(student: DomaciStudentiInfo){
     return student.uradjenDomaciNapomene ? student.uradjenDomaciNapomene : "-";
+  }
+
+  navigateEvidentiranje(){
+    if (this.id) this.router.navigate([AppRoutes.domaciEvidentiranje(Number(this.id))])
   }
 }
