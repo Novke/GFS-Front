@@ -1,41 +1,42 @@
 <div class="container mt-5">
-    <div class="row justify-content-center">
-      <div class="col-md-6">
-        <h2 class="text-center mb-4">{{titleText}}</h2>
-  
-        <form (ngSubmit)="onSubmit()">
-          <div class="form-group mb-3">
-            <label for="group" class="form-label">Izaberi grupu:</label>
-            <select [(ngModel)]="izabranaGrupa" id="group" name="group" class="form-select" required>
-              <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
-            </select>
-          </div>
-  
-          <div class="form-group mb-3">
-            <label for="subject" class="form-label">Izaberi predmet:</label>
-            <select [(ngModel)]="izabranPredmet" id="subject" name="subject" class="form-select" required>
-              <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
-            </select>
-          </div>
-  
-          <div class="text-center">
-            <button type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet">
-              {{submitButtonText}}
-            </button>
-          </div>
-        </form>
-      </div>
-  
-      <div class="container mt-5">
-        <mat-divider></mat-divider>
-        <h2 class="text-center mt-3">ili...</h2>
-      </div>
-  
-      <div class="text-center mt-3">
-        <button class="btn btn-primary" (click)="onNew()">
-          {{newButtonText}}
-        </button>
-      </div>
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <h2 class="text-center mb-4">{{titleText}}</h2>
+
+      <form (ngSubmit)="onSubmit()">
+        <div class="form-group mb-3">
+          <label for="group" class="form-label">Izaberi grupu:</label>
+          <select [(ngModel)]="izabranaGrupa" (ngModelChange)="onIzabranaGrupaChange()" id="group" name="group"
+            class="form-select" required>
+            <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
+          </select>
+        </div>
+
+        <div class="form-group mb-3">
+          <label for="subject" class="form-label">Izaberi predmet:</label>
+          <select [(ngModel)]="izabranPredmet" (ngModelChange)="onIzabranPredmetChange()" id="subject" name="subject"
+            class="form-select" required>
+            <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
+          </select>
+        </div>
+
+        <div class="text-center">
+          <button type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet">
+            {{submitButtonText}}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="container mt-5">
+      <mat-divider></mat-divider>
+      <h2 class="text-center mt-3">ili...</h2>
+    </div>
+
+    <div class="text-center mt-3">
+      <button class="btn btn-primary" (click)="onNew()">
+        {{newButtonText}}
+      </button>
     </div>
   </div>
-  
+</div>

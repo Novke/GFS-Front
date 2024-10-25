@@ -2,6 +2,10 @@
   [titleText]="'Pretraži predavanja'"
   [submitButtonText]="'Pretraži'"
   [newButtonText]="'Započni novo'"
+  [izabranaGrupa]="izabranaGrupa"
+  [izabranPredmet]="izabranPredmet"
+  (izabranaGrupaChange)="izabranaGrupa = $event"
+  (izabranPredmetChange)="izabranPredmet = $event"
   (submitSelection)="onSubmit()"
   (createNew)="onNew()"
 ></app-select-base>

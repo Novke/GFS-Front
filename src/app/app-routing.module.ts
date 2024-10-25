@@ -9,17 +9,19 @@ import { DomaciListComponent } from './domaci/domaci-list/domaci-list.component'
 import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.component';
 import { AppRoutes } from './app.routes';
 import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predavanje-select.component';
+import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje-list.component';
 
 
 const routes: Routes = [
   { path: AppRoutes.predavanjeSelect, component: PredavanjeSelectComponent},
   { path: AppRoutes.predavanjeStart, component: StartPredavanjeComponent },
+  { path: AppRoutes.predavanjeGrupaPredmet(':grupaId', ':predmetId'), component: PredavanjeListComponent},
   { path: AppRoutes.predavanjeLive(':id'), component: LivePredavanjeComponent },
-  { path: AppRoutes.domaciEvidentiranje(':id'), component: EvidentiranjeComponent },
-  { path: AppRoutes.domaciPregled(':id'), component: PregledDomacegComponent },
-  { path: AppRoutes.domaciGrupaPredmet(':grupaId', ':predmetId'), component: DomaciListComponent },
   { path: AppRoutes.domaciSelect, component: DomaciSelectComponent },
-  { path: AppRoutes.domaciNew, component: NovDomaciComponent }
+  { path: AppRoutes.domaciNew, component: NovDomaciComponent },
+  { path: AppRoutes.domaciGrupaPredmet(':grupaId', ':predmetId'), component: DomaciListComponent },
+  { path: AppRoutes.domaciEvidentiranje(':id'), component: EvidentiranjeComponent },
+  { path: AppRoutes.domaciPregled(':id'), component: PregledDomacegComponent }
 ];
 
 @NgModule({
