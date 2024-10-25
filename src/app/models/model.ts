@@ -12,6 +12,7 @@ export interface StartPredavanjeCmd {
     predmet: PredmetInfo;
     grupa: GrupaInfo;
     aktivnosti: AktivnostInfo[];
+    zavrseno: boolean;
   }
   
   export interface PredavanjeStudentId {

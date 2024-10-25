@@ -20,7 +20,8 @@ export class LivePredavanjeComponent implements OnInit {
     posecenost: 0,
     predmet: { id: 0, naziv: '' },
     grupa: { id: 0, naziv: '', godinaUpisa: 0 },
-    aktivnosti: []
+    aktivnosti: [],
+    zavrseno: true
   };
 
   liveGrupa: GrupaDetails = {
@@ -234,6 +235,15 @@ export class LivePredavanjeComponent implements OnInit {
       default:
         return "";
     }
+  }
+
+  zavrsiPredavanje(){
+    if (this.id) 
+    if (window.confirm("Da li si siguran da želiš da završiš predavanje?"))
+      this.predavanjeService.zavrsiPredavanje(Number(this.id)).subscribe(
+        result => this.osveziPredavanje(result)
+    )
+
   }
 
 

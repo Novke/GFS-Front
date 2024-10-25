@@ -83,4 +83,8 @@ export class PredavanjeService {
     return this.http.get<PredmetInfo>(`${this.apiUrl}/predmeti/${predmetId}`)
   }
 
+  zavrsiPredavanje(predavanjeId: number){
+    return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}`, null)
+  }
+
 }

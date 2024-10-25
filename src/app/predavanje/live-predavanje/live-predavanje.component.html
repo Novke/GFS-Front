@@ -61,7 +61,8 @@
                         <div class="col-auto">
                             <button class="btn btn-primary" 
                             (click)="toggleModal()" 
-                            *ngIf="livePredavanje.aktivnosti.length<liveGrupa.studenti.length">Dodaj</button>
+                            *ngIf="livePredavanje.aktivnosti.length<liveGrupa.studenti.length"
+                            [disabled]="livePredavanje.zavrseno">Dodaj</button>
                         </div>
                     </div>
                     <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
@@ -91,7 +92,7 @@
                                             <div class="btn-group" role="group">
                                                 <button *ngFor="let tip of tipKeys" class="btn btn-sm btn-primary mx-1"
                                                     (click)="handleTipAction(tip, a.student.id)"
-                                                    [disabled]="tipEquals(a, tip)">
+                                                    [disabled]="tipEquals(a, tip) || livePredavanje.zavrseno">
                                                     {{ buttonLabel(tip) }}
                                                 </button>
                                             </div>
@@ -99,6 +100,7 @@
 
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-secondary"
+                                            [disabled]="livePredavanje.zavrseno"
                                                 (click)="skloniPrisutnog(a.student.id)">X</button>
                                         </td>
                                     </tr>
@@ -112,7 +114,15 @@
                 </div>
 
             </div>
+            <div class="container text-center my-5" *ngIf="livePredavanje.id">
+                <button class="btn btn-secondary" (click)="zavrsiPredavanje()" [disabled]="livePredavanje.zavrseno">Završi</button>
+            </div>
         </div>
+
+
+
+
+
         <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
             <div class="modal-content table-responsive">
                 <div class="row mb-5">
