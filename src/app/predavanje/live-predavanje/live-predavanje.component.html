@@ -1,7 +1,15 @@
 <div class="container mt-4">
     <div class="row mt-5">
         <div class="col">
-            <h2>Detalji Predavanja</h2>
+
+            <div class="row">
+                <div class="col">
+                    <h2>Detalji Predavanja</h2>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-secondary" (click)="navigatePregled()">Pregled</button>
+                </div>
+            </div>
 
             <form (ngSubmit)="updatePredavanje()" *ngIf="livePredavanje" #predavanjeForm="ngForm">
                 <div class="row">
@@ -59,10 +67,9 @@
                     <div class="row mb-3">
                         <h3 class="col">Prisutni</h3>
                         <div class="col-auto">
-                            <button class="btn btn-primary" 
-                            (click)="toggleModal()" 
-                            *ngIf="livePredavanje.aktivnosti.length<liveGrupa.studenti.length"
-                            [disabled]="livePredavanje.zavrseno">Dodaj</button>
+                            <button class="btn btn-primary" (click)="toggleModal()"
+                                *ngIf="livePredavanje.aktivnosti.length<liveGrupa.studenti.length"
+                                [disabled]="livePredavanje.zavrseno">Dodaj</button>
                         </div>
                     </div>
                     <div *ngIf="livePredavanje.aktivnosti.length > 0; else noActivities">
@@ -100,7 +107,7 @@
 
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-secondary"
-                                            [disabled]="livePredavanje.zavrseno"
+                                                [disabled]="livePredavanje.zavrseno"
                                                 (click)="skloniPrisutnog(a.student.id)">X</button>
                                         </td>
                                     </tr>
@@ -115,7 +122,8 @@
 
             </div>
             <div class="container text-center my-5" *ngIf="livePredavanje.id">
-                <button class="btn btn-secondary" (click)="zavrsiPredavanje()" [disabled]="livePredavanje.zavrseno">Završi</button>
+                <button class="btn btn-secondary" (click)="zavrsiPredavanje()"
+                    [disabled]="livePredavanje.zavrseno">Završi</button>
             </div>
         </div>
 

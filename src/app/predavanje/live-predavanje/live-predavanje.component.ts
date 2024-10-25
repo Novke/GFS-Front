@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd, tipAktivnosti } from '../../models/model';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-live-predavanje',
@@ -44,6 +45,7 @@ export class LivePredavanjeComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private predavanjeService: PredavanjeService) { }
 
   ngOnInit() {
@@ -241,9 +243,14 @@ export class LivePredavanjeComponent implements OnInit {
     if (this.id) 
     if (window.confirm("Da li si siguran da želiš da završiš predavanje?"))
       this.predavanjeService.zavrsiPredavanje(Number(this.id)).subscribe(
-        result => this.osveziPredavanje(result)
+        result => this.navigatePregled()
     )
 
+  }
+
+  navigatePregled(){
+    if (this.id)
+      this.router.navigate([AppRoutes.predavanjePregled(Number(this.id))])
   }
 
 

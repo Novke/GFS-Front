@@ -21,6 +21,7 @@ import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.comp
 import { SelectBaseComponent } from './components/select-base.component';
 import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje-list.component';
 import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predavanje-select.component';
+import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
 
 @NgModule({
   declarations: [
@@ -34,7 +35,8 @@ import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predav
     DomaciSelectComponent,
     SelectBaseComponent,
     PredavanjeListComponent,
-    PredavanjeSelectComponent
+    PredavanjeSelectComponent,
+    PregledPredavanjaComponent
   ],
   imports: [
     BrowserModule,

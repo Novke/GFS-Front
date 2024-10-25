@@ -65,7 +65,7 @@ export class PredavanjeListComponent implements OnInit {
 
   go2predavanje(predavanje: PredavanjeInfo) {
     if (predavanje.zavrseno) {
-      //navigacija na pregled TODO
+      this.router.navigate([AppRoutes.predavanjePregled(predavanje.id)])
     } else {
       this.router.navigate([AppRoutes.predavanjeLive(predavanje.id)])
     }

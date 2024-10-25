@@ -1,0 +1,67 @@
+<div class="container mt-5">
+    <div class="row">
+        <div class="col">
+
+            <h1 class="text-center">Predavanje {{predavanje?.rb}}</h1>
+
+
+
+            <div class="container text-center mt-2" *ngIf="predavanje">
+                <button class="btn btn-secondary" (click)="navigateLive()" *ngIf="predavanje">Izmeni</button>
+            </div>
+
+            <div class="container my-5">
+
+                <div class="row">
+                    <div class="col">
+                        <label for="grupaNaziv">Grupa</label>
+                        <h2 id="grupaNaziv">{{predavanje?.grupa?.naziv}}</h2>
+                    </div>
+                    <div class="col">
+                        <label for="grupaNaziv">Predmet</label>
+                        <h2 id="grupaNaziv">{{predavanje?.predmet?.naziv}}</h2>
+                    </div>
+
+                </div>
+
+                <div class="col">
+                    <label for="predavanjeTema">Tema</label>
+                    <input id="predavanjeTema" class="form-control" name="predavanjeTema" [ngModel]="predavanje?.tema"
+                        disabled>
+                </div>
+
+
+                <div class="form-group my-3 row">
+
+                    <div class="form-group mb-3 col col-md-5">
+                        <label for="predavanjeDatum">Datum</label>
+                        <input type="date" id="predavanjeDatum" class="form-control" name="predavanjeDatum"
+                            [ngModel]="predavanje?.datum" disabled>
+                    </div>
+                    <div class="col">
+                        <label>Posećenost</label>
+                        <input id="predavanjePosecenost" class="form-control" name="predavanjePosecenost" disabled
+                            [ngModel]="posecenost2string()">
+                    </div>
+                </div>
+            </div>
+
+            <div class="container">
+                <div fxLayout="row wrap" fxLayoutGap="50px grid">
+                    <div *ngFor="let a of predavanje?.aktivnosti">
+                        <mat-card class="aktivnost-card">
+                            <mat-card-content>
+                                <mat-card-title>{{student2string(a.student)}}</mat-card-title>
+                                <mat-card-subtitle class="my-2">{{a.tip}}</mat-card-subtitle>
+                                <mat-card-subtitle class="my-2"
+                                    style="font-weight: 600">{{napomene2string(a)}}</mat-card-subtitle>
+                            </mat-card-content>
+                        </mat-card>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+</div>

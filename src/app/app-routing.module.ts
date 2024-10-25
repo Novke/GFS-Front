@@ -10,6 +10,7 @@ import { DomaciSelectComponent } from './domaci/domaci-select/domaci-select.comp
 import { AppRoutes } from './app.routes';
 import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predavanje-select.component';
 import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje-list.component';
+import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
 
 
 const routes: Routes = [
@@ -17,6 +18,7 @@ const routes: Routes = [
   { path: AppRoutes.predavanjeStart, component: StartPredavanjeComponent },
   { path: AppRoutes.predavanjeGrupaPredmet(':grupaId', ':predmetId'), component: PredavanjeListComponent},
   { path: AppRoutes.predavanjeLive(':id'), component: LivePredavanjeComponent },
+  { path: AppRoutes.predavanjePregled(':id'), component: PregledPredavanjaComponent},
   { path: AppRoutes.domaciSelect, component: DomaciSelectComponent },
   { path: AppRoutes.domaciNew, component: NovDomaciComponent },
   { path: AppRoutes.domaciGrupaPredmet(':grupaId', ':predmetId'), component: DomaciListComponent },
