@@ -10,6 +10,7 @@ import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 export class SelectBaseComponent implements OnInit {
     @Input() submitButtonText: string = 'Submit';
     @Input() newButtonText: string = 'Create New';
+    @Input() titleText: string = '';
 
     @Output() submitSelection = new EventEmitter<void>();
     @Output() createNew = new EventEmitter<void>();
