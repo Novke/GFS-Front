@@ -131,11 +131,13 @@ export interface DomaciDetails {
 }
 
 export interface CreateUradjenDomaciCmd {
+
   studentId: number,
   domaciId: number,
   bodovi: number,
   napomene: string,
   prepisivanje: boolean
+  
 }
 
 export interface UpdateDomaciCmd {
