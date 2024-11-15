@@ -20,8 +20,8 @@ export class NovTestComponent implements OnInit {
   izabranTipTesta: number = 0;
   novTipTestaNaziv: string | null = null;
   kreirajNoviTip: Boolean = false;
-  datum: Date = new Date();
-  brojGrupa: number = 0;
+  datum: Date | null = null;
+  brojGrupa: number = 1;
   maxPoena: number = 0;
 
   constructor(
@@ -79,8 +79,12 @@ export class NovTestComponent implements OnInit {
     this.novTipTestaNaziv = null;
   }
 
+  setBrojGrupa(broj: number){
+    this.brojGrupa = broj
+  }
+
   createTest(): void {
-    if (this.izabranaGrupa && this.izabranPredmet) {
+    if (this.izabranaGrupa && this.izabranPredmet && this.datum) {
 
       const cmd: CreateTestCmd = {
         grupaId: this.izabranaGrupa,

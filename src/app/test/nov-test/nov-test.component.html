@@ -1,7 +1,7 @@
 <div class="container mt-5">
     <div class="row justify-content-center">
       <div class="col-md-6">
-        <h2 class="text-center mb-4">Započni predavanje</h2>
+        <h2 class="text-center mb-4">Kreiraj test</h2>
         
         <form (ngSubmit)="createTest()">
             <div>
@@ -42,19 +42,47 @@
             <label for="novTipTesta" class="form-label">Tip testa:</label>
             <div class="row">
                 <div class="col">
-                    <input [(ngModel)]="novTipTestaNaziv" id="novTipTesta" name="novTipTesta" class="form-select" required>
+                    <input [(ngModel)]="novTipTestaNaziv" id="novTipTesta" name="novTipTesta" class="form-control" required>
                 </div>
                 <div class="col-md-2">
                     <button (click)="postojeciTip()" class="btn btn-secondary">Postojeći</button>
                 </div>
             </div>
           </div>
+
+<!--        DATUM / GRUPE / MAX POENA    -->
+          <div *ngIf="izabranPredmet && izabranaGrupa" class="row">
+
+            <div class="col">
+                <label for="datum" class="form-label">Datum:</label>
+                <input [(ngModel)]="datum" class="form-control" id="datum" name="datum" required type="date">
+            </div>
+            <div class="col">
+                <label for="grupeDugmici" class="form-label">Grupe: {{ brojGrupa }}</label>
+                <div class="d-flex gap-2" id="grupeDugmici">
+                  <button 
+                    *ngFor="let grupa of ['A', 'B', 'C', 'D']; let i = index" 
+                    class="btn" 
+                    [ngClass]="{'btn-primary': i < brojGrupa, 'btn-outline-secondary': i >= brojGrupa}" 
+                    (click)="setBrojGrupa(i + 1)">
+                    {{ grupa }}
+                  </button>
+                </div>
+              </div>
+              
+            <div class="col">
+                <label for="maxPoena" class="form-label">Broj poena:</label>
+                <input [(ngModel)]="maxPoena" type="number" class="form-control" id="maxPoena" name="maxPoena">
+            </div>
+
+          </div>
+          
           </div>
   
           <!-- Submit Button -->
-          <div class="text-center">
+          <div class="text-center mt-5">
             <button type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet">
-              Pokreni
+              Kreiraj
             </button>
           </div>
         </form>
