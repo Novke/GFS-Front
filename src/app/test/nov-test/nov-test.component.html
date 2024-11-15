@@ -22,8 +22,8 @@
               <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
             </select>
           </div>
-          <!-- Tip testa -->
-          <div class="form-group mb-3" *ngIf="izabranPredmet">
+          <!-- Postojeci Tip testa -->
+          <div class="form-group mb-3" *ngIf="izabranPredmet && !kreirajNoviTip">
             <label for="tipTesta" class="form-label">Tip testa:</label>
             <div class="row">
                 <div class="col">
@@ -32,8 +32,20 @@
                         <option *ngFor="let t of tipoviTesta" [ngValue]="t.id">{{ t.naziv }}</option>
                       </select>
                 </div>
-                <div class="col-md-1">
-                    <button class="btn btn-secondary">Nov</button>
+                <div class="col-md-2">
+                    <button (click)="novTip()" class="btn btn-secondary">Nov tip</button>
+                </div>
+            </div>
+          </div>
+          <!-- Nov Tip testa -->
+          <div class="form-group mb-3" *ngIf="izabranPredmet && kreirajNoviTip">
+            <label for="novTipTesta" class="form-label">Tip testa:</label>
+            <div class="row">
+                <div class="col">
+                    <input [(ngModel)]="novTipTestaNaziv" id="novTipTesta" name="novTipTesta" class="form-select" required>
+                </div>
+                <div class="col-md-2">
+                    <button (click)="postojeciTip()" class="btn btn-secondary">Postojeći</button>
                 </div>
             </div>
           </div>

@@ -18,7 +18,8 @@ export class NovTestComponent implements OnInit {
   izabranaGrupa: number = 0;
   izabranPredmet: number = 0;
   izabranTipTesta: number = 0;
-  novTipTesta: string | null = null;
+  novTipTestaNaziv: string | null = null;
+  kreirajNoviTip: Boolean = false;
   datum: Date = new Date();
   brojGrupa: number = 0;
   maxPoena: number = 0;
@@ -68,6 +69,16 @@ export class NovTestComponent implements OnInit {
     }
   }
 
+  novTip(){
+    this.kreirajNoviTip = true;
+    this.izabranTipTesta = 0;
+  }
+
+  postojeciTip(){
+    this.kreirajNoviTip = false;
+    this.novTipTestaNaziv = null;
+  }
+
   createTest(): void {
     if (this.izabranaGrupa && this.izabranPredmet) {
 
@@ -75,7 +86,7 @@ export class NovTestComponent implements OnInit {
         grupaId: this.izabranaGrupa,
         predmetId: this.izabranPredmet,
         tipTestaId: this.izabranTipTesta,
-        novTipTesta: this.novTipTesta,
+        novTipTesta: this.novTipTestaNaziv,
         brojGrupa: this.brojGrupa,
         datum: this.datum,
         maxPoena: this.maxPoena
