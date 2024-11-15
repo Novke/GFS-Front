@@ -1,0 +1,51 @@
+<div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <h2 class="text-center mb-4">Započni predavanje</h2>
+        
+        <form (ngSubmit)="createTest()">
+            <div>
+          <!-- Group Selection -->
+          <div class="form-group mb-3">
+            <label for="group" class="form-label">Izaberi grupu:</label>
+            <select [(ngModel)]="izabranaGrupa" id="group" name="group" class="form-select" required>
+              <!-- <option value="" disabled>Izaberi grupu</option> -->
+              <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
+            </select>
+          </div>
+  
+          <!-- Subject Selection -->
+          <div class="form-group mb-3">
+            <label for="subject" class="form-label">Izaberi predmet:</label>
+            <select [(ngModel)]="izabranPredmet" (change)="fetchTipove()" id="subject" name="subject" class="form-select" required>
+              <!-- <option value="" disabled>Izaberi predmet</option> -->
+              <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
+            </select>
+          </div>
+          <!-- Tip testa -->
+          <div class="form-group mb-3" *ngIf="izabranPredmet">
+            <label for="tipTesta" class="form-label">Tip testa:</label>
+            <div class="row">
+                <div class="col">
+                    <select [(ngModel)]="izabranTipTesta" id="tipTesta" name="tipTesta" class="form-select" required>
+                        <option value="" *ngIf="tipoviTesta.length===0" disabled>Ne postoji nijedan tip za odabrani predmet</option>
+                        <option *ngFor="let t of tipoviTesta" [ngValue]="t.id">{{ t.naziv }}</option>
+                      </select>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-secondary">Nov</button>
+                </div>
+            </div>
+          </div>
+          </div>
+  
+          <!-- Submit Button -->
+          <div class="text-center">
+            <button type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet">
+              Pokreni
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>

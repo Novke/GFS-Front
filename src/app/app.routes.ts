@@ -9,6 +9,11 @@ export const AppRoutes = {
     domaciNew: "domaci/new",
     domaciEvidentiranje: (id: number | string) => `domaci/${id}/evidentiranje`,
     domaciPregled: (id: number | string) => `domaci/${id}/pregled`,
-    domaciGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `domaci/grupa/${grupaId}/predmet/${predmetId}`
+    domaciGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `domaci/grupa/${grupaId}/predmet/${predmetId}`,
+    // testSelect
+    testNew: "test/new",
+    testEvidentiranje: (id: number | string) => `test/${id}/evidentiranje`
+    // testPregled
+    // testGrupaPredmet
   };
   

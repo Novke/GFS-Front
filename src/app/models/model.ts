@@ -1,3 +1,5 @@
+import { NumberSymbol } from "@angular/common";
+
 export interface StartPredavanjeCmd {
     predmetId: number;
     grupaId: number;
@@ -152,4 +154,33 @@ export interface DomaciInfo {
   text: string,
   datum: Date,
   pregledan: boolean
+}
+
+export interface CreateTestCmd {
+  tipTestaId: number | null,
+  novTipTesta: string | null,
+  predmetId: number,
+  grupaId: number,
+  datum: Date,
+  brojGrupa: number,
+  maxPoena: number
+}
+
+export interface TipTestaInfo {
+  id: number,
+  naziv: string
+}
+
+export interface TestDetails {
+  id: number,
+  tipTesta: TipTestaInfo,
+  predmet: PredmetInfo,
+  grupa: GrupaInfo,
+  datum: Date,
+  maxPoena: number,
+  grupe: TestGrupa[]
+}
+
+export enum TestGrupa {
+  A,B,D,C
 }
