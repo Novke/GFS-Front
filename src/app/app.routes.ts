@@ -12,8 +12,8 @@ export const AppRoutes = {
     domaciGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `domaci/grupa/${grupaId}/predmet/${predmetId}`,
     testSelect: "test",
     testNew: "test/new",
-    testEvidentiranje: (id: number | string) => `test/${id}/evidentiranje`
+    testEvidentiranje: (id: number | string) => `test/${id}/evidentiranje`,
     // testPregled
-    // testGrupaPredmet
+    testGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `test/grupa/${grupaId}/predmet/${predmetId}`,
   };
   
