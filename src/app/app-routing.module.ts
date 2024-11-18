@@ -15,6 +15,7 @@ import { HomeComponent } from './home/home.component';
 import { NovTestComponent } from './test/nov-test/nov-test.component';
 import { TestSelectComponent } from './test-select/test-select.component';
 import { TestListComponent } from './test-list/test-list.component';
+import { TestEvidentiranjeComponent } from './test-evidentiranje/test-evidentiranje.component';
 
 
 const routes: Routes = [
@@ -32,7 +33,7 @@ const routes: Routes = [
   { path: AppRoutes.testSelect, component: TestSelectComponent},
   { path: AppRoutes.testNew, component: NovTestComponent },
   { path: AppRoutes.testGrupaPredmet(':grupaId', ':predmetId'), component: TestListComponent},
-  // {},
+  { path: AppRoutes.testEvidentiranje(':id'), component: TestEvidentiranjeComponent},
   // {},
 ];
 
