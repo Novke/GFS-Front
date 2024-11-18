@@ -184,3 +184,23 @@ export interface TestInfo {
 export enum TestGrupa {
   A,B,D,C
 }
+
+export interface TestDetails {
+  id: number,
+  tipTesta: TipTestaInfo,
+  predmet: PredmetInfo,
+  grupa: GrupaInfo,
+  datum: Date,
+  maxPoena: number,
+  grupe: TestGrupa[],
+  polaganja: TestPolaganjeInfo[]
+}
+
+export interface TestPolaganjeInfo {
+  id: number,
+  student: StudentInfo,
+  grupa: TestGrupa,
+  ostvareniPoeni: number,
+  prepisivao: Boolean,
+  polozio: Boolean
+}
