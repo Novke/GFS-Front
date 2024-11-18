@@ -171,7 +171,7 @@ export interface TipTestaInfo {
   naziv: string
 }
 
-export interface TestDetails {
+export interface TestInfo {
   id: number,
   tipTesta: TipTestaInfo,
   predmet: PredmetInfo,
