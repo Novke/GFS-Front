@@ -200,7 +200,7 @@ export interface TestPolaganjeInfo {
   id: number,
   student: StudentInfo,
   grupa: TestGrupa,
-  ostvareniPoeni: number,
+  ostvareniPoeni: number | null,
   prepisivao: Boolean,
   polozio: Boolean
 }
