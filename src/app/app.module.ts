@@ -24,6 +24,7 @@ import { PredavanjeSelectComponent } from './predavanje/predavanje-select/predav
 import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
 import { HomeComponent } from './home/home.component';
 import { NovTestComponent } from './test/nov-test/nov-test.component';
+import { TestSelectComponent } from './test-select/test-select.component';
 
 @NgModule({
   declarations: [
@@ -40,7 +41,8 @@ import { NovTestComponent } from './test/nov-test/nov-test.component';
     PredavanjeSelectComponent,
     PregledPredavanjaComponent,
     HomeComponent,
-    NovTestComponent
+    NovTestComponent,
+    TestSelectComponent
   ],
   imports: [
     BrowserModule,

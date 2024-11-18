@@ -4,6 +4,7 @@ import { CreateTestCmd, GrupaInfo, PredmetInfo, TipTestaInfo } from 'src/app/mod
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { TestService } from '../test.service';
 import { AppRoutes } from 'src/app/app.routes';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-nov-test',
@@ -56,8 +57,8 @@ export class NovTestComponent implements OnInit {
     );
   }
 
-  fetchTipove(){
-    if (this.izabranPredmet){
+  fetchTipove() {
+    if (this.izabranPredmet) {
       this.testService.findTipoveTestovaPredmeta(this.izabranPredmet).subscribe(
         result => {
           this.tipoviTesta = result
@@ -69,17 +70,17 @@ export class NovTestComponent implements OnInit {
     }
   }
 
-  novTip(){
+  novTip() {
     this.kreirajNoviTip = true;
     this.izabranTipTesta = 0;
   }
 
-  postojeciTip(){
+  postojeciTip() {
     this.kreirajNoviTip = false;
     this.novTipTestaNaziv = null;
   }
 
-  setBrojGrupa(broj: number){
+  setBrojGrupa(broj: number) {
     this.brojGrupa = broj
   }
 
@@ -101,13 +102,19 @@ export class NovTestComponent implements OnInit {
           console.log('Test kreiran')
           this.router.navigate([AppRoutes.testEvidentiranje(test.id)])
         },
-        error => {
-          console.error('Neuspesno kreiranje testa', error)
+        (error: HttpErrorResponse) => {
+          if (error.status >= 400 && error.status < 500) {
+            const reason = error.error.reason || 'Sistemska greska'
+            alert(`Greska: ${reason}`)
+          } else {
+            console.error('Neuspesno kreiranje testa', error)
+          }
         }
       )
 
 
     }
   }
+
 
 }

@@ -13,6 +13,7 @@ import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje
 import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
 import { HomeComponent } from './home/home.component';
 import { NovTestComponent } from './test/nov-test/nov-test.component';
+import { TestSelectComponent } from './test-select/test-select.component';
 
 
 const routes: Routes = [
@@ -27,7 +28,7 @@ const routes: Routes = [
   { path: AppRoutes.domaciGrupaPredmet(':grupaId', ':predmetId'), component: DomaciListComponent },
   { path: AppRoutes.domaciEvidentiranje(':id'), component: EvidentiranjeComponent },
   { path: AppRoutes.domaciPregled(':id'), component: PregledDomacegComponent },
-  // {},
+  { path: AppRoutes.testSelect, component: TestSelectComponent},
   { path: AppRoutes.testNew, component: NovTestComponent },
   // {},
   // {},
