@@ -29,6 +29,7 @@
                 <div class="col">
                     <select [(ngModel)]="izabranTipTesta" id="tipTesta" name="tipTesta" class="form-select" required>
                         <option value="" *ngIf="tipoviTesta.length===0" disabled>Ne postoji nijedan tip za odabrani predmet</option>
+                        <option value="0" *ngIf="tipoviTesta.length>0" disabled selected></option>
                         <option *ngFor="let t of tipoviTesta" [ngValue]="t.id">{{ t.naziv }}</option>
                       </select>
                 </div>
