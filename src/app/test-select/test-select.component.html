@@ -1,1 +1,13 @@
-<p>test-select works!</p>
+<app-select-base
+    [titleText]="'Pretraži testove'"
+    [submitButtonText]="'Pretraži'"
+    [newButtonText]="'Napravi novi'"
+    [izabranaGrupa]="izabranaGrupa"
+    [izabranPredmet]="izabranPredmet"
+    (izabranaGrupaChange)="izabranaGrupa = $event"
+    (izabranPredmetChange)="izabranPredmet = $event"
+    (submitSelection)="onSubmit()"
+    (createNew)="onNew()"
+  >
+
+</app-select-base>
