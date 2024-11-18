@@ -15,6 +15,7 @@ export class TestSelectComponent {
 
   onSubmit(){
     if (this.izabranaGrupa && this.izabranPredmet) {
+      this.router.navigate([AppRoutes.testGrupaPredmet(this.izabranaGrupa, this.izabranPredmet)])
     }
   }
 
