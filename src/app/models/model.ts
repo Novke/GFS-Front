@@ -192,6 +192,7 @@ export interface TestDetails {
   grupa: GrupaInfo,
   datum: Date,
   maxPoena: number,
+  pregledan: Boolean,
   grupe: TestGrupa[],
   polaganja: TestPolaganjeInfo[]
 }
