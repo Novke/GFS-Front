@@ -17,7 +17,7 @@ export interface StartPredavanjeCmd {
     zavrseno: boolean;
   }
   
-  export interface PredavanjeStudentId {
+  export interface IdCmd {
     id: number;
   }
   

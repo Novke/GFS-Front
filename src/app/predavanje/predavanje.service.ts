@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, PredavanjeStudentId, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
+import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, IdCmd, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
 
 @Injectable({
   providedIn: 'root'
@@ -42,7 +42,7 @@ export class PredavanjeService {
   }
 
   dodajPrisutnog(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
-    const cmd : PredavanjeStudentId = {id: studentId}
+    const cmd : IdCmd = {id: studentId}
     return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/prisustvo`, cmd)
   }
 
@@ -51,7 +51,7 @@ export class PredavanjeService {
   }
 
   dodajZadatak(studentId: number, predavanjeId: number): Observable<PredavanjeDetails> {
-    const cmd : PredavanjeStudentId = {id: studentId}
+    const cmd : IdCmd = {id: studentId}
     return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/zadatak`, cmd)
   }
   
@@ -60,7 +60,7 @@ export class PredavanjeService {
   }
 
   dodajZadatakZvezdica(studentId: number, predavanjeId: number): Observable<PredavanjeDetails>{
-    const cmd : PredavanjeStudentId = {id: studentId}
+    const cmd : IdCmd = {id: studentId}
     return this.http.patch<PredavanjeDetails>(`${this.apiUrl}/predavanja/${predavanjeId}/zvezdica`, cmd)
   }
   
