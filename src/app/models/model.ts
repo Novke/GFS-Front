@@ -203,5 +203,6 @@ export interface TestPolaganjeInfo {
   grupa: TestGrupa,
   ostvareniPoeni: number | null,
   prepisivao: Boolean,
-  polozio: Boolean
+  polozio: Boolean,
+  napomene: string
 }

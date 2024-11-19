@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { GrupaDetails, StudentDetails, TestDetails } from '../models/model';
+import { GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo } from '../models/model';
 import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje/predavanje.service';
@@ -42,6 +42,7 @@ export class TestEvidentiranjeComponent implements OnInit {
     this.testService.viewTest(Number(this.id)).subscribe(
       result => {
         this.popuniPolja(result)
+        this.ucitajGrupu() //poziva i osvezavanje studenata
       }
     )
   }
@@ -50,7 +51,6 @@ export class TestEvidentiranjeComponent implements OnInit {
     this.test = result
     this.novDatum = result.datum
     this.novMaxPoena = result.maxPoena
-    this.ucitajGrupu()
   }
 
   navigatePregled() {
@@ -73,12 +73,26 @@ export class TestEvidentiranjeComponent implements OnInit {
 
   }
 
-  dodajIspitanika(id: number) {
-
+  dodajIspitanika(studentId: number) {
+    this.testService.dodajIspitanika(studentId, this.test!.id).subscribe(
+      result => {
+        this.popuniPolja(result)
+        this.osveziStudenteZaDodavanje()
+      }
+    )
   }
 
-  skloniIspitanika(id: number){
-    
+  ukloniIspitanika(studentId: number){
+    this.testService.skloniIspitanika(studentId, this.test!.id).subscribe(
+      result => {
+        this.popuniPolja(result)
+        this.osveziStudenteZaDodavanje()
+      }
+    )
+  }
+
+  evidentirajIspitanika(studentId: number){
+
   }
 
   ucitajGrupu() {
@@ -96,6 +110,7 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   osveziStudenteZaDodavanje() {
+    console.log("Osvezavam studente za dodavanje")
     this.studentiZaDodavanje = this.grupa?.studenti.filter(
       s => {
         const num = this.test?.polaganja.filter(
@@ -106,6 +121,17 @@ export class TestEvidentiranjeComponent implements OnInit {
         return num === 0
       }
     )
+    console.log("Rezultat:", this.studentiZaDodavanje)
+  }
+
+  postojeStudentiZaDodavanje(): Boolean {
+    if (this.studentiZaDodavanje) return this.studentiZaDodavanje.length>0
+    else return false;
+  }
+
+  poeni2string(polaganje: TestPolaganjeInfo):string {
+    if (polaganje.ostvareniPoeni) return polaganje.ostvareniPoeni?.toString()
+      else return "- Nije pregledano -"
   }
 
 
