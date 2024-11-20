@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import { GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo } from '../models/model';
+import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo } from '../models/model';
 import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje/predavanje.service';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-test-evidentiranje',
@@ -17,8 +18,10 @@ export class TestEvidentiranjeComponent implements OnInit {
   novMaxPoena: number | null = null
   novDatum: Date | null = null
 
-  showModal = false
+  showModalDodaj = false
   studentiZaDodavanje: StudentDetails[] | undefined = []
+
+  prikazaniIspitanik: TestPolaganjeInfo | null = null
 
   constructor(
     private testService: TestService,
@@ -66,7 +69,7 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   toggleModal() {
-    this.showModal = !this.showModal
+    this.showModalDodaj = !this.showModalDodaj
   }
 
   zavrsiEvidentiranje() {
@@ -91,8 +94,46 @@ export class TestEvidentiranjeComponent implements OnInit {
     )
   }
 
-  evidentirajIspitanika(studentId: number){
+  prikaziIspitanika(polaganje: TestPolaganjeInfo){
+    this.prikazaniIspitanik = {
+      grupa: polaganje.grupa,
+      id: polaganje.id,
+      napomene: polaganje.napomene,
+      ostvareniPoeni: polaganje.ostvareniPoeni,
+      polozio: polaganje.polozio,
+      prepisivao: polaganje.prepisivao,
+      student: polaganje.student
+    }
+  }
 
+  sakrijIspitanika(){
+    this.prikazaniIspitanik = null
+  }
+
+  evidentirajIspitanika(polaganje: TestPolaganjeInfo){
+    const cmd : EvidentirajPolaganjeCmd = {
+      grupa: polaganje.grupa,
+      napomene: polaganje.napomene,
+      ostvareniPoeni: Number(polaganje.ostvareniPoeni),
+      prepisivao: polaganje.prepisivao,
+      studentId: polaganje.student.id
+    }
+
+    this.testService.evidentirajIspitanika(cmd, this.test!.id).subscribe(
+      result => {
+        console.log("Uspesno!", result)
+        this.popuniPolja(result)
+        this.prikazaniIspitanik = null
+      },
+      (error: HttpErrorResponse) => {
+        if (error.status >= 400 && error.status < 500) {
+          const reason = error.error.reason || 'Sistemska greska'
+          alert(`Greska: ${reason}`)
+        } else {
+          console.error('Neuspesno kreiranje testa', error)
+        }
+      }
+    )
   }
 
   ucitajGrupu() {

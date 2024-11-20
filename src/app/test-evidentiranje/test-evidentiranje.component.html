@@ -17,11 +17,13 @@
 
                 <div class="form-group mb-3">
                     <label for="testMaxPoena" class="form-label">Max poena:</label>
-                    <input [(ngModel)]="novMaxPoena" type="number" id="testMaxPoena" name="testMaxPoena" class="form-control">
+                    <input [(ngModel)]="novMaxPoena" type="number" id="testMaxPoena" name="testMaxPoena"
+                        class="form-control">
                 </div>
 
                 <div>
-                    <button class="btn btn-primary" (click)="azuriraj()" [disabled]="jesuLiPoljaNepromenjena()">Sačuvaj</button>
+                    <button class="btn btn-primary" (click)="azuriraj()"
+                        [disabled]="jesuLiPoljaNepromenjena()">Sačuvaj</button>
                 </div>
 
 
@@ -37,10 +39,8 @@
                         <h3 class="col">Ispitanici</h3>
                         <div class="col-auto">
                             <!-- TODO dodaj ngIf test.polaganja.length < grupa.studenti.length -->
-                            <button class="btn btn-primary" (click)="toggleModal()"
-                            [disabled]="test.pregledan"
-                            *ngIf="postojeStudentiZaDodavanje()"
-                            >Dodaj</button>
+                            <button class="btn btn-primary" (click)="toggleModal()" [disabled]="test.pregledan"
+                                *ngIf="postojeStudentiZaDodavanje()">Dodaj</button>
                         </div>
                     </div>
 
@@ -64,10 +64,13 @@
                                         <td>{{poeni2string(p)}}</td>
                                         <td>{{p.napomene}}</td>
                                         <td class="text-center">
-                                            <button class="btn btn-sm" [ngClass]="p.ostvareniPoeni ? 'btn-secondary' : 'btn-primary'">Evidentiraj</button>
+                                            <button class="btn btn-sm"
+                                                [ngClass]="p.ostvareniPoeni ? 'btn-secondary' : 'btn-primary'"
+                                                (click)="prikaziIspitanika(p)">Evidentiraj</button>
                                         </td>
                                         <td class="text-center">
-                                            <button class="btn btn-sm btn-secondary" (click)="ukloniIspitanika(p.student.id)">X</button>
+                                            <button class="btn btn-sm btn-secondary"
+                                                (click)="ukloniIspitanika(p.student.id)">X</button>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -84,17 +87,18 @@
 
             <div class="container text-center my-5" *ngIf="test.id">
                 <button class="btn btn-secondary" (click)="zavrsiEvidentiranje()"
-                [disabled]="test.pregledan">Završi</button>
+                    [disabled]="test.pregledan">Završi</button>
             </div>
         </div>
 
-        <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
+        <div class="modal" [ngStyle]="{'display': showModalDodaj ? 'block' : 'none'}">
             <div class="modal-content table-responsive">
                 <div class="row mb-5">
                     <h3 class="col">Studenti u Grupi</h3>
-                    <button class="btn col btn =btn-secondary mx-3 col-md-1" (click)="toggleModal()">X</button>
+                    <button class="btn col btn btn-secondary mx-3 col-md-1" (click)="toggleModal()">X</button>
                 </div>
-                <table class="table table-striped table-bordered"  *ngIf="postojeStudentiZaDodavanje(); else noMoreStudents">
+                <table class="table table-striped table-bordered"
+                    *ngIf="postojeStudentiZaDodavanje(); else noMoreStudents">
                     <thead>
                         <tr>
                             <th style="width: 28px">#</th>
@@ -109,8 +113,7 @@
                             <td>{{s.ime}} {{s.prezime}}</td>
                             <td class="text-center text-nowrap">{{s.indeks}}</td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-primary"
-                                (click)="dodajIspitanika(s.id)">Dodaj</button>
+                                <button class="btn btn-sm btn-primary" (click)="dodajIspitanika(s.id)">Dodaj</button>
                             </td>
                         </tr>
                     </tbody>
@@ -121,6 +124,52 @@
                 <p class="alert alert-info">Nema studenata za dodavanje</p>
             </ng-template>
 
+        </div>
+
+        <div class="modal" *ngIf="prikazaniIspitanik && prikazaniIspitanik.student"
+            [ngStyle]="{'display' : prikazaniIspitanik ? 'block' : 'none'}">
+            <div class="modal-content">
+                <div class="row">
+                    <div class="col my-4 text-center">
+                        <h2>{{prikazaniIspitanik.student.ime}} {{prikazaniIspitanik.student.prezime}}
+                            {{prikazaniIspitanik.student.indeks}}</h2>
+                    </div>
+                    <div class="col col-md-2">
+                        <button class="btn col btn btn-secondary mx-3 text-center"
+                            (click)="sakrijIspitanika()">X</button>
+                    </div>
+                </div>
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label" for="kojaGrupa">Grupa:</label>
+                            <select [(ngModel)]="prikazaniIspitanik.grupa" class="form-select" id="kojaGrupa">
+                                <option selected disabled></option>
+                                <option *ngFor="let g of test!.grupe">{{g}}</option>
+                            </select>
+                        </div>
+                        <div class="col">
+
+                            <label class="form-label" for="brojPoena">Poeni  (od {{test?.maxPoena}})</label>
+                            <input [(ngModel)]="prikazaniIspitanik.ostvareniPoeni" type="number" class="form-control col col-md-2" id="brojPoena" required min="0">
+                            
+                        </div>
+                        
+                        <div class="col">
+                            <input type="checkbox" class="form-check-input mx-3" id="prepisivanje"
+                            [(ngModel)]="prikazaniIspitanik.prepisivao">
+                            <label class="form-check-label" for="prepisivanje">Prepisivanje?</label>
+                        </div>
+                    </div>
+                        <div class="col">
+                            <label class="form-label" for="napomene">Napomene</label>
+                            <input [(ngModel)]="prikazaniIspitanik.napomene" class="form-control" id="napomene">
+                        </div>
+                </div>
+                <div class="text-center">
+                    <button (click)="evidentirajIspitanika(prikazaniIspitanik)" class="btn btn-primary">Sačuvaj</button>
+                </div>
+            </div>
         </div>
 
 

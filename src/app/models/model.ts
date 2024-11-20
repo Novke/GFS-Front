@@ -206,3 +206,11 @@ export interface TestPolaganjeInfo {
   polozio: Boolean,
   napomene: string
 }
+
+export interface EvidentirajPolaganjeCmd {
+  studentId: number,
+  grupa: TestGrupa,
+  ostvareniPoeni: number,
+  prepisivao: Boolean,
+  napomene: string
+}

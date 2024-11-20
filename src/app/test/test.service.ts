@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CreateTestCmd, IdCmd, TestDetails, TestInfo, TipTestaInfo } from '../models/model';
+import { CreateTestCmd, EvidentirajPolaganjeCmd, IdCmd, TestDetails, TestInfo, TipTestaInfo } from '../models/model';
 
 @Injectable({
   providedIn: 'root'
@@ -26,10 +26,14 @@ export class TestService {
 
   dodajIspitanika(studentId: number, testId: number): Observable<TestDetails>{
     const cmd : IdCmd = {id: studentId}
-    return this.http.patch<TestDetails>(`${this.apiUrl}/test/${testId}/polaganje`, cmd)
+    return this.http.post<TestDetails>(`${this.apiUrl}/test/${testId}/polaganje`, cmd)
   }
 
   skloniIspitanika(studentId: number, testId: number): Observable<TestDetails>{
     return this.http.delete<TestDetails>(`${this.apiUrl}/test/${testId}/polaganje/${studentId}`)
+  }
+
+  evidentirajIspitanika(cmd: EvidentirajPolaganjeCmd, testId: number) {
+    return this.http.patch<TestDetails>(`${this.apiUrl}/test/${testId}/polaganje`, cmd)
   }
 }
