@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { AppRoutes } from 'src/app/app.routes';
 import { CreateTestCmd, GrupaInfo, PredmetInfo, TipTestaInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
+import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { TestService } from '../test.service';
-import { AppRoutes } from 'src/app/app.routes';
-import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-nov-test',
@@ -101,14 +101,7 @@ export class NovTestComponent implements OnInit {
         test => {
           this.router.navigate([AppRoutes.testEvidentiranje(test.id)])
         },
-        (error: HttpErrorResponse) => {
-          if (error.status >= 400 && error.status < 500) {
-            const reason = error.error.reason || 'Sistemska greska'
-            alert(`Greska: ${reason}`)
-          } else {
-            console.error('Neuspesno kreiranje testa', error)
-          }
-        }
+        error => ErrorHandlerUtil.handleHttpError(error)
       )
 
 

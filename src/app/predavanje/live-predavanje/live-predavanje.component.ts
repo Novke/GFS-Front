@@ -198,10 +198,6 @@ export class LivePredavanjeComponent implements OnInit {
     this.predavanjeService.updateAktivnostiNapomena(aktivnostId, value).subscribe(
       result => {
         //ne treba nista jos
-      },
-      error => {
-        //mozda
-        // this.updatedNapomene[aktivnostId]=this.livePredavanje.aktivnosti.filter(a => a.id === aktivnostId).at(0)?.napomene;
       }
     )
   }

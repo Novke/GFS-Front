@@ -3,6 +3,7 @@ import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnost
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
+import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 
 @Component({
   selector: 'app-evidentiranje',
@@ -142,7 +143,7 @@ export class EvidentiranjeComponent implements OnInit {
       .subscribe(
         () => this.router.navigate([AppRoutes.domaciPregled(Number(this.id))]),
 
-        error => console.log("Greska", error)
+        error => ErrorHandlerUtil.handleHttpError(error)
         )
 
 
