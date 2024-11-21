@@ -107,7 +107,9 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   zavrsiEvidentiranje() {
-
+    this.testService.zavrsiEvidentiranje(this.test!.id).subscribe(
+      result => console.log("Uspesno")
+    )
   }
 
   dodajIspitanika(studentId: number) {

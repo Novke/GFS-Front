@@ -40,4 +40,8 @@ export class TestService {
   evidentirajIspitanika(cmd: EvidentirajPolaganjeCmd, testId: number) {
     return this.http.patch<TestDetails>(`${this.apiUrl}/test/${testId}/polaganje`, cmd)
   }
+
+  zavrsiEvidentiranje(testId: number){
+    return this.http.patch<TestDetails>(`${this.apiUrl}/test/${testId}`, null)
+  }
 }
