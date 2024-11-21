@@ -79,7 +79,6 @@ export class PredavanjeService {
   }
 
   getPredmet(predmetId: number){
-    console.log("Predmet id: " + predmetId)
     return this.http.get<PredmetInfo>(`${this.apiUrl}/predmeti/${predmetId}`)
   }
 

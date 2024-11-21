@@ -99,7 +99,6 @@ export class NovTestComponent implements OnInit {
 
       this.testService.createTest(cmd).subscribe(
         test => {
-          console.log('Test kreiran')
           this.router.navigate([AppRoutes.testEvidentiranje(test.id)])
         },
         (error: HttpErrorResponse) => {

@@ -52,12 +52,8 @@ export class StartPredavanjeComponent implements OnInit {
 
       const cmd : StartPredavanjeCmd = { predmetId: this.izabranPredmet, grupaId: this.izabranaGrupa };
 
-      console.log("Started lecture with", cmd)
-
       this.predavanjeService.startPredavanje(cmd).subscribe(
         (predavanje) => {
-          console.log('Lecture started successfully:', predavanje);
-          
           this.router.navigate([AppRoutes.predavanjeLive(predavanje.id)])
 
         },

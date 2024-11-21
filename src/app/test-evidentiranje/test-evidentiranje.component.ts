@@ -167,7 +167,6 @@ export class TestEvidentiranjeComponent implements OnInit {
 
     this.testService.evidentirajIspitanika(cmd, this.test!.id).subscribe(
       result => {
-        console.log("Uspesno!", result)
         this.popuniPolja(result)
         this.prikazaniIspitanik = null
       },
