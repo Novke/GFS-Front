@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo } from '../models/model';
+import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo } from '../models/model';
 import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje/predavanje.service';
@@ -17,6 +17,9 @@ export class TestEvidentiranjeComponent implements OnInit {
   grupa: GrupaDetails | null = null
   novMaxPoena: number | null = null
   novDatum: Date | null = null
+  novTipTesta: TipTestaInfo | null = null
+
+  tipovi: TipTestaInfo[] = []
 
   showModalDodaj = false
   studentiZaDodavanje: StudentDetails[] | undefined = []
@@ -36,7 +39,9 @@ export class TestEvidentiranjeComponent implements OnInit {
         const id = params.get('id')
         this.id = id !== null ? Number(id) : null
 
-        if (this.id) this.ucitajTest()
+        if (this.id) {
+          this.ucitajTest()
+        }
       }
     )
   }
@@ -46,6 +51,19 @@ export class TestEvidentiranjeComponent implements OnInit {
       result => {
         this.popuniPolja(result)
         this.ucitajGrupu() //poziva i osvezavanje studenata
+        this.ucitajTipove()
+      }
+    )
+  }
+
+  private ucitajTipove(){
+    this.testService.findTipoveTestovaPredmeta(this.test!.predmet.id).subscribe(
+      result => {
+        this.tipovi = result
+        this.novTipTesta = this.tipovi.find(t => t.id === this.test!.tipTesta.id) || null;
+      },
+      error => {
+        console.log("Neuspesno nabavljanje tipova", error)
       }
     )
   }
@@ -54,6 +72,8 @@ export class TestEvidentiranjeComponent implements OnInit {
     this.test = result
     this.novDatum = result.datum
     this.novMaxPoena = result.maxPoena
+    // this.novTipTesta = result.tipTesta
+    this.novTipTesta = this.tipovi.find(t => t.id === result.tipTesta.id) || null;
   }
 
   navigatePregled() {
@@ -61,7 +81,7 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   azuriraj() {
-
+    console.log(this.novTipTesta)
   }
 
   jesuLiPoljaNepromenjena() {
@@ -85,7 +105,7 @@ export class TestEvidentiranjeComponent implements OnInit {
     )
   }
 
-  ukloniIspitanika(studentId: number){
+  ukloniIspitanika(studentId: number) {
     this.testService.skloniIspitanika(studentId, this.test!.id).subscribe(
       result => {
         this.popuniPolja(result)
@@ -94,7 +114,7 @@ export class TestEvidentiranjeComponent implements OnInit {
     )
   }
 
-  prikaziIspitanika(polaganje: TestPolaganjeInfo){
+  prikaziIspitanika(polaganje: TestPolaganjeInfo) {
     this.prikazaniIspitanik = {
       grupa: polaganje.grupa,
       id: polaganje.id,
@@ -106,12 +126,12 @@ export class TestEvidentiranjeComponent implements OnInit {
     }
   }
 
-  sakrijIspitanika(){
+  sakrijIspitanika() {
     this.prikazaniIspitanik = null
   }
 
-  evidentirajIspitanika(polaganje: TestPolaganjeInfo){
-    const cmd : EvidentirajPolaganjeCmd = {
+  evidentirajIspitanika(polaganje: TestPolaganjeInfo) {
+    const cmd: EvidentirajPolaganjeCmd = {
       grupa: polaganje.grupa,
       napomene: polaganje.napomene,
       ostvareniPoeni: Number(polaganje.ostvareniPoeni),
@@ -151,7 +171,6 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   osveziStudenteZaDodavanje() {
-    console.log("Osvezavam studente za dodavanje")
     this.studentiZaDodavanje = this.grupa?.studenti.filter(
       s => {
         const num = this.test?.polaganja.filter(
@@ -162,17 +181,16 @@ export class TestEvidentiranjeComponent implements OnInit {
         return num === 0
       }
     )
-    console.log("Rezultat:", this.studentiZaDodavanje)
   }
 
   postojeStudentiZaDodavanje(): Boolean {
-    if (this.studentiZaDodavanje) return this.studentiZaDodavanje.length>0
+    if (this.studentiZaDodavanje) return this.studentiZaDodavanje.length > 0
     else return false;
   }
 
-  poeni2string(polaganje: TestPolaganjeInfo):string {
+  poeni2string(polaganje: TestPolaganjeInfo): string {
     if (polaganje.ostvareniPoeni) return polaganje.ostvareniPoeni?.toString()
-      else return "- Nije pregledano -"
+    else return "- Nije pregledano -"
   }
 
 

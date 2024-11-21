@@ -8,14 +8,21 @@
                 <button class="btn btn-secondary" (click)="navigatePregled()" disabled>Pregled</button>
             </div>
 
-            <div class="my-4">
+            <div class="my-4 row">
 
-                <div class="form-group mb-3">
-                    <label for="testDatum">Datum:</label>
+                <div class="form-group mb-3 col">
+                    <label for="testDatum" class="form-label">Datum:</label>
                     <input [(ngModel)]="novDatum" type="date" id="testDatum" class="form-control">
                 </div>
 
-                <div class="form-group mb-3">
+                <div class="form-group mb-3 col">
+                    <label for="testTip" class="form-label">Tip:</label>
+                    <select [(ngModel)]="novTipTesta" class="form-select" id="testTip" name="testTip" required>
+                        <option *ngFor="let t of tipovi" [ngValue]="t">{{t.naziv}}</option>
+                    </select>
+                </div>
+
+                <div class="form-group mb-3 col">
                     <label for="testMaxPoena" class="form-label">Max poena:</label>
                     <input [(ngModel)]="novMaxPoena" type="number" id="testMaxPoena" name="testMaxPoena"
                         class="form-control">
@@ -143,7 +150,7 @@
                     <div class="row">
                         <div class="col">
                             <label class="form-label" for="kojaGrupa">Grupa:</label>
-                            <select [(ngModel)]="prikazaniIspitanik.grupa" class="form-select" id="kojaGrupa">
+                            <select [(ngModel)]="prikazaniIspitanik.grupa" class="form-select" id="kojaGrupa" required>
                                 <option selected disabled></option>
                                 <option *ngFor="let g of test!.grupe">{{g}}</option>
                             </select>
@@ -166,7 +173,7 @@
                             <input [(ngModel)]="prikazaniIspitanik.napomene" class="form-control" id="napomene">
                         </div>
                 </div>
-                <div class="text-center">
+                <div class="text-center my-4">
                     <button (click)="evidentirajIspitanika(prikazaniIspitanik)" class="btn btn-primary">Sačuvaj</button>
                 </div>
             </div>
