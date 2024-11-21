@@ -4,6 +4,7 @@ import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje/predavanje.service';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ErrorHandlerUtil } from '../shared/utils/error-handler.util';
 
 @Component({
   selector: 'app-test-evidentiranje',
@@ -61,9 +62,6 @@ export class TestEvidentiranjeComponent implements OnInit {
       result => {
         this.tipovi = result
         this.novTipTesta = this.tipovi.find(t => t.id === this.test!.tipTesta.id) || null;
-      },
-      error => {
-        console.log("Neuspesno nabavljanje tipova", error)
       }
     )
   }
@@ -90,7 +88,8 @@ export class TestEvidentiranjeComponent implements OnInit {
       }
 
       this.testService.updateTest(this.test!.id, cmd).subscribe(
-        result => this.popuniPolja(result)
+        result => this.popuniPolja(result),
+        error => ErrorHandlerUtil.handleHttpError(error)
       )
     } else {
       alert("Nisu popunjena sva polja!")
@@ -116,7 +115,8 @@ export class TestEvidentiranjeComponent implements OnInit {
       result => {
         this.popuniPolja(result)
         this.osveziStudenteZaDodavanje()
-      }
+      },
+      error => ErrorHandlerUtil.handleHttpError(error)
     )
   }
 
@@ -130,7 +130,8 @@ export class TestEvidentiranjeComponent implements OnInit {
         result => {
           this.popuniPolja(result)
           this.osveziStudenteZaDodavanje()
-        }
+        },
+        error => ErrorHandlerUtil.handleHttpError(error)
       )
     }
   }
@@ -166,14 +167,7 @@ export class TestEvidentiranjeComponent implements OnInit {
         this.popuniPolja(result)
         this.prikazaniIspitanik = null
       },
-      (error: HttpErrorResponse) => {
-        if (error.status >= 400 && error.status < 500) {
-          const reason = error.error.reason || 'Sistemska greska'
-          alert(`Greska: ${reason}`)
-        } else {
-          console.error('Neuspesno kreiranje testa', error)
-        }
-      }
+      error => ErrorHandlerUtil.handleHttpError(error)
     )
   }
 
