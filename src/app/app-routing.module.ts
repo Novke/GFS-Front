@@ -13,9 +13,9 @@ import { PredavanjeListComponent } from './predavanje/predavanje-list/predavanje
 import { PregledPredavanjaComponent } from './predavanje/pregled-predavanja/pregled-predavanja.component';
 import { HomeComponent } from './home/home.component';
 import { NovTestComponent } from './test/nov-test/nov-test.component';
-import { TestSelectComponent } from './test-select/test-select.component';
-import { TestListComponent } from './test-list/test-list.component';
-import { TestEvidentiranjeComponent } from './test-evidentiranje/test-evidentiranje.component';
+import { TestSelectComponent } from './test/test-select/test-select.component';
+import { TestListComponent } from './test/test-list/test-list.component';
+import { TestEvidentiranjeComponent } from './test/test-evidentiranje/test-evidentiranje.component';
 import { TestPregledComponent } from './test/test-pregled/test-pregled.component';
 
 

@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from '../app.routes';
-import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
-import { PredavanjeService } from '../predavanje/predavanje.service';
-import { ErrorHandlerUtil } from '../shared/utils/error-handler.util';
-import { TestService } from '../test/test.service';
+import { AppRoutes } from '../../app.routes';
+import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../../models/model';
+import { PredavanjeService } from '../../predavanje/predavanje.service';
+import { ErrorHandlerUtil } from '../../shared/utils/error-handler.util';
+import { TestService } from '../test.service';
 
 @Component({
   selector: 'app-test-evidentiranje',
