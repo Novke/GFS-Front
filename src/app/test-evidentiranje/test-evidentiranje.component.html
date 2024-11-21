@@ -2,7 +2,7 @@
     <div class="row">
         <div class="col" *ngIf="test">
 
-            <h1 class="text-center">Evidentiranje testa</h1>
+            <h1 class="text-center">{{test.pregledan ? "TEST EVIDENTIRAN" : "Evidentiranje testa"}}</h1>
 
             <div class="container text-center mt-2" *ngIf="id">
                 <button class="btn btn-secondary" (click)="navigatePregled()" disabled>Pregled</button>
@@ -84,11 +84,11 @@
                                         <td class="text-center">
                                             <button class="btn btn-sm"
                                                 [ngClass]="p.ostvareniPoeni !== null ? 'btn-secondary' : 'btn-primary'"
-                                                (click)="prikaziIspitanika(p)">Evidentiraj</button>
+                                                (click)="prikaziIspitanika(p)" [disabled]="test.pregledan">Evidentiraj</button>
                                         </td>
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-secondary"
-                                                (click)="ukloniIspitanika(p)">X</button>
+                                                (click)="ukloniIspitanika(p)" [disabled]="test.pregledan">X</button>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -105,7 +105,7 @@
 
             <div class="container text-center my-5" *ngIf="test.id">
                 <button class="btn btn-secondary" (click)="zavrsiEvidentiranje()"
-                    [disabled]="test.pregledan">Završi</button>
+                    *ngIf="!test.pregledan">Završi</button>
             </div>
         </div>
 
