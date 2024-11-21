@@ -216,7 +216,7 @@ export interface TestPolaganjeInfo {
 export interface EvidentirajPolaganjeCmd {
   studentId: number,
   grupa: TestGrupa,
-  ostvareniPoeni: number,
+  ostvareniPoeni: number | null,
   prepisivao: Boolean,
   napomene: string
 }

@@ -160,7 +160,7 @@ export class TestEvidentiranjeComponent implements OnInit {
     const cmd: EvidentirajPolaganjeCmd = {
       grupa: polaganje.grupa,
       napomene: polaganje.napomene,
-      ostvareniPoeni: Number(polaganje.ostvareniPoeni),
+      ostvareniPoeni: polaganje.ostvareniPoeni,
       prepisivao: polaganje.prepisivao,
       studentId: polaganje.student.id
     }
