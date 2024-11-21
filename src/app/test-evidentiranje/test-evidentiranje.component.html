@@ -58,6 +58,7 @@
                                     <tr>
                                         <th>#</th>
                                         <th>Student</th>
+                                        <th>Grupa</th>
                                         <th>Broj poena</th>
                                         <th>Napomene</th>
                                         <th class="text-center">Akcije</th>
@@ -68,6 +69,7 @@
                                     <tr *ngFor="let p of test.polaganja; let i = index">
                                         <td>{{i+1}}</td>
                                         <td>{{p.student.ime}} {{p.student.prezime}} {{p.student.indeks}}</td>
+                                        <td>{{p.grupa}}</td>
                                         <td>{{poeni2string(p)}}</td>
                                         <td>{{p.napomene}}</td>
                                         <td class="text-center">
