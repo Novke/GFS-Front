@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo } from '../models/model';
+import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
 import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje/predavanje.service';
@@ -81,11 +81,26 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   azuriraj() {
-    console.log(this.novTipTesta)
+    if (this.novDatum && this.novMaxPoena && this.novTipTesta) {
+
+      const cmd: UpdateTestCmd = {
+        datum: this.novDatum,
+        maxPoena: this.novMaxPoena,
+        tipTestaId: this.novTipTesta?.id
+      }
+
+      this.testService.updateTest(this.test!.id, cmd).subscribe(
+        result => this.popuniPolja(result)
+      )
+    } else {
+      alert("Nisu popunjena sva polja!")
+    }
   }
 
   jesuLiPoljaNepromenjena() {
-    return false
+    return this.test!.datum === this.novDatum &&
+      this.test!.tipTesta.id === this.novTipTesta?.id &&
+      this.test!.maxPoena === this.novMaxPoena
   }
 
   toggleModal() {

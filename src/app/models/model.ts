@@ -166,6 +166,12 @@ export interface CreateTestCmd {
   maxPoena: number
 }
 
+export interface UpdateTestCmd {
+  datum: Date,
+  maxPoena: number,
+  tipTestaId: number
+}
+
 export interface TipTestaInfo {
   id: number,
   naziv: string
