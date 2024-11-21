@@ -27,6 +27,7 @@ import { NovTestComponent } from './test/nov-test/nov-test.component';
 import { TestSelectComponent } from './test-select/test-select.component';
 import { TestListComponent } from './test-list/test-list.component';
 import { TestEvidentiranjeComponent } from './test-evidentiranje/test-evidentiranje.component';
+import { TestPregledComponent } from './test/test-pregled/test-pregled.component';
 
 @NgModule({
   declarations: [
@@ -46,7 +47,8 @@ import { TestEvidentiranjeComponent } from './test-evidentiranje/test-evidentira
     NovTestComponent,
     TestSelectComponent,
     TestListComponent,
-    TestEvidentiranjeComponent
+    TestEvidentiranjeComponent,
+    TestPregledComponent
   ],
   imports: [
     BrowserModule,

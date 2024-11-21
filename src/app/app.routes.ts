@@ -13,7 +13,7 @@ export const AppRoutes = {
     testSelect: "test",
     testNew: "test/new",
     testEvidentiranje: (id: number | string) => `test/${id}/evidentiranje`,
-    // testPregled
+    testPregled: (id: number | string) => `test/${id}/pregled`,
     testGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `test/grupa/${grupaId}/predmet/${predmetId}`,
   };
   

@@ -1,10 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
-import { TestService } from '../test/test.service';
 import { ActivatedRoute, Router } from '@angular/router';
+import { AppRoutes } from '../app.routes';
+import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
 import { PredavanjeService } from '../predavanje/predavanje.service';
-import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorHandlerUtil } from '../shared/utils/error-handler.util';
+import { TestService } from '../test/test.service';
 
 @Component({
   selector: 'app-test-evidentiranje',
@@ -75,7 +75,7 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   navigatePregled() {
-
+    this.router.navigate([AppRoutes.testPregled(this.test!.id)])
   }
 
   azuriraj() {
@@ -107,9 +107,11 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   zavrsiEvidentiranje() {
-    this.testService.zavrsiEvidentiranje(this.test!.id).subscribe(
-      result => console.log("Uspesno")
-    )
+    if (window.confirm("Da li si siguran da želiš da završiš sa evidentiranjem testa?"))
+      this.testService.zavrsiEvidentiranje(this.test!.id).subscribe(
+        result => this.navigatePregled(),
+        error => ErrorHandlerUtil.handleHttpError(error)
+      )
   }
 
   dodajIspitanika(studentId: number) {
