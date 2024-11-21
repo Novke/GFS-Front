@@ -56,7 +56,7 @@ export class TestEvidentiranjeComponent implements OnInit {
     )
   }
 
-  private ucitajTipove(){
+  private ucitajTipove() {
     this.testService.findTipoveTestovaPredmeta(this.test!.predmet.id).subscribe(
       result => {
         this.tipovi = result
@@ -105,13 +105,19 @@ export class TestEvidentiranjeComponent implements OnInit {
     )
   }
 
-  ukloniIspitanika(studentId: number) {
-    this.testService.skloniIspitanika(studentId, this.test!.id).subscribe(
-      result => {
-        this.popuniPolja(result)
-        this.osveziStudenteZaDodavanje()
-      }
-    )
+  ukloniIspitanika(polaganje: TestPolaganjeInfo) {
+
+    if (polaganje.ostvareniPoeni === null || window.confirm("Da li si siguran da želiš da ukloniš studenta " + polaganje.student.ime + " " + polaganje.student.prezime)) {
+
+      const studentId = polaganje.student.id
+
+      this.testService.skloniIspitanika(studentId, this.test!.id).subscribe(
+        result => {
+          this.popuniPolja(result)
+          this.osveziStudenteZaDodavanje()
+        }
+      )
+    }
   }
 
   prikaziIspitanika(polaganje: TestPolaganjeInfo) {
@@ -189,8 +195,9 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   poeni2string(polaganje: TestPolaganjeInfo): string {
-    if (polaganje.ostvareniPoeni) return polaganje.ostvareniPoeni?.toString()
-    else return "- Nije pregledano -"
+    if (polaganje.ostvareniPoeni === null) return "- Nije pregledano -"
+    return polaganje.ostvareniPoeni?.toString()
+
   }
 
 

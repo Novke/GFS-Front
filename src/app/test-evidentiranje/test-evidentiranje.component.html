@@ -74,12 +74,12 @@
                                         <td>{{p.napomene}}</td>
                                         <td class="text-center">
                                             <button class="btn btn-sm"
-                                                [ngClass]="p.ostvareniPoeni ? 'btn-secondary' : 'btn-primary'"
+                                                [ngClass]="p.ostvareniPoeni !== null ? 'btn-secondary' : 'btn-primary'"
                                                 (click)="prikaziIspitanika(p)">Evidentiraj</button>
                                         </td>
                                         <td class="text-center">
                                             <button class="btn btn-sm btn-secondary"
-                                                (click)="ukloniIspitanika(p.student.id)">X</button>
+                                                (click)="ukloniIspitanika(p)">X</button>
                                         </td>
                                     </tr>
                                 </tbody>
