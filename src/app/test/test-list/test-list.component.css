@@ -1,0 +1,14 @@
+mat-list-item:hover {
+    background-color: lightgray;
+}
+
+.pregledan-background {
+    background-color: #ff7f9f;
+    color: white;
+    border-radius: 8px; /* zaobljene ivice */
+  }
+
+.pregledan-background div,
+.pregledan-background span {
+  color: white; /* Make sure all child elements have white text */
+}

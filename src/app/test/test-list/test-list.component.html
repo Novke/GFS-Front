@@ -1,1 +1,28 @@
-<p>test-list works!</p>
+<div class="container mt-5">
+    <div>
+        <div mat-subheader class="text-center">Svi testovi</div>
+        <div class="row my-4">
+            <div class="col text-center">
+                <label for="predmet" class="form-label">Predmet</label>
+                <input class="form-control" id="predmet" [value]="predmet?.naziv" disabled>
+            </div>
+            <div class="col text-center">
+                <label for="grupa" class="form-label">Grupa</label>
+                <input class="form-control" id="grupa" [value]="grupa?.naziv" disabled>
+            </div>
+        </div>
+
+        <div class="container">
+            <mat-list *ngFor="let t of testovi; let i = index">
+                <mat-divider></mat-divider>
+                <mat-list-item (click)="go2test(t)"
+                [ngClass]="{'pregledan-background': !t.pregledan}">
+                    <!-- <mat-icon></mat-icon> -->
+                     <div matListItemTitle>{{i+1}}. {{t.tipTesta.naziv}}</div>
+                     <div matListItemLine>{{t.datum | date : 'd. MMMM y.'}}</div>
+                     <span matListItemLine>Broj ispitanika: {{t.posecenost}}</span>
+                </mat-list-item>
+            </mat-list>
+        </div>
+    </div>
+</div>
