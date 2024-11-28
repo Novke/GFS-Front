@@ -44,4 +44,8 @@ export class TestService {
   zavrsiEvidentiranje(testId: number){
     return this.http.patch<TestDetails>(`${this.apiUrl}/test/${testId}`, null)
   }
+
+  vratiTestoveGrupaPredmet(grupaId: number, predmetId: number){
+    return this.http.get<TestInfo[]>(`${this.apiUrl}/test/grupa/${grupaId}/predmet/${predmetId}`)
+  }
 }

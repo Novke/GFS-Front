@@ -184,7 +184,9 @@ export interface TestInfo {
   grupa: GrupaInfo,
   datum: Date,
   maxPoena: number,
-  grupe: TestGrupa[]
+  grupe: TestGrupa[],
+  pregledan: boolean,
+  posecenost: number
 }
 
 export enum TestGrupa {
