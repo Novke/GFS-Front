@@ -34,5 +34,44 @@
                 </div>
             </div>
         </div>
+
+        <div class="container mt-4">
+            <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8">
+          
+              <!-- Student Name Column -->
+              <ng-container matColumnDef="name">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Ime i Prezime</th>
+                <td mat-cell *matCellDef="let element">{{element.student.ime}} {{element.student.prezime}}</td>
+              </ng-container>
+          
+              <!-- Student Index Column -->
+              <ng-container matColumnDef="index">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Indeks</th>
+                <td mat-cell *matCellDef="let element">{{element.student.indeks}}</td>
+              </ng-container>
+          
+              <!-- Group Column -->
+              <ng-container matColumnDef="group">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Grupa</th>
+                <td mat-cell *matCellDef="let element">{{element.grupa}}</td>
+              </ng-container>
+          
+              <!-- Points Column -->
+              <ng-container matColumnDef="points">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Poeni</th>
+                <td mat-cell *matCellDef="let element">{{element.ostvareniPoeni === null ? '- Nije pregledano -' : element.ostvareniPoeni}}</td>
+              </ng-container>
+          
+              <!-- Header and Row Definitions -->
+              <tr mat-header-row *matHeaderRowDef="kolone"></tr>
+              <tr mat-row *matRowDef="let row; columns: kolone;"></tr>
+            </table>
+          
+            <!-- Paginator -->
+            <mat-paginator [pageSizeOptions]="[5, 10, 20]" showFirstLastButtons></mat-paginator>
+          </div>
+          
+          
+        
     </div>
 </div>
