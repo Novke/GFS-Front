@@ -1,1 +1,38 @@
-<p>test-pregled works!</p>
+<div class="container mt-5">
+    <div class="row" *ngIf="test">
+        <div class="col">
+
+            <h1 class="text-center">{{test.tipTesta.naziv}} - {{test.datum | date:'d. MMM y.'}}</h1>
+
+            <div class="container text-center mt-2" *ngIf="id">
+                <button class="btn btn-secondary" (click)="navigateEvidentiranje()">Izmeni</button>
+            </div>
+
+            <div class="container my-5">
+                <div class="row text-center">
+                    <div class="col">
+                        <label for="grupaNaziv">Grupa</label>
+                        <h2 id="grupaNaziv">{{test.grupa.naziv}}</h2>
+                    </div>
+                    <div class="col">
+                        <label for="grupaNaziv">Predmet</label>
+                        <h2 id="grupaNaziv">{{test.predmet.naziv}}</h2>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="row text-center">
+                <div class="col">
+                    <h3 class="form-label">Max poena: {{test.maxPoena}}</h3>
+                </div>
+                <div class="col">
+                    <h3 class="form-label">Grupe: {{grupe2string()}}</h3>
+                </div>
+                <div class="col">
+                    <h3 class="form-label">Pregledan: {{test.pregledan ? "DA" : "NE"}}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
