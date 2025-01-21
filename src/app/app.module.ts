@@ -31,6 +31,7 @@ import { TestEvidentiranjeComponent } from './test/test-evidentiranje/test-evide
 import { TestListComponent } from './test/test-list/test-list.component';
 import { TestPregledComponent } from './test/test-pregled/test-pregled.component';
 import { TestSelectComponent } from './test/test-select/test-select.component';
+import { StudentDetailsComponent } from './student/student-details/student-details.component';
 
 @NgModule({
   declarations: [
@@ -51,7 +52,8 @@ import { TestSelectComponent } from './test/test-select/test-select.component';
     TestSelectComponent,
     TestListComponent,
     TestEvidentiranjeComponent,
-    TestPregledComponent
+    TestPregledComponent,
+    StudentDetailsComponent
   ],
   imports: [
     BrowserModule,
