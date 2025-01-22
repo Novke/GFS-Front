@@ -222,3 +222,38 @@ export interface EvidentirajPolaganjeCmd {
   prepisivao: Boolean,
   napomene: string
 }
+  
+export interface StudentPregledDetails {
+  id: number;
+  ime: string;
+  prezime: string;
+  indeks: string;
+  aktivnosti: StudentPregledAktivnostInfo[];
+  uradjeniDomaci: StudentPregledDomaciInfo[];
+  polaganja: StudentPregledTestInfo[];
+}
+  
+export interface StudentPregledAktivnostInfo {
+  id: number;
+  predavanjeId: number,
+  tip: string;
+  napomene: string;
+}
+
+export interface StudentPregledDomaciInfo {
+  id: number,
+  domaciId: number,
+  bodovi: number,
+  napomene: string,
+  prepisivanje: boolean,
+  oslobodjen: boolean
+}
+
+export interface StudentPregledTestInfo {
+  id: number,
+  testId: number,
+  ostvareniPoeni: number,
+  polozio: boolean,
+  prepisivao: boolean,
+  napomene: string
+}
