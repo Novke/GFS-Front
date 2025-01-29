@@ -1,10 +1,92 @@
 <div class="container mt-5">
-    <div class="row" *ngIf="student">
-      <div class="col text-center">
+  <div *ngIf="student; else noStudent">
+    <div class="row">
+      <div class="col text-left">
         <h1>Podaci o Studentu</h1>
-        <h2>{{ student.ime }} {{ student.prezime }}</h2>
-        <h3>Broj indeksa: {{ student.indeks }}</h3>
-        <button class="btn btn-primary mt-3" (click)="navigateBack()">Back to List</button>
+        <p><strong>Ime i Prezime:</strong> {{ student.ime }} {{ student.prezime }}</p>
+        <p><strong>Grupa:</strong> {{ student.grupa }}</p>
+        <p><strong>Broj indeksa:</strong> {{ student.indeks }}</p>
+        <!-- <button class="btn btn-primary mt-3" (click)="navigateBack()">Nazad</button> -->
+      </div>
+
+      <!-- Aktivnosti Section -->
+      <div class="mt-4" *ngIf="student.aktivnosti && student.aktivnosti.length > 0">
+        <h2>Aktivnosti</h2>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Tip</th>
+              <th>Tema</th>
+              <th>Napomene</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let aktivnost of student.aktivnosti">
+              <td>{{ aktivnost.datum | date:'dd.MM.yyyy' }}</td>
+              <td>{{ aktivnost.tip }}</td>
+              <td>{{ aktivnost.tema }}</td>
+              <td>{{ aktivnost.napomene || defaultNapomena }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Uradjeni Domaci Section -->
+      <div class="mt-4" *ngIf="student.uradjeniDomaci.length > 0">
+        <h2>Domaći</h2>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Naslov</th>
+              <th>Bodovi</th>
+              <th>Napomene</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let domaci of student.uradjeniDomaci">
+              <td>{{ domaci.datum | date:'dd.MM.yyyy' }}</td>
+              <td>{{ domaci.naslov || 'Nema naslova' }}</td>
+              <td>{{ domaci.bodovi }}</td>
+              <td>{{ domaci.napomene || defaultNapomena }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Polaganja Section -->
+      <div class="mt-4" *ngIf="student.polaganja.length > 0">
+        <h2>Polaganja</h2>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Tip Testa</th>
+              <th>Osvojeni Poeni</th>
+              <th>Napomene</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let polaganje of student.polaganja">
+              <td>{{ polaganje.datum | date:'dd.MM.yyyy' }}</td>
+              <td>{{ polaganje.tipTesta.naziv }}</td>
+              <td>{{ polaganje.ostvareniPoeni }}</td>
+              <td>{{ polaganje.napomene || defaultNapomena }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
+
+  <!-- Else block for when student is not found -->
+  <ng-template #noStudent>
+    <div class="row">
+      <div class="col text-center">
+        <h1 class="text-danger">Greška: Student nije pronađen!</h1>
+        <button class="btn btn-secondary mt-3" (click)="navigateBack()">Back to List</button>
+      </div>
+    </div>
+  </ng-template>
+</div>

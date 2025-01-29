@@ -11,13 +11,16 @@ import { StudentService } from '../student.service';
 export class StudentDetailsComponent implements OnInit{
 
   id: number | null = null
-  student: StudentPregledDetails | undefined
+  student: StudentPregledDetails | null
+  defaultNapomena = "- - -"
 
   constructor(
     private studentService: StudentService,
         private route: ActivatedRoute,
         private router: Router
-  ){}
+  ){
+    this.student = null
+  }
   ngOnInit(): void {
     this.route.paramMap.subscribe(
       params => {
