@@ -228,6 +228,7 @@ export interface StudentPregledDetails {
   ime: string;
   prezime: string;
   indeks: string;
+  grupa: string;
   aktivnosti: StudentPregledAktivnostInfo[];
   uradjeniDomaci: StudentPregledDomaciInfo[];
   polaganja: StudentPregledTestInfo[];
@@ -238,6 +239,8 @@ export interface StudentPregledAktivnostInfo {
   predavanjeId: number,
   tip: string;
   napomene: string;
+  datum: Date;
+  tema: string;
 }
 
 export interface StudentPregledDomaciInfo {
@@ -246,7 +249,9 @@ export interface StudentPregledDomaciInfo {
   bodovi: number,
   napomene: string,
   prepisivanje: boolean,
-  oslobodjen: boolean
+  oslobodjen: boolean,
+  datum: Date;
+  naslov: string;
 }
 
 export interface StudentPregledTestInfo {
@@ -255,5 +260,7 @@ export interface StudentPregledTestInfo {
   ostvareniPoeni: number,
   polozio: boolean,
   prepisivao: boolean,
-  napomene: string
+  napomene: string,
+  datum: Date;
+  tipTesta: TipTestaInfo
 }
