@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { StudentPregledDetails } from 'src/app/models/model';
 import { StudentService } from '../student.service';
+import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
   selector: 'app-student-details',
@@ -42,6 +43,18 @@ export class StudentDetailsComponent implements OnInit{
 
   private popuniPolja(details: StudentPregledDetails){
       this.student = details
+  }
+
+  nagivatePredavanje(predavanjeId: number){
+    this.router.navigate([AppRoutes.predavanjePregled(predavanjeId)])
+  }
+
+  navigateDomaci(domaciId: number){
+    this.router.navigate([AppRoutes.domaciPregled(domaciId)])
+  }
+
+  navigateTest(testId: number){
+    this.router.navigate([AppRoutes.testPregled(testId)])
   }
 
   navigateBack(){

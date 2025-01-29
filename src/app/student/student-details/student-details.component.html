@@ -22,7 +22,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let aktivnost of student.aktivnosti">
+            <tr *ngFor="let aktivnost of student.aktivnosti"
+            (click)="nagivatePredavanje(aktivnost.predavanjeId)">
               <td>{{ aktivnost.datum | date:'dd.MM.yyyy' }}</td>
               <td>{{ aktivnost.tip }}</td>
               <td>{{ aktivnost.tema }}</td>
@@ -45,7 +46,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let domaci of student.uradjeniDomaci">
+            <tr *ngFor="let domaci of student.uradjeniDomaci"
+            (click)="navigateDomaci(domaci.domaciId)">
               <td>{{ domaci.datum | date:'dd.MM.yyyy' }}</td>
               <td>{{ domaci.naslov || 'Nema naslova' }}</td>
               <td>{{ domaci.bodovi }}</td>
@@ -68,7 +70,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let polaganje of student.polaganja">
+            <tr *ngFor="let polaganje of student.polaganja"
+            (click)="navigateTest(polaganje.testId)">
               <td>{{ polaganje.datum | date:'dd.MM.yyyy' }}</td>
               <td>{{ polaganje.tipTesta.naziv }}</td>
               <td>{{ polaganje.ostvareniPoeni }}</td>
