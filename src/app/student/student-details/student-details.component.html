@@ -1,1 +1,10 @@
-<p>student-details works!</p>
+<div class="container mt-5">
+    <div class="row" *ngIf="student">
+      <div class="col text-center">
+        <h1>Podaci o Studentu</h1>
+        <h2>{{ student.ime }} {{ student.prezime }}</h2>
+        <h3>Broj indeksa: {{ student.indeks }}</h3>
+        <button class="btn btn-primary mt-3" (click)="navigateBack()">Back to List</button>
+      </div>
+    </div>
+  </div>
