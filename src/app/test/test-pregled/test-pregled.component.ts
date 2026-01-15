@@ -74,4 +74,9 @@ export class TestPregledComponent implements OnInit{
     if (this.id) this.router.navigate([AppRoutes.testEvidentiranje(Number(this.id))])
   }
 
+  navigateStudentPredmet(studentId: number) {
+    if (this.test) {
+      this.router.navigate([AppRoutes.studentPredmet(studentId, this.test.predmet.id)])
+    }
+  }
 }

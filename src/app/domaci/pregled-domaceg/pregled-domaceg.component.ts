@@ -61,4 +61,10 @@ export class PregledDomacegComponent implements OnInit {
   navigateEvidentiranje(){
     if (this.id) this.router.navigate([AppRoutes.domaciEvidentiranje(Number(this.id))])
   }
+
+  navigateStudentPredmet(studentId: number) {
+    if (this.domaci) {
+      this.router.navigate([AppRoutes.studentPredmet(studentId, this.domaci.predmet.id)])
+    }
+  }
 }

@@ -99,7 +99,9 @@
           
               <!-- Header and Row Definitions -->
               <tr mat-header-row *matHeaderRowDef="kolone"></tr>
-              <tr mat-row *matRowDef="let row; columns: kolone;"></tr>
+              <tr mat-row *matRowDef="let row; columns: kolone;"
+                  (click)="navigateStudentPredmet(row.student.id)"
+                  style="cursor: pointer;"></tr>
             </table>
           
             <!-- Paginator -->

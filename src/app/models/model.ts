@@ -285,6 +285,23 @@ export interface StudentPregledTestInfo {
   tipTesta: TipTestaInfo
 }
 
+export interface StudentNaPredmetuDetails {
+  student: StudentInfo;
+  predmet: PredmetInfo;
+  grupaNaziv: string;
+  aktivnosti: StudentPregledAktivnostInfo[];
+  domaci: StudentPregledDomaciInfo[];
+  testoviPoTipu: StudentTestoviPoTipuInfo[];
+  ukupnoPoenaAktivnost: number;
+  ukupnoPoenaDomaci: number;
+}
+
+export interface StudentTestoviPoTipuInfo {
+  tipTesta: TipTestaInfo;
+  polaganja: StudentPregledTestInfo[];
+  najboljePolaganje: StudentPregledTestInfo | null;
+}
+
 // ========== OCENJIVANJE ==========
 
 export interface KoeficijentiInfo {

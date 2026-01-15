@@ -49,7 +49,7 @@
             <div class="container">
                 <div fxLayout="row wrap" fxLayoutGap="50px grid">
                     <div *ngFor="let a of predavanje?.aktivnosti">
-                        <mat-card class="aktivnost-card">
+                        <mat-card class="aktivnost-card" (click)="navigateStudentPredmet(a.student.id)" style="cursor: pointer;">
                             <mat-card-content>
                                 <mat-card-title>{{student2string(a.student)}}</mat-card-title>
                                 <mat-card-subtitle class="my-2">{{a.tip}}</mat-card-subtitle>

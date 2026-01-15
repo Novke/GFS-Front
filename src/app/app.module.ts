@@ -32,6 +32,7 @@ import { TestListComponent } from './test/test-list/test-list.component';
 import { TestPregledComponent } from './test/test-pregled/test-pregled.component';
 import { TestSelectComponent } from './test/test-select/test-select.component';
 import { StudentDetailsComponent } from './student/student-details/student-details.component';
+import { StudentPredmetComponent } from './student/student-predmet/student-predmet.component';
 import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.component';
 
 @NgModule({
@@ -55,6 +56,7 @@ import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.com
     TestEvidentiranjeComponent,
     TestPregledComponent,
     StudentDetailsComponent,
+    StudentPredmetComponent,
     OcenjivanjeSelectComponent
   ],
   imports: [

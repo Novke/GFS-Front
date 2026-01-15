@@ -1,0 +1,7 @@
+.list-group-item-action:hover {
+  background-color: #f8f9fa;
+}
+
+.accordion-button:not(.collapsed) {
+  background-color: #e7f1ff;
+}

@@ -16,6 +16,7 @@ export const AppRoutes = {
     testPregled: (id: number | string) => `test/${id}/pregled`,
     testGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `test/grupa/${grupaId}/predmet/${predmetId}`,
     studentDetails: (id: number | string) => `student/${id}`,
+    studentPredmet: (studentId: number | string, predmetId: number | string) => `student/${studentId}/predmet/${predmetId}`,
     ocenjivanjeSelect: "ocene"
   };
   

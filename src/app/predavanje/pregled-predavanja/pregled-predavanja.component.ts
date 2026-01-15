@@ -76,4 +76,9 @@ export class PregledPredavanjaComponent implements OnInit {
     return aktivnost.napomene ? aktivnost.napomene : "."
   }
 
+  navigateStudentPredmet(studentId: number) {
+    if (this.predavanje) {
+      this.router.navigate([AppRoutes.studentPredmet(studentId, this.predavanje.predmet.id)])
+    }
+  }
 }

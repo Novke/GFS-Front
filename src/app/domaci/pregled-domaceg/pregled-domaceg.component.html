@@ -38,7 +38,7 @@
             <div class="container">
                 <div fxLayout="row wrap" fxLayoutGap="50px grid">
                     <div *ngFor="let s of domaci?.studenti">
-                        <mat-card class="domaci-card">
+                        <mat-card class="domaci-card" style="cursor: pointer;" (click)="navigateStudentPredmet(s.studentId)">
                             <mat-card-content>
                                 <mat-card-title>{{student2string(s)}}</mat-card-title>
                                 <mat-card-subtitle class="my-2"
