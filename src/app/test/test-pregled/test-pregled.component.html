@@ -33,6 +33,41 @@
                     <h3 class="form-label">Pregledan: {{test.pregledan ? "DA" : "NE"}}</h3>
                 </div>
             </div>
+
+            <!-- Statistika -->
+            <div class="card mt-4" *ngIf="test.statistika && test.statistika.ukupnoPolaganja > 0">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Statistika</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6>Ukupno</h6>
+                            <p class="mb-1">Polaganja: <strong>{{test.statistika.ukupnoPolaganja}}</strong></p>
+                            <p class="mb-1">Prosek: <strong>{{test.statistika.prosecniPoeni}}</strong></p>
+                            <p class="mb-1">Min/Max: <strong>{{test.statistika.minPoeni}} - {{test.statistika.maxPoeni}}</strong></p>
+                            <p class="mb-0">Std. dev.: <strong>{{test.statistika.standardnaDevijacija}}</strong></p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>Prolaznost</h6>
+                            <p class="mb-1">Položilo: <strong class="text-success">{{test.statistika.brojPolozenih}}</strong></p>
+                            <p class="mb-1">Palo: <strong class="text-danger">{{test.statistika.brojPalih}}</strong></p>
+                            <p class="mb-0">Procenat: <strong>{{test.statistika.procenatProlaznosti}}%</strong></p>
+                        </div>
+                        <div class="col-md-4" *ngIf="test.statistika.statistikaPoGrupi?.length">
+                            <h6>Po grupama</h6>
+                            <div *ngFor="let gs of test.statistika.statistikaPoGrupi">
+                                <p class="mb-1">
+                                    <strong>{{gs.grupa}}</strong>:
+                                    prosek {{gs.prosecniPoeni}},
+                                    prolaz {{gs.procenatProlaznosti}}%
+                                    <small class="text-muted">({{gs.brojPolaganja}})</small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="container mt-4">

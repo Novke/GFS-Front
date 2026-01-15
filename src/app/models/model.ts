@@ -202,7 +202,27 @@ export interface TestDetails {
   maxPoena: number,
   pregledan: Boolean,
   grupe: TestGrupa[],
-  polaganja: TestPolaganjeInfo[]
+  polaganja: TestPolaganjeInfo[],
+  statistika: TestStatistikaInfo
+}
+
+export interface TestStatistikaInfo {
+  ukupnoPolaganja: number;
+  prosecniPoeni: number;
+  minPoeni: number;
+  maxPoeni: number;
+  standardnaDevijacija: number;
+  brojPolozenih: number;
+  brojPalih: number;
+  procenatProlaznosti: number;
+  statistikaPoGrupi: TestStatistikaPoGrupiInfo[];
+}
+
+export interface TestStatistikaPoGrupiInfo {
+  grupa: TestGrupa;
+  brojPolaganja: number;
+  prosecniPoeni: number;
+  procenatProlaznosti: number;
 }
 
 export interface TestPolaganjeInfo {
