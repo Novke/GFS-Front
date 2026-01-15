@@ -264,3 +264,63 @@ export interface StudentPregledTestInfo {
   datum: Date;
   tipTesta: TipTestaInfo
 }
+
+// ========== OCENJIVANJE ==========
+
+export interface KoeficijentiInfo {
+  id: number;
+  predmetId: number;
+  koefPrisustvo: number;
+  koefZadatak: number;
+  koefZvezdica: number;
+  domaciFlat: number;
+  domaciVarijansa: number;
+  koristiMaxRezultat: boolean;
+  prikaziZbirno: boolean;
+  maxAktivnost: number | null;  // ako null, ne normalizuje se
+  maxDomaci: number | null;     // ako null, ne normalizuje se
+  koeficijentiTipova: KoeficijentTipTestaInfo[];
+}
+
+export interface KoeficijentTipTestaInfo {
+  tipTestaId: number;
+  tipTestaNaziv: string;
+  maxPoena: number | null;  // ako null, ne normalizuje se
+}
+
+export interface SaveKoeficijentiCmd {
+  koefPrisustvo: number;
+  koefZadatak: number;
+  koefZvezdica: number;
+  domaciFlat: number;
+  domaciVarijansa: number;
+  koristiMaxRezultat: boolean;
+  prikaziZbirno: boolean;
+  maxAktivnost: number | null;
+  maxDomaci: number | null;
+  koeficijentiTipova: KoeficijentTipTestaCmd[];
+}
+
+export interface KoeficijentTipTestaCmd {
+  tipTestaId: number;
+  maxPoena: number | null;
+}
+
+export interface GetOceneCmd {
+  grupaId: number;
+}
+
+export interface RezultatiStudentaInfo {
+  studentInfo: StudentInfo;
+  rezultati: MaxPoeniStudentaNaTestuInfo[];
+  poeniDomaci: number;
+  poeniAktivnost: number;
+  poeniPredispitne: number;
+  ukupno: number;
+  predlogOcene: number | null;
+}
+
+export interface MaxPoeniStudentaNaTestuInfo {
+  tipTesta: TipTestaInfo;
+  ostvarenoPoena: number;
+}

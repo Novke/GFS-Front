@@ -18,6 +18,7 @@ import { TestListComponent } from './test/test-list/test-list.component';
 import { TestEvidentiranjeComponent } from './test/test-evidentiranje/test-evidentiranje.component';
 import { TestPregledComponent } from './test/test-pregled/test-pregled.component';
 import { StudentDetailsComponent } from './student/student-details/student-details.component';
+import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.component';
 
 
 const routes: Routes = [
@@ -37,7 +38,8 @@ const routes: Routes = [
   { path: AppRoutes.testGrupaPredmet(':grupaId', ':predmetId'), component: TestListComponent},
   { path: AppRoutes.testEvidentiranje(':id'), component: TestEvidentiranjeComponent},
   { path: AppRoutes.testPregled(':id'), component: TestPregledComponent},
-  { path: AppRoutes.studentDetails(':id'), component: StudentDetailsComponent}
+  { path: AppRoutes.studentDetails(':id'), component: StudentDetailsComponent},
+  { path: AppRoutes.ocenjivanjeSelect, component: OcenjivanjeSelectComponent}
 ];
 
 @NgModule({
