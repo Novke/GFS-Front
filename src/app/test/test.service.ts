@@ -2,13 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { CreateTestCmd, EvidentirajPolaganjeCmd, IdCmd, TestDetails, TestInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
+import { API_URL } from '../shared/api-url';
 
 @Injectable({
   providedIn: 'root'
 })
 export class TestService {
 
-  private apiUrl = 'http://localhost:8080';
+  private apiUrl = API_URL;
 
   constructor(private http: HttpClient) { }
 

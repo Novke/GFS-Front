@@ -1,13 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciId, DomaciInfo, UpdateDomaciCmd } from '../models/model';
+import { API_URL } from '../shared/api-url';
 
 @Injectable({
   providedIn: 'root'
 })
 export class DomaciService {
 
-  private apiUrl = 'http://localhost:8080';
+  private apiUrl = API_URL;
 
   constructor(private http: HttpClient) { }
 

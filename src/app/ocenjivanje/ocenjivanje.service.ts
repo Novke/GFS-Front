@@ -10,13 +10,14 @@ import {
   SaveKoeficijentiCmd,
   TipTestaInfo
 } from '../models/model';
+import { API_URL } from '../shared/api-url';
 
 @Injectable({
   providedIn: 'root'
 })
 export class OcenjivanjeService {
 
-  private apiUrl = 'http://localhost:8080';
+  private apiUrl = API_URL;
 
   constructor(private http: HttpClient) { }
 

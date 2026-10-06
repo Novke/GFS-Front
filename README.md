@@ -1,27 +1,24 @@
-# GfsFront
+# GFS-Front
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 16.1.6.
+Angular 16 frontend za sistem Građevinskog fakulteta Subotica (evidencija predavanja, domaćih, testova i predlog ocena).
 
-## Development server
+## Pokretanje
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+### Lokalno (razvoj)
 
-## Code scaffolding
+```bash
+npm ci
+npx ng serve --host 127.0.0.1   # http://127.0.0.1:4200
+```
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+Backend se očekuje na `localhost:8080`. Frontend poziva relativni URL `/api`, a `ng serve` ga
+preko `proxy.conf.json` prosleđuje na `http://localhost:8080` (prefiks `/api` se uklanja).
 
-## Build
+### Docker
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+docker build --build-arg BASE_HREF=/gfs/ -t gfs-frontend .
+```
 
-## Running unit tests
-
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+`BASE_HREF` je putanja pod kojom se aplikacija služi (podrazumevano `/`). Kontejner sluša na portu 80;
+nginx unutra služi Angular build i proxy-uje `/api` ka servisu `backend` (`http://backend:8080/`).

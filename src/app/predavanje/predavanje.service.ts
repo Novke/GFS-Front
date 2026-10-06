@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, IdCmd, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
+import { API_URL } from '../shared/api-url';
 
 @Injectable({
   providedIn: 'root'
@@ -9,7 +10,7 @@ import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeIn
 export class PredavanjeService {
   
 
-  private apiUrl = 'http://localhost:8080';
+  private apiUrl = API_URL;
 
   constructor(private http: HttpClient) { }
 
