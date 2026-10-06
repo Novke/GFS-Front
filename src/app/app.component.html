@@ -1,3 +1,4 @@
+<div *ngIf="isStaging" class="env-strip">STAGING — test podaci</div>
 <mat-toolbar color="primary">
     <mat-toolbar-row>
         <a [routerLink]="routes.home" mat-button>Home</a>
@@ -5,6 +6,8 @@
         <a [routerLink]="routes.domaciSelect" mat-button>Domaći</a>
         <a [routerLink]="routes.testSelect" mat-button>Testovi</a>
         <a [routerLink]="routes.ocenjivanjeSelect" mat-button>Ocene</a>
+        <span class="spacer"></span>
+        <span *ngIf="isStaging" class="env-badge">STAGING</span>
     </mat-toolbar-row>
 </mat-toolbar>
 
