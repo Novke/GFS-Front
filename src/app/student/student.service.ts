@@ -2,13 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { StudentNaPredmetuDetails, StudentPregledDetails } from '../models/model';
+import { API_URL } from '../shared/api-url';
 
 @Injectable({
   providedIn: 'root'
 })
 export class StudentService {
 
-  private apiUrl = 'http://localhost:8080';
+  private apiUrl = API_URL;
 
   constructor(private http: HttpClient) { }
 

@@ -1,27 +1,28 @@
-# GfsFront
+# GFS-Front
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 16.1.6.
+Angular 16 frontend za sistem Građevinskog fakulteta Subotica (evidencija predavanja, domaćih, testova i predlog ocena).
 
-## Development server
+## Pokretanje
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+### Lokalno (razvoj)
 
-## Code scaffolding
+```bash
+npm ci
+npx ng serve --host 127.0.0.1   # http://127.0.0.1:4200
+```
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+Backend se očekuje na `localhost:8080`. Frontend poziva `api` (bez vodeće kose crte), što se razrešava
+u odnosu na `<base href>`: lokalno daje `/api/...`, a iza preview proxy-ja `/gfs/api/...`. `ng serve`
+zahteve ka `/api` preko `proxy.conf.json` prosleđuje na `http://localhost:8080` (prefiks `/api` se uklanja).
 
-## Build
+### Docker
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+docker build --build-arg BASE_HREF=/gfs/ -t gfs-frontend .
+```
 
-## Running unit tests
+`BASE_HREF` je putanja pod kojom se aplikacija služi (podrazumevano `/`). Kontejner sluša na portu 80;
+nginx unutra služi Angular build i proxy-uje `/api` ka servisu `backend` (`http://backend:8080/`).
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+`/api` proxy razrešava ime `backend` preko Docker DNS-a (`127.0.0.11`), pa kontejner mora da radi na compose
+ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom bridge-u `/api` vraća 502.
