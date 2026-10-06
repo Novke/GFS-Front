@@ -24,6 +24,10 @@ docker build --build-arg BASE_HREF=/gfs/ -t gfs-frontend .
 `BASE_HREF` je putanja pod kojom se aplikacija služi (podrazumevano `/`). Kontejner sluša na portu 80;
 nginx unutra služi Angular build i proxy-uje `/api` ka servisu `backend` (`http://backend:8080/`).
 
+`APP_ENV` (build arg, podrazumevano `prod`) se upisuje u `assets/env.json`. Za `APP_ENV=staging` aplikacija prikazuje crvenu
+traku "STAGING — test podaci" i značku `STAGING` u toolbaru (tako se staging razlikuje od prod). Sa `prod` nema trake; `ng serve`
+nema `env.json`, pa ni lokalno nema trake.
+
 `/api` proxy razrešava ime `backend` preko Docker DNS-a (`127.0.0.11`), pa kontejner mora da radi na compose
 ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom bridge-u `/api` vraća 502.
 
