@@ -65,8 +65,14 @@ a { color: var(--primary); }
 .mat-mdc-button-base:focus-visible,
 .mat-mdc-icon-button:focus-visible,
 .mat-mdc-chip-action:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+// Tamna ljuska je ista u oba režima: tamni ćilibar (--focus danju) na njoj ima 2.7:1, zato svetli.
+.mat-drawer:not(.mat-drawer-content),
+.ljuska-tamna {
+  --focus: var(--side-focus);
 }
 
 // Papir za pojedinačne površine (npr. sadržaj ljuske kad ima svoju pozadinu).

@@ -29,6 +29,8 @@
   --danger: #b42318;
   --danger-soft: #fdecea;
   --danger-ink: #ffffff;
+  // Fokus prsten: tamni ćilibar (5.9:1 na --bg, 6.3:1 na --surface); --accent danju ima samo 1.95:1.
+  --focus: #8a5300;
   --side-bg: #111c30;
   --side-ink: #c4cee0;
   --side-muted: #7f8ca6;
@@ -71,6 +73,7 @@
   --danger: #f97066;
   --danger-soft: #3a1513;
   --danger-ink: #1f0603;
+  --focus: var(--accent); // 8.8:1 na --bg
   --side-bg: #080e19;
   --side-ink: #c2ccdc;
   --side-muted: #6f7c95;
@@ -97,6 +100,7 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --accent: #f0a23b; // ćilibar, isti u oba režima
   --accent-ink: #1d1304;
+  --side-focus: var(--accent); // fokus na tamnoj ljusci u oba režima (8.1:1 na --side-bg danju)
   --pattern-size: 24px 24px;
   --radius: 8px; // kartice
   --radius-sm: 6px; // polja, dugmad, chipovi

@@ -45,6 +45,7 @@
 
 // Stara traka (AppComponent) je tamna kao buduća ljuska, u oba režima.
 .mat-toolbar-row {
+  --focus: var(--side-focus);
   background-color: var(--side-bg);
   color: var(--side-ink);
 }
@@ -58,7 +59,7 @@
 }
 
 .clickable-row:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
 
