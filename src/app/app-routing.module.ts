@@ -24,6 +24,7 @@ import { GrupeComponent } from './grupa/grupe/grupe.component';
 import { GrupaDetailsComponent } from './grupa/grupa-details/grupa-details.component';
 import { OnboardingQrComponent } from './onboarding/onboarding-qr/onboarding-qr.component';
 import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onboarding-prijave.component';
+import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component';
 
 
 const routes: Routes = [
@@ -49,7 +50,9 @@ const routes: Routes = [
   { path: AppRoutes.grupe, component: GrupeComponent },
   { path: AppRoutes.grupaDetails(':id'), component: GrupaDetailsComponent },
   { path: AppRoutes.onboardingQr(':id'), component: OnboardingQrComponent },
-  { path: AppRoutes.onboardingPrijave(':id'), component: OnboardingPrijaveComponent }
+  { path: AppRoutes.onboardingPrijave(':id'), component: OnboardingPrijaveComponent },
+  // Javna ruta (bez basic-auth-a, bez toolbara): vidi JAVNA_RUTA u app.component.ts.
+  { path: AppRoutes.upis(':token'), component: JavniUpisComponent }
 ];
 
 @NgModule({

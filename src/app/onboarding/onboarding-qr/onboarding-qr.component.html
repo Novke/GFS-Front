@@ -8,7 +8,7 @@
   </div>
   <div *ngIf="greska" class="alert alert-danger" role="alert">{{ greska }}</div>
 
-  <canvas #qr class="d-block mx-auto mb-3" [hidden]="!sesija" aria-label="QR kod za prijavu"></canvas>
+  <canvas #qr class="mx-auto mb-3" [ngClass]="sesija ? 'd-block' : 'd-none'" aria-label="QR kod za prijavu"></canvas>
 
   <ng-container *ngIf="sesija">
     <p class="mb-2"><code #linkTekst class="text-break fs-5">{{ link }}</code></p>

@@ -38,6 +38,7 @@ import { GrupeComponent } from './grupa/grupe/grupe.component';
 import { GrupaDetailsComponent } from './grupa/grupa-details/grupa-details.component';
 import { OnboardingQrComponent } from './onboarding/onboarding-qr/onboarding-qr.component';
 import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onboarding-prijave.component';
+import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component';
 
 @NgModule({
   declarations: [
@@ -65,7 +66,8 @@ import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onbo
     GrupeComponent,
     GrupaDetailsComponent,
     OnboardingQrComponent,
-    OnboardingPrijaveComponent
+    OnboardingPrijaveComponent,
+    JavniUpisComponent
   ],
   imports: [
     BrowserModule,
