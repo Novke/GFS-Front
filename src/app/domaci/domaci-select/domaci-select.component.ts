@@ -1,20 +1,22 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
+import { SelectBaseComponent } from '../../components/select-base.component';
 
 @Component({
     selector: 'app-domaci-select',
     templateUrl: './domaci-select.component.html',
     styleUrls: ['./domaci-select.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [SelectBaseComponent]
 })
 export class DomaciSelectComponent {
+  private predavanjeService = inject(PredavanjeService);
+  private router = inject(Router);
+
   izabranaGrupa: number = 0;
   izabranPredmet: number = 0;
-
-  constructor(private predavanjeService: PredavanjeService, private router: Router) {}
 
   onSubmit(): void {
     if (this.izabranaGrupa && this.izabranPredmet) {

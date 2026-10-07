@@ -8,8 +8,8 @@ describe('PredavanjeListComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [PredavanjeListComponent]
-    });
+    imports: [PredavanjeListComponent]
+});
     fixture = TestBed.createComponent(PredavanjeListComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

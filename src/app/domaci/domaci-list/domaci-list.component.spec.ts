@@ -8,8 +8,8 @@ describe('DomaciListComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [DomaciListComponent]
-    });
+    imports: [DomaciListComponent]
+});
     fixture = TestBed.createComponent(DomaciListComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

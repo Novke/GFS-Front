@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   GrupaInfo,
   KoeficijentiInfo,
@@ -9,15 +9,19 @@ import {
   TipTestaInfo
 } from '../models/model';
 import { OcenjivanjeService } from './ocenjivanje.service';
+import { FormsModule } from '@angular/forms';
+import { NgClass, DecimalPipe } from '@angular/common';
 
 @Component({
     selector: 'app-ocenjivanje-select',
     templateUrl: './ocenjivanje-select.component.html',
     styleUrls: ['./ocenjivanje-select.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [FormsModule, NgClass, DecimalPipe]
 })
 export class OcenjivanjeSelectComponent implements OnInit {
+  private ocenjivanjeService = inject(OcenjivanjeService);
+
 
   grupe: GrupaInfo[] = [];
   predmeti: PredmetInfo[] = [];
@@ -34,8 +38,6 @@ export class OcenjivanjeSelectComponent implements OnInit {
 
   // Lokalna kopija za editovanje
   editKoef: SaveKoeficijentiCmd = this.getDefaultKoeficijenti();
-
-  constructor(private ocenjivanjeService: OcenjivanjeService) { }
 
   ngOnInit(): void {
     this.loadGrupeIPredmeti();

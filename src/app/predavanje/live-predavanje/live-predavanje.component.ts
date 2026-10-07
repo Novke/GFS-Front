@@ -1,17 +1,23 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd, tipAktivnosti } from '../../models/model';
 import { AppRoutes } from 'src/app/app.routes';
+import { FormsModule } from '@angular/forms';
+import { NgStyle } from '@angular/common';
 
 @Component({
     selector: 'app-live-predavanje',
     templateUrl: './live-predavanje.component.html',
     styleUrls: ['./live-predavanje.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [FormsModule, NgStyle]
 })
 export class LivePredavanjeComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private predavanjeService = inject(PredavanjeService);
+
 
   id: number | null = null;
 
@@ -44,11 +50,6 @@ export class LivePredavanjeComponent implements OnInit {
   updatedNapomene: { [key: number]: string } = {};
 
   showModal: boolean = false;
-
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private predavanjeService: PredavanjeService) { }
 
   ngOnInit() {
     this.route.paramMap.subscribe(params => {

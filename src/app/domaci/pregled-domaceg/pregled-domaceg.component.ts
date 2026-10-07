@@ -1,26 +1,26 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { DomaciDetails, DomaciStudentiInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
+import { FormsModule } from '@angular/forms';
+import { MatCard, MatCardContent, MatCardTitle, MatCardSubtitle } from '@angular/material/card';
 
 @Component({
     selector: 'app-pregled-domaceg',
     templateUrl: './pregled-domaceg.component.html',
     styleUrls: ['./pregled-domaceg.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [FormsModule, MatCard, MatCardContent, MatCardTitle, MatCardSubtitle]
 })
 export class PregledDomacegComponent implements OnInit {
+  private domaciService = inject(DomaciService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   id: number | null = null;
   domaci: DomaciDetails | undefined;
-
-  constructor(
-    private domaciService: DomaciService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(

@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   CreateOnboardingCmd, JavniUpisInfo, OdbijPrijavuCmd, OnboardingSesijaDetails, OnboardingSesijaInfo,
@@ -11,10 +11,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class OnboardingService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   listSesije(grupaId: number): Observable<OnboardingSesijaInfo[]> {
     return this.http.get<OnboardingSesijaInfo[]>(`${this.apiUrl}/grupe/${grupaId}/onboarding`);

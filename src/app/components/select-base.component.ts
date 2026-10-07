@@ -1,15 +1,19 @@
-import { Component, OnInit, Input, Output, EventEmitter, Injector, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, Input, Output, EventEmitter, Injector, ChangeDetectionStrategy, inject } from '@angular/core';
 import { GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
+import { FormsModule } from '@angular/forms';
+import { MatDivider } from '@angular/material/list';
 
 @Component({
     selector: 'app-select-base',
     templateUrl: './select-base.component.html',
     styleUrls: ['./select-base.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [FormsModule, MatDivider]
 })
 export class SelectBaseComponent implements OnInit {
+  private predavanjeService = inject(PredavanjeService);
+
   @Input() submitButtonText: string = 'Submit';
   @Input() newButtonText: string = 'Create New';
   @Input() titleText: string = '';
@@ -23,8 +27,6 @@ export class SelectBaseComponent implements OnInit {
   @Input() izabranPredmet: number = 0;
   @Output() izabranaGrupaChange = new EventEmitter<number>();
   @Output() izabranPredmetChange = new EventEmitter<number>();
-
-  constructor(private predavanjeService: PredavanjeService) { }
 
   ngOnInit(): void {
     this.loadGroupsAndSubjects();

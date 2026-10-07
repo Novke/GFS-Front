@@ -6,8 +6,7 @@ import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/com
 
 describe('AppComponent', () => {
   beforeEach(() => TestBed.configureTestingModule({
-    declarations: [AppComponent],
-    imports: [RouterTestingModule],
+    imports: [RouterTestingModule, AppComponent],
     providers: [provideHttpClient(withXhr(), withInterceptorsFromDi()), provideHttpClientTesting()]
 }));
 

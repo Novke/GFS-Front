@@ -1,12 +1,13 @@
-import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { NgForm } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { NgForm, FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AppRoutes } from 'src/app/app.routes';
 import { CreateOnboardingCmd, CreateStudentCmd, GrupaDetails, OnboardingSesijaInfo } from 'src/app/models/model';
 import { OnboardingService } from 'src/app/onboarding/onboarding.service';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { GrupaService } from '../grupa.service';
+import { NgClass, DatePipe } from '@angular/common';
 
 interface NovStudent {
   ime: string;
@@ -22,9 +23,14 @@ interface NovStudent {
     templateUrl: './grupa-details.component.html',
     styleUrls: ['./grupa-details.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [RouterLink, FormsModule, NgClass, DatePipe]
 })
 export class GrupaDetailsComponent implements OnInit, OnDestroy {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private grupaService = inject(GrupaService);
+  private onboardingService = inject(OnboardingService);
+
 
   readonly routes = AppRoutes;
 
@@ -43,12 +49,6 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
   menjaSesijuId: number | null = null;
 
   private paramSub?: Subscription;
-
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private grupaService: GrupaService,
-    private onboardingService: OnboardingService) { }
 
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {

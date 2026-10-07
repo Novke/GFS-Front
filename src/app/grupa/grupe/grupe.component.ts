@@ -1,5 +1,5 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { NgForm } from '@angular/forms';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { NgForm, FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { CreateGrupaCmd, GrupaInfo } from 'src/app/models/model';
@@ -11,9 +11,12 @@ import { GrupaService } from '../grupa.service';
     templateUrl: './grupe.component.html',
     styleUrls: ['./grupe.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [FormsModule]
 })
 export class GrupeComponent implements OnInit {
+  private grupaService = inject(GrupaService);
+  private router = inject(Router);
+
 
   grupe: GrupaInfo[] = [];
   ucitano = false;
@@ -21,10 +24,6 @@ export class GrupeComponent implements OnInit {
   naziv = '';
   godinaUpisa = new Date().getFullYear();
   cuva = false;
-
-  constructor(
-    private grupaService: GrupaService,
-    private router: Router) { }
 
   ngOnInit(): void {
     this.ucitajGrupe();

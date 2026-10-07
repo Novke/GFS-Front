@@ -1,17 +1,23 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { PredavanjeService } from '../predavanje.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
 import { AppRoutes } from 'src/app/app.routes';
+import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
+import { DatePipe } from '@angular/common';
 
 @Component({
     selector: 'app-predavanje-list',
     templateUrl: './predavanje-list.component.html',
     styleUrls: ['./predavanje-list.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine, DatePipe]
 })
 export class PredavanjeListComponent implements OnInit {
+  private predavanjaService = inject(PredavanjeService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   grupaId: number | null = null;
   predmetId: number | null = null;
@@ -19,12 +25,6 @@ export class PredavanjeListComponent implements OnInit {
 
   grupa: GrupaInfo | null = null;
   predmet: PredmetInfo | null = null;
-
-  constructor(
-    private predavanjaService: PredavanjeService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
 

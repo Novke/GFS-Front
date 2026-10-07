@@ -1,5 +1,4 @@
-import { NgModule } from '@angular/core';
-import { RouterModule, Routes } from '@angular/router';
+import { Routes } from '@angular/router';
 import { StartPredavanjeComponent } from './predavanje/start-predavanje/start-predavanje.component';
 import { LivePredavanjeComponent } from './predavanje/live-predavanje/live-predavanje.component';
 import { EvidentiranjeComponent } from './domaci/evidentiranje/evidentiranje.component';
@@ -27,7 +26,7 @@ import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onbo
 import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component';
 
 
-const routes: Routes = [
+export const routes: Routes = [
   { path: AppRoutes.home, component: HomeComponent },
   { path: AppRoutes.predavanjeSelect, component: PredavanjeSelectComponent },
   { path: AppRoutes.predavanjeStart, component: StartPredavanjeComponent },
@@ -54,9 +53,3 @@ const routes: Routes = [
   // Javna ruta (bez basic-auth-a, bez toolbara): vidi JAVNA_RUTA u app.component.ts.
   { path: AppRoutes.upis(':token'), component: JavniUpisComponent }
 ];
-
-@NgModule({
-  imports: [RouterModule.forRoot(routes)],
-  exports: [RouterModule]
-})
-export class AppRoutingModule { }

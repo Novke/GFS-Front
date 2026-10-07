@@ -8,8 +8,8 @@ describe('LivePredavanjeComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [LivePredavanjeComponent]
-    });
+    imports: [LivePredavanjeComponent]
+});
     fixture = TestBed.createComponent(LivePredavanjeComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

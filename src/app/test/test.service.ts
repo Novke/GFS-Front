@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { CreateTestCmd, EvidentirajPolaganjeCmd, IdCmd, TestDetails, TestInfo, TipTestaInfo, UpdateTestCmd } from '../models/model';
 import { API_URL } from '../shared/api-url';
@@ -8,10 +8,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class TestService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   createTest(cmd: CreateTestCmd): Observable<TestInfo>{
     return this.http.post<TestInfo>(`${this.apiUrl}/test`, cmd)

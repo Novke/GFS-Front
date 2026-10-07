@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { CreateGrupaCmd, CreateStudentCmd, GrupaDetails, GrupaInfo, StudentInfo } from '../models/model';
 import { API_URL } from '../shared/api-url';
@@ -8,10 +8,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class GrupaService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   getGrupe(): Observable<GrupaInfo[]> {
     return this.http.get<GrupaInfo[]>(`${this.apiUrl}/grupe`);
