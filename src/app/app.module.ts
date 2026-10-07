@@ -36,6 +36,8 @@ import { StudentPredmetComponent } from './student/student-predmet/student-predm
 import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.component';
 import { GrupeComponent } from './grupa/grupe/grupe.component';
 import { GrupaDetailsComponent } from './grupa/grupa-details/grupa-details.component';
+import { OnboardingQrComponent } from './onboarding/onboarding-qr/onboarding-qr.component';
+import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onboarding-prijave.component';
 
 @NgModule({
   declarations: [
@@ -61,7 +63,9 @@ import { GrupaDetailsComponent } from './grupa/grupa-details/grupa-details.compo
     StudentPredmetComponent,
     OcenjivanjeSelectComponent,
     GrupeComponent,
-    GrupaDetailsComponent
+    GrupaDetailsComponent,
+    OnboardingQrComponent,
+    OnboardingPrijaveComponent
   ],
   imports: [
     BrowserModule,

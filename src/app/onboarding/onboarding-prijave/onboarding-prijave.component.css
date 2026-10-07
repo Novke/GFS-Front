@@ -1,0 +1,6 @@
+/* Zajednički stilovi su u src/styles.css; ovde samo širine polja za inline izmenu. */
+.polje-izmene { min-width: 8rem; }
+.polje-usko { min-width: 5.5rem; }
+.polje-email { min-width: 12rem; }
+.polje-datum { min-width: 9.5rem; }
+.napomena-kolona { max-width: 16rem; }

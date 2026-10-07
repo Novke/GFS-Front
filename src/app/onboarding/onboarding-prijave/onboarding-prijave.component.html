@@ -1,0 +1,125 @@
+<div class="container-fluid mt-4 px-4">
+  <a *ngIf="detalji" [routerLink]="['/' + routes.grupaDetails(detalji.sesija.grupa.id)]" class="btn btn-link ps-0">&larr; Nazad na grupu</a>
+
+  <h1>Prijave<span *ngIf="detalji">: {{ detalji.sesija.grupa.naziv }}</span></h1>
+
+  <p *ngIf="!detalji && !neuspehUcitavanja" class="text-muted">Učitavanje...</p>
+  <div *ngIf="!detalji && neuspehUcitavanja" class="alert alert-danger" role="alert">
+    Prijave nisu mogle da se učitaju.
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-2" [disabled]="ucitava" (click)="osvezi()">Pokušaj ponovo</button>
+  </div>
+
+  <ng-container *ngIf="detalji">
+    <!-- Brojači -->
+    <div class="d-flex flex-wrap gap-4 mb-3">
+      <div><div class="fs-4 fw-bold">{{ brojevi.ukupno }}</div><div class="text-muted small">Ukupno</div></div>
+      <div><div class="fs-4 fw-bold">{{ brojevi.naCekanju }}</div><div class="text-muted small">Na čekanju</div></div>
+      <div><div class="fs-4 fw-bold">{{ brojevi.prihvacene }}</div><div class="text-muted small">Prihvaćene</div></div>
+      <div><div class="fs-4 fw-bold">{{ brojevi.odbijene }}</div><div class="text-muted small">Odbijene</div></div>
+    </div>
+
+    <!-- Akcije i filter -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+      <button type="button" class="btn btn-primary"
+              [disabled]="zauzet || izmenaId !== null || brojevi.naCekanju === 0"
+              (click)="prihvatiSve()">Prihvati sve na čekanju ({{ brojevi.naCekanju }})</button>
+      <button type="button" class="btn btn-outline-secondary" [disabled]="zauzet || ucitava" (click)="osvezi()">Osveži</button>
+      <a [routerLink]="['/' + routes.onboardingQr(sesijaId)]" class="btn btn-outline-secondary">QR</a>
+
+      <div class="btn-group ms-md-auto" role="group" aria-label="Filter po statusu">
+        <button *ngFor="let f of filteri" type="button" class="btn btn-outline-secondary"
+                [class.active]="filter === f.vrednost" [attr.aria-pressed]="filter === f.vrednost"
+                (click)="postaviFilter(f.vrednost)">{{ f.naziv }}</button>
+      </div>
+    </div>
+    <p class="text-muted small">Lista se osvežava automatski na svakih 15 s (pauzirano dok menjate prijavu).</p>
+
+    <div *ngIf="poruka" class="alert alert-info alert-dismissible" role="alert">
+      {{ poruka }}
+      <button type="button" class="btn-close" aria-label="Zatvori" (click)="poruka = null"></button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Ime</th>
+            <th>Prezime</th>
+            <th>Indeks</th>
+            <th>Godina</th>
+            <th>Email</th>
+            <th>Telefon</th>
+            <th>Datum rođenja</th>
+            <th>Opština</th>
+            <th>Podneto</th>
+            <th>Napomena</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <ng-container *ngFor="let p of prikazane; trackBy: trackById">
+            <tr *ngIf="izmenaId !== p.id; else izmenaRed">
+              <td><span class="badge" [ngClass]="statusKlasa(p.status)">{{ statusNaziv(p.status) }}</span></td>
+              <td>{{ p.ime }}</td>
+              <td>{{ p.prezime }}</td>
+              <td>{{ p.indeks }}</td>
+              <td>{{ p.godina }}</td>
+              <td>{{ p.email }}</td>
+              <td>{{ p.brojTelefona }}</td>
+              <td>{{ p.datumRodjenja ? (p.datumRodjenja | date:'dd.MM.yyyy') : '—' }}</td>
+              <td>{{ p.opstina || '—' }}</td>
+              <td class="text-nowrap">{{ p.podneto | date:'dd.MM.yyyy HH:mm' }}</td>
+              <td class="napomena-kolona">{{ p.napomena || '—' }}</td>
+              <td class="text-nowrap text-end">
+                <ng-container *ngIf="p.status === 'NA_CEKANJU'">
+                  <button type="button" class="btn btn-sm btn-primary me-1" [disabled]="zauzet" (click)="prihvati(p)">Prihvati</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger me-1" [disabled]="zauzet" (click)="odbij(p)">Odbij</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary"
+                          [disabled]="zauzet || izmenaId !== null" (click)="zapocniIzmenu(p)">Izmeni</button>
+                </ng-container>
+                <a *ngIf="p.status === 'PRIHVACENA' && p.studentId !== null"
+                   [routerLink]="['/' + routes.studentDetails(p.studentId)]" class="btn btn-sm btn-link">Student</a>
+              </td>
+            </tr>
+
+            <ng-template #izmenaRed>
+              <tr class="table-active" (keydown.enter)="tasterUIzmeni($event, p, true)" (keydown.escape)="tasterUIzmeni($event, p, false)">
+                <td><span class="badge" [ngClass]="statusKlasa(p.status)">{{ statusNaziv(p.status) }}</span></td>
+                <td><input class="form-control form-control-sm polje-izmene" type="text" maxlength="60" aria-label="Ime"
+                           [(ngModel)]="nacrt.ime"></td>
+                <td><input class="form-control form-control-sm polje-izmene" type="text" maxlength="60" aria-label="Prezime"
+                           [(ngModel)]="nacrt.prezime"></td>
+                <td><input class="form-control form-control-sm polje-usko" type="text" maxlength="20" aria-label="Indeks"
+                           [(ngModel)]="nacrt.indeks"></td>
+                <td><input class="form-control form-control-sm polje-usko" type="number" min="2000" step="1" aria-label="Godina"
+                           [(ngModel)]="nacrt.godina"></td>
+                <td><input class="form-control form-control-sm polje-email" type="email" maxlength="120" aria-label="Email"
+                           [(ngModel)]="nacrt.email"></td>
+                <td><input class="form-control form-control-sm polje-izmene" type="tel" maxlength="20" aria-label="Telefon"
+                           [(ngModel)]="nacrt.brojTelefona"></td>
+                <td><input class="form-control form-control-sm polje-datum" type="date" aria-label="Datum rođenja"
+                           [(ngModel)]="nacrt.datumRodjenja"></td>
+                <td><input class="form-control form-control-sm polje-izmene" type="text" maxlength="100" aria-label="Opština"
+                           [(ngModel)]="nacrt.opstina"></td>
+                <td class="text-nowrap">{{ p.podneto | date:'dd.MM.yyyy HH:mm' }}</td>
+                <td class="napomena-kolona">{{ p.napomena || '—' }}</td>
+                <td class="text-nowrap text-end">
+                  <button type="button" class="btn btn-sm btn-primary me-1"
+                          [disabled]="zauzet || !nacrtVazeci()" (click)="sacuvajIzmenu(p)">Sačuvaj</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="zauzet" (click)="otkaziIzmenu()">Otkaži</button>
+                </td>
+              </tr>
+            </ng-template>
+          </ng-container>
+
+          <tr *ngIf="prikazane.length === 0">
+            <td colspan="12" class="text-muted">
+              {{ brojevi.ukupno === 0 ? 'Još nema prijava.' : 'Nema prijava za izabrani filter.' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </ng-container>
+</div>
