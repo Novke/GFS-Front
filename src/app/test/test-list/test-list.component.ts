@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredmetInfo, TestInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
@@ -9,6 +9,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-test-list',
     templateUrl: './test-list.component.html',
     styleUrls: ['./test-list.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class TestListComponent implements OnInit{

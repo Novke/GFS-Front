@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, Subscription, interval } from 'rxjs';
 import { AppRoutes } from 'src/app/app.routes';
@@ -26,6 +26,7 @@ const AUTO_OSVEZAVANJE_MS = 15000;
     selector: 'app-onboarding-prijave',
     templateUrl: './onboarding-prijave.component.html',
     styleUrls: ['./onboarding-prijave.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class OnboardingPrijaveComponent implements OnInit, OnDestroy {

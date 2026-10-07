@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { StudentNaPredmetuDetails } from '../../models/model';
 import { StudentService } from '../student.service';
@@ -7,6 +7,7 @@ import { StudentService } from '../student.service';
     selector: 'app-student-predmet',
     templateUrl: './student-predmet.component.html',
     styleUrls: ['./student-predmet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class StudentPredmetComponent implements OnInit {

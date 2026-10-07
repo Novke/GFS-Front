@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { toCanvas } from 'qrcode';
 import { Subscription } from 'rxjs';
@@ -12,6 +12,7 @@ import { upisLink } from '../upis-link';
     selector: 'app-onboarding-qr',
     templateUrl: './onboarding-qr.component.html',
     styleUrls: ['./onboarding-qr.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class OnboardingQrComponent implements OnInit, OnDestroy {

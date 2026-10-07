@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd, tipAktivnosti } from '../../models/model';
@@ -8,6 +8,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-live-predavanje',
     templateUrl: './live-predavanje.component.html',
     styleUrls: ['./live-predavanje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class LivePredavanjeComponent implements OnInit {

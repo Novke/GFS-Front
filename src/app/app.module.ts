@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -77,5 +77,5 @@ import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component
         MatListModule,
         MatTableModule,
         MatPaginatorModule,
-        MatSortModule], providers: [provideHttpClient(withInterceptorsFromDi())] })
+        MatSortModule], providers: [provideHttpClient(withXhr(), withInterceptorsFromDi())] })
 export class AppModule { }

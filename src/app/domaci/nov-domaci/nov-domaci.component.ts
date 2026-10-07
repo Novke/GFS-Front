@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { DodajDomaciCmd, GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
@@ -9,6 +9,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-nov-domaci',
     templateUrl: './nov-domaci.component.html',
     styleUrls: ['./nov-domaci.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class NovDomaciComponent implements OnInit{

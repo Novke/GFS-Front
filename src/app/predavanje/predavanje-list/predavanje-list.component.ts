@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { PredavanjeService } from '../predavanje.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
@@ -8,6 +8,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-predavanje-list',
     templateUrl: './predavanje-list.component.html',
     styleUrls: ['./predavanje-list.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class PredavanjeListComponent implements OnInit {

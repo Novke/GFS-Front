@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {
   GrupaInfo,
   KoeficijentiInfo,
@@ -14,6 +14,7 @@ import { OcenjivanjeService } from './ocenjivanje.service';
     selector: 'app-ocenjivanje-select',
     templateUrl: './ocenjivanje-select.component.html',
     styleUrls: ['./ocenjivanje-select.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class OcenjivanjeSelectComponent implements OnInit {

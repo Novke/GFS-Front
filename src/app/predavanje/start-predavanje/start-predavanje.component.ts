@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/model';
@@ -8,6 +8,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-start-predavanje',
     templateUrl: './start-predavanje.component.html',
     styleUrls: ['./start-predavanje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class StartPredavanjeComponent implements OnInit {

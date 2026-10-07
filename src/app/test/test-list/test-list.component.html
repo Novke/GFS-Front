@@ -4,11 +4,11 @@
     <div class="row my-4">
       <div class="col text-center">
         <label for="predmet" class="form-label">Predmet</label>
-        <input class="form-control" id="predmet" [value]="predmet?.naziv" disabled>
+        <input class="form-control" id="predmet" [value]="$safeNavigationMigration(predmet?.naziv)" disabled>
       </div>
       <div class="col text-center">
         <label for="grupa" class="form-label">Grupa</label>
-        <input class="form-control" id="grupa" [value]="grupa?.naziv" disabled>
+        <input class="form-control" id="grupa" [value]="$safeNavigationMigration(grupa?.naziv)" disabled>
       </div>
     </div>
 

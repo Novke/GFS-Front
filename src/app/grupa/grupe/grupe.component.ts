@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { NgForm } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
@@ -10,6 +10,7 @@ import { GrupaService } from '../grupa.service';
     selector: 'app-grupe',
     templateUrl: './grupe.component.html',
     styleUrls: ['./grupe.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class GrupeComponent implements OnInit {

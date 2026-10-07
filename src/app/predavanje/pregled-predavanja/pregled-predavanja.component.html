@@ -30,7 +30,7 @@
 
         <div class="col">
           <label for="predavanjeTema">Tema</label>
-          <input id="predavanjeTema" class="form-control" name="predavanjeTema" [ngModel]="predavanje?.tema"
+          <input id="predavanjeTema" class="form-control" name="predavanjeTema" [ngModel]="$safeNavigationMigration(predavanje?.tema)"
             disabled>
         </div>
 
@@ -40,7 +40,7 @@
           <div class="form-group mb-3 col col-md-5">
             <label for="predavanjeDatum">Datum</label>
             <input type="date" id="predavanjeDatum" class="form-control" name="predavanjeDatum"
-              [ngModel]="predavanje?.datum" disabled>
+              [ngModel]="$safeNavigationMigration(predavanje?.datum)" disabled>
           </div>
           <div class="col">
             <label>Posećenost</label>

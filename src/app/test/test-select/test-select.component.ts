@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppRoutes } from '../../app.routes';
 
@@ -6,6 +6,7 @@ import { AppRoutes } from '../../app.routes';
     selector: 'app-test-select',
     templateUrl: './test-select.component.html',
     styleUrls: ['./test-select.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class TestSelectComponent {

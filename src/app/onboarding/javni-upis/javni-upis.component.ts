@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { NgForm, NgModel } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -62,6 +62,7 @@ function lokalniDatum(d: Date): string {
     selector: 'app-javni-upis',
     templateUrl: './javni-upis.component.html',
     styleUrls: ['./javni-upis.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class JavniUpisComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { CreateTestCmd, GrupaInfo, PredmetInfo, TipTestaInfo } from 'src/app/models/model';
@@ -10,6 +10,7 @@ import { TestService } from '../test.service';
     selector: 'app-nov-test',
     templateUrl: './nov-test.component.html',
     styleUrls: ['./nov-test.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class NovTestComponent implements OnInit {

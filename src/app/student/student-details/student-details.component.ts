@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { StudentPregledDetails } from 'src/app/models/model';
 import { StudentService } from '../student.service';
@@ -8,6 +8,7 @@ import { AppRoutes } from 'src/app/app.routes';
     selector: 'app-student-details',
     templateUrl: './student-details.component.html',
     styleUrls: ['./student-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class StudentDetailsComponent implements OnInit{

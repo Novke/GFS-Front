@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from '../../app.routes';
 import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../../models/model';
@@ -10,6 +10,7 @@ import { TestService } from '../test.service';
     selector: 'app-test-evidentiranje',
     templateUrl: './test-evidentiranje.component.html',
     styleUrls: ['./test-evidentiranje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class TestEvidentiranjeComponent implements OnInit {

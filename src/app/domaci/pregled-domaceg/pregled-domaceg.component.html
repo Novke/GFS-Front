@@ -27,13 +27,13 @@
         <div class="form-group mb-3">
           <label for="domaciDatum">Datum</label>
           <input type="date" id="domaciDatum" class="form-control" name="domaciDatum"
-            [ngModel]="domaci?.datum" disabled>
+            [ngModel]="$safeNavigationMigration(domaci?.datum)" disabled>
         </div>
 
         <div class="form-group mb-3">
           <label for="domaciOpis">Opis</label>
           <textarea id="domaciOpis" class="form-control" name="domaciOpis" rows="3"
-          [ngModel]="domaci?.text" disabled></textarea>
+          [ngModel]="$safeNavigationMigration(domaci?.text)" disabled></textarea>
         </div>
       </div>
 

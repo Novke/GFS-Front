@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
@@ -7,6 +7,7 @@ import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
     selector: 'app-domaci-select',
     templateUrl: './domaci-select.component.html',
     styleUrls: ['./domaci-select.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class DomaciSelectComponent {

@@ -45,12 +45,12 @@
           <div class="row col-md-7 my-3">
             <div class="col">
               <label class="form-label" for="tema">Tema</label>
-              <input class="form-control" id="tema" disabled [value]="domaci?.predavanje?.tema">
+              <input class="form-control" id="tema" disabled [value]="$safeNavigationMigration(domaci?.predavanje?.tema)">
             </div>
             <div class="col col-md-3">
               <label class="form-label" for="datum">Datum</label>
               <input class="form-control" id="datum" disabled
-                [value]="domaci?.predavanje?.datum | date : 'd. MMM y.'">
+                [value]="$safeNavigationMigration(domaci?.predavanje?.datum) | date : 'd. MMM y.'">
             </div>
           </div>
           <div class="row">

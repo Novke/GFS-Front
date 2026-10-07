@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { NgForm } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -21,6 +21,7 @@ interface NovStudent {
     selector: 'app-grupa-details',
     templateUrl: './grupa-details.component.html',
     styleUrls: ['./grupa-details.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class GrupaDetailsComponent implements OnInit, OnDestroy {
