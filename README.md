@@ -1,6 +1,6 @@
 # GFS-Front
 
-Angular 16 frontend za sistem Građevinskog fakulteta Subotica (evidencija predavanja, domaćih, testova i predlog ocena).
+Angular 22 frontend za sistem Građevinskog fakulteta Subotica (evidencija predavanja, domaćih, testova i predlog ocena).
 
 ## Pokretanje
 
@@ -38,7 +38,7 @@ ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom br
   `master` je zaštićen: obavezan PR i zeleni check `build`. Repo je javan, pa u njemu nema tajni ni pravih podataka.
 - Staging: svaki push na `staging` se automatski deployuje (oko minut) na `https://gfs.dev.trif.rs` (basic-auth,
   samo izmišljeni podaci); ishod je commit status `staging-deploy`. Detalji u deploy repou `Novke/GFS-deploy` (`README.md`).
-- CI: `.github/workflows/ci.yml`, job `build`, na PR i push na `staging`/`master`: Node 18, `npm ci`,
+- CI: `.github/workflows/ci.yml`, job `build`, na PR i push na `staging`/`master`: Node 24, `npm ci`,
   `npx ng build --configuration production`, Karma (`npx ng test --watch=false --browsers=ChromeHeadless`), pa `docker build`.
   Lokalno isto: `npm ci && npx ng build --configuration production`.
   **Poznati dug:** Karma korak ima `continue-on-error: true`, jer CLI stub specovi padaju (`NullInjectorError: No provider for HttpClient`,
