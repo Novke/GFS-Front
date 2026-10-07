@@ -1,0 +1,132 @@
+<main class="upis">
+  <header class="text-center mb-4">
+    <img src="assets/images/gfs-logo-pink.png" alt="Građevinski fakultet Subotica" class="upis-logo mb-2" width="96" height="72">
+    <h1 class="h3 mb-1 text-break">{{ info ? 'Prijava za grupu ' + info.grupaNaziv : 'Prijava' }}</h1>
+    <p *ngIf="info" class="text-muted mb-0">Godina upisa: <strong>{{ info.godinaUpisa }}</strong></p>
+  </header>
+
+  <p *ngIf="stanje === 'ucitavanje'" class="text-center text-muted py-4" role="status">
+    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Učitavanje...
+  </p>
+
+  <div *ngIf="stanje === 'nepostoji'" class="alert alert-warning" role="alert">
+    Link za prijavu nije ispravan. Proveri da li si ceo link prepisao/skenirao.
+  </div>
+
+  <div *ngIf="stanje === 'zatvorena'" class="alert alert-secondary" role="alert">Prijava je zatvorena.</div>
+
+  <ng-container *ngIf="stanje === 'greska'">
+    <div class="alert alert-danger" role="alert">Greška na serveru, pokušaj ponovo.</div>
+    <button type="button" class="btn btn-primary btn-lg w-100" (click)="pokusajPonovo()">Pokušaj ponovo</button>
+  </ng-container>
+
+  <ng-container *ngIf="stanje === 'uspeh' && poslato">
+    <div class="alert alert-success" role="status">Prijava primljena. Asistent će je odobriti.</div>
+    <dl class="row mb-0">
+      <dt class="col-5">Ime</dt><dd class="col-7 text-break">{{ poslato.ime }}</dd>
+      <dt class="col-5">Prezime</dt><dd class="col-7 text-break">{{ poslato.prezime }}</dd>
+      <dt class="col-5">Indeks</dt><dd class="col-7 text-break">{{ poslato.indeks }}</dd>
+      <dt class="col-5">Godina upisa</dt><dd class="col-7">{{ poslato.godina }}</dd>
+      <dt class="col-5">Email</dt><dd class="col-7 text-break">{{ poslato.email }}</dd>
+      <dt class="col-5">Telefon</dt><dd class="col-7 text-break">{{ poslato.brojTelefona }}</dd>
+    </dl>
+  </ng-container>
+
+  <form *ngIf="stanje === 'forma'" #f="ngForm" #formaEl (ngSubmit)="posalji(f, formaEl)" novalidate>
+    <div class="mb-3">
+      <label for="upis-ime" class="form-label">Ime</label>
+      <input id="upis-ime" name="ime" type="text" class="form-control form-control-lg"
+             autocomplete="given-name" autocapitalize="words" required maxlength="60"
+             [(ngModel)]="forma.ime" #imeC="ngModel"
+             [class.is-invalid]="!!poruka(f, imeC, 'ime')" [attr.aria-invalid]="poruka(f, imeC, 'ime') ? 'true' : null"
+             aria-describedby="upis-ime-greska">
+      <div *ngIf="poruka(f, imeC, 'ime') as p" id="upis-ime-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-prezime" class="form-label">Prezime</label>
+      <input id="upis-prezime" name="prezime" type="text" class="form-control form-control-lg"
+             autocomplete="family-name" autocapitalize="words" required maxlength="60"
+             [(ngModel)]="forma.prezime" #prezimeC="ngModel"
+             [class.is-invalid]="!!poruka(f, prezimeC, 'prezime')"
+             [attr.aria-invalid]="poruka(f, prezimeC, 'prezime') ? 'true' : null"
+             aria-describedby="upis-prezime-greska">
+      <div *ngIf="poruka(f, prezimeC, 'prezime') as p" id="upis-prezime-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-indeks" class="form-label">Indeks</label>
+      <input id="upis-indeks" name="indeks" type="text" class="form-control form-control-lg"
+             autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"
+             required minlength="2" maxlength="20"
+             [(ngModel)]="forma.indeks" #indeksC="ngModel"
+             [class.is-invalid]="!!poruka(f, indeksC, 'indeks')"
+             [attr.aria-invalid]="poruka(f, indeksC, 'indeks') ? 'true' : null"
+             aria-describedby="upis-indeks-pomoc upis-indeks-greska">
+      <div id="upis-indeks-pomoc" class="form-text">Latinicom, npr. GD12</div>
+      <div *ngIf="poruka(f, indeksC, 'indeks') as p" id="upis-indeks-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-godina" class="form-label">Godina upisa</label>
+      <input id="upis-godina" name="godina" type="number" inputmode="numeric" class="form-control form-control-lg"
+             required min="2000" [max]="maxGodina" step="1"
+             [(ngModel)]="forma.godina" #godinaC="ngModel"
+             [class.is-invalid]="!!poruka(f, godinaC, 'godina')"
+             [attr.aria-invalid]="poruka(f, godinaC, 'godina') ? 'true' : null"
+             aria-describedby="upis-godina-greska">
+      <div *ngIf="poruka(f, godinaC, 'godina') as p" id="upis-godina-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-email" class="form-label">Email</label>
+      <input id="upis-email" name="email" type="email" inputmode="email" class="form-control form-control-lg"
+             autocomplete="email" autocapitalize="off" spellcheck="false" required email maxlength="120"
+             [(ngModel)]="forma.email" #emailC="ngModel"
+             [class.is-invalid]="!!poruka(f, emailC, 'email')"
+             [attr.aria-invalid]="poruka(f, emailC, 'email') ? 'true' : null"
+             aria-describedby="upis-email-greska">
+      <div *ngIf="poruka(f, emailC, 'email') as p" id="upis-email-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-telefon" class="form-label">Broj telefona</label>
+      <!-- "\/" umesto "/": browser pattern kompajlira sa v zastavicom, gde je "/" u klasi sintaksna greška. -->
+      <input id="upis-telefon" name="brojTelefona" type="tel" inputmode="tel" class="form-control form-control-lg"
+             autocomplete="tel" required pattern="[0-9 +\-\/]{6,20}"
+             [(ngModel)]="forma.brojTelefona" #telefonC="ngModel"
+             [class.is-invalid]="!!poruka(f, telefonC, 'brojTelefona')"
+             [attr.aria-invalid]="poruka(f, telefonC, 'brojTelefona') ? 'true' : null"
+             aria-describedby="upis-telefon-greska">
+      <div *ngIf="poruka(f, telefonC, 'brojTelefona') as p" id="upis-telefon-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-3">
+      <label for="upis-datum" class="form-label">Datum rođenja (opciono)</label>
+      <input id="upis-datum" name="datumRodjenja" type="date" class="form-control form-control-lg"
+             autocomplete="bday" min="1920-01-01" [max]="danas"
+             [(ngModel)]="forma.datumRodjenja" #datumC="ngModel"
+             [class.is-invalid]="!!poruka(f, datumC, 'datumRodjenja')"
+             [attr.aria-invalid]="poruka(f, datumC, 'datumRodjenja') ? 'true' : null"
+             aria-describedby="upis-datum-greska">
+      <div *ngIf="poruka(f, datumC, 'datumRodjenja') as p" id="upis-datum-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div class="mb-4">
+      <label for="upis-opstina" class="form-label">Opština (opciono)</label>
+      <input id="upis-opstina" name="opstina" type="text" class="form-control form-control-lg"
+             autocomplete="address-level2" maxlength="100"
+             [(ngModel)]="forma.opstina" #opstinaC="ngModel"
+             [class.is-invalid]="!!poruka(f, opstinaC, 'opstina')"
+             [attr.aria-invalid]="poruka(f, opstinaC, 'opstina') ? 'true' : null"
+             aria-describedby="upis-opstina-greska">
+      <div *ngIf="poruka(f, opstinaC, 'opstina') as p" id="upis-opstina-greska" class="invalid-feedback d-block">{{ p }}</div>
+    </div>
+
+    <div *ngIf="greskaServera" class="alert alert-danger" role="alert">{{ greskaServera }}</div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100" [disabled]="salje">
+      <span *ngIf="salje" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Pošalji
+    </button>
+  </form>
+</main>

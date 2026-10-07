@@ -34,6 +34,11 @@ import { TestSelectComponent } from './test/test-select/test-select.component';
 import { StudentDetailsComponent } from './student/student-details/student-details.component';
 import { StudentPredmetComponent } from './student/student-predmet/student-predmet.component';
 import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.component';
+import { GrupeComponent } from './grupa/grupe/grupe.component';
+import { GrupaDetailsComponent } from './grupa/grupa-details/grupa-details.component';
+import { OnboardingQrComponent } from './onboarding/onboarding-qr/onboarding-qr.component';
+import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onboarding-prijave.component';
+import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component';
 
 @NgModule({
   declarations: [
@@ -57,7 +62,12 @@ import { OcenjivanjeSelectComponent } from './ocenjivanje/ocenjivanje-select.com
     TestPregledComponent,
     StudentDetailsComponent,
     StudentPredmetComponent,
-    OcenjivanjeSelectComponent
+    OcenjivanjeSelectComponent,
+    GrupeComponent,
+    GrupaDetailsComponent,
+    OnboardingQrComponent,
+    OnboardingPrijaveComponent,
+    JavniUpisComponent
   ],
   imports: [
     BrowserModule,
