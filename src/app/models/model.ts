@@ -29,7 +29,8 @@ export interface StartPredavanjeCmd {
   export interface GrupaInfo {
     id: number;
     naziv: string;
-    godinaUpisa: number
+    godinaUpisa: number;
+    brojStudenata?: number | null;
   }
 
   export interface GrupaDetails {
@@ -51,6 +52,9 @@ export interface StartPredavanjeCmd {
     ime: string;
     prezime: string;
     indeks: string;
+    godina?: number;
+    email?: string | null;
+    brojTelefona?: string | null;
   }
   
   export interface StudentDetails {
@@ -58,6 +62,9 @@ export interface StartPredavanjeCmd {
     ime: string;
     prezime: string;
     indeks: string;
+    godina?: number;
+    email?: string | null;
+    brojTelefona?: string | null;
     aktivnosti: AktivnostInfo[];
   }
 
@@ -361,3 +368,37 @@ export interface MaxPoeniStudentaNaTestuInfo {
   tipTesta: TipTestaInfo;
   ostvarenoPoena: number;
 }
+
+export interface CreateGrupaCmd { naziv: string; godinaUpisa: number; }
+
+export interface CreateStudentCmd {
+  grupaId: number; ime: string; prezime: string; godina: number; indeks: string;
+  brojTelefona: string | null; email: string | null; datumRodjenja: string | null; opstina: string | null;
+}
+
+export type StatusPrijave = 'NA_CEKANJU' | 'PRIHVACENA' | 'ODBIJENA';
+
+export interface OnboardingSesijaInfo {
+  id: number; token: string; grupa: GrupaInfo; aktivna: boolean; otvorena: boolean;
+  kreirano: string; istice: string; maxPrijava: number; brojPrijava: number; brojNaCekanju: number;
+  napomena: string | null;
+}
+
+export interface PrijavaInfo {
+  id: number; ime: string; prezime: string; indeks: string; godina: number; email: string; brojTelefona: string;
+  datumRodjenja: string | null; opstina: string | null; status: StatusPrijave; podneto: string;
+  obradjeno: string | null; studentId: number | null; napomena: string | null;
+}
+
+export interface OnboardingSesijaDetails { sesija: OnboardingSesijaInfo; prijave: PrijavaInfo[]; poruka: string | null; }
+export interface CreateOnboardingCmd { isticeZaDana: number; maxPrijava: number; napomena: string | null; }
+export interface UpdateOnboardingCmd { aktivna: boolean; isticeZaDana?: number; }
+export interface PoljaPrijave {
+  ime: string; prezime: string; indeks: string; godina: number | null; email: string; brojTelefona: string;
+  datumRodjenja: string | null; opstina: string | null;
+}
+export interface UpdatePrijavaCmd extends PoljaPrijave {}
+export interface PodnesiPrijavuCmd extends PoljaPrijave {}
+export interface OdbijPrijavuCmd { napomena: string | null; }
+export interface JavniUpisInfo { grupaNaziv: string; godinaUpisa: number; otvorena: boolean; istice: string; }
+export interface PodnetaPrijavaInfo { id: number; }

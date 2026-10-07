@@ -17,6 +17,11 @@ export const AppRoutes = {
     testGrupaPredmet: (grupaId: number | string, predmetId: number | string) => `test/grupa/${grupaId}/predmet/${predmetId}`,
     studentDetails: (id: number | string) => `student/${id}`,
     studentPredmet: (studentId: number | string, predmetId: number | string) => `student/${studentId}/predmet/${predmetId}`,
-    ocenjivanjeSelect: "ocene"
+    ocenjivanjeSelect: "ocene",
+    grupe: "grupe",
+    grupaDetails: (id: number | string) => `grupe/${id}`,
+    onboardingPrijave: (id: number | string) => `onboarding/${id}`,
+    onboardingQr: (id: number | string) => `onboarding/${id}/qr`,
+    upis: (token: string) => `upis/${token}`
   };
   
