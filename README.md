@@ -36,7 +36,7 @@ ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom br
 - Tok: `feature/* -> staging -> master`. PR-ovi podrazumevano ciljaju `staging`; izdanje je PR `staging -> master`
   (otvara Novica ili agent na zahtev). Nikad direktan push na `master`; direktan push na `staging` je dozvoljen za brze probe.
   `master` je zaštićen: obavezan PR i zeleni check `build`. Repo je javan, pa u njemu nema tajni ni pravih podataka.
-- Staging: svaki push na `staging` se automatski deployuje (oko minut) na `https://staging.gfs.trif.rs` (basic-auth,
+- Staging: svaki push na `staging` se automatski deployuje (oko minut) na `https://gfs.dev.trif.rs` (basic-auth,
   samo izmišljeni podaci); ishod je commit status `staging-deploy`. Detalji u deploy repou `Novke/GFS-deploy` (`README.md`).
 - CI: `.github/workflows/ci.yml`, job `build`, na PR i push na `staging`/`master`: Node 18, `npm ci`,
   `npx ng build --configuration production`, Karma (`npx ng test --watch=false --browsers=ChromeHeadless`), pa `docker build`.
