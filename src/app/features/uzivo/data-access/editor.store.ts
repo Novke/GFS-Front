@@ -3,7 +3,8 @@ import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import {
-  EMPTY, Observable, Subject, catchError, debounce, filter, finalize, groupBy, mergeMap, pipe, race, switchMap, tap, timer,
+  EMPTY, Observable, Subject, catchError, concat, debounce, defer, filter, finalize, groupBy, map, mergeMap, of, pipe, race,
+  switchMap, take, tap, throwError, timer,
 } from 'rxjs';
 import { PrezentacijeApi } from './prezentacije.api';
 import { razlogGreske } from './razlog-greske';
@@ -27,6 +28,14 @@ export interface EditorState {
 export const DEBOUNCE_MS = 800;
 
 const PORUKA_CUVANJE = 'Čuvanje nije uspelo. Pokušaj ponovo (Ctrl+S).';
+
+/** Greška iz `sacuvajSve`: poruka je za korisnika (prva neispravnost ili razlog servera). */
+export class NijeSacuvano extends Error {
+  constructor(poruka: string) {
+    super(poruka);
+    this.name = 'NijeSacuvano';
+  }
+}
 
 const POCETNO: EditorState = { prezentacija: null, izabraniId: null, cuvanje: 'miruje', greska: null };
 
@@ -63,7 +72,11 @@ export const EditorStore = signalStore(
     let generacija = 0;
     let sledeciNacrt = -1;
     let uToku = 0;
+    /** Broj zahteva završenih greškom (za `sacuvajSve`: da li je greška nastala posle njegovog poziva). */
+    let brojGresaka = 0;
     const flush$ = new Subject<number | null>();
+    /** Emituje kad se završi bilo koji zahtev ka serveru. */
+    const zavrseno$ = new Subject<void>();
     /** Poslednja lokalna komanda, njen broj izmene i poslednji sačuvan broj izmene, po id-ju slajda. */
     const cmdovi = new Map<number, SlajdCmd>();
     const izmena = new Map<number, number>();
@@ -72,6 +85,8 @@ export const EditorStore = signalStore(
     const zamene = new Map<number, number>();
     const poreklo = new Map<number, number>();
     const nacrtiUSlanju = new Set<number>();
+    /** Broj izmene koji je upravo na putu (PUT), po id-ju: ista izmena se ne šalje dvaput (npr. iz grupe nacrta i pravog id-ja). */
+    const uSlanju = new Map<number, number>();
     const obrisani = new Set<number>();
 
     const razresi = (id: number) => zamene.get(id) ?? id;
@@ -99,8 +114,15 @@ export const EditorStore = signalStore(
       if (ishod !== undefined) {
         patchState(store, { greska: ishod });
       }
+      if (typeof ishod === 'string') {
+        brojGresaka++;
+      }
       if (uToku === 0) {
         patchState(store, { cuvanje: store.greska() ? 'greska' : 'sacuvano' });
+      }
+      // otkazan zahtev (switchMap) uvek odmah zamenjuje nov, pa se ne javlja
+      if (ishod !== undefined) {
+        zavrseno$.next();
       }
     }
 
@@ -221,6 +243,10 @@ export const EditorStore = signalStore(
         return EMPTY;
       }
       const rev = izmena.get(kljuc)!;
+      if (uSlanju.get(kljuc) === rev) {
+        return EMPTY;
+      }
+      uSlanju.set(kljuc, rev);
       const gen = generacija;
       let ishod: string | null | undefined;
       pocni();
@@ -237,7 +263,10 @@ export const EditorStore = signalStore(
           ishod = razlogGreske(e, PORUKA_CUVANJE);
           return EMPTY;
         }),
-        finalize(() => gen === generacija && zavrsi(ishod)),
+        finalize(() => {
+          if (uSlanju.get(kljuc) === rev) uSlanju.delete(kljuc);
+          if (gen === generacija) zavrsi(ishod);
+        }),
       );
     }
 
@@ -285,6 +314,37 @@ export const EditorStore = signalStore(
       return false;
     }
 
+    /** Slajdovi čije poslednje izmene još nisu na serveru (bez obrisanih). */
+    function nesacuvani(): number[] {
+      return [...izmena.keys()].filter(id => !obrisani.has(id) && naCekanju(id));
+    }
+
+    function sacuvajOdmah(): void {
+      for (const id of nesacuvani()) cuvaj(id);
+      flush$.next(null);
+    }
+
+    /**
+     * Ishod čekanja u `sacuvajSve`: `undefined` = još traje, `null` = sve je na serveru, string = greška. Ispravne izmene
+     * koje su ostale (npr. stigle dok je POST nacrta trajao, pa čekaju debounce) šalju se odmah.
+     */
+    function ishodCuvanja(greskePre: number): string | null | undefined {
+      if (uToku > 0 || nacrtiUSlanju.size > 0) return undefined;
+      if (brojGresaka > greskePre) return store.greska() ?? PORUKA_CUVANJE;
+      const ostali = nesacuvani();
+      for (const id of ostali) {
+        const greske = greskeSlajda(cmdovi.get(id)!);
+        if (greske.length) {
+          const rb = store.slajdovi().find(s => s.id === id)?.rb;
+          return rb ? `Slajd ${rb} nije sačuvan: ${greske[0]}` : greske[0];
+        }
+      }
+      if (!ostali.length) return null;
+      // van tekućeg završetka zahteva (bez ulaska u rxMethod usred njegovog `finalize`); sledeći završetak ponovo procenjuje
+      queueMicrotask(sacuvajOdmah);
+      return undefined;
+    }
+
     /** Šalje sve ispravne nesačuvane izmene van rxMethod-a (preživi uništavanje store-a pri napuštanju editora). */
     function sacuvajPreIzlaska(): void {
       for (const [id, cmd] of cmdovi) {
@@ -306,6 +366,7 @@ export const EditorStore = signalStore(
         uToku = 0;
         for (const m of [cmdovi, izmena, sacuvano, zamene, poreklo]) m.clear();
         nacrtiUSlanju.clear();
+        uSlanju.clear();
         obrisani.clear();
         patchState(store, POCETNO);
         api.detalji(id).subscribe({
@@ -330,11 +391,24 @@ export const EditorStore = signalStore(
       },
 
       /** Ctrl+S: šalje sve nesačuvano odmah (i ponavlja neuspela čuvanja). */
-      sacuvajOdmah(): void {
-        for (const id of [...izmena.keys()]) {
-          if (naCekanju(id) && !obrisani.has(id)) cuvaj(id);
-        }
-        flush$.next(null);
+      sacuvajOdmah,
+
+      /**
+       * Šalje sve nesačuvano i završava se (jedna vrednost) tek kad na serveru nema ničeg nesačuvanog ni zahteva u toku
+       * (PUT-ovi i POST-ovi nacrta). Greška `NijeSacuvano` kad neki slajd nije ispravan ili čuvanje padne posle poziva.
+       * Pokretanje i dupliranje čekaju ovo, da server vidi poslednje izmene.
+       */
+      sacuvajSve(): Observable<void> {
+        return defer(() => {
+          const greskePre = brojGresaka;
+          sacuvajOdmah();
+          return concat(of(undefined), zavrseno$).pipe(
+            map(() => ishodCuvanja(greskePre)),
+            filter(ishod => ishod !== undefined),
+            take(1),
+            switchMap(ishod => (ishod === null ? of(undefined) : throwError(() => new NijeSacuvano(ishod)))),
+          );
+        });
       },
 
       /** Nov slajd posle izabranog (ili na kraj), kao lokalni nacrt; bira ga. */
@@ -459,7 +533,7 @@ export const EditorStore = signalStore(
 
       /** Ima li izmena koje još nisu na serveru (uključujući neispravne nacrte). */
       imaNesacuvano(): boolean {
-        return [...izmena.keys()].some(id => !obrisani.has(id) && naCekanju(id)) || nacrtiUSlanju.size > 0;
+        return nesacuvani().length > 0 || nacrtiUSlanju.size > 0;
       },
 
       sacuvajPreIzlaska,

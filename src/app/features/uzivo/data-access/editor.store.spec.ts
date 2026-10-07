@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { EditorStore } from './editor.store';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { EditorStore, NijeSacuvano } from './editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
 
 function slajd(id: number, rb: number, naslov = `Slajd ${id}`): SlajdDetails {
@@ -208,6 +208,69 @@ describe('EditorStore', () => {
     http.expectNone('api/prezentacije/1/redosled');
     store.pomeri(1, 3);
     expect(http.expectOne('api/prezentacije/1/redosled').request.body).toEqual({ slajdIds: [12, 13, 11] });
+  });
+
+  describe('sacuvajSve', () => {
+    it('završava se tek kad PUT stigne', fakeAsync(() => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Pre pokretanja'));
+      let gotovo = false;
+      store.sacuvajSve().subscribe(() => (gotovo = true));
+      const req = http.expectOne('api/slajdovi/11');
+      flushMicrotasks();
+      expect(gotovo).toBeFalse();
+      req.flush(slajd(11, 1, 'Pre pokretanja'));
+      expect(gotovo).toBeTrue();
+      tick(800);
+    }));
+
+    it('bez nesačuvanog se završava odmah', () => {
+      ucitaj();
+      let gotovo = false;
+      store.sacuvajSve().subscribe(() => (gotovo = true));
+      expect(gotovo).toBeTrue();
+    });
+
+    it('neuspelo čuvanje daje grešku sa razlogom servera', fakeAsync(() => {
+      ucitaj();
+      store.izmeniSlajd(11, info('X'));
+      let greska: unknown = null;
+      store.sacuvajSve().subscribe({ error: e => (greska = e) });
+      http.expectOne('api/slajdovi/11').flush({ reason: 'Slajd nije pronađen.' }, { status: 404, statusText: 'Not Found' });
+      expect(greska instanceof NijeSacuvano).toBeTrue();
+      expect((greska as Error).message).toBe('Slajd nije pronađen.');
+      tick(800);
+    }));
+
+    it('neispravan nacrt daje grešku odmah, bez zahteva', () => {
+      ucitaj();
+      store.izaberi(13);
+      store.dodaj('PITANJE', 'JEDAN_TACAN');
+      let greska: unknown = null;
+      store.sacuvajSve().subscribe({ error: e => (greska = e) });
+      http.expectNone(() => true);
+      expect((greska as Error).message).toBe('Slajd 4 nije sačuvan: Tekst pitanja je obavezan (najviše 2000 znakova).');
+    });
+
+    it('čeka POST nacrta i izmenu stiglu dok je POST trajao', fakeAsync(() => {
+      ucitaj();
+      store.izaberi(13);
+      store.dodaj('INFO');
+      const nacrt = store.izabraniId()!;
+      store.izmeniSlajd(nacrt, info('Prvi'));
+      let gotovo = false;
+      store.sacuvajSve().subscribe(() => (gotovo = true));
+      const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+      store.izmeniSlajd(nacrt, info('Drugi'));
+      post.flush(slajd(30, 4, 'Prvi'));
+      flushMicrotasks();
+      expect(gotovo).toBeFalse();
+      const put = http.expectOne('api/slajdovi/30');
+      expect(put.request.body.naslov).toBe('Drugi');
+      put.flush(slajd(30, 4, 'Drugi'));
+      expect(gotovo).toBeTrue();
+      tick(800);
+    }));
   });
 });
 

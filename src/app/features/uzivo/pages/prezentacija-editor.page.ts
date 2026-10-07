@@ -1,6 +1,6 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -11,9 +11,9 @@ import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Observable, distinctUntilChanged, filter, map, take } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs';
 import { AppRoutes } from '../../../app.routes';
-import { EditorStore } from '../data-access/editor.store';
+import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
@@ -217,7 +217,6 @@ export class PrezentacijaEditorPage {
     return `${p.takmicenje ? 'Takmičenje' : 'Bez takmičenja'} · ${telefon}`;
   });
 
-  private readonly cuvanje$ = toObservable(this.store.cuvanje);
   private readonly aktivnoZa = computed(() => {
     const p = this.store.prezentacija();
     return p?.aktivnoIzvodjenjeId ? p.id : null;
@@ -304,17 +303,20 @@ export class PrezentacijaEditorPage {
     const p = this.store.prezentacija();
     if (!p || this.radi()) return;
     this.radi.set(true);
-    this.posleCuvanja().subscribe(() => {
-      // posle čuvanja: nacrt koji je upravo postao pitanje se računa
-      const bezDijaloga = pokretanjeBezDijaloga(this.route.snapshot.queryParamMap.get('predavanje'), this.store.brojPitanja());
-      if (bezDijaloga) {
-        this.pokreniSa(p.id, bezDijaloga);
-        return;
-      }
-      otvoriPokreni(this.dialog, { prezentacijaId: p.id, naziv: p.naziv }).subscribe(i => {
-        this.radi.set(false);
-        if (i) this.uKonzolu(i);
-      });
+    this.store.sacuvajSve().subscribe({
+      next: () => {
+        // tek posle čuvanja: nacrt koji je upravo postao pitanje se računa
+        const bezDijaloga = pokretanjeBezDijaloga(this.route.snapshot.queryParamMap.get('predavanje'), this.store.brojPitanja());
+        if (bezDijaloga) {
+          this.pokreniSa(p.id, bezDijaloga);
+          return;
+        }
+        otvoriPokreni(this.dialog, { prezentacijaId: p.id, naziv: p.naziv }).subscribe(i => {
+          this.radi.set(false);
+          if (i) this.uKonzolu(i);
+        });
+      },
+      error: e => this.neuspeh(e, 'Izmene nisu sačuvane.', 'Pokretanje je zaustavljeno'),
     });
   }
 
@@ -322,14 +324,17 @@ export class PrezentacijaEditorPage {
     const p = this.store.prezentacija();
     if (!p || this.radi()) return;
     this.radi.set(true);
-    this.posleCuvanja().subscribe(() => this.api.dupliraj(p.id).subscribe({
-      next: kopija => {
-        this.radi.set(false);
-        this.snack.open(`Napravljena je kopija „${kopija.naziv}“.`, 'U redu', { duration: 5000 });
-        this.router.navigate(['/' + AppRoutes.prezentacija(kopija.id)]);
-      },
-      error: e => this.neuspeh(e, 'Dupliranje nije uspelo.'),
-    }));
+    this.store.sacuvajSve().subscribe({
+      next: () => this.api.dupliraj(p.id).subscribe({
+        next: kopija => {
+          this.radi.set(false);
+          this.snack.open(`Napravljena je kopija „${kopija.naziv}“.`, 'U redu', { duration: 5000 });
+          this.router.navigate(['/' + AppRoutes.prezentacija(kopija.id)]);
+        },
+        error: e => this.neuspeh(e, 'Dupliranje nije uspelo.'),
+      }),
+      error: e => this.neuspeh(e, 'Izmene nisu sačuvane.', 'Dupliranje je zaustavljeno'),
+    });
   }
 
   protected obrisiPrezentaciju(): void {
@@ -367,14 +372,10 @@ export class PrezentacijaEditorPage {
     this.router.navigate(['izvodjenja', i.id, 'konzola']);
   }
 
-  /** Pošalje nesačuvano i sačeka da se čuvanje završi (dupliranje i pokretanje vide poslednje izmene). */
-  private posleCuvanja(): Observable<unknown> {
-    this.store.sacuvajOdmah();
-    return this.cuvanje$.pipe(filter(c => c !== 'cuva'), take(1));
-  }
-
-  private neuspeh(e: unknown, poruka: string): void {
+  /** `uvod` ide ispred poruke kad radnja nije ni počela jer izmene nisu sačuvane. */
+  private neuspeh(e: unknown, poruka: string, uvod?: string): void {
     this.radi.set(false);
-    this.snack.open(razlogGreske(e, poruka), 'U redu', { duration: 8000 });
+    const razlog = e instanceof NijeSacuvano ? e.message : razlogGreske(e, poruka);
+    this.snack.open(uvod ? `${uvod}: ${razlog}` : razlog, 'U redu', { duration: 8000 });
   }
 }
