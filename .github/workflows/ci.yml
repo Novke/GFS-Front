@@ -23,12 +23,11 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - name: Lint (ESLint)
+        run: npx ng lint
+      - name: Unit testovi (Vitest)
+        run: npx ng test --watch=false
       - name: Produkcioni build
         run: npx ng build --configuration production
-      # Poznati dug: CLI stub specs (*.spec.ts) ne obezbeđuju providere (HttpClient, ActivatedRoute),
-      # pa padaju sa "NullInjectorError: No provider for HttpClient!". Ne blokira CI dok se specovi ne srede.
-      - name: Unit testovi (Karma)
-        continue-on-error: true
-        run: npx ng test --watch=false --browsers=ChromeHeadless
       - name: Provera Dockerfile-a
         run: docker build -t gfs-frontend-ci .
