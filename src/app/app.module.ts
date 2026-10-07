@@ -2,7 +2,6 @@ import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { HttpClientModule } from '@angular/common/http';
-import { FlexModule } from '@angular/flex-layout';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -78,7 +77,6 @@ import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component
     MatToolbarModule,
     MatButtonModule,
     MatCardModule,
-    FlexModule,
     MatListModule,
     MatTableModule,
     MatPaginatorModule,

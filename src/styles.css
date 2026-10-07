@@ -33,3 +33,9 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   outline: 2px solid #e96989;
   outline-offset: -2px;
 }
+
+.kartice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 50px;
+}
