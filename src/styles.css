@@ -1,5 +1,6 @@
 @import "bootstrap/dist/css/bootstrap.min.css";
 @import "./app/features/uzivo/ui/uzivo-tokeni.css";
+@import "./app/features/uzivo/pages/uzivo-editor.css";
 
 .btn-primary {
     background-color: #e96989;

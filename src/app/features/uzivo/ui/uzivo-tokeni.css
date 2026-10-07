@@ -22,6 +22,30 @@
   container-type: inline-size;
 }
 
+/*
+ * Dnevne boje lokalno: projektor, umanjeni prikaz i pregled u editoru su uvek svetli, i kad redizajn stavi noćne tokene
+ * na <html>. Roditelj prikaza dobija klasu `uz-dan`; vrednosti su iste kao podrazumevane u `var(--x, ...)` ispod.
+ */
+.uz-dan {
+  --primary: #2456a6;
+  --primary-ink: #fff;
+  --primary-soft: #e4ecf8;
+  --primary-soft-ink: #1b4386;
+  --surface: #fff;
+  --surface-2: #eef1f6;
+  --ink: #121a2a;
+  --ink-2: #34405a;
+  --muted: #5f6c84;
+  --line: #dce2eb;
+  --ok: #1d7a55;
+  --ok-soft: #dff2e9;
+  --danger: #b42318;
+  --accent: #f0a23b;
+  --accent-ink: #1d1304;
+  color-scheme: light;
+  color: var(--ink);
+}
+
 /* ---------- Platno 16:9 ---------- */
 
 /*
