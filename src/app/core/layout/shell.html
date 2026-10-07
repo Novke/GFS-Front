@@ -1,7 +1,8 @@
 <a class="skip-link" href="#sadrzaj" (click)="preskoci($event)">Preskoči na sadržaj</a>
 <mat-sidenav-container class="kontejner">
   <mat-sidenav class="bocna ljuska-tamna" [mode]="siroko() ? 'side' : 'over'" [opened]="siroko() || otvorena()"
-               (openedChange)="otvorena.set($event)">
+               [disableClose]="siroko()"
+               (openedChange)="promenaOtvorenosti($event)">
     <app-side-nav [predmeti]="reference.predmeti()" [brojaci]="brojaci()" [staging]="okruzenje.jeStaging()"
                   (izabrano)="zatvoriAkoJeDrawer()" />
   </mat-sidenav>

@@ -56,6 +56,13 @@ export class Shell {
       .subscribe(() => this.otvorena.set(false));
   }
 
+  /** Pamti samo stanje drawer-a (`over`); u `side` režimu je navigacija uvek otvorena (i Esc je ne zatvara). */
+  protected promenaOtvorenosti(otvorena: boolean): void {
+    if (!this.siroko()) {
+      this.otvorena.set(otvorena);
+    }
+  }
+
   protected zatvoriAkoJeDrawer(): void {
     if (!this.siroko()) {
       this.otvorena.set(false);

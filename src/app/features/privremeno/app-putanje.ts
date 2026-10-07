@@ -32,8 +32,7 @@ export const AppRoutes = {
   ocenjivanjeSelect: 'ocene',
   grupe: 'grupe',
   grupaDetails: (id: number | string) => `grupe/${id}`,
-  // Stari ekrani znaju samo id sesije; preusmerenje učita sesiju i ode na grupe/:g/onboarding/:id[/qr].
-  onboardingPrijave: (id: number | string) => `onboarding/${id}`,
-  onboardingQr: (id: number | string) => `onboarding/${id}/qr`,
+  onboardingPrijave: (grupaId: number | string, sesijaId: number | string) => `grupe/${grupaId}/onboarding/${sesijaId}`,
+  onboardingQr: (grupaId: number | string, sesijaId: number | string) => `grupe/${grupaId}/onboarding/${sesijaId}/qr`,
   upis: (token: string) => `upis/${token}`,
 };

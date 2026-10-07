@@ -46,6 +46,7 @@ export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
   ];
 
   sesijaId = 0;
+  grupaId = 0;
   detalji: OnboardingSesijaDetails | null = null;
   poruka: string | null = null;
   neuspehUcitavanja = false;
@@ -70,6 +71,7 @@ export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
     this.paramSub = this.route.paramMap.subscribe(params => {
       this.generacija++;
       this.sesijaId = Number(params.get('sid')); // PRIVREMENO: nova ruta grupe/:id/onboarding/:sid
+      this.grupaId = Number(params.get('id'));
       this.detalji = null;
       this.poruka = null;
       this.neuspehUcitavanja = false;

@@ -12,6 +12,7 @@ import { PublicLayout } from '../core/layout/public-layout';
 import { Shell } from '../core/layout/shell';
 import { HomeComponent } from '../home/home.component';
 import { OnboardingQrComponent } from '../onboarding/onboarding-qr/onboarding-qr.component';
+import { AppRoutes } from './privremeno/app-putanje';
 
 /** Lanac komponenti od korena do lista (bez outleta: komponente se ne prave, samo se ruta prepoznaje). */
 function komponente(router: Router): unknown[] {
@@ -143,6 +144,13 @@ describe('preusmerenja starih ruta', () => {
     await gotovo;
     await vi.waitFor(() => expect(router.url).toBe(novo));
     expect(router.currentNavigation()).toBeNull();
+  });
+
+  it('stari ekrani sa poznatom grupom vode direktno na grupe/:g/onboarding/:sid[/qr] (bez preusmerenja i GET-a sesije)', async () => {
+    expect(await idi('/' + AppRoutes.onboardingPrijave(3, 7))).toBe('/grupe/3/onboarding/7');
+    expect(await idi('/' + AppRoutes.onboardingQr(3, 7))).toBe('/grupe/3/onboarding/7/qr');
+    expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQrComponent]);
+    http.expectNone('api/onboarding/7');
   });
 
   it('nepostojeća sesija: poruka i link na grupe, bez preusmerenja', async () => {

@@ -156,7 +156,7 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
     this.onboardingService.createSesija(this.grupaId, cmd).subscribe({
       next: (nova) => {
         this.pokrece = false;
-        this.router.navigateByUrl(AppRoutes.onboardingQr(nova.id));
+        this.router.navigateByUrl(AppRoutes.onboardingQr(this.grupaId, nova.id));
       },
       error: (err) => {
         this.pokrece = false;
@@ -212,10 +212,10 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
   }
 
   otvoriQr(id: number): void {
-    this.router.navigateByUrl(AppRoutes.onboardingQr(id));
+    this.router.navigateByUrl(AppRoutes.onboardingQr(this.grupaId, id));
   }
 
   otvoriPrijave(id: number): void {
-    this.router.navigateByUrl(AppRoutes.onboardingPrijave(id));
+    this.router.navigateByUrl(AppRoutes.onboardingPrijave(this.grupaId, id));
   }
 }

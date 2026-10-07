@@ -31,7 +31,7 @@
         [disabled]="zauzet || izmenaId !== null || brojevi.naCekanju === 0"
       (click)="prihvatiSve()">Prihvati sve na čekanju ({{ brojevi.naCekanju }})</button>
       <button type="button" class="btn btn-outline-secondary" [disabled]="zauzet || ucitava" (click)="osvezi()">Osveži</button>
-      <a [routerLink]="['/' + routes.onboardingQr(sesijaId)]" class="btn btn-outline-secondary">QR</a>
+      <a [routerLink]="['/' + routes.onboardingQr(grupaId, sesijaId)]" class="btn btn-outline-secondary">QR</a>
       <div class="btn-group ms-md-auto" role="group" aria-label="Filter po statusu">
         @for (f of filteri; track f) {
           <button type="button" class="btn btn-outline-secondary"

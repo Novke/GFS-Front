@@ -19,6 +19,8 @@ interface SesijaZaPreusmerenje {
   selector: 'app-onboarding-preusmerenje',
   imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // Bez ljuske: ista površina kao 404 (papir u tekućem režimu), da poruka ne visi na goloj stranici.
+  host: { class: 'papir' },
   template: `
     <main class="preusmerenje">
       @if (greska(); as poruka) {
@@ -30,7 +32,11 @@ interface SesijaZaPreusmerenje {
       }
     </main>
   `,
-  styles: `.preusmerenje { max-width: 520px; margin: 48px auto; padding: 0 16px; text-align: center; }`,
+  styles: `
+    :host { display: block; min-height: 100dvh; color: var(--ink); }
+    .preusmerenje { max-width: 520px; margin: 0 auto; padding: 48px 16px; text-align: center; }
+    p { color: var(--ink-2); }
+  `,
 })
 export class OnboardingPreusmerenje {
   protected readonly greska = signal<string | null>(null);

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { booleanAttribute, ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 /**
@@ -32,6 +32,9 @@ import { RouterLink } from '@angular/router';
   `,
 })
 export class NotFound {
-  /** Iz `data: { javna: true }` (withComponentInputBinding). */
-  readonly javna = input(false);
+  /**
+   * Iz `data: { javna: true }` (withComponentInputBinding). Na ruti bez tog podatka binding upisuje `undefined`,
+   * pa `booleanAttribute` svodi svaku vrednost na boolean (`undefined` -> false).
+   */
+  readonly javna = input(false, { transform: booleanAttribute });
 }

@@ -6,7 +6,7 @@ import { TestBed } from '@angular/core/testing';
 import { By, DomSanitizer } from '@angular/platform-browser';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
-import { provideRouter, ROUTES } from '@angular/router';
+import { provideRouter, ROUTES, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -46,7 +46,7 @@ describe('Shell', () => {
     ucitajReferentne = vi.fn();
     TestBed.configureTestingModule({
       providers: [
-        provideRouter(routes),
+        provideRouter(routes, withComponentInputBinding()), // kao app.config (data -> input, npr. NotFound.javna)
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: MediaMatcher, useValue: mediaZaSirinu(sirina) },
@@ -83,6 +83,34 @@ describe('Shell', () => {
       expect(nav.mode).toBe('side');
       expect(nav.opened).toBe(true);
       expect(f.nativeElement.querySelector('[data-meni]')).toBeNull();
+    });
+
+    it('na 1280 px Esc ne zatvara navigaciju (u side režimu nema hamburgera kojim bi se vratila)', async () => {
+      podesi(1280);
+      const f = TestBed.createComponent(Shell);
+      f.detectChanges();
+      await f.whenStable();
+      const nav = f.debugElement.query(By.directive(MatSidenav));
+      nav.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+      f.detectChanges();
+      await f.whenStable();
+      expect((nav.componentInstance as MatSidenav).opened).toBe(true);
+    });
+
+    it('na 800 px Esc zatvara otvoren drawer', async () => {
+      podesi(800);
+      const f = TestBed.createComponent(Shell);
+      f.detectChanges();
+      await f.whenStable();
+      f.nativeElement.querySelector('[data-meni]').click();
+      f.detectChanges();
+      await f.whenStable();
+      const nav = f.debugElement.query(By.directive(MatSidenav));
+      expect((nav.componentInstance as MatSidenav).opened).toBe(true);
+      nav.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+      f.detectChanges();
+      await f.whenStable();
+      expect((nav.componentInstance as MatSidenav).opened).toBe(false);
     });
 
     it('na 800 px je over (zatvorena), hamburger je otvara', async () => {
@@ -129,6 +157,17 @@ describe('Shell', () => {
     for (const url of zahtevi) {
       expect(url === 'assets/env.json' || url.startsWith('api/public/upis/')).toBe(true);
     }
+  });
+
+  it('404 u ljusci nudi povratak na početnu, a javni 404 pod /upis ne', async () => {
+    podesi(1280);
+    const harness = await RouterTestingHarness.create('/nepostoji');
+    const el = harness.fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-not-found')?.textContent).toContain('Stranica nije pronađena');
+    expect(el.querySelector('app-not-found .na-pocetnu')).not.toBeNull();
+    await harness.navigateByUrl('/upis/a/b');
+    expect(el.querySelector('app-not-found')).not.toBeNull();
+    expect(el.querySelector('app-not-found .na-pocetnu')).toBeNull();
   });
 
   it('stari ekran (bez signala) u outletu ljuske se osvežava posle asinhrone promene', async () => {

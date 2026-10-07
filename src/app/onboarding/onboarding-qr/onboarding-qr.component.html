@@ -23,7 +23,7 @@
     </button>
     <p class="fs-5">Važi do: <strong>{{ sesija.istice | date:'dd.MM.yyyy HH:mm' }}</strong></p>
     <p>
-      <a [routerLink]="['/' + routes.onboardingPrijave(sesija.id)]" class="btn btn-link">Prijave</a>
+      <a [routerLink]="['/' + routes.onboardingPrijave(sesija.grupa.id, sesija.id)]" class="btn btn-link">Prijave</a>
       <a [routerLink]="['/' + routes.grupaDetails(sesija.grupa.id)]" class="btn btn-link">Nazad na grupu</a>
     </p>
   }
