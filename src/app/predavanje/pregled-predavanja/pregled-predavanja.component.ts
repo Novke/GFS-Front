@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { AktivnostInfo, PredavanjeDetails, StudentInfo, tipAktivnosti } from 'src/app/models/model';
 import { PredavanjeService } from '../predavanje.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { FormsModule } from '@angular/forms';
 import { MatCard, MatCardContent, MatCardTitle, MatCardSubtitle } from '@angular/material/card';
 
@@ -44,7 +44,7 @@ export class PregledPredavanjaComponent implements OnInit {
   }
 
   navigateLive() {
-    if (this.id) this.router.navigate([AppRoutes.predavanjeLive(Number(this.id))])
+    if (this.id) this.router.navigateByUrl(AppRoutes.predavanjeLive(Number(this.id)))
   }
 
   posecenost2string() {
@@ -80,7 +80,7 @@ export class PregledPredavanjaComponent implements OnInit {
 
   navigateStudentPredmet(studentId: number) {
     if (this.predavanje) {
-      this.router.navigate([AppRoutes.studentPredmet(studentId, this.predavanje.predmet.id)])
+      this.router.navigateByUrl(AppRoutes.studentPredmet(studentId, this.predavanje.predmet.id))
     }
   }
 }

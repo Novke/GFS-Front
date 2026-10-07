@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, inject } from '@
 import { NgForm, FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { CreateOnboardingCmd, CreateStudentCmd, GrupaDetails, OnboardingSesijaInfo } from 'src/app/models/model';
 import { OnboardingService } from 'src/app/onboarding/onboarding.service';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
@@ -88,7 +88,7 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
   }
 
   otvoriStudenta(id: number): void {
-    this.router.navigate([AppRoutes.studentDetails(id)]);
+    this.router.navigateByUrl(AppRoutes.studentDetails(id));
   }
 
   dodajStudenta(forma: NgForm): void {
@@ -156,7 +156,7 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
     this.onboardingService.createSesija(this.grupaId, cmd).subscribe({
       next: (nova) => {
         this.pokrece = false;
-        this.router.navigate([AppRoutes.onboardingQr(nova.id)]);
+        this.router.navigateByUrl(AppRoutes.onboardingQr(nova.id));
       },
       error: (err) => {
         this.pokrece = false;
@@ -212,10 +212,10 @@ export class GrupaDetailsComponent implements OnInit, OnDestroy {
   }
 
   otvoriQr(id: number): void {
-    this.router.navigate([AppRoutes.onboardingQr(id)]);
+    this.router.navigateByUrl(AppRoutes.onboardingQr(id));
   }
 
   otvoriPrijave(id: number): void {
-    this.router.navigate([AppRoutes.onboardingPrijave(id)]);
+    this.router.navigateByUrl(AppRoutes.onboardingPrijave(id));
   }
 }

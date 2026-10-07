@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { PredavanjeService } from '../predavanje.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
 import { DatePipe } from '@angular/common';
 
@@ -28,10 +28,11 @@ export class PredavanjeListComponent implements OnInit {
 
   ngOnInit(): void {
 
-    this.route.paramMap.subscribe(
+    // PRIVREMENO (nove rute): grupa i predmet su query parametri (?grupa=&predmet=), vidi features/privremeno.
+    this.route.queryParamMap.subscribe(
       params => {
-        const gId = params.get('grupaId')
-        const pId = params.get('predmetId')
+        const gId = params.get('grupa')
+        const pId = params.get('predmet')
         this.grupaId = gId !== null ? Number(gId) : null
         this.predmetId = pId !== null ? Number(pId) : null
         this.ucitajGrupu()
@@ -67,9 +68,9 @@ export class PredavanjeListComponent implements OnInit {
 
   go2predavanje(predavanje: PredavanjeInfo) {
     if (predavanje.zavrseno) {
-      this.router.navigate([AppRoutes.predavanjePregled(predavanje.id)])
+      this.router.navigateByUrl(AppRoutes.predavanjePregled(predavanje.id))
     } else {
-      this.router.navigate([AppRoutes.predavanjeLive(predavanje.id)])
+      this.router.navigateByUrl(AppRoutes.predavanjeLive(predavanje.id))
     }
   }
 }

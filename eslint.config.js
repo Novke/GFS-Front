@@ -46,7 +46,6 @@ module.exports = defineConfig([
   // OnPush: komponente su namerno na Eager (Angular 22 migracija, zone.js ostaje) do F2 (OnPush + signali).
   {
     files: [
-  "src/app/app.component.ts",
   "src/app/components/select-base.component.ts",
   "src/app/domaci/domaci-list/domaci-list.component.ts",
   "src/app/domaci/domaci-select/domaci-select.component.ts",

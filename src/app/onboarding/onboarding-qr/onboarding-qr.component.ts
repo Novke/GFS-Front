@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, OnInit, ViewChild, ChangeDetectionStr
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { toCanvas } from 'qrcode';
 import { Subscription } from 'rxjs';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { OnboardingSesijaInfo } from 'src/app/models/model';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { OnboardingService } from '../onboarding.service';
@@ -38,7 +38,7 @@ export class OnboardingQrComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {
-      this.sesijaId = Number(params.get('id'));
+      this.sesijaId = Number(params.get('sid')); // PRIVREMENO: nova ruta grupe/:id/onboarding/:sid
       this.sesija = null;
       this.link = '';
       this.greska = null;

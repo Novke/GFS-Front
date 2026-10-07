@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti, UpdateDomaciCmd } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { FormsModule } from '@angular/forms';
 import { NgStyle, DatePipe } from '@angular/common';
@@ -143,7 +143,7 @@ export class EvidentiranjeComponent implements OnInit {
     if (window.confirm("Da li si siguran da želiš da završiš sa pregledanjem domaćeg?")) {
       this.domaciService.zavrsiPregledanje(Number(this.id))
       .subscribe(
-        () => this.router.navigate([AppRoutes.domaciPregled(Number(this.id))]),
+        () => this.router.navigateByUrl(AppRoutes.domaciPregled(Number(this.id))),
 
         error => ErrorHandlerUtil.handleHttpError(error)
         )
@@ -153,6 +153,6 @@ export class EvidentiranjeComponent implements OnInit {
   }
 
   navigatePregled(){
-    if (this.id) this.router.navigate([AppRoutes.domaciPregled(Number(this.id))])
+    if (this.id) this.router.navigateByUrl(AppRoutes.domaciPregled(Number(this.id)))
   }
 }

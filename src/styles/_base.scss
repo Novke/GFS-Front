@@ -82,6 +82,28 @@ a { color: var(--primary); }
   background-size: var(--pattern-size);
 }
 
+// Oznaka okruženja (assets/env.json) u javnom i projektorskom layoutu; ljuska ima oznaku u gornjoj traci.
+.traka-okruzenja {
+  padding: 2px 0;
+  background: #c62828;
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+// Oznaka STAGING u ljusci (gornja traka, dno bočne navigacije).
+.oznaka-okruzenja {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #fff;
+  background: #c62828;
+}
+
 // Samo za čitače ekrana.
 .sr-only {
   position: absolute;

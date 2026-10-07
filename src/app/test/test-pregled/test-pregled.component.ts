@@ -3,7 +3,7 @@ import { MatPaginator } from '@angular/material/paginator';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { MatTableDataSource, MatTable, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCellDef, MatCell, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow } from '@angular/material/table';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { StudentInfo, TestDetails, TestPolaganjeInfo } from 'src/app/models/model';
 import { TestService } from '../test.service';
 import { DatePipe } from '@angular/common';
@@ -72,12 +72,12 @@ export class TestPregledComponent implements OnInit{
   }
 
   navigateEvidentiranje(){
-    if (this.id) this.router.navigate([AppRoutes.testEvidentiranje(Number(this.id))])
+    if (this.id) this.router.navigateByUrl(AppRoutes.testEvidentiranje(Number(this.id)))
   }
 
   navigateStudentPredmet(studentId: number) {
     if (this.test) {
-      this.router.navigate([AppRoutes.studentPredmet(studentId, this.test.predmet.id)])
+      this.router.navigateByUrl(AppRoutes.studentPredmet(studentId, this.test.predmet.id))
     }
   }
 }

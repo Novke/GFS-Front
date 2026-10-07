@@ -24,8 +24,8 @@ export class StudentPredmetComponent implements OnInit {
 
   ngOnInit(): void {
     this.route.params.subscribe(params => {
-      this.studentId = +params['studentId'];
-      this.predmetId = +params['predmetId'];
+      this.studentId = +params['id']; // PRIVREMENO: nova ruta studenti/:id/predmeti/:pid
+      this.predmetId = +params['pid'];
       this.loadData();
     });
   }
@@ -45,11 +45,11 @@ export class StudentPredmetComponent implements OnInit {
   }
 
   navigateToTest(testId: number): void {
-    this.router.navigate(['/test', testId]);
+    this.router.navigate(['/testovi', testId]); // PRIVREMENO: nove rute
   }
 
   navigateToPredavanje(predavanjeId: number): void {
-    this.router.navigate(['/predavanje', predavanjeId]);
+    this.router.navigate(['/predavanja', predavanjeId]); // PRIVREMENO: nove rute
   }
 
   navigateToDomaci(domaciId: number): void {

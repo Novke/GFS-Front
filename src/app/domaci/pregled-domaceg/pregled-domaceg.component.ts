@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { DomaciDetails, DomaciStudentiInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { FormsModule } from '@angular/forms';
 import { MatCard, MatCardContent, MatCardTitle, MatCardSubtitle } from '@angular/material/card';
 
@@ -61,12 +61,12 @@ export class PregledDomacegComponent implements OnInit {
   }
 
   navigateEvidentiranje(){
-    if (this.id) this.router.navigate([AppRoutes.domaciEvidentiranje(Number(this.id))])
+    if (this.id) this.router.navigateByUrl(AppRoutes.domaciEvidentiranje(Number(this.id)))
   }
 
   navigateStudentPredmet(studentId: number) {
     if (this.domaci) {
-      this.router.navigate([AppRoutes.studentPredmet(studentId, this.domaci.predmet.id)])
+      this.router.navigateByUrl(AppRoutes.studentPredmet(studentId, this.domaci.predmet.id))
     }
   }
 }

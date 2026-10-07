@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { ActivatedRoute, Router } from '@angular/router';
 import { StudentPregledDetails } from 'src/app/models/model';
 import { StudentService } from '../student.service';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { DatePipe } from '@angular/common';
 
 @Component({
@@ -49,15 +49,15 @@ export class StudentDetailsComponent implements OnInit{
   }
 
   nagivatePredavanje(predavanjeId: number){
-    this.router.navigate([AppRoutes.predavanjePregled(predavanjeId)])
+    this.router.navigateByUrl(AppRoutes.predavanjePregled(predavanjeId))
   }
 
   navigateDomaci(domaciId: number){
-    this.router.navigate([AppRoutes.domaciPregled(domaciId)])
+    this.router.navigateByUrl(AppRoutes.domaciPregled(domaciId))
   }
 
   navigateTest(testId: number){
-    this.router.navigate([AppRoutes.testPregled(testId)])
+    this.router.navigateByUrl(AppRoutes.testPregled(testId))
   }
 
   navigateBack(){

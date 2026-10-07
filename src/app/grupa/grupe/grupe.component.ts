@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { NgForm, FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { CreateGrupaCmd, GrupaInfo } from 'src/app/models/model';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { GrupaService } from '../grupa.service';
@@ -40,7 +40,7 @@ export class GrupeComponent implements OnInit {
   }
 
   otvori(id: number): void {
-    this.router.navigate([AppRoutes.grupaDetails(id)]);
+    this.router.navigateByUrl(AppRoutes.grupaDetails(id));
   }
 
   kreiraj(forma: NgForm): void {

@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, Subscription, interval } from 'rxjs';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { OnboardingSesijaDetails, PrijavaInfo, StatusPrijave, UpdatePrijavaCmd } from 'src/app/models/model';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { OnboardingService } from '../onboarding.service';
@@ -69,7 +69,7 @@ export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {
       this.generacija++;
-      this.sesijaId = Number(params.get('id'));
+      this.sesijaId = Number(params.get('sid')); // PRIVREMENO: nova ruta grupe/:id/onboarding/:sid
       this.detalji = null;
       this.poruka = null;
       this.neuspehUcitavanja = false;

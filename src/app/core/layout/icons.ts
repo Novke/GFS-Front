@@ -12,7 +12,7 @@ export const IKONE = [
   'star', 'task_alt', 'warning', 'error', 'info', 'print', 'content_copy', 'qr_code_2', 'fullscreen', 'dark_mode',
   'light_mode', 'routine', 'logout', 'filter_alt', 'filter_alt_off', 'arrow_back', 'arrow_forward', 'undo', 'schedule',
   'event', 'mail', 'call', 'open_in_new', 'settings', 'history', 'sticky_note_2', 'school', 'person_add', 'swap_horiz',
-  'refresh', 'cloud_off',
+  'refresh', 'cloud_off', 'menu', 'brightness_auto',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

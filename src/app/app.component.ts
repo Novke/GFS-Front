@@ -1,37 +1,22 @@
-import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { catchError, filter, of } from 'rxjs';
-import { AppRoutes } from './app.routes';
-import { MatToolbar, MatToolbarRow } from '@angular/material/toolbar';
-import { MatButton } from '@angular/material/button';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+
 import { SnackbarHost } from './core/layout/snackbar-host';
 
-// Javne rute (bez basic-auth-a na nginx-u): bez toolbara i bez ijednog poziva zaključanog /api/*.
-const JAVNA_RUTA = /^\/upis(\/|$)/;
-
+/**
+ * Koren: samo outlet i snackbar. Ljuska, javni i projektorski layout su rute (`app.routes.ts`), pa se na javnoj
+ * ruti `/upis` ljuska (i sve što zove zaključan `/api/*`) uopšte ne pravi.
+ */
 @Component({
-    selector: 'app-root',
-    templateUrl: './app.component.html',
-    styleUrls: ['./app.component.css'],
-    changeDetection: ChangeDetectionStrategy.Eager,
-    imports: [MatToolbar, MatToolbarRow, MatButton, RouterLink, RouterOutlet, SnackbarHost]
+  selector: 'app-root',
+  imports: [RouterOutlet, SnackbarHost],
+  // PRIVREMENO (do Task 27): stari ekrani u outletu ne javljaju promene (bez signala/markForCheck); ispod OnPush
+  // roditelja ne bi se nikad osvežili. Kad nestanu, vraća se OnPush.
+  // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `
+    <router-outlet />
+    <app-snackbar-host />
+  `,
 })
-export class AppComponent implements OnInit {
-  private http = inject(HttpClient);
-  private router = inject(Router);
-
-  title = 'GFS';
-  routes = AppRoutes;
-  isStaging = false;
-  // Pre prve navigacije: putanja bez <base href> (radi i pod /gfs/).
-  javnaStranica = JAVNA_RUTA.test('/' + window.location.pathname.substring(new URL(document.baseURI).pathname.length));
-
-  ngOnInit(): void {
-    this.router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe(e => this.javnaStranica = JAVNA_RUTA.test(e.urlAfterRedirects));
-    this.http.get<{ env: string }>('assets/env.json')
-      .pipe(catchError(() => of(null)))
-      .subscribe(cfg => this.isStaging = cfg?.env === 'staging');
-  }
-}
+export class AppComponent {}

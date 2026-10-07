@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdatePredavanjeCmd, tipAktivnosti } from '../../models/model';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { FormsModule } from '@angular/forms';
 import { NgStyle } from '@angular/common';
 
@@ -249,7 +249,7 @@ export class LivePredavanjeComponent implements OnInit {
 
   navigatePregled(){
     if (this.id)
-      this.router.navigate([AppRoutes.predavanjePregled(Number(this.id))])
+      this.router.navigateByUrl(AppRoutes.predavanjePregled(Number(this.id)))
   }
 
 

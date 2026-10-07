@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredmetInfo, TestInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { TestService } from '../test.service';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
 import { NgClass, DatePipe } from '@angular/common';
 
@@ -30,10 +30,11 @@ export class TestListComponent implements OnInit{
 
   ngOnInit(): void{
 
-    this.route.paramMap.subscribe(
+    // PRIVREMENO (nove rute): grupa i predmet su query parametri (?grupa=&predmet=), vidi features/privremeno.
+    this.route.queryParamMap.subscribe(
       params => {
-        const gId = params.get('grupaId')
-        const pId = params.get('predmetId')
+        const gId = params.get('grupa')
+        const pId = params.get('predmet')
         this.grupaId = gId !== null ? Number(gId) : null
         this.predmetId = pId !== null ? Number(pId) : null
         this.ucitajGrupu()
@@ -74,9 +75,9 @@ export class TestListComponent implements OnInit{
 
   go2test(test: TestInfo){
     if (test.pregledan){
-      this.router.navigate([AppRoutes.testPregled(test.id)])
+      this.router.navigateByUrl(AppRoutes.testPregled(test.id))
     } else {
-      this.router.navigate([AppRoutes.testEvidentiranje(test.id)])
+      this.router.navigateByUrl(AppRoutes.testEvidentiranje(test.id))
     }
   }
 

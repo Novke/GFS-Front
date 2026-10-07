@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { CreateTestCmd, GrupaInfo, PredmetInfo, TipTestaInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
@@ -102,7 +102,7 @@ export class NovTestComponent implements OnInit {
 
       this.testService.createTest(cmd).subscribe(
         test => {
-          this.router.navigate([AppRoutes.testEvidentiranje(test.id)])
+          this.router.navigateByUrl(AppRoutes.testEvidentiranje(test.id))
         },
         error => ErrorHandlerUtil.handleHttpError(error)
       )

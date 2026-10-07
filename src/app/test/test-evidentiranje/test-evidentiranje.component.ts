@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AppRoutes } from '../../app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../../models/model';
 import { PredavanjeService } from '../../predavanje/predavanje.service';
 import { ErrorHandlerUtil } from '../../shared/utils/error-handler.util';
@@ -77,7 +77,7 @@ export class TestEvidentiranjeComponent implements OnInit {
   }
 
   navigatePregled() {
-    this.router.navigate([AppRoutes.testPregled(this.test!.id)])
+    this.router.navigateByUrl(AppRoutes.testPregled(this.test!.id))
   }
 
   azuriraj() {

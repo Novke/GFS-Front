@@ -3,7 +3,7 @@ import { DomaciInfo, GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
 import { NgClass, DatePipe } from '@angular/common';
 
@@ -29,10 +29,11 @@ export class DomaciListComponent implements OnInit{
   predmet: PredmetInfo | null = null;
   ngOnInit(): void {
 
-    this.route.paramMap.subscribe(
+    // PRIVREMENO (nove rute): grupa i predmet su query parametri (?grupa=&predmet=), vidi features/privremeno.
+    this.route.queryParamMap.subscribe(
       params => {
-        const gId = params.get('grupaId')
-        const pId = params.get('predmetId')
+        const gId = params.get('grupa')
+        const pId = params.get('predmet')
         this.grupaId = gId !== null ? Number(gId) : null
         this.predmetId = pId !== null ? Number(pId) : null
         this.ucitajGrupu()
@@ -70,9 +71,9 @@ export class DomaciListComponent implements OnInit{
 
   go2domaci(domaci: DomaciInfo){
     if (domaci.pregledan){
-      this.router.navigate([AppRoutes.domaciPregled(domaci.id)])
+      this.router.navigateByUrl(AppRoutes.domaciPregled(domaci.id))
     } else {
-      this.router.navigate([AppRoutes.domaciEvidentiranje(domaci.id)])
+      this.router.navigateByUrl(AppRoutes.domaciEvidentiranje(domaci.id))
     }
   }
 

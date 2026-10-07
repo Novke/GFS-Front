@@ -2,7 +2,8 @@
 // da bi stari ekrani bili čitljivi i u noćnom režimu, i ostaci starog styles.css koje stari šabloni koriste.
 :root,
 :root[data-mode],
-[data-bs-theme] {
+[data-bs-theme],
+.rezim-dan {
   --bs-body-font-family: var(--font);
   --bs-body-font-size: 15px;
   --bs-body-color: var(--ink);
@@ -41,17 +42,6 @@
   --bs-table-striped-bg: var(--surface-2);
   --bs-table-hover-bg: var(--surface-2);
   --bs-table-hover-color: var(--ink);
-}
-
-// Stara traka (AppComponent) je tamna kao buduća ljuska, u oba režima.
-.mat-toolbar-row {
-  --focus: var(--side-focus);
-  background-color: var(--side-bg);
-  color: var(--side-ink);
-}
-
-.mat-toolbar-row .mat-mdc-button:not(:disabled) {
-  color: var(--side-ink);
 }
 
 .clickable-row {

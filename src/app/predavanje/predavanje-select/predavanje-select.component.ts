@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { PredavanjeService } from '../predavanje.service';
 import { SelectBaseComponent } from '../../components/select-base.component';
 
@@ -20,12 +20,12 @@ export class PredavanjeSelectComponent {
   
   onSubmit(): void {
     if (this.izabranaGrupa && this.izabranPredmet) {
-      this.router.navigate([AppRoutes.predavanjeGrupaPredmet(this.izabranaGrupa, this.izabranPredmet)]);
+      this.router.navigateByUrl(AppRoutes.predavanjeGrupaPredmet(this.izabranaGrupa, this.izabranPredmet));
     }
   }
 
   onNew(): void {
-    this.router.navigate([AppRoutes.predavanjeStart]);
+    this.router.navigateByUrl(AppRoutes.predavanjeStart);
   }
 
 }

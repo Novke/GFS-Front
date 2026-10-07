@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/cor
 import { Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/model';
-import { AppRoutes } from 'src/app/app.routes';
+import { AppRoutes } from 'src/app/features/privremeno/app-putanje';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -57,7 +57,7 @@ export class StartPredavanjeComponent implements OnInit {
 
       this.predavanjeService.startPredavanje(cmd).subscribe(
         (predavanje) => {
-          this.router.navigate([AppRoutes.predavanjeLive(predavanje.id)])
+          this.router.navigateByUrl(AppRoutes.predavanjeLive(predavanje.id))
 
         },
         (error) => {

@@ -1,0 +1,68 @@
+<div class="brend">
+  <span class="logo" role="img" aria-label="GFS"><img src="assets/images/gfs-logo.png" alt="" width="113" height="85"></span>
+  <span class="brend-naziv">GFS Nastava<small>Građevinski fakultet Subotica</small></span>
+</div>
+
+<nav class="glavna-nav" aria-label="Glavna navigacija">
+  <a class="stavka" routerLink="/" routerLinkActive="aktivna" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page"
+     (click)="izabrano.emit()">
+    <mat-icon svgIcon="home" aria-hidden="true" />Početna
+  </a>
+
+  @for (sekcija of sekcije; track sekcija.id) {
+    <h2 class="grupa" [id]="sekcija.id">{{ sekcija.naslov }}</h2>
+    <ul [attr.aria-labelledby]="sekcija.id">
+      @for (s of sekcija.stavke; track s.url) {
+        <li>
+          <a class="stavka" [routerLink]="s.url" routerLinkActive="aktivna" ariaCurrentWhenActive="page" (click)="izabrano.emit()">
+            <mat-icon [svgIcon]="s.ikona" aria-hidden="true" /><span class="tekst">{{ s.label }}</span>
+            @if (s.brojac && brojaci()[s.brojac] > 0) {
+              <span class="brojac">{{ brojaci()[s.brojac] }}<span class="sr-only"> {{ opisBrojaca[s.brojac] }}</span></span>
+            }
+          </a>
+        </li>
+      }
+    </ul>
+  }
+
+  <h2 class="grupa" id="nav-predmeti">Predmeti</h2>
+  <ul aria-labelledby="nav-predmeti">
+    @for (p of predmeti(); track p.id) {
+      <li>
+        <a class="stavka" [routerLink]="['/predmeti', p.id]" routerLinkActive="aktivna" ariaCurrentWhenActive="page" [title]="p.naziv"
+           (click)="izabrano.emit()">
+          <mat-icon svgIcon="menu_book" aria-hidden="true" /><span class="tekst">{{ p.naziv }}</span>
+        </a>
+      </li>
+    }
+    <li>
+      <a class="stavka" routerLink="/predmeti" routerLinkActive="aktivna" [routerLinkActiveOptions]="{ exact: true }"
+         ariaCurrentWhenActive="page" (click)="izabrano.emit()">
+        <mat-icon svgIcon="menu_book" aria-hidden="true" /><span class="tekst">Svi predmeti</span>
+      </a>
+    </li>
+  </ul>
+
+  <h2 class="grupa" id="nav-uskoro">Uskoro</h2>
+  <ul aria-labelledby="nav-uskoro">
+    <li>
+      <span class="stavka uskoro" aria-disabled="true">
+        <mat-icon svgIcon="forum" aria-hidden="true" /><span class="tekst">Ankete i kvizovi</span>
+        <span class="oznaka-uskoro">uskoro</span>
+      </span>
+    </li>
+  </ul>
+</nav>
+
+<div class="dno">
+  <div class="nalog">
+    <span class="avatar" aria-hidden="true">NT</span>
+    <span>Nastavnik<small>prijava dolazi kasnije</small></span>
+  </div>
+  <div class="podesavanja">
+    <app-theme-toggle />
+    @if (staging()) {
+      <span class="oznaka-okruzenja">STAGING</span>
+    }
+  </div>
+</div>

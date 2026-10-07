@@ -5,9 +5,9 @@ import { ApplicationConfig, inject, LOCALE_ID, provideAppInitializer, provideZon
 import { MAT_DATE_LOCALE, provideNativeDateAdapter } from '@angular/material/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
-import { provideRouter, TitleStrategy } from '@angular/router';
+import { provideRouter, TitleStrategy, withComponentInputBinding } from '@angular/router';
 
-import { routes } from './app.routing';
+import { routes } from './app.routes';
 import { errorInterceptor } from './core/api/error.interceptor';
 import { registrujIkone } from './core/layout/icons';
 import { GfsTitleStrategy } from './core/title-strategy';
@@ -18,7 +18,7 @@ registerLocaleData(localeSrLatn, 'sr-Latn');
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection(),
-    provideRouter(routes),
+    provideRouter(routes, withComponentInputBinding()),
     { provide: TitleStrategy, useClass: GfsTitleStrategy },
     { provide: LOCALE_ID, useValue: 'sr-Latn' },
     { provide: MAT_DATE_LOCALE, useValue: 'sr-Latn' },
