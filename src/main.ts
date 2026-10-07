@@ -1,16 +1,7 @@
-import { provideZoneChangeDetection } from '@angular/core';
-import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
 
 import { AppComponent } from './app/app.component';
-import { routes } from './app/app.routing';
+import { appConfig } from './app/app.config';
 
-bootstrapApplication(AppComponent, {
-  providers: [
-    provideZoneChangeDetection(),
-    provideRouter(routes),
-    provideHttpClient(withXhr(), withInterceptorsFromDi())
-  ]
-})
+bootstrapApplication(AppComponent, appConfig)
   .catch(err => console.error(err));

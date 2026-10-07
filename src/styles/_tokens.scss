@@ -1,0 +1,126 @@
+// Tema "Nacrt": jedini izvor boja. Vrednosti su iz spec-a (sekcija 3) i odobrene makete
+// (docs/superpowers/mockups/2026-10-07-redizajn/index.html u GFS-deploy). Material M3 tema (_theme.scss) i svi
+// ekrani čitaju ove promenljive; ne pišu se heks boje po komponentama.
+//
+// Režim se bira atributom `data-mode` na <html> ("dan" | "noc"), koji postavljaju inline skripta u index.html
+// (pre prvog renderovanja) i PreferencesStore. Bez JS-a (ili pre skripte) važi sistemska tema.
+// `.rezim-dan` forsira dnevne tokene za podstablo (projektorski ekrani su uvek dnevni); _theme.scss na istom
+// selektoru ponovo izračunava --mat-sys-* (var() se razrešava na elementu koji deklariše promenljivu).
+// Ljuska (--side-*) je tamna u oba režima.
+
+@mixin dan {
+  color-scheme: light;
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --ink: #121a2a;
+  --ink-2: #34405a;
+  --muted: #5f6c84;
+  --line: #dce2eb;
+  --primary: #2456a6;
+  --primary-ink: #ffffff;
+  --primary-soft: #e4ecf8;
+  --primary-soft-ink: #1b4386;
+  --ok: #1d7a55;
+  --ok-soft: #dff2e9;
+  --ok-ink: #ffffff;
+  --warn: #8a5300;
+  --warn-soft: #fcefd9;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --danger-ink: #ffffff;
+  --side-bg: #111c30;
+  --side-ink: #c4cee0;
+  --side-muted: #7f8ca6;
+  --side-active: #22345a;
+  --side-active-ink: #ffffff;
+  --side-line: #1d2a44;
+  --hero-bg: linear-gradient(135deg, #16294a 0%, #1f3d70 100%);
+  --hero-ink: #ffffff;
+  --hero-btn-ink: #16294a;
+  --snack-bg: #121a2a;
+  --snack-ink: #ffffff;
+  --snack-link: var(--accent);
+  --star: #e89a1c;
+  --shadow: 0 1px 2px rgba(18, 26, 42, .06);
+  // Milimetarski papir (≤ 4.5 % opacity); samo slike, veličina ćelije je --pattern-size.
+  --pattern:
+    linear-gradient(rgba(36, 86, 166, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 86, 166, .045) 1px, transparent 1px);
+  --logo-filter: invert(1);
+}
+
+@mixin noc {
+  color-scheme: dark;
+  --bg: #0c1320;
+  --surface: #121b2c;
+  --surface-2: #192436;
+  --ink: #e6ebf3;
+  --ink-2: #c2ccdc;
+  --muted: #8e9bb2;
+  --line: #243147;
+  --primary: #79a3f0;
+  --primary-ink: #0a1324;
+  --primary-soft: #1c2d4c;
+  --primary-soft-ink: #c8d9fa;
+  --ok: #4cc38a;
+  --ok-soft: #10291c;
+  --ok-ink: #05140c;
+  --warn: #f0b44c;
+  --warn-soft: #33260f;
+  --danger: #f97066;
+  --danger-soft: #3a1513;
+  --danger-ink: #1f0603;
+  --side-bg: #080e19;
+  --side-ink: #c2ccdc;
+  --side-muted: #6f7c95;
+  --side-active: #1c2d4c;
+  --side-active-ink: #ffffff;
+  --side-line: #151f30;
+  --hero-bg: linear-gradient(135deg, #172a4c 0%, #213d6e 100%);
+  --hero-ink: #ffffff;
+  --hero-btn-ink: #0c1320;
+  --snack-bg: #e6ebf3;
+  --snack-ink: #0c1320;
+  --snack-link: #1b4386;
+  --star: #f2b544;
+  --shadow: none;
+  --pattern:
+    linear-gradient(rgba(140, 170, 230, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 170, 230, .035) 1px, transparent 1px);
+  --logo-filter: invert(1);
+}
+
+// Nezavisno od režima.
+:root {
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --accent: #f0a23b; // ćilibar, isti u oba režima
+  --accent-ink: #1d1304;
+  --pattern-size: 24px 24px;
+  --radius: 8px; // kartice
+  --radius-sm: 6px; // polja, dugmad, chipovi
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+
+:root,
+:root[data-mode="dan"],
+.rezim-dan {
+  @include dan;
+}
+
+:root[data-mode="noc"] {
+  @include noc;
+}
+
+// Bez data-mode (JS isključen ili pre inline skripte): prati sistem.
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) {
+    @include noc;
+  }
+}

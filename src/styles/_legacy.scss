@@ -1,0 +1,69 @@
+// PRIVREMENO (do Task 27, kada nestaje Bootstrap i stari ekrani): Bootstrap promenljive vezane za tokene "Nacrt",
+// da bi stari ekrani bili čitljivi i u noćnom režimu, i ostaci starog styles.css koje stari šabloni koriste.
+:root,
+:root[data-mode],
+[data-bs-theme] {
+  --bs-body-font-family: var(--font);
+  --bs-body-font-size: 15px;
+  --bs-body-color: var(--ink);
+  --bs-body-bg: var(--surface);
+  --bs-emphasis-color: var(--ink);
+  --bs-secondary-color: var(--muted);
+  --bs-secondary-bg: var(--surface-2);
+  --bs-tertiary-bg: var(--surface-2);
+  --bs-border-color: var(--line);
+  --bs-heading-color: var(--ink);
+  --bs-link-color: var(--primary);
+  --bs-link-hover-color: var(--primary);
+  --bs-border-radius: var(--radius-sm);
+  --bs-primary: var(--primary);
+}
+
+.btn-primary {
+  --bs-btn-color: var(--primary-ink);
+  --bs-btn-bg: var(--primary);
+  --bs-btn-border-color: var(--primary);
+  --bs-btn-hover-color: var(--primary-ink);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--primary) 88%, var(--ink));
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--primary) 88%, var(--ink));
+  --bs-btn-active-color: var(--primary-ink);
+  --bs-btn-active-bg: color-mix(in srgb, var(--primary) 80%, var(--ink));
+  --bs-btn-active-border-color: color-mix(in srgb, var(--primary) 80%, var(--ink));
+  --bs-btn-disabled-color: var(--primary-ink);
+  --bs-btn-disabled-bg: var(--primary);
+  --bs-btn-disabled-border-color: var(--primary);
+}
+
+.table {
+  --bs-table-color: var(--ink);
+  --bs-table-bg: var(--surface);
+  --bs-table-border-color: var(--line);
+  --bs-table-striped-bg: var(--surface-2);
+  --bs-table-hover-bg: var(--surface-2);
+  --bs-table-hover-color: var(--ink);
+}
+
+// Stara traka (AppComponent) je tamna kao buduća ljuska, u oba režima.
+.mat-toolbar-row {
+  background-color: var(--side-bg);
+  color: var(--side-ink);
+}
+
+.mat-toolbar-row .mat-mdc-button:not(:disabled) {
+  color: var(--side-ink);
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.kartice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 50px;
+}
