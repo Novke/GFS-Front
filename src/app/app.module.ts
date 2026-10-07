@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -39,50 +39,43 @@ import { OnboardingQrComponent } from './onboarding/onboarding-qr/onboarding-qr.
 import { OnboardingPrijaveComponent } from './onboarding/onboarding-prijave/onboarding-prijave.component';
 import { JavniUpisComponent } from './onboarding/javni-upis/javni-upis.component';
 
-@NgModule({
-  declarations: [
-    AppComponent,
-    StartPredavanjeComponent,
-    LivePredavanjeComponent,
-    EvidentiranjeComponent,
-    NovDomaciComponent,
-    PregledDomacegComponent,
-    DomaciListComponent,
-    DomaciSelectComponent,
-    SelectBaseComponent,
-    PredavanjeListComponent,
-    PredavanjeSelectComponent,
-    PregledPredavanjaComponent,
-    HomeComponent,
-    NovTestComponent,
-    TestSelectComponent,
-    TestListComponent,
-    TestEvidentiranjeComponent,
-    TestPregledComponent,
-    StudentDetailsComponent,
-    StudentPredmetComponent,
-    OcenjivanjeSelectComponent,
-    GrupeComponent,
-    GrupaDetailsComponent,
-    OnboardingQrComponent,
-    OnboardingPrijaveComponent,
-    JavniUpisComponent
-  ],
-  imports: [
-    BrowserModule,
-    AppRoutingModule,
-    HttpClientModule,
-    FormsModule,
-    BrowserAnimationsModule,
-    MatToolbarModule,
-    MatButtonModule,
-    MatCardModule,
-    MatListModule,
-    MatTableModule,
-    MatPaginatorModule,
-    MatSortModule
-  ],
-  providers: [],
-  bootstrap: [AppComponent]
-})
+@NgModule({ declarations: [
+        AppComponent,
+        StartPredavanjeComponent,
+        LivePredavanjeComponent,
+        EvidentiranjeComponent,
+        NovDomaciComponent,
+        PregledDomacegComponent,
+        DomaciListComponent,
+        DomaciSelectComponent,
+        SelectBaseComponent,
+        PredavanjeListComponent,
+        PredavanjeSelectComponent,
+        PregledPredavanjaComponent,
+        HomeComponent,
+        NovTestComponent,
+        TestSelectComponent,
+        TestListComponent,
+        TestEvidentiranjeComponent,
+        TestPregledComponent,
+        StudentDetailsComponent,
+        StudentPredmetComponent,
+        OcenjivanjeSelectComponent,
+        GrupeComponent,
+        GrupaDetailsComponent,
+        OnboardingQrComponent,
+        OnboardingPrijaveComponent,
+        JavniUpisComponent
+    ],
+    bootstrap: [AppComponent], imports: [BrowserModule,
+        AppRoutingModule,
+        FormsModule,
+        BrowserAnimationsModule,
+        MatToolbarModule,
+        MatButtonModule,
+        MatCardModule,
+        MatListModule,
+        MatTableModule,
+        MatPaginatorModule,
+        MatSortModule], providers: [provideHttpClient(withInterceptorsFromDi())] })
 export class AppModule { }
