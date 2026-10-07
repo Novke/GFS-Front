@@ -7,7 +7,7 @@ export type FilterValue = string | number | boolean | null;
 /**
  * Tip filtera određuje kako se parsira iz URL-a:
  * - `broj`: pozitivan ceo broj (id grupe, predmeta, ...);
- * - `tekst`: slobodan tekst (pretraga), skraćen, najviše {@link MAX_TEKST} znakova;
+ * - `tekst`: slobodan tekst (pretraga): trimuje se, prazan je `null`, duži od {@link MAX_TEKST} znakova se skraćuje;
  * - `bool`: samo `true` / `false`;
  * - `datum`: `YYYY-MM-DD` koji postoji u kalendaru (ostaje string).
  */
@@ -60,8 +60,8 @@ function parseFilter(sirovo: string, def: FilterDef): FilterValue | undefined {
     case 'broj':
       return parseBroj(sirovo);
     case 'tekst': {
-      const t = sirovo.trim();
-      return t === '' || t.length > MAX_TEKST ? undefined : t;
+      const t = sirovo.trim().slice(0, MAX_TEKST).trim();
+      return t === '' ? null : t;
     }
     case 'bool':
       return sirovo === 'true' ? true : sirovo === 'false' ? false : undefined;
@@ -74,6 +74,20 @@ function parseFilter(sirovo: string, def: FilterDef): FilterValue | undefined {
 function uzmi(params: ParamMap, kljuc: string): string | null {
   const v: unknown = params.get(kljuc);
   return typeof v === 'string' ? v : null;
+}
+
+/**
+ * Vrednost iz koda (metoda store-a, zaključan filter iz rute) u ispravnu vrednost filtera, po istim pravilima kao URL:
+ * `null`/`undefined` -> `null`; neispravno (`NaN`, `2.5` za `broj`, nepostojeći datum, objekat) -> `undefined`.
+ */
+export function normalizujFilter(v: unknown, def: FilterDef): FilterValue | undefined {
+  if (v === null || v === undefined) {
+    return null;
+  }
+  if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') {
+    return undefined;
+  }
+  return parseFilter(String(v), def);
 }
 
 function jeVelicina(n: number): boolean {
@@ -159,7 +173,8 @@ export function toQueryParams<F extends Record<string, FilterValue>>(q: ListQuer
 }
 
 /**
- * Upit -> parametri za `GET api/<lista>/pretraga`: `page` (0-based), `size`, `sort` i filteri koji nisu `null`,
+ * Upit -> parametri za `GET api/<lista>/pretraga`: `page` (0-based), `size`, `sort` i filteri koji imaju vrednost
+ * (preskaču se `null`, `undefined` i `NaN`/`Infinity`),
  * pod imenom iz `mapa` (npr. `predmet` -> `predmetId`) ili pod svojim imenom.
  */
 export function toHttpParams<F extends Record<string, FilterValue>>(
@@ -171,7 +186,8 @@ export function toHttpParams<F extends Record<string, FilterValue>>(
     .set('size', String(q.velicina))
     .set('sort', q.sort);
   for (const [kljuc, v] of Object.entries(q.filteri) as [keyof F & string, FilterValue][]) {
-    if (v !== null) {
+    const prazno = v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v));
+    if (!prazno) {
       params = params.set(mapa[kljuc] ?? kljuc, uTekst(v));
     }
   }

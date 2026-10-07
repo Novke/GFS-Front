@@ -14,6 +14,7 @@ import {
   FilterValue,
   jeDozvoljenSort,
   ListQuery,
+  normalizujFilter,
   parseListParams,
   REZERVISANI_PARAMETRI,
   toQueryParams,
@@ -66,6 +67,10 @@ function bezStrane(params: Params): Params {
  * kad URL nema nijedan parametar liste) i kad je strana iza poslednje (prelazak na poslednju postojeću; strana samo opada).
  * Neispravan URL se ne prepravlja (nema navigacije), samo se tumači kao podrazumevan.
  *
+ * Više poziva `postavi*` u istom tiku se sabira: svaki kreće od cilja navigacije koja je u toku (`_nav.cilj`), ne od
+ * `upit`-a koji se menja tek kad URL stigne. Cilj se briše kad se sve pokrenute navigacije završe (uspeh, otkazivanje,
+ * greška), pa otkazana navigacija ne ostavlja zaglavljen cilj.
+ *
  * Store mora biti provajdovan u rutiranoj komponenti (koristi njen `ActivatedRoute`).
  */
 export function withListQuery<T extends { id: number }, F extends Record<string, FilterValue>>(cfg: ListQueryConfig<T, F>) {
@@ -89,6 +94,17 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
   /** Svi parametri liste na `null`: uz `queryParamsHandling: 'merge'` brišu stare, a ostale parametre ne diraju. */
   const ocisti: Params = Object.fromEntries([...kljucevi, ...REZERVISANI_PARAMETRI].map(k => [k, null]));
   const jednako = (a: ListQuery<F>, b: ListQuery<F>) => JSON.stringify(a) === JSON.stringify(b);
+  /** Zaključane vrednosti iz rute po pravilima filtera; neispravna (`NaN` iz `/predmeti/abc`) nije zaključana. */
+  const ispravnoZakljucano = (sirovo: Partial<F>): Partial<F> => {
+    const zak: Partial<Record<string, FilterValue>> = {};
+    for (const [k, v] of Object.entries(sirovo ?? {})) {
+      const n = Object.hasOwn(cfg.filteri, k) ? normalizujFilter(v, cfg.filteri[k as keyof F]) : undefined;
+      if (n !== undefined && n !== null) {
+        zak[k] = n;
+      }
+    }
+    return zak as Partial<F>;
+  };
 
   return signalStoreFeature(
     withEntities<T>(),
@@ -103,6 +119,8 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
       /** Otkucan tekst koji čeka debounce (nije stanje: ne prikazuje se, samo se šalje u URL). */
       _pretraga: { tajmer: undefined as ReturnType<typeof setTimeout> | undefined, vrednosti: {} as Partial<F> },
       _url: { prvi: true, poslednjiUcitan: null as string | null },
+      /** Upit ka kojem navigacija ide, dok se sve pokrenute navigacije ne završe (`uToku`). */
+      _nav: { cilj: null as ListQuery<F> | null, uToku: 0 },
     })),
     withComputed(({ entities, upit, ukupno, zakljucano }) => ({
       stavke: computed(() => entities()),
@@ -119,6 +137,15 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
         if (opcije.sacuvaj) {
           store._prefs.sacuvajFiltere(cfg.kljuc, bezStrane(params));
         }
+        const nav = store._nav;
+        nav.cilj = q;
+        nav.uToku++;
+        const gotovo = () => {
+          nav.uToku--;
+          if (nav.uToku === 0) {
+            nav.cilj = null;
+          }
+        };
         store._router
           .navigate([], {
             relativeTo: store._route,
@@ -126,12 +153,16 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
             queryParamsHandling: 'merge',
             replaceUrl: opcije.replaceUrl,
           })
-          .catch(() => false); // greška navigacije ide kroz Router; lista ostaje na starom upitu
+          // greška navigacije ide kroz Router; lista ostaje na upitu iz URL-a
+          .then(gotovo, gotovo);
       };
 
-      /** Navigira na novi upit ako se razlikuje od trenutnog. */
+      /** Polazni upit za sledeću promenu: cilj navigacije u toku ili, ako je nema, trenutni upit. */
+      const osnova = () => store._nav.cilj ?? store.upit();
+
+      /** Navigira na novi upit ako se razlikuje od polaznog. */
       const idi = (q: ListQuery<F>, replaceUrl = false) => {
-        if (!jednako(q, store.upit())) {
+        if (!jednako(q, osnova())) {
           navigiraj(q, { replaceUrl, sacuvaj: true });
         }
       };
@@ -146,7 +177,7 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
       };
 
       const saFilterima = (izmene: Partial<F>): ListQuery<F> => {
-        const upit = store.upit();
+        const upit = osnova();
         return { ...upit, filteri: { ...upit.filteri, ...izmene }, strana: 1 };
       };
 
@@ -175,7 +206,7 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
       );
 
       const primeniUrl = (pm: ParamMap) => {
-        const zak = cfg.zakljucano ? runInInjectionContext(store._injector, cfg.zakljucano) : ({} as Partial<F>);
+        const zak = cfg.zakljucano ? ispravnoZakljucano(runInInjectionContext(store._injector, cfg.zakljucano)) : ({} as Partial<F>);
         let q = sZakljucanim(parse(pm), zak);
         if (store._url.prvi) {
           store._url.prvi = false;
@@ -198,19 +229,45 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
         }
       };
 
+      /** Izmene filtera iz koda, normalizovane po pravilima URL-a; zaključani, nepoznati i neispravni se izostavljaju. */
+      const ispravneIzmene = (izmene: Partial<F>): Partial<F> => {
+        const zak = store.zakljucano();
+        const ispravne: Partial<Record<string, FilterValue>> = {};
+        for (const [k, v] of Object.entries(izmene)) {
+          if (!Object.hasOwn(cfg.filteri, k) || jeZakljucan(zak, k)) {
+            continue;
+          }
+          const n = normalizujFilter(v, cfg.filteri[k as keyof F]);
+          if (n !== undefined) {
+            ispravne[k] = n;
+          }
+        }
+        return ispravne as Partial<F>;
+      };
+
       return {
         _pratiUrl: rxMethod<ParamMap>(tap(primeniUrl)),
+        /** Jedan filter; `tekst` se debounsuje ({@link DEBOUNCE_PRETRAGE_MS}) i ide sa `replaceUrl`. Strana se vraća na 1. */
         postaviFilter<K extends keyof F & string>(k: K, v: F[K]): void {
-          if (!Object.hasOwn(cfg.filteri, k) || jeZakljucan(store.zakljucano(), k)) {
+          const izmena = ispravneIzmene({ [k]: v } as unknown as Partial<F>);
+          if (!Object.hasOwn(izmena, k)) {
             return;
           }
           if (cfg.filteri[k].tip === 'tekst') {
             clearTimeout(store._pretraga.tajmer);
-            store._pretraga.vrednosti = { ...store._pretraga.vrednosti, [k]: v };
+            store._pretraga.vrednosti = { ...store._pretraga.vrednosti, ...izmena };
             store._pretraga.tajmer = setTimeout(() => idi(saFilterima(uzmiPretragu()), true), DEBOUNCE_PRETRAGE_MS);
             return;
           }
-          idi(saFilterima({ ...uzmiPretragu(), [k]: v } as Partial<F>));
+          idi(saFilterima({ ...uzmiPretragu(), ...izmena }));
+        },
+        /** Više filtera odjednom, jednom navigacijom i bez debounce-a (npr. „Primeni“ u panelu filtera). */
+        postaviFiltere(izmene: Partial<F>): void {
+          const ispravne = ispravneIzmene(izmene);
+          if (Object.keys(ispravne).length === 0) {
+            return;
+          }
+          idi(saFilterima({ ...uzmiPretragu(), ...ispravne }));
         },
         postaviSort(sort: string): void {
           if (jeDozvoljenSort(sort, cfg.sortPolja)) {
@@ -229,7 +286,7 @@ export function withListQuery<T extends { id: number }, F extends Record<string,
         },
         ocistiFiltere(): void {
           uzmiPretragu();
-          idi({ ...store.upit(), filteri: { ...pod.filteri, ...store.zakljucano() }, strana: 1 });
+          idi({ ...osnova(), filteri: { ...pod.filteri, ...store.zakljucano() }, strana: 1 });
         },
         osvezi(): void {
           ucitaj(store.upit());

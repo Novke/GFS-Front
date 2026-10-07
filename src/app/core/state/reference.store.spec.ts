@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { computed } from '@angular/core';
+import { computed, effect } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -88,6 +88,34 @@ describe('ReferenceStore', () => {
     expect(store.grupe()).toEqual(GRUPE);
   });
 
+  it('greška jednog resursa se ne skriva uspehom drugog', () => {
+    const store = TestBed.inject(ReferenceStore);
+    store.ucitaj();
+    http.expectOne('api/grupe').flush({ reason: 'Nema pristupa.' }, { status: 403, statusText: 'Forbidden' });
+    http.expectOne('api/predmeti').flush(PREDMETI);
+    expect(store.status()).toBe('error');
+
+    store.invalidiraj('predmeti');
+    expect(store.status()).toBe('loading');
+    http.expectOne('api/predmeti').flush(PREDMETI);
+    expect(store.status()).toBe('error');
+    expect(store.greska()).toBe('Nema pristupa.');
+
+    store.invalidiraj('grupe');
+    http.expectOne('api/grupe').flush(GRUPE);
+    expect(store.status()).toBe('loaded');
+    expect(store.greska()).toBeNull();
+  });
+
+  it('godinaUpisa i brojStudenata mogu biti null (stari podaci)', () => {
+    const store = TestBed.inject(ReferenceStore);
+    store.ucitaj();
+    const bezGodine: GrupaInfo = { id: 9, naziv: 'Stara', godinaUpisa: null, brojStudenata: null };
+    http.expectOne('api/predmeti').flush([]);
+    http.expectOne('api/grupe').flush([bezGodine]);
+    expect(store.grupe()).toEqual([bezGodine]);
+  });
+
   it('tipoviTesta(predmetId) učitava jednom po predmetu i kešira', () => {
     const store = TestBed.inject(ReferenceStore);
     const t5 = store.tipoviTesta(5);
@@ -125,6 +153,19 @@ describe('ReferenceStore', () => {
     store.invalidiraj('tipovi', 8);
     http.expectOne('api/predmeti/8/tipovi').flush(TIPOVI);
     expect(store.tipoviTesta(8)()).toEqual(TIPOVI);
+  });
+
+  it('tipoviTesta u effect-u: pokretanje zahteva ne pravi zavisnost (untracked), effect se ne ponavlja', () => {
+    const store = TestBed.inject(ReferenceStore);
+    let pokretanja = 0;
+    TestBed.runInInjectionContext(() => effect(() => {
+      pokretanja++;
+      store.tipoviTesta(11);
+    }));
+    TestBed.tick();
+    http.expectOne('api/predmeti/11/tipovi').flush(TIPOVI);
+    TestBed.tick();
+    expect(pokretanja).toBe(1);
   });
 
   it('tipoviTesta sme da se pozove iz computed-a / šablona (ne piše signale sinhrono)', () => {

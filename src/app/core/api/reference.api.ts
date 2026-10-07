@@ -13,7 +13,7 @@ export interface PredmetInfo {
 export interface GrupaInfo {
   id: number;
   naziv: string;
-  godinaUpisa: number;
+  godinaUpisa: number | null;
   brojStudenata: number | null;
 }
 

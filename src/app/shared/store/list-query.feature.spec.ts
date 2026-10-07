@@ -194,6 +194,87 @@ describe('withListQuery', () => {
     expect(store.imaFiltera()).toBe(false);
   });
 
+  it('dve promene u istom tiku: obe važe (predmet pa grupa=null)', async () => {
+    const store = await lista('/lista?grupa=4');
+    store.postaviFilter('predmet', 7);
+    store.postaviFilter('grupa', null);
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', predmet: '7' });
+    expect(store.upit().filteri).toEqual({ predmet: 7, grupa: null, q: null });
+    expect(TestBed.inject(PreferencesStore).filteri(KLJUC)).toEqual({ predmet: '7' });
+  });
+
+  it('postaviSort pa odmah postaviStranu(1) na strani 3 zadržava sort', async () => {
+    const store = await lista('/lista?strana=3');
+    store.postaviSort('naziv,asc');
+    store.postaviStranu(1);
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', sort: 'naziv,asc' });
+    expect(poslednjiUpit()).toMatchObject({ sort: 'naziv,asc', strana: 1 });
+
+    store.postaviStranu(2);
+    store.postaviVelicinu(50);
+    store.postaviStranu(3);
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', sort: 'naziv,asc', velicina: '50', strana: '3' });
+  });
+
+  it('otkazana navigacija ne ostavlja zaglavljen cilj: sledeća promena kreće od stvarnog upita', async () => {
+    const store = await lista('/lista?grupa=4');
+    const original = router.navigate.bind(router);
+    const nav = vi.spyOn(router, 'navigate').mockImplementationOnce(() => Promise.resolve(false));
+    store.postaviFilter('predmet', 7);
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', grupa: '4' });
+    nav.mockImplementation((...a) => original(...a));
+    store.postaviSort('naziv,asc');
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', grupa: '4', sort: 'naziv,asc' });
+  });
+
+  it('postaviFiltere menja više filtera jednom navigacijom', async () => {
+    const store = await lista('/lista?grupa=4&strana=2');
+    const nav = vi.spyOn(router, 'navigate');
+    store.postaviFiltere({ predmet: 3, grupa: null, q: '  Ana ' });
+    await stabilno();
+    expect(nav).toHaveBeenCalledTimes(1);
+    expect(url()).toEqual({ putanja: '/lista', predmet: '3', q: 'Ana' });
+  });
+
+  it('tekst se normalizuje pre navigacije: trim, prazan -> bez parametra', async () => {
+    const store = await lista('/lista?q=Ana');
+    vi.useFakeTimers();
+    store.postaviFilter('q', '   ');
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_PRETRAGE_MS);
+    vi.useRealTimers();
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista' });
+    expect(TestBed.inject(PreferencesStore).filteri(KLJUC)).toEqual({});
+
+    vi.useFakeTimers();
+    store.postaviFilter('q', '  Marko ');
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_PRETRAGE_MS);
+    vi.useRealTimers();
+    await stabilno();
+    expect(url()).toEqual({ putanja: '/lista', q: 'Marko' });
+  });
+
+  it('neispravna vrednost filtera iz koda se ignoriše (NaN, 2.5)', async () => {
+    const store = await lista('/lista?grupa=4');
+    const nav = vi.spyOn(router, 'navigate');
+    store.postaviFilter('grupa', Number.NaN);
+    store.postaviFilter('grupa', 2.5);
+    expect(nav).not.toHaveBeenCalled();
+    expect(store.upit().filteri.grupa).toBe(4);
+  });
+
+  it('loš parametar rute za zaključan filter: nema zaključane vrednosti, nikad NaN', async () => {
+    await otvori('/predmeti/abc/lista');
+    expect(poslednjiUpit()?.filteri.predmet).toBeNull();
+    const cmp = harness.routeDebugElement?.componentInstance as HubComponent;
+    expect(cmp.store.zakljucano()).toEqual({});
+  });
+
   it('zaključan filter dolazi iz rute, ne može se promeniti, ne ulazi u imaFiltera ni u URL', async () => {
     const cmp = (await otvori('/predmeti/9/lista?predmet=3')) as HubComponent;
     const store = cmp.store;

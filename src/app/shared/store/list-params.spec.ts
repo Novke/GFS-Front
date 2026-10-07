@@ -1,7 +1,7 @@
 import { convertToParamMap } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 
-import { FilterDef, ListQuery, parseListParams, toHttpParams, toQueryParams, VELICINE } from './list-params';
+import { FilterDef, ListQuery, MAX_TEKST, normalizujFilter, parseListParams, toHttpParams, toQueryParams, VELICINE } from './list-params';
 
 interface Filteri extends Record<string, string | number | boolean | null> {
   grupa: number | null;
@@ -80,10 +80,10 @@ describe('parseListParams', () => {
     }
   });
 
-  it('tekst se skraćuje (trim), predugačak ili prazan -> podrazumevano', () => {
+  it('tekst se trimuje, prazan je null, predugačak se skraćuje na MAX_TEKST', () => {
     expect(parse({ q: '  Ana ' }).filteri.q).toBe('Ana');
     expect(parse({ q: '   ' }).filteri.q).toBeNull();
-    expect(parse({ q: 'a'.repeat(201) }).filteri.q).toBeNull();
+    expect(parse({ q: 'a'.repeat(201) }).filteri.q).toBe('a'.repeat(MAX_TEKST));
   });
 
   it('sort=lozinka,asc -> podrazumevani; samo polje,(asc|desc) iz dozvoljenih', () => {
@@ -161,5 +161,26 @@ describe('toHttpParams', () => {
     expect(h.get('q')).toBe('Ana');
     expect(h.get('zavrseno')).toBe('true');
     expect(h.has('od')).toBe(false);
+  });
+
+  it('preskače undefined i brojeve koji nisu konačni (NaN iz loše rute ne ide backendu)', () => {
+    const q = { ...POD, filteri: { grupa: Number.NaN, q: undefined, od: null, zavrseno: false } } as unknown as ListQuery<Filteri>;
+    const h = toHttpParams(q, {});
+    expect(h.keys().sort()).toEqual(['page', 'size', 'sort', 'zavrseno']);
+    expect(h.get('zavrseno')).toBe('false');
+  });
+});
+
+describe('normalizujFilter', () => {
+  it('primenjuje ista pravila kao URL na vrednosti iz koda', () => {
+    expect(normalizujFilter(5, { tip: 'broj' })).toBe(5);
+    expect(normalizujFilter(Number.NaN, { tip: 'broj' })).toBeUndefined();
+    expect(normalizujFilter(2.5, { tip: 'broj' })).toBeUndefined();
+    expect(normalizujFilter(undefined, { tip: 'broj' })).toBeNull();
+    expect(normalizujFilter('  Ana  ', { tip: 'tekst' })).toBe('Ana');
+    expect(normalizujFilter('   ', { tip: 'tekst' })).toBeNull();
+    expect(normalizujFilter(true, { tip: 'bool' })).toBe(true);
+    expect(normalizujFilter('2025-02-30', { tip: 'datum' })).toBeUndefined();
+    expect(normalizujFilter({}, { tip: 'tekst' })).toBeUndefined();
   });
 });

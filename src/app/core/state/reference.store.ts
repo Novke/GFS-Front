@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject, Signal } from '@angular/core';
+import { computed, inject, Signal, untracked } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { Observable, Subscription } from 'rxjs';
 
@@ -30,7 +30,8 @@ function porukaGreske(e: unknown): string {
  * Lenj: ne učitava ništa dok neko ne pozove `ucitaj()` ili `tipoviTesta(id)`, pa se na javnoj ruti `/upis` nikad ne
  * instancira (i ne sme se tamo injektovati). `ucitaj()` je idempotentan; posle izmene (nova grupa, predmet, tip) pozovi
  * `invalidiraj(...)`: resurs koji je već bio tražen se odmah ponovo učitava, a zahtev koji je u toku se otkazuje.
- * `status`/`greska` (withRequestStatus) prate predmete i grupe; tipovi testa nemaju zaseban status.
+ * `status`/`greska` (withRequestStatus) su zbir predmeta i grupa: `loading` dok je bilo koji u toku, inače `error` dok
+ * bilo koji ima grešku (uspeh drugog resursa je ne skriva), inače `loaded`. Tipovi testa nemaju zaseban status.
  */
 export const ReferenceStore = signalStore(
   { providedIn: 'root' },
@@ -40,16 +41,22 @@ export const ReferenceStore = signalStore(
     _api: inject(ReferenceApi),
     // knjigovodstvo zahteva nije stanje (ne prikazuje se); tako tipoviTesta() ne piše signale sinhrono
     _lista: {
-      predmeti: { stanje: 'ne' as Stanje, veza: null as Subscription | null },
-      grupe: { stanje: 'ne' as Stanje, veza: null as Subscription | null },
+      predmeti: { stanje: 'ne' as Stanje, veza: null as Subscription | null, greska: null as string | null },
+      grupe: { stanje: 'ne' as Stanje, veza: null as Subscription | null, greska: null as string | null },
     },
     _tipoviZahtevi: new Map<number, { stanje: Stanje; veza: Subscription | null }>(),
     _tipoviSignali: new Map<number, Signal<readonly TipTestaInfo[]>>(),
   })),
   withMethods(store => {
-    const zavrsi = () => {
-      const uToku = Object.values(store._lista).some(l => l.stanje === 'ucitava');
-      if (!uToku && store.status() === 'loading') {
+    /** Zbirni status predmeta i grupa (vidi opis store-a). */
+    const azurirajStatus = () => {
+      const liste = Object.values(store._lista);
+      const saGreskom = liste.find(l => l.stanje === 'greska');
+      if (liste.some(l => l.stanje === 'ucitava')) {
+        patchState(store, setLoading());
+      } else if (saGreskom) {
+        patchState(store, setError(saGreskom.greska ?? PORUKA_SISTEM));
+      } else if (liste.some(l => l.stanje === 'ucitano')) {
         patchState(store, setLoaded());
       }
     };
@@ -58,16 +65,18 @@ export const ReferenceStore = signalStore(
       const l = store._lista[kljuc];
       l.veza?.unsubscribe();
       l.stanje = 'ucitava';
-      patchState(store, setLoading());
+      l.greska = null;
+      azurirajStatus();
       l.veza = izvor.subscribe({
         next: lista => {
           l.stanje = 'ucitano';
           patchState(store, { [kljuc]: lista ?? [] } as Partial<ReferenceState>);
-          zavrsi();
+          azurirajStatus();
         },
         error: (e: unknown) => {
           l.stanje = 'greska';
-          patchState(store, setError(porukaGreske(e)));
+          l.greska = porukaGreske(e);
+          azurirajStatus();
         },
       });
     };
@@ -109,7 +118,8 @@ export const ReferenceStore = signalStore(
           return computed(() => PRAZNO);
         }
         if (!store._tipoviZahtevi.has(predmetId)) {
-          pokreniTipove(predmetId);
+          // zove se iz šablona/computed/effect-a: pokretanje zahteva ne sme da pravi reaktivnu zavisnost
+          untracked(() => pokreniTipove(predmetId));
         }
         let s = store._tipoviSignali.get(predmetId);
         if (!s) {
