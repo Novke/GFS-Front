@@ -1,16 +1,22 @@
-<div *ngIf="isStaging" class="env-strip">STAGING — test podaci</div>
-<mat-toolbar *ngIf="!javnaStranica" color="primary">
+@if (isStaging) {
+  <div class="env-strip">STAGING — test podaci</div>
+}
+@if (!javnaStranica) {
+  <mat-toolbar color="primary">
     <mat-toolbar-row>
-        <a [routerLink]="routes.home" mat-button>Home</a>
-        <a [routerLink]="routes.grupe" mat-button>Grupe</a>
-        <a [routerLink]="routes.predavanjeSelect" mat-button>Predavanja</a>
-        <a [routerLink]="routes.domaciSelect" mat-button>Domaći</a>
-        <a [routerLink]="routes.testSelect" mat-button>Testovi</a>
-        <a [routerLink]="routes.ocenjivanjeSelect" mat-button>Ocene</a>
-        <span class="spacer"></span>
-        <span *ngIf="isStaging" class="env-badge">STAGING</span>
+      <a [routerLink]="routes.home" mat-button>Home</a>
+      <a [routerLink]="routes.grupe" mat-button>Grupe</a>
+      <a [routerLink]="routes.predavanjeSelect" mat-button>Predavanja</a>
+      <a [routerLink]="routes.domaciSelect" mat-button>Domaći</a>
+      <a [routerLink]="routes.testSelect" mat-button>Testovi</a>
+      <a [routerLink]="routes.ocenjivanjeSelect" mat-button>Ocene</a>
+      <span class="spacer"></span>
+      @if (isStaging) {
+        <span class="env-badge">STAGING</span>
+      }
     </mat-toolbar-row>
-</mat-toolbar>
+  </mat-toolbar>
+}
 
 
 <router-outlet></router-outlet>

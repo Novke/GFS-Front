@@ -1,54 +1,58 @@
 <div class="container mt-5">
-    <div class="row">
-        <div class="col">
+  <div class="row">
+    <div class="col">
 
-            <h1 class="text-center">Domaći {{domaci?.naslov}}</h1>
+      <h1 class="text-center">Domaći {{domaci?.naslov}}</h1>
 
-            <div class="container text-center mt-2" *ngIf="id">
-                <button class="btn btn-secondary" (click)="navigateEvidentiranje()">Izmeni</button>
-            </div>
-
-            <div class="container my-5">
-
-                <div class="row">
-                    <div class="col">
-                        <label for="grupaNaziv">Grupa</label>
-                        <h2 id="grupaNaziv">{{domaci?.grupa?.naziv}}</h2>
-                    </div>
-                    <div class="col">
-                        <label for="grupaNaziv">Predmet</label>
-                        <h2 id="grupaNaziv">{{domaci?.predmet?.naziv}}</h2>
-                    </div>
-
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="domaciDatum">Datum</label>
-                    <input type="date" id="domaciDatum" class="form-control" name="domaciDatum"
-                        [ngModel]="domaci?.datum" disabled>
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="domaciOpis">Opis</label>
-                    <textarea id="domaciOpis" class="form-control" name="domaciOpis" rows="3"
-                    [ngModel]="domaci?.text" disabled></textarea>
-                </div>
-            </div>
-
-            <div class="container">
-                <div class="kartice">
-                    <div *ngFor="let s of domaci?.studenti">
-                        <mat-card class="domaci-card" style="cursor: pointer;" (click)="navigateStudentPredmet(s.studentId)">
-                            <mat-card-content>
-                                <mat-card-title>{{student2string(s)}}</mat-card-title>
-                                <mat-card-subtitle class="my-2"
-                                    style="font-weight: 500;">{{bodovi2string(s)}}</mat-card-subtitle>
-                                <mat-card-subtitle style="font-weight: 200;">{{napomene2string(s)}}</mat-card-subtitle>
-                            </mat-card-content>
-                        </mat-card>
-                    </div>
-                </div>
-            </div>
+      @if (id) {
+        <div class="container text-center mt-2">
+          <button class="btn btn-secondary" (click)="navigateEvidentiranje()">Izmeni</button>
         </div>
+      }
+
+      <div class="container my-5">
+
+        <div class="row">
+          <div class="col">
+            <label for="grupaNaziv">Grupa</label>
+            <h2 id="grupaNaziv">{{domaci?.grupa?.naziv}}</h2>
+          </div>
+          <div class="col">
+            <label for="grupaNaziv">Predmet</label>
+            <h2 id="grupaNaziv">{{domaci?.predmet?.naziv}}</h2>
+          </div>
+
+        </div>
+
+        <div class="form-group mb-3">
+          <label for="domaciDatum">Datum</label>
+          <input type="date" id="domaciDatum" class="form-control" name="domaciDatum"
+            [ngModel]="domaci?.datum" disabled>
+        </div>
+
+        <div class="form-group mb-3">
+          <label for="domaciOpis">Opis</label>
+          <textarea id="domaciOpis" class="form-control" name="domaciOpis" rows="3"
+          [ngModel]="domaci?.text" disabled></textarea>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="kartice">
+          @for (s of domaci?.studenti; track s) {
+            <div>
+              <mat-card class="domaci-card" style="cursor: pointer;" (click)="navigateStudentPredmet(s.studentId)">
+                <mat-card-content>
+                  <mat-card-title>{{student2string(s)}}</mat-card-title>
+                  <mat-card-subtitle class="my-2"
+                  style="font-weight: 500;">{{bodovi2string(s)}}</mat-card-subtitle>
+                  <mat-card-subtitle style="font-weight: 200;">{{napomene2string(s)}}</mat-card-subtitle>
+                </mat-card-content>
+              </mat-card>
+            </div>
+          }
+        </div>
+      </div>
     </div>
+  </div>
 </div>

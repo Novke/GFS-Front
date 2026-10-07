@@ -1,92 +1,106 @@
 <div class="container mt-5">
-    <div class="row justify-content-center">
-      <div class="col-md-6">
-        <h2 class="text-center mb-4">Kreiraj test</h2>
-        
-        <form>
-            <div>
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <h2 class="text-center mb-4">Kreiraj test</h2>
+
+      <form>
+        <div>
           <!-- Group Selection -->
           <div class="form-group mb-3">
             <label for="group" class="form-label">Izaberi grupu:</label>
             <select [(ngModel)]="izabranaGrupa" id="group" name="group" class="form-select" required>
               <!-- <option value="" disabled>Izaberi grupu</option> -->
-              <option *ngFor="let g of grupe" [ngValue]="g.id">{{ g.naziv }}</option>
+              @for (g of grupe; track g) {
+                <option [ngValue]="g.id">{{ g.naziv }}</option>
+              }
             </select>
           </div>
-  
+
           <!-- Subject Selection -->
           <div class="form-group mb-3">
             <label for="subject" class="form-label">Izaberi predmet:</label>
             <select [(ngModel)]="izabranPredmet" (change)="fetchTipove()" id="subject" name="subject" class="form-select" required>
               <!-- <option value="" disabled>Izaberi predmet</option> -->
-              <option *ngFor="let p of predmeti" [ngValue]="p.id">{{ p.naziv }}</option>
+              @for (p of predmeti; track p) {
+                <option [ngValue]="p.id">{{ p.naziv }}</option>
+              }
             </select>
           </div>
           <!-- Postojeci Tip testa -->
-          <div class="form-group mb-3" *ngIf="izabranPredmet && !kreirajNoviTip">
-            <label for="tipTesta" class="form-label">Tip testa:</label>
-            <div class="row">
+          @if (izabranPredmet && !kreirajNoviTip) {
+            <div class="form-group mb-3">
+              <label for="tipTesta" class="form-label">Tip testa:</label>
+              <div class="row">
                 <div class="col">
-                    <select [(ngModel)]="izabranTipTesta" id="tipTesta" name="tipTesta" class="form-select" required>
-                        <option value="" *ngIf="tipoviTesta.length===0" disabled>Ne postoji nijedan tip za odabrani predmet</option>
-                        <option value="0" *ngIf="tipoviTesta.length>0" disabled selected></option>
-                        <option *ngFor="let t of tipoviTesta" [ngValue]="t.id">{{ t.naziv }}</option>
-                      </select>
+                  <select [(ngModel)]="izabranTipTesta" id="tipTesta" name="tipTesta" class="form-select" required>
+                    @if (tipoviTesta.length===0) {
+                      <option value="" disabled>Ne postoji nijedan tip za odabrani predmet</option>
+                    }
+                    @if (tipoviTesta.length>0) {
+                      <option value="0" disabled selected></option>
+                    }
+                    @for (t of tipoviTesta; track t) {
+                      <option [ngValue]="t.id">{{ t.naziv }}</option>
+                    }
+                  </select>
                 </div>
                 <div class="col-md-2">
-                    <button (click)="novTip()" class="btn btn-secondary">Nov tip</button>
-                </div>
-            </div>
-          </div>
-          <!-- Nov Tip testa -->
-          <div class="form-group mb-3" *ngIf="izabranPredmet && kreirajNoviTip">
-            <label for="novTipTesta" class="form-label">Tip testa:</label>
-            <div class="row">
-                <div class="col">
-                    <input [(ngModel)]="novTipTestaNaziv" id="novTipTesta" name="novTipTesta" class="form-control" required>
-                </div>
-                <div class="col-md-2">
-                    <button (click)="postojeciTip()" class="btn btn-secondary">Postojeći</button>
-                </div>
-            </div>
-          </div>
-
-<!--        DATUM / GRUPE / MAX POENA    -->
-          <div *ngIf="izabranPredmet && izabranaGrupa" class="row">
-
-            <div class="col">
-                <label for="datum" class="form-label">Datum:</label>
-                <input [(ngModel)]="datum" class="form-control" id="datum" name="datum" required type="date">
-            </div>
-            <div class="col">
-                <label for="grupeDugmici" class="form-label">Grupe: {{ brojGrupa }}</label>
-                <div class="d-flex gap-2" id="grupeDugmici">
-                  <button 
-                    *ngFor="let grupa of ['A', 'B', 'C', 'D']; let i = index" 
-                    class="btn" 
-                    [ngClass]="{'btn-primary': i < brojGrupa, 'btn-outline-secondary': i >= brojGrupa}" 
-                    (click)="setBrojGrupa(i + 1)">
-                    {{ grupa }}
-                  </button>
+                  <button (click)="novTip()" class="btn btn-secondary">Nov tip</button>
                 </div>
               </div>
-              
-            <div class="col">
+            </div>
+          }
+          <!-- Nov Tip testa -->
+          @if (izabranPredmet && kreirajNoviTip) {
+            <div class="form-group mb-3">
+              <label for="novTipTesta" class="form-label">Tip testa:</label>
+              <div class="row">
+                <div class="col">
+                  <input [(ngModel)]="novTipTestaNaziv" id="novTipTesta" name="novTipTesta" class="form-control" required>
+                </div>
+                <div class="col-md-2">
+                  <button (click)="postojeciTip()" class="btn btn-secondary">Postojeći</button>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!--        DATUM / GRUPE / MAX POENA    -->
+          @if (izabranPredmet && izabranaGrupa) {
+            <div class="row">
+              <div class="col">
+                <label for="datum" class="form-label">Datum:</label>
+                <input [(ngModel)]="datum" class="form-control" id="datum" name="datum" required type="date">
+              </div>
+              <div class="col">
+                <label for="grupeDugmici" class="form-label">Grupe: {{ brojGrupa }}</label>
+                <div class="d-flex gap-2" id="grupeDugmici">
+                  @for (grupa of ['A', 'B', 'C', 'D']; track grupa; let i = $index) {
+                    <button
+                      class="btn"
+                      [ngClass]="{'btn-primary': i < brojGrupa, 'btn-outline-secondary': i >= brojGrupa}"
+                      (click)="setBrojGrupa(i + 1)">
+                      {{ grupa }}
+                    </button>
+                  }
+                </div>
+              </div>
+              <div class="col">
                 <label for="maxPoena" class="form-label">Broj poena:</label>
                 <input [(ngModel)]="maxPoena" type="number" class="form-control" id="maxPoena" name="maxPoena">
+              </div>
             </div>
+          }
 
-          </div>
-          
-          </div>
-  
-          <!-- Submit Button -->
-          <div class="text-center mt-5">
-            <button (click)="createTest()" type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet || !datum || maxPoena===0">
-              Kreiraj
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="text-center mt-5">
+          <button (click)="createTest()" type="submit" class="btn btn-primary btn-block" [disabled]="!izabranaGrupa || !izabranPredmet || !datum || maxPoena===0">
+            Kreiraj
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>
