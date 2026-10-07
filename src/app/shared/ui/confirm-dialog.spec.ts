@@ -55,4 +55,16 @@ describe('ConfirmDialog', () => {
     await vi.waitFor(() => expect(rez).toHaveBeenCalled());
     expect(rez).toHaveBeenCalledExactlyOnceWith(false);
   });
+
+  it('destruktivna varijanta počinje fokusom na "Odustani"', async () => {
+    ConfirmDialog.otvori(dialog, CFG).subscribe();
+    await vi.waitFor(() => expect(document.activeElement).toBe(overlay.querySelector('[data-odustani]')));
+    dialog.closeAll();
+  });
+
+  it('nedestruktivna varijanta počinje fokusom na potvrdi', async () => {
+    ConfirmDialog.otvori(dialog, { ...CFG, destruktivno: false }).subscribe();
+    await vi.waitFor(() => expect(document.activeElement).toBe(overlay.querySelector('[data-potvrdi]')));
+    dialog.closeAll();
+  });
 });

@@ -12,7 +12,7 @@ export interface ConfirmDialogCfg {
   destruktivno?: boolean;
 }
 
-/** Potvrda umesto `confirm()`. Esc, klik van dijaloga i "Odustani" daju `false`. */
+/** Potvrda umesto `confirm()`. Esc, klik van dijaloga i "Odustani" daju `false`. Destruktivna varijanta počinje fokusom na "Odustani". */
 @Component({
   selector: 'app-confirm-dialog',
   imports: [MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle],
@@ -27,7 +27,6 @@ export interface ConfirmDialogCfg {
         data-potvrdi
         [class.destruktivno]="cfg.destruktivno"
         [mat-dialog-close]="true"
-        cdkFocusInitial
       >{{ cfg.potvrdi }}</button>
     </mat-dialog-actions>
   `,
@@ -43,7 +42,7 @@ export class ConfirmDialog {
 
   static otvori(dialog: MatDialog, cfg: ConfirmDialogCfg): Observable<boolean> {
     return dialog
-      .open<ConfirmDialog, ConfirmDialogCfg, boolean>(ConfirmDialog, { data: cfg, role: 'alertdialog', width: '28rem', maxWidth: '92vw' })
+      .open<ConfirmDialog, ConfirmDialogCfg, boolean>(ConfirmDialog, { data: cfg, role: 'alertdialog', autoFocus: cfg.destruktivno ? '[data-odustani]' : '[data-potvrdi]', width: '28rem', maxWidth: '92vw' })
       .afterClosed()
       .pipe(map(rez => rez === true));
   }

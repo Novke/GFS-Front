@@ -68,4 +68,13 @@ describe('errorInterceptor', () => {
 
     expect(greska).toHaveBeenCalledOnce();
   });
+
+  it('ne obaveštava za api/public/ ni bez LOCAL_ERRORS (javna ruta)', () => {
+    http.post('api/public/upis/abc', {}).subscribe({ error: () => undefined });
+    kontrola.expectOne('api/public/upis/abc').flush({ reason: 'x' }, { status: 410, statusText: 'Gone' });
+    http.get('api/public/upis/abc').subscribe({ error: () => undefined });
+    kontrola.expectOne('api/public/upis/abc').error(new ProgressEvent('error'));
+
+    expect(greska).not.toHaveBeenCalled();
+  });
 });

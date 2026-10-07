@@ -15,8 +15,8 @@ export interface Poruka {
 }
 
 /**
- * Obaveštenja za korisnika. Store samo prima poruke; prikazuje ih `SnackbarHost` (jedan u `AppComponent`).
- * Poruke su događaji, ne stanje: nijedna se ne spaja sa drugom i nijedna se ne gubi dok host postoji.
+ * Obaveštenja za korisnika. Store samo emituje poruke; prikazuje ih `SnackbarHost` (jedan u `AppComponent`),
+ * koji ih stavlja u red i prikazuje jednu po jednu. Poruke su događaji, ne stanje: store ih ne spaja i ne odbacuje.
  */
 export const NotificationStore = signalStore(
   { providedIn: 'root' },
