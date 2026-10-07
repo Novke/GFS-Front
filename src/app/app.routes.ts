@@ -22,6 +22,14 @@ export const AppRoutes = {
     grupaDetails: (id: number | string) => `grupe/${id}`,
     onboardingPrijave: (id: number | string) => `onboarding/${id}`,
     onboardingQr: (id: number | string) => `onboarding/${id}/qr`,
-    upis: (token: string) => `upis/${token}`
+    upis: (token: string) => `upis/${token}`,
+    prezentacije: "prezentacije",
+    prezentacija: (id: number | string) => `prezentacije/${id}`,
+    prezentacijaIzvodjenja: (id: number | string) => `prezentacije/${id}/izvodjenja`,
+    izvodjenjePregled: (id: number | string) => `izvodjenja/${id}/pregled`,
+    izvodjenjePublika: (id: number | string) => `izvodjenja/${id}/publika`,
+    izvodjenjeKonzola: (id: number | string) => `izvodjenja/${id}/konzola`,
+    uzivo: "uzivo",
+    uzivoKod: (kod: string) => `uzivo/${kod}`
   };
   
