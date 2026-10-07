@@ -6,9 +6,10 @@ import { AppRoutes } from 'src/app/app.routes';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 
 @Component({
-  selector: 'app-evidentiranje',
-  templateUrl: './evidentiranje.component.html',
-  styleUrls: ['./evidentiranje.component.css']
+    selector: 'app-evidentiranje',
+    templateUrl: './evidentiranje.component.html',
+    styleUrls: ['./evidentiranje.component.css'],
+    standalone: false
 })
 export class EvidentiranjeComponent implements OnInit {
 

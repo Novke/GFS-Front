@@ -7,9 +7,10 @@ import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { TestService } from '../test.service';
 
 @Component({
-  selector: 'app-nov-test',
-  templateUrl: './nov-test.component.html',
-  styleUrls: ['./nov-test.component.css']
+    selector: 'app-nov-test',
+    templateUrl: './nov-test.component.html',
+    styleUrls: ['./nov-test.component.css'],
+    standalone: false
 })
 export class NovTestComponent implements OnInit {
 

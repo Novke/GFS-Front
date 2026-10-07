@@ -6,9 +6,10 @@ import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-nov-domaci',
-  templateUrl: './nov-domaci.component.html',
-  styleUrls: ['./nov-domaci.component.css']
+    selector: 'app-nov-domaci',
+    templateUrl: './nov-domaci.component.html',
+    styleUrls: ['./nov-domaci.component.css'],
+    standalone: false
 })
 export class NovDomaciComponent implements OnInit{
 

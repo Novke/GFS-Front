@@ -18,9 +18,10 @@ interface NovStudent {
 }
 
 @Component({
-  selector: 'app-grupa-details',
-  templateUrl: './grupa-details.component.html',
-  styleUrls: ['./grupa-details.component.css']
+    selector: 'app-grupa-details',
+    templateUrl: './grupa-details.component.html',
+    styleUrls: ['./grupa-details.component.css'],
+    standalone: false
 })
 export class GrupaDetailsComponent implements OnInit, OnDestroy {
 

@@ -6,9 +6,10 @@ import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-domaci-list',
-  templateUrl: './domaci-list.component.html',
-  styleUrls: ['./domaci-list.component.css']
+    selector: 'app-domaci-list',
+    templateUrl: './domaci-list.component.html',
+    styleUrls: ['./domaci-list.component.css'],
+    standalone: false
 })
 export class DomaciListComponent implements OnInit{
 

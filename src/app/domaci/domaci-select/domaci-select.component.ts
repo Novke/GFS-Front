@@ -4,9 +4,10 @@ import { AppRoutes } from 'src/app/app.routes';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 
 @Component({
-  selector: 'app-domaci-select',
-  templateUrl: './domaci-select.component.html',
-  styleUrls: ['./domaci-select.component.css']
+    selector: 'app-domaci-select',
+    templateUrl: './domaci-select.component.html',
+    styleUrls: ['./domaci-select.component.css'],
+    standalone: false
 })
 export class DomaciSelectComponent {
   izabranaGrupa: number = 0;

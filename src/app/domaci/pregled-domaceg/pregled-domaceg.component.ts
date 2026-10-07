@@ -5,9 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-pregled-domaceg',
-  templateUrl: './pregled-domaceg.component.html',
-  styleUrls: ['./pregled-domaceg.component.css']
+    selector: 'app-pregled-domaceg',
+    templateUrl: './pregled-domaceg.component.html',
+    styleUrls: ['./pregled-domaceg.component.css'],
+    standalone: false
 })
 export class PregledDomacegComponent implements OnInit {
 

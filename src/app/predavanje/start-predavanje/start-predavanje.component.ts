@@ -5,9 +5,10 @@ import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/model';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-start-predavanje',
-  templateUrl: './start-predavanje.component.html',
-  styleUrls: ['./start-predavanje.component.css']
+    selector: 'app-start-predavanje',
+    templateUrl: './start-predavanje.component.html',
+    styleUrls: ['./start-predavanje.component.css'],
+    standalone: false
 })
 export class StartPredavanjeComponent implements OnInit {
 

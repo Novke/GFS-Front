@@ -5,9 +5,10 @@ import { GrupaInfo, PredavanjeInfo, PredmetInfo } from 'src/app/models/model';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-predavanje-list',
-  templateUrl: './predavanje-list.component.html',
-  styleUrls: ['./predavanje-list.component.css']
+    selector: 'app-predavanje-list',
+    templateUrl: './predavanje-list.component.html',
+    styleUrls: ['./predavanje-list.component.css'],
+    standalone: false
 })
 export class PredavanjeListComponent implements OnInit {
 

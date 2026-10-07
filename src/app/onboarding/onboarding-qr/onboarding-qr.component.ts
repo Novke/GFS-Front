@@ -9,9 +9,10 @@ import { OnboardingService } from '../onboarding.service';
 import { upisLink } from '../upis-link';
 
 @Component({
-  selector: 'app-onboarding-qr',
-  templateUrl: './onboarding-qr.component.html',
-  styleUrls: ['./onboarding-qr.component.css']
+    selector: 'app-onboarding-qr',
+    templateUrl: './onboarding-qr.component.html',
+    styleUrls: ['./onboarding-qr.component.css'],
+    standalone: false
 })
 export class OnboardingQrComponent implements OnInit, OnDestroy {
 

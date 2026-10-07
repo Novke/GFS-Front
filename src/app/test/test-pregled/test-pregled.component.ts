@@ -8,9 +8,10 @@ import { StudentInfo, TestDetails, TestPolaganjeInfo } from 'src/app/models/mode
 import { TestService } from '../test.service';
 
 @Component({
-  selector: 'app-test-pregled',
-  templateUrl: './test-pregled.component.html',
-  styleUrls: ['./test-pregled.component.css']
+    selector: 'app-test-pregled',
+    templateUrl: './test-pregled.component.html',
+    styleUrls: ['./test-pregled.component.css'],
+    standalone: false
 })
 export class TestPregledComponent implements OnInit{
   @ViewChild(MatPaginator) paginator!: MatPaginator;

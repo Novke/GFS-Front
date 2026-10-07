@@ -6,9 +6,10 @@ import { TestService } from '../test.service';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-test-list',
-  templateUrl: './test-list.component.html',
-  styleUrls: ['./test-list.component.css']
+    selector: 'app-test-list',
+    templateUrl: './test-list.component.html',
+    styleUrls: ['./test-list.component.css'],
+    standalone: false
 })
 export class TestListComponent implements OnInit{
 

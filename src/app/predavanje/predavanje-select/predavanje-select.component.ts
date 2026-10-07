@@ -4,9 +4,10 @@ import { AppRoutes } from 'src/app/app.routes';
 import { PredavanjeService } from '../predavanje.service';
 
 @Component({
-  selector: 'app-predavanje-select',
-  templateUrl: './predavanje-select.component.html',
-  styleUrls: ['./predavanje-select.component.css']
+    selector: 'app-predavanje-select',
+    templateUrl: './predavanje-select.component.html',
+    styleUrls: ['./predavanje-select.component.css'],
+    standalone: false
 })
 export class PredavanjeSelectComponent {
   izabranaGrupa: number = 0;

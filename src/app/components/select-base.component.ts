@@ -3,9 +3,10 @@ import { GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 
 @Component({
-  selector: 'app-select-base',
-  templateUrl: './select-base.component.html',
-  styleUrls: ['./select-base.component.css']
+    selector: 'app-select-base',
+    templateUrl: './select-base.component.html',
+    styleUrls: ['./select-base.component.css'],
+    standalone: false
 })
 export class SelectBaseComponent implements OnInit {
   @Input() submitButtonText: string = 'Submit';

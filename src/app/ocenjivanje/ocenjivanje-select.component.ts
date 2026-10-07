@@ -11,9 +11,10 @@ import {
 import { OcenjivanjeService } from './ocenjivanje.service';
 
 @Component({
-  selector: 'app-ocenjivanje-select',
-  templateUrl: './ocenjivanje-select.component.html',
-  styleUrls: ['./ocenjivanje-select.component.css']
+    selector: 'app-ocenjivanje-select',
+    templateUrl: './ocenjivanje-select.component.html',
+    styleUrls: ['./ocenjivanje-select.component.css'],
+    standalone: false
 })
 export class OcenjivanjeSelectComponent implements OnInit {
 

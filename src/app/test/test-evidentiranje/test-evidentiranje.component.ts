@@ -7,9 +7,10 @@ import { ErrorHandlerUtil } from '../../shared/utils/error-handler.util';
 import { TestService } from '../test.service';
 
 @Component({
-  selector: 'app-test-evidentiranje',
-  templateUrl: './test-evidentiranje.component.html',
-  styleUrls: ['./test-evidentiranje.component.css']
+    selector: 'app-test-evidentiranje',
+    templateUrl: './test-evidentiranje.component.html',
+    styleUrls: ['./test-evidentiranje.component.css'],
+    standalone: false
 })
 export class TestEvidentiranjeComponent implements OnInit {
 

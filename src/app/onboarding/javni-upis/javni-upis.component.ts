@@ -59,9 +59,10 @@ function lokalniDatum(d: Date): string {
  * svaki drugi /api/* poziv vraća 401 i studentu na telefonu otvara basic-auth dijalog.
  */
 @Component({
-  selector: 'app-javni-upis',
-  templateUrl: './javni-upis.component.html',
-  styleUrls: ['./javni-upis.component.css']
+    selector: 'app-javni-upis',
+    templateUrl: './javni-upis.component.html',
+    styleUrls: ['./javni-upis.component.css'],
+    standalone: false
 })
 export class JavniUpisComponent implements OnInit, OnDestroy {
 

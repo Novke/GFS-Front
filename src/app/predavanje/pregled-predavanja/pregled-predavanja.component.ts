@@ -5,9 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-pregled-predavanja',
-  templateUrl: './pregled-predavanja.component.html',
-  styleUrls: ['./pregled-predavanja.component.css']
+    selector: 'app-pregled-predavanja',
+    templateUrl: './pregled-predavanja.component.html',
+    styleUrls: ['./pregled-predavanja.component.css'],
+    standalone: false
 })
 export class PregledPredavanjaComponent implements OnInit {
 

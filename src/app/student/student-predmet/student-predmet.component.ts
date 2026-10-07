@@ -4,9 +4,10 @@ import { StudentNaPredmetuDetails } from '../../models/model';
 import { StudentService } from '../student.service';
 
 @Component({
-  selector: 'app-student-predmet',
-  templateUrl: './student-predmet.component.html',
-  styleUrls: ['./student-predmet.component.css']
+    selector: 'app-student-predmet',
+    templateUrl: './student-predmet.component.html',
+    styleUrls: ['./student-predmet.component.css'],
+    standalone: false
 })
 export class StudentPredmetComponent implements OnInit {
 

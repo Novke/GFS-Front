@@ -5,9 +5,10 @@ import { AktivnostInfo, GrupaDetails, PredavanjeDetails, StudentDetails, UpdateP
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-live-predavanje',
-  templateUrl: './live-predavanje.component.html',
-  styleUrls: ['./live-predavanje.component.css']
+    selector: 'app-live-predavanje',
+    templateUrl: './live-predavanje.component.html',
+    styleUrls: ['./live-predavanje.component.css'],
+    standalone: false
 })
 export class LivePredavanjeComponent implements OnInit {
 

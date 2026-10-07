@@ -7,9 +7,10 @@ import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { GrupaService } from '../grupa.service';
 
 @Component({
-  selector: 'app-grupe',
-  templateUrl: './grupe.component.html',
-  styleUrls: ['./grupe.component.css']
+    selector: 'app-grupe',
+    templateUrl: './grupe.component.html',
+    styleUrls: ['./grupe.component.css'],
+    standalone: false
 })
 export class GrupeComponent implements OnInit {
 

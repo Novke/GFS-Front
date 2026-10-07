@@ -23,9 +23,10 @@ interface NacrtIzmene {
 const AUTO_OSVEZAVANJE_MS = 15000;
 
 @Component({
-  selector: 'app-onboarding-prijave',
-  templateUrl: './onboarding-prijave.component.html',
-  styleUrls: ['./onboarding-prijave.component.css']
+    selector: 'app-onboarding-prijave',
+    templateUrl: './onboarding-prijave.component.html',
+    styleUrls: ['./onboarding-prijave.component.css'],
+    standalone: false
 })
 export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
 

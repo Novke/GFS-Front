@@ -5,9 +5,10 @@ import { StudentService } from '../student.service';
 import { AppRoutes } from 'src/app/app.routes';
 
 @Component({
-  selector: 'app-student-details',
-  templateUrl: './student-details.component.html',
-  styleUrls: ['./student-details.component.css']
+    selector: 'app-student-details',
+    templateUrl: './student-details.component.html',
+    styleUrls: ['./student-details.component.css'],
+    standalone: false
 })
 export class StudentDetailsComponent implements OnInit{
 
