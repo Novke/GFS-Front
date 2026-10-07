@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, IdCmd, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
-import { API_URL } from '../shared/api-url';
+import { API_URL } from '../core/api/api-url';
 
 @Injectable({
   providedIn: 'root'

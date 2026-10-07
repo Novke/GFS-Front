@@ -10,7 +10,7 @@ import {
   SaveKoeficijentiCmd,
   TipTestaInfo
 } from '../models/model';
-import { API_URL } from '../shared/api-url';
+import { API_URL } from '../core/api/api-url';
 
 @Injectable({
   providedIn: 'root'

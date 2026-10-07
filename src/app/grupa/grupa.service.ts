@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { CreateGrupaCmd, CreateStudentCmd, GrupaDetails, GrupaInfo, StudentInfo } from '../models/model';
-import { API_URL } from '../shared/api-url';
+import { API_URL } from '../core/api/api-url';
 
 @Injectable({
   providedIn: 'root'

@@ -5,6 +5,7 @@ import { catchError, filter, of } from 'rxjs';
 import { AppRoutes } from './app.routes';
 import { MatToolbar, MatToolbarRow } from '@angular/material/toolbar';
 import { MatButton } from '@angular/material/button';
+import { SnackbarHost } from './core/layout/snackbar-host';
 
 // Javne rute (bez basic-auth-a na nginx-u): bez toolbara i bez ijednog poziva zaključanog /api/*.
 const JAVNA_RUTA = /^\/upis(\/|$)/;
@@ -14,7 +15,7 @@ const JAVNA_RUTA = /^\/upis(\/|$)/;
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    imports: [MatToolbar, MatToolbarRow, MatButton, RouterLink, RouterOutlet]
+    imports: [MatToolbar, MatToolbarRow, MatButton, RouterLink, RouterOutlet, SnackbarHost]
 })
 export class AppComponent implements OnInit {
   private http = inject(HttpClient);
