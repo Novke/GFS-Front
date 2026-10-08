@@ -1,13 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, signal, untracked } from '@angular/core';
-import { rxResource, toSignal } from '@angular/core/rxjs-interop';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSelect, MatOption } from '@angular/material/select';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, map, of, startWith } from 'rxjs';
+import { catchError, map, of } from 'rxjs';
 
 import { toApiError } from '../../../core/api/api-error';
 import { JE_ID } from '../../../core/route-matchers';
@@ -28,7 +28,7 @@ function idIzParametra(v: string | undefined): number | null {
 
 /**
  * Započinjanje predavanja (`/predavanja/novo?predmet&grupa`): predmet i grupa su obavezni, datum je danas, a redni broj
- * se predlaže kao poslednji za par + 1 ("Biće predavanje broj N"). "Započni" -> `POST predavanja/start` -> detalj.
+ * se predlaže kao najveći postojeći + 1, isto što dodeljuje server ("Biće predavanje broj N"). "Započni" -> `POST predavanja/start` -> detalj.
  * Greška servera ide u traku iznad forme (`LOCAL_ERRORS`), ne u snackbar.
  *
  * `predmet` i `grupa` su ulazi iz query parametara (`withComponentInputBinding`): predizbor iz filtera liste.
@@ -71,26 +71,17 @@ export class NovoPredavanje implements OnInit {
   protected readonly greska = signal<string | null>(null);
   protected readonly danas = formatDatum(new Date());
 
-  private readonly izbor = toSignal(
-    this.forma.valueChanges.pipe(
-      startWith(null),
-      map(() => ({ predmet: this.forma.controls.predmet.value, grupa: this.forma.controls.grupa.value })),
+  /**
+   * Redni broj koji će server dodeliti: `max(rb) + 1` preko svih predavanja, učitano jednom pri otvaranju. Prazna baza
+   * daje 1; greška je tiha (nema predloga, "Započni" radi i bez njega).
+   */
+  protected readonly sledeciRb = toSignal(
+    this.api.poslednjiRb().pipe(
+      map(s => (s?.content?.[0]?.rb ?? 0) + 1),
+      catchError(() => of(null)),
     ),
-    { initialValue: { predmet: null, grupa: null } },
+    { initialValue: null },
   );
-
-  /** Sledeći redni broj za izabrani par; bez izbora ili uz grešku (tiho) nema predloga. */
-  protected readonly sledeciRb = rxResource<number | null, { predmet: number; grupa: number } | undefined>({
-    params: () => {
-      const { predmet, grupa } = this.izbor();
-      return predmet !== null && grupa !== null ? { predmet, grupa } : undefined;
-    },
-    stream: ({ params }) =>
-      this.api.poslednjeZaPar(params.predmet, params.grupa).pipe(
-        map(s => (s?.content?.[0]?.rb ?? 0) + 1),
-        catchError(() => of(null)),
-      ),
-  });
 
   protected readonly referencePodaci = computed(() => this.reference.predmeti().length > 0 || this.reference.grupe().length > 0);
 

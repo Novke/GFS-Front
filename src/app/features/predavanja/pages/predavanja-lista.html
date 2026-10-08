@@ -24,7 +24,7 @@
 
   @if (store.stavke().length > 0) {
     <p class="lista-broj" aria-live="polite">{{ brojRezultata() }}</p>
-    <app-predavanja-tabela [stavke]="store.stavke()" [sort]="store.upit().sort" (otvori)="otvori($event)"
+    <app-predavanja-tabela [stavke]="store.stavke()" [sort]="store.upit().sort" [punDatum]="filteri().godina === null" (otvori)="otvori($event)"
       (sortChange)="store.postaviSort($event)" />
   } @else if (store.ucitava() || store.status() === 'idle') {
     <app-skeleton-rows [redovi]="6" />

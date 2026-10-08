@@ -46,9 +46,16 @@ describe('NovoPredavanje', () => {
   const el = () => harness.fixture.nativeElement as HTMLElement;
   const rbZahtev = () => http.expectOne(r => r.url === 'api/predavanja/pretraga');
 
-  async function otvori(url = '/predavanja/novo') {
+  /** `rb`: odgovor na predlog rednog broja (jedan zahtev pri otvaranju, bez obzira na izbor). */
+  async function otvori(url = '/predavanja/novo', rb: Strana<PredavanjeListItem> | 'greska' = strana([])) {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(url);
+    const z = rbZahtev();
+    if (rb === 'greska') {
+      z.flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
+    } else {
+      z.flush(rb);
+    }
     http.expectOne('api/predmeti').flush([{ id: 1, naziv: 'UPR' }, { id: 2, naziv: 'Informatika' }]);
     http.expectOne('api/grupe').flush([{ id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 38 }, { id: 5, naziv: 'AR-2025', godinaUpisa: 2025, brojStudenata: 20 }]);
     await harness.fixture.whenStable();
@@ -88,42 +95,53 @@ describe('NovoPredavanje', () => {
     expect(el().textContent).toContain('Grupa je obavezno.');
   });
 
-  it('predlaže sledeći redni broj iz poslednjeg predavanja za par (size=1, sort=rb,desc)', async () => {
-    await otvori();
-    await izaberi(1, 4);
+  it('predlaže max(rb) + 1 kao server: jedan zahtev pri otvaranju, size=1, sort=rb,desc, bez ikakvih filtera', async () => {
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/predavanja/novo');
     const z = rbZahtev();
-    expect(z.request.params.get('predmetId')).toBe('1');
-    expect(z.request.params.get('grupaId')).toBe('4');
-    expect(z.request.params.get('size')).toBe('1');
-    expect(z.request.params.get('sort')).toBe('rb,desc');
-    expect(z.request.params.has('godina')).toBe(false);
+    const p = z.request.params;
+    expect(p.get('size')).toBe('1');
+    expect(p.get('sort')).toBe('rb,desc');
+    expect(p.get('page')).toBe('0');
+    for (const k of ['predmetId', 'grupaId', 'godina', 'zavrseno', 'q', 'od', 'do']) {
+      expect(p.has(k), k).toBe(false);
+    }
     expect(z.request.context.get(LOCAL_ERRORS)).toBe(true);
-    z.flush(strana([{ id: 9, rb: 11 }]));
+    z.flush(strana([{ id: 9, rb: 41 }]));
+    http.expectOne('api/predmeti').flush([{ id: 1, naziv: 'UPR' }]);
+    http.expectOne('api/grupe').flush([{ id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 38 }]);
     await harness.fixture.whenStable();
     harness.detectChanges();
-    expect(el().querySelector('[data-rb]')!.textContent).toContain('Biće predavanje broj 12');
+    expect(el().querySelector('[data-rb]')!.textContent).toContain('Biće predavanje broj 42');
   });
 
-  it('par bez predavanja počinje od 1; greška predloga je tiha i ne sprečava započinjanje', async () => {
-    await otvori();
+  it('izbor predmeta i grupe ne pravi nove zahteve za predlog', async () => {
+    await otvori('/predavanja/novo', strana([{ id: 9, rb: 41 }]));
     await izaberi(1, 4);
-    rbZahtev().flush(strana([]));
-    await harness.fixture.whenStable();
-    harness.detectChanges();
-    expect(el().querySelector('[data-rb]')!.textContent).toContain('Biće predavanje broj 1');
-
     await izaberi(2, 5);
-    rbZahtev().flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
-    await harness.fixture.whenStable();
-    harness.detectChanges();
+    http.expectNone(r => r.url === 'api/predavanja/pretraga');
+    expect(el().querySelector('[data-rb]')!.textContent).toContain('Biće predavanje broj 42');
+  });
+
+  it('bez ijednog predavanja predlog je 1', async () => {
+    await otvori('/predavanja/novo', strana([]));
+    expect(el().querySelector('[data-rb]')!.textContent).toContain('Biće predavanje broj 1');
+  });
+
+  it('greška predloga je tiha (bez poruke) i ne sprečava započinjanje', async () => {
+    await otvori('/predavanja/novo', 'greska');
     expect(el().querySelector('[data-rb]')).toBeNull();
     expect(el().querySelector('[role=alert]')).toBeNull();
+    await izaberi(1, 4);
+    await posalji();
+    http.expectOne('api/predavanja/start').flush({ id: 77, rb: 1 });
+    await harness.fixture.whenStable();
+    expect(router.url).toBe('/predavanja/77');
   });
 
   it('"Započni" šalje predmetId i grupaId i vodi na detalj predavanja', async () => {
     await otvori();
     await izaberi(1, 4);
-    rbZahtev().flush(strana([]));
     await posalji();
     const z = http.expectOne('api/predavanja/start');
     expect(z.request.body).toEqual({ predmetId: 1, grupaId: 4 });
@@ -136,7 +154,6 @@ describe('NovoPredavanje', () => {
   it('dvostruki klik ne šalje dva zahteva (dugme je onemogućeno dok zahtev traje)', async () => {
     await otvori();
     await izaberi(1, 4);
-    rbZahtev().flush(strana([]));
     await posalji();
     await posalji();
     http.expectOne('api/predavanja/start').flush({ id: 77, rb: 1 });
@@ -146,7 +163,6 @@ describe('NovoPredavanje', () => {
   it('greška servera ide u traku iznad forme, ne u snackbar; dugme se vraća', async () => {
     await otvori();
     await izaberi(1, 4);
-    rbZahtev().flush(strana([]));
     await posalji();
     http.expectOne('api/predavanja/start').flush({ reason: 'Grupa nije pronadjena! ID = 4' }, { status: 404, statusText: 'Not Found' });
     await harness.fixture.whenStable();
@@ -158,9 +174,6 @@ describe('NovoPredavanje', () => {
 
   it('predizbor iz linka (?predmet=&grupa=) samo za postojeće stavke; smeće se ignoriše', async () => {
     await otvori('/predavanja/novo?predmet=2&grupa=4');
-    const z = rbZahtev();
-    expect(z.request.params.get('predmetId')).toBe('2');
-    z.flush(strana([]));
     harness.detectChanges();
     await harness.fixture.whenStable();
     harness.detectChanges();
@@ -170,7 +183,6 @@ describe('NovoPredavanje', () => {
 
   it('neispravan ili nepostojeći predizbor se ignoriše', async () => {
     await otvori('/predavanja/novo?predmet=abc&grupa=999');
-    http.expectNone(r => r.url === 'api/predavanja/pretraga');
     expect(komponenta().forma.controls.predmet).toBeDefined();
     expect(el().querySelector('[data-predmet]')!.textContent).not.toContain('UPR');
   });

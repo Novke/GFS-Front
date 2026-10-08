@@ -25,13 +25,14 @@ function predavanje(izmene: Partial<PredavanjeListItem> = {}): PredavanjeListIte
 
 @Component({
   imports: [PredavanjaTabela],
-  template: `<app-predavanja-tabela [stavke]="stavke()" [zakljucano]="zakljucano()" [sort]="sort()" (otvori)="otvori($event)"
+  template: `<app-predavanja-tabela [stavke]="stavke()" [zakljucano]="zakljucano()" [sort]="sort()" [punDatum]="punDatum()" (otvori)="otvori($event)"
     (sortChange)="sortChange($event)" />`,
 })
 class Host {
   stavke = signal<PredavanjeListItem[]>([]);
   zakljucano = signal<ZakljucanaKolona[]>([]);
   sort = signal<string | null>('datum,desc');
+  punDatum = signal(false);
   otvori = vi.fn();
   sortChange = vi.fn();
 }
@@ -108,6 +109,20 @@ describe('PredavanjaTabela', () => {
     expect(el.querySelector('.c-meta')!.textContent).toBe('14. 10. · Uvod u primenu računara · GD-2025 · 28/38 +3');
     const hub = napravi([predavanje()], ['predmet', 'grupa']);
     expect(hub.el.querySelector('.c-meta')!.textContent).toBe('14. 10. · 28/38 +3');
+  });
+
+  it('kartica na telefonu: kratak datum, a pun (sa godinom) kad lista prikazuje sve školske godine', () => {
+    const { f, el, h } = napravi([predavanje()]);
+    expect(el.querySelector('.c-meta')!.textContent!.startsWith('14. 10. · ')).toBe(true);
+    h.punDatum.set(true);
+    f.detectChanges();
+    expect(el.querySelector('.c-meta')!.textContent!.startsWith('14. 10. 2025. · ')).toBe(true);
+  });
+
+  it('predmet koji nedostaje je — i u koloni i u kartici, bez izuzetka', () => {
+    const { celije, el } = napravi([predavanje({ predmet: null as unknown as PredavanjeListItem['predmet'] })]);
+    expect(celije()[3]).toBe('—');
+    expect(el.querySelector('.c-meta')!.textContent).toBe('14. 10. · — · GD-2025 · 28/38 +3');
   });
 
   it('klik na red i klik na temu emituju otvori(id) tačno jednom', () => {

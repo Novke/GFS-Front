@@ -6,7 +6,7 @@ const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { lab
 
 /**
  * Rute predavanja koje su već na novim ekranima (deca rute `predavanja` u `app.routes.ts`): lista i "Novo".
- * Detalj `:id` dolazi sa Task 19. `novo` je pre `:id` matchera, pa `/predavanja/novo` nikad ne ide na detalj.
+ * Detalj `:id` je u `app.routes.ts`, posle ovih ruta: `novo` je ispred `:id` matchera, pa `/predavanja/novo` nikad ne ide na detalj.
  */
 export const PREDAVANJA_RUTE: Route[] = [
   {

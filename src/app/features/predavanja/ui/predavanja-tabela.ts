@@ -59,6 +59,8 @@ export class PredavanjaTabela {
   readonly zakljucano = input<readonly ZakljucanaKolona[]>([]);
   /** Aktivni sort `polje,(asc|desc)`; `null` = zaglavlja bez oznake. */
   readonly sort = input<string | null>(null);
+  /** Pun datum (sa godinom) u kartici na telefonu: kad lista prikazuje više školskih godina, kratki datum je dvosmislen. */
+  readonly punDatum = input(false);
   readonly otvori = output<number>();
   /** Novi sort (`polje,(asc|desc)`) posle klika na zaglavlje. */
   readonly sortChange = output<string>();
@@ -88,18 +90,26 @@ export class PredavanjaTabela {
     return prisutniPrikaz(p);
   }
 
+  protected nazivPredmeta(p: PredavanjeListItem): string {
+    return p.predmet?.naziv || '—';
+  }
+
+  protected nazivGrupe(p: PredavanjeListItem): string {
+    return p.grupa?.naziv || '—';
+  }
+
   protected uToku(p: PredavanjeListItem): boolean {
     return p.zavrseno !== true;
   }
 
   /** Red kartice na telefonu: `14. 10. · UPR · GD-2025 · 28/38 +3` (bez zaključanih kolona). */
   protected meta(p: PredavanjeListItem): string {
-    const delovi = [formatDatum(p.datum, p.datum ? 'kratko' : 'pun')];
+    const delovi = [formatDatum(p.datum, this.punDatum() ? 'pun' : 'kratko')];
     if (this.prikazPredmeta()) {
-      delovi.push(p.predmet?.naziv || '—');
+      delovi.push(this.nazivPredmeta(p));
     }
     if (this.prikazGrupe()) {
-      delovi.push(p.grupa?.naziv || '—');
+      delovi.push(this.nazivGrupe(p));
     }
     delovi.push(this.prisutni(p).tekst);
     return delovi.join(' · ');

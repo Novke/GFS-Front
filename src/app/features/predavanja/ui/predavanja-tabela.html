@@ -33,10 +33,10 @@
           </td>
           <td class="samo-desktop mono brojevi-sitno">{{ p.datum | datum }}</td>
           @if (prikazPredmeta()) {
-            <td class="samo-desktop">{{ p.predmet.naziv || '—' }}</td>
+            <td class="samo-desktop">{{ nazivPredmeta(p) }}</td>
           }
           @if (prikazGrupe()) {
-            <td class="samo-desktop brojevi-sitno" [class.nema]="!p.grupa">{{ p.grupa?.naziv || '—' }}</td>
+            <td class="samo-desktop brojevi-sitno" [class.nema]="!p.grupa">{{ nazivGrupe(p) }}</td>
           }
           <td class="samo-desktop brojevi-sitno">
             @let pr = prisutni(p);

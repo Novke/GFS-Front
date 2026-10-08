@@ -97,13 +97,14 @@ export class PredavanjaApi {
   }
 
   /**
-   * Poslednje predavanje (najveći `rb`) za par predmet + grupa; prazna strana kad ga nema. Jedan zahtev `pretraga` sa `size=1&sort=rb,desc`.
-   * Greška je tiha, pozivalac je prikazuje sam.
+   * Predavanje sa najvećim `rb` (prazna strana kad predavanja nema): jedan zahtev `pretraga` sa `size=1&sort=rb,desc`,
+   * bez filtera. Server novom predavanju dodeljuje `max(rb) + 1` preko svih predavanja (`findPoslednjiRB`, ne po paru
+   * predmet + grupa), pa je to i predlog rednog broja. Greška je tiha, pozivalac je prikazuje sam.
    */
-  poslednjeZaPar(predmetId: number, grupaId: number): Observable<Strana<PredavanjeListItem>> {
+  poslednjiRb(): Observable<Strana<PredavanjeListItem>> {
     return this.pretraga(
       {
-        filteri: { predmet: predmetId, grupa: grupaId, godina: null, status: null, q: null, od: null, do: null },
+        filteri: { predmet: null, grupa: null, godina: null, status: null, q: null, od: null, do: null },
         sort: 'rb,desc',
         strana: 1,
         velicina: 1,

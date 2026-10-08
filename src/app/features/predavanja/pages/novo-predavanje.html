@@ -32,7 +32,7 @@
   </mat-form-field>
 
   <p class="predlog" aria-live="polite">
-    @if (sledeciRb.value(); as rb) {
+    @if (sledeciRb(); as rb) {
       <span data-rb>Biće predavanje broj <strong class="mono">{{ rb }}</strong> · danas, {{ danas }}</span>
     } @else {
       <span>Datum: danas, {{ danas }}</span>
