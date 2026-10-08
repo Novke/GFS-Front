@@ -35,24 +35,35 @@ describe('PredavanjeProjektor', () => {
     vi.useRealTimers();
   });
 
+  const grupaStudenata = (ids: number[]) => ({
+    content: ids.map(id => ({ id, ime: 'X', prezime: 'Y', indeks: `GD${id}`, godina: 2025, email: null, brojTelefona: null, grupa: null })),
+    page: { size: 100, number: 0, totalElements: ids.length, totalPages: 1 },
+  });
+
   it('tema, "Predavanje N · Predmet · Grupa" i broj prisutnih bez imena; osvežava se na 10 s', async () => {
     const f = TestBed.createComponent(PredavanjeProjektor);
     f.componentRef.setInput('id', '5');
     f.detectChanges();
     await vi.advanceTimersByTimeAsync(0);
     http.expectOne('api/predavanja/5').flush(predavanje([akt(1, 'Ana'), akt(2, 'Marko')]));
+    // studenti grupe jednom (za isti broj kao u zaglavlju: iz grupe + stariji)
+    http.expectOne(r => r.url === 'api/studenti/pretraga' && r.params.get('grupaId') === '4').flush(grupaStudenata([1, 2, 3, 4]));
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('h1')?.textContent).toContain('Petlje i uslovi');
     expect(el.textContent).toContain('Predavanje 12 · Uvod u primenu računara · GD-2025');
     expect(el.querySelector('[data-prisutnih] .vrednost')?.textContent?.trim()).toBe('2');
+    expect(el.querySelector('[data-prisutnih] .labela')?.textContent?.trim()).toBe('prisutno od 4');
+    expect(el.querySelector('[data-stariji]')).toBeNull();
     expect(el.textContent).not.toContain('Ana');
     expect(el.textContent).not.toContain('GD1');
 
     await vi.advanceTimersByTimeAsync(OSVEZAVANJE_MS);
-    http.expectOne('api/predavanja/5').flush(predavanje([akt(1, 'Ana'), akt(2, 'Marko'), akt(3, 'Iva')]));
+    // student 9 nije u grupi: stariji, kao "+1" (isto kao zaglavlje detalja)
+    http.expectOne('api/predavanja/5').flush(predavanje([akt(1, 'Ana'), akt(2, 'Marko'), akt(3, 'Iva'), akt(9, 'Tamara')]));
     f.detectChanges();
     expect(el.querySelector('[data-prisutnih] .vrednost')?.textContent?.trim()).toBe('3');
+    expect(el.querySelector('[data-stariji]')?.textContent?.trim()).toBe('+1 stariji student');
 
     // neuspelo osvežavanje ostavlja poslednji broj
     await vi.advanceTimersByTimeAsync(OSVEZAVANJE_MS);

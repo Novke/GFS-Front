@@ -71,10 +71,39 @@ interface PredavanjeState {
   _grupaIds: number[];
 }
 
-/** Jedan klik u redu studenta: cilj i stanje pre klika (za "Poništi"). */
+/** Jedan klik u redu studenta: cilj, stanje pre klika (za "Poništi") i napomena koju uklanjanje prisustva briše. */
 interface Korak {
   cilj: StanjeStudenta;
   prethodno: StanjeStudenta;
+  napomena: string | null;
+}
+
+/**
+ * Knjigovodstvo jednog učitanog predavanja: red po studentu, broj koraka u redu i stanje koje je server potvrdio.
+ * Posle napuštanja ekrana ili učitavanja drugog predavanja sesija postaje neaktivna: redovi se **i dalje prazne do servera**
+ * (klik koji je korisnik video se ne gubi; HttpClient je u root injektoru), ali više ne menjaju stanje store-a niti prikazuju
+ * uspeh i "Poništi" (greška se i dalje javlja).
+ */
+interface Sesija {
+  pId: number;
+  aktivna: boolean;
+  redovi: Map<number, Subject<Korak>>;
+  naCekanju: Map<number, number>;
+  potvrdjeno: Map<number, StanjeStudenta>;
+}
+
+/** Sesija prestaje da menja stanje; redovi se završavaju tek pošto pošalju sve korake. */
+function zatvoriSesijuStore(r: { sesija: Sesija | null }): void {
+  const ses = r.sesija;
+  if (ses) {
+    ses.aktivna = false;
+    ses.redovi.forEach(red => red.complete());
+  }
+  r.sesija = null;
+}
+
+function novaSesija(pId: number): Sesija {
+  return { pId, aktivna: true, redovi: new Map(), naCekanju: new Map(), potvrdjeno: new Map() };
 }
 
 const indeksi = new Intl.Collator('sr-Latn', { numeric: true, sensitivity: 'base' });
@@ -90,8 +119,8 @@ function porukaGreske(e: unknown): string {
 const imeStudenta = (s: { ime: string | null; prezime: string | null } | undefined): string =>
   s ? [s.ime, s.prezime].filter(Boolean).join(' ') || 'Student' : 'Student';
 
-/** Velika grupa: sve strane studenata (100 po strani), redom. */
-function sviStudentiGrupe(api: StudentiApi, grupaId: number): Observable<StudentListItem[]> {
+/** Velika grupa: sve strane studenata (100 po strani), redom. Koristi i projektor (isti broj "iz grupe" kao zaglavlje). */
+export function sviStudentiGrupe(api: StudentiApi, grupaId: number): Observable<StudentListItem[]> {
   const strana = (page: number) => api.pretraga({ grupaId, page, size: 100 }, { tiho: true });
   return strana(0).pipe(
     expand(s => (s.page.number + 1 < s.page.totalPages ? strana(s.page.number + 1) : EMPTY)),
@@ -119,13 +148,8 @@ export const PredavanjeStore = signalStore(
     _api: inject(PredavanjaApi),
     _studentiApi: inject(StudentiApi),
     _obavestenja: inject(NotificationStore),
-    _redovi: new Map<number, Subject<Korak>>(),
-    /** Promenljivo knjigovodstvo (nije stanje): pretplate redova, učitavanje u toku, uništen store. */
-    _r: { veze: new Subscription(), ucitavanje: null as Subscription | null, unisten: false },
-    /** Koraci u redu po studentu (uključujući onaj koji se izvršava). */
-    _naCekanju: new Map<number, number>(),
-    /** Poslednje stanje koje je server potvrdio, po studentu. */
-    _potvrdjeno: new Map<number, StanjeStudenta>(),
+    /** Promenljivo knjigovodstvo (nije stanje): sesija tekućeg predavanja, učitavanje u toku, uništen store. */
+    _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
   })),
   withComputed(({ predavanje, studenti, _grupaIds }) => ({
     zavrseno: computed(() => predavanje()?.zavrseno === true),
@@ -173,12 +197,15 @@ export const PredavanjeStore = signalStore(
   })),
   withMethods(store => {
     const id = () => store.predavanje()?.id ?? null;
-    const grupaPoruka = () => `predavanje-${id()}`;
+    const aktivnaZa = (ses: Sesija) => ses.aktivna && !store._r.unisten && store.predavanje()?.id === ses.pId;
 
     /** Odgovor servera: potvrđeno stanje i aktivnost **samo ovog** studenta (ostali možda imaju svoje zahteve u toku). */
-    function uskladi(sId: number, det: PredavanjeDetails): void {
+    function uskladi(ses: Sesija, sId: number, det: PredavanjeDetails): void {
       const aktivnost = det.aktivnosti?.find(a => a.student?.id === sId);
-      store._potvrdjeno.set(sId, stanjeIzAktivnosti(aktivnost));
+      ses.potvrdjeno.set(sId, stanjeIzAktivnosti(aktivnost));
+      if (!aktivnaZa(ses)) {
+        return;
+      }
       patchState(store, s => {
         if (!s.predavanje) {
           return {};
@@ -211,55 +238,96 @@ export const PredavanjeStore = signalStore(
       return koraci;
     }
 
-    function zavrsiKorak(sId: number, korak: Korak, greska: unknown): void {
-      const ostalo = (store._naCekanju.get(sId) ?? 1) - 1;
-      store._naCekanju.set(sId, ostalo);
+    /**
+     * Posle greške (red prazan): ponovo čita predavanje i usaglašava tog studenta, za slučaj da je server izmenu ipak
+     * upisao a odgovor se izgubio (inače bi svaki sledeći klik krenuo od pogrešnog stanja i dobijao 400).
+     */
+    function osveziStudenta(ses: Sesija, sId: number): void {
+      store._api.get(ses.pId, { tiho: true }).subscribe({
+        next: det => {
+          if (!aktivnaZa(ses) || (ses.naCekanju.get(sId) ?? 0) > 0) {
+            return; // u međuvremenu novi klik: on određuje stanje
+          }
+          uskladi(ses, sId, det);
+          const potvrdjeno = ses.potvrdjeno.get(sId) ?? 'odsutan';
+          patchState(store, s => ({ stanjePoStudentu: { ...s.stanjePoStudentu, [sId]: potvrdjeno } }));
+        },
+        error: () => undefined, // ostaje poslednje potvrđeno
+      });
+    }
+
+    function porukaUspeha(ime: string, korak: Korak): string {
+      return korak.cilj === 'odsutan' && korak.napomena
+        ? `${ime}: odsutan · napomena je obrisana i ne vraća se poništavanjem`
+        : `${ime}: ${korak.cilj}`;
+    }
+
+    function zavrsiKorak(ses: Sesija, sId: number, korak: Korak, greska: unknown): void {
+      const ostalo = (ses.naCekanju.get(sId) ?? 1) - 1;
+      ses.naCekanju.set(sId, ostalo);
       if (ostalo > 0) {
         return; // noviji klik u redu: on određuje konačno stanje
       }
-      const potvrdjeno = store._potvrdjeno.get(sId) ?? 'odsutan';
+      const ime = imeStudenta(store._poStudentu().get(sId));
+      if (!aktivnaZa(ses)) {
+        // ekran napušten: stanje se više ne prikazuje, ali greška ne sme da prođe nezapaženo
+        if (greska !== null) {
+          store._obavestenja.greska(`${ime}: ${porukaGreske(greska)}`);
+        }
+        return;
+      }
+      const potvrdjeno = ses.potvrdjeno.get(sId) ?? 'odsutan';
       patchState(store, s => ({
         stanjePoStudentu: { ...s.stanjePoStudentu, [sId]: potvrdjeno },
         cekanje: { ...s.cekanje, [sId]: false },
       }));
-      const ime = imeStudenta(store._poStudentu().get(sId));
       if (greska !== null) {
         store._obavestenja.greska(`${ime}: ${porukaGreske(greska)}`);
+        osveziStudenta(ses, sId);
       } else if (potvrdjeno === korak.cilj && korak.prethodno !== korak.cilj) {
         store._obavestenja.uspeh(
-          `${ime}: ${korak.cilj}`,
-          { label: 'Poništi', run: () => postavi(sId, korak.prethodno) },
-          { grupa: grupaPoruka() },
+          porukaUspeha(ime, korak),
+          {
+            label: 'Poništi',
+            // "Poništi" važi samo za ovo predavanje, dok je ekran otvoren
+            run: () => {
+              if (aktivnaZa(ses)) {
+                postavi(sId, korak.prethodno);
+              }
+            },
+          },
+          { grupa: `predavanje-${ses.pId}` },
         );
       }
     }
 
-    function izvrsi(pId: number, sId: number, korak: Korak): Observable<unknown> {
+    function izvrsi(ses: Sesija, sId: number, korak: Korak): Observable<unknown> {
       return defer(() => {
-        if ((store._naCekanju.get(sId) ?? 0) > 1) {
+        if ((ses.naCekanju.get(sId) ?? 0) > 1) {
           // nadjačan novijim klikom: preskače se (noviji prelaz kreće od potvrđenog stanja)
-          store._naCekanju.set(sId, (store._naCekanju.get(sId) ?? 1) - 1);
+          ses.naCekanju.set(sId, (ses.naCekanju.get(sId) ?? 1) - 1);
           return EMPTY;
         }
-        const od = store._potvrdjeno.get(sId) ?? 'odsutan';
-        const zahtevi = prelaz(pId, sId, od, korak.cilj).map(z => defer(z).pipe(tap(det => uskladi(sId, det))));
+        const od = ses.potvrdjeno.get(sId) ?? 'odsutan';
+        const zahtevi = prelaz(ses.pId, sId, od, korak.cilj).map(z => defer(z).pipe(tap(det => uskladi(ses, sId, det))));
         return concat(...zahtevi).pipe(
           reduce(() => null, null),
-          tap(() => zavrsiKorak(sId, korak, null)),
+          tap(() => zavrsiKorak(ses, sId, korak, null)),
           catchError((e: unknown) => {
-            zavrsiKorak(sId, korak, e);
+            zavrsiKorak(ses, sId, korak, e);
             return EMPTY;
           }),
         );
       });
     }
 
-    function red(pId: number, sId: number): Subject<Korak> {
-      let r = store._redovi.get(sId);
+    /** Red studenta; pretplata se namerno ne otkazuje: kad se sesija zatvori, red se završi tek kad isprazni korake. */
+    function red(ses: Sesija, sId: number): Subject<Korak> {
+      let r = ses.redovi.get(sId);
       if (!r) {
         const novi = new Subject<Korak>();
-        store._r.veze.add(novi.pipe(concatMap(k => izvrsi(pId, sId, k))).subscribe());
-        store._redovi.set(sId, novi);
+        novi.pipe(concatMap(k => izvrsi(ses, sId, k))).subscribe();
+        ses.redovi.set(sId, novi);
         r = novi;
       }
       return r;
@@ -267,29 +335,25 @@ export const PredavanjeStore = signalStore(
 
     function postavi(sId: number, cilj: StanjeStudenta): void {
       const p = store.predavanje();
-      if (store._r.unisten || !p || p.zavrseno === true || !store._poStudentu().has(sId)) {
+      const ses = store._r.sesija;
+      if (!ses || !p || !aktivnaZa(ses) || p.zavrseno === true || !store._poStudentu().has(sId)) {
         return;
       }
       const prethodno = store.stanjePoStudentu()[sId] ?? 'odsutan';
-      const naCekanju = store._naCekanju.get(sId) ?? 0;
+      const naCekanju = ses.naCekanju.get(sId) ?? 0;
       if (prethodno === cilj && naCekanju === 0) {
         return;
       }
+      const napomena = cilj === 'odsutan' ? (p.aktivnosti.find(a => a.student?.id === sId)?.napomene ?? null) : null;
       patchState(store, s => ({
         stanjePoStudentu: { ...s.stanjePoStudentu, [sId]: cilj },
         cekanje: { ...s.cekanje, [sId]: true },
       }));
-      store._naCekanju.set(sId, naCekanju + 1);
-      red(p.id, sId).next({ cilj, prethodno });
+      ses.naCekanju.set(sId, naCekanju + 1);
+      red(ses, sId).next({ cilj, prethodno, napomena });
     }
 
-    function resetujRedove(): void {
-      store._r.veze.unsubscribe();
-      store._r.veze = new Subscription();
-      store._redovi.clear();
-      store._naCekanju.clear();
-      store._potvrdjeno.clear();
-    }
+    const zatvoriSesiju = () => zatvoriSesijuStore(store._r);
 
     /**
      * Zabeleženi studenti van grupe (stariji) imaju u `PredavanjeDetails` samo ime i indeks; grupa i godina upisa
@@ -312,7 +376,7 @@ export const PredavanjeStore = signalStore(
     }
 
     /** Postavlja predavanje i pločice; studenti sa aktivnošću koji nisu u grupi dobijaju pločicu (stariji). */
-    function postaviPodatke(predavanje: PredavanjeDetails, grupa: StudentListItem[], vanGrupe: StudentListItem[]): void {
+    function postaviPodatke(ses: Sesija, predavanje: PredavanjeDetails, grupa: StudentListItem[], vanGrupe: StudentListItem[]): void {
       const aktivnosti = predavanje.aktivnosti ?? [];
       const poId = new Map(grupa.map(s => [s.id, s]));
       const dopunjeni = new Map(vanGrupe.map(s => [s.id, s]));
@@ -326,7 +390,7 @@ export const PredavanjeStore = signalStore(
       for (const s of studenti) {
         const st = stanjeIzAktivnosti(aktivnosti.find(a => a.student?.id === s.id));
         stanja[s.id] = st;
-        store._potvrdjeno.set(s.id, st);
+        ses.potvrdjeno.set(s.id, st);
       }
       patchState(
         store,
@@ -353,7 +417,9 @@ export const PredavanjeStore = signalStore(
     return {
       ucitaj(pId: number): void {
         store._r.ucitavanje?.unsubscribe();
-        resetujRedove();
+        zatvoriSesiju();
+        const ses = novaSesija(pId);
+        store._r.sesija = ses;
         patchState(store, { predavanje: null, studenti: [], stanjePoStudentu: {}, cekanje: {}, _grupaIds: [] }, setLoading());
         store._r.ucitavanje = store._api
           .get(pId, { tiho: true })
@@ -365,7 +431,7 @@ export const PredavanjeStore = signalStore(
             ),
           )
           .subscribe({
-            next: ({ p, grupa, vanGrupe }) => postaviPodatke(p, grupa, vanGrupe),
+            next: ({ p, grupa, vanGrupe }) => postaviPodatke(ses, p, grupa, vanGrupe),
             error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
           });
       },
@@ -450,7 +516,9 @@ export const PredavanjeStore = signalStore(
             map(det => {
               zaglavljeIz({ ...det, zavrseno: true });
               // ista grupa: sklanja "Poništi" poslednje izmene, koje na završenom predavanju više ne radi
-              store._obavestenja.uspeh('Predavanje je završeno.', undefined, { grupa: grupaPoruka() });
+              store._obavestenja.uspeh('Predavanje je završeno.', undefined, { grupa: `predavanje-${pId}` });
+              // backend `posecenost` je read-modify-write, a zahtevi po studentima idu paralelno: prebroji (tiho)
+              store._api.posecenost(pId, { tiho: true }).subscribe({ error: () => undefined });
               return true;
             }),
             catchError(() => of(false)),
@@ -480,7 +548,8 @@ export const PredavanjeStore = signalStore(
     onDestroy(store) {
       store._r.unisten = true;
       store._r.ucitavanje?.unsubscribe();
-      store._r.veze.unsubscribe();
+      store._r.ucitavanje = null;
+      zatvoriSesijuStore(store._r);
     },
   }),
 );

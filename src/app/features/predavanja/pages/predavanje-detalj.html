@@ -16,8 +16,8 @@
         <li class="l-zvezdica"><mat-icon svgIcon="star" aria-hidden="true" />zvezdica</li>
       </ul>
       <div class="akcije">
-        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" data-projektor>
-          <mat-icon svgIcon="co_present" aria-hidden="true" />Projektor
+        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" target="_blank" rel="noopener" data-projektor>
+          <mat-icon svgIcon="co_present" aria-hidden="true" />Projektor<span class="sr-only"> (otvara se u novoj kartici)</span>
         </a>
         <button matButton="filled" type="button" data-zavrsi (click)="zavrsi()">
           <mat-icon svgIcon="check" aria-hidden="true" />Završi predavanje

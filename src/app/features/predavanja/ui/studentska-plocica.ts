@@ -20,7 +20,7 @@ const OPIS: Record<StanjeStudenta, string> = {
 
 /**
  * Pločica studenta na live predavanju (spec 4): klik kruži stanja (`klik`), meni (⋮, desni klik, dugo držanje) nudi
- * napomenu i "Ukloni prisustvo". Stanje se vidi i bez boje: isprekidan okvir = odsutan, ispuna = prisutan, ikone
+ * napomenu i "Ukloni prisustvo" (onemogućeno dok izmena čeka server). Stanje se vidi i bez boje: isprekidan okvir = odsutan, ispuna = prisutan, ikone
  * `task_alt` (zadatak) i `star` (zvezdica), tekst za čitač ekrana. `samoCitanje` (završeno predavanje): bez klika i menija.
  */
 @Component({
@@ -49,10 +49,10 @@ const OPIS: Record<StanjeStudenta, string> = {
         <mat-icon svgIcon="more_vert" />
       </button>
       <mat-menu #meni="matMenu">
-        <button mat-menu-item type="button" data-napomena [disabled]="stanje() === 'odsutan'" (click)="napomena.emit()">
+        <button mat-menu-item type="button" data-napomena [disabled]="stanje() === 'odsutan' || cekanje()" (click)="napomena.emit()">
           <mat-icon svgIcon="sticky_note_2" />Napomena
         </button>
-        <button mat-menu-item type="button" data-ukloni [disabled]="stanje() === 'odsutan'" (click)="ukloni.emit()">
+        <button mat-menu-item type="button" data-ukloni [disabled]="stanje() === 'odsutan' || cekanje()" (click)="ukloni.emit()">
           <mat-icon svgIcon="close" />Ukloni prisustvo
         </button>
       </mat-menu>

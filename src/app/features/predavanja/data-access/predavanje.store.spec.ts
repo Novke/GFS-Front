@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
+import { createEnvironmentInjector, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -245,6 +246,95 @@ describe('PredavanjeStore', () => {
     expect(store.cekanje()[1]).toBe(false);
     expect(poruke.filter(p => p.tip === 'greska').map(p => p.tekst)).toEqual(['Ana Radić: Student nije dodat na predavanje!']);
     expect(poruke.some(p => p.tip === 'uspeh')).toBe(false);
+    // posle greške se predavanje ponovo čita (tiho) i student usaglašava sa serverom
+    const ponovo = http.expectOne('api/predavanja/5');
+    expect(ponovo.request.context.get(LOCAL_ERRORS)).toBe(true);
+    ponovo.flush(server.details());
+    expect(store.stanjePoStudentu()[1]).toBe('prisutan');
+  });
+
+  it('izmena upisana a odgovor izgubljen: ponovno čitanje posle greške vraća pravo stanje (nema zaglavljivanja na 400)', () => {
+    ucitaj();
+    store.klik(1); // -> prisutan
+    const [req] = zahteviUToku();
+    server.postavi(1, 'PRISUSTVO'); // server je upisao...
+    req.flush(null, { status: 504, statusText: 'Gateway Timeout' }); // ...ali odgovor nije stigao
+    expect(store.stanjePoStudentu()[1]).toBe('odsutan');
+    http.expectOne('api/predavanja/5').flush(server.details());
+    expect(store.stanjePoStudentu()[1]).toBe('prisutan');
+    store.klik(1); // sledeći klik kreće od pravog stanja: samo PATCH zadatak
+    expect(odgovaraj()).toEqual(['PATCH zadatak 1']);
+    expect(store.stanjePoStudentu()[1]).toBe('zadatak');
+  });
+
+  it('greška u koraku dok noviji klik čeka: sledeći korak kreće od potvrđenog stanja, konačno je poslednji klik', () => {
+    ucitaj();
+    store.klik(1); // -> prisutan (poslato)
+    store.klik(1); // -> zadatak (u redu)
+    store.klik(1); // -> zvezdica (u redu)
+    zahteviUToku()[0].flush({ reason: 'Privremeno nedostupno.' }, { status: 400, statusText: 'Bad Request' });
+    expect(store.stanjePoStudentu()[1]).toBe('zvezdica'); // noviji klik u redu: bez vraćanja i bez poruke o grešci
+    expect(poruke.some(p => p.tip === 'greska')).toBe(false);
+    expect(odgovaraj()).toEqual(['PATCH prisustvo 1', 'PATCH zvezdica 1']); // od potvrđenog `odsutan`
+    expect(store.stanjePoStudentu()[1]).toBe('zvezdica');
+    expect(server.tipovi.get(1)).toBe('SA_ZVEZDICOM');
+    expect(store.cekanje()[1]).toBe(false);
+  });
+
+  it('napuštanje ekrana: koraci iz reda i dalje stižu do servera, bez uspeh-poruka i bez menjanja stanja', () => {
+    const inj = createEnvironmentInjector([PredavanjeStore], TestBed.inject(EnvironmentInjector));
+    const lokalni = inj.get(PredavanjeStore);
+    lokalni.ucitaj(5);
+    http.expectOne('api/predavanja/5').flush(server.details());
+    http.expectOne(r => r.url === 'api/studenti/pretraga').flush(strana([MARKO, ANA, JOVANA]));
+    lokalni.klik(1);
+    lokalni.klik(1);
+    lokalni.klik(1); // korisnik vidi zvezdicu, pa odmah ode na drugi ekran
+    const [prvi] = zahteviUToku();
+    inj.destroy();
+
+    expect(prvi.cancelled).toBe(false); // zahtev u toku se ne prekida
+    const izvrseno = [server.odgovori(prvi), ...odgovaraj()];
+    expect(izvrseno).toEqual(['PATCH prisustvo 1', 'PATCH zvezdica 1']);
+    expect(server.tipovi.get(1)).toBe('SA_ZVEZDICOM');
+    expect(poruke.filter(p => p.tip === 'uspeh')).toEqual([]);
+  });
+
+  it('napuštanje ekrana: greška posle napuštanja se i dalje javlja', () => {
+    const inj = createEnvironmentInjector([PredavanjeStore], TestBed.inject(EnvironmentInjector));
+    const lokalni = inj.get(PredavanjeStore);
+    lokalni.ucitaj(5);
+    http.expectOne('api/predavanja/5').flush(server.details());
+    http.expectOne(r => r.url === 'api/studenti/pretraga').flush(strana([ANA]));
+    lokalni.klik(1);
+    inj.destroy();
+    zahteviUToku()[0].flush({ reason: 'Odbijeno.' }, { status: 400, statusText: 'Bad Request' });
+    expect(poruke.map(p => p.tekst)).toEqual(['Ana Radić: Odbijeno.']);
+  });
+
+  it('ponovno učitavanje (drugi :id): stari red se isprazni do servera, a "Poništi" starog predavanja ne radi ništa', () => {
+    ucitaj();
+    store.klik(1);
+    odgovaraj();
+    const ponisti = poruke.find(p => p.tip === 'uspeh')!.akcija!;
+    store.klik(2); // poslato, odgovor još nije stigao
+    const [uToku] = zahteviUToku();
+    ucitaj(); // komponenta ponovo upotrebljena (isto ili drugo predavanje)
+    server.odgovori(uToku);
+    expect(server.tipovi.get(2)).toBe('PRISUSTVO');
+    expect(store.stanjePoStudentu()[2]).toBe('odsutan'); // stari odgovor ne dira novo učitano stanje
+    ponisti.run();
+    expect(zahteviUToku()).toHaveLength(0);
+  });
+
+  it('"Poništi" posle uklanjanja prisustva kaže da se napomena ne vraća', () => {
+    server.postavi(1, 'PRISUSTVO');
+    ucitaj();
+    store.napomena(1, 'Kasnio');
+    http.expectOne('api/predavanja/aktivnost/100').flush({ ...server.details().aktivnosti[0], napomene: 'Kasnio' });
+    store.ukloni(1);
+    odgovaraj();
+    expect(poruke.find(p => p.akcija)?.tekst).toBe('Ana Radić: odsutan · napomena je obrisana i ne vraća se poništavanjem');
   });
 
   it('greška usred višekoračnog prelaza: stanje je ono što je server potvrdio', () => {
@@ -255,6 +345,8 @@ describe('PredavanjeStore', () => {
     server.odgovori(zahteviUToku()[0]); // DELETE prisustvo
     server.odgovori(zahteviUToku()[0]); // PATCH prisustvo
     zahteviUToku()[0].flush({ reason: 'Odbijeno.' }, { status: 400, statusText: 'Bad Request' }); // PATCH zvezdica
+    expect(store.stanjePoStudentu()[1]).toBe('prisutan');
+    http.expectOne('api/predavanja/5').flush(server.details());
     expect(store.stanjePoStudentu()[1]).toBe('prisutan');
     expect(server.tipovi.get(1)).toBe('PRISUSTVO');
   });
@@ -333,6 +425,12 @@ describe('PredavanjeStore', () => {
     expect(patch.request.method).toBe('PATCH');
     patch.flush({ ...server.details(), zavrseno: true });
     expect(await kraj).toBe(true);
+    // prebrojavanje posećenosti posle završetka, tiho
+    const posecenost = http.expectOne('api/predavanja/5/posecenost');
+    expect(posecenost.request.method).toBe('PUT');
+    expect(posecenost.request.context.get(LOCAL_ERRORS)).toBe(true);
+    posecenost.flush(null, { status: 500, statusText: 'Server Error' });
+    expect(poruke.some(p => p.tip === 'greska')).toBe(false);
     expect(store.zavrseno()).toBe(true);
     store.klik(1);
     expect(zahteviUToku()).toHaveLength(0);
