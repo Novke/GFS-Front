@@ -43,11 +43,12 @@ const ISPOD: ConnectedPosition[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span class="chip" [class.aktivan]="opis() !== null" cdkOverlayOrigin #izvor="cdkOverlayOrigin">
-      <button #dugme type="button" data-otvori aria-haspopup="dialog" [attr.aria-expanded]="otvoren()" (click)="otvori()">
+      <button #dugme type="button" data-otvori aria-haspopup="dialog" [attr.aria-expanded]="otvoren()" (click)="otvori()"
+        [attr.title]="opis() ? labela() + ': ' + opis() : null">
         @if (opis(); as o) {
-          {{ labela() }}: {{ o }}
+          <span class="chip-tekst">{{ labela() }}: {{ o }}</span>
         } @else {
-          {{ labela() }}
+          <span class="chip-tekst">{{ labela() }}</span>
           <mat-icon svgIcon="expand_more" aria-hidden="true" />
         }
       </button>

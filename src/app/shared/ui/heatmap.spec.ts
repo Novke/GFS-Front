@@ -59,4 +59,28 @@ describe('Heatmap', () => {
     const legenda = [...el.querySelectorAll('.legenda li')].map(l => l.textContent!.trim());
     expect(legenda).toEqual(['odsutan', 'prisutan', 'zadatak', 'zvezdica']);
   });
+
+  it('vrednost van 0-3 ili nedostajuća (rupa u podacima) prikazuje se kao odsutan, bez izuzetka', () => {
+    const f = TestBed.createComponent(Host);
+    f.componentInstance.vrednost = (r, k) =>
+      (r.kljuc === 1 ? (k.kljuc === 10 ? 7 : undefined) : Number.NaN) as unknown as StanjePrisustva;
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const stanja = [...el.querySelectorAll('tbody td.celija .sr-only')].map(s => s.textContent!.trim());
+    expect(stanja).toEqual(['odsutan', 'odsutan', 'odsutan', 'odsutan']);
+    expect([...el.querySelectorAll('tbody td.ukupno')].map(t => t.textContent!.trim())).toEqual(['0/2', '0/2']);
+  });
+
+  it('bez redova ili bez kolona: "Nema podataka.", bez tabele i legende', () => {
+    for (const [redovi, kolone] of [[[], KOLONE], [REDOVI, []]] as [HeatmapRed[], HeatmapKolona[]][]) {
+      const f = TestBed.createComponent(Host);
+      f.componentInstance.redovi = redovi;
+      f.componentInstance.kolone = kolone;
+      f.detectChanges();
+      const el = f.nativeElement as HTMLElement;
+      expect(el.textContent).toContain('Nema podataka.');
+      expect(el.querySelector('table')).toBeNull();
+      expect(el.querySelector('.legenda')).toBeNull();
+    }
+  });
 });

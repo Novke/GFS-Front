@@ -28,6 +28,15 @@ describe('školska godina', () => {
     expect(skolskaGodinaZa('2026-10-01T00:30:00')).toBe(2026);
   });
 
+  it('skolskaGodinaZa bez datuma ili sa neispravnim datumom daje null (bez izuzetka)', () => {
+    expect(skolskaGodinaZa(null)).toBeNull();
+    expect(skolskaGodinaZa(undefined)).toBeNull();
+    expect(skolskaGodinaZa('')).toBeNull();
+    expect(skolskaGodinaZa('2025-02-30')).toBeNull();
+    expect(skolskaGodinaZa(new Date(Number.NaN))).toBeNull();
+    expect(formatSkolskaGodina(skolskaGodinaZa(null))).toBe('—');
+  });
+
   it('tekucaSkolskaGodina prima "sada" (za testove), podrazumevano današnji dan', () => {
     expect(tekucaSkolskaGodina(new Date(2026, 9, 8))).toBe(2026);
     expect(tekucaSkolskaGodina(new Date(2026, 4, 8))).toBe(2025);

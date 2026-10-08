@@ -83,6 +83,20 @@ describe('FilterBar', () => {
     expect(h.promena).toHaveBeenCalledExactlyOnceWith('petlje');
   });
 
+  it('razmak na kraju preživi pauzu: roditelj vrati normalizovanu vrednost, polje ostaje kako je otkucano', () => {
+    vi.useFakeTimers();
+    const { f, polje, kucaj, h } = napravi();
+    kucaj('Ivana ');
+    vi.advanceTimersByTime(DEBOUNCE_PRETRAGE_MS);
+    expect(h.promena).toHaveBeenCalledExactlyOnceWith('Ivana');
+    h.pretraga.set('Ivana');
+    f.detectChanges();
+    expect(polje()!.value).toBe('Ivana ');
+    kucaj('Ivana Kostić');
+    vi.advanceTimersByTime(DEBOUNCE_PRETRAGE_MS);
+    expect(h.promena).toHaveBeenLastCalledWith('Ivana Kostić');
+  });
+
   it('bez ulaza pretraga (undefined) nema polja za pretragu', () => {
     const { f, polje, h } = napravi();
     h.pretraga.set(undefined);

@@ -2,12 +2,13 @@ import { parseDatum } from './datum.pipe';
 
 /**
  * Školska godina `Y` traje od 1. 10. `Y` do 30. 9. `Y+1` (isto kao backend `utility/SkolskaGodina`); prikaz `2025/26`.
- * Filteri lista šalju godinu kao broj (`godina=2025`).
+ * Filteri lista šalju godinu kao broj (`godina=2025`). Bez datuma ili sa neispravnim datumom `null` (stari redovi bez
+ * datuma, Review Focus 4); `formatSkolskaGodina(null)` je `—`.
  */
-export function skolskaGodinaZa(datum: Date | string): number {
+export function skolskaGodinaZa(datum: Date | string | null | undefined): number | null {
   const d = parseDatum(datum);
   if (!d) {
-    throw new Error(`skolskaGodinaZa: neispravan datum "${String(datum)}".`);
+    return null;
   }
   // getMonth(): oktobar je 9
   return d.getMonth() >= 9 ? d.getFullYear() : d.getFullYear() - 1;
@@ -15,7 +16,8 @@ export function skolskaGodinaZa(datum: Date | string): number {
 
 /** Školska godina kojoj pripada `sada` (podrazumevano današnji dan po satu pregledača). */
 export function tekucaSkolskaGodina(sada: Date = new Date()): number {
-  return skolskaGodinaZa(sada);
+  const d = Number.isNaN(sada.getTime()) ? new Date() : sada; // neispravan `sada` -> sat pregledača
+  return d.getMonth() >= 9 ? d.getFullYear() : d.getFullYear() - 1;
 }
 
 /** `2025` -> `2025/26`; bez godine `—`. */

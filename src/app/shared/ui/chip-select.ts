@@ -19,14 +19,14 @@ export interface ChipOpcija<T> {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (zakljucano()) {
-      <span class="chip zakljucan">{{ labela() }}: {{ labelaVrednosti() ?? '—' }}</span>
+      <span class="chip zakljucan" [attr.title]="punTekst()"><span class="chip-tekst">{{ punTekst() }}</span></span>
     } @else {
       <span class="chip" [class.aktivan]="aktivan()">
-        <button type="button" data-otvori [matMenuTriggerFor]="meni" aria-haspopup="menu">
+        <button type="button" data-otvori [matMenuTriggerFor]="meni" aria-haspopup="menu" [attr.title]="aktivan() ? punTekst() : null">
           @if (aktivan()) {
-            {{ labela() }}: {{ labelaVrednosti() ?? '—' }}
+            <span class="chip-tekst">{{ punTekst() }}</span>
           } @else {
-            {{ labela() }}
+            <span class="chip-tekst">{{ labela() }}</span>
             <mat-icon svgIcon="expand_more" aria-hidden="true" />
           }
         </button>
@@ -68,6 +68,8 @@ export class ChipSelect<T> {
 
   protected readonly aktivan = computed(() => this.vrednost() !== null && this.vrednost() !== undefined);
   protected readonly labelaVrednosti = computed(() => this.opcije().find(o => o.vrednost === this.vrednost())?.labela ?? null);
+  /** `Labela: Vrednost` (i za `title`, jer se duga vrednost na uskom ekranu skraćuje sa …). */
+  protected readonly punTekst = computed(() => `${this.labela()}: ${this.labelaVrednosti() ?? '—'}`);
 
   protected izaberi(v: T | null): void {
     if (v !== (this.vrednost() ?? null)) {

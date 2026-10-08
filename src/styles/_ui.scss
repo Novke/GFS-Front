@@ -5,6 +5,8 @@
 .chip {
   display: inline-flex;
   align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -34,6 +36,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
     margin: 0;
     padding: 0 10px;
     border: 0;
@@ -46,13 +49,22 @@
     &:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
   }
 
+  // Duga vrednost ("Predmet: Uvod u primenu računara") se na uskom ekranu skraćuje sa …; pun tekst je u `title`.
+  .chip-tekst {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   // Dugme ✕ uz aktivan chip.
   > .chip-x {
+    flex: none;
     padding: 0 8px;
     border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   }
 
   .mat-icon {
+    flex: none;
     width: 18px;
     height: 18px;
   }

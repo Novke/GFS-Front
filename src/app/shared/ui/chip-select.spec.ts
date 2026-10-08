@@ -81,6 +81,13 @@ describe('ChipSelect', () => {
     expect(el.textContent!.replace(/\s+/g, ' ')).toContain('Predmet: UPR');
     expect(el.querySelector('[data-ukloni]')).toBeNull();
     expect(el.querySelector('button')).toBeNull();
+    expect(el.querySelector('.chip.zakljucan')!.getAttribute('title')).toBe('Predmet: UPR');
+  });
+
+  it('aktivan chip nosi pun tekst u title (skraćuje se sa … na uskom ekranu)', () => {
+    const { el } = napravi(2);
+    expect(el.querySelector('[data-otvori]')!.getAttribute('title')).toBe('Predmet: NG');
+    expect(el.querySelector('[data-otvori] .chip-tekst')).not.toBeNull();
   });
 
   it('vrednost koje nema među opcijama (obrisana grupa) prikazuje —', () => {

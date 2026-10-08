@@ -103,9 +103,9 @@ interface Rezultat {
             </li>
           }
         </ul>
-        @if (skraceno()) {
-          <p class="napomena">Prikazano prvih {{ rezultatVrednost().stavke.length }} od {{ rezultatVrednost().ukupno }}. Suzi pretragu.</p>
-        }
+      }
+      @if (!rezultat.isLoading() && !greska() && skraceno()) {
+        <p class="napomena" data-skraceno>Prikazano {{ ponuda().length }} od {{ rezultatVrednost().ukupno }} pronađenih. Suzi pretragu.</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
@@ -172,7 +172,7 @@ export class StudentPicker {
       return `Nema studenata za „${q}“.`;
     }
     if (this.rezultatVrednost().stavke.length > 0) {
-      return 'Svi studenti su već dodati.';
+      return this.skraceno() ? 'Svi prikazani studenti su već dodati.' : 'Svi studenti su već dodati.';
     }
     return this.rezim() === 'grupa' ? 'Grupa nema studenata.' : 'Nema studenata iz starijih grupa.';
   });

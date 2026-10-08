@@ -32,7 +32,7 @@ export type StanjeCuvanja = 'cuva' | 'sacuvano' | 'greska';
     }
   `,
   styles: `
-    :host { display: inline-flex; align-items: center; gap: 6px; min-height: 20px; font-size: 12.5px; color: var(--muted); }
+    :host { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 20px; font-size: 12.5px; color: var(--muted); }
     .mat-icon { width: 18px; height: 18px; flex: none; }
     .ok { color: var(--ok); }
     .greska { color: var(--danger); }

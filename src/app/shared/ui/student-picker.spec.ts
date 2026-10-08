@@ -148,6 +148,22 @@ describe('StudentPicker', () => {
     expect(overlay.textContent).toContain('Nema studenata za „gd1“.');
   });
 
+  it('skraćen rezultat: napomena broji ponuđene redove (posle isključenja)', async () => {
+    await otvori([2, 5]);
+    zahtev().flush({ ...strana(IZ_GRUPE), page: { size: 100, number: 0, totalElements: 150, totalPages: 2 } });
+    await osvezi();
+    expect(overlay.textContent).toContain('Prikazano 1 od 150 pronađenih. Suzi pretragu.');
+  });
+
+  it('skraćen rezultat u kome su svi ponuđeni već dodati: prazno stanje i napomena', async () => {
+    await otvori([1, 2, 5]);
+    zahtev().flush({ ...strana(IZ_GRUPE), page: { size: 100, number: 0, totalElements: 150, totalPages: 2 } });
+    await osvezi();
+    expect(redovi()).toHaveLength(0);
+    expect(overlay.textContent).toContain('Svi prikazani studenti su već dodati.');
+    expect(overlay.textContent).toContain('Prikazano 0 od 150 pronađenih. Suzi pretragu.');
+  });
+
   it('Odustani vraća prazan niz', async () => {
     const rez = await otvori();
     zahtev().flush(strana(IZ_GRUPE));

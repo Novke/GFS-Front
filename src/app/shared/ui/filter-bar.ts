@@ -71,7 +71,9 @@ export class FilterBar {
     effect(() => {
       const spolja = this.pretraga() ?? '';
       untracked(() => {
-        if (this.tajmer === undefined && spolja !== this.tekst()) {
+        // Poredi normalizovano: roditelj vraća `trim`-ovanu vrednost, a razmak na kraju (korisnik tek kuca sledeću reč)
+        // ne sme da nestane niti da kursor skoči.
+        if (this.tajmer === undefined && normalizuj(spolja) !== normalizuj(this.tekst())) {
           this.tekst.set(spolja);
         }
       });

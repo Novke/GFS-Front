@@ -64,4 +64,34 @@ describe('Histogram', () => {
     expect(el.querySelector('svg')).toBeNull();
     expect(el.textContent).toContain('Nema podataka.');
   });
+
+  it('NaN i negativan broj se računaju kao 0 (stubac, aria-label, ukupno)', () => {
+    const { f, el, h } = napravi();
+    h.vrednosti.set([{ labela: 'a', broj: Number.NaN }, { labela: 'b', broj: -3 }, { labela: 'c', broj: 2 }]);
+    f.detectChanges();
+    expect(el.querySelector('svg')!.getAttribute('aria-label')).toBe('Raspodela ocena: a: 0, b: 0, c: 2. Ukupno 2.');
+    expect(el.querySelectorAll('path.stubac')).toHaveLength(1);
+  });
+
+  it('mnogo kategorija u uskoj širini: labele se proređuju, stupci se ne preklapaju', () => {
+    const { f, el, h } = napravi();
+    h.vrednosti.set(Array.from({ length: 40 }, (_, i) => ({ labela: `${i * 10}–${i * 10 + 10}`, broj: i % 7 })));
+    f.detectChanges();
+    const labele = [...el.querySelectorAll('.x-labela')].map(t => t.textContent!.trim());
+    expect(labele.length).toBeGreaterThan(1);
+    expect(labele.length).toBeLessThan(40);
+    expect(labele[0]).toBe('0–10');
+    // Stupci: x-opsezi (iz putanje "M x,y0 ... H x2 ...") rastu i ne preklapaju se.
+    const opsezi = [...el.querySelectorAll<SVGPathElement>('path.stubac')].map(p => {
+      const brojevi = p.getAttribute('d')!.match(/-?[\d.]+/g)!.map(Number);
+      const x = brojevi[0];
+      const sirina = Number(p.dataset['sirina']);
+      return [x, x + sirina];
+    });
+    for (let i = 1; i < opsezi.length; i++) {
+      expect(opsezi[i][0]).toBeGreaterThanOrEqual(opsezi[i - 1][1]);
+    }
+    // Brojevi na vrhu se ne pišu kad je stubaca previše.
+    expect(el.querySelectorAll('text.broj')).toHaveLength(0);
+  });
 });

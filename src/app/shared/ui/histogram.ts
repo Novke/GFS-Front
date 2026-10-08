@@ -39,8 +39,16 @@ const DOLE = 38; // labele kategorija, do dva reda
 const MAX_DEBLJINA = 24; // tanki stupci (dataviz: ≤ 24 px)
 const ZAOBLJENJE = 4; // zaobljen kraj sa podatkom, ravan na osnovi
 const PODRAZUMEVANA_SIRINA = 480;
-/** Preko ovoliko stubaca brojevi na vrhu se ne pišu (ostaju osa, opis stupca i `aria-label`). */
+/** Preko ovoliko stubaca (ili u užem mestu) brojevi na vrhu se ne pišu (ostaju osa, opis stupca i `aria-label`). */
 const MAX_BROJEVA = 12;
+const MIN_MESTO_ZA_BROJ = 22;
+/** Procena širine znaka labele (12 px IBM Plex Sans) za proređivanje labela. */
+const SIRINA_ZNAKA = 6.6;
+
+/** Broj za crtanje i opis: NaN, beskonačno i negativno su 0. */
+function cist(broj: number): number {
+  return Number.isFinite(broj) && broj > 0 ? broj : 0;
+}
 
 /** Stubac od osnove `y0` naviše, zaobljen samo na vrhu. */
 function putanjaStupca(x: number, y0: number, sirina: number, visina: number): string {
@@ -55,7 +63,7 @@ function putanjaStupca(x: number, y0: number, sirina: number, visina: number): s
 /** Labela kategorije u dva reda kad ne staje u širinu stupca ("nije položio" -> "nije" / "položio"). */
 function redoviLabele(labela: string, mesto: number): string[] {
   const razmak = labela.indexOf(' ');
-  return labela.length * 6.6 > mesto && razmak > 0 ? [labela.slice(0, razmak + 1), labela.slice(razmak + 1)] : [labela];
+  return labela.length * SIRINA_ZNAKA > mesto && razmak > 0 ? [labela.slice(0, razmak + 1), labela.slice(razmak + 1)] : [labela];
 }
 
 /**
@@ -83,16 +91,18 @@ function redoviLabele(labela: string, mesto: number): string[] {
             <title>{{ s.opis }}</title>
             <rect class="meta" [attr.x]="s.mestoX" [attr.y]="gore" [attr.width]="s.mesto" [attr.height]="g.osnova - gore" />
             @if (s.visina > 0) {
-              <path class="stubac" [attr.d]="s.putanja" [attr.data-visina]="s.visina" />
+              <path class="stubac" [attr.d]="s.putanja" [attr.data-visina]="s.visina" [attr.data-sirina]="g.debljina" />
               @if (g.brojevi) {
                 <text class="broj" [attr.x]="s.centar" [attr.y]="g.osnova - s.visina - 5" text-anchor="middle">{{ s.broj }}</text>
               }
             }
-            <text class="x-labela" [attr.x]="s.centar" [attr.y]="g.osnova + 16" text-anchor="middle">
-              @for (red of s.redovi; track $index) {
-                <tspan [attr.x]="s.centar" [attr.dy]="$index === 0 ? 0 : '1.15em'">{{ red }}</tspan>
-              }
-            </text>
+            @if (s.labelaVidljiva) {
+              <text class="x-labela" [attr.x]="s.centar" [attr.y]="g.osnova + 16" text-anchor="middle">
+                @for (red of s.redovi; track $index) {
+                  <tspan [attr.x]="s.centar" [attr.dy]="$index === 0 ? 0 : '1.15em'">{{ red }}</tspan>
+                }
+              </text>
+            }
           </g>
         }
       </svg>
@@ -123,28 +133,34 @@ export class Histogram {
 
   protected readonly sazetak = computed(() => {
     const v = this.vrednosti();
-    const ukupno = v.reduce((z, s) => z + (Number.isFinite(s.broj) ? s.broj : 0), 0);
+    const ukupno = v.reduce((z, s) => z + cist(s.broj), 0);
     const naslov = this.naslov();
-    return `${naslov ? naslov + ': ' : ''}${v.map(s => `${s.labela}: ${s.broj}`).join(', ')}. Ukupno ${ukupno}.`;
+    return `${naslov ? naslov + ': ' : ''}${v.map(s => `${s.labela}: ${cist(s.broj)}`).join(', ')}. Ukupno ${ukupno}.`;
   });
 
   protected readonly geometrija = computed(() => {
     const v = this.vrednosti();
     const sirina = Math.max(200, this.sirina());
     const osnova = GORE + VISINA_CRTEZA;
-    const podeoci = lepiPodeoci(Math.max(0, ...v.map(s => (Number.isFinite(s.broj) ? s.broj : 0))));
+    const podeoci = lepiPodeoci(Math.max(0, ...v.map(s => cist(s.broj))));
     const vrh = podeoci[podeoci.length - 1];
     const y = (n: number) => osnova - (n / vrh) * VISINA_CRTEZA;
     const mesto = (sirina - LEVO - DESNO) / Math.max(1, v.length);
-    const debljina = Math.min(MAX_DEBLJINA, Math.max(4, mesto - 8));
+    // Razmak između stubaca je najmanje 2 px (ili 30 % mesta), pa se stupci nikad ne preklapaju.
+    const debljina = Math.max(1, Math.min(MAX_DEBLJINA, mesto - Math.max(2, mesto * 0.3)));
+    // Labele koje ne staju proređuju se: prikazuje se svaka k-ta (sve ostaju u `<title>` i `aria-label`).
+    const redovi = v.map(s => redoviLabele(s.labela, mesto));
+    const najsira = Math.max(...redovi.map(r => Math.max(...r.map(red => red.trim().length)))) * SIRINA_ZNAKA + 6;
+    const svakaK = Math.max(1, Math.ceil(najsira / mesto));
     return {
       sirina,
       visina: osnova + DOLE,
       osnova,
-      brojevi: v.length <= MAX_BROJEVA,
+      brojevi: v.length <= MAX_BROJEVA && mesto >= MIN_MESTO_ZA_BROJ,
+      debljina,
       podeoci: podeoci.map(p => ({ vrednost: p, y: Math.round(y(p)) + 0.5 })),
       stubci: v.map((s, i) => {
-        const broj = Number.isFinite(s.broj) && s.broj > 0 ? s.broj : 0;
+        const broj = cist(s.broj);
         const mestoX = LEVO + i * mesto;
         const visina = (broj / vrh) * VISINA_CRTEZA;
         const x = mestoX + (mesto - debljina) / 2;
@@ -155,8 +171,9 @@ export class Histogram {
           mestoX,
           centar: mestoX + mesto / 2,
           putanja: putanjaStupca(x, osnova, debljina, visina),
-          redovi: redoviLabele(s.labela, mesto),
-          opis: `${s.labela}: ${s.broj}`,
+          redovi: redovi[i],
+          labelaVidljiva: i % svakaK === 0,
+          opis: `${s.labela}: ${broj}`,
         };
       }),
     };
