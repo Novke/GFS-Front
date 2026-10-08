@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatSnackBar, MatSnackBarConfig } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarConfig, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 
 import { NotificationStore, Poruka } from '../state/notification.store';
 
@@ -24,6 +24,7 @@ function podesavanje(p: Poruka): MatSnackBarConfig {
 /**
  * Prikazuje poruke iz `NotificationStore` kroz `MatSnackBar`, jednu po jednu: sledeća tek kad se prethodna
  * zatvori (`MatSnackBar.open` bi inače zamenio otvorenu, pa bi uspeh sakrio grešku koja mora da ostane do zatvaranja).
+ * Poruka sa `grupa` zamenjuje ranije poruke iste grupe (iz reda, a otvorenu zatvara), osim grešaka.
  * Postavlja se jednom, u `AppComponent`.
  */
 @Component({
@@ -35,14 +36,29 @@ export class SnackbarHost {
   private readonly snackBar = inject(MatSnackBar);
   private readonly red: Poruka[] = [];
   private otvorena = false;
+  private tekuca: { poruka: Poruka; ref: MatSnackBarRef<TextOnlySnackBar> } | null = null;
 
   constructor() {
     inject(NotificationStore).poruke$
       .pipe(takeUntilDestroyed(inject(DestroyRef)))
-      .subscribe(p => {
-        this.red.push(p);
-        this.sledeca();
-      });
+      .subscribe(p => this.primi(p));
+  }
+
+  private primi(p: Poruka): void {
+    const zamenjiva = (q: Poruka) => p.grupa !== undefined && q.grupa === p.grupa && q.tip !== 'greska';
+    if (p.grupa !== undefined && p.tip !== 'greska') {
+      for (let i = this.red.length - 1; i >= 0; i--) {
+        if (zamenjiva(this.red[i])) {
+          this.red.splice(i, 1);
+        }
+      }
+    }
+    this.red.push(p);
+    if (p.tip !== 'greska' && this.tekuca && zamenjiva(this.tekuca.poruka)) {
+      this.tekuca.ref.dismiss(); // afterDismissed prikazuje sledeću
+      return;
+    }
+    this.sledeca();
   }
 
   private sledeca(): void {
@@ -53,12 +69,14 @@ export class SnackbarHost {
     this.otvorena = true;
     const labela = p.akcija?.label ?? (p.tip === 'greska' ? 'Zatvori' : undefined);
     const ref = this.snackBar.open(p.tekst, labela, podesavanje(p));
+    this.tekuca = { poruka: p, ref };
     const run = p.akcija?.run;
     if (run) {
       ref.onAction().subscribe(() => run());
     }
     ref.afterDismissed().subscribe(() => {
       this.otvorena = false;
+      this.tekuca = null;
       this.sledeca();
     });
   }

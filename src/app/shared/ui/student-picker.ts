@@ -28,9 +28,11 @@ export interface StudentPickerCfg {
   /** Već dodati studenti; ne nude se. */
   iskljuci: readonly number[];
   naslov: string;
+  /** Tab koji je otvoren na početku (podrazumevano "Iz grupe"). */
+  pocetniRezim?: Rezim;
 }
 
-type Rezim = 'grupa' | 'stariji';
+export type Rezim = 'grupa' | 'stariji';
 
 /** Najviše koliko backend vraća u jednoj strani (`max-page-size`); više od toga traži pretragu. */
 const VELICINA = 100;
@@ -133,7 +135,7 @@ export class StudentPicker {
   private readonly ref = inject<MatDialogRef<StudentPicker, StudentListItem[]>>(MatDialogRef);
   private readonly api = inject(StudentiApi);
 
-  protected readonly rezim = signal<Rezim>('grupa');
+  protected readonly rezim = signal<Rezim>(this.cfg.pocetniRezim ?? 'grupa');
   protected readonly q = signal<string | null>(null);
   /** Izabrani studenti, redom izbora (Map čuva redosled umetanja). */
   protected readonly izabrani = signal(new Map<number, StudentListItem>());

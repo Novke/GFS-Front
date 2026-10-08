@@ -7,8 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../../app.routes';
 import { NovoPredavanje } from '../predavanja/pages/novo-predavanje';
 import { PredavanjaLista } from '../predavanja/pages/predavanja-lista';
-import { LivePredavanjeComponent } from '../../predavanje/live-predavanje/live-predavanje.component';
-import { PregledPredavanjaComponent } from '../../predavanje/pregled-predavanja/pregled-predavanja.component';
+import { PredavanjeDetalj } from '../predavanja/pages/predavanje-detalj';
 import { TestEvidentiranjeComponent } from '../../test/test-evidentiranje/test-evidentiranje.component';
 import { TestPregledComponent } from '../../test/test-pregled/test-pregled.component';
 import { AppRoutes } from './app-putanje';
@@ -43,11 +42,15 @@ describe('privremeni izbor starih ekrana na novim rutama', () => {
     expect(list(router)).toBe(NovoPredavanje);
   });
 
-  it('detalj sa ?prikaz bira stranicu bez poziva API-ja', async () => {
-    await router.navigateByUrl(AppRoutes.predavanjePregled(5));
-    expect(list(router)).toBe(PregledPredavanjaComponent);
-    await router.navigateByUrl(AppRoutes.predavanjeLive(5));
-    expect(list(router)).toBe(LivePredavanjeComponent);
+  it('predavanje: detalj je novi ekran (Task 19), i sa starim ?prikaz, bez poziva API-ja pri rutiranju', async () => {
+    for (const url of ['/predavanja/5', AppRoutes.predavanjePregled(5), AppRoutes.predavanjeLive(5)]) {
+      await router.navigateByUrl(url);
+      expect(list(router)).toBe(PredavanjeDetalj);
+    }
+    http.expectNone(() => true);
+  });
+
+  it('test: detalj sa ?prikaz bira stranicu bez poziva API-ja', async () => {
     await router.navigateByUrl(AppRoutes.testPregled(3));
     expect(list(router)).toBe(TestPregledComponent);
     await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
@@ -56,27 +59,27 @@ describe('privremeni izbor starih ekrana na novim rutama', () => {
   });
 
   it.each([
-    [{ zavrseno: true }, PregledPredavanjaComponent],
-    [{ zavrseno: false }, LivePredavanjeComponent],
-  ])('detalj bez ?prikaz bira po stanju (%o)', async (dto, ocekivana) => {
-    const gotovo = router.navigateByUrl('/predavanja/5');
-    await vi.waitFor(() => http.expectOne('api/predavanja/5').flush(dto));
+    [{ pregledan: true }, TestPregledComponent],
+    [{ pregledan: false }, TestEvidentiranjeComponent],
+  ])('test: detalj bez ?prikaz bira po stanju (%o)', async (dto, ocekivana) => {
+    const gotovo = router.navigateByUrl('/testovi/3');
+    await vi.waitFor(() => http.expectOne('api/test/3').flush(dto));
     await gotovo;
     expect(list(router)).toBe(ocekivana);
   });
 
-  it('greška pri čitanju stanja otvara beleženje (ono samo prikazuje grešku)', async () => {
-    const gotovo = router.navigateByUrl('/predavanja/5');
-    await vi.waitFor(() => http.expectOne('api/predavanja/5').flush(null, { status: 404, statusText: 'Not Found' }));
+  it('test: greška pri čitanju stanja otvara evidentiranje (ono samo prikazuje grešku)', async () => {
+    const gotovo = router.navigateByUrl('/testovi/3');
+    await vi.waitFor(() => http.expectOne('api/test/3').flush(null, { status: 404, statusText: 'Not Found' }));
     await gotovo;
-    expect(list(router)).toBe(LivePredavanjeComponent);
+    expect(list(router)).toBe(TestEvidentiranjeComponent);
   });
 
-  it('stara stranica na istoj ruti prelazi na drugu (Završi -> pregled, Nastavi -> beleženje)', async () => {
-    await router.navigateByUrl(AppRoutes.predavanjeLive(5));
-    await router.navigateByUrl(AppRoutes.predavanjePregled(5));
-    expect(list(router)).toBe(PregledPredavanjaComponent);
-    await router.navigateByUrl(AppRoutes.predavanjeLive(5));
-    expect(list(router)).toBe(LivePredavanjeComponent);
+  it('test: stara stranica na istoj ruti prelazi na drugu (evidentiranje -> pregled -> evidentiranje)', async () => {
+    await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
+    await router.navigateByUrl(AppRoutes.testPregled(3));
+    expect(list(router)).toBe(TestPregledComponent);
+    await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
+    expect(list(router)).toBe(TestEvidentiranjeComponent);
   });
 });

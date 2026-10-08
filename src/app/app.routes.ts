@@ -8,7 +8,7 @@ import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { legacyRedirects } from './features/legacy-redirects';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
-import { domaciPregledan, imaGrupuIPredmet, predavanjeZavrseno, testPregledan } from './features/privremeno/privremeno';
+import { domaciPregledan, imaGrupuIPredmet, testPregledan } from './features/privremeno/privremeno';
 
 /*
  * Stablo ruta (spec, sekcija 2). Putanje su relativne na <base href>; filteri lista su query parametri.
@@ -50,18 +50,11 @@ const nastavnickeRute: Routes = [
     children: [
       ...PREDAVANJA_RUTE,
       {
+        // dok nije završeno beleženje uživo, posle toga pregled (isti ekran)
         matcher: putanjaSaId(':id'),
         title: 'Predavanje',
         data: stalne(m('Predavanja', '/predavanja'), m('Predavanje')),
-        canMatch: [predavanjeZavrseno],
-        loadComponent: () =>
-          import('./predavanje/pregled-predavanja/pregled-predavanja.component').then(x => x.PregledPredavanjaComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Predavanje',
-        data: stalne(m('Predavanja', '/predavanja'), m('Predavanje')),
-        loadComponent: () => import('./predavanje/live-predavanje/live-predavanje.component').then(x => x.LivePredavanjeComponent),
+        loadComponent: () => import('./features/predavanja/pages/predavanje-detalj').then(x => x.PredavanjeDetalj),
       },
     ],
   },
@@ -271,7 +264,13 @@ export const routes: Routes = [
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
     component: ProjectorLayout,
-    children: [{ path: '', title: 'Projektor', loadComponent: uskoro }],
+    children: [
+      {
+        path: '',
+        title: 'Projektor',
+        loadComponent: () => import('./features/predavanja/pages/predavanje-projektor').then(x => x.PredavanjeProjektor),
+      },
+    ],
   },
   {
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),

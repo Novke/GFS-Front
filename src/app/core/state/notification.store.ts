@@ -12,7 +12,18 @@ export interface Poruka {
   tip: PorukaTip;
   tekst: string;
   akcija?: PorukaAkcija;
+  /**
+   * Poruke iste grupe se zamenjuju: nova sklanja prethodnu iz reda, a otvorenu zatvara (npr. live beleženje,
+   * gde "Poništi" ima smisla samo za poslednju izmenu). Greške se nikad ne zamenjuju.
+   */
+  grupa?: string;
 }
+
+export interface OpcijePoruke {
+  grupa?: string;
+}
+
+const saGrupom = (p: Poruka, opcije?: OpcijePoruke): Poruka => (opcije?.grupa ? { ...p, grupa: opcije.grupa } : p);
 
 /**
  * Obaveštenja za korisnika. Store samo emituje poruke; prikazuje ih `SnackbarHost` (jedan u `AppComponent`),
@@ -25,14 +36,14 @@ export const NotificationStore = signalStore(
     return { _poruke: poruke, poruke$: poruke.asObservable() as Observable<Poruka> };
   }),
   withMethods(store => ({
-    uspeh(tekst: string, akcija?: PorukaAkcija): void {
-      store._poruke.next({ tip: 'uspeh', tekst, akcija });
+    uspeh(tekst: string, akcija?: PorukaAkcija, opcije?: OpcijePoruke): void {
+      store._poruke.next(saGrupom({ tip: 'uspeh', tekst, akcija }, opcije));
     },
     greska(tekst: string): void {
       store._poruke.next({ tip: 'greska', tekst, akcija: undefined });
     },
-    info(tekst: string): void {
-      store._poruke.next({ tip: 'info', tekst, akcija: undefined });
+    info(tekst: string, opcije?: OpcijePoruke): void {
+      store._poruke.next(saGrupom({ tip: 'info', tekst, akcija: undefined }, opcije));
     },
   })),
 );

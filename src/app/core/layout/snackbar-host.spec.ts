@@ -78,4 +78,42 @@ describe('SnackbarHost', () => {
     zatvorene[1].next();
     expect(open.mock.calls.map(c => c[0])).toEqual(['A', 'B', 'C']);
   });
+
+  describe('grupa (live beleženje: samo poslednja izmena nosi "Poništi")', () => {
+    let dismiss: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      dismiss = vi.fn(() => zatvorene[zatvorene.length - 1].next());
+      open.mockImplementation(() => {
+        const zatvorena = new Subject<void>();
+        zatvorene.push(zatvorena);
+        return { onAction: () => onAction.asObservable(), afterDismissed: () => zatvorena.asObservable(), dismiss };
+      });
+    });
+
+    it('nova poruka iste grupe zatvara otvorenu i zauzima njeno mesto', () => {
+      poruke.next({ tip: 'uspeh', tekst: 'Ana: prisutan', grupa: 'p' });
+      poruke.next({ tip: 'uspeh', tekst: 'Ana: zadatak', grupa: 'p' });
+      expect(dismiss).toHaveBeenCalledOnce();
+      expect(open.mock.calls.map(c => c[0])).toEqual(['Ana: prisutan', 'Ana: zadatak']);
+    });
+
+    it('poruke iste grupe u redu se zamenjuju poslednjom; druge poruke ostaju', () => {
+      poruke.next({ tip: 'greska', tekst: 'Neuspelo.' });
+      poruke.next({ tip: 'uspeh', tekst: 'Ana: prisutan', grupa: 'p' });
+      poruke.next({ tip: 'info', tekst: 'B' });
+      poruke.next({ tip: 'uspeh', tekst: 'Ana: zadatak', grupa: 'p' });
+      expect(dismiss).not.toHaveBeenCalled(); // otvorena greška se nikad ne zatvara zamenom
+      zatvorene[0].next();
+      zatvorene[1].next();
+      expect(open.mock.calls.map(c => c[0])).toEqual(['Neuspelo.', 'B', 'Ana: zadatak']);
+    });
+
+    it('greška sa grupom se ne zamenjuje', () => {
+      poruke.next({ tip: 'greska', tekst: 'Ana: odbijeno', grupa: 'p' });
+      poruke.next({ tip: 'uspeh', tekst: 'Ana: zadatak', grupa: 'p' });
+      expect(dismiss).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledOnce();
+    });
+  });
 });

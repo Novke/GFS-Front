@@ -112,6 +112,17 @@ describe('StudentPicker', () => {
     expect(redovi()[0].textContent).toContain('GD14/2024');
   });
 
+  it('pocetniRezim "stariji" otvara tab "Stariji studenti" bez zahteva za grupu', async () => {
+    StudentPicker.otvori(dialog, { grupaId: 4, iskljuci: [], naslov: 'Stariji', pocetniRezim: 'stariji' }).subscribe();
+    await osvezi();
+    const req = zahtev();
+    expect(req.request.params.get('starijiOdGrupe')).toBe('4');
+    expect(req.request.params.has('grupaId')).toBe(false);
+    req.flush(strana(STARIJI));
+    await osvezi();
+    expect(redovi()).toHaveLength(1);
+  });
+
   it('višestruki izbor: "Dodaj (n)" vraća izabrane, i preko tabova', async () => {
     const rez = await otvori();
     expect(dodaj().disabled).toBe(true);

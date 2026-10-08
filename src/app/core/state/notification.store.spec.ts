@@ -20,4 +20,18 @@ describe('NotificationStore', () => {
       { tip: 'info', tekst: 'Napomena.', akcija: undefined },
     ]);
   });
+
+  it('grupa se prenosi samo kad je zadata', () => {
+    const store = TestBed.inject(NotificationStore);
+    const primljene: Poruka[] = [];
+    store.poruke$.subscribe(p => primljene.push(p));
+
+    store.uspeh('Ana: zadatak', undefined, { grupa: 'predavanje' });
+    store.info('Ana je već prisutna.', { grupa: 'predavanje' });
+    store.uspeh('Sačuvano.');
+
+    expect(primljene[0].grupa).toBe('predavanje');
+    expect(primljene[1].grupa).toBe('predavanje');
+    expect('grupa' in primljene[2]).toBe(false);
+  });
 });

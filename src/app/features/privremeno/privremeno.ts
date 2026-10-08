@@ -43,7 +43,6 @@ export function prikazPregleda(putanjaApi: string, zavrseno: (dto: Record<string
   };
 }
 
-export const predavanjeZavrseno = prikazPregleda('predavanja', d => d['zavrseno'] === true);
 export const domaciPregledan = prikazPregleda('domaci', d => d['pregledan'] === true);
 export const testPregledan = prikazPregleda('test', d => d['pregledan'] === true);
 

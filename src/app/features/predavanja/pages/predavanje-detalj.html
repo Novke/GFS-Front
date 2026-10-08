@@ -1,0 +1,96 @@
+@if (store.predavanje(); as p) {
+  <app-predavanje-zaglavlje [predavanje]="p" [brojevi]="store.brojevi()" [sacuvaj]="sacuvajZaglavlje" (obrisi)="obrisi()" />
+
+  @if (!store.zavrseno()) {
+    <div class="traka" role="toolbar" aria-label="Beleženje">
+      <app-brzi-unos [studenti]="store.studenti()" (izabran)="brziUnos($event)" />
+      @if (p.grupa) {
+        <button matButton="outlined" type="button" data-stariji (click)="dodajStarije()">
+          <mat-icon svgIcon="person_add" aria-hidden="true" />Stariji studenti
+        </button>
+      }
+      <ul class="legenda" aria-label="Legenda">
+        <li class="l-odsutan">odsutan</li>
+        <li class="l-prisutan">prisutan</li>
+        <li class="l-zadatak"><mat-icon svgIcon="task_alt" aria-hidden="true" />zadatak</li>
+        <li class="l-zvezdica"><mat-icon svgIcon="star" aria-hidden="true" />zvezdica</li>
+      </ul>
+      <div class="akcije">
+        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" data-projektor>
+          <mat-icon svgIcon="co_present" aria-hidden="true" />Projektor
+        </a>
+        <button matButton="filled" type="button" data-zavrsi (click)="zavrsi()">
+          <mat-icon svgIcon="check" aria-hidden="true" />Završi predavanje
+        </button>
+      </div>
+    </div>
+    <p class="uputstvo">Klik na studenta: prisutan → zadatak → zvezdica → prisutan. Uklanjanje i napomena su u meniju pločice (⋮, desni klik ili dugo držanje).</p>
+  } @else {
+    <p class="uputstvo" data-samo-citanje>
+      <mat-icon svgIcon="info" aria-hidden="true" />Predavanje je završeno; prisustvo i aktivnosti su samo za čitanje.
+    </p>
+  }
+
+  @if (store.studenti().length === 0) {
+    <app-empty-state
+      ikona="groups"
+      [naslov]="p.grupa ? 'Grupa nema studenata.' : 'Na predavanju nema zabeleženih studenata.'"
+      [tekst]="p.grupa && !store.zavrseno() ? 'Studente starijih generacija dodaj dugmetom „Stariji studenti“.' : null"
+    />
+  } @else {
+    <section class="plocice" aria-label="Studenti">
+      @for (s of store.studenti(); track s.id) {
+        <app-studentska-plocica
+          [student]="s"
+          [stanje]="store.stanjePoStudentu()[s.id] ?? 'odsutan'"
+          [stariji]="store.stariji().has(s.id)"
+          [cekanje]="store.cekanje()[s.id] ?? false"
+          [samoCitanje]="store.zavrseno()"
+          [napomenaTekst]="napomenePoStudentu().get(s.id)"
+          (klik)="store.klik(s.id)"
+          (napomena)="napomena(s.id)"
+          (ukloni)="postavi(s.id, 'odsutan')"
+        />
+      }
+    </section>
+  }
+
+  @if (store.zavrseno()) {
+    <section class="aktivnosti" aria-labelledby="naslov-aktivnosti">
+      <h2 id="naslov-aktivnosti">Aktivnosti</h2>
+      @if (aktivnosti().length === 0) {
+        <p class="prazno">Nema zabeleženih aktivnosti.</p>
+      } @else {
+        <table class="tab-akt">
+          <thead>
+            <tr><th scope="col">Student</th><th scope="col">Indeks</th><th scope="col">Aktivnost</th><th scope="col">Napomena</th></tr>
+          </thead>
+          <tbody>
+            @for (a of aktivnosti(); track a.id) {
+              <tr [attr.data-aktivnost]="a.id">
+                <td>{{ a.student.ime }} {{ a.student.prezime }}</td>
+                <td class="mono">{{ a.student.indeks | indeks: godinePoStudentu().get(a.student.id) }}</td>
+                <td>
+                  <span class="tip">
+                    @if (a.tip === 'ZADATAK') {
+                      <mat-icon svgIcon="task_alt" aria-hidden="true" />
+                    } @else if (a.tip === 'SA_ZVEZDICOM') {
+                      <mat-icon class="zvezda" svgIcon="star" aria-hidden="true" />
+                    }
+                    {{ tipTekst[a.tip] ?? a.tip }}
+                  </span>
+                </td>
+                <td>{{ a.napomene || '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+} @else if (store.imaGresku()) {
+  <app-error-panel naslov="Predavanje nije učitano." [poruka]="store.greska()" (ponovo)="ponovo()" />
+  <a matButton routerLink="/predavanja"><mat-icon svgIcon="arrow_back" aria-hidden="true" />Sva predavanja</a>
+} @else {
+  <app-skeleton-rows [redovi]="6" />
+}
