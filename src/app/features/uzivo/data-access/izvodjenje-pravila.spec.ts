@@ -125,6 +125,7 @@ describe('oznake', () => {
 
   it('tajmer', () => {
     expect(oznakaTajmera(naPitanju('OTVORENO'))).toBe('Pokreni tajmer 30 s');
+    expect(oznakaTajmera(naPitanju('ZATVORENO', { runda: { id: 9, redniBroj: 1, rokMs: 5, preostaloMs: null, tajmerRadi: false } }))).toBe('Pokreni tajmer 30 s');
     expect(oznakaTajmera(naPitanju('OTVORENO', { runda: { id: 9, redniBroj: 1, rokMs: 5, preostaloMs: null, tajmerRadi: true } }))).toBe('Pauziraj tajmer');
     expect(oznakaTajmera(naPitanju('OTVORENO', { runda: { id: 9, redniBroj: 1, rokMs: null, preostaloMs: 5, tajmerRadi: false } }))).toBe('Nastavi tajmer');
   });

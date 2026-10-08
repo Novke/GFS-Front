@@ -1,0 +1,607 @@
+/*
+ * Uživo: prikaz za publiku (`uz-pub-`), scena projektora (`uz-scena-`) i konzola (`uz-kon-`). Globalno uključeno iz
+ * src/styles.css (posle uzivo-tokeni.css), da stilovi komponenti ostanu ispod budžeta `anyComponentStyle`.
+ * Boje kroz tokene redizajna sa dnevnim podrazumevanim vrednostima; bez Bootstrap klasa.
+ */
+
+/* ---------- Scena projektora (16:9, širinu daje roditelj) ---------- */
+
+.uz-scena {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.uz-scena-sloj {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.uz-scena-poruka,
+.uz-scena-kraj,
+.uz-scena-rang {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.uz-platno .uz-scena-naslov {
+  font-family: inherit;
+  font-size: 4.4cqw;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.uz-platno .uz-scena-hvala {
+  font-family: inherit;
+  font-size: 9cqw;
+  font-weight: 800;
+  color: var(--primary, #2456a6);
+}
+
+.uz-platno .uz-scena-podnaslov {
+  font-size: 3cqw;
+  color: var(--muted, #5f6c84);
+}
+
+.uz-scena-postolje {
+  width: 70%;
+  font-size: 2.6cqw;
+}
+
+.uz-scena-rang .uz-rang {
+  width: 70%;
+  font-size: 3.2cqw;
+  text-align: left;
+}
+
+.uz-scena-qr {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 5cqw;
+}
+
+.uz-scena-qr-kod {
+  width: 40cqw;
+}
+
+.uz-scena-qr-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5cqw;
+}
+
+.uz-platno .uz-scena-qr-link {
+  font-size: 3.6cqw;
+  font-weight: 600;
+}
+
+.uz-platno .uz-scena-qr-kod-tekst {
+  font-size: 9cqw;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary, #2456a6);
+}
+
+.uz-scena-ekran {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: #9aa3b5;
+  font-size: 2.2cqw;
+}
+
+.uz-scena-ekran--beo {
+  background: #fff;
+  color: #5f6c84;
+}
+
+/* ---------- Prikaz za publiku (ceo prozor, letterbox) ---------- */
+
+.uz-pub {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+  cursor: default;
+}
+
+.uz-pub--beo {
+  background: #fff;
+}
+
+.uz-pub-scena {
+  width: min(100vw, calc(100dvh * 16 / 9));
+}
+
+.uz-pub-poruka {
+  padding: 2em 3em;
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  font-size: clamp(18px, 3vw, 40px);
+}
+
+.uz-pub-poruka p {
+  margin: 0;
+}
+
+.uz-pub-veza,
+.uz-pub-natpis,
+.uz-kon-goto {
+  position: fixed;
+  z-index: 10;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font: 600 16px/1.3 Roboto, "Helvetica Neue", sans-serif;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.3);
+}
+
+.uz-pub-veza {
+  top: 12px;
+  right: 12px;
+  background: #b42318;
+  color: #fff;
+}
+
+.uz-pub-natpis,
+.uz-kon-goto {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #121a2a;
+  color: #fff;
+  font-size: 22px;
+}
+
+/* ---------- Konzola ---------- */
+
+.uz-kon {
+  display: block;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  background: var(--surface-2, #eef1f6);
+  color: var(--ink, #121a2a);
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+.uz-kon-zaglavlje {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--line, #dce2eb);
+}
+
+.uz-kon-naslovi {
+  flex: 1;
+  min-width: 0;
+}
+
+.uz-kon .uz-kon-naziv {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.uz-kon .uz-kon-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 0;
+  color: var(--muted, #5f6c84);
+  font-size: 14px;
+}
+
+.uz-kon-meta strong {
+  color: var(--ink, #121a2a);
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-kon-veza {
+  color: var(--danger, #b42318);
+  font-weight: 600;
+}
+
+.uz-kon-veza--ok {
+  color: var(--ok, #1d7a55);
+}
+
+.uz-kon-akcije {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.uz-kon-telo {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.1fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 16px;
+  padding: 16px;
+}
+
+@media (max-width: 1100px) {
+  .uz-kon-telo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .uz-kon-kolona--srednja {
+    order: -1;
+    grid-column: 1 / -1;
+  }
+}
+
+.uz-kon-kolona {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.uz-kon-kartica {
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line, #dce2eb);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+
+.uz-kon .uz-kon-naslov {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2, #34405a);
+}
+
+.uz-kon .uz-kon-podnaslov {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.uz-kon-naslov .uz-cip {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.uz-kon-sledeci .uz-okvir {
+  max-width: 70%;
+}
+
+.uz-kon .uz-kon-beleske {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.uz-kon .uz-kon-odgovorili {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.uz-kon-odgovorili strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-kon-odgovorili--svi strong {
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--ok-soft, #dff2e9);
+  color: var(--ok, #1d7a55);
+}
+
+.uz-kon-rezultat {
+  font-size: 15px;
+}
+
+.uz-kon-rezultat .uz-rez-skala {
+  min-height: 10em;
+}
+
+.uz-kon-tajmer {
+  display: flex;
+  justify-content: center;
+}
+
+.uz-kon-tajmer .uz-tajmer {
+  width: 120px;
+}
+
+/* Kontrole */
+
+.uz-kon-kontrole {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.uz-kon .uz-kon-grupa-naslov {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted, #5f6c84);
+}
+
+.uz-kon-dugmad {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.uz-kon-dugme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #dce2eb);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--ink, #121a2a);
+  font: 500 15px/1.2 Roboto, "Helvetica Neue", sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.uz-kon-dugme:hover:not(:disabled) {
+  border-color: var(--primary, #2456a6);
+}
+
+.uz-kon-dugme:focus-visible {
+  outline: 3px solid var(--primary, #2456a6);
+  outline-offset: 1px;
+}
+
+.uz-kon-dugme:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.uz-kon-dugme--glavno {
+  grid-column: span 2;
+  border-color: var(--primary, #2456a6);
+  background: var(--primary, #2456a6);
+  color: var(--primary-ink, #fff);
+  font-weight: 700;
+}
+
+.uz-kon-dugme--ukljuceno {
+  border-color: var(--primary, #2456a6);
+  background: var(--primary-soft, #e4ecf8);
+  color: var(--primary-soft-ink, #1b4386);
+  font-weight: 700;
+}
+
+.uz-kon-dugme-tekst {
+  flex: 1;
+  min-width: 0;
+}
+
+.uz-kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  text-align: center;
+  opacity: 0.75;
+}
+
+/* Učesnici i tekstovi */
+
+.uz-kon .uz-kon-zbir {
+  margin: 0 0 8px;
+  color: var(--muted, #5f6c84);
+}
+
+.uz-kon-ucesnici-lista,
+.uz-kon-tekstovi-lista {
+  max-height: 360px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.uz-kon-ucesnik,
+.uz-kon-tekst {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line, #dce2eb);
+}
+
+.uz-kon-ucesnik--odsutan .uz-kon-ucesnik-ime {
+  color: var(--muted, #5f6c84);
+}
+
+.uz-kon-tacka {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--muted, #5f6c84);
+  box-sizing: border-box;
+}
+
+.uz-kon-tacka--da {
+  border-color: var(--ok, #1d7a55);
+  background: var(--ok, #1d7a55);
+}
+
+.uz-kon-ucesnik-ime,
+.uz-kon-tekst-sadrzaj {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.uz-kon-odgovorio {
+  color: var(--ok, #1d7a55);
+}
+
+.uz-kon-poeni,
+.uz-kon-tekst-broj {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-kon-tekst--sakriven .uz-kon-tekst-sadrzaj {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+/* Dijalozi */
+
+.uz-kon-polje {
+  width: 100%;
+}
+
+.uz-kon-ekrani {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uz-kon-telefon {
+  text-align: center;
+}
+
+.uz-kon-telefon-qr {
+  width: min(280px, 70vw);
+  margin: 0 auto;
+}
+
+.uz-kon-telefon-link {
+  overflow-wrap: anywhere;
+  color: var(--muted, #5f6c84);
+  font-size: 13px;
+}
+
+.uz-pomoc {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.uz-pomoc :is(th, td) {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line, #dce2eb);
+  text-align: left;
+  vertical-align: top;
+}
+
+.uz-pomoc th {
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.uz-pomoc-napomena {
+  margin-top: 12px;
+  color: var(--muted, #5f6c84);
+}
+
+.uz-kon-poruka {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-height: 60dvh;
+  font-size: 18px;
+}
+
+/* Telefon (ispod 600 px): tabovi i lepljiva donja traka */
+
+.uz-kon--usko {
+  padding-bottom: 76px;
+}
+
+.uz-kon--usko .uz-kon-kartica,
+.uz-kon--usko .uz-kon-kontrole,
+.uz-kon--usko .uz-kon-tajmer {
+  margin: 12px;
+}
+
+.uz-kon--usko .uz-kon-dugmad {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.uz-kon--usko .uz-kon-ucesnici-lista,
+.uz-kon--usko .uz-kon-tekstovi-lista {
+  max-height: none;
+}
+
+.uz-kon-tabovi .mdc-tab {
+  min-width: 0;
+  padding: 0 6px;
+  letter-spacing: normal;
+}
+
+.uz-kon-traka {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.3fr;
+  gap: 6px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--line, #dce2eb);
+  box-shadow: 0 -2px 10px rgb(0 0 0 / 0.08);
+}
+
+.uz-kon-traka button {
+  min-height: 52px;
+  border: 1px solid var(--line, #dce2eb);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--ink, #121a2a);
+  font: 600 15px/1.2 Roboto, "Helvetica Neue", sans-serif;
+}
+
+.uz-kon-traka button[aria-pressed="true"] {
+  background: var(--primary-soft, #e4ecf8);
+  border-color: var(--primary, #2456a6);
+}
+
+.uz-kon-traka button:disabled {
+  opacity: 0.45;
+}
+
+.uz-kon-traka .uz-kon-traka-glavno {
+  border-color: var(--primary, #2456a6);
+  background: var(--primary, #2456a6);
+  color: var(--primary-ink, #fff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uz-kon-dugme,
+  .uz-kon-traka button {
+    transition: none;
+  }
+}

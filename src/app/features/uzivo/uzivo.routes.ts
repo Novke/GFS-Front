@@ -21,8 +21,14 @@ export const UZIVO_ROUTES: Routes = [
   },
   { path: AppRoutes.prezentacijaIzvodjenja(':id'), loadComponent: uIzradi, data: { ekran: 'Izvođenja prezentacije' } },
   { path: AppRoutes.izvodjenjePregled(':id'), loadComponent: uIzradi, data: { ekran: 'Pregled izvođenja' } },
-  { path: AppRoutes.izvodjenjePublika(':id'), loadComponent: uIzradi, data: { ekran: 'Prikaz za publiku' } },
-  { path: AppRoutes.izvodjenjeKonzola(':id'), loadComponent: uIzradi, data: { ekran: 'Konzola' } },
+  {
+    path: AppRoutes.izvodjenjePublika(':id'),
+    loadComponent: () => import('./pages/publika.page').then(m => m.PublikaPage),
+  },
+  {
+    path: AppRoutes.izvodjenjeKonzola(':id'),
+    loadComponent: () => import('./pages/konzola.page').then(m => m.KonzolaPage),
+  },
   { path: AppRoutes.uzivo, loadComponent: uIzradi, data: { ekran: 'Unos koda' } },
   { path: AppRoutes.uzivoKod(':kod'), loadComponent: uIzradi, data: { ekran: 'Uživo' } },
 ];

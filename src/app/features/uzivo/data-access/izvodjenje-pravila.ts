@@ -84,7 +84,7 @@ export function oznakaOtvoriZatvori(s: NastavnickoStanje): string {
 
 /** Oznaka za `T`. */
 export function oznakaTajmera(s: NastavnickoStanje): string {
-  const r = s.runda;
+  const r = s.faza === 'OTVORENO' ? s.runda : null;
   if (r?.rokMs != null && r.preostaloMs === null) return 'Pauziraj tajmer';
   if (r?.preostaloMs != null) return 'Nastavi tajmer';
   return 'Pokreni tajmer 30 s';
