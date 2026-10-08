@@ -7,6 +7,7 @@ import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { legacyRedirects } from './features/legacy-redirects';
+import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { domaciPregledan, imaGrupuIPredmet, predavanjeZavrseno, testPregledan } from './features/privremeno/privremeno';
 
 /*
@@ -47,25 +48,7 @@ const nastavnickeRute: Routes = [
     title: 'Predavanja',
     data: stalne(m('Nastava'), m('Predavanja')),
     children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        canMatch: [imaGrupuIPredmet],
-        loadComponent: () => import('./predavanje/predavanje-list/predavanje-list.component').then(x => x.PredavanjeListComponent),
-      },
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () =>
-          import('./predavanje/predavanje-select/predavanje-select.component').then(x => x.PredavanjeSelectComponent),
-      },
-      {
-        path: 'novo',
-        title: 'Novo predavanje',
-        data: stalne(m('Predavanja', '/predavanja'), m('Novo predavanje')),
-        loadComponent: () =>
-          import('./predavanje/start-predavanje/start-predavanje.component').then(x => x.StartPredavanjeComponent),
-      },
+      ...PREDAVANJA_RUTE,
       {
         matcher: putanjaSaId(':id'),
         title: 'Predavanje',

@@ -1,0 +1,122 @@
+// Stranice-liste (spec 4, Lista): kartica sa trakom filtera, tabela koja ispod 600 px postaje kartice (maketa `table.list`).
+// Zajedničko za sve liste (predavanja, domaći, testovi); ćelije koje se na telefonu skrivaju imaju `.samo-desktop`,
+// a red kartice dobija jednu ćeliju `.c-meta` (podaci u jednom redu).
+
+.lista-kartica {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.lista-broj {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tabela-okvir {
+  overflow-x: auto;
+}
+
+table.lista-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  th .sortiraj {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: -4px -6px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+
+    &:hover { color: var(--ink); }
+  }
+
+  th[aria-sort='ascending'],
+  th[aria-sort='descending'] { color: var(--ink); }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  .c-rb {
+    width: 1%;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .c-glavno .otvori {
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+
+    &:hover { color: var(--primary); text-decoration: underline; }
+  }
+
+  .c-meta { display: none; }
+  .brojevi-sitno { white-space: nowrap; }
+
+  .nema { color: var(--muted); }
+}
+
+@media (max-width: 599.98px) {
+  table.lista-tabela {
+    thead { display: none; }
+
+    &,
+    tbody,
+    tr,
+    td { display: block; width: 100%; }
+
+    tr {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 2px 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      min-height: 44px;
+    }
+
+    tbody tr:last-child { border-bottom: 0; }
+
+    td { padding: 0; border: 0; }
+    .samo-desktop { display: none; }
+    .c-rb { grid-row: span 2; width: auto; }
+    .c-glavno { grid-column: 2; min-width: 0; }
+    .c-st { grid-column: 3; grid-row: 1; text-align: right; }
+    .c-meta { display: block; grid-column: 2 / 4; color: var(--muted); font-size: 12.5px; }
+  }
+}

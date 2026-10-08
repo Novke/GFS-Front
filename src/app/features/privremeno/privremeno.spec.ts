@@ -5,9 +5,9 @@ import { ActivatedRouteSnapshot, provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { routes } from '../../app.routes';
+import { NovoPredavanje } from '../predavanja/pages/novo-predavanje';
+import { PredavanjaLista } from '../predavanja/pages/predavanja-lista';
 import { LivePredavanjeComponent } from '../../predavanje/live-predavanje/live-predavanje.component';
-import { PredavanjeListComponent } from '../../predavanje/predavanje-list/predavanje-list.component';
-import { PredavanjeSelectComponent } from '../../predavanje/predavanje-select/predavanje-select.component';
 import { PregledPredavanjaComponent } from '../../predavanje/pregled-predavanja/pregled-predavanja.component';
 import { TestEvidentiranjeComponent } from '../../test/test-evidentiranje/test-evidentiranje.component';
 import { TestPregledComponent } from '../../test/test-pregled/test-pregled.component';
@@ -31,14 +31,16 @@ describe('privremeni izbor starih ekrana na novim rutama', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  it('lista: bez ?grupa&predmet stari izbor, sa njima stara lista', async () => {
+  it('predavanja: lista (i sa ?grupa&predmet iz starih linkova) i "Novo" su na novim ekranima (Task 18)', async () => {
     await router.navigateByUrl('/predavanja');
-    expect(list(router)).toBe(PredavanjeSelectComponent);
+    expect(list(router)).toBe(PredavanjaLista);
     await router.navigateByUrl(AppRoutes.predavanjeGrupaPredmet(1, 2));
     expect(router.url).toBe('/predavanja?grupa=1&predmet=2');
-    expect(list(router)).toBe(PredavanjeListComponent);
+    expect(list(router)).toBe(PredavanjaLista);
     await router.navigateByUrl('/predavanja?grupa=abc&predmet=2');
-    expect(list(router)).toBe(PredavanjeSelectComponent);
+    expect(list(router)).toBe(PredavanjaLista);
+    await router.navigateByUrl('/predavanja/novo');
+    expect(list(router)).toBe(NovoPredavanje);
   });
 
   it('detalj sa ?prikaz bira stranicu bez poziva API-ja', async () => {

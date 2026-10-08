@@ -1,0 +1,48 @@
+<app-page-header naslov="Predavanja" podnaslov="Sva predavanja, svih predmeta i grupa">
+  <a akcije matButton="filled" routerLink="/predavanja/novo" [queryParams]="novoParametri()" data-novo>
+    <mat-icon svgIcon="add" aria-hidden="true" />Novo predavanje
+  </a>
+</app-page-header>
+
+<section class="lista-kartica" aria-label="Lista predavanja" [attr.aria-busy]="store.ucitava()">
+  <app-filter-bar [pretraga]="filteri().q" pretragaLabela="Pretraži po temi…" [imaFiltera]="store.imaFiltera()"
+    (pretragaChange)="promeniPretragu($event)" (ocisti)="store.ocistiFiltere()">
+    <app-chip-select labela="Predmet" [opcije]="predmeti()" [vrednost]="filteri().predmet"
+      (vrednostChange)="store.postaviFilter('predmet', $event)" />
+    <app-chip-select labela="Grupa" [opcije]="grupe()" [vrednost]="filteri().grupa"
+      (vrednostChange)="store.postaviFilter('grupa', $event)" />
+    <app-chip-select labela="Školska godina" [opcije]="godine()" [vrednost]="filteri().godina"
+      (vrednostChange)="store.postaviFilter('godina', $event)" />
+    <app-chip-select labela="Status" [opcije]="statusi" [vrednost]="filteri().status"
+      (vrednostChange)="store.postaviFilter('status', $event)" />
+    <app-date-range-chip labela="Datum" [opseg]="opseg()" (opsegChange)="promeniOpseg($event)" />
+  </app-filter-bar>
+
+  @if (store.imaGresku()) {
+    <app-error-panel [poruka]="store.greska()" (ponovo)="store.osvezi()" />
+  }
+
+  @if (store.stavke().length > 0) {
+    <p class="lista-broj" aria-live="polite">{{ brojRezultata() }}</p>
+    <app-predavanja-tabela [stavke]="store.stavke()" [sort]="store.upit().sort" (otvori)="otvori($event)"
+      (sortChange)="store.postaviSort($event)" />
+  } @else if (store.ucitava() || store.status() === 'idle') {
+    <app-skeleton-rows [redovi]="6" />
+  } @else if (store.status() === 'loaded') {
+    @if (store.imaFiltera()) {
+      <app-empty-state naslov="Nema predavanja za izabrane filtere" tekst="Probaj drugu školsku godinu, predmet ili grupu.">
+        <button matButton="outlined" type="button" data-ocisti (click)="store.ocistiFiltere()">Očisti filtere</button>
+      </app-empty-state>
+    } @else {
+      <app-empty-state naslov="Još nema predavanja" ikona="co_present"
+        [tekst]="'Za školsku godinu ' + skolskaGodina() + ' nema nijednog predavanja. Započni prvo.'">
+        <a matButton="filled" routerLink="/predavanja/novo" [queryParams]="novoParametri()">
+          <mat-icon svgIcon="add" aria-hidden="true" />Novo predavanje
+        </a>
+      </app-empty-state>
+    }
+  }
+
+  <app-paginator [ukupno]="store.ukupno()" [strana]="store.upit().strana" [velicina]="store.upit().velicina"
+    (stranaChange)="store.postaviStranu($event)" (velicinaChange)="store.postaviVelicinu($event)" />
+</section>
