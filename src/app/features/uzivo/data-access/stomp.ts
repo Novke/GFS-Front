@@ -1,3 +1,4 @@
+import { InjectionToken } from '@angular/core';
 import { RxStomp } from '@stomp/rx-stomp';
 
 export type WsPutanja = 'api/ws' | 'api/public/ws';
@@ -25,3 +26,11 @@ export function napraviStomp(putanja: WsPutanja): RxStomp {
   stomp.activate();
   return stomp;
 }
+
+export type StompFabrika = (putanja: WsPutanja) => RxStomp;
+
+/** Fabrika STOMP veze; store-ovi je dobijaju kroz DI, pa testovi podmeću lažnu vezu. */
+export const STOMP_FABRIKA = new InjectionToken<StompFabrika>('STOMP_FABRIKA', {
+  providedIn: 'root',
+  factory: () => napraviStomp,
+});
