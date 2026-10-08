@@ -24,7 +24,7 @@ import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
-import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
+import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
@@ -92,7 +92,7 @@ export class IzborEkranaDialog {
     PublikaScenaComponent, RezultatPrikazComponent, SlajdPrikazComponent, TajmerComponent, TekstoviPanelComponent,
     UcesniciPanelComponent,
   ],
-  host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)' },
+  host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)', '(document:keyup)': 'tast.pusten($event)' },
   template: `
     @if (store.stanje(); as s) {
       <header class="uz-kon-zaglavlje">
@@ -194,11 +194,11 @@ export class IzborEkranaDialog {
           <mat-tab label="Učesnici"><ng-container [ngTemplateOutlet]="ucesniciTpl" /></mat-tab>
         </mat-tab-group>
         <nav class="uz-kon-traka" aria-label="Brze komande">
-          <button type="button" [disabled]="!ima('PRETHODNI')" (click)="komanda({ tip: 'PRETHODNI' })">◀ Nazad</button>
-          <button type="button" [disabled]="!ima('OTVORI_ZATVORI')" (click)="komanda({ tip: 'OTVORI_ZATVORI' })">{{ otvoriZatvori() }}</button>
+          <button type="button" [disabled]="!ima('PRETHODNI')" (click)="pustiFokus($event); komanda({ tip: 'PRETHODNI' })">◀ Nazad</button>
+          <button type="button" [disabled]="!ima('OTVORI_ZATVORI')" (click)="pustiFokus($event); komanda({ tip: 'OTVORI_ZATVORI' })">{{ otvoriZatvori() }}</button>
           <button type="button" [disabled]="!ima('REZULTATI')" [attr.aria-pressed]="s.rezultatiPrikazani"
-                  (click)="komanda({ tip: 'REZULTATI' })">Rezultati</button>
-          <button type="button" class="uz-kon-traka-glavno" [disabled]="!ima('SLEDECI')" (click)="komanda({ tip: 'SLEDECI' })">
+                  (click)="pustiFokus($event); komanda({ tip: 'REZULTATI' })">Rezultati</button>
+          <button type="button" class="uz-kon-traka-glavno" [disabled]="!ima('SLEDECI')" (click)="pustiFokus($event); komanda({ tip: 'SLEDECI' })">
             {{ dalje() }} ▶
           </button>
         </nav>
@@ -246,6 +246,7 @@ export class KonzolaPage {
   private readonly router = inject(Router);
   protected readonly rute = AppRoutes;
   protected readonly tast = new TastaturaIzvodjenja();
+  protected readonly pustiFokus = pustiFokusPosleKlika;
 
   protected readonly usko = toSignal(
     inject(BreakpointObserver).observe('(max-width: 599.98px)').pipe(map(r => r.matches)), { initialValue: false });

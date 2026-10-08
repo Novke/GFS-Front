@@ -3,6 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { oznakaDalje, oznakaOtvoriZatvori, oznakaTajmera } from '../data-access/izvodjenje-pravila';
 import { NastavnickoStanje, TipKomande } from '../data-access/uzivo.models';
+import { pustiFokusPosleKlika } from './precice';
 
 export interface KomandaZahtev { tip: TipKomande; vrednost?: number; }
 
@@ -33,7 +34,7 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
                     [class.uz-kon-dugme--ukljuceno]="d.ukljuceno === true"
                     [attr.aria-pressed]="d.ukljuceno === null ? null : d.ukljuceno"
                     [attr.aria-keyshortcuts]="d.taster" [disabled]="!dozvoljene().has(d.tip)"
-                    (click)="komanda.emit({ tip: d.tip, vrednost: d.vrednost })">
+                    (click)="pustiFokus($event); komanda.emit({ tip: d.tip, vrednost: d.vrednost })">
               <mat-icon aria-hidden="true">{{ d.ikona }}</mat-icon>
               <span class="uz-kon-dugme-tekst">{{ d.oznaka }}</span>
               <kbd class="uz-kbd" aria-hidden="true">{{ d.taster }}</kbd>
@@ -48,6 +49,8 @@ export class KonzolaKontroleComponent {
   readonly stanje = input.required<NastavnickoStanje>();
   readonly dozvoljene = input.required<ReadonlySet<TipKomande>>();
   readonly komanda = output<KomandaZahtev>();
+
+  protected readonly pustiFokus = pustiFokusPosleKlika;
 
   protected readonly grupe = computed<Grupa[]>(() => {
     const s = this.stanje();

@@ -31,11 +31,15 @@ describe('preskociPrecicu', () => {
     expect(preskociPrecicu(taster('ArrowDown', unutra), false)).toBeTrue();
   });
 
-  it('Enter i Space na fokusiranom dugmetu radi dugme, strelice idu na prečicu', () => {
+  it('Enter na fokusiranom dugmetu radi dugme; Space i strelice idu na prečicu', () => {
     const dugme = element('<button>Dalje</button>');
     expect(preskociPrecicu(taster('Enter', dugme), false)).toBeTrue();
-    expect(preskociPrecicu(taster(' ', dugme), false)).toBeTrue();
+    expect(preskociPrecicu(taster(' ', dugme), false)).toBeFalse();
     expect(preskociPrecicu(taster('ArrowRight', dugme), false)).toBeFalse();
+  });
+
+  it('Space na prekidaču (switch, checkbox) ostaje prekidaču', () => {
+    expect(preskociPrecicu(taster(' ', element('<button role="switch"></button>')), false)).toBeTrue();
   });
 });
 
@@ -63,6 +67,20 @@ describe('TastaturaIzvodjenja', () => {
     tick(1);
     expect(t.gotoUnos()).toBeNull();
   }));
+
+  it('Space na fokusiranom dugmetu: REZULTATI, a keyup ne klikne dugme', () => {
+    const t = new TastaturaIzvodjenja();
+    const dugme = element('<button>QR preko ekrana</button>');
+    const dole = taster(' ', dugme);
+    expect(t.akcija(dole, 3, false)).toEqual({ komanda: 'REZULTATI' });
+    expect(dole.defaultPrevented).toBeTrue();
+    const gore = taster(' ', dugme);
+    t.pusten(gore);
+    expect(gore.defaultPrevented).toBeTrue();
+    const drugiGore = taster(' ', dugme);
+    t.pusten(drugiGore);
+    expect(drugiGore.defaultPrevented).toBeFalse();
+  });
 
   it('Space je prečica i ne skroluje; Ctrl+G nije G režim', () => {
     const t = new TastaturaIzvodjenja();

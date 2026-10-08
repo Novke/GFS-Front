@@ -29,6 +29,7 @@ const PONOVI_ROK_MS = 2000;
     lang: 'sr-Latn',
     '[class.uz-pub--beo]': 'store.stanje()?.ekran === "BEO"',
     '(document:keydown)': 'tastatura($event)',
+    '(document:keyup)': 'tast.pusten($event)',
   },
   template: `
     @if (store.stanje(); as s) {
