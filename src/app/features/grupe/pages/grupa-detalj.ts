@@ -68,6 +68,12 @@ export function prisutnostTekst(p: number | null | undefined): string | null {
         </div>
       </div>
 
+      @if (store.imaGresku()) {
+        <!-- osvežavanje posle izmene nije uspelo: prikaz ostaje, ali se vidi da je zastareo -->
+        <app-error-panel naslov="Osvežavanje grupe nije uspelo; prikazani podaci su možda zastareli." [poruka]="store.greska()"
+          (ponovo)="store.osvezi()" data-greska-osvezavanja />
+      }
+
       <nav class="tabovi" aria-label="Odeljci grupe">
         @for (t of tabovi; track t.putanja) {
           <a [routerLink]="t.putanja" routerLinkActive="aktivan" ariaCurrentWhenActive="page" [attr.data-tab]="t.putanja">{{ t.naslov }}</a>

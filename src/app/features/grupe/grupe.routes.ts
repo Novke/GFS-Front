@@ -1,9 +1,7 @@
 import { Params, Route } from '@angular/router';
 
-import { Mrvica } from '../../core/layout/breadcrumbs';
+import { mrvica as m } from '../../core/layout/mrvica';
 import { putanjaSaId } from '../../core/route-matchers';
-
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
 
 /** Tabovi detalja grupe (child rute); prvi je podrazumevani (`/grupe/:id` -> `pregled`). */
 export const TABOVI_GRUPE = [

@@ -2,12 +2,15 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { GrupaPregledInfo, GrupaStudentStat } from '../data-access/grupe.models';
+import { GrupaStore } from '../data-access/grupa.store';
 import { GRUPE_RUTE } from '../grupe.routes';
+import { GrupaDetalj } from './grupa-detalj';
 import { parseVrsta } from './grupa-nastava-tab';
 import { sortirajSesije } from './grupa-onboarding-tab';
 import { parseGodina, predmetiSaPredavanja, uHeatmapu, vrednostCelije } from './grupa-prisustvo-tab';
@@ -163,5 +166,20 @@ describe('rute grupe', () => {
     harness.fixture.detectChanges();
     const novo = el.querySelector('[data-novo-predavanje]') as HTMLAnchorElement;
     expect(novo.getAttribute('href')).toBe('/predavanja/novo?grupa=4');
+  });
+
+  it('neuspelo osvežavanje učitane grupe: prikaz ostaje, iznad tabova je panel greške', { timeout: 15_000 }, async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/grupe/4/studenti');
+    http.expectOne('api/grupe/4/pregled').flush(pregled);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    const store = harness.fixture.debugElement.query(By.directive(GrupaDetalj)).injector.get(GrupaStore);
+    store.osvezi();
+    http.expectOne('api/grupe/4/pregled').flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
+    harness.fixture.detectChanges();
+    const el = harness.fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-greska-osvezavanja]')?.textContent).toContain('Osvežavanje grupe nije uspelo');
+    expect(el.querySelectorAll('tbody tr')).toHaveLength(1);
   });
 });

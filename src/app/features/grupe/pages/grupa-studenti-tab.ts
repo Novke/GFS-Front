@@ -13,6 +13,7 @@ import { FilterBar } from '../../../shared/ui/filter-bar';
 import { EmptyState } from '../../../shared/ui/list-states';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
+import { kopirajTekst } from '../../../shared/util/kopiraj';
 import { GrupaStore } from '../data-access/grupa.store';
 import {
   emailoviZaKopiranje,
@@ -87,36 +88,6 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
       return c !== 0 ? c * smer : a.i - b.i;
     })
     .map(x => x.r);
-}
-
-/**
- * Kopira tekst: Clipboard API, a bez njega (http preko tailneta nije "secure context") skriveno polje + `execCommand`.
- * Vraća da li je uspelo.
- */
-export async function kopirajTekst(tekst: string, dokument: Document): Promise<boolean> {
-  const clipboard = dokument.defaultView?.navigator?.clipboard;
-  if (clipboard?.writeText) {
-    try {
-      await clipboard.writeText(tekst);
-      return true;
-    } catch {
-      // pada na rezervni način
-    }
-  }
-  const polje = dokument.createElement('textarea');
-  polje.value = tekst;
-  polje.setAttribute('readonly', '');
-  polje.style.position = 'fixed';
-  polje.style.opacity = '0';
-  dokument.body.appendChild(polje);
-  polje.select();
-  try {
-    return dokument.execCommand?.('copy') ?? false;
-  } catch {
-    return false;
-  } finally {
-    polje.remove();
-  }
 }
 
 /**

@@ -77,7 +77,14 @@ export const OnboardingSesijaStore = signalStore(
       patchState(store, { detalji, izmenaId: izmenaVazi ? izmenaId : null, statusGreske: null }, setLoaded());
     };
 
-    /** `tiho`: automatsko osvežavanje; greška tada ne menja prikaz ni status, samo se zabeleži u konzoli. */
+    /** Učitavanje koje se ne primenjuje (otkazano, zastarelo, tiho palo) ne ostavlja status 'loading' nad prikazom. */
+    const zavrsiUcitavanje = () => {
+      if (store.status() === 'loading' && store.detalji()) {
+        patchState(store, setLoaded());
+      }
+    };
+
+    /** `tiho`: automatsko osvežavanje; greška tada ne menja prikaz, samo se zabeleži u konzoli. */
     const osvezi = (tiho = false) => {
       const id = store.sesijaId();
       if (id === null || store.zauzet() || b.ucitavanje) {
@@ -96,8 +103,8 @@ export const OnboardingSesijaStore = signalStore(
           b.ucitavanje = null;
           if (v === b.verzija) {
             primeni(d);
-          } else if (!tiho) {
-            patchState(store, setLoaded());
+          } else {
+            zavrsiUcitavanje();
           }
         },
         error: (e: unknown) => {
@@ -106,6 +113,8 @@ export const OnboardingSesijaStore = signalStore(
           }
           b.ucitavanje = null;
           if (tiho && store.detalji()) {
+            // prikaz ostaje; status ne sme da ostane 'loading' od ručnog osvežavanja koje je akcija otkazala
+            zavrsiUcitavanje();
             console.error('Osvežavanje prijava nije uspelo', e);
             return;
           }
@@ -123,6 +132,7 @@ export const OnboardingSesijaStore = signalStore(
       b.verzija++;
       b.ucitavanje?.unsubscribe();
       b.ucitavanje = null;
+      zavrsiUcitavanje();
       patchState(store, { zauzet: true });
       zahtev.subscribe({
         next: odgovor => {

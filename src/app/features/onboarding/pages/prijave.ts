@@ -83,7 +83,7 @@ const TON_PRIJAVE: Record<StatusPrijave, TonStatusa> = { NA_CEKANJU: 'warn', PRI
 
       <section class="lista-kartica" aria-label="Prijave">
         <div class="tabela-okvir">
-          <table class="prijave-tabela">
+          <table class="lista-tabela prijave-tabela">
             <caption class="sr-only">Prijave studenata</caption>
             <thead>
               <tr>
@@ -98,24 +98,24 @@ const TON_PRIJAVE: Record<StatusPrijave, TonStatusa> = { NA_CEKANJU: 'warn', PRI
                 <th scope="col">Opština</th>
                 <th scope="col">Podneto</th>
                 <th scope="col">Napomena</th>
-                <th scope="col"><span class="sr-only">Akcije</span></th>
+                <th scope="col" class="akcije-reda"><span class="sr-only">Akcije</span></th>
               </tr>
             </thead>
             <tbody>
               @for (p of prikazane(); track p.id) {
                 @if (store.izmenaId() !== p.id) {
                   <tr [attr.data-prijava]="p.id">
-                    <td><app-status-chip [tekst]="nazivStatusa[p.status]" [ton]="tonPrijave[p.status]" /></td>
-                    <td>{{ p.ime }}</td>
-                    <td>{{ p.prezime }}</td>
-                    <td class="mono">{{ p.indeks }}</td>
-                    <td class="mono">{{ p.godina }}</td>
-                    <td class="siroko">{{ p.email || '—' }}</td>
-                    <td class="nowrap">{{ p.brojTelefona || '—' }}</td>
-                    <td class="mono nowrap">{{ p.datumRodjenja | datum }}</td>
-                    <td>{{ p.opstina || '—' }}</td>
-                    <td class="mono nowrap">{{ p.podneto | datum: 'sa-vremenom' }}</td>
-                    <td class="napomena">{{ p.napomena || '—' }}</td>
+                    <td data-labela="Status"><app-status-chip [tekst]="nazivStatusa[p.status]" [ton]="tonPrijave[p.status]" /></td>
+                    <td data-labela="Ime">{{ p.ime }}</td>
+                    <td data-labela="Prezime">{{ p.prezime }}</td>
+                    <td class="mono" data-labela="Indeks">{{ p.indeks }}</td>
+                    <td class="mono" data-labela="Godina">{{ p.godina }}</td>
+                    <td class="siroko" data-labela="Email">{{ p.email || '—' }}</td>
+                    <td class="brojevi-sitno" data-labela="Telefon">{{ p.brojTelefona || '—' }}</td>
+                    <td class="mono brojevi-sitno" data-labela="Datum rođenja">{{ p.datumRodjenja | datum }}</td>
+                    <td data-labela="Opština">{{ p.opstina || '—' }}</td>
+                    <td class="mono brojevi-sitno" data-labela="Podneto">{{ p.podneto | datum: 'sa-vremenom' }}</td>
+                    <td class="napomena" data-labela="Napomena">{{ p.napomena || '—' }}</td>
                     <td class="akcije-reda">
                       @if (p.status === 'NA_CEKANJU') {
                         <button matButton="filled" type="button" [disabled]="store.zauzet()" (click)="store.prihvati(p)" data-prihvati>Prihvati</button>
@@ -129,17 +129,17 @@ const TON_PRIJAVE: Record<StatusPrijave, TonStatusa> = { NA_CEKANJU: 'warn', PRI
                   </tr>
                 } @else {
                   <tr class="u-izmeni" [formGroup]="nacrt" (keydown.enter)="taster($event, p, true)" (keydown.escape)="taster($event, p, false)">
-                    <td><app-status-chip [tekst]="nazivStatusa[p.status]" [ton]="tonPrijave[p.status]" /></td>
-                    <td><input formControlName="ime" maxlength="60" aria-label="Ime" [class.neispravno]="nacrt.controls.ime.invalid" /></td>
-                    <td><input formControlName="prezime" maxlength="60" aria-label="Prezime" [class.neispravno]="nacrt.controls.prezime.invalid" /></td>
-                    <td><input class="usko" formControlName="indeks" maxlength="20" aria-label="Indeks" [class.neispravno]="nacrt.controls.indeks.invalid" /></td>
-                    <td><input class="usko" type="number" min="2000" step="1" formControlName="godina" aria-label="Godina" [class.neispravno]="nacrt.controls.godina.invalid" /></td>
-                    <td><input type="email" formControlName="email" maxlength="120" aria-label="Email" [class.neispravno]="nacrt.controls.email.invalid" /></td>
-                    <td><input type="tel" formControlName="brojTelefona" maxlength="20" aria-label="Telefon" [class.neispravno]="nacrt.controls.brojTelefona.invalid" /></td>
-                    <td><input type="date" formControlName="datumRodjenja" aria-label="Datum rođenja" /></td>
-                    <td><input formControlName="opstina" maxlength="100" aria-label="Opština" /></td>
-                    <td class="mono nowrap">{{ p.podneto | datum: 'sa-vremenom' }}</td>
-                    <td class="napomena">{{ p.napomena || '—' }}</td>
+                    <td data-labela="Status"><app-status-chip [tekst]="nazivStatusa[p.status]" [ton]="tonPrijave[p.status]" /></td>
+                    <td data-labela="Ime"><input formControlName="ime" maxlength="60" aria-label="Ime" [class.neispravno]="nacrt.controls.ime.invalid" /></td>
+                    <td data-labela="Prezime"><input formControlName="prezime" maxlength="60" aria-label="Prezime" [class.neispravno]="nacrt.controls.prezime.invalid" /></td>
+                    <td data-labela="Indeks"><input formControlName="indeks" maxlength="20" aria-label="Indeks" [class.neispravno]="nacrt.controls.indeks.invalid" /></td>
+                    <td data-labela="Godina"><input type="number" min="2000" step="1" formControlName="godina" aria-label="Godina" [class.neispravno]="nacrt.controls.godina.invalid" /></td>
+                    <td data-labela="Email"><input type="email" formControlName="email" maxlength="120" aria-label="Email" [class.neispravno]="nacrt.controls.email.invalid" /></td>
+                    <td data-labela="Telefon"><input type="tel" formControlName="brojTelefona" maxlength="20" aria-label="Telefon" [class.neispravno]="nacrt.controls.brojTelefona.invalid" /></td>
+                    <td data-labela="Datum rođenja"><input type="date" formControlName="datumRodjenja" aria-label="Datum rođenja" /></td>
+                    <td data-labela="Opština"><input formControlName="opstina" maxlength="100" aria-label="Opština" /></td>
+                    <td class="mono brojevi-sitno" data-labela="Podneto">{{ p.podneto | datum: 'sa-vremenom' }}</td>
+                    <td class="napomena" data-labela="Napomena">{{ p.napomena || '—' }}</td>
                     <td class="akcije-reda">
                       <button matButton="filled" type="button" [disabled]="store.zauzet() || nacrt.invalid" (click)="sacuvaj(p)" data-sacuvaj>Sačuvaj</button>
                       <button matButton type="button" [disabled]="store.zauzet()" (click)="store.otkaziIzmenu()" data-otkazi>Otkaži</button>
@@ -171,30 +171,35 @@ const TON_PRIJAVE: Record<StatusPrijave, TonStatusa> = { NA_CEKANJU: 'warn', PRI
     :host { display: block; }
     .kontekst { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
     .brojaci { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-    .traka { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .traka { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
     .filteri { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
-    .filteri .chip { align-items: center; padding: 0 12px; min-height: 36px; cursor: pointer; font: inherit; }
+    .filteri .chip { align-items: center; padding: 0 12px; cursor: pointer; font: inherit; }
     .napomena-osvezavanja { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
     .poruka { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; border-radius: var(--radius);
       background: var(--primary-soft); color: var(--primary-soft-ink); }
     .poruka span { flex: 1; }
     .zatvori { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
-    .prijave-tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
-    .prijave-tabela th { padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 600; text-align: left; white-space: nowrap; }
-    .prijave-tabela td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-    .prijave-tabela tbody tr:last-child td { border-bottom: 0; }
-    .nowrap { white-space: nowrap; }
+    .prijave-tabela tbody tr { cursor: default; }
+    .prijave-tabela td { padding: 8px 12px; }
     .siroko { overflow-wrap: anywhere; min-width: 12ch; }
-    .napomena { min-width: 12ch; max-width: 28ch; color: var(--ink-2); }
-    .akcije-reda { white-space: nowrap; text-align: right; }
+    .napomena { min-width: 12ch; color: var(--ink-2); }
+    .akcije-reda { white-space: nowrap; text-align: right; position: sticky; right: 0; background: var(--surface); }
+    .u-izmeni .akcije-reda { background: var(--surface-2); }
     .akcije-reda > * + * { margin-left: 6px; }
     .odbij { color: var(--danger); }
     .u-izmeni { background: var(--surface-2); }
     .u-izmeni input { width: 100%; min-width: 9ch; height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm);
       background: var(--surface); color: var(--ink); font: inherit; }
-    .u-izmeni input.usko { min-width: 7ch; }
     .u-izmeni input.neispravno { border-color: var(--danger); }
-    .prazno td { color: var(--muted); padding: 16px 12px; }
+    .prazno td { color: var(--muted); }
+    @media (max-width: 599.98px) {
+      .prijave-tabela tr { grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+      td[data-labela]::before { content: attr(data-labela); display: block; font-size: 11.5px; color: var(--muted); }
+      td:first-child, .siroko, .napomena, .akcije-reda, .prazno td { grid-column: 1 / -1; }
+      .akcije-reda { display: flex; flex-wrap: wrap; gap: 8px; position: static; background: none; }
+      .akcije-reda > * + * { margin-left: 0; }
+      .u-izmeni input { min-width: 0; height: 44px; font-size: 16px; }
+    }
   `,
 })
 export class Prijave {

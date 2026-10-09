@@ -5,7 +5,7 @@ import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, filter, forkJoin, map, of, switchMap, tap } from 'rxjs';
+import { catchError, filter, forkJoin, map, of, Subscription, switchMap, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -139,6 +139,7 @@ export class GrupeLista implements OnInit {
   protected readonly status = signal<'ucitava' | 'ucitano' | 'greska'>('ucitava');
   protected readonly greska = signal<string | null>(null);
   protected readonly q = signal<string | null>(null);
+  private zahtev: Subscription | null = null;
 
   /** Najnovija godina upisa prva, pa po nazivu. */
   protected readonly prikazane = computed(() =>
@@ -158,9 +159,12 @@ export class GrupeLista implements OnInit {
   }
 
   protected ucitaj(): void {
+    // "Pokušaj ponovo" dok prethodno učitavanje još traje: staro se otkazuje (i njegovi zahtevi za onboarding)
+    this.zahtev?.unsubscribe();
     this.status.set('ucitava');
     this.greska.set(null);
-    this.api
+    this.onboarding.set({});
+    this.zahtev = this.api
       .sve({ tiho: true })
       .pipe(
         tap(grupe => {

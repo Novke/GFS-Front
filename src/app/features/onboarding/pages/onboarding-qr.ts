@@ -23,6 +23,7 @@ import { Subscription } from 'rxjs';
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { JE_ID } from '../../../core/route-matchers';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
+import { kopirajTekst } from '../../../shared/util/kopiraj';
 import { OnboardingApi, OnboardingSesijaInfo, upisLink } from '../data-access/onboarding.api';
 
 /** Najmanja i najveća širina QR koda (projektor; telefon studenta skenira i sa zadnjih klupa). */
@@ -40,7 +41,8 @@ type Kopirano = 'ne' | 'da' | 'selektovano';
  * QR za projektor (`/grupe/:id/onboarding/:sid/qr`, `ProjectorLayout` bez ljuske, uvek svetao): naziv grupe, QR kod
  * (canvas ≥ 320 px, paket `qrcode`), link u `<code>` sa "Kopiraj" -> "Kopirano", rok važenja i "Pun ekran". Bez ličnih
  * podataka. Esc van punog ekrana vraća na prijave. Link je `new URL('upis/' + token, document.baseURI)`, pa radi pod
- * `/` i `/gfs/`. Bez clipboard API-ja (http preko tailneta) link se selektuje ("Selektovano, pritisnite Ctrl+C").
+ * `/` i `/gfs/`. Kopiranje kroz `kopirajTekst` (i bez Clipboard API-ja na http-u); ako ni to ne uspe, link se selektuje
+ * ("Selektovano, pritisnite Ctrl+C").
  */
 @Component({
   selector: 'app-onboarding-qr',
@@ -181,15 +183,8 @@ export class OnboardingQr {
     if (!link) {
       return;
     }
-    const clipboard = this.dokument.defaultView?.navigator?.clipboard;
-    if (clipboard?.writeText) {
-      clipboard.writeText(link).then(
-        () => this.postaviKopirano('da'),
-        () => this.selektuj(),
-      );
-    } else {
-      this.selektuj();
-    }
+    // ni Clipboard API ni execCommand: link se selektuje, korisnik pritiska Ctrl+C
+    void kopirajTekst(link, this.dokument).then(ok => (ok ? this.postaviKopirano('da') : this.selektuj()));
   }
 
   private selektuj(): void {
