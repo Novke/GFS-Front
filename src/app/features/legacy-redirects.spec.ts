@@ -11,7 +11,7 @@ import { ProjectorLayout } from '../core/layout/projector-layout';
 import { PublicLayout } from '../core/layout/public-layout';
 import { Shell } from '../core/layout/shell';
 import { HomeComponent } from '../home/home.component';
-import { OnboardingQrComponent } from '../onboarding/onboarding-qr/onboarding-qr.component';
+import { OnboardingQr } from './onboarding/pages/onboarding-qr';
 import { AppRoutes } from './privremeno/app-putanje';
 
 /** Lanac komponenti od korena do lista (bez outleta: komponente se ne prave, samo se ruta prepoznaje). */
@@ -124,7 +124,7 @@ describe('preusmerenja starih ruta', () => {
     await idi('/predavanja/5/projektor');
     expect(komponente(router)[0]).toBe(ProjectorLayout);
     await idi('/grupe/3/onboarding/7/qr');
-    expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQrComponent]);
+    expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQr]);
     expect(router.routerState.snapshot.root.firstChild?.firstChild?.paramMap.get('sid')).toBe('7');
     await idi('/grupe/3/onboarding/7/qr/visak');
     expect(komponente(router)).toEqual([Shell, NotFound]);
@@ -149,7 +149,7 @@ describe('preusmerenja starih ruta', () => {
   it('stari ekrani sa poznatom grupom vode direktno na grupe/:g/onboarding/:sid[/qr] (bez preusmerenja i GET-a sesije)', async () => {
     expect(await idi('/' + AppRoutes.onboardingPrijave(3, 7))).toBe('/grupe/3/onboarding/7');
     expect(await idi('/' + AppRoutes.onboardingQr(3, 7))).toBe('/grupe/3/onboarding/7/qr');
-    expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQrComponent]);
+    expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQr]);
     http.expectNone('api/onboarding/7');
   });
 

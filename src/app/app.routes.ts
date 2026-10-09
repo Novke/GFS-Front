@@ -1,4 +1,4 @@
-import { Params, Route, Routes } from '@angular/router';
+import { Route, Routes } from '@angular/router';
 
 import { Mrvica, MrviceFn } from './core/layout/breadcrumbs';
 import { NotFound } from './core/layout/not-found';
@@ -7,6 +7,7 @@ import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
+import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
@@ -85,43 +86,12 @@ const nastavnickeRute: Routes = [
     loadComponent: () => import('./ocenjivanje/ocenjivanje-select.component').then(x => x.OcenjivanjeSelectComponent),
   },
 
-  // Grupe i onboarding (Task 22)
+  // Grupe i onboarding (Task 22: lista, detalj sa tabovima, prijave; QR je ispod, u ProjectorLayout-u)
   {
     path: 'grupe',
     title: 'Grupe',
     data: stalne(m('Ljudi'), m('Grupe')),
-    children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () => import('./grupa/grupe/grupe.component').then(x => x.GrupeComponent),
-      },
-      {
-        matcher: putanjaSaId(':id/onboarding/:sid'),
-        title: 'Prijave',
-        data: mrvice((p: Params) => [
-          m('Grupe', '/grupe'),
-          m('Grupa', `/grupe/${p['id']}`),
-          m('Onboarding', `/grupe/${p['id']}/onboarding`),
-          m('Prijave'),
-        ]),
-        loadComponent: () =>
-          import('./onboarding/onboarding-prijave/onboarding-prijave.component').then(x => x.OnboardingPrijaveComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Grupa',
-        data: stalne(m('Grupe', '/grupe'), m('Grupa')),
-        loadComponent: () => import('./grupa/grupa-details/grupa-details.component').then(x => x.GrupaDetailsComponent),
-        children: tabovi({
-          pregled: 'Grupa',
-          studenti: 'Studenti grupe',
-          prisustvo: 'Prisustvo grupe',
-          nastava: 'Nastava grupe',
-          onboarding: 'Onboarding grupe',
-        }),
-      },
-    ],
+    children: GRUPE_RUTE,
   },
 
   // Studenti (Task 23: lista, profil sa tabovima, student na predmetu)
@@ -198,7 +168,7 @@ export const routes: Routes = [
       {
         path: '',
         title: 'QR za upis',
-        loadComponent: () => import('./onboarding/onboarding-qr/onboarding-qr.component').then(x => x.OnboardingQrComponent),
+        loadComponent: () => import('./features/onboarding/pages/onboarding-qr').then(x => x.OnboardingQr),
       },
     ],
   },
