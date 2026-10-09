@@ -6,6 +6,7 @@ import {
   EMPTY, Observable, Subject, catchError, concat, debounce, defer, filter, finalize, groupBy, map, mergeMap, of, pipe, race,
   switchMap, take, tap, throwError, timer,
 } from 'rxjs';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { PrezentacijeApi } from './prezentacije.api';
 import { razlogGreske } from './razlog-greske';
 import {
@@ -67,6 +68,7 @@ export const EditorStore = signalStore(
   }),
   withMethods(store => {
     const api = inject(PrezentacijeApi);
+    const obavestenja = inject(NotificationStore);
 
     let prezentacijaId = 0;
     let generacija = 0;
@@ -351,7 +353,14 @@ export const EditorStore = signalStore(
         if (obrisani.has(id) || !naCekanju(id) || greskeSlajda(cmd).length || nacrtiUSlanju.has(id)) continue;
         sacuvano.set(id, izmena.get(id)!);
         const zahtev = id > 0 ? api.izmeniSlajd(id, cmd) : api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle);
-        zahtev.subscribe({ error: e => console.warn('Uživo: izmena slajda nije sačuvana pri izlasku', e) });
+        // editor je možda već zatvoren: poruka ide kroz globalni snackbar (više neuspeha = jedna poruka)
+        zahtev.subscribe({
+          error: e => {
+            const razlog = razlogGreske(e, '');
+            obavestenja.greska(razlog ? `Izmena slajda nije sačuvana: ${razlog}` : 'Izmena slajda nije sačuvana.',
+              { grupa: 'uzivo-cuvanje-pri-izlasku' });
+          },
+        });
       }
     }
 

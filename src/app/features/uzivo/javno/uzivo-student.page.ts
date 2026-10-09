@@ -27,7 +27,7 @@ export function naslovIshoda(
 /**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
  * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`).
- * Bez toolbara (bez-toolbara.ts); uvek svetle boje, mobile-first.
+ * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first.
  */
 @Component({
   selector: 'app-uzivo-student',

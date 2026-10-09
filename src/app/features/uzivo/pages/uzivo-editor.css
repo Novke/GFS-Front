@@ -168,7 +168,7 @@ span.uz-ed-napomena {
 .uz-ed-naziv:focus,
 .uz-ed-opis:focus {
   border-color: var(--primary);
-  outline: 2px solid var(--primary-soft);
+  outline: 2px solid var(--focus);
   background: var(--surface);
 }
 
@@ -353,7 +353,7 @@ span.uz-ed-napomena {
 
 .uz-ed-stavka-dugme:focus-visible {
   border-radius: 4px;
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 

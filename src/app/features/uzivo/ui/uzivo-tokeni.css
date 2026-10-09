@@ -31,7 +31,7 @@
   color: var(--ink);
 }
 
-/* Opasna radnja (Završi, Obriši u potvrdi): Material 3 ne boji dugme atributom `color`, pa ide kroz tokene dugmeta. */
+/* Opasna radnja (Završi u konzoli; potvrde idu kroz ConfirmDialog): Material 3 ne boji dugme atributom `color`, pa ide kroz tokene dugmeta. */
 .uz-opasno.mat-mdc-button-base {
   --mat-button-filled-container-color: var(--danger);
   --mat-button-filled-label-text-color: var(--danger-ink);
@@ -41,7 +41,7 @@
 
 /*
  * Pažnja: <body class="mat-typography"> stilizuje h1-h6 i p specifičnošću (0,1,1) (font, margine). Pravila ovde koja
- * gađaju te elemente zato imaju bar (0,1,1) i dolaze posle Material teme (src/styles.css je poslednji u angular.json).
+ * gađaju te elemente zato imaju bar (0,1,1) i dolaze posle Material teme (`src/styles.scss` ih `@use`-uje posle `styles/theme`).
  */
 
 .uz-platno {
