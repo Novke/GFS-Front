@@ -7,12 +7,11 @@ import { DomSanitizer } from '@angular/platform-browser';
  * `expand_more` je u paketu `keyboard_arrow_down.svg` (isti znak), kopiran pod starim imenom.
  */
 export const IKONE = [
-  'home', 'co_present', 'description', 'assignment', 'bar_chart', 'groups', 'person', 'menu_book', 'forum', 'search',
-  'add', 'close', 'edit', 'delete', 'more_vert', 'expand_more', 'chevron_left', 'chevron_right', 'check', 'check_circle',
-  'star', 'task_alt', 'warning', 'error', 'info', 'print', 'content_copy', 'qr_code_2', 'fullscreen', 'dark_mode',
-  'light_mode', 'routine', 'logout', 'filter_alt', 'filter_alt_off', 'arrow_back', 'arrow_forward', 'undo', 'schedule',
-  'event', 'mail', 'call', 'open_in_new', 'settings', 'history', 'sticky_note_2', 'school', 'person_add', 'swap_horiz',
-  'refresh', 'cloud_off', 'menu', 'brightness_auto',
+  'home', 'co_present', 'description', 'assignment', 'bar_chart', 'groups', 'person', 'menu_book', 'search', 'add', 'close',
+  'edit', 'delete', 'more_vert', 'expand_more', 'chevron_left', 'chevron_right', 'check', 'check_circle', 'star', 'task_alt',
+  'error', 'info', 'print', 'content_copy', 'qr_code_2', 'fullscreen', 'dark_mode', 'light_mode', 'filter_alt_off',
+  'arrow_back', 'arrow_forward', 'schedule', 'event', 'mail', 'call', 'open_in_new', 'settings', 'history', 'sticky_note_2',
+  'school', 'person_add', 'swap_horiz', 'refresh', 'menu', 'brightness_auto',
   // Uživo (prezentacije, konzola, editor): `smartphone`, `laptop`, `error_outline` su u Material Symbols `mobile`,
   // `computer`, `error`.
   'slideshow', 'arrow_downward', 'arrow_upward', 'brightness_2', 'brightness_7', 'cancel', 'check_box', 'drag_indicator',

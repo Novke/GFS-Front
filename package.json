@@ -29,8 +29,7 @@
     "marked": "^18.1.0",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
-    "uuid": "^14.0.2"
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
     "@angular/build": "^22.2.2",
