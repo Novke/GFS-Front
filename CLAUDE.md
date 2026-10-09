@@ -23,12 +23,22 @@ npm run test:eslint-pravila                   # node --test for the two project 
 npx ng test --watch=false                     # all specs
 npx ng test --watch=false --include src/app/features/testovi/data-access/test.store.spec.ts   # one spec
 npx ng build                                  # production build -> dist/gfs-front
+npm run e2e                                   # ng build + tsc (e2e) + Playwright over dist with a mocked API
+npx playwright test e2e/liste.spec.ts         # one e2e spec (needs a fresh dist; Chromium: npx playwright install chromium)
 npx ng serve --host 127.0.0.1                 # angular.json defaults host to "sistem.gfs"; port 4200
 ```
 
 `ng serve` proxies `/api` to `http://localhost:8080` and strips the prefix (`proxy.conf.json`); point it elsewhere
 with your own proxy file (`--proxy-config`). CI (`.github/workflows/ci.yml`, job `build`) runs lint, the rule tests,
-`ng test`, `ng build --configuration production` and `docker build`; nothing is `continue-on-error`.
+`ng test`, `ng build --configuration production`, the e2e suite and `docker build`; nothing is `continue-on-error`.
+
+E2E (`e2e/`, Playwright + `@axe-core/playwright`): `playwright.config.ts` serves `dist/gfs-front/browser` with
+`e2e/staticki-server.ts` (SPA fallback, port 4300 or `E2E_PORT`) and every spec imports `test` from `e2e/fixture.ts`,
+which installs `MockApi` (`e2e/mock-api.ts`, invented data in `e2e/fixtures/*.json`, state per test). A request the mock
+has no route for gets 404 **and fails the test**, so a new endpoint needs a mock route; so does an uncaught page error.
+`mock.na(...)` overrides one route, `mock.zadrzi(...)` holds a response until the test releases it (no fixed sleeps).
+`pristupacnost.spec.ts` runs axe (WCAG 2.0/2.1/2.2 A+AA) day and night: 0 serious/critical violations; fix the app,
+do not disable rules.
 
 ## Layout
 

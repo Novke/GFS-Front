@@ -1,0 +1,8 @@
+{
+  "_napomena": "Ostatak kontrolne table (čeka na tebe, u toku) mok računa iz predavanja, testova, domaćih i onboardinga.",
+  "sledece": { "predmetId": 1, "grupaId": 1, "rb": 4, "brojStarijih": 1 },
+  "nedelja": [
+    { "tip": "PREDAVANJE", "id": 1, "naslov": "Petlje i nizovi", "predmetId": 1, "grupaId": 1, "danUNedelji": 1 },
+    { "tip": "TEST", "id": 1, "naslov": "Kolokvijum 1", "predmetId": 1, "grupaId": 1, "danUNedelji": 3 }
+  ]
+}

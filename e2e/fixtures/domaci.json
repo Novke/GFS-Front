@@ -1,0 +1,6 @@
+[
+  { "id": 1, "naslov": "Nizovi", "text": "Reši zadatke 1-5 iz zbirke.", "datum": "2026-09-29", "pregledan": false, "predmetId": 1, "grupaId": 1, "predavanjeId": 2,
+    "uradjeni": [ { "id": 901, "studentId": 1, "bodovi": 8, "napomene": "", "prepisivanje": false, "oslobodjen": false } ] },
+  { "id": 2, "naslov": null, "text": null, "datum": "2026-10-01", "pregledan": false, "predmetId": 2, "grupaId": 2, "predavanjeId": null,
+    "uradjeni": [] }
+]

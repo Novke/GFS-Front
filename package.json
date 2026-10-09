@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",
-    "test:eslint-pravila": "node --test \"eslint-rules/*.test.js\""
+    "test:eslint-pravila": "node --test \"eslint-rules/*.test.js\"",
+    "e2e": "ng build && tsc -p e2e/tsconfig.json && playwright test"
   },
   "private": true,
   "dependencies": {
@@ -35,8 +36,11 @@
     "@angular/build": "^22.2.2",
     "@angular/cli": "~22.2.2",
     "@angular/compiler-cli": "^22.2.1",
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
     "@material-symbols/svg-400": "^0.47.6",
+    "@playwright/test": "1.64.0",
+    "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.5",
     "angular-eslint": "22.5.0",
     "eslint": "^10.9.1",

@@ -31,5 +31,20 @@ jobs:
         run: npx ng test --watch=false
       - name: Produkcioni build
         run: npx ng build --configuration production
+      - name: E2E pregledač (Chromium)
+        run: npx playwright install --with-deps chromium
+      - name: E2E (Playwright, mokovan API, axe dan i noć)
+        run: |
+          npx tsc -p e2e/tsconfig.json
+          npx playwright test
+      - name: Izveštaj E2E
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-izvestaj
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
       - name: Provera Dockerfile-a
         run: docker build -t gfs-frontend-ci .
