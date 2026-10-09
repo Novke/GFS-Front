@@ -10,6 +10,8 @@ import {
   brojStudenataTekst,
   formatBroj,
   hronologija,
+  prolazPolaganja,
+  rezultatPolaganja,
   mailtoHref,
   pretragaZaUpit,
   punoIme,
@@ -27,7 +29,7 @@ const dom = (id: number, datum: string | null, izmene: Partial<StudentPregledDom
   id, domaciId: 200 + id, bodovi: 7, napomene: null, prepisivanje: false, oslobodjen: false, datum, naslov: `Domaći ${id}`, ...izmene,
 });
 const test = (id: number, datum: string | null, izmene: Partial<StudentPregledTestInfo> = {}): StudentPregledTestInfo => ({
-  id, testId: 300 + id, ostvareniPoeni: 40, polozio: true, prepisivao: false, napomene: null, datum, tipTesta: { id: 1, naziv: 'Kolokvijum' }, ...izmene,
+  id, testId: 300 + id, ostvareniPoeni: 40, pragProlaza: 25, polozeno: true, prepisivao: false, napomene: null, datum, tipTesta: { id: 1, naziv: 'Kolokvijum' }, ...izmene,
 });
 
 describe('hronologija', () => {
@@ -73,7 +75,7 @@ describe('hronologija', () => {
     const [d, t, a] = hronologija({
       aktivnosti: [akt(1, '2025-10-01', { tema: null, tip: null })],
       uradjeniDomaci: [dom(1, '2025-10-03', { naslov: null, bodovi: null, prepisivanje: true, napomene: 'kasno' })],
-      polaganja: [test(1, '2025-10-02', { tipTesta: null, ostvareniPoeni: null, polozio: null })],
+      polaganja: [test(1, '2025-10-02', { tipTesta: null, ostvareniPoeni: null, pragProlaza: null, polozeno: null })],
     });
     expect(d.naslov).toBe('Domaći bez naslova');
     expect(d.detalj).toBe('Bez bodova · prepisivao · kasno');
@@ -87,7 +89,7 @@ describe('hronologija', () => {
     const stavke = hronologija({
       aktivnosti: [],
       uradjeniDomaci: [dom(1, '2025-10-03', { bodovi: 7.5 }), dom(2, '2025-10-02', { oslobodjen: true, bodovi: 10 })],
-      polaganja: [test(1, '2025-10-01', { ostvareniPoeni: 45.5, polozio: false, prepisivao: true })],
+      polaganja: [test(1, '2025-10-01', { ostvareniPoeni: 45.5, polozeno: false, prepisivao: true })],
     });
     expect(stavke.map(s => s.detalj)).toEqual(['7,5 / 10 bodova', 'Oslobođen', '45,5 poena · nije položio · prepisivao']);
   });
@@ -177,5 +179,23 @@ describe('pomoćne funkcije', () => {
     expect(brojStudenataTekst(3)).toBe('3 studenta');
     expect(brojStudenataTekst(12)).toBe('12 studenata');
     expect(brojStudenataTekst(21)).toBe('21 student');
+  });
+});
+
+describe('prolaz polaganja (pravilo je na serveru: pragProlaza i polozeno)', () => {
+  it('bez praga "—" (nema prolaznosti), prag bez poena "nije upisano" (ne "pao"), inače po polozeno', () => {
+    expect(prolazPolaganja(test(1, null, { pragProlaza: null, polozeno: null }))).toBe('bez-praga');
+    expect(prolazPolaganja(test(1, null, { pragProlaza: null, polozeno: null, ostvareniPoeni: null }))).toBe('bez-praga');
+    expect(prolazPolaganja(test(1, null, { ostvareniPoeni: null, polozeno: null }))).toBe('nije-upisano');
+    expect(prolazPolaganja(test(1, null, { ostvareniPoeni: 40, polozeno: true }))).toBe('polozio');
+    // server: prepisivao uvek pada, i sa poenima iznad praga; front ne računa sam
+    expect(prolazPolaganja(test(1, null, { ostvareniPoeni: 40, polozeno: false, prepisivao: true }))).toBe('pao');
+    expect(prolazPolaganja(test(1, null, { ostvareniPoeni: 10, pragProlaza: 25, polozeno: true }))).toBe('polozio');
+  });
+
+  it('rezultat u hronologiji: bez praga nema reči o prolazu, prag bez poena samo "Bez poena"', () => {
+    expect(rezultatPolaganja(test(1, null, { pragProlaza: null, polozeno: null }))).toBe('40 poena');
+    expect(rezultatPolaganja(test(1, null, { ostvareniPoeni: null, polozeno: null }))).toBe('Bez poena');
+    expect(rezultatPolaganja(test(1, null, { polozeno: true }))).toBe('40 poena · položio');
   });
 });

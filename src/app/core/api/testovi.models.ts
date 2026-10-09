@@ -66,8 +66,8 @@ export interface TestStudentInfo {
 }
 
 /**
- * Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). Sačuvano `polozio` se nigde ne
- * koristi (ni kao oznaka po studentu): prolaz se uvek izvodi iz `pragProlaza` testa (`jePolozio`).
+ * Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). Nema polja o prolazu: na ekranu
+ * unosa se prolaz izvodi iz unetih poena i `pragProlaza` testa (`jePolozio`, isto pravilo kao server).
  */
 export interface TestPolaganjeInfo {
   id: number;
@@ -75,7 +75,6 @@ export interface TestPolaganjeInfo {
   grupa: TestGrupa | null;
   ostvareniPoeni: number | null;
   prepisivao: boolean | null;
-  polozio: boolean | null;
   napomene: string | null;
 }
 

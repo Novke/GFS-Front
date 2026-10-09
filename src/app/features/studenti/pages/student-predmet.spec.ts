@@ -14,7 +14,7 @@ import { STUDENTI_RUTE } from '../studenti.routes';
 import { redoviTestova } from './student-predmet';
 
 const polaganje = (id: number, datum: string | null, izmene: Partial<StudentPregledTestInfo> = {}): StudentPregledTestInfo => ({
-  id, testId: 300 + id, ostvareniPoeni: 30, polozio: true, prepisivao: false, napomene: null, datum, tipTesta: { id: 1, naziv: 'Kolokvijum' }, ...izmene,
+  id, testId: 300 + id, ostvareniPoeni: 30, pragProlaza: 25, polozeno: true, prepisivao: false, napomene: null, datum, tipTesta: { id: 1, naziv: 'Kolokvijum' }, ...izmene,
 });
 
 function detalji(izmene: Partial<StudentNaPredmetuDetails> = {}): StudentNaPredmetuDetails {
@@ -33,7 +33,7 @@ function detalji(izmene: Partial<StudentNaPredmetuDetails> = {}): StudentNaPredm
     testoviPoTipu: [
       {
         tipTesta: { id: 1, naziv: 'Kolokvijum' },
-        polaganja: [polaganje(1, '2025-11-01', { ostvareniPoeni: 20, polozio: false }), polaganje(3, '2025-12-01', { ostvareniPoeni: 45 }), polaganje(2, '2025-11-15', { prepisivao: true })],
+        polaganja: [polaganje(1, '2025-11-01', { ostvareniPoeni: 20, polozeno: false }), polaganje(3, '2025-12-01', { ostvareniPoeni: 45 }), polaganje(2, '2025-11-15', { prepisivao: true })],
         najboljePolaganje: polaganje(3, '2025-12-01', { ostvareniPoeni: 45 }),
       },
       { tipTesta: { id: 2, naziv: 'Završni' }, polaganja: [], najboljePolaganje: null },
@@ -138,6 +138,27 @@ describe('StudentPredmet', () => {
     expect(redovi[3].textContent).toContain('Završni');
     expect(redovi[3].querySelector('.c-meta')!.textContent).toBe('nema polaganja');
     expect([...el().querySelectorAll('[data-testovi] thead th')].map(t => t.textContent)).toEqual(['Tip testa', 'Datum', 'Poeni', 'Položio', 'Prepisivao']);
+  });
+
+  it('kolona Položio: bez praga "—", prag bez poena "nije upisano" (ne "Ne"), inače Da/Ne sa servera', async () => {
+    await otvori(detalji({
+      testoviPoTipu: [{
+        tipTesta: { id: 1, naziv: 'Kolokvijum' },
+        polaganja: [
+          polaganje(1, '2025-12-03', { pragProlaza: null, polozeno: null }),
+          polaganje(2, '2025-12-02', { ostvareniPoeni: null, polozeno: null }),
+          polaganje(3, '2025-12-01', { ostvareniPoeni: 40, polozeno: false, prepisivao: true }),
+        ],
+        najboljePolaganje: null,
+      }],
+    }));
+    const polozio = [...el().querySelectorAll('[data-testovi] tbody tr')].map(r => r.querySelectorAll('td')[3].textContent!.trim());
+    expect(polozio).toEqual(['—', 'nije upisano', 'Ne']);
+    const meta = [...el().querySelectorAll('[data-testovi] tbody tr .c-meta')].map(m => m.textContent!.trim());
+    expect(meta[0]).not.toContain('položio');
+    expect(meta[1]).toContain('nije upisano');
+    expect(meta[1]).not.toContain('nije položio');
+    expect(meta[2]).toContain('nije položio');
   });
 
   it('student bez aktivnosti, domaćih i tipova testa: objašnjenja umesto tabela', async () => {

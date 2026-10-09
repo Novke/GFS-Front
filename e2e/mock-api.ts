@@ -343,7 +343,7 @@ export class MockApi {
         const s = this.student(p.studentId);
         return {
           id: p.id, student: s ? this.studentInfo(s) : null, grupa: p.grupa, ostvareniPoeni: p.ostvareniPoeni,
-          prepisivao: p.prepisivao, polozio: p.ostvareniPoeni === null ? null : this.prolazi(t, p), napomene: p.napomene,
+          prepisivao: p.prepisivao, napomene: p.napomene,
         };
       }),
       statistika: saStatistikom
@@ -456,7 +456,8 @@ export class MockApi {
       ),
       polaganja: this.podaci.testovi.flatMap(t =>
         t.polaganja.filter(p => p.studentId === s.id).map(p => ({
-          id: p.id, testId: t.id, ostvareniPoeni: p.ostvareniPoeni, polozio: p.ostvareniPoeni === null ? null : this.prolazi(t, p),
+          id: p.id, testId: t.id, ostvareniPoeni: p.ostvareniPoeni, pragProlaza: t.pragProlaza,
+          polozeno: t.pragProlaza === null || p.ostvareniPoeni === null ? null : this.prolazi(t, p),
           prepisivao: p.prepisivao, napomene: p.napomene, datum: t.datum, tipTesta: this.tipTesta(t.tipTestaId),
         })),
       ),

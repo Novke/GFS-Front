@@ -29,7 +29,6 @@ const polaganje = (id: number, ime: string, indeks: string, poeni: number | null
   grupa: poeni === null ? null : grupa,
   ostvareniPoeni: poeni,
   prepisivao: false,
-  polozio: null,
   napomene: null,
 });
 

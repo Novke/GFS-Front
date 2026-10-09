@@ -20,7 +20,6 @@ const ana: TestPolaganjeInfo = {
   grupa: null,
   ostvareniPoeni: null,
   prepisivao: false,
-  polozio: null,
   napomene: null,
 };
 

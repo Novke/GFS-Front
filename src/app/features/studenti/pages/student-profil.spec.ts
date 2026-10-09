@@ -30,7 +30,7 @@ function student(izmene: Partial<StudentPregledDetails> = {}): StudentPregledDet
       { id: 2, predavanjeId: 12, tip: 'PRISUSTVO', napomene: 'kasnila', datum: '2025-10-21', tema: 'Nizovi' },
     ],
     uradjeniDomaci: [{ id: 1, domaciId: 21, bodovi: 8, napomene: null, prepisivanje: false, oslobodjen: false, datum: '2025-10-18', naslov: 'Domaći 1' }],
-    polaganja: [{ id: 1, testId: 31, ostvareniPoeni: 40, polozio: true, prepisivao: false, napomene: null, datum: '2025-11-20', tipTesta: { id: 1, naziv: 'Kolokvijum 1' } }],
+    polaganja: [{ id: 1, testId: 31, ostvareniPoeni: 40, pragProlaza: 25, polozeno: true, prepisivao: false, napomene: null, datum: '2025-11-20', tipTesta: { id: 1, naziv: 'Kolokvijum 1' } }],
     ...izmene,
   };
 }

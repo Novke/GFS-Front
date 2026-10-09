@@ -13,7 +13,9 @@ import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { StudentPredmetStore } from '../data-access/student.store';
-import { formatBroj, punoIme, sortirajPolaganja, sortirajPoDatumu, tipAktivnostiTekst } from '../data-access/studenti.models';
+import {
+  formatBroj, polozioKolona, prolazTekst, punoIme, sortirajPolaganja, sortirajPoDatumu, tipAktivnostiTekst,
+} from '../data-access/studenti.models';
 
 /** Red tabele testova: polaganje (ili `null` za tip bez polaganja) sa nazivom tipa i oznakom najboljeg. */
 export interface RedTesta {
@@ -165,7 +167,7 @@ const daNe = (v: boolean | null | undefined): string => (v === true ? 'Da' : v =
                           }
                         </td>
                         <td class="samo-desktop mono brojevi-sitno">{{ poeni(p.ostvareniPoeni) }}</td>
-                        <td class="samo-desktop">{{ daNe(p.polozio) }}</td>
+                        <td class="samo-desktop">{{ polozio(p) }}</td>
                         <td class="samo-desktop">{{ daNe(p.prepisivao) }}</td>
                         <td class="c-meta">{{ metaPolaganja(p) }}</td>
                       } @else {
@@ -267,6 +269,7 @@ export class StudentPredmet {
   }
 
   protected daNe = daNe;
+  protected polozio = polozioKolona;
 
   protected tip(a: StudentPregledAktivnostInfo): string {
     return tipAktivnostiTekst(a.tip);
@@ -291,8 +294,8 @@ export class StudentPredmet {
   protected metaPolaganja(p: StudentPregledTestInfo): string {
     return [
       formatDatum(p.datum),
-      `${formatBroj(p.ostvareniPoeni)} poena`,
-      p.polozio === true ? 'položio' : p.polozio === false ? 'nije položio' : null,
+      p.ostvareniPoeni === null ? (p.pragProlaza === null ? 'bez poena' : 'nije upisano') : `${formatBroj(p.ostvareniPoeni)} poena`,
+      prolazTekst(p),
       p.prepisivao ? 'prepisivao' : null,
     ]
       .filter(Boolean)

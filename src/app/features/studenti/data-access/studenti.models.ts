@@ -126,10 +126,35 @@ function izDomaceg(d: StudentPregledDomaciInfo): StavkaHronologije {
   };
 }
 
+/** Prolaz polaganja u pregledu studenta. */
+export type ProlazPolaganja = 'bez-praga' | 'nije-upisano' | 'polozio' | 'pao';
+
+/**
+ * Prolaz iz odgovora servera (`pragProlaza`, `polozeno`; pravilo prolaza je samo na serveru, front ga ne ponavlja): test
+ * bez praga nema prolaznost; prag bez upisanih poena je "nije upisano", nikad "pao". `null` samo za nedosledan odgovor.
+ */
+export function prolazPolaganja(p: Pick<StudentPregledTestInfo, 'pragProlaza' | 'polozeno' | 'ostvareniPoeni'>): ProlazPolaganja | null {
+  if (p.pragProlaza === null) return 'bez-praga';
+  if (p.ostvareniPoeni === null) return 'nije-upisano';
+  return p.polozeno === true ? 'polozio' : p.polozeno === false ? 'pao' : null;
+}
+
+/** Kolona "Položio" u tabeli polaganja. */
+export function polozioKolona(p: StudentPregledTestInfo): string {
+  const prolaz = prolazPolaganja(p);
+  return prolaz === 'polozio' ? 'Da' : prolaz === 'pao' ? 'Ne' : prolaz === 'nije-upisano' ? 'nije upisano' : '—';
+}
+
+/** Reč o prolazu uz poene (`položio`, `nije položio`); bez praga i bez poena ništa (poeni već kažu "Bez poena"). */
+export function prolazTekst(p: StudentPregledTestInfo): string | null {
+  const prolaz = prolazPolaganja(p);
+  return prolaz === 'polozio' ? 'položio' : prolaz === 'pao' ? 'nije položio' : null;
+}
+
 /** Rezultat polaganja za prikaz: `45,5 poena · položio` ili `Bez poena`. */
 export function rezultatPolaganja(p: StudentPregledTestInfo): string {
   const poeni = p.ostvareniPoeni === null ? 'Bez poena' : `${formatBroj(p.ostvareniPoeni)} poena`;
-  return spoji(poeni, p.polozio === true ? 'položio' : p.polozio === false ? 'nije položio' : null, p.prepisivao && 'prepisivao');
+  return spoji(poeni, prolazTekst(p), p.prepisivao && 'prepisivao');
 }
 
 function izPolaganja(p: StudentPregledTestInfo): StavkaHronologije {

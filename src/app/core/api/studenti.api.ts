@@ -92,12 +92,17 @@ export interface StudentPregledDomaciInfo {
   naslov: string | null;
 }
 
-/** Polaganje testa (`StudentPregledTestInfo`); `polozio` može biti `null`. Redosled sa servera nije određen. */
+/**
+ * Polaganje testa (`StudentPregledTestInfo`). Prolaz računa server (jedino pravilo prolaza za pregled): `pragProlaza` je
+ * `null` kad test nema prag, `polozeno` je `null` kad test nema prag ili poeni nisu upisani (inače `false` i za
+ * prepisivanje). Redosled sa servera nije određen.
+ */
 export interface StudentPregledTestInfo {
   id: number;
   testId: number | null;
   ostvareniPoeni: number | null;
-  polozio: boolean | null;
+  pragProlaza: number | null;
+  polozeno: boolean | null;
   prepisivao: boolean | null;
   napomene: string | null;
   datum: string | null;

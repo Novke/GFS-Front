@@ -14,7 +14,6 @@ const polaganje = (id: number, poeni: number | null, grupa: 'A' | 'B' | null, pr
   grupa,
   ostvareniPoeni: poeni,
   prepisivao,
-  polozio: null, // server ga ne postavlja: prolaz računa front
   napomene: null,
 });
 
