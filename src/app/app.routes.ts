@@ -15,6 +15,7 @@ import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
 import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
 import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
+import { UZIVO_ROUTES } from './features/uzivo/uzivo.routes';
 
 /*
  * Stablo ruta (spec, sekcija 2). Putanje su relativne na <base href>; filteri lista su query parametri.
@@ -145,6 +146,9 @@ export const routes: Routes = [
       },
     ],
   },
+
+  // Uživo (merge sa staging-om): privremeno bez layouta, kao na staging-u.
+  ...UZIVO_ROUTES,
 
   { path: '', component: Shell, children: nastavnickeRute },
 ];
