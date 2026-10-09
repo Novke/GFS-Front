@@ -9,6 +9,7 @@ import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { legacyRedirects } from './features/legacy-redirects';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
+import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
 import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
 
 /*
@@ -123,26 +124,12 @@ const nastavnickeRute: Routes = [
     ],
   },
 
-  // Studenti (Task 23)
+  // Studenti (Task 23: lista, profil sa tabovima, student na predmetu)
   {
     path: 'studenti',
     title: 'Studenti',
     data: stalne(m('Ljudi'), m('Studenti')),
-    children: [
-      { path: '', pathMatch: 'full', loadComponent: uskoro },
-      {
-        matcher: putanjaSaId(':id/predmeti/:pid'),
-        title: 'Student na predmetu',
-        data: mrvice((p: Params) => [m('Studenti', '/studenti'), m('Student', `/studenti/${p['id']}`), m('Predmet')]),
-        loadComponent: () => import('./student/student-predmet/student-predmet.component').then(x => x.StudentPredmetComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Student',
-        data: stalne(m('Studenti', '/studenti'), m('Student')),
-        loadComponent: () => import('./student/student-details/student-details.component').then(x => x.StudentDetailsComponent),
-      },
-    ],
+    children: STUDENTI_RUTE,
   },
 
   // Predmeti (Task 24)
