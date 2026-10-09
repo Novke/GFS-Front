@@ -13,8 +13,9 @@ import { TipTestaInfo } from '../../../core/api/reference.api';
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
-import { formatBroja } from '../data-access/test.store';
+import { formatBroja, PORUKA_PRAGA } from '../data-access/test.store';
 import { TestDetails, UpdateTestCmd, VARIJANTE } from '../data-access/testovi.models';
+import { PragProlaza } from './prag-prolaza';
 
 const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -27,7 +28,9 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
 /**
  * Zaglavlje testa (detalj i statistika): status, naziv tipa, predmet / grupa / datum / max / varijante kao chipovi,
  * tabovi "Unos poena" i "Statistika" (rute) i meni ⋮. Dok test nije evidentiran, tip, datum i max poena su izmenljivi
- * (forma na mestu naslova, `sacuvaj` vraća `true` kad server prihvati); novi max ne sme biti manji od unetih poena.
+ * (forma na mestu naslova, `sacuvaj` vraća `null` kad server prihvati, inače razlog); novi max ne sme biti manji od
+ * unetih poena ni od praga.
+ * Prag prolaza je zasebno polje (`cuvajPrag`) koje se čuva samo i menja se i na evidentiranom testu.
  */
 @Component({
   selector: 'app-test-zaglavlje',
@@ -46,6 +49,7 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
     MatOption,
     MatProgressSpinner,
     MatSelect,
+    PragProlaza,
     ReactiveFormsModule,
     RouterLink,
     RouterLinkActive,
@@ -62,6 +66,9 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
 
       @if (izmena()) {
         <form class="izmena" [formGroup]="forma" (ngSubmit)="posalji()" novalidate aria-label="Izmena testa">
+          @if (greskaForme(); as g) {
+            <p class="greska-forme" role="alert" data-greska-forme>{{ g }}</p>
+          }
           <mat-form-field appearance="outline" class="tip">
             <mat-label>Tip testa</mat-label>
             <mat-select formControlName="tipTestaId" data-tip>
@@ -115,6 +122,9 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
         <span class="oznaka ton-neutral mono" title="Max poena">max {{ test().maxPoena ?? '—' }}</span>
         <span class="oznaka ton-neutral mono" title="Varijante">var. {{ varijante() }}</span>
       </div>
+      @if (cuvajPrag(); as cuvaj) {
+        <app-prag-prolaza [prag]="test().pragProlaza ?? null" [max]="test().maxPoena ?? null" [cuvaj]="cuvaj" />
+      }
     </div>
 
     <div class="desno">
@@ -150,6 +160,7 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
     .izmena .datum { flex: 0 1 180px; }
     .izmena .max { flex: 0 0 130px; }
     .dugmad { display: flex; gap: 8px; padding-top: 8px; }
+    .greska-forme { flex: 1 0 100%; margin: 0 0 8px; color: var(--danger); font-size: 13px; }
     .dugmad mat-progress-spinner { display: inline-block; margin-right: 8px; }
     .desno { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
     .opasno { color: var(--danger); }
@@ -173,11 +184,15 @@ export class TestZaglavlje {
   readonly izmenljivo = input(false);
   /** Najveći uneti poeni (novi max ne sme biti manji); `null` kad nema unetih. */
   readonly najviseUneto = input<number | null>(null);
-  readonly sacuvaj = input<(izmena: UpdateTestCmd) => Promise<boolean>>(() => Promise.resolve(false));
+  /** Čuva zaglavlje; vraća `null` kad je sačuvano, inače razlog greške (prikazuje se u formi). */
+  readonly sacuvaj = input<(izmena: UpdateTestCmd) => Promise<string | null>>(() => Promise.resolve(null));
+  /** Čuva prag prolaza (`null` briše); bez ovog ulaza polje praga se ne prikazuje. Radi i na evidentiranom testu. */
+  readonly cuvajPrag = input<((prag: number | null) => Promise<string | null>) | null>(null);
   readonly obrisi = output<void>();
 
   protected readonly izmena = signal(false);
   protected readonly cuva = signal(false);
+  protected readonly greskaForme = signal<string | null>(null);
 
   protected readonly naslov = computed(() => this.test().tipTesta?.naziv?.trim() || 'Test');
   protected readonly varijante = computed(() => varijantePrikaz(this.test().grupe));
@@ -199,6 +214,7 @@ export class TestZaglavlje {
   protected pocniIzmenu(): void {
     const t = this.test();
     this.forma.reset({ tipTestaId: t.tipTesta?.id ?? null, datum: t.datum ?? '', maxPoena: t.maxPoena });
+    this.greskaForme.set(null);
     this.izmena.set(true);
   }
 
@@ -209,6 +225,12 @@ export class TestZaglavlje {
     }
     if (k.errors?.['ispodUnetih']) {
       return `Neko već ima ${formatBroja(this.najviseUneto())} poena.`;
+    }
+    if (k.errors?.['ispodPraga']) {
+      return `Max ne može biti manji od praga prolaza (${this.test().pragProlaza}).`;
+    }
+    if (k.errors?.['server']) {
+      return k.errors['server'] as string;
     }
     if (ime === 'maxPoena' && k.errors?.['pattern'] && !k.errors?.['min']) {
       return 'Unesi ceo broj.';
@@ -222,8 +244,11 @@ export class TestZaglavlje {
     }
     const { tipTestaId, datum, maxPoena } = this.forma.getRawValue();
     const najvise = this.najviseUneto();
+    const prag = this.test().pragProlaza;
     if (maxPoena !== null && najvise !== null && Number(maxPoena) < najvise) {
       this.forma.controls.maxPoena.setErrors({ ispodUnetih: true });
+    } else if (maxPoena !== null && prag !== null && prag !== undefined && Number(maxPoena) < prag) {
+      this.forma.controls.maxPoena.setErrors({ ispodPraga: true });
     }
     if (this.forma.invalid || tipTestaId === null || maxPoena === null) {
       this.forma.markAllAsTouched();
@@ -231,8 +256,16 @@ export class TestZaglavlje {
     }
     this.cuva.set(true);
     try {
-      if (await this.sacuvaj()({ tipTestaId, datum, maxPoena: Number(maxPoena) })) {
+      this.greskaForme.set(null);
+      const greska = await this.sacuvaj()({ tipTestaId, datum, maxPoena: Number(maxPoena) });
+      if (greska === null) {
         this.izmena.set(false);
+      } else if (greska === PORUKA_PRAGA) {
+        // max manji od praga prolaza: greška pripada polju max poena
+        this.forma.controls.maxPoena.setErrors({ server: greska });
+        this.forma.controls.maxPoena.markAsTouched();
+      } else {
+        this.greskaForme.set(greska);
       }
     } finally {
       this.cuva.set(false);

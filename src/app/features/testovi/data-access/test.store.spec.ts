@@ -10,7 +10,9 @@ import { NotificationStore, Poruka } from '../../../core/state/notification.stor
 import {
   DEBOUNCE_REDA_MS,
   greskaReda,
+  jePolozio,
   korpePoena,
+  opisProlaza,
   parsirajPoene,
   statistikaPoena,
   statistikaPoVarijantama,
@@ -38,6 +40,7 @@ function test(polaganja: TestPolaganjeInfo[], max = 30): TestDetails {
     grupa: GRUPA,
     datum: '2025-10-16',
     maxPoena: max,
+    pragProlaza: 15,
     pregledan: false,
     grupe: ['A', 'B'],
     polaganja,
@@ -65,7 +68,7 @@ describe('Testovi: čiste funkcije', () => {
     expect(greskaReda({ ...v, poeni: '5', napomene: 'x'.repeat(256) }, 30, ['A', 'B'])?.polje).toBe('napomena');
   });
 
-  it('statistika uživo ignoriše prazne unose: prosek, prolaz (pola max, bez prepisivanja), min i max', () => {
+  it('statistika uživo ignoriše prazne unose: prosek, prolaz (prag 15, bez prepisivanja), min i max', () => {
     const s = statistikaPoena(
       [
         { poeni: 10, prepisivao: false },
@@ -74,9 +77,35 @@ describe('Testovi: čiste funkcije', () => {
         { poeni: 15, prepisivao: true },
         { poeni: null, prepisivao: false },
       ],
-      30,
+      15,
     );
     expect(s).toEqual({ broj: 3, ukupno: 5, prosek: 15, prolaz: (1 * 100) / 3, min: 10, max: 20 });
+  });
+
+  it('prag prolaza: tačno prag prolazi, prag - 1 pada, prepisivao pada i sa poenima iznad praga', () => {
+    expect(jePolozio(15, 15, false)).toBe(true);
+    expect(jePolozio(14, 15, false)).toBe(false);
+    expect(jePolozio(14.5, 15, false)).toBe(false);
+    expect(jePolozio(30, 15, true)).toBe(false);
+    expect(jePolozio(0, 0, false)).toBe(true);
+    const s = statistikaPoena(
+      [
+        { poeni: 15, prepisivao: false },
+        { poeni: 14, prepisivao: false },
+        { poeni: 30, prepisivao: true },
+      ],
+      15,
+    );
+    expect(s.prolaz).toBeCloseTo(100 / 3);
+  });
+
+  it('bez praga test nema prolaznost: prolaz je null (prikaz "—"), ostalo se računa', () => {
+    expect(jePolozio(30, null, false)).toBe(false);
+    const s = statistikaPoena([{ poeni: 20, prepisivao: false }], null);
+    expect(s).toMatchObject({ broj: 1, prosek: 20, prolaz: null });
+    expect(statistikaPoVarijantama([polaganje(1, 'Ana', 'GD1', 20, 'A')], null)[0].prolaz).toBeNull();
+    expect(opisProlaza(null)).toBe('Bez praga test nema prolaznost.');
+    expect(opisProlaza(15)).toBe('Prolaz: najmanje 15 poena, bez prepisivanja.');
   });
 
   it('statistika bez unetih poena nema proseka (prikaz "—")', () => {
@@ -104,7 +133,7 @@ describe('Testovi: čiste funkcije', () => {
   it('statistika po varijantama računa samo polaganja sa poenima', () => {
     const s = statistikaPoVarijantama(
       [polaganje(1, 'Ana', 'GD1', 20, 'A'), polaganje(2, 'Bora', 'GD2', 10, 'B'), polaganje(3, 'Ceca', 'GD3', null), polaganje(4, 'Dule', 'GD4', 30, 'A')],
-      30,
+      15,
     );
     expect(s.map(x => [x.varijanta, x.broj, x.prosek, x.prolaz])).toEqual([
       ['A', 2, 25, 100],
@@ -399,4 +428,51 @@ describe('TestStore', () => {
     http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(2, 'Bora', 'GD3', 5, 'B')]));
     expect(store.spremnost()).toEqual({ moze: true, razlog: null });
   });
+
+  it('prag: PATCH prag-prolaza (i na evidentiranom testu), statistika uživo se odmah preračunava; null briše prag', async () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 12, 'A'), polaganje(2, 'Bora', 'GD3', 20, 'B')]);
+    patchEvidentiran();
+    expect(store.statistikaUzivo().prolaz).toBe(50);
+    const p = store.postaviPrag(10);
+    const req = http.expectOne('api/test/5/prag-prolaza');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ pragProlaza: 10 });
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
+    req.flush({ ...test([]), pragProlaza: 10, pregledan: true });
+    await expect(p).resolves.toBeNull();
+    expect(store.statistikaUzivo().prolaz).toBe(100);
+    const brisanje = store.postaviPrag(null);
+    const r2 = http.expectOne('api/test/5/prag-prolaza');
+    expect(r2.request.body).toEqual({ pragProlaza: null });
+    r2.flush({ ...test([]), pragProlaza: null, pregledan: true });
+    await brisanje;
+    expect(store.statistikaUzivo().prolaz).toBeNull();
+  });
+
+  it('prag van opsega: razlog servera se vraća polju (nema snackbara), prag ostaje', async () => {
+    ucitaj([]);
+    const p = store.postaviPrag(40);
+    http
+      .expectOne('api/test/5/prag-prolaza')
+      .flush({ reason: 'Prag prolaza mora biti između 0 i maksimalnog broja poena.' }, { status: 400, statusText: 'Bad Request' });
+    await expect(p).resolves.toBe('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
+    expect(store.pragProlaza()).toBe(15);
+  });
+
+  it('zaglavlje (PUT) ne šalje prag; greška servera se vraća formi', async () => {
+    ucitaj([]);
+    const p = store.izmeniZaglavlje({ datum: '2025-10-16', maxPoena: 10, tipTestaId: 2 });
+    const req = http.expectOne(r => r.method === 'PUT' && r.url === 'api/test/5');
+    expect(req.request.body).toEqual({ datum: '2025-10-16', maxPoena: 10, tipTestaId: 2 });
+    req.flush({ reason: 'Prag prolaza mora biti između 0 i maksimalnog broja poena.' }, { status: 400, statusText: 'Bad Request' });
+    await expect(p).resolves.toBe('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
+    expect(store.maxPoena()).toBe(30);
+  });
+
+  /** Evidentiran test (prag se i tada menja): stanje kao da je završen. */
+  function patchEvidentiran(): void {
+    void store.zavrsi();
+    http.expectOne(r => r.method === 'PATCH' && r.url === 'api/test/5').flush({ ...test([]), pregledan: true });
+    expect(store.evidentiran()).toBe(true);
+  }
 });

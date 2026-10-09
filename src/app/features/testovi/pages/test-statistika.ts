@@ -11,7 +11,7 @@ import { StatTile } from '../../../shared/ui/stat-tile';
 import {
   formatBroja,
   korpePoena,
-  OPIS_PROLAZA,
+  opisProlaza,
   statistikaPoena,
   StatistikaVarijante,
   statistikaPoVarijantama,
@@ -34,7 +34,7 @@ const procenat = (p: number | null) => (p === null ? '—' : `${Math.round(p)} %
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.test(); as t) {
-      <app-test-zaglavlje [test]="t" (obrisi)="obrisi()" />
+      <app-test-zaglavlje [test]="t" [cuvajPrag]="cuvajPrag" (obrisi)="obrisi()" />
 
       @if (brojSaPoenima() === 0) {
         <app-empty-state ikona="bar_chart" naslov="Još nema unetih poena"
@@ -52,7 +52,7 @@ const procenat = (p: number | null) => (p === null ? '—' : `${Math.round(p)} %
           <app-stat-tile labela="max" [vrednost]="broj(t.statistika?.maxPoeni ?? lokalno().max)" />
           <app-stat-tile labela="std. devijacija" [vrednost]="broj(t.statistika?.standardnaDevijacija ?? null)" />
         </div>
-        <p class="napomena">Prolaz: {{ opisProlaza }}.</p>
+        <p class="napomena">{{ opisProlaza() }}</p>
 
         <section class="kartica" aria-labelledby="naslov-raspodele">
           <h2 id="naslov-raspodele">Raspodela poena</h2>
@@ -131,14 +131,16 @@ export class TestStatistika {
 
   readonly id = input.required<string>();
   protected readonly tId = computed(() => (JE_ID.test(this.id()) ? Number(this.id()) : null));
-  protected readonly opisProlaza = OPIS_PROLAZA;
+  protected readonly opisProlaza = computed(() => opisProlaza(this.store.pragProlaza()));
+  /** Prag se menja i ovde (i na evidentiranom testu); statistika se odmah preračunava. */
+  protected readonly cuvajPrag = (prag: number | null) => this.store.postaviPrag(prag);
   protected readonly procenat = procenat;
 
   protected readonly polaganja = computed(() => this.store.test()?.polaganja ?? []);
   private readonly unosi = computed(() =>
     this.polaganja().map(p => ({ poeni: p.ostvareniPoeni ?? null, prepisivao: p.prepisivao === true })),
   );
-  protected readonly lokalno = computed(() => statistikaPoena(this.unosi(), this.store.maxPoena()));
+  protected readonly lokalno = computed(() => statistikaPoena(this.unosi(), this.store.pragProlaza()));
   protected readonly brojSaPoenima = computed(() => this.lokalno().broj);
   /** Stabilan ulaz histograma: menja se samo kad se promene poeni ili max. */
   protected readonly korpe = computed<StubacHistograma[]>(
@@ -151,7 +153,7 @@ export class TestStatistika {
       ),
     { equal: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
   );
-  protected readonly poVarijantama = computed<StatistikaVarijante[]>(() => statistikaPoVarijantama(this.polaganja(), this.store.maxPoena()));
+  protected readonly poVarijantama = computed<StatistikaVarijante[]>(() => statistikaPoVarijantama(this.polaganja(), this.store.pragProlaza()));
 
   constructor() {
     effect(() => {

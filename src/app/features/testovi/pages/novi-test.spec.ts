@@ -13,7 +13,7 @@ import { NOV_TIP, NoviTest } from './novi-test';
 class Stub {}
 
 interface Forma {
-  controls: Record<'predmet' | 'grupa' | 'tip' | 'maxPoena' | 'brojGrupa', { setValue(v: unknown): void }> & {
+  controls: Record<'predmet' | 'grupa' | 'tip' | 'maxPoena' | 'brojGrupa' | 'pragProlaza', { setValue(v: unknown): void }> & {
     novTip: { setValue(v: string): void };
   };
 }
@@ -69,7 +69,7 @@ describe('NoviTest', () => {
     await posalji();
     const req = http.expectOne('api/test');
     expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
-    expect(req.request.body).toMatchObject({ tipTestaId: 2, predmetId: 1, grupaId: 4, brojGrupa: 2, maxPoena: 30 });
+    expect(req.request.body).toMatchObject({ tipTestaId: 2, predmetId: 1, grupaId: 4, brojGrupa: 2, maxPoena: 30, pragProlaza: null });
     expect(req.request.body.datum).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     req.flush({ id: 77 });
     await harness.fixture.whenStable();
@@ -108,5 +108,24 @@ describe('NoviTest', () => {
     await posalji();
     http.expectNone('api/test/tip');
     expect(http.expectOne('api/test').request.body.tipTestaId).toBe(8);
+  });
+
+  it('prag prolaza: iznad max se ne šalje; greška servera za prag ide ispod polja praga', async () => {
+    await otvori();
+    forma().controls.tip.setValue(2);
+    forma().controls.maxPoena.setValue(20);
+    forma().controls.pragProlaza.setValue(25);
+    await posalji();
+    http.expectNone('api/test');
+    expect(el().querySelector('mat-error')?.textContent).toContain('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
+    forma().controls.pragProlaza.setValue(11);
+    await posalji();
+    const req = http.expectOne('api/test');
+    expect(req.request.body.pragProlaza).toBe(11);
+    req.flush({ reason: 'Prag prolaza mora biti između 0 i maksimalnog broja poena.' }, { status: 400, statusText: 'Bad Request' });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el().querySelector('[role=alert]')).toBeNull(); // ne u traci iznad forme
+    expect(el().querySelector('mat-error')?.textContent).toContain('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
   });
 });

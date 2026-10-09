@@ -32,6 +32,7 @@ function test(polaganja: TestPolaganjeInfo[]): TestDetails {
     grupa: GRUPA,
     datum: '2025-10-16',
     maxPoena: 30,
+    pragProlaza: 15,
     pregledan: false,
     grupe: ['A', 'B'],
     polaganja,
@@ -181,5 +182,27 @@ describe('TestDetalj', () => {
     harness.detectChanges();
     expect(el().querySelector('h1')?.textContent).toContain('Popravni');
     expect(el().querySelector('tr[data-student="1"]')).toBeNull();
+  });
+
+  it('prag prolaza u zaglavlju: prazno briše prag, prag iznad max je greška ispod polja (ne šalje se)', async () => {
+    await otvori([ana]);
+    const polje = el().querySelector<HTMLInputElement>('input[data-prag]')!;
+    expect(polje.value).toBe('15');
+    polje.value = '31';
+    polje.dispatchEvent(new Event('input'));
+    polje.dispatchEvent(new Event('blur'));
+    harness.detectChanges();
+    expect(el().querySelector('[data-prag-opis]')?.textContent).toContain('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
+    http.expectNone('api/test/5/prag-prolaza');
+    polje.value = '';
+    polje.dispatchEvent(new Event('input'));
+    polje.dispatchEvent(new Event('blur'));
+    const req = http.expectOne('api/test/5/prag-prolaza');
+    expect(req.request.body).toEqual({ pragProlaza: null });
+    req.flush({ ...test([ana]), pragProlaza: null });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el().querySelector('[data-kpi-prolaz]')?.textContent).toContain('—');
+    expect(el().textContent).toContain('Bez praga test nema prolaznost.');
   });
 });

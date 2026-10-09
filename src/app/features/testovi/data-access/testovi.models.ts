@@ -15,15 +15,17 @@ export type TestGrupa = 'A' | 'B' | 'C' | 'D';
 export const VARIJANTE: readonly TestGrupa[] = ['A', 'B', 'C', 'D'];
 
 /**
- * Red liste testova; ogleda backend `dto/test/TestListItem`. `prosek` i `procenatProlaznosti` (0-100) su `null` kad
- * nijedno polaganje nema upisane poene. `procenatProlaznosti` računa server (lista nema polaganja); na detalju i u
- * statistici prolaz računa front (`jePolozio` u `test.store.ts`).
+ * Red liste testova; ogleda backend `dto/test/TestListItem`. `prosek` je `null` kad nijedno polaganje nema upisane poene;
+ * `procenatProlaznosti` (0-100, računa server po pragu, lista nema polaganja) je `null` i kad test nema prag prolaza.
+ * Na detalju i u statistici prolaz računa front (`jePolozio` u `test.store.ts`, isto pravilo).
  */
 export interface TestListItem {
   id: number;
   datum: string | null;
   tipTesta: TipTestaInfo | null;
   maxPoena: number | null;
+  /** Prag prolaza u poenima; `null` = test nema prolaznost. */
+  pragProlaza: number | null;
   pregledan: boolean | null;
   predmet: PredmetInfo | null;
   grupa: GrupaInfo | null;
@@ -64,8 +66,8 @@ export interface TestStudentInfo {
 }
 
 /**
- * Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). `polozio` se na frontu ne koristi
- * (prolaz računa `jePolozio`).
+ * Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). Sačuvano `polozio` se nigde ne
+ * koristi (ni kao oznaka po studentu): prolaz se uvek izvodi iz `pragProlaza` testa (`jePolozio`).
  */
 export interface TestPolaganjeInfo {
   id: number;
@@ -77,27 +79,30 @@ export interface TestPolaganjeInfo {
   napomene: string | null;
 }
 
+/** Ogleda `TestStatistikaPoGrupiInfo`; `procenatProlaznosti` je `null` kad test nema prag prolaza. */
 export interface TestStatistikaPoGrupiInfo {
   grupa: TestGrupa;
-  brojPolaganja: number;
-  prosecniPoeni: number;
-  procenatProlaznosti: number;
+  brojPolaganja: number | null;
+  prosecniPoeni: number | null;
+  procenatProlaznosti: number | null;
 }
 
 /**
- * Ogleda `TestStatistikaInfo` (računa se samo u `GET test/{id}`). Front iz nje prikazuje broj, prosek, min, max i
- * standardnu devijaciju; prolaz (ukupno i po varijantama) računa sam (`jePolozio`).
+ * Ogleda `TestStatistikaInfo` (računa se samo u `GET test/{id}`). Sva polja se tretiraju kao opciona: prolaznost
+ * (`brojPolozenih`, `brojPalih`, `procenatProlaznosti`) je `null` bez praga prolaza ili bez polaganja sa poenima. Front iz
+ * nje prikazuje broj, prosek, min, max i standardnu devijaciju; prolaz (ukupno i po varijantama) računa sam (`jePolozio`,
+ * isto pravilo kao server).
  */
 export interface TestStatistikaInfo {
-  ukupnoPolaganja: number;
-  prosecniPoeni: number;
-  minPoeni: number;
-  maxPoeni: number;
-  standardnaDevijacija: number;
-  brojPolozenih: number;
-  brojPalih: number;
-  procenatProlaznosti: number;
-  statistikaPoGrupi: TestStatistikaPoGrupiInfo[];
+  ukupnoPolaganja: number | null;
+  prosecniPoeni: number | null;
+  minPoeni: number | null;
+  maxPoeni: number | null;
+  standardnaDevijacija: number | null;
+  brojPolozenih: number | null;
+  brojPalih: number | null;
+  procenatProlaznosti: number | null;
+  statistikaPoGrupi: TestStatistikaPoGrupiInfo[] | null;
 }
 
 /** Ogleda `TestDetails`. `statistika` šalje samo `GET test/{id}`; izmene (`PUT`, `PATCH`, `POST`) je vraćaju kao `null`. */
@@ -108,6 +113,8 @@ export interface TestDetails {
   grupa: GrupaInfo | null;
   datum: string | null;
   maxPoena: number | null;
+  /** Prag prolaza u poenima; `null` = test nema prolaznost. Menja se samo kroz `PATCH test/{id}/prag-prolaza`. */
+  pragProlaza: number | null;
   pregledan: boolean | null;
   grupe: TestGrupa[] | null;
   polaganja: TestPolaganjeInfo[] | null;
@@ -122,6 +129,7 @@ export interface TestInfo {
   grupa: GrupaInfo | null;
   datum: string | null;
   maxPoena: number | null;
+  pragProlaza: number | null;
   grupe: TestGrupa[] | null;
   pregledan: boolean | null;
   posecenost: number | null;
@@ -129,7 +137,8 @@ export interface TestInfo {
 
 /**
  * `POST test`. Tip je postojeći (`tipTestaId`); nov tip se prvo pravi kroz `POST test/tip` (server za
- * `tipTestaId = null` ne stiže do `novTipTesta`). `brojGrupa` 1-4 daje varijante A..D, `maxPoena` 1-100.
+ * `tipTestaId = null` ne stiže do `novTipTesta`). `brojGrupa` 1-4 daje varijante A..D, `maxPoena` 1-100, opcioni
+ * `pragProlaza` 0-maxPoena (u poenima; `null` = bez praga).
  */
 export interface CreateTestCmd {
   tipTestaId: number;
@@ -138,9 +147,15 @@ export interface CreateTestCmd {
   datum: string;
   brojGrupa: number;
   maxPoena: number;
+  pragProlaza?: number | null;
 }
 
-/** `PUT test/{id}`: sva tri polja su obavezna. */
+/** `PATCH test/{id}/prag-prolaza`: postavlja (0-maxPoena) ili briše (`null`) prag; dozvoljeno i na evidentiranom testu. */
+export interface PragProlazaCmd {
+  pragProlaza: number | null;
+}
+
+/** `PUT test/{id}` (zaglavlje): sva tri polja su obavezna; prag prolaza se ovde ne šalje (`PragProlazaCmd`). */
 export interface UpdateTestCmd {
   datum: string;
   maxPoena: number;

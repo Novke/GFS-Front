@@ -15,6 +15,7 @@ const red: TestListItem = {
   datum: '2025-10-16',
   tipTesta: { id: 2, naziv: 'Kolokvijum 1', aktivan: true },
   maxPoena: 30,
+  pragProlaza: 15,
   pregledan: false,
   predmet: { id: 1, naziv: 'UPR' },
   grupa: { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 30 },
@@ -24,6 +25,8 @@ const red: TestListItem = {
 };
 
 const bezPolaganja: TestListItem = { ...red, id: 4, datum: null, grupa: null, brojPolaganja: 0, prosek: null, procenatProlaznosti: null, pregledan: null };
+/** Test bez praga: server šalje `procenatProlaznosti: null` i kad ima poena. */
+const bezPraga: TestListItem = { ...red, id: 6, pragProlaza: null, procenatProlaznosti: null };
 
 const strana = (content: TestListItem[]): Strana<TestListItem> => ({
   content,
@@ -50,11 +53,11 @@ describe('TestoviLista', () => {
     expect([p.get('predmetId'), p.get('grupaId'), p.get('tipTestaId'), p.get('pregledan'), p.get('godina')]).toEqual(['1', '4', '2', 'false', '2025']);
     expect([p.get('od'), p.get('do'), p.get('sort'), p.get('page'), p.get('size')]).toEqual(['2025-10-01', '2025-10-31', 'maxPoena,asc', '0', '25']);
     expect(p.has('status')).toBe(false);
-    req.flush(strana([red, bezPolaganja]));
+    req.flush(strana([red, bezPolaganja, bezPraga]));
     harness.detectChanges();
     const el = harness.fixture.nativeElement as HTMLElement;
     const redovi = el.querySelectorAll('tbody tr');
-    expect(redovi).toHaveLength(2);
+    expect(redovi).toHaveLength(3);
     expect(redovi[0].textContent).toContain('Kolokvijum 1');
     expect(redovi[0].textContent).toContain('18,46 / 30');
     expect(redovi[0].textContent).toContain('67 %');
@@ -63,7 +66,9 @@ describe('TestoviLista', () => {
     expect(redovi[1].textContent).toContain('—');
     // zaglavlje koje sortira po max poena se tako i zove (prosek nije sortabilan)
     expect(el.querySelector('th[aria-sort="ascending"] [data-sort="maxPoena"]')?.textContent).toContain('Max');
-    expect(el.textContent).toContain('2 testa');
+    expect(redovi[2].querySelectorAll('td')[7].textContent?.trim()).toBe('—'); // prolaz bez praga
+    expect(redovi[2].querySelector('.c-meta')?.textContent).not.toContain('prolaz');
+    expect(el.textContent).toContain('3 testa');
   });
 
   it('status "evidentiran" -> pregledan=true; nepoznat status je bez filtera', async () => {

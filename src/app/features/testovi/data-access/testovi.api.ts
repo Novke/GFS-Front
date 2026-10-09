@@ -11,6 +11,7 @@ import {
   CreateTestCmd,
   CreateTipTestaCmd,
   EvidentirajPolaganjeCmd,
+  PragProlazaCmd,
   TestDetails,
   TestInfo,
   TestListItem,
@@ -81,6 +82,12 @@ export class TestoviApi {
   /** `PATCH test/{id}`: završava evidentiranje (svi ispitanici moraju imati poene). */
   zavrsi(id: number, opcije: OpcijeZahteva = {}): Observable<TestDetails> {
     return this.http.patch<TestDetails>(`${API_URL}/test/${id}`, null, { context: this.kontekst(opcije) });
+  }
+
+  /** `PATCH test/{id}/prag-prolaza`: postavlja ili (`null`) briše prag prolaza, i na evidentiranom testu. */
+  pragProlaza(id: number, pragProlaza: number | null, opcije: OpcijeZahteva = {}): Observable<TestDetails> {
+    const cmd: PragProlazaCmd = { pragProlaza };
+    return this.http.patch<TestDetails>(`${API_URL}/test/${id}/prag-prolaza`, cmd, { context: this.kontekst(opcije) });
   }
 
   /** `DELETE test/{id}`: briše test i njegova polaganja (204). */

@@ -15,7 +15,7 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { formatDatum } from '../../../shared/util/datum.pipe';
-import { formatBroja, OPIS_PROLAZA, TestStore } from '../data-access/test.store';
+import { formatBroja, opisProlaza, TestStore } from '../data-access/test.store';
 import { brojIspitanika } from '../data-access/testovi.models';
 import { TestZaglavlje } from '../ui/test-zaglavlje';
 import { obrisiTestUzPotvrdu } from './obrisi-test';
@@ -45,7 +45,7 @@ export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: stri
   template: `
     @if (store.test(); as t) {
       <app-test-zaglavlje [test]="t" [tipovi]="tipovi()" [izmenljivo]="!store.evidentiran()" [najviseUneto]="store.statistikaUzivo().max"
-        [sacuvaj]="sacuvajZaglavlje" (obrisi)="obrisi()">
+        [sacuvaj]="sacuvajZaglavlje" [cuvajPrag]="cuvajPrag" (obrisi)="obrisi()">
         @if (!store.evidentiran()) {
           <div akcije class="akcije">
             @if (t.grupa) {
@@ -72,7 +72,7 @@ export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: stri
         @if (store.evidentiran()) {
           <mat-icon svgIcon="info" aria-hidden="true" />Evidentiranje je završeno; poeni su samo za čitanje.
         } @else {
-          Prolaz: {{ opisProlaza }}. Svaki red se čuva sam; Enter prelazi na sledeći red.
+          {{ opisProlaza() }} Svaki red se čuva sam; Enter prelazi na sledeći red.
           @if (store.spremnost().razlog; as r) {
             <span id="razlog-zavrsetka" class="razlog" data-razlog> {{ r }}</span>
           }
@@ -153,7 +153,7 @@ export class TestDetalj {
   /** Id iz putanje (`withComponentInputBinding`); matcher rute već propušta samo brojeve. */
   readonly id = input.required<string>();
   protected readonly tId = computed(() => (JE_ID.test(this.id()) ? Number(this.id()) : null));
-  protected readonly opisProlaza = OPIS_PROLAZA;
+  protected readonly opisProlaza = computed(() => opisProlaza(this.store.pragProlaza()));
 
   protected readonly s = computed(() => this.store.statistikaUzivo());
   protected readonly prosek = computed(() => (this.s().prosek === null ? null : formatBroja(this.s().prosek)));
@@ -169,6 +169,7 @@ export class TestDetalj {
 
   /** Stabilna referenca (ulaz zaglavlja). */
   protected readonly sacuvajZaglavlje = (izmena: UpdateTestCmd) => this.store.izmeniZaglavlje(izmena);
+  protected readonly cuvajPrag = (prag: number | null) => this.store.postaviPrag(prag);
 
   constructor() {
     effect(() => {
@@ -243,7 +244,8 @@ export class TestDetalj {
     const t = this.store.test();
     const detalji =
       s.broj > 0
-        ? `${brojIspitanika(s.broj)}, prosek ${formatBroja(s.prosek)}${t?.maxPoena ? ' / ' + t.maxPoena : ''}, prolaz ${Math.round(s.prolaz ?? 0)} %.`
+        ? `${brojIspitanika(s.broj)}, prosek ${formatBroja(s.prosek)}${t?.maxPoena ? ' / ' + t.maxPoena : ''}` +
+          (s.prolaz === null ? ', bez praga prolaza.' : `, prolaz ${Math.round(s.prolaz)} %.`)
         : 'Test nema ispitanika.';
     ConfirmDialog.otvori(this.dialog, {
       naslov: 'Završi evidentiranje?',

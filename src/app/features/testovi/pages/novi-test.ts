@@ -19,6 +19,7 @@ import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ErrorPanel } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
+import { PORUKA_PRAGA } from '../data-access/test.store';
 import { TestoviApi } from '../data-access/testovi.api';
 import { VARIJANTE } from '../data-access/testovi.models';
 
@@ -41,7 +42,7 @@ export function danasIso(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-type ImeKontrole = 'predmet' | 'grupa' | 'tip' | 'novTip' | 'datum' | 'maxPoena';
+type ImeKontrole = 'predmet' | 'grupa' | 'tip' | 'novTip' | 'datum' | 'maxPoena' | 'pragProlaza';
 const LABELE: Record<ImeKontrole, string> = {
   predmet: 'Predmet',
   grupa: 'Grupa',
@@ -49,13 +50,15 @@ const LABELE: Record<ImeKontrole, string> = {
   novTip: 'Naziv tipa',
   datum: 'Datum',
   maxPoena: 'Max poena',
+  pragProlaza: 'Prag prolaza',
 };
 
 /**
  * Nov test (`/testovi/novo?predmet&grupa`): predmet, grupa, tip (postojeći aktivni tip predmeta ili "Nov tip…" sa
- * nazivom), datum, varijante A-D (segmentirano) i max poena (1-100). Nov tip se pravi prvo (`POST test/tip`), pa test
- * sa njegovim id-jem; ako test posle toga ne uspe, ponovni pokušaj koristi već napravljen tip (nema duplikata).
- * Posle uspeha -> `/testovi/:id` (unos poena). Greška servera ide u traku iznad forme.
+ * nazivom), datum, varijante A-D (segmentirano), max poena (1-100) i opcioni prag prolaza (poeni, 0-max; prazno = bez
+ * prolaznosti). Nov tip se pravi prvo (`POST test/tip`), pa test sa njegovim id-jem; ako test posle toga ne uspe,
+ * ponovni pokušaj koristi već napravljen tip (nema duplikata). Posle uspeha -> `/testovi/:id` (unos poena). Greška
+ * servera ide u traku iznad forme, a greška praga ispod polja praga.
  */
 @Component({
   selector: 'app-novi-test',
@@ -161,6 +164,17 @@ const LABELE: Record<ImeKontrole, string> = {
         </mat-form-field>
       </div>
 
+      <div class="dva">
+        <mat-form-field appearance="outline">
+          <mat-label>Prag prolaza (poeni)</mat-label>
+          <input matInput type="number" inputmode="numeric" min="0" formControlName="pragProlaza" data-prag />
+          <mat-hint>Bez praga test nema prolaznost.</mat-hint>
+          @if (poruka('pragProlaza'); as m) {
+            <mat-error>{{ m }}</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
       <fieldset class="varijante">
         <legend id="varijante-labela">Varijante testa</legend>
         <mat-button-toggle-group formControlName="brojGrupa" aria-labelledby="varijante-labela" [hideSingleSelectionIndicator]="true" data-varijante>
@@ -232,6 +246,8 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
       Validators.max(MAX_POENA_TESTA),
       Validators.pattern(/^\d+$/),
     ]),
+    /** Opciono: prazno = bez praga (test nema prolaznost); ceo broj 0-max poena. */
+    pragProlaza: new FormControl<number | null>(null, [Validators.min(0), Validators.pattern(/^\d+$/)]),
   });
 
   protected readonly salje = signal(false);
@@ -305,8 +321,14 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
     if (!(k.touched || k.dirty)) {
       return null;
     }
-    if (ime === 'maxPoena' && k.errors?.['pattern'] && !k.errors?.['min']) {
+    if ((ime === 'maxPoena' || ime === 'pragProlaza') && k.errors?.['pattern'] && !k.errors?.['min']) {
       return 'Unesi ceo broj.';
+    }
+    if (ime === 'pragProlaza' && (k.errors?.['min'] || k.errors?.['iznadMax'])) {
+      return PORUKA_PRAGA;
+    }
+    if (k.errors?.['server']) {
+      return k.errors['server'] as string;
     }
     return porukaValidacije(k.errors, LABELE[ime]);
   }
@@ -332,6 +354,10 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
       return;
     }
     const v = this.forma.getRawValue();
+    const prag = v.pragProlaza === null || String(v.pragProlaza) === '' ? null : Number(v.pragProlaza);
+    if (prag !== null && v.maxPoena !== null && prag > Number(v.maxPoena)) {
+      this.forma.controls.pragProlaza.setErrors({ iznadMax: true });
+    }
     if (this.forma.invalid || v.predmet === null || v.grupa === null || v.tip === null || v.maxPoena === null) {
       this.forma.markAllAsTouched();
       return;
@@ -342,14 +368,29 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
       const tipTestaId = await this.idTipa(v.predmet, v.tip, v.novTip);
       const test = await firstValueFrom(
         this.api.create(
-          { tipTestaId, predmetId: v.predmet, grupaId: v.grupa, datum: v.datum, brojGrupa: v.brojGrupa, maxPoena: Number(v.maxPoena) },
+          {
+            tipTestaId,
+            predmetId: v.predmet,
+            grupaId: v.grupa,
+            datum: v.datum,
+            brojGrupa: v.brojGrupa,
+            maxPoena: Number(v.maxPoena),
+            pragProlaza: prag,
+          },
           { tiho: true },
         ),
       );
       this.poslato = true;
       await this.router.navigate(['/testovi', test.id]);
     } catch (e: unknown) {
-      this.greska.set(e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM);
+      const razlog = e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
+      if (razlog === PORUKA_PRAGA) {
+        // greška praga pripada polju praga, ne traci iznad forme
+        this.forma.controls.pragProlaza.setErrors({ server: razlog });
+        this.forma.controls.pragProlaza.markAsTouched();
+      } else {
+        this.greska.set(razlog);
+      }
     } finally {
       this.salje.set(false);
     }

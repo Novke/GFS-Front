@@ -18,7 +18,7 @@ const polaganje = (id: number, poeni: number | null, grupa: 'A' | 'B' | null, pr
   napomene: null,
 });
 
-function test(polaganja: TestPolaganjeInfo[], statistika: TestDetails['statistika']): TestDetails {
+function test(polaganja: TestPolaganjeInfo[], statistika: TestDetails['statistika'], pragProlaza: number | null = 15): TestDetails {
   return {
     id: 5,
     tipTesta: { id: 2, naziv: 'Kolokvijum 1', aktivan: true },
@@ -26,6 +26,7 @@ function test(polaganja: TestPolaganjeInfo[], statistika: TestDetails['statistik
     grupa: null, // stari podaci sa rupama: bez grupe
     datum: null,
     maxPoena: 30,
+    pragProlaza,
     pregledan: true,
     grupe: ['A', 'B'],
     polaganja,
@@ -78,7 +79,7 @@ describe('TestStatistika', () => {
     );
     expect(el().querySelector('[data-kpi-ispitanika]')?.textContent).toContain('3 sa poenima');
     expect(el().querySelector('[data-kpi-prosek]')?.textContent).toContain('15');
-    // 20 prolazi, 10 ne, 15 je prepisivao: 1 od 3
+    // prag 15: 20 prolazi, 10 ne, 15 je prepisivao: 1 od 3
     expect(el().querySelector('[data-kpi-prolaz]')?.textContent).toContain('33 %');
     expect(el().textContent).toContain('4,08');
     expect(el().textContent).toContain('—'); // datum i grupa testa ne postoje
@@ -103,5 +104,43 @@ describe('TestStatistika', () => {
     await otvori(test([polaganje(1, null, null)], null));
     expect(el().querySelector('app-empty-state')?.textContent).toContain('Još nema unetih poena');
     expect(el().querySelector('app-histogram')).toBeNull();
+  });
+
+  it('bez praga: prolaz "—" u pločici i po varijantama; serverska prolaznost null ne smeta', async () => {
+    await otvori(
+      test(
+        [polaganje(1, 20, 'A'), polaganje(2, 10, 'B')],
+        {
+          ukupnoPolaganja: 2,
+          prosecniPoeni: 15,
+          minPoeni: 10,
+          maxPoeni: 20,
+          standardnaDevijacija: 5,
+          brojPolozenih: null,
+          brojPalih: null,
+          procenatProlaznosti: null,
+          statistikaPoGrupi: [{ grupa: 'A', brojPolaganja: 1, prosecniPoeni: 20, procenatProlaznosti: null }],
+        },
+        null,
+      ),
+    );
+    expect(el().querySelector('[data-kpi-prolaz]')?.textContent).toContain('—');
+    expect(el().textContent).toContain('Bez praga test nema prolaznost.');
+    const prolaz = [...el().querySelectorAll('table.varijante tbody tr')].map(r => r.children[3].textContent?.trim());
+    expect(prolaz).toEqual(['—', '—']);
+  });
+
+  it('prag se menja i ovde (PATCH prag-prolaza), prolaz se odmah preračunava', async () => {
+    await otvori(test([polaganje(1, 20, 'A'), polaganje(2, 10, 'B')], null, null));
+    const polje = el().querySelector<HTMLInputElement>('input[data-prag]')!;
+    polje.value = '10';
+    polje.dispatchEvent(new Event('input'));
+    polje.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    const req = http.expectOne('api/test/5/prag-prolaza');
+    expect(req.request.body).toEqual({ pragProlaza: 10 });
+    req.flush({ ...test([], null, 10), polaganja: null });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el().querySelector('[data-kpi-prolaz]')?.textContent).toContain('100 %');
   });
 });

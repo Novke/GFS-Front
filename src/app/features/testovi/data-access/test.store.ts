@@ -16,13 +16,8 @@ import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentI
 export const DEBOUNCE_REDA_MS = 600;
 /** Kolona `polaganja.napomene` je `varchar(255)`. */
 export const MAX_NAPOMENA = 255;
-/**
- * Prag prolaza kao deo max poena. Koristi ga samo {@link jePolozio} (jedino mesto pravila prolaza) i {@link OPIS_PROLAZA}.
- * Privremeno: prag će biti opciono polje testa sa servera.
- */
-export const PRAG_PROLAZA = 0.5;
-/** Tekst pravila prolaza za ekran (uz {@link jePolozio}). */
-export const OPIS_PROLAZA = `najmanje ${PRAG_PROLAZA * 100} % max poena, bez prepisivanja`;
+/** Poruka servera (`TestPP`, `@Min`) i forme za prag van opsega 0-max. */
+export const PORUKA_PRAGA = 'Prag prolaza mora biti između 0 i maksimalnog broja poena.';
 
 /** Ono što nastavnik unosi u redu; `poeni` je tekst kako je otkucan (`14,5`), prazan = još nije uneto. */
 export interface VrednostiReda {
@@ -146,24 +141,39 @@ export function zaSlanje(v: VrednostiReda, max: number | null | undefined, varij
   return greskaReda(v, max, varijante) === null && parsirajPoene(v.poeni) !== null && (v.grupa !== null || varijante.length <= 1);
 }
 
-/** Jedino mesto pravila prolaza (statistika uživo, stranica statistike, tabela po varijantama). */
-export function jePolozio(poeni: number, max: number | null | undefined, prepisivao: boolean): boolean {
-  return !prepisivao && max !== null && max !== undefined && max > 0 && poeni >= max * PRAG_PROLAZA;
+/**
+ * Jedino mesto pravila prolaza na frontu (statistika uživo, stranica statistike, tabela po varijantama); isto kao backend
+ * `utility/Prolaz`: test ima prag (`pragProlaza`, u poenima), poeni >= prag (prag je uključen) i nije prepisivao.
+ * Bez praga test nema prolaznost (`false`; statistika tada daje `prolaz: null`).
+ */
+export function jePolozio(poeni: number, pragProlaza: number | null | undefined, prepisivao: boolean): boolean {
+  return pragProlaza !== null && pragProlaza !== undefined && !prepisivao && poeni >= pragProlaza;
 }
 
-/** Statistika iz unosa: prosek, prolaz, min i max samo nad unetim poenima (prazni se ignorišu). */
-export function statistikaPoena(unosi: readonly UnosPoena[], max: number | null | undefined): StatistikaPoena {
+/** Tekst pravila prolaza za ekran (uz {@link jePolozio}). */
+export function opisProlaza(pragProlaza: number | null | undefined): string {
+  return pragProlaza === null || pragProlaza === undefined
+    ? 'Bez praga test nema prolaznost.'
+    : `Prolaz: najmanje ${pragProlaza} poena, bez prepisivanja.`;
+}
+
+/**
+ * Statistika iz unosa: prosek, prolaz, min i max samo nad unetim poenima (prazni se ignorišu). `prolaz` je `null` kad test
+ * nema prag prolaza ili nema unetih poena.
+ */
+export function statistikaPoena(unosi: readonly UnosPoena[], pragProlaza: number | null | undefined): StatistikaPoena {
   const uneti = unosi.filter((u): u is { poeni: number; prepisivao: boolean } => u.poeni !== null && Number.isFinite(u.poeni));
   if (uneti.length === 0) {
     return { broj: 0, ukupno: unosi.length, prosek: null, prolaz: null, min: null, max: null };
   }
   const poeni = uneti.map(u => u.poeni);
-  const polozilo = uneti.filter(u => jePolozio(u.poeni, max, u.prepisivao)).length;
+  const polozilo = uneti.filter(u => jePolozio(u.poeni, pragProlaza, u.prepisivao)).length;
+  const saPragom = pragProlaza !== null && pragProlaza !== undefined;
   return {
     broj: uneti.length,
     ukupno: unosi.length,
     prosek: poeni.reduce((z, p) => z + p, 0) / uneti.length,
-    prolaz: (polozilo * 100) / uneti.length,
+    prolaz: saPragom ? (polozilo * 100) / uneti.length : null,
     min: Math.min(...poeni),
     max: Math.max(...poeni),
   };
@@ -195,7 +205,10 @@ export function korpePoena(poeni: readonly number[], max: number | null | undefi
 }
 
 /** Statistika po varijantama (A, B, …; polaganja bez varijante kao `null`), samo polaganja sa poenima. */
-export function statistikaPoVarijantama(polaganja: readonly TestPolaganjeInfo[], max: number | null | undefined): StatistikaVarijante[] {
+export function statistikaPoVarijantama(
+  polaganja: readonly TestPolaganjeInfo[],
+  pragProlaza: number | null | undefined,
+): StatistikaVarijante[] {
   const grupe = new Map<TestGrupa | null, UnosPoena[]>();
   for (const p of polaganja) {
     if (p.ostvareniPoeni === null || p.ostvareniPoeni === undefined) {
@@ -208,7 +221,7 @@ export function statistikaPoVarijantama(polaganja: readonly TestPolaganjeInfo[],
   return redosled
     .filter(g => grupe.has(g))
     .map(g => {
-      const s = statistikaPoena(grupe.get(g)!, max);
+      const s = statistikaPoena(grupe.get(g)!, pragProlaza);
       return { varijanta: g, broj: s.broj, prosek: s.prosek, prolaz: s.prolaz, min: s.min, max: s.max };
     });
 }
@@ -375,6 +388,7 @@ export const TestStore = signalStore(
       maxPoena: max,
       varijante,
       evidentiran: computed(() => test()?.pregledan === true),
+      pragProlaza: computed(() => test()?.pragProlaza ?? null),
       /** Statistika uživo iz unetih (ispravnih) poena; redovi koji se dodaju ne ulaze. */
       statistikaUzivo: computed<StatistikaPoena>(() => {
         const v = vrednosti();
@@ -384,7 +398,7 @@ export const TestStore = signalStore(
           redovi()
             .filter(r => z[r.id] !== 'dodaje')
             .map(r => ({ poeni: poeniZaStatistiku(v[r.id]?.poeni ?? '', m), prepisivao: v[r.id]?.prepisivao === true })),
-          m,
+          test()?.pragProlaza,
         );
       }),
       /** Greška validacije po redu (prikazuje je red; red sa greškom se ne šalje). */
@@ -645,6 +659,7 @@ export const TestStore = signalStore(
                 ...st.test,
                 datum: det.datum,
                 maxPoena: det.maxPoena,
+                pragProlaza: det.pragProlaza !== undefined ? det.pragProlaza : st.test.pragProlaza,
                 tipTesta: det.tipTesta ?? st.test.tipTesta,
                 pregledan: det.pregledan,
               },
@@ -775,21 +790,46 @@ export const TestStore = signalStore(
         zakazi(s, { tip: 'ukloni', sId });
       },
 
-      /** Tip, datum, max. Posle većeg max-a se šalju redovi koji su do tada bili neispravni (poeni > stari max). */
-      izmeniZaglavlje(izmena: UpdateTestCmd): Promise<boolean> {
+      /**
+       * Tip, datum, max (`PUT`, prag se ne šalje). Vraća `null` kad je sačuvano, inače razlog greške (forma ga prikazuje
+       * sama; npr. max manji od praga prolaza). Posle većeg max-a se šalju redovi koji su do tada bili neispravni.
+       */
+      izmeniZaglavlje(izmena: UpdateTestCmd): Promise<string | null> {
         const s = aktivna();
         if (!s) {
-          return Promise.resolve(false);
+          return Promise.resolve(PORUKA_SISTEM);
         }
         return firstValueFrom(
-          store._api.update(s.tId, izmena).pipe(
+          store._api.update(s.tId, izmena, { tiho: true }).pipe(
             map(det => {
               zaglavljeIz(s, det);
               store._obavestenja.uspeh('Izmene su sačuvane.');
               posaljiNepotvrdjeno(s);
-              return true;
+              return null;
             }),
-            catchError(() => of(false)), // grešku je već prikazao interceptor
+            catchError((e: unknown) => of(porukaGreske(e))),
+          ),
+        );
+      },
+
+      /**
+       * Prag prolaza (`PATCH test/{id}/prag-prolaza`, `null` briše), i na evidentiranom testu. Vraća `null` kad je
+       * sačuvano, inače razlog greške (polje ga prikazuje). Statistika uživo se odmah preračunava po novom pragu.
+       */
+      postaviPrag(pragProlaza: number | null): Promise<string | null> {
+        const s = store._r.sesija;
+        if (!s || !tekuca(s) || s.obrisan) {
+          return Promise.resolve(PORUKA_SISTEM);
+        }
+        return firstValueFrom(
+          store._api.pragProlaza(s.tId, pragProlaza, { tiho: true }).pipe(
+            map(det => {
+              if (tekuca(s)) {
+                patchState(store, st => (st.test ? { test: { ...st.test, pragProlaza: det.pragProlaza ?? null } } : {}));
+              }
+              return null;
+            }),
+            catchError((e: unknown) => of(porukaGreske(e))),
           ),
         );
       },
