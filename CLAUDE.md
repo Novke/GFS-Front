@@ -2,14 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-GFS-Front is the teacher tool of Građevinski fakultet Subotica (lectures, homework, tests, grade proposals) plus one
-public student form. The backend is `Novke/GFSSystem` (Spring Boot); deploy, staging and branching rules live in the
+GFS-Front is the teacher tool of Građevinski fakultet Subotica (lectures, homework, tests, grade proposals, live
+presentations "uživo") plus two public student areas (the intake form `upis` and the live student pages `uzivo`). The backend is `Novke/GFSSystem` (Spring Boot); deploy, staging and branching rules live in the
 wrapper repo `Novke/GFS-deploy` (`CLAUDE.md`, `README.md`). This repo is **public**: no secrets, no real data.
 
 ## Stack
 
 Angular 22, standalone components only, **zoneless** (`provideZonelessChangeDetection()`, no zone.js), OnPush
-everywhere, signals + NgRx SignalStore (`@ngrx/signals`), Angular Material 22 (M3) on our own tokens, Vitest + jsdom
+everywhere, signals + NgRx SignalStore (`@ngrx/signals`), Angular Material 22 (M3) on our own tokens, STOMP over WebSocket
+(`@stomp/rx-stomp`) and `marked` for uživo, Vitest + jsdom
 through `ng test` (no browser), ESLint (angular-eslint) with two project rules in `eslint-rules/`. CI runs Node 24.
 All UI text is Serbian Latin; code identifiers are Serbian too (predmet, grupa, predavanje, domaći, test, ocena).
 
@@ -87,18 +88,54 @@ pattern; keep it when touching any of them:
 Specs for these stores drive `HttpTestingController` with fake timers; a fix to a guarantee needs a spec that fails
 without it.
 
-## Public route
+## Public routes
 
-`upis/:token` (and the future `uzivo/javno`) is opened by students on a phone **without basic-auth**, so it may only
-request `assets/env.json` and `api/public/*`; any other `/api/*` call returns 401 and pops the browser's password
-dialog. `gfs/javna-ruta-uvozi` enforces this fail-closed: public features may import only themselves plus the short
-allowlist in `eslint-rules/javna-ruta-konfig.js`. Never add teacher-shell code (stores, `core/state`, shell) to it.
-On the backend, anything mapped under `/public/**` is reachable from the internet without auth.
+`upis/:token` and `uzivo`, `uzivo/:kod` are opened by students on a phone **without basic-auth**, so they may only request
+`assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo: `api/public/uzivo/*`, `api/public/mediji/*`,
+`api/public/ws`); any other `/api/*` call returns 401 and pops the browser's password dialog. Both live in
+`PublicLayout` (no shell; a wrong link under `/upis` or `/uzivo` stays a public 404). `gfs/javna-ruta-uvozi` enforces
+this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may import only itself plus
+`dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
+addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
+own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
+shell, teacher API clients) to it. On the backend, anything mapped under `/public/**` is reachable from the internet
+without auth.
+
+## Uživo (`features/uzivo`)
+
+Interactive presentation with live questions (spec `docs/superpowers/specs/2026-10-07-interaktivna-prezentacija-design.md`
+in `Novke/GFS-deploy`). The server is the only source of truth: every change arrives as a whole snapshot with `verzija`
+over STOMP; teacher commands are REST.
+
+- `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
+  every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock
+  offset), `editor.store.ts`, `izvodjenje.store.ts`, rules (`slajd-pravila`, `izvodjenje-pravila`). Only uživo uses them.
+- `ui/`: shared views (slide, options, results, ranking, timer, QR); `pages/`: list, editor, runs, overview, audience
+  (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
+  `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
+- Layouts (paths unchanged since the first release, they may be printed as QR codes): `prezentacije`, `prezentacije/:id`,
+  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola` in
+  `ProjectorLayout`; `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
+  content frame), because these pages draw the whole screen themselves.
+- `javno/` may import exactly: `uzivo-putanje`, `data-access/uzivo.models`, `data-access/stomp`, `data-access/sat`,
+  `data-access/razlog-greske`, `ui/format`, `ui/markdown`, `ui/opcija-oblik`, `ui/rang-lista.component`,
+  `ui/tajmer.component` (and `lazni-sat.testing` in specs). Never `prezentacije.api`, `izvodjenja.api`, the stores,
+  `pages/` or `core/state`. After touching `javno/` or the routes, check that `uzivo/<kod>` makes no `/api/` call outside
+  `/api/public/` (the wrapper's `staging/e2e/uzivo_e2e.py` checks it).
+- Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
+  `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
+  tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the
+  text colour, which is inherited as a computed value). The black/white screens (keys B/W) are deliberately pure black and
+  white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`).
+- Zoneless: all state is signals (STOMP messages go through `patchState`, the timer interval sets a signal). Component
+  specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
+  `animationsDisabled: true`, otherwise MatFormField leaves 300 ms timers behind.
 
 ## Routes and paths
 
 - Old routes (`predavanje/...`, `domaci/new`, `test/...`, ...) redirect to the new ones in
-  `features/legacy-redirects.ts` until the end of the semester; printed QR codes use `upis/:token`, which never changes.
+  `features/legacy-redirects.ts` until the end of the semester; printed QR codes and shared links use `upis/:token`
+  and `uzivo/:kod`, which never change (the uživo teacher paths kept their pre-redesign URLs too).
 - All URLs are **relative** (`api/...`, `assets/...`, `new URL('upis/' + token, document.baseURI)`): the app is built with
   a `BASE_HREF` (`/` on staging and prod, `/gfs/` historically), so never write root-relative `/api` or `/assets`.
 

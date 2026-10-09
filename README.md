@@ -25,11 +25,13 @@ docker build --build-arg BASE_HREF=/gfs/ -t gfs-frontend .
 nginx unutra služi Angular build i proxy-uje `/api` ka servisu `backend` (`http://backend:8080/`).
 
 `APP_ENV` (build arg, podrazumevano `prod`) se upisuje u `assets/env.json`. Za `APP_ENV=staging` aplikacija prikazuje crvenu
-traku "STAGING — test podaci" i značku `STAGING` u toolbaru (tako se staging razlikuje od prod). Sa `prod` nema trake; `ng serve`
+traku "STAGING — test podaci" i značku `STAGING` u bočnoj navigaciji (tako se staging razlikuje od prod). Sa `prod` nema trake; `ng serve`
 nema `env.json`, pa ni lokalno nema trake.
 
 `/api` proxy razrešava ime `backend` preko Docker DNS-a (`127.0.0.11`), pa kontejner mora da radi na compose
 ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom bridge-u `/api` vraća 502.
+WebSocket uživo ide kroz `location = /api/ws` (nastavnik) i `location = /api/public/ws` (student), oba ispred `^~ /api/`;
+lokalni `ng serve` traži `"ws": true` u proxy fajlu (`proxy.conf.json` ga ima).
 
 ## Grane i CI
 
@@ -43,6 +45,6 @@ ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom br
   `eslint.config.js`), `npx ng test --watch=false` (Vitest + jsdom, ne treba browser), `npx ng build --configuration production`,
   pa `docker build`. Nijedan korak nije `continue-on-error`: crven lint ili test blokira merge.
   Lokalno isto: `npm ci && npx ng lint && npm run test:eslint-pravila && npx ng test --watch=false && npx ng build --configuration production`.
-- Sopstvena ESLint pravila: `gfs/javna-ruta-uvozi` (javna ruta `upis/:token`, kasnije `uzivo/javno`, sme da uvozi samo sebe i
-  spisak iz `eslint-rules/javna-ruta-konfig.js`, jer svaki zaključan `/api/*` studentu otvara dijalog za lozinku) i
+- Sopstvena ESLint pravila: `gfs/javna-ruta-uvozi` (javne rute `upis/:token` i `uzivo[/:kod]` smeju da uvoze samo sebe i
+  spisak iz `eslint-rules/javna-ruta-konfig.js` (zajednički plus dodatak po feature-u), jer svaki zaključan `/api/*` studentu otvara dijalog za lozinku) i
   `gfs/granice-featurea` (feature ne uvozi tuđi `data-access/`; `core/` i `shared/` ne uvoze `features/`).
