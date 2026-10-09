@@ -4,7 +4,7 @@ import { grupisiCifre } from './format';
 
 /** Postolje za prva tri mesta (raspored 2-1-3); prima celu rang-listu ili samo vrh. */
 @Component({
-  selector: 'gfs-postolje',
+  selector: 'app-postolje',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'uz-postolje' },
   template: `

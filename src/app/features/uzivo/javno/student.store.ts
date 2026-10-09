@@ -462,7 +462,7 @@ export const StudentStore = signalStore(
         pratiPotvrdu();
       },
 
-      /** Nacrt odgovora trenutne runde (iz `gfs-odgovor-unos`). */
+      /** Nacrt odgovora trenutne runde (iz `app-odgovor-unos`). */
       sacuvajNacrt(n: NacrtOdgovora): void {
         if (store.faza() === 'uzivo' && n.rundaId === store.pitanje()?.rundaId) patchState(store, { nacrt: n });
       },

@@ -14,7 +14,7 @@ export const IME_MAKS = 40;
 
 /** Dijalog za novo ime učesnika; vraća ime bez razmaka na krajevima ili `undefined`. */
 @Component({
-  selector: 'gfs-preimenuj-dialog',
+  selector: 'app-preimenuj-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, ReactiveFormsModule],
   template: `
@@ -55,7 +55,7 @@ export class PreimenujDialog {
  * preimenuj u dijalogu, izbaci uz potvrdu. Učesnici su u redosledu prijave.
  */
 @Component({
-  selector: 'gfs-ucesnici-panel',
+  selector: 'app-ucesnici-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule],
   host: { class: 'uz-kon-ucesnici' },

@@ -33,7 +33,7 @@ export function udeoPrstena(preostaloMs: number, ukupnoMs: number): number {
  * Pun krug je `ukupnoMs` ako je poznat, inače najveće preostalo vreme viđeno od početka runde (+10 s ga povećava).
  */
 @Component({
-  selector: 'gfs-tajmer',
+  selector: 'app-tajmer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'uz-tajmer',

@@ -20,7 +20,7 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
  * u ovoj fazi ne bi prihvatio (`dozvoljene`, ista pravila kao server); prekidači pokazuju stanje (`aria-pressed`).
  */
 @Component({
-  selector: 'gfs-konzola-kontrole',
+  selector: 'app-konzola-kontrole',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule],
   host: { class: 'uz-kon-kontrole' },

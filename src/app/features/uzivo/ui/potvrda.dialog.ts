@@ -13,7 +13,7 @@ export interface PotvrdaPodaci {
 
 /** Dijalog za potvrdu (brisanje, završavanje); fokus je na "Otkaži" da Enter ne potvrdi slučajno. */
 @Component({
-  selector: 'gfs-potvrda-dialog',
+  selector: 'app-potvrda-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule],
   template: `

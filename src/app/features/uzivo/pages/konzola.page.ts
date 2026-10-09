@@ -33,14 +33,14 @@ const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu 
 
 /** QR do konzole: telefon postaje daljinski (spec 1.7). */
 @Component({
-  selector: 'gfs-telefon-dialog',
+  selector: 'app-telefon-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, QrKodComponent],
   template: `
     <h2 mat-dialog-title>Konzola na telefonu</h2>
     <mat-dialog-content class="uz-kon-telefon">
       <p>Skeniraj QR kod telefonom: konzola se otvara na telefonu i radi kao daljinski (Dalje, Otvori/Zatvori, Rezultati).</p>
-      <gfs-qr-kod class="uz-kon-telefon-qr" [tekst]="link" [velicina]="480" />
+      <app-qr-kod class="uz-kon-telefon-qr" [tekst]="link" [velicina]="480" />
       <p class="uz-kon-telefon-link">{{ link }}</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
@@ -54,7 +54,7 @@ export class TelefonDialog {
 
 /** Izbor ekrana za prikaz publike (Window Management API, više ekrana). */
 @Component({
-  selector: 'gfs-izbor-ekrana-dialog',
+  selector: 'app-izbor-ekrana-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, MatIconModule],
   template: `
@@ -84,7 +84,7 @@ export class IzborEkranaDialog {
  * prečice kao publika; `R` traži potvrdu, `P` otvara publiku. Posle završetka: pregled (uz čuvanje) ili editor.
  */
 @Component({
-  selector: 'gfs-konzola',
+  selector: 'app-konzola',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
   imports: [
@@ -126,14 +126,14 @@ export class IzborEkranaDialog {
       <ng-template #trenutniTpl>
         <section class="uz-kon-kartica uz-kon-trenutni" aria-label="Na projektoru">
           <h2 class="uz-kon-naslov">Na projektoru · {{ polozaj() }}</h2>
-          <gfs-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" [umanjeno]="true" />
+          <app-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" [umanjeno]="true" />
         </section>
       </ng-template>
 
       <ng-template #tajmerTpl>
         @if (s.faza === 'OTVORENO' && s.runda && (s.runda.rokMs !== null || s.runda.preostaloMs !== null)) {
           <div class="uz-kon-tajmer">
-            <gfs-tajmer [rokMs]="s.runda.rokMs" [preostaloMs]="s.runda.preostaloMs" [sat]="store.sat()" [ukupnoMs]="store.ukupnoMs()" />
+            <app-tajmer [rokMs]="s.runda.rokMs" [preostaloMs]="s.runda.preostaloMs" [sat]="store.sat()" [ukupnoMs]="store.ukupnoMs()" />
           </div>
         }
       </ng-template>
@@ -149,11 +149,11 @@ export class IzborEkranaDialog {
               Odgovorili <strong>{{ s.brojOdgovora }}/{{ s.brojPovezanih }}</strong>
             </p>
             @if (s.rezultat; as r) {
-              <gfs-rezultat-prikaz class="uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
+              <app-rezultat-prikaz class="uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
                                    [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
               @if (r.tip === 'KRATAK_TEKST') {
                 <h3 class="uz-kon-podnaslov">Tekstovi</h3>
-                <gfs-tekstovi-panel [tekstovi]="r.tekstovi ?? []" (sakrij)="store.sakrij(s.runda.id, $event.kljuc, $event.sakriven)" />
+                <app-tekstovi-panel [tekstovi]="r.tekstovi ?? []" (sakrij)="store.sakrij(s.runda.id, $event.kljuc, $event.sakriven)" />
               }
             }
           } @else {
@@ -173,13 +173,13 @@ export class IzborEkranaDialog {
       <ng-template #ucesniciTpl>
         <section class="uz-kon-kartica" aria-label="Učesnici">
           <h2 class="uz-kon-naslov">Učesnici</h2>
-          <gfs-ucesnici-panel [ucesnici]="s.ucesnici" [takmicenje]="s.takmicenje"
+          <app-ucesnici-panel [ucesnici]="s.ucesnici" [takmicenje]="s.takmicenje"
                               (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
         </section>
       </ng-template>
 
       <ng-template #kontroleTpl>
-        <gfs-konzola-kontrole [stanje]="s" [dozvoljene]="store.dozvoljene()" (komanda)="komanda($event)" />
+        <app-konzola-kontrole [stanje]="s" [dozvoljene]="store.dozvoljene()" (komanda)="komanda($event)" />
       </ng-template>
 
       @if (usko()) {
@@ -209,7 +209,7 @@ export class IzborEkranaDialog {
             <section class="uz-kon-kartica uz-kon-sledeci" aria-label="Sledeće">
               <h2 class="uz-kon-naslov">Sledeće</h2>
               @if (s.sledeciSlajd; as sl) {
-                <div class="uz-dan"><gfs-slajd-prikaz [slajd]="sl" [postepeno]="false" /></div>
+                <div class="uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" /></div>
               } @else {
                 <p class="uz-prazno">{{ s.prikaz === 'KRAJ' ? 'Ovo je kraj. Završi izvođenje dugmetom „Završi“.' : 'Kraj prezentacije.' }}</p>
               }

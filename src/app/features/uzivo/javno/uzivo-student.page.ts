@@ -30,7 +30,7 @@ export function naslovIshoda(
  * Bez toolbara (bez-toolbara.ts); uvek svetle boje, mobile-first.
  */
 @Component({
-  selector: 'gfs-uzivo-student',
+  selector: 'app-uzivo-student',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [StudentStore],
   imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent],
@@ -103,7 +103,7 @@ export function naslovIshoda(
               @if (l?.mesto) {
                 <p class="uz-st-mesto">Tvoje mesto: {{ l!.mesto }} · {{ poeni(l!.poeni) }}</p>
               }
-              <gfs-rang-lista [stavke]="rang" [istakni]="l?.mesto ?? null" />
+              <app-rang-lista [stavke]="rang" [istakni]="l?.mesto ?? null" />
             </section>
           } @else {
             @switch (s.ekran()) {
@@ -123,14 +123,14 @@ export function naslovIshoda(
                       @if (celoPitanje() && p.tekst) {
                         <div class="uz-st-md" [innerHTML]="md(p.tekst)"></div>
                       }
-                      <gfs-tajmer class="uz-st-tajmer" [rokMs]="p.rokMs" [preostaloMs]="p.preostaloMs" [sat]="s.sat()"
+                      <app-tajmer class="uz-st-tajmer" [rokMs]="p.rokMs" [preostaloMs]="p.preostaloMs" [sat]="s.sat()"
                                   [ukupnoMs]="s.ukupnoMs()" />
                     </div>
                     @if (celoPitanje() && p.slikaId) {
                       <img class="uz-st-slika" [src]="slika(p.slikaId)" alt="Slika uz pitanje" />
                     }
                     <!-- montira se samo dok je unos otvoren; nacrt čuva izbor i tekst kroz zaključavanje i otključavanje -->
-                    <gfs-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [nacrt]="s.nacrt()"
+                    <app-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [nacrt]="s.nacrt()"
                                       (nacrtPromena)="s.sacuvajNacrt($event)" (posalji)="s.odgovori($event)" />
                   </div>
                 }
@@ -139,7 +139,7 @@ export function naslovIshoda(
                 <div class="uz-st-poruka" role="status">
                   <p class="uz-st-veliko uz-st-ok">Odgovor primljen ✓</p>
                   @if (p?.faza === 'OTVORENO') {
-                    <gfs-tajmer class="uz-st-tajmer" [rokMs]="p!.rokMs" [preostaloMs]="p!.preostaloMs" [sat]="s.sat()"
+                    <app-tajmer class="uz-st-tajmer" [rokMs]="p!.rokMs" [preostaloMs]="p!.preostaloMs" [sat]="s.sat()"
                                 [ukupnoMs]="s.ukupnoMs()" />
                   }
                 </div>
@@ -156,7 +156,7 @@ export function naslovIshoda(
                     <p class="uz-st-tekst">Tačan odgovor:</p>
                     @for (o of t.opcije; track o.indeks) {
                       <p class="uz-st-tacna">
-                        <gfs-opcija-oblik [indeks]="o.indeks" [velicina]="40" />
+                        <app-opcija-oblik [indeks]="o.indeks" [velicina]="40" />
                         @if (o.tekst) { <span>{{ o.tekst }}</span> }
                       </p>
                     }
@@ -174,7 +174,7 @@ export function naslovIshoda(
                     <p class="uz-st-mesto uz-st-mesto--konacno">Tvoje konačno mesto: {{ l!.mesto }} · {{ poeni(l!.poeni) }}</p>
                   }
                   @if (j?.rangLista?.length) {
-                    <gfs-rang-lista class="uz-st-rang" [stavke]="j!.rangLista!" [istakni]="l?.mesto ?? null" />
+                    <app-rang-lista class="uz-st-rang" [stavke]="j!.rangLista!" [istakni]="l?.mesto ?? null" />
                   }
                   <p class="uz-st-veliko">Hvala!</p>
                 </div>
@@ -193,7 +193,7 @@ export function naslovIshoda(
             @if (p.opcije?.length) {
               <ul class="uz-st-detalji-opcije">
                 @for (o of p.opcije; track o.id; let i = $index) {
-                  <li><gfs-opcija-oblik [indeks]="i" [velicina]="32" /><span>{{ tekstOpcije(p, i) }}</span></li>
+                  <li><app-opcija-oblik [indeks]="i" [velicina]="32" /><span>{{ tekstOpcije(p, i) }}</span></li>
                 }
               </ul>
             }

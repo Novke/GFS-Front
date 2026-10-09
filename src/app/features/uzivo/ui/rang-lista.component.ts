@@ -7,7 +7,7 @@ import { grupisiCifre } from './format';
  * su jedinstvena (jednaki poeni se razdvajaju vremenom), a `ucesnikId` se u javnom stanju ne šalje.
  */
 @Component({
-  selector: 'gfs-rang-lista',
+  selector: 'app-rang-lista',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'uz-rang' },
   template: `

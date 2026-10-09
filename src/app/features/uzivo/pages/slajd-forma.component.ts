@@ -27,7 +27,7 @@ const nn = { nonNullable: true } as const;
  * Svaka izmena emituje celu `SlajdCmd`; greške (ista pravila kao server) se prikazuju ispod forme.
  */
 @Component({
-  selector: 'gfs-slajd-forma',
+  selector: 'app-slajd-forma',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, TextFieldModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, PitanjeFormaComponent,
@@ -45,10 +45,10 @@ const nn = { nonNullable: true } as const;
           <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="6" formControlName="sadrzaj"></textarea>
           <mat-hint>**podebljano** · *kurziv* · "- " stavka liste · "1. " numerisana · "## " podnaslov · [veza](https://…)</mat-hint>
         </mat-form-field>
-        <gfs-slika-polje [slikaId]="forma.controls.slikaId.value" oznaka="Slika na slajdu" (promena)="postaviSliku($event)" />
+        <app-slika-polje [slikaId]="forma.controls.slikaId.value" oznaka="Slika na slajdu" (promena)="postaviSliku($event)" />
         <mat-checkbox formControlName="postepeno">Otkrivaj stavke liste jednu po jednu (tasterom →)</mat-checkbox>
       } @else {
-        <gfs-pitanje-forma [forma]="forma.controls.pitanje" />
+        <app-pitanje-forma [forma]="forma.controls.pitanje" />
       }
       <mat-form-field class="uz-ed-puno">
         <mat-label>Beleške za predavača</mat-label>

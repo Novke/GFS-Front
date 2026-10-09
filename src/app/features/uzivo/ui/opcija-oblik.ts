@@ -41,7 +41,7 @@ const PUTANJE: Record<SlovoOpcije, string> = {
  * npr. `'3cqw'`); bez nje je 1.6em okolnog teksta.
  */
 @Component({
-  selector: 'gfs-opcija-oblik',
+  selector: 'app-opcija-oblik',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'uz-oblik',

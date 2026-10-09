@@ -21,7 +21,7 @@ function predmetIzUpita(v: string | null): number | null {
 
 /** Lista prezentacija (spec 6.2): filter predmeta u `?predmet=`, "Nova prezentacija", "U toku" za aktivno izvođenje. */
 @Component({
-  selector: 'gfs-prezentacije-lista',
+  selector: 'app-prezentacije-lista',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatProgressBarModule, MatSelectModule],
   template: `

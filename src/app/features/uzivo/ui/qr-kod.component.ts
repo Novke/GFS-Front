@@ -6,7 +6,7 @@ import { toCanvas } from 'qrcode';
  * određuje roditelj (canvas se rasteže na širinu elementa, bez zamućenja ivica modula).
  */
 @Component({
-  selector: 'gfs-qr-kod',
+  selector: 'app-qr-kod',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'uz-qr' },
   template: `

@@ -10,7 +10,7 @@ import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
  * dovoljan je prazan niz, tada se prikazuju `brojTacno` ili `prihvatljiviOdgovori` iz pitanja).
  */
 @Component({
-  selector: 'gfs-pitanje-plocice',
+  selector: 'app-pitanje-plocice',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent],
   host: { class: 'uz-plocice' },
@@ -48,7 +48,7 @@ import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
           @for (o of opcije(); track o.id) {
             <li class="uz-plocica" [class.uz-plocica--tacna]="o.tacna" [class.uz-plocica--prigusena]="o.prigusena"
                 [style.--uz-boja]="o.boja">
-              <gfs-opcija-oblik class="uz-plocica-oblik" [indeks]="o.indeks" />
+              <app-opcija-oblik class="uz-plocica-oblik" [indeks]="o.indeks" />
               <span class="uz-plocica-tekst">{{ o.tekst }}</span>
               @if (o.tacna) { <span class="uz-plocica-tacno"><span aria-hidden="true">✓</span> tačno</span> }
             </li>

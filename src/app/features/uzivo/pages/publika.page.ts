@@ -20,7 +20,7 @@ const PONOVI_ROK_MS = 2000;
  * projektor ne prikazuje greške. Indikator veze u uglu samo dok veza nije uspostavljena.
  */
 @Component({
-  selector: 'gfs-publika',
+  selector: 'app-publika',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
   imports: [PublikaScenaComponent],
@@ -36,7 +36,7 @@ const PONOVI_ROK_MS = 2000;
       @if (s.izvodjenje.status === 'ZAVRSENO') {
         <div class="uz-pub-poruka uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       } @else {
-        <gfs-publika-scena class="uz-pub-scena" [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" />
+        <app-publika-scena class="uz-pub-scena" [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" />
       }
     } @else if (store.greska(); as g) {
       <div class="uz-pub-poruka uz-dan" role="alert"><p>{{ g }}</p></div>

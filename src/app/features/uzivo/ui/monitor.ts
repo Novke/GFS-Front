@@ -4,7 +4,7 @@
  * (bez okvira prozora) je `F` u samom prozoru publike, jer browser traži gest korisnika u tom prozoru.
  */
 
-export type EkranOpis = { oznaka: string; levo: number; gore: number; sirina: number; visina: number; primarni: boolean };
+export interface EkranOpis { oznaka: string; levo: number; gore: number; sirina: number; visina: number; primarni: boolean }
 
 /** Ime prozora publike (isti prozor se ponovo koristi, ne otvara se drugi). */
 export const PROZOR_PUBLIKE = 'gfs-publika';

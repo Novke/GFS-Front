@@ -53,7 +53,7 @@ export function otvoriPokreni(dialog: MatDialog, podaci: PokreniPodaci): Observa
 
 /** Izbor čuvanja pre starta (prezentacija sa pitanjima): uz predavanje, za grupu, bez grupe, ne čuvaj. */
 @Component({
-  selector: 'gfs-pokreni-dialog',
+  selector: 'app-pokreni-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, MatFormFieldModule, MatProgressBarModule, MatRadioModule, MatSelectModule],
   template: `

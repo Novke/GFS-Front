@@ -77,7 +77,7 @@ describe('SlajdPrikazComponent', () => {
     const { el } = await prikazi({
       slajd: slajdPitanje, rezultat, prikaziRezultat: true, brojOdgovora: 3, kodTraka: { host: 'gfs.trif.rs/gfs', kod: '123456' },
     });
-    expect(el.querySelector('gfs-pitanje-plocice')).toBeNull();
+    expect(el.querySelector('app-pitanje-plocice')).toBeNull();
     expect(Array.from(el.querySelectorAll('.uz-rez-opcija-vrednost')).map(v => v.textContent?.trim()))
       .toEqual(['1 · 33 %', '2 · 67 %', '0 · 0 %']);
     expect(el.querySelector('.uz-slajd-odgovori')?.textContent).toContain('3');

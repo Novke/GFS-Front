@@ -15,7 +15,7 @@ export function samoCifre(unos: string): string {
  * (`GET api/public/uzivo/{kod}`), pa `uzivo/:kod`. Greška ostaje ovde, uz polje.
  */
 @Component({
-  selector: 'gfs-uzivo-kod',
+  selector: 'app-uzivo-kod',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'uz-st uz-dan', lang: 'sr-Latn' },
   template: `

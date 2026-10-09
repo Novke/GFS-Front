@@ -11,7 +11,7 @@ import { TastaturaIzvodjenja } from './precice';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [KonzolaKontroleComponent],
   host: { '(document:keydown)': 'dole($event)', '(document:keyup)': 'tast.pusten($event)' },
-  template: `<gfs-konzola-kontrole [stanje]="stanje()" [dozvoljene]="dozvoljene()" (komanda)="kliknuto.push($event)" />`,
+  template: `<app-konzola-kontrole [stanje]="stanje()" [dozvoljene]="dozvoljene()" (komanda)="kliknuto.push($event)" />`,
 })
 class DomacinKontrola {
   readonly stanje = signal(naPitanju('ZATVORENO', { takmicenje: true }));

@@ -93,7 +93,7 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
  * `tekstPrikaz` i `jedinica` dolaze iz pitanja (rezultat ih ne nosi).
  */
 @Component({
-  selector: 'gfs-rezultat-prikaz',
+  selector: 'app-rezultat-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent],
   host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()' },
@@ -104,7 +104,7 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
           @for (o of opcije(); track o.id) {
             <li class="uz-rez-opcija" [class.uz-rez-opcija--tacna]="o.tacna" [class.uz-rez-opcija--prigusena]="o.prigusena"
                 [style.--uz-boja]="o.boja">
-              <gfs-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
+              <app-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
               <span class="uz-rez-opcija-tekst">
                 @if (o.tacna) { <span class="uz-tacno-znak">✓ tačno</span> }
                 {{ o.tekst }}

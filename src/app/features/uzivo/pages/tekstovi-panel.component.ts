@@ -7,7 +7,7 @@ import { RezultatTekst } from '../data-access/uzivo.models';
  * grupa se ne vidi u javnim rezultatima, a ovde ostaje precrtana.
  */
 @Component({
-  selector: 'gfs-tekstovi-panel',
+  selector: 'app-tekstovi-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule],
   host: { class: 'uz-kon-tekstovi' },

@@ -15,13 +15,13 @@ export function imenaZaPrikaz(imena: readonly string[], broj: number, maks = MAK
  * prijavljenih. `imena` su u redosledu prijave (najstarije prvo). Širinu određuje roditelj.
  */
 @Component({
-  selector: 'gfs-prijava-ekran',
+  selector: 'app-prijava-ekran',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [QrKodComponent],
   host: { class: 'uz-okvir' },
   template: `
     <section class="uz-platno uz-prijava" aria-label="Prijava učesnika">
-      <gfs-qr-kod class="uz-prijava-qr" [tekst]="link()" [velicina]="720" />
+      <app-qr-kod class="uz-prijava-qr" [tekst]="link()" [velicina]="720" />
       <div class="uz-prijava-info">
         <p class="uz-prijava-poziv">Skeniraj QR kod ili otvori</p>
         <p class="uz-prijava-link">{{ linkPrikaz() }}</p>

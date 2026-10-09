@@ -34,7 +34,7 @@ export function precice(kontekst: KontekstPrecica): Red[] {
 
 /** Pomoć sa prečicama (`?`). */
 @Component({
-  selector: 'gfs-pomoc-precice-dialog',
+  selector: 'app-pomoc-precice-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule],
   template: `

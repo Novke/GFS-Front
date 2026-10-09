@@ -17,7 +17,7 @@ export interface KodTraka { host: string; kod: string; }
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
  */
 @Component({
-  selector: 'gfs-slajd-prikaz',
+  selector: 'app-slajd-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PitanjePlociceComponent, RezultatPrikazComponent, TajmerComponent],
   host: { class: 'uz-okvir' },
@@ -33,16 +33,16 @@ export interface KodTraka { host: string; kod: string; }
         <header class="uz-pitanje-zaglavlje">
           <div class="uz-md uz-pitanje-tekst" [innerHTML]="pitanjeHtml()"></div>
           @if (aktivanTajmer(); as t) {
-            <gfs-tajmer class="uz-slajd-tajmer" [rokMs]="t.rokMs" [preostaloMs]="t.preostaloMs" [sat]="t.sat"
+            <app-tajmer class="uz-slajd-tajmer" [rokMs]="t.rokMs" [preostaloMs]="t.preostaloMs" [sat]="t.sat"
                         [ukupnoMs]="p.vremeSekunde ? p.vremeSekunde * 1000 : null" />
           }
         </header>
         <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat()">
           @if (prikazanRezultat(); as r) {
-            <gfs-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
+            <app-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
           } @else {
             @if (p.slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
-            <gfs-pitanje-plocice [pitanje]="p" [tacne]="tacne()" />
+            <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" />
           }
         </div>
       }
@@ -84,7 +84,7 @@ export class SlajdPrikazComponent {
     const t = this.tajmer();
     return t && (t.rokMs !== null || t.preostaloMs !== null) ? t : null;
   });
-  /** Id-jevi tačnih opcija kad je tačan odgovor prikazan (za broj i tekst prazan niz, vidi `gfs-pitanje-plocice`). */
+  /** Id-jevi tačnih opcija kad je tačan odgovor prikazan (za broj i tekst prazan niz, vidi `app-pitanje-plocice`). */
   protected readonly tacne = computed(() => {
     const p = this.slajd().pitanje;
     if (!p || !this.tacanPrikazan()) {

@@ -21,7 +21,7 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
 
 /** Nova prezentacija: predmet, naziv, opis -> `POST /prezentacije`; zatvara se sa napravljenom prezentacijom. */
 @Component({
-  selector: 'gfs-nova-prezentacija-dialog',
+  selector: 'app-nova-prezentacija-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `

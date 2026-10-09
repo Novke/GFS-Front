@@ -22,7 +22,7 @@ export function proveriSliku(fajl: { size: number; type: string }): string | nul
 
 /** Slika slajda ili pitanja: upload (`POST /mediji`), pregled, zamena i uklanjanje; greška iz `reason`. */
 @Component({
-  selector: 'gfs-slika-polje',
+  selector: 'app-slika-polje',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `

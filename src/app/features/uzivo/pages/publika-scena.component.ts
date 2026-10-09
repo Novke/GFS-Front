@@ -23,7 +23,7 @@ export function hostAplikacije(base: string = document.baseURI): string {
  * tačnost tek posle `C`), kao `JavnoStanje` koje dobijaju telefoni.
  */
 @Component({
-  selector: 'gfs-publika-scena',
+  selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PostoljeComponent, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena uz-dan' },
@@ -31,11 +31,11 @@ export function hostAplikacije(base: string = document.baseURI): string {
     @let s = stanje();
     @switch (s.prikaz) {
       @case ('PRIJAVA') {
-        <gfs-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
+        <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
       }
       @case ('SLAJD') {
         @if (s.trenutniSlajd; as sl) {
-          <gfs-slajd-prikaz [slajd]="sl" [korak]="s.korak" [postepeno]="sl.postepeno" [faza]="s.faza"
+          <app-slajd-prikaz [slajd]="sl" [korak]="s.korak" [postepeno]="sl.postepeno" [faza]="s.faza"
                             [rezultat]="rezultat()" [prikaziRezultat]="s.rezultatiPrikazani" [tacanPrikazan]="s.tacanPrikazan"
                             [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" [kodTraka]="kodTraka()" />
         } @else {
@@ -47,7 +47,7 @@ export function hostAplikacije(base: string = document.baseURI): string {
           <section class="uz-platno uz-scena-kraj">
             @if (s.takmicenje && s.rangLista.length) {
               <h1 class="uz-scena-naslov">Pobednici</h1>
-              <gfs-postolje class="uz-scena-postolje" [stavke]="s.rangLista" />
+              <app-postolje class="uz-scena-postolje" [stavke]="s.rangLista" />
             } @else {
               <h1 class="uz-scena-hvala">Hvala!</h1>
               <p class="uz-scena-podnaslov">{{ s.izvodjenje.prezentacija.naziv }}</p>
@@ -60,14 +60,14 @@ export function hostAplikacije(base: string = document.baseURI): string {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-rang" aria-label="Rang-lista">
           <h1 class="uz-scena-naslov">Rang-lista</h1>
-          <gfs-rang-lista [stavke]="vrhRang()" />
+          <app-rang-lista [stavke]="vrhRang()" />
         </section>
       </div>
     }
     @if (s.qrPrikazan) {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-qr" aria-label="QR kod za prijavu">
-          <gfs-qr-kod class="uz-scena-qr-kod" [tekst]="joinLink()" [velicina]="900" />
+          <app-qr-kod class="uz-scena-qr-kod" [tekst]="joinLink()" [velicina]="900" />
           <div class="uz-scena-qr-info">
             <p class="uz-scena-qr-link">{{ host() }}/uzivo</p>
             <p class="uz-scena-qr-kod-tekst">{{ kod() }}</p>

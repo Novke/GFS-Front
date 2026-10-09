@@ -34,7 +34,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
  */
 @Component({
-  selector: 'gfs-prezentacija-editor',
+  selector: 'app-prezentacija-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [EditorStore],
   imports: [
@@ -161,7 +161,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
             @for (s of izabraniNiz(); track store.kljuc(s.id)) {
-              <gfs-slajd-forma [slajd]="s" (izmena)="store.izmeniSlajd(s.id, $event)" />
+              <app-slajd-forma [slajd]="s" (izmena)="store.izmeniSlajd(s.id, $event)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -170,7 +170,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           <aside class="uz-ed-pregled" aria-label="Pregled slajda">
             @if (store.izabrani(); as s) {
               <div class="uz-dan uz-ed-platno">
-                <gfs-slajd-prikaz [slajd]="s" />
+                <app-slajd-prikaz [slajd]="s" />
               </div>
               <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
             }

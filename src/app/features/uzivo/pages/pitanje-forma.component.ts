@@ -98,7 +98,7 @@ let sledeciId = 0;
  * `valueChanges` roditeljske forme; strukturne izmene (tip, opcije) emituju jednom, na kraju.
  */
 @Component({
-  selector: 'gfs-pitanje-forma',
+  selector: 'app-pitanje-forma',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, TextFieldModule, MatButtonModule, MatCheckboxModule, MatChipsModule, MatFormFieldModule,
@@ -135,7 +135,7 @@ let sledeciId = 0;
       <mat-hint>Markdown: **podebljano**, *kurziv*, \`kod\`</mat-hint>
     </mat-form-field>
 
-    <gfs-slika-polje [slikaId]="f.controls.slikaId.value" oznaka="Slika uz pitanje"
+    <app-slika-polje [slikaId]="f.controls.slikaId.value" oznaka="Slika uz pitanje"
                      (promena)="f.controls.slikaId.setValue($event?.id ?? null)" />
 
     @switch (tip) {
@@ -205,7 +205,7 @@ let sledeciId = 0;
           <legend class="uz-ed-oznaka-grupe">{{ tn ? 'Tačan odgovor' : 'Ponuđeni odgovori' }}</legend>
           @for (o of f.controls.opcije.controls; track o; let i = $index, prva = $first, poslednja = $last) {
             <div class="uz-ed-opcija">
-              <gfs-opcija-oblik [indeks]="i" [velicina]="34" />
+              <app-opcija-oblik [indeks]="i" [velicina]="34" />
               @if (tn) {
                 <span class="uz-ed-opcija-tn">{{ o.controls.tekst.value }}</span>
               } @else {

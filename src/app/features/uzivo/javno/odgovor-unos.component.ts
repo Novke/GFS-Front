@@ -10,7 +10,7 @@ export const PORUKA_BROJ = 'Unesi broj.';
 export const PORUKA_TEKST = 'Odgovor mora imati od 1 do 200 znakova.';
 
 export function normalizujBroj(unos: string): string {
-  return unos.replace(/[\s  ]/g, '');
+  return unos.replace(/[\s\u00A0\u202F]/g, '');
 }
 
 /** Poruka kad unos nije broj (ista kao serverska), inače null. */
@@ -66,7 +66,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
  * - izbor i ukucan tekst idu roditelju kao `nacrtPromena`, a vraćaju se kroz `nacrt` iste runde pri novom montiranju.
  */
 @Component({
-  selector: 'gfs-odgovor-unos',
+  selector: 'app-odgovor-unos',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent],
   host: { class: 'uz-st-unos', '[class.uz-st-unos--celo]': 'celoPitanje()' },
@@ -117,7 +117,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
                     [class.uz-st-opcija--izabrana]="izabrane().includes(o.id)"
                     [attr.aria-pressed]="p.tip === 'VISE_TACNIH' ? izabrane().includes(o.id) : null"
                     [attr.aria-label]="oznaka(i)" (click)="dodir(o.id)">
-              <gfs-opcija-oblik [indeks]="i" aria-hidden="true" />
+              <app-opcija-oblik [indeks]="i" aria-hidden="true" />
               @if (tekst1(i); as t) { <span class="uz-st-opcija-tekst" aria-hidden="true">{{ t }}</span> }
               @if (p.tip === 'VISE_TACNIH') {
                 <span class="uz-st-opcija-kvacica" aria-hidden="true">{{ izabrane().includes(o.id) ? '✓' : '' }}</span>
