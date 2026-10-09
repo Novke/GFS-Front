@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AktivnostInfo, GrupaDetails, GrupaInfo, PredavanjeDetails, PredavanjeInfo, IdCmd, PredmetInfo, StartPredavanjeCmd, UpdateAktivnostNapomenaCmd, UpdatePredavanjeCmd } from '../models/model';
@@ -8,11 +8,11 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class PredavanjeService {
+  private http = inject(HttpClient);
+
   
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   getGrupe(): Observable<GrupaInfo[]> {
     return this.http.get<any[]>(`${this.apiUrl}/grupe`);

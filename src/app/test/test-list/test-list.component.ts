@@ -1,16 +1,25 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { GrupaInfo, PredmetInfo, TestInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { TestService } from '../test.service';
 import { AppRoutes } from 'src/app/app.routes';
+import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
+import { NgClass, DatePipe } from '@angular/common';
 
 @Component({
-  selector: 'app-test-list',
-  templateUrl: './test-list.component.html',
-  styleUrls: ['./test-list.component.css']
+    selector: 'app-test-list',
+    templateUrl: './test-list.component.html',
+    styleUrls: ['./test-list.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, NgClass, MatListItemTitle, MatListItemLine, DatePipe]
 })
 export class TestListComponent implements OnInit{
+  private predavanjaService = inject(PredavanjeService);
+  private testService = inject(TestService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   grupaId: number | null = null;
   predmetId: number | null = null;
@@ -18,13 +27,6 @@ export class TestListComponent implements OnInit{
 
   grupa: GrupaInfo | null = null;
   predmet: PredmetInfo | null = null;
-
-  constructor(
-    private predavanjaService: PredavanjeService,
-    private testService: TestService,
-    private route: ActivatedRoute,
-    private router: Router
-  ){}
 
   ngOnInit(): void{
 

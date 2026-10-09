@@ -11,15 +11,19 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let g of grupe" class="clickable-row" tabindex="0"
+        @for (g of grupe; track g) {
+          <tr class="clickable-row" tabindex="0"
             (click)="otvori(g.id)" (keydown.enter)="otvori(g.id)">
-          <td>{{ g.naziv }}</td>
-          <td>{{ g.godinaUpisa }}</td>
-          <td>{{ g.brojStudenata ?? '—' }}</td>
-        </tr>
-        <tr *ngIf="ucitano && grupe.length === 0">
-          <td colspan="3" class="text-muted">Još nema nijedne grupe.</td>
-        </tr>
+            <td>{{ g.naziv }}</td>
+            <td>{{ g.godinaUpisa }}</td>
+            <td>{{ g.brojStudenata ?? '—' }}</td>
+          </tr>
+        }
+        @if (ucitano && grupe.length === 0) {
+          <tr>
+            <td colspan="3" class="text-muted">Još nema nijedne grupe.</td>
+          </tr>
+        }
       </tbody>
     </table>
   </div>
@@ -29,15 +33,15 @@
     <div class="col-md-6">
       <label for="naziv" class="form-label">Naziv</label>
       <input id="naziv" name="naziv" class="form-control" type="text" maxlength="60" required
-             [(ngModel)]="naziv" #nazivCtrl="ngModel"
-             [class.is-invalid]="nazivCtrl.touched && (nazivCtrl.invalid || !naziv.trim())">
+        [(ngModel)]="naziv" #nazivCtrl="ngModel"
+        [class.is-invalid]="nazivCtrl.touched && (nazivCtrl.invalid || !naziv.trim())">
       <div class="invalid-feedback">Naziv grupe je obavezan (najviše 60 znakova).</div>
     </div>
     <div class="col-md-3">
       <label for="godinaUpisa" class="form-label">Godina upisa</label>
       <input id="godinaUpisa" name="godinaUpisa" class="form-control" type="number" min="2000" max="2100" step="1" required
-             [(ngModel)]="godinaUpisa" #godinaCtrl="ngModel"
-             [class.is-invalid]="godinaCtrl.touched && godinaCtrl.invalid">
+        [(ngModel)]="godinaUpisa" #godinaCtrl="ngModel"
+        [class.is-invalid]="godinaCtrl.touched && godinaCtrl.invalid">
       <div class="invalid-feedback">Unesite ispravnu godinu upisa (2000–2100).</div>
     </div>
     <div class="col-md-3 d-flex align-items-end">

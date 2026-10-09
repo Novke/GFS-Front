@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { StudentNaPredmetuDetails, StudentPregledDetails } from '../models/model';
 import { API_URL } from '../shared/api-url';
@@ -8,10 +8,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class StudentService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   getDetails(id: number): Observable<StudentPregledDetails>{
     return this.http.get<StudentPregledDetails>(`${this.apiUrl}/studenti/${id}`)

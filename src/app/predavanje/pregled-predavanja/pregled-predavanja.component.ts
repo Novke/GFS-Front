@@ -1,24 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { AktivnostInfo, PredavanjeDetails, StudentInfo, tipAktivnosti } from 'src/app/models/model';
 import { PredavanjeService } from '../predavanje.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
+import { FormsModule } from '@angular/forms';
+import { MatCard, MatCardContent, MatCardTitle, MatCardSubtitle } from '@angular/material/card';
 
 @Component({
-  selector: 'app-pregled-predavanja',
-  templateUrl: './pregled-predavanja.component.html',
-  styleUrls: ['./pregled-predavanja.component.css']
+    selector: 'app-pregled-predavanja',
+    templateUrl: './pregled-predavanja.component.html',
+    styleUrls: ['./pregled-predavanja.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule, MatCard, MatCardContent, MatCardTitle, MatCardSubtitle]
 })
 export class PregledPredavanjaComponent implements OnInit {
+  private predavanjeService = inject(PredavanjeService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   id: number | null = null;
   predavanje: PredavanjeDetails | undefined;
-
-  constructor(
-    private predavanjeService: PredavanjeService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(

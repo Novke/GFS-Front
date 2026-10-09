@@ -1,16 +1,25 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { DomaciInfo, GrupaInfo, PredmetInfo } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { AppRoutes } from 'src/app/app.routes';
+import { MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, MatListItemTitle, MatListItemLine } from '@angular/material/list';
+import { NgClass, DatePipe } from '@angular/common';
 
 @Component({
-  selector: 'app-domaci-list',
-  templateUrl: './domaci-list.component.html',
-  styleUrls: ['./domaci-list.component.css']
+    selector: 'app-domaci-list',
+    templateUrl: './domaci-list.component.html',
+    styleUrls: ['./domaci-list.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [MatListSubheaderCssMatStyler, MatList, MatDivider, MatListItem, NgClass, MatListItemTitle, MatListItemLine, DatePipe]
 })
 export class DomaciListComponent implements OnInit{
+  private domaciService = inject(DomaciService);
+  private predavanjaService = inject(PredavanjeService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   grupaId: number | null = null;
   predmetId: number | null = null;
@@ -18,15 +27,6 @@ export class DomaciListComponent implements OnInit{
 
   grupa: GrupaInfo | null = null;
   predmet: PredmetInfo | null = null;
-  
-  constructor(
-    private domaciService: DomaciService,
-    private predavanjaService: PredavanjeService,
-    private route: ActivatedRoute,
-    private router: Router
-  ){
-
-  }
   ngOnInit(): void {
 
     this.route.paramMap.subscribe(

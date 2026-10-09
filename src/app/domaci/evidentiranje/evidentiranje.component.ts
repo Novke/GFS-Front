@@ -1,16 +1,24 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo, tipAktivnosti, UpdateDomaciCmd } from 'src/app/models/model';
 import { DomaciService } from '../domaci.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
+import { FormsModule } from '@angular/forms';
+import { NgStyle, DatePipe } from '@angular/common';
 
 @Component({
-  selector: 'app-evidentiranje',
-  templateUrl: './evidentiranje.component.html',
-  styleUrls: ['./evidentiranje.component.css']
+    selector: 'app-evidentiranje',
+    templateUrl: './evidentiranje.component.html',
+    styleUrls: ['./evidentiranje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule, NgStyle, DatePipe]
 })
 export class EvidentiranjeComponent implements OnInit {
+  private domaciService = inject(DomaciService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   id: number | null = null;
   domaci: DomaciDetails | undefined;
@@ -20,12 +28,6 @@ export class EvidentiranjeComponent implements OnInit {
   showModal = false;
 
   selectedStudent: DomaciStudentiInfo | null = null;
-
-  constructor(
-    private domaciService: DomaciService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(

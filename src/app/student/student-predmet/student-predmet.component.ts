@@ -1,25 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { StudentNaPredmetuDetails } from '../../models/model';
 import { StudentService } from '../student.service';
+import { NgClass, DatePipe } from '@angular/common';
 
 @Component({
-  selector: 'app-student-predmet',
-  templateUrl: './student-predmet.component.html',
-  styleUrls: ['./student-predmet.component.css']
+    selector: 'app-student-predmet',
+    templateUrl: './student-predmet.component.html',
+    styleUrls: ['./student-predmet.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [NgClass, DatePipe]
 })
 export class StudentPredmetComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private studentService = inject(StudentService);
+
 
   studentId: number = 0;
   predmetId: number = 0;
   details: StudentNaPredmetuDetails | null = null;
   loading: boolean = false;
-
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private studentService: StudentService
-  ) { }
 
   ngOnInit(): void {
     this.route.params.subscribe(params => {

@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   GetOceneCmd,
@@ -16,10 +16,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class OcenjivanjeService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   getGrupe(): Observable<GrupaInfo[]> {
     return this.http.get<GrupaInfo[]>(`${this.apiUrl}/grupe`);

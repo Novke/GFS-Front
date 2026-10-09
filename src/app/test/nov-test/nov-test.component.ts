@@ -1,17 +1,25 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppRoutes } from 'src/app/app.routes';
 import { CreateTestCmd, GrupaInfo, PredmetInfo, TipTestaInfo } from 'src/app/models/model';
 import { PredavanjeService } from 'src/app/predavanje/predavanje.service';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { TestService } from '../test.service';
+import { FormsModule } from '@angular/forms';
+import { NgClass } from '@angular/common';
 
 @Component({
-  selector: 'app-nov-test',
-  templateUrl: './nov-test.component.html',
-  styleUrls: ['./nov-test.component.css']
+    selector: 'app-nov-test',
+    templateUrl: './nov-test.component.html',
+    styleUrls: ['./nov-test.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule, NgClass]
 })
 export class NovTestComponent implements OnInit {
+  private predavanjeService = inject(PredavanjeService);
+  private router = inject(Router);
+  private testService = inject(TestService);
+
 
   grupe: GrupaInfo[] = [];
   predmeti: PredmetInfo[] = [];
@@ -24,11 +32,6 @@ export class NovTestComponent implements OnInit {
   datum: Date | null = null;
   brojGrupa: number = 1;
   maxPoena: number = 0;
-
-  constructor(
-    private predavanjeService: PredavanjeService,
-    private router: Router,
-    private testService: TestService) { }
 
   ngOnInit(): void {
     this.loadGroupsAndSubjects();

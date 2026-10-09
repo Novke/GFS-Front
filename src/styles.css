@@ -1,4 +1,8 @@
-@import "~bootstrap/dist/css/bootstrap.min.css";
+@import "bootstrap/dist/css/bootstrap.min.css";
+@import "./app/features/uzivo/ui/uzivo-tokeni.css";
+@import "./app/features/uzivo/pages/uzivo-editor.css";
+@import "./app/features/uzivo/pages/uzivo-izvodjenje.css";
+@import "./app/features/uzivo/javno/uzivo-javno.css";
 
 .btn-primary {
     background-color: #e96989;
@@ -32,4 +36,10 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 .clickable-row:focus-visible {
   outline: 2px solid #e96989;
   outline-offset: -2px;
+}
+
+.kartice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 50px;
 }

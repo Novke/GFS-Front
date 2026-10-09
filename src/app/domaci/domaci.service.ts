@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { CreateUradjenDomaciCmd, DodajDomaciCmd, DomaciDetails, DomaciId, DomaciInfo, UpdateDomaciCmd } from '../models/model';
 import { API_URL } from '../shared/api-url';
 
@@ -7,10 +7,10 @@ import { API_URL } from '../shared/api-url';
   providedIn: 'root'
 })
 export class DomaciService {
+  private http = inject(HttpClient);
+
 
   private apiUrl = API_URL;
-
-  constructor(private http: HttpClient) { }
 
   dodajDomaci(cmd: DodajDomaciCmd){
     return this.http.post<DomaciId>(`${this.apiUrl}/domaci`, cmd)

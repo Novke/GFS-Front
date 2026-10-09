@@ -1,136 +1,147 @@
 <div class="container mt-5">
-    <div class="row">
-        <div class="col">
+  <div class="row">
+    <div class="col">
 
-            <h1 class="text-center">Evidentiranje domaćeg {{domaci?.naslov}}</h1>
-
-
-            <div class="container text-center mt-2" *ngIf="id">
-                <button class="btn btn-secondary" (click)="navigatePregled()">Pregled</button>
-            </div>
-
-            <div class="my-4">
-
-                <div class="form-group mb-3">
-                    <label for="domaciDatum">Datum</label>
-                    <input type="date" id="domaciDatum" class="form-control" [(ngModel)]="novDatum" name="domaciDatum">
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="domaciNaslov">Naslov</label>
-                    <input type="text" id="domaciNaslov" class="form-control" [(ngModel)]="novNaslov"
-                        name="domaciNaslov">
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="domaciOpis">Opis</label>
-                    <textarea id="domaciOpis" class="form-control" [(ngModel)]="novText" name="domaciOpis"
-                        rows="3"></textarea>
-                </div>
-
-                <div>
-                    <button class="btn btn-primary" (click)="azuriraj()" [disabled]="jesuLiPoljaNepromenjena()"
-                        *ngIf="domaci">Sačuvaj</button>
-                </div>
-            </div>
+      <h1 class="text-center">Evidentiranje domaćeg {{domaci?.naslov}}</h1>
 
 
-            <div *ngIf="domaci?.predavanje">
-                <h2>{{domaci?.predavanje?.rb}}. Predavanje</h2>
-
-                <div class="row col-md-7 my-3">
-                    <div class="col">
-                        <label class="form-label" for="tema">Tema</label>
-                        <input class="form-control" id="tema" disabled [value]="domaci?.predavanje?.tema">
-                    </div>
-                    <div class="col col-md-3">
-                        <label class="form-label" for="datum">Datum</label>
-                        <input class="form-control" id="datum" disabled
-                            [value]="domaci?.predavanje?.datum | date : 'd. MMM y.'">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col col-md-3">
-                        <label class="form-label">Prisutnih: {{izracunajPrisutne()}}</label>
-                    </div>
-                    <div class="col">
-                        <label class="form-label">Aktivnih: {{izracunajAktivne()}}</label>
-                    </div>
-                </div>
-
-                <div class="row my-3">
-                    <div class="col text-right">
-                        <button class="btn btn-primary" (click)="oslobodi()"
-                            [disabled]="domaci?.pregledan || jesuLiOslobadjani()">Oslobodi aktivne</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-3" *ngIf="domaci">
-                <div class="table-responsive">
-                    <table class="table table-striped table-bordered">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Student</th>
-                                <th>Indeks</th>
-                                <th>Aktivnost</th>
-                                <th>Bodovi</th>
-                                <th>Akcije</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr *ngFor="let s of domaci?.studenti; let i = index">
-                                <th>{{i+1}}</th>
-                                <td>{{s.ime}} {{s.prezime}}</td>
-                                <td>{{s.indeks}}-{{s.godina}}</td>
-                                <td>{{aktivnost2String(s.tip)}}</td>
-                                <td>{{bodovi2String(s)}}</td>
-                                <td class="text-center">
-                                    <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
-                                        [disabled]="domaci.pregledan || s.oslobodjen"> E </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div>
-                <button class="btn btn-primary my-3" (click)="zavrsi()" [disabled]="domaci.pregledan"
-                    *ngIf="domaci">Završi</button>
-            </div>
-
-            <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Evidentiraj domaci: {{selectedStudent?.ime}}
-                            {{selectedStudent?.prezime}}</h5>
-                    </div>
-                    <div class="modal-body" *ngIf="selectedStudent">
-                        <div class="form-group">
-                            <label for="editBodovi">Bodovi (0-10)</label>
-                            <input type="number" id="editBodovi" [(ngModel)]="selectedStudent.bodovi"
-                                class="form-control" min="0" max="10">
-                        </div>
-                        <div class="form-group">
-                            <label for="editNapomene">Napomene</label>
-                            <input type="text" id="editNapomene" [(ngModel)]="selectedStudent.uradjenDomaciNapomene"
-                                class="form-control">
-                        </div>
-                        <div class="form-group form-check">
-                            <input type="checkbox" id="editPrepisivanje" [(ngModel)]="selectedStudent.prepisivanje"
-                                class="form-check-input">
-                            <label for="editPrepisivanje" class="form-check-label">Prepisivanje</label>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" (click)="closeModal()">Close</button>
-                        <button class="btn btn-primary" (click)="saveChanges()">Save Changes</button>
-                    </div>
-                </div>
-            </div>
-
+      @if (id) {
+        <div class="container text-center mt-2">
+          <button class="btn btn-secondary" (click)="navigatePregled()">Pregled</button>
         </div>
+      }
+
+      <div class="my-4">
+
+        <div class="form-group mb-3">
+          <label for="domaciDatum">Datum</label>
+          <input type="date" id="domaciDatum" class="form-control" [(ngModel)]="novDatum" name="domaciDatum">
+        </div>
+
+        <div class="form-group mb-3">
+          <label for="domaciNaslov">Naslov</label>
+          <input type="text" id="domaciNaslov" class="form-control" [(ngModel)]="novNaslov"
+            name="domaciNaslov">
+        </div>
+
+        <div class="form-group mb-3">
+          <label for="domaciOpis">Opis</label>
+          <textarea id="domaciOpis" class="form-control" [(ngModel)]="novText" name="domaciOpis"
+          rows="3"></textarea>
+        </div>
+
+        <div>
+          @if (domaci) {
+            <button class="btn btn-primary" (click)="azuriraj()" [disabled]="jesuLiPoljaNepromenjena()"
+            >Sačuvaj</button>
+          }
+        </div>
+      </div>
+
+
+      @if (domaci?.predavanje) {
+        <div>
+          <h2>{{domaci?.predavanje?.rb}}. Predavanje</h2>
+          <div class="row col-md-7 my-3">
+            <div class="col">
+              <label class="form-label" for="tema">Tema</label>
+              <input class="form-control" id="tema" disabled [value]="$safeNavigationMigration(domaci?.predavanje?.tema)">
+            </div>
+            <div class="col col-md-3">
+              <label class="form-label" for="datum">Datum</label>
+              <input class="form-control" id="datum" disabled
+                [value]="$safeNavigationMigration(domaci?.predavanje?.datum) | date : 'd. MMM y.'">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col col-md-3">
+              <label class="form-label">Prisutnih: {{izracunajPrisutne()}}</label>
+            </div>
+            <div class="col">
+              <label class="form-label">Aktivnih: {{izracunajAktivne()}}</label>
+            </div>
+          </div>
+          <div class="row my-3">
+            <div class="col text-right">
+              <button class="btn btn-primary" (click)="oslobodi()"
+              [disabled]="domaci?.pregledan || jesuLiOslobadjani()">Oslobodi aktivne</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (domaci) {
+        <div class="mt-3">
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Student</th>
+                  <th>Indeks</th>
+                  <th>Aktivnost</th>
+                  <th>Bodovi</th>
+                  <th>Akcije</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of domaci?.studenti; track s; let i = $index) {
+                  <tr>
+                    <th>{{i+1}}</th>
+                    <td>{{s.ime}} {{s.prezime}}</td>
+                    <td>{{s.indeks}}-{{s.godina}}</td>
+                    <td>{{aktivnost2String(s.tip)}}</td>
+                    <td>{{bodovi2String(s)}}</td>
+                    <td class="text-center">
+                      <button class="btn btn-primary btn-sm" (click)="openEditModal(s)"
+                      [disabled]="domaci.pregledan || s.oslobodjen"> E </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+      <div>
+        @if (domaci) {
+          <button class="btn btn-primary my-3" (click)="zavrsi()" [disabled]="domaci.pregledan"
+          >Završi</button>
+        }
+      </div>
+
+      <div class="modal" [ngStyle]="{'display': showModal ? 'block' : 'none'}">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Evidentiraj domaci: {{selectedStudent?.ime}}
+            {{selectedStudent?.prezime}}</h5>
+          </div>
+          @if (selectedStudent) {
+            <div class="modal-body">
+              <div class="form-group">
+                <label for="editBodovi">Bodovi (0-10)</label>
+                <input type="number" id="editBodovi" [(ngModel)]="selectedStudent.bodovi"
+                  class="form-control" min="0" max="10">
+              </div>
+              <div class="form-group">
+                <label for="editNapomene">Napomene</label>
+                <input type="text" id="editNapomene" [(ngModel)]="selectedStudent.uradjenDomaciNapomene"
+                  class="form-control">
+              </div>
+              <div class="form-group form-check">
+                <input type="checkbox" id="editPrepisivanje" [(ngModel)]="selectedStudent.prepisivanje"
+                  class="form-check-input">
+                <label for="editPrepisivanje" class="form-check-label">Prepisivanje</label>
+              </div>
+            </div>
+          }
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeModal()">Close</button>
+            <button class="btn btn-primary" (click)="saveChanges()">Save Changes</button>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </div>
 </div>

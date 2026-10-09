@@ -1,10 +1,12 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, Subscription, interval } from 'rxjs';
 import { AppRoutes } from 'src/app/app.routes';
 import { OnboardingSesijaDetails, PrijavaInfo, StatusPrijave, UpdatePrijavaCmd } from 'src/app/models/model';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { OnboardingService } from '../onboarding.service';
+import { NgClass, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 type Filter = 'SVE' | StatusPrijave;
 
@@ -23,11 +25,16 @@ interface NacrtIzmene {
 const AUTO_OSVEZAVANJE_MS = 15000;
 
 @Component({
-  selector: 'app-onboarding-prijave',
-  templateUrl: './onboarding-prijave.component.html',
-  styleUrls: ['./onboarding-prijave.component.css']
+    selector: 'app-onboarding-prijave',
+    templateUrl: './onboarding-prijave.component.html',
+    styleUrls: ['./onboarding-prijave.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [RouterLink, NgClass, FormsModule, DatePipe]
 })
 export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
+  private route = inject(ActivatedRoute);
+  private onboardingService = inject(OnboardingService);
+
 
   readonly routes = AppRoutes;
 
@@ -58,10 +65,6 @@ export class OnboardingPrijaveComponent implements OnInit, OnDestroy {
   private generacija = 0;
   // Raste sa svakom izmenom (prihvati/odbij/...): zakasneli odgovor običnog osvežavanja ne sme da pregazi noviji.
   private verzija = 0;
-
-  constructor(
-    private route: ActivatedRoute,
-    private onboardingService: OnboardingService) { }
 
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {

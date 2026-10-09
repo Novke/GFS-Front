@@ -1,17 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AppRoutes } from '../../app.routes';
 import { EvidentirajPolaganjeCmd, GrupaDetails, StudentDetails, TestDetails, TestPolaganjeInfo, TipTestaInfo, UpdateTestCmd } from '../../models/model';
 import { PredavanjeService } from '../../predavanje/predavanje.service';
 import { ErrorHandlerUtil } from '../../shared/utils/error-handler.util';
 import { TestService } from '../test.service';
+import { FormsModule } from '@angular/forms';
+import { NgClass, NgStyle } from '@angular/common';
 
 @Component({
-  selector: 'app-test-evidentiranje',
-  templateUrl: './test-evidentiranje.component.html',
-  styleUrls: ['./test-evidentiranje.component.css']
+    selector: 'app-test-evidentiranje',
+    templateUrl: './test-evidentiranje.component.html',
+    styleUrls: ['./test-evidentiranje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule, NgClass, NgStyle]
 })
 export class TestEvidentiranjeComponent implements OnInit {
+  private testService = inject(TestService);
+  private predavanjeService = inject(PredavanjeService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
 
   id: number | null = null
   test: TestDetails | null = null
@@ -26,13 +35,6 @@ export class TestEvidentiranjeComponent implements OnInit {
   studentiZaDodavanje: StudentDetails[] | undefined = []
 
   prikazaniIspitanik: TestPolaganjeInfo | null = null
-
-  constructor(
-    private testService: TestService,
-    private predavanjeService: PredavanjeService,
-    private route: ActivatedRoute,
-    private router: Router
-  ) { }
 
   ngOnInit() {
     this.route.paramMap.subscribe(

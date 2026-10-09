@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit } from '@angular/core';
-import { NgForm, NgModel } from '@angular/forms';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
+import { NgForm, NgModel, FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { JavniUpisInfo, PodnesiPrijavuCmd } from 'src/app/models/model';
@@ -59,11 +59,16 @@ function lokalniDatum(d: Date): string {
  * svaki drugi /api/* poziv vraća 401 i studentu na telefonu otvara basic-auth dijalog.
  */
 @Component({
-  selector: 'app-javni-upis',
-  templateUrl: './javni-upis.component.html',
-  styleUrls: ['./javni-upis.component.css']
+    selector: 'app-javni-upis',
+    templateUrl: './javni-upis.component.html',
+    styleUrls: ['./javni-upis.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule]
 })
 export class JavniUpisComponent implements OnInit, OnDestroy {
+  private route = inject(ActivatedRoute);
+  private onboardingService = inject(OnboardingService);
+
 
   readonly maxGodina = new Date().getFullYear() + 1;
   readonly danas = lokalniDatum(new Date());
@@ -80,10 +85,6 @@ export class JavniUpisComponent implements OnInit, OnDestroy {
   private zaPonovno: PodnesiPrijavuCmd | null = null;
   private paramSub?: Subscription;
   private zahtevSub?: Subscription;
-
-  constructor(
-    private route: ActivatedRoute,
-    private onboardingService: OnboardingService) { }
 
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {

@@ -1,5 +1,5 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { toCanvas } from 'qrcode';
 import { Subscription } from 'rxjs';
 import { AppRoutes } from 'src/app/app.routes';
@@ -7,13 +7,19 @@ import { OnboardingSesijaInfo } from 'src/app/models/model';
 import { ErrorHandlerUtil } from 'src/app/shared/utils/error-handler.util';
 import { OnboardingService } from '../onboarding.service';
 import { upisLink } from '../upis-link';
+import { NgClass, DatePipe } from '@angular/common';
 
 @Component({
-  selector: 'app-onboarding-qr',
-  templateUrl: './onboarding-qr.component.html',
-  styleUrls: ['./onboarding-qr.component.css']
+    selector: 'app-onboarding-qr',
+    templateUrl: './onboarding-qr.component.html',
+    styleUrls: ['./onboarding-qr.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [NgClass, RouterLink, DatePipe]
 })
 export class OnboardingQrComponent implements OnInit, OnDestroy {
+  private route = inject(ActivatedRoute);
+  private onboardingService = inject(OnboardingService);
+
 
   readonly routes = AppRoutes;
 
@@ -29,10 +35,6 @@ export class OnboardingQrComponent implements OnInit, OnDestroy {
 
   private paramSub?: Subscription;
   private kopiranoTimer?: ReturnType<typeof setTimeout>;
-
-  constructor(
-    private route: ActivatedRoute,
-    private onboardingService: OnboardingService) { }
 
   ngOnInit(): void {
     this.paramSub = this.route.paramMap.subscribe(params => {

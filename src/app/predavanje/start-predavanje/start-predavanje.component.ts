@@ -1,23 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { PredavanjeService } from '../predavanje.service';
 import { GrupaInfo, PredmetInfo, StartPredavanjeCmd } from '../../models/model';
 import { AppRoutes } from 'src/app/app.routes';
+import { FormsModule } from '@angular/forms';
 
 @Component({
-  selector: 'app-start-predavanje',
-  templateUrl: './start-predavanje.component.html',
-  styleUrls: ['./start-predavanje.component.css']
+    selector: 'app-start-predavanje',
+    templateUrl: './start-predavanje.component.html',
+    styleUrls: ['./start-predavanje.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [FormsModule]
 })
 export class StartPredavanjeComponent implements OnInit {
+  private predavanjeService = inject(PredavanjeService);
+  private router = inject(Router);
+
 
   grupe: GrupaInfo[] = [];
   predmeti: PredmetInfo[] = [];
   izabranaGrupa : number = 0;
   izabranPredmet : number= 0;
-
-
-  constructor(private predavanjeService: PredavanjeService, private router: Router) {}
 
   ngOnInit(): void {
     this.loadGroupsAndSubjects();
