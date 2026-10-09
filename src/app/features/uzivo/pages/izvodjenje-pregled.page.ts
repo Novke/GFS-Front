@@ -46,11 +46,6 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
   });
 }
 
-/** Rang-lista se prikazuje samo ako je bilo takmičenje; poene server dodeljuje samo tada, pa je dovoljan jedan nenulti. */
-export function imaTakmicenje(r: Pick<IzvodjenjeRezultati, 'rangLista'>): boolean {
-  return r.rangLista.some(s => s.poeni > 0);
-}
-
 /** Pregled sačuvanog izvođenja posle časa (spec 6.2): pitanja po redu otvaranja sa rezultatima i rang-lista. */
 @Component({
   selector: 'app-izvodjenje-pregled',
@@ -150,10 +145,7 @@ export class IzvodjenjePregledPage {
     const r = this.podaci();
     return r ? opisVeze(r.izvodjenje) : '';
   });
-  protected readonly takmicenje = computed(() => {
-    const r = this.podaci();
-    return !!r && imaTakmicenje(r);
-  });
+  protected readonly takmicenje = computed(() => this.podaci()?.takmicenje ?? false);
   protected readonly kartice = computed(() => {
     const pitanja = this.podaci()?.pitanja ?? [];
     const oznake = oznakeRundi(pitanja);

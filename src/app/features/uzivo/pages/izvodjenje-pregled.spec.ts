@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, RezultatPitanja } from '../data-access/uzivo.models';
-import { IzvodjenjePregledPage, imaTakmicenje, oznakeRundi, procenatTacnihTekst } from './izvodjenje-pregled.page';
+import { IzvodjenjePregledPage, oznakeRundi, procenatTacnihTekst } from './izvodjenje-pregled.page';
 
 function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 + 2?'): PitanjeSnimak {
   return {
@@ -69,14 +69,6 @@ describe('oznakeRundi', () => {
   });
 });
 
-describe('imaTakmicenje', () => {
-  it('rang-lista bez poena znači da takmičenja nije bilo', () => {
-    expect(imaTakmicenje({ rangLista: [] })).toBe(false);
-    expect(imaTakmicenje({ rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }] })).toBe(false);
-    expect(imaTakmicenje({ rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 940 }] })).toBe(true);
-  });
-});
-
 describe('IzvodjenjePregledPage', () => {
   let http: HttpTestingController;
 
@@ -98,7 +90,7 @@ describe('IzvodjenjePregledPage', () => {
 
   it('zaglavlje, karte pitanja, oznake rundi i rang-lista', () => {
     const el = otvori({
-      izvodjenje: INFO,
+      izvodjenje: INFO, takmicenje: true,
       pitanja: [runda(1, 1, 10), runda(2, 1, 11, { procenatTacnih: null, brojOdgovora: 2 }), runda(3, 2, 10, { procenatTacnih: 100 })],
       rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 940 }, { mesto: 2, ucesnikId: 2, ime: 'Bojan', poeni: 700 }],
     });
@@ -126,20 +118,42 @@ describe('IzvodjenjePregledPage', () => {
     expect(karte[3].textContent).toContain('Ana');
   });
 
-  it('bez poena nema rang-liste', () => {
-    const el = otvori({ izvodjenje: INFO, pitanja: [runda(1, 1, 10)], rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }] });
+  it('bez takmičenja nema rang-liste, ni kad server šalje učesnike', () => {
+    const el = otvori({
+      izvodjenje: INFO, takmicenje: false, pitanja: [runda(1, 1, 10)],
+      rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }],
+    });
     expect(el.querySelectorAll('.uz-pr-karta').length).toBe(1);
     expect(el.textContent).not.toContain('Rang-lista');
+    expect(el.textContent).not.toContain('Za poene važi');
+  });
+
+  it('takmičenje u kome niko nije dobio poene i dalje prikazuje rang-listu', () => {
+    const el = otvori({
+      izvodjenje: INFO, takmicenje: true, pitanja: [runda(1, 1, 10)],
+      rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }, { mesto: 2, ucesnikId: 2, ime: 'Bojan', poeni: 0 }],
+    });
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    expect(karte.length).toBe(2);
+    expect(karte[1].querySelector('h2')?.textContent).toBe('Rang-lista');
+    expect(karte[1].textContent).toContain('Ana');
+    expect(karte[1].textContent).toContain('Bojan');
+  });
+
+  it('takmičenje bez učesnika: prazno stanje rang-liste', () => {
+    const el = otvori({ izvodjenje: INFO, takmicenje: true, pitanja: [runda(1, 1, 10)], rangLista: [] });
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    expect(karte[1].textContent).toContain('Još nema poena.');
   });
 
   it('izvođenje bez čuvanja: prazno stanje', () => {
-    const el = otvori({ izvodjenje: { ...INFO, cuvanje: false, brojPitanja: 0, brojUcesnika: 0 }, pitanja: [], rangLista: [] });
+    const el = otvori({ izvodjenje: { ...INFO, cuvanje: false, brojPitanja: 0, brojUcesnika: 0 }, takmicenje: false, pitanja: [], rangLista: [] });
     expect(el.textContent).toContain('Rezultati ovog izvođenja nisu čuvani.');
     expect(el.querySelector('.uz-pr-karta')).toBeNull();
   });
 
   it('sačuvano izvođenje bez pitanja', () => {
-    const el = otvori({ izvodjenje: INFO, pitanja: [], rangLista: [] });
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [], rangLista: [] });
     expect(el.textContent).toContain('U ovom izvođenju nije bilo pitanja.');
   });
 

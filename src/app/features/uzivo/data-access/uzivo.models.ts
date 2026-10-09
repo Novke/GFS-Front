@@ -101,5 +101,8 @@ export interface RezultatPitanja {
   rundaId: number; slajdId: number | null; rbSlajda: number | null; redniBroj: number; pitanje: PitanjeSnimak;
   rezultat: Rezultat; brojOdgovora: number; procenatTacnih: number | null;
 }
-export interface IzvodjenjeRezultati { izvodjenje: IzvodjenjeInfo; pitanja: RezultatPitanja[]; rangLista: RangStavka[]; }
+/** `takmicenje`: podešavanje izvođenja zapamćeno pri pokretanju (pregled po tome prikazuje poene i rang-listu). */
+export interface IzvodjenjeRezultati {
+  izvodjenje: IzvodjenjeInfo; takmicenje: boolean; pitanja: RezultatPitanja[]; rangLista: RangStavka[];
+}
 export const medijUrl = (id: string) => `api/public/mediji/${encodeURIComponent(id)}`;
