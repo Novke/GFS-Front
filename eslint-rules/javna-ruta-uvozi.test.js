@@ -45,6 +45,9 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "const r = require('../../../core/state/reference.store');", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "type T = import('../../../core/state/reference.store').X;", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { ReferenceStore } from '../../../core/state/reference.store';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
+    // upozorenje pre zatvaranja kartice je nastavnička briga: javna ruta ga nikad ne instancira
+    { code: "import { NesacuvaneIzmene } from '../../../core/state/nesacuvane-izmene';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { ReferenceStore } from '../../core/state/reference.store';", filename: upisKoren, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { S } from '../../../core/api/studenti.api';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { S } from '../../../core/layout/shell';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },

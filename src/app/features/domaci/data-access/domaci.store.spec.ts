@@ -1,10 +1,11 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ErrorHandler, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
+import { NesacuvaneIzmene } from '../../../core/state/nesacuvane-izmene';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
 import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo } from '../../../core/api/domaci.models';
 import { DEBOUNCE_REDA_MS, DomaciStore } from './domaci.store';
@@ -509,6 +510,122 @@ describe('DomaciStore', () => {
     expect(zahtevi).toHaveLength(1);
     server.odgovori(zahtevi[0]);
     expect(store.statusi()[2]).toBe('sacuvano');
+  });
+
+  describe('jednak obrazac čuvanja (kao TestStore)', () => {
+    it('izgubljen odgovor (server ipak upisao 4), pa vraćeno na staru vrednost: sledeća izmena ipak šalje', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 4 });
+      tece();
+      const [prvi] = evidentiraj();
+      server.primeni(prvi.request.body as CreateUradjenDomaciCmd); // server je upisao...
+      prvi.flush({ reason: 'x' }, { status: 504, statusText: 'Gateway Timeout' }); // ...a odgovor se izgubio
+      expect(store.statusi()[2]).toBe('greska');
+      store.izmeni(2, { bodovi: null }); // nazad na ono što je bilo potvrđeno pri učitavanju
+      tece();
+      const [drugi] = evidentiraj();
+      expect(drugi).toBeDefined();
+      expect((drugi.request.body as CreateUradjenDomaciCmd).bodovi).toBe(0);
+      server.odgovori(drugi);
+      expect(store.statusi()[2]).toBe('sacuvano');
+      expect(server.studenti[1].bodovi).toBe(0);
+    });
+
+    it('zastareo odgovor "oslobodi" ne pregazi noviju potvrdu čuvanja (ni prikaz ni potvrđeno)', async () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 4 });
+      tece();
+      const [cuvanje] = evidentiraj();
+      const obecanje = store.oslobodi();
+      const oslobodi = http.expectOne('api/domaci/5/oslobodi');
+      const preUpisa = server.details(); // server je obradio "oslobodi" pre upisa 4
+      server.odgovori(cuvanje); // odgovor čuvanja stiže prvi
+      expect(store.statusi()[2]).toBe('sacuvano');
+      oslobodi.flush(preUpisa); // zastareo za studenta 2 (bodovi null)
+      expect(await obecanje).toBe(true);
+      expect(store.vrednosti()[2].bodovi).toBe(4);
+      store.izmeni(2, { bodovi: null }); // razlikuje se od potvrđenog 4: mora da se pošalje
+      tece();
+      const [vracanje] = evidentiraj();
+      expect(vracanje).toBeDefined();
+      server.odgovori(vracanje);
+      expect(server.studenti[1].bodovi).toBe(0);
+    });
+
+    it('5 -> 6 -> 5: povratak na domaći 5 čeka upis zatvorene sesije domaćeg 5', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 6 });
+      store.ucitaj(6);
+      const [upis] = evidentiraj();
+      store.ucitaj(5); // pre nego što se 6 uopšte učitao
+      http.expectNone('api/domaci/6');
+      http.expectNone('api/domaci/5');
+      server.odgovori(upis);
+      http.expectOne('api/domaci/5').flush(server.details());
+      expect(store.domaci()?.id).toBe(5);
+      expect(store.vrednosti()[2].bodovi).toBe(6);
+    });
+
+    it('napušten ekran pa ponovo otvoren isti domaći (novi store): GET čeka upis prethodnog ekrana', () => {
+      const f = TestBed.createComponent(Domacin);
+      f.componentInstance.store.ucitaj(5);
+      http.expectOne('api/domaci/5').flush(server.details());
+      f.componentInstance.store.izmeni(2, { bodovi: 6 });
+      f.destroy(); // izmena se šalje
+      const [upis] = evidentiraj();
+      const drugi = TestBed.createComponent(Domacin);
+      drugi.componentInstance.store.ucitaj(5);
+      http.expectNone('api/domaci/5'); // registar: sesija napuštenog ekrana još upisuje
+      server.odgovori(upis);
+      http.expectOne('api/domaci/5').flush(server.details());
+      expect(drugi.componentInstance.store.vrednosti()[2].bodovi).toBe(6);
+    });
+
+    it('izuzetak u obradi greške ne gasi red studenta: sledeća izmena se šalje, povratak na domaći ne čeka zauvek', () => {
+      const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
+      vi.spyOn(TestBed.inject(NotificationStore), 'greska').mockImplementationOnce(() => {
+        throw new Error('pukla poruka');
+      });
+      const f = TestBed.createComponent(Domacin);
+      const lokalni = f.componentInstance.store;
+      lokalni.ucitaj(5);
+      http.expectOne('api/domaci/5').flush(server.details());
+      lokalni.izmeni(2, { bodovi: 4 });
+      tece();
+      evidentiraj()[0].flush({ reason: 'Odbijeno' }, { status: 400, statusText: 'Bad Request' });
+      lokalni.izmeni(2, { bodovi: 5 });
+      tece();
+      const [drugi] = evidentiraj();
+      expect(drugi).toBeDefined();
+      server.odgovori(drugi);
+      expect(lokalni.statusi()[2]).toBe('sacuvano');
+      lokalni.izmeni(2, { bodovi: 6 });
+      tece();
+      const [treci] = evidentiraj(); // u toku dok se ekran napušta
+      f.destroy();
+      const ponovo = TestBed.createComponent(Domacin).componentInstance.store;
+      ponovo.ucitaj(5);
+      server.odgovori(treci);
+      http.expectOne('api/domaci/5').flush(server.details());
+      expect(ponovo.status()).toBe('loaded');
+      expect(handleError).toHaveBeenCalledWith(new Error('pukla poruka'));
+    });
+
+    it('nesačuvane izmene (čekanje, u toku, neuspelo) se vide u NesacuvaneIzmene; posle potvrde ih nema', () => {
+      const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+      ucitaj();
+      expect(nesacuvane.broj()).toBe(0);
+      store.izmeni(2, { bodovi: 4 });
+      expect(nesacuvane.broj()).toBe(1);
+      tece();
+      const [prvi] = evidentiraj();
+      expect(nesacuvane.broj()).toBe(1);
+      prvi.flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
+      expect(nesacuvane.broj()).toBe(1);
+      store.ponovi(2);
+      server.odgovori(evidentiraj()[0]);
+      expect(nesacuvane.broj()).toBe(0);
+    });
   });
 
   it('napuštanje ekrana (uništen store) šalje izmenu koja je čekala debounce', () => {

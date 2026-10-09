@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject } from '@angular/core';
+import { computed, ErrorHandler, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { catchError, concatMap, defer, EMPTY, finalize, firstValueFrom, map, Observable, of, Subject, Subscription, switchMap, take, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { bezPrekidaReda, RegistarCuvanja, SesijaCuvanja } from '../../../core/state/registar-cuvanja';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
@@ -114,15 +115,20 @@ function zaglavljeIzOdgovora(det: DomaciDetails): DomaciPodaci {
  * toga koji je domaći sada na ekranu: zahtev nosi `domaciId` i vrednosti iz sesije, pa izmena napravljena na jednom domaćem
  * uvek stigne na taj domaći, i kad je ekran u međuvremenu prešao na drugi.
  */
-class Sesija {
+class Sesija implements SesijaCuvanja {
   /** Redovi zahteva po studentu: najviše jedan zahtev u toku, ostali čekaju (`concatMap`). */
   readonly redovi = new Map<number, Subject<void>>();
   /** Debounce tajmeri izmena koje još nisu poslate. */
   readonly timeri = new Map<number, ReturnType<typeof setTimeout>>();
   /** Poslednje vrednosti koje je korisnik uneo (ono što treba poslati). */
   readonly lokalno = new Map<number, VrednostiReda>();
-  /** Poslednje vrednosti koje je server potvrdio. */
+  /**
+   * Poslednje vrednosti koje je server potvrdio; nema unosa = nepoznato (posle greške čuvanja: server je možda ipak
+   * upisao, a odgovor se izgubio), pa sledeći korak reda uvek šalje.
+   */
   readonly potvrdjeno = new Map<number, VrednostiReda>();
+  /** Raste sa svakom promenom potvrđenog stanja reda; odgovor zahteva za ceo domaći (oslobodi) se odbacuje ako je zastareo. */
+  readonly potvrde = new Map<number, number>();
   /** Raste sa svakom izmenom reda; odgovor važi samo ako je verzija ista kao pri slanju. */
   readonly verzije = new Map<number, number>();
   readonly imena = new Map<number, string>();
@@ -134,11 +140,35 @@ class Sesija {
   readonly mirovanje = new Subject<void>();
   /** Domaći se briše: izmene se ne šalju. */
   obrisan = false;
+  /** Sesija je zatvorena (ekran napušten ili prelaz na drugi domaći): odjavljuje se iz registra kad isprazni redove. */
+  zatvorena = false;
+  readonly kljuc: string;
 
-  constructor(readonly domaciId: number) {}
+  constructor(readonly domaciId: number) {
+    this.kljuc = `domaci-${domaciId}`;
+  }
 
   verzija(sId: number): number {
     return this.verzije.get(sId) ?? 0;
+  }
+
+  potvrda(sId: number): number {
+    return this.potvrde.get(sId) ?? 0;
+  }
+
+  /** Novo potvrđeno stanje reda (`undefined` = nepoznato). */
+  potvrdi(sId: number, v: VrednostiReda | undefined): void {
+    if (v) {
+      this.potvrdjeno.set(sId, v);
+    } else {
+      this.potvrdjeno.delete(sId);
+    }
+    this.potvrde.set(sId, this.potvrda(sId) + 1);
+  }
+
+  /** Za upozorenje pre zatvaranja kartice: na čekanju, u redu ili u izvršenju, i neuspela čuvanja. */
+  nesacuvano(): number {
+    return this.timeri.size + this.uToku + this.greske.size;
   }
 }
 
@@ -152,10 +182,14 @@ class Sesija {
  * izmeni (i prvi upis ne može da napravi dupli red). Odgovor koji stigne dok je red u međuvremenu menjan ne prepisuje
  * unos (`verzije`). Greška ostavlja uneto u polju i postavlja status reda na `greska` ("Pokušaj ponovo" = `ponovi`);
  * greške više redova se javljaju jednom porukom ("Nije sačuvano za N studenata", grupa poruka zamenjuje prethodnu).
+ * Posle greške je potvrđeno stanje reda **nepoznato** (server je možda upisao, a odgovor se izgubio), pa sledeća izmena
+ * uvek šalje, i kad je jednaka staroj vrednosti. Odgovor `oslobodi` ne prepisuje red za koji je u međuvremenu stigla
+ * novija potvrda (`potvrde`).
  *
  * Svaki učitani domaći ima svoju {@link Sesija}. Kad `ucitaj` pređe na drugi domaći (ista komponenta, drugi `:id`), sesija
  * prethodnog se **zatvara, ne otkazuje**: izmene koje čekaju debounce se odmah šalju, zahtevi u toku se završavaju, a
- * odgovori stare sesije ne diraju stanje novog domaćeg. Novi domaći se učitava tek kad se stara sesija isprazni.
+ * odgovori stare sesije ne diraju stanje novog domaćeg. Novi domaći se učitava tek kad se stara sesija isprazni i kad
+ * nijedna sesija tog domaćeg u aplikaciji (registar `RegistarCuvanja`, i iz uništenih store-ova) nema posao na putu.
  * `zavrsi` pre PATCH-a šalje izmene i čeka da se redovi isprazne; `obrisi` otkazuje izmene na čekanju tog domaćeg.
  * Oslobođeni redovi i pregledan domaći su samo za čitanje.
  */
@@ -165,6 +199,8 @@ export const DomaciStore = signalStore(
   withProps(() => ({
     _api: inject(DomaciApi),
     _obavestenja: inject(NotificationStore),
+    _registar: inject(RegistarCuvanja),
+    _greske: inject(ErrorHandler),
     /** Promenljivo knjigovodstvo (nije stanje): tekuća sesija, učitavanje u toku, uništen store. */
     _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
   })),
@@ -210,7 +246,7 @@ export const DomaciStore = signalStore(
         return;
       }
       const potvrdjeno = izRedaServera(red);
-      s.potvrdjeno.set(sId, potvrdjeno);
+      s.potvrdi(sId, potvrdjeno);
       if (s.verzija(sId) !== poslataVerzija) {
         return; // noviji unos čeka ili je u redu: on određuje konačno stanje
       }
@@ -256,6 +292,8 @@ export const DomaciStore = signalStore(
           .pipe(
             tap(det => uskladi(s, sId, det, trenutna)),
             catchError((e: unknown) => {
+              // server je možda ipak upisao (izgubljen odgovor): sledeći korak reda šalje i vrednost jednaku staroj
+              s.potvrdi(sId, undefined);
               if (s.verzija(sId) === trenutna) {
                 s.greske.add(sId);
                 postaviStatus(s, sId, 'greska');
@@ -265,9 +303,14 @@ export const DomaciStore = signalStore(
             }),
           );
       }).pipe(
+        // izuzetak iz obrade greške ne sme da ugasi red studenta (sledeći koraci, pražnjenje, registar)
+        (korak$: Observable<unknown>) => bezPrekidaReda(korak$, store._greske),
         finalize(() => {
           s.uToku--;
           if (s.uToku === 0) {
+            if (s.zatvorena) {
+              store._registar.odjavi(s);
+            }
             s.mirovanje.next();
           }
         }),
@@ -309,14 +352,18 @@ export const DomaciStore = signalStore(
     /** Zatvara sesiju: izmene na čekanju se šalju, zahtevi u toku i u redu se završavaju (ne otkazuju). */
     function zatvori(s: Sesija): void {
       posaljiCekajuce(s);
+      s.zatvorena = true;
       s.redovi.forEach(r => r.complete());
+      if (s.uToku === 0) {
+        store._registar.odjavi(s);
+      }
     }
 
     /** Šta nije potvrđeno ponovo ide na izvršenje (posle neuspelog brisanja). */
     function ponoviNepotvrdjeno(s: Sesija): void {
       for (const [sId, v] of s.lokalno) {
         const p = s.potvrdjeno.get(sId);
-        if (p && !jednake(v, p)) {
+        if (!p || !jednake(v, p)) {
           posalji(s, sId);
         }
       }
@@ -333,6 +380,7 @@ export const DomaciStore = signalStore(
         s.potvrdjeno.set(r.studentId, v);
         s.imena.set(r.studentId, [r.ime, r.prezime].filter(Boolean).join(' ') || 'Student');
       }
+      store._registar.prijavi(s);
       store._r.sesija = s;
       patchState(store, { domaci: zaglavljeIzOdgovora(det), studenti: redovi, vrednosti, statusi: {} }, setLoaded());
     }
@@ -346,8 +394,9 @@ export const DomaciStore = signalStore(
       },
 
       /**
-       * Učitava domaći. Sesija prethodnog domaćeg se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni,
-       * pa ni ponovno učitavanje istog domaćeg ne može da pročita stanje pre sopstvenih izmena.
+       * Učitava domaći. Sesija prethodnog domaćeg se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni
+       * i kad se isprazne sve druge sesije istog domaćeg ({@link RegistarCuvanja}: napušten ekran, prelaz 5 -> 6 -> 5), pa
+       * učitano stanje ne može da prethodi izmenama koje su još na putu.
        */
       ucitaj(dId: number): void {
         store._r.ucitavanje?.unsubscribe();
@@ -358,7 +407,10 @@ export const DomaciStore = signalStore(
         }
         patchState(store, { domaci: null, studenti: [], vrednosti: {}, statusi: {} }, setLoading());
         store._r.ucitavanje = (stara ? sacekaj(stara) : of(null))
-          .pipe(switchMap(() => store._api.get(dId, { tiho: true })))
+          .pipe(
+            switchMap(() => store._registar.sacekaj(`domaci-${dId}`)),
+            switchMap(() => store._api.get(dId, { tiho: true })),
+          )
           .subscribe({
             next: det => postaviPodatke(det),
             error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
@@ -421,6 +473,8 @@ export const DomaciStore = signalStore(
         if (!s) {
           return Promise.resolve(false);
         }
+        // potvrde redova pri slanju: red za koji u međuvremenu stigne odgovor čuvanja ima noviju potvrdu od ovog odgovora
+        const potvrdePriSlanju = new Map([...s.lokalno.keys()].map(sId => [sId, s.potvrda(sId)]));
         return firstValueFrom(
           store._api.oslobodi(s.domaciId).pipe(
             map(det => {
@@ -431,11 +485,14 @@ export const DomaciStore = signalStore(
               let novih = 0;
               for (const r of det.studenti ?? []) {
                 const potvrdjeno = izRedaServera(r);
-                s.potvrdjeno.set(r.studentId, potvrdjeno);
                 const oslobodjen = r.oslobodjen === true;
                 if (oslobodjen && !ranije.has(r.studentId)) {
                   novih++;
                 }
+                if (!oslobodjen && s.potvrda(r.studentId) !== potvrdePriSlanju.get(r.studentId)) {
+                  continue; // zastareo red: noviju vrednost je već potvrdio odgovor čuvanja
+                }
+                s.potvrdi(r.studentId, potvrdjeno);
                 const menja = store.statusi()[r.studentId] === 'cuva';
                 if (oslobodjen || !menja) {
                   const t = s.timeri.get(r.studentId);

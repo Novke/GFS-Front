@@ -1,11 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { createEnvironmentInjector, EnvironmentInjector } from '@angular/core';
+import { createEnvironmentInjector, EnvironmentInjector, ErrorHandler } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { StudentListItem } from '../../../core/api/studenti.api';
+import { NesacuvaneIzmene } from '../../../core/state/nesacuvane-izmene';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
 import {
   DEBOUNCE_REDA_MS,
@@ -527,6 +528,45 @@ describe('TestStore', () => {
     req.flush({ reason: 'Prag prolaza mora biti između 0 i maksimalnog broja poena.' }, { status: 400, statusText: 'Bad Request' });
     await expect(p).resolves.toBe('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
     expect(store.maxPoena()).toBe(30);
+  });
+
+  it('izuzetak u obradi greške ne gasi red: sledeća izmena se šalje, povratak na test ne čeka zauvek', () => {
+    const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
+    vi.spyOn(TestBed.inject(NotificationStore), 'greska').mockImplementationOnce(() => {
+      throw new Error('pukla poruka');
+    });
+    ucitaj([polaganje(1, 'Ana', 'GD2', 10, 'A')]);
+    store.izmeni(1, { poeni: '20' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush({ reason: 'Odbijeno' }, { status: 400, statusText: 'Bad Request' });
+    http.expectOne(r => r.method === 'GET' && r.url === 'api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 10, 'A')]));
+    store.izmeni(1, { poeni: '21' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 21, 'A')]));
+    expect(store.statusi()[1]).toBe('sacuvano');
+    injector.destroy(); // napušten ekran pa isti test ponovo: registar ne čeka sesiju sa zaglavljenim redom
+    const drugi = createEnvironmentInjector([TestStore], TestBed.inject(EnvironmentInjector)).get(TestStore);
+    drugi.ucitaj(5);
+    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 21, 'A')]));
+    expect(drugi.status()).toBe('loaded');
+    expect(handleError).toHaveBeenCalledWith(new Error('pukla poruka'));
+  });
+
+  it('nesačuvane izmene (čekanje, u toku, neuspelo) se vide u NesacuvaneIzmene; posle potvrde ih nema', () => {
+    const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    expect(nesacuvane.broj()).toBe(0);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    expect(nesacuvane.broj()).toBe(1); // čeka debounce
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    const req = http.expectOne('api/test/5/polaganje');
+    expect(nesacuvane.broj()).toBe(1); // u toku
+    req.error(new ProgressEvent('error'), { status: 0 });
+    http.expectOne(r => r.method === 'GET' && r.url === 'api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', null)]));
+    expect(nesacuvane.broj()).toBe(1); // nije sačuvano
+    store.ponovo(1);
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    expect(nesacuvane.broj()).toBe(0);
   });
 
   /** Evidentiran test (prag se i tada menja): stanje kao da je završen. */

@@ -1,15 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject } from '@angular/core';
+import { computed, ErrorHandler, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { catchError, concatMap, defer, EMPTY, finalize, firstValueFrom, map, Observable, of, Subject, Subscription, switchMap, take, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { StudentListItem } from '../../../core/api/studenti.api';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { bezPrekidaReda, RegistarCuvanja, SesijaCuvanja } from '../../../core/state/registar-cuvanja';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StubacHistograma } from '../../../shared/ui/histogram';
-import { CuvanjaTestova } from './cuvanja-testova';
 import { TestoviApi } from '../../../core/api/testovi.api';
 import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from '../../../core/api/testovi.models';
 
@@ -307,7 +307,7 @@ type Posao = { tip: 'cuvaj'; sId: number } | { tip: 'dodaj'; red: RedIspitanika 
  * koji je test sada na ekranu: zahtev nosi `tId` i vrednosti iz sesije, pa izmena napravljena na jednom testu uvek stigne
  * na taj test, i kad je ekran u međuvremenu prešao na drugi (`/testovi/5` -> `/testovi/6`, ista komponenta).
  */
-class Sesija {
+class Sesija implements SesijaCuvanja {
   /** Jedan red poslova testa (`concatMap`): čuvanja, dodavanja i uklanjanja, redom. */
   readonly red = new Subject<Posao>();
   /** Debounce tajmeri izmena koje još nisu poslate. */
@@ -335,11 +335,20 @@ class Sesija {
   /** Sesija je zatvorena (ekran napušten ili prelaz na drugi test): odjavljuje se iz registra kad isprazni red. */
   zatvorena = false;
 
+  readonly kljuc: string;
+
   constructor(
     readonly tId: number,
     public max: number | null,
     readonly varijante: TestGrupa[],
-  ) {}
+  ) {
+    this.kljuc = `test-${tId}`;
+  }
+
+  /** Za upozorenje pre zatvaranja kartice: na čekanju, u redu ili u izvršenju, i neuspela čuvanja. */
+  nesacuvano(): number {
+    return this.timeri.size + this.uToku + this.greske.size;
+  }
 
   verzija(sId: number): number {
     return this.verzije.get(sId) ?? 0;
@@ -390,7 +399,7 @@ const PRAZNO_STANJE: TestState = { test: null, redovi: [], vrednosti: {}, status
  *
  * Kad `ucitaj` pređe na drugi test, sesija prethodnog se **zatvara, ne otkazuje** (izmene na čekanju se odmah šalju, red se
  * prazni), a novi test se učitava tek kad se stara sesija isprazni i kad nijedna sesija tog testa u aplikaciji (registar
- * `CuvanjaTestova`) nema posao na putu. Isto pri napuštanju ekrana. `zavrsi` šalje izmene i čeka
+ * `RegistarCuvanja`) nema posao na putu. Isto pri napuštanju ekrana. `zavrsi` šalje izmene i čeka
  * pražnjenje pre PATCH-a; `obrisi` otkazuje izmene na čekanju tog testa.
  */
 export const TestStore = signalStore(
@@ -398,7 +407,8 @@ export const TestStore = signalStore(
   withRequestStatus(),
   withProps(() => ({
     _api: inject(TestoviApi),
-    _registar: inject(CuvanjaTestova),
+    _registar: inject(RegistarCuvanja),
+    _greske: inject(ErrorHandler),
     _obavestenja: inject(NotificationStore),
     _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
   })),
@@ -604,6 +614,8 @@ export const TestStore = signalStore(
             return ukloni(s, posao.sId);
         }
       }).pipe(
+        // izuzetak iz obrade greške ne sme da ugasi red (sledeći poslovi, pražnjenje, registar)
+        (posao$: Observable<unknown>) => bezPrekidaReda(posao$, store._greske),
         finalize(() => {
           s.uToku--;
           if (s.uToku === 0) {
@@ -722,7 +734,7 @@ export const TestStore = signalStore(
 
       /**
        * Učitava test. Sesija prethodnog testa se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni
-       * i kad se isprazne sve druge sesije istog testa ({@link CuvanjaTestova}: napušten ekran, drugi store), pa učitano
+       * i kad se isprazne sve druge sesije istog testa ({@link RegistarCuvanja}: napušten ekran, drugi store), pa učitano
        * stanje ne može da prethodi izmenama koje su još na putu.
        */
       ucitaj(id: number): void {
@@ -736,7 +748,7 @@ export const TestStore = signalStore(
         // prvo stara sesija ovog store-a (i kad je drugi test), pa sve sesije testa `id` u aplikaciji (registar)
         store._r.ucitavanje = (stara ? sacekaj(stara) : of(null))
           .pipe(
-            switchMap(() => store._registar.sacekaj(id)),
+            switchMap(() => store._registar.sacekaj(`test-${id}`)),
             switchMap(() => store._api.get(id, { tiho: true })),
           )
           .subscribe({
