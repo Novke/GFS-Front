@@ -1,6 +1,7 @@
 import { infoSlajd, naPitanju, pitanjeSlajd, stanje } from './izvodjenje-podaci.testing';
 import {
-  dozvoljeneKomande, imaTacanOdgovor, ispravanIndeks, javniRezultat, oznakaDalje, oznakaTajmera,
+  datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, javniRezultat, mozePregled, opisVeze,
+  oznakaDalje, oznakaTajmera,
 } from './izvodjenje-pravila';
 import { Rezultat } from './uzivo.models';
 
@@ -128,5 +129,50 @@ describe('oznake', () => {
     expect(oznakaTajmera(naPitanju('ZATVORENO', { runda: { id: 9, redniBroj: 1, rokMs: 5, preostaloMs: null, tajmerRadi: false } }))).toBe('Pokreni tajmer 30 s');
     expect(oznakaTajmera(naPitanju('OTVORENO', { runda: { id: 9, redniBroj: 1, rokMs: 5, preostaloMs: null, tajmerRadi: true } }))).toBe('Pauziraj tajmer');
     expect(oznakaTajmera(naPitanju('OTVORENO', { runda: { id: 9, redniBroj: 1, rokMs: null, preostaloMs: 5, tajmerRadi: false } }))).toBe('Nastavi tajmer');
+  });
+});
+
+describe('opisVeze i datumKratko', () => {
+  it('datum bez vremena i bez vodećih nula', () => {
+    expect(datumKratko('2026-10-07')).toBe('7.10.2026.');
+    expect(datumKratko('2026-01-05T10:00:00')).toBe('5.1.2026.');
+    expect(datumKratko(null)).toBe('');
+    expect(datumKratko('nije datum')).toBe('nije datum');
+  });
+
+  it('predavanje sa grupom i temom', () => {
+    expect(opisVeze({
+      grupa: { id: 2, naziv: 'GD-2025' }, predavanje: { id: 4, rb: 3, datum: '2026-10-07', tema: 'Statika' },
+    })).toBe('GD-2025 · 3. predavanje (7.10.2026.) · Statika');
+  });
+
+  it('predavanje bez grupe i teme', () => {
+    expect(opisVeze({ grupa: null, predavanje: { id: 4, rb: 1, datum: '2026-10-07', tema: null } }))
+      .toBe('1. predavanje (7.10.2026.)');
+  });
+
+  it('samo grupa', () => {
+    expect(opisVeze({ grupa: { id: 2, naziv: 'AR-2025' }, predavanje: null })).toBe('AR-2025');
+  });
+
+  it('bez grupe i predavanja', () => {
+    expect(opisVeze({ grupa: null, predavanje: null })).toBe('Bez grupe');
+  });
+});
+
+describe('imaBrojeve i mozePregled', () => {
+  it('završeno bez čuvanja nema brojeve ni pregled', () => {
+    expect(imaBrojeve({ cuvanje: false, status: 'ZAVRSENO' })).toBe(false);
+    expect(mozePregled({ cuvanje: false, status: 'ZAVRSENO' })).toBe(false);
+  });
+
+  it('aktivno bez čuvanja ima brojeve, ali još nema pregled', () => {
+    expect(imaBrojeve({ cuvanje: false, status: 'AKTIVNO' })).toBe(true);
+    expect(mozePregled({ cuvanje: true, status: 'AKTIVNO' })).toBe(false);
+  });
+
+  it('završeno sa čuvanjem ima oba', () => {
+    expect(imaBrojeve({ cuvanje: true, status: 'ZAVRSENO' })).toBe(true);
+    expect(mozePregled({ cuvanje: true, status: 'ZAVRSENO' })).toBe(true);
   });
 });

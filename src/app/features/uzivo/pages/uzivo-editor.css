@@ -545,3 +545,99 @@ span.uz-ed-napomena {
   width: calc(100% - 40px);
   margin-left: 40px;
 }
+
+/* ---------- Izvođenja: lista i pregled posle časa ---------- */
+
+.uz-ed-tabela-okvir {
+  overflow-x: auto;
+}
+
+.uz-ed-tabela .uz-ed-radnje {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.uz-ed-tabela .uz-ed-napomena {
+  margin-left: 6px;
+}
+
+.uz-pr {
+  max-width: 900px;
+}
+
+.uz-pr-zaglavlje {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.uz-pr-naslovi {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.uz-pr-naslovi h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.uz-pr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin: 4px 0 0;
+  color: var(--muted, #5f6c84);
+  font-size: 14px;
+}
+
+.uz-pr-karta {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--line, #dce2eb);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink, #121a2a);
+}
+
+.uz-pr-karta-zaglavlje {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.uz-pr-karta-zaglavlje h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.uz-pr-tekst {
+  margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.uz-pr-slika {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  margin: 0 0 12px;
+  border-radius: 6px;
+}
+
+.uz-pr-podnozje {
+  margin: 12px 0 0;
+  color: var(--ink-2, #34405a);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-pr-podnozje .uz-ed-napomena {
+  margin-left: 12px;
+}

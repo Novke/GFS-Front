@@ -1,4 +1,4 @@
-import { NastavnickoStanje, PitanjeDetails, Rezultat, TipKomande } from './uzivo.models';
+import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, Rezultat, TipKomande } from './uzivo.models';
 
 const UVEK: readonly TipKomande[] = ['TELEFON_PRIKAZ', 'DETALJI', 'EKRAN_CRN', 'EKRAN_BEO', 'QR', 'ZAVRSI'];
 
@@ -95,4 +95,34 @@ export function oznakaPolozaja(s: NastavnickoStanje): string {
   if (s.prikaz === 'PRIJAVA') return 'Prijava';
   if (s.prikaz === 'KRAJ') return 'Kraj';
   return `Slajd ${s.indeks + 1}/${s.brojSlajdova}`;
+}
+
+/** "7.10.2026." iz ISO datuma ili datuma-vremena; nepoznat oblik se vraća nepromenjen. */
+export function datumKratko(iso: string | null | undefined): string {
+  const [g, m, d] = (iso ?? '').slice(0, 10).split('-').map(Number);
+  return g && m && d ? `${d}.${m}.${g}.` : (iso ?? '');
+}
+
+/**
+ * Za šta je izvođenje vezano: "GD-2025 · 3. predavanje (7.10.2026.) · Statika" (predavanje nosi svoju grupu, pa se grupa
+ * ne ponavlja kad je ista). Bez predavanja i bez grupe: "Bez grupe".
+ */
+export function opisVeze(i: Pick<IzvodjenjeInfo, 'grupa' | 'predavanje'>): string {
+  const delovi: string[] = [];
+  if (i.grupa) delovi.push(i.grupa.naziv);
+  if (i.predavanje) {
+    delovi.push(`${i.predavanje.rb}. predavanje (${datumKratko(i.predavanje.datum)})`);
+    if (i.predavanje.tema) delovi.push(i.predavanje.tema);
+  }
+  return delovi.length ? delovi.join(' · ') : 'Bez grupe';
+}
+
+/** Završeno izvođenje bez čuvanja nema ni učesnike ni pitanja (server ih briše na "Završi"), pa se brojevi ne prikazuju. */
+export function imaBrojeve(i: Pick<IzvodjenjeInfo, 'cuvanje' | 'status'>): boolean {
+  return i.cuvanje || i.status === 'AKTIVNO';
+}
+
+/** Pregled je moguć samo za završeno izvođenje koje je čuvalo rezultate. */
+export function mozePregled(i: Pick<IzvodjenjeInfo, 'cuvanje' | 'status'>): boolean {
+  return i.cuvanje && i.status === 'ZAVRSENO';
 }

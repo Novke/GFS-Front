@@ -1,0 +1,99 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute, provideRouter } from '@angular/router';
+import { of } from 'rxjs';
+import { IzvodjenjeInfo } from '../data-access/uzivo.models';
+import { IzvodjenjaListaPage } from './izvodjenja-lista.page';
+
+function izv(id: number, izmene: Partial<IzvodjenjeInfo> = {}): IzvodjenjeInfo {
+  return {
+    id, prezentacija: { id: 3, naziv: 'Statika', predmetId: 7 }, kod: '123456', status: 'ZAVRSENO', cuvanje: true,
+    grupa: { id: 2, naziv: 'GD-2025' }, predavanje: null, pocetak: '2026-10-07T10:00:00', kraj: '2026-10-07T11:00:00',
+    brojUcesnika: 12, brojPitanja: 5, ...izmene,
+  };
+}
+
+describe('IzvodjenjaListaPage', () => {
+  let http: HttpTestingController;
+  let potvrda: ReturnType<typeof vi.spyOn>;
+  let poruka: ReturnType<typeof vi.spyOn>;
+
+  function otvori(lista: IzvodjenjeInfo[]) {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '3']]) } } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    potvrda = vi.spyOn(TestBed.inject(MatDialog), 'open')
+      .mockReturnValue({ afterClosed: () => of(true) } as unknown as MatDialogRef<unknown>);
+    poruka = vi.spyOn(TestBed.inject(MatSnackBar), 'open').mockReturnValue(undefined as never);
+    const fixture = TestBed.createComponent(IzvodjenjaListaPage);
+    http.expectOne('api/izvodjenja?prezentacijaId=3').flush(lista);
+    http.expectOne('api/prezentacije/3').flush({ id: 3, naziv: 'Statika' });
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  const redovi = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr')) as HTMLElement[];
+  const tekst = (e: Element) => (e.textContent ?? '').replace(/\s+/g, ' ');
+
+  const brojevi = (red: HTMLElement) => Array.from(red.querySelectorAll('td.uz-ed-broj')).map(td => (td.textContent ?? '').trim());
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  it('aktivno ima Nastavi, sačuvano završeno Pregled i Obriši, nesačuvano samo Obriši', () => {
+    const el = otvori([
+      izv(3, { status: 'AKTIVNO', kraj: null }), izv(2), izv(1, { cuvanje: false, brojUcesnika: 0, brojPitanja: 0 }),
+    ]).nativeElement as HTMLElement;
+    expect(el.querySelector('h1')?.textContent).toContain('Statika');
+    const [aktivno, sacuvano, nesacuvano] = redovi(el);
+    expect(tekst(aktivno)).toContain('U toku');
+    expect(tekst(aktivno)).toContain('kod 123 456');
+    expect(tekst(aktivno)).toContain('Nastavi');
+    expect(tekst(aktivno)).not.toContain('Obriši');
+    expect(tekst(aktivno)).not.toContain('Pregled');
+    expect(tekst(sacuvano)).toContain('Sačuvano');
+    expect(tekst(sacuvano)).toContain('Pregled');
+    expect(tekst(sacuvano)).toContain('Obriši');
+    expect(brojevi(sacuvano)).toEqual(['12', '5']);
+    expect(tekst(nesacuvano)).toContain('Ne čuva se');
+    expect(tekst(nesacuvano)).not.toContain('Pregled');
+    expect(tekst(nesacuvano)).toContain('Obriši');
+    expect(brojevi(nesacuvano)).toEqual(['–', '–']);
+  });
+
+  it('Obriši uz potvrdu briše red', () => {
+    const fixture = otvori([izv(2), izv(1)]);
+    const el = fixture.nativeElement as HTMLElement;
+    (redovi(el)[0].querySelector('button') as HTMLButtonElement).click();
+    expect(potvrda).toHaveBeenCalled();
+    http.expectOne({ method: 'DELETE', url: 'api/izvodjenja/2' }).flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+    expect(redovi(el).length).toBe(1);
+    expect(poruka).toHaveBeenCalledWith('Izvođenje je obrisano.', undefined, expect.anything());
+  });
+
+  it('greška pri brisanju ostavlja red i javlja razlog', () => {
+    const fixture = otvori([izv(2)]);
+    const el = fixture.nativeElement as HTMLElement;
+    (redovi(el)[0].querySelector('button') as HTMLButtonElement).click();
+    http.expectOne('api/izvodjenja/2').flush({ reason: 'Izvođenje je u toku.' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+    expect(redovi(el).length).toBe(1);
+    expect(poruka).toHaveBeenCalledWith('Izvođenje je u toku.', 'U redu', expect.anything());
+  });
+
+  it('prazna lista', () => {
+    const el = otvori([]).nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Ova prezentacija još nije izvođena.');
+    expect(el.querySelector('table')).toBeNull();
+  });
+});
