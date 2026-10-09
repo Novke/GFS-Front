@@ -14,7 +14,7 @@ import { NastavnickoStanje } from './uzivo.models';
 class LazniStomp {
   readonly connectionState$ = new BehaviorSubject<RxStompState>(RxStompState.CONNECTING);
   readonly odredista = new Map<string, Subject<IMessage>>();
-  readonly deactivate = jasmine.createSpy('deactivate').and.resolveTo();
+  readonly deactivate = vi.fn().mockResolvedValue(undefined);
   watch(odrediste: string) {
     const s = new Subject<IMessage>();
     this.odredista.set(odrediste, s);
@@ -29,13 +29,13 @@ describe('IzvodjenjeStore', () => {
   let store: InstanceType<typeof IzvodjenjeStore>;
   let http: HttpTestingController;
   let stomp: LazniStomp;
-  let snack: jasmine.SpyObj<MatSnackBar>;
+  let snack: { open: ReturnType<typeof vi.fn> };
   let putanje: string[];
 
   beforeEach(() => {
     stomp = new LazniStomp();
     putanje = [];
-    snack = jasmine.createSpyObj<MatSnackBar>('MatSnackBar', ['open']);
+    snack = { open: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         IzvodjenjeStore, provideHttpClient(), provideHttpClientTesting(),
@@ -133,13 +133,13 @@ describe('IzvodjenjeStore', () => {
     it('POST komande, odgovor ide kroz prihvati', () => {
       init();
       store.komanda('SLEDECI');
-      expect(store.salje()).toBeTrue();
+      expect(store.salje()).toBe(true);
       const req = http.expectOne('api/izvodjenja/5/komande');
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({ tip: 'SLEDECI', vrednost: null });
       req.flush(naPitanju('CEKA', { verzija: 2 }));
       expect(store.stanje()!.faza).toBe('CEKA');
-      expect(store.salje()).toBeFalse();
+      expect(store.salje()).toBe(false);
     });
 
     it('greška komande postavlja `greska` iz reason i prikazuje je 3 s', () => {
@@ -149,7 +149,7 @@ describe('IzvodjenjeStore', () => {
         { reason: 'Prvo zatvori pitanje.' }, { status: 409, statusText: 'Conflict' });
       expect(store.greska()).toBe('Prvo zatvori pitanje.');
       expect(snack.open).toHaveBeenCalledWith('Prvo zatvori pitanje.', undefined, { duration: 3000 });
-      expect(store.salje()).toBeFalse();
+      expect(store.salje()).toBe(false);
     });
 
     it('dok `salje`, nova komanda ne blokira: svaka ide, redom', () => {
@@ -157,7 +157,7 @@ describe('IzvodjenjeStore', () => {
       store.komanda('SLEDECI');
       store.komanda('IDI_NA', 2);
       store.komanda('QR');
-      expect(store.salje()).toBeTrue();
+      expect(store.salje()).toBe(true);
 
       const prva = http.expectOne('api/izvodjenja/5/komande');
       expect(prva.request.body.tip).toBe('SLEDECI');
@@ -166,13 +166,13 @@ describe('IzvodjenjeStore', () => {
       const druga = http.expectOne('api/izvodjenja/5/komande');
       expect(druga.request.body).toEqual({ tip: 'IDI_NA', vrednost: 2 });
       druga.flush(stanje({ verzija: 3 }));
-      expect(store.salje()).toBeTrue();
+      expect(store.salje()).toBe(true);
 
       const treca = http.expectOne('api/izvodjenja/5/komande');
       expect(treca.request.body.tip).toBe('QR');
       treca.flush(stanje({ verzija: 4, qrPrikazan: true }));
-      expect(store.stanje()!.qrPrikazan).toBeTrue();
-      expect(store.salje()).toBeFalse();
+      expect(store.stanje()!.qrPrikazan).toBe(true);
+      expect(store.salje()).toBe(false);
     });
 
     it('410: izvođenje je završeno, stanje se ponovo učitava', () => {

@@ -1,3 +1,5 @@
+import type { Mock } from 'vitest';
+
 import { EkranOpis, ProzorSaEkranima, otvoriPublikuNaMonitoru } from './monitor';
 
 function ekran(left: number, isPrimary: boolean, label = '') {
@@ -9,11 +11,11 @@ function ekran(left: number, isPrimary: boolean, label = '') {
 
 describe('otvoriPublikuNaMonitoru', () => {
   const url = 'http://novica-dev/gfs/izvodjenja/5/publika';
-  let open: jasmine.Spy;
+  let open: Mock<ProzorSaEkranima['open']>;
   const prozorcic = {} as Window;
 
   beforeEach(() => {
-    open = jasmine.createSpy('open').and.returnValue(prozorcic);
+    open = vi.fn<ProzorSaEkranima['open']>().mockReturnValue(prozorcic);
   });
 
   it('bez getScreenDetails: običan popup', async () => {
@@ -23,7 +25,7 @@ describe('otvoriPublikuNaMonitoru', () => {
   });
 
   it('jedan ekran (isExtended=false): ne traži dozvolu, običan popup', async () => {
-    const getScreenDetails = jasmine.createSpy('getScreenDetails');
+    const getScreenDetails = vi.fn();
     await otvoriPublikuNaMonitoru(url, undefined, { open, getScreenDetails, screen: { isExtended: false } });
     expect(getScreenDetails).not.toHaveBeenCalled();
     expect(open).toHaveBeenCalledWith(url, 'gfs-publika', 'popup');
@@ -36,7 +38,7 @@ describe('otvoriPublikuNaMonitoru', () => {
   });
 
   it('jedan ne-primarni ekran: otvara na njegovim koordinatama bez pitanja', async () => {
-    const izbor = jasmine.createSpy('izbor');
+    const izbor = vi.fn();
     const glavni = ekran(0, true);
     const p: ProzorSaEkranima = {
       open, screen: { isExtended: true },
@@ -56,12 +58,12 @@ describe('otvoriPublikuNaMonitoru', () => {
   });
 
   it('dva kandidata: poziva izbor i otvara na izabranom', async () => {
-    const izbor = jasmine.createSpy('izbor').and.callFake((e: EkranOpis[]) => Promise.resolve(e[1]));
+    const izbor = vi.fn((e: EkranOpis[]) => Promise.resolve(e[1]));
     await otvoriPublikuNaMonitoru(url, izbor, {
       open, getScreenDetails: () => Promise.resolve({ screens: [ekran(0, true), ekran(1920, false, 'Projektor'), ekran(3840, false)] }),
     });
     expect(izbor).toHaveBeenCalledTimes(1);
-    const ekrani = izbor.calls.mostRecent().args[0] as EkranOpis[];
+    const ekrani = izbor.mock.lastCall![0] as EkranOpis[];
     expect(ekrani.map(e => e.oznaka)).toEqual(['Projektor (1920×1080)', 'Ekran 3 (1920×1080)']);
     expect(open).toHaveBeenCalledWith(url, 'gfs-publika', 'popup,left=3840,top=0,width=1920,height=1040');
   });

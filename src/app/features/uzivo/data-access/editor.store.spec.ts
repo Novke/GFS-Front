@@ -1,8 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { EditorStore, NijeSacuvano } from './editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
+import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 function slajd(id: number, rb: number, naslov = `Slajd ${id}`): SlajdDetails {
   return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null };
@@ -70,15 +71,15 @@ describe('EditorStore', () => {
     expect(store.greska()).toBe('Redosled mora sadržati tačno sve slajdove prezentacije.');
   });
 
-  it('dve izmene istog slajda u 800 ms -> jedan PUT sa poslednjom izmenom', fakeAsync(() => {
+  it('dve izmene istog slajda u 800 ms -> jedan PUT sa poslednjom izmenom', saLaznimSatom(async () => {
     ucitaj();
     store.izmeniSlajd(11, info('Prvo'));
-    tick(300);
+    await pomeriSat(300);
     store.izmeniSlajd(11, info('Drugo'));
     expect(store.slajdovi()[0].naslov).toBe('Drugo');
-    tick(799);
+    await pomeriSat(799);
     http.expectNone('api/slajdovi/11');
-    tick(1);
+    await pomeriSat(1);
     const req = http.expectOne('api/slajdovi/11');
     expect(req.request.method).toBe('PUT');
     expect(req.request.body.naslov).toBe('Drugo');
@@ -86,45 +87,45 @@ describe('EditorStore', () => {
     expect(store.cuvanje()).toBe('sacuvano');
   }));
 
-  it('izmene različitih slajdova se čuvaju nezavisno', fakeAsync(() => {
+  it('izmene različitih slajdova se čuvaju nezavisno', saLaznimSatom(async () => {
     ucitaj();
     store.izmeniSlajd(11, info('A'));
     store.izmeniSlajd(12, info('B'));
-    tick(800);
+    await pomeriSat(800);
     http.expectOne('api/slajdovi/11').flush(slajd(11, 1, 'A'));
     http.expectOne('api/slajdovi/12').flush(slajd(12, 2, 'B'));
   }));
 
-  it('promena izabranog slajda odmah šalje nesačuvanu izmenu', fakeAsync(() => {
+  it('promena izabranog slajda odmah šalje nesačuvanu izmenu', saLaznimSatom(async () => {
     ucitaj();
     store.izmeniSlajd(11, info('Izmena'));
-    tick(100);
+    await pomeriSat(100);
     store.izaberi(12);
     const req = http.expectOne('api/slajdovi/11');
     expect(req.request.body.naslov).toBe('Izmena');
     req.flush(slajd(11, 1, 'Izmena'));
     expect(store.izabraniId()).toBe(12);
-    tick(800);
+    await pomeriSat(800);
   }));
 
-  it('sacuvajOdmah (Ctrl+S) šalje bez čekanja', fakeAsync(() => {
+  it('sacuvajOdmah (Ctrl+S) šalje bez čekanja', saLaznimSatom(async () => {
     ucitaj();
     store.izmeniSlajd(12, info('Odmah'));
     store.sacuvajOdmah();
     http.expectOne('api/slajdovi/12').flush(slajd(12, 2, 'Odmah'));
-    tick(800);
+    await pomeriSat(800);
   }));
 
-  it('neispravan slajd se ne šalje, a greška kaže zašto', fakeAsync(() => {
+  it('neispravan slajd se ne šalje, a greška kaže zašto', saLaznimSatom(async () => {
     ucitaj();
     store.izmeniSlajd(11, info(''));
-    tick(800);
+    await pomeriSat(800);
     http.expectNone('api/slajdovi/11');
     expect(store.cuvanje()).toBe('greska');
     expect(store.greska()).toContain('Info slajd mora imati naslov, tekst ili sliku.');
   }));
 
-  it('odgovor servera zamenjuje lokalni slajd (novi id-jevi opcija)', fakeAsync(() => {
+  it('odgovor servera zamenjuje lokalni slajd (novi id-jevi opcija)', saLaznimSatom(async () => {
     ucitaj();
     const cmd: SlajdCmd = {
       tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
@@ -136,7 +137,7 @@ describe('EditorStore', () => {
       },
     };
     store.izmeniSlajd(13, cmd);
-    tick(800);
+    await pomeriSat(800);
     const odServera: SlajdDetails = {
       ...slajd(13, 3), tip: 'PITANJE', naslov: null,
       pitanje: {
@@ -150,7 +151,7 @@ describe('EditorStore', () => {
     expect(store.slajdovi()[2].pitanje?.opcije.map(op => op.id)).toEqual([901, 902]);
   }));
 
-  it('dodaj pravi lokalni nacrt posle izabranog; prva ispravna izmena ga šalje kao POST posle tog slajda', fakeAsync(() => {
+  it('dodaj pravi lokalni nacrt posle izabranog; prva ispravna izmena ga šalje kao POST posle tog slajda', saLaznimSatom(async () => {
     ucitaj();
     store.izaberi(11);
     store.dodaj('PITANJE', 'TACNO_NETACNO');
@@ -165,7 +166,7 @@ describe('EditorStore', () => {
       pitanje: { ...nacrtPitanje(nacrt), tekst: 'Zemlja je okrugla.' },
     };
     store.izmeniSlajd(nacrt.id, cmd);
-    tick(800);
+    await pomeriSat(800);
     const req = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
     expect(req.request.method).toBe('POST');
     expect(req.request.params.get('posle')).toBe('11');
@@ -175,7 +176,7 @@ describe('EditorStore', () => {
 
     // sledeća izmena istog (sada sačuvanog) slajda ide kao PUT na pravi id, i kad stigne sa starim id-jem
     store.izmeniSlajd(nacrt.id, { ...cmd, beleske: 'b' });
-    tick(800);
+    await pomeriSat(800);
     http.expectOne('api/slajdovi/20').flush({ ...slajd(20, 2) });
   }));
 
@@ -211,35 +212,35 @@ describe('EditorStore', () => {
   });
 
   describe('sacuvajSve', () => {
-    it('završava se tek kad PUT stigne', fakeAsync(() => {
+    it('završava se tek kad PUT stigne', saLaznimSatom(async () => {
       ucitaj();
       store.izmeniSlajd(11, info('Pre pokretanja'));
       let gotovo = false;
       store.sacuvajSve().subscribe(() => (gotovo = true));
       const req = http.expectOne('api/slajdovi/11');
-      flushMicrotasks();
-      expect(gotovo).toBeFalse();
+      await isprazniMikrozadatke();
+      expect(gotovo).toBe(false);
       req.flush(slajd(11, 1, 'Pre pokretanja'));
-      expect(gotovo).toBeTrue();
-      tick(800);
+      expect(gotovo).toBe(true);
+      await pomeriSat(800);
     }));
 
     it('bez nesačuvanog se završava odmah', () => {
       ucitaj();
       let gotovo = false;
       store.sacuvajSve().subscribe(() => (gotovo = true));
-      expect(gotovo).toBeTrue();
+      expect(gotovo).toBe(true);
     });
 
-    it('neuspelo čuvanje daje grešku sa razlogom servera', fakeAsync(() => {
+    it('neuspelo čuvanje daje grešku sa razlogom servera', saLaznimSatom(async () => {
       ucitaj();
       store.izmeniSlajd(11, info('X'));
       let greska: unknown = null;
       store.sacuvajSve().subscribe({ error: e => (greska = e) });
       http.expectOne('api/slajdovi/11').flush({ reason: 'Slajd nije pronađen.' }, { status: 404, statusText: 'Not Found' });
-      expect(greska instanceof NijeSacuvano).toBeTrue();
+      expect(greska instanceof NijeSacuvano).toBe(true);
       expect((greska as Error).message).toBe('Slajd nije pronađen.');
-      tick(800);
+      await pomeriSat(800);
     }));
 
     it('neispravan nacrt daje grešku odmah, bez zahteva', () => {
@@ -252,7 +253,7 @@ describe('EditorStore', () => {
       expect((greska as Error).message).toBe('Slajd 4 nije sačuvan: Tekst pitanja je obavezan (najviše 2000 znakova).');
     });
 
-    it('čeka POST nacrta i izmenu stiglu dok je POST trajao', fakeAsync(() => {
+    it('čeka POST nacrta i izmenu stiglu dok je POST trajao', saLaznimSatom(async () => {
       ucitaj();
       store.izaberi(13);
       store.dodaj('INFO');
@@ -263,13 +264,13 @@ describe('EditorStore', () => {
       const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
       store.izmeniSlajd(nacrt, info('Drugi'));
       post.flush(slajd(30, 4, 'Prvi'));
-      flushMicrotasks();
-      expect(gotovo).toBeFalse();
+      await isprazniMikrozadatke();
+      expect(gotovo).toBe(false);
       const put = http.expectOne('api/slajdovi/30');
       expect(put.request.body.naslov).toBe('Drugi');
       put.flush(slajd(30, 4, 'Drugi'));
-      expect(gotovo).toBeTrue();
-      tick(800);
+      expect(gotovo).toBe(true);
+      await pomeriSat(800);
     }));
   });
 });

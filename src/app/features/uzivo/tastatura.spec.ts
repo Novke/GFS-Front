@@ -56,6 +56,22 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
 });
 
 describe('uPoljuZaUnos', () => {
+  // jsdom nema isContentEditable (ni contentEditable); u pregledaču se izvodi iz contentEditable. Emulacija važi samo
+  // u ovom describe-u i samo kad je okruženje nema, da uPoljuZaUnos dobije boolean kao u Chrome-u.
+  let emulirano = false;
+  beforeAll(() => {
+    if (!('isContentEditable' in HTMLElement.prototype)) {
+      Object.defineProperty(HTMLElement.prototype, 'isContentEditable', {
+        configurable: true,
+        get(this: HTMLElement & { contentEditable?: string }) { return this.contentEditable === 'true'; },
+      });
+      emulirano = true;
+    }
+  });
+  afterAll(() => {
+    if (emulirano) delete (HTMLElement.prototype as { isContentEditable?: boolean }).isContentEditable;
+  });
+
   it('input, textarea i select jesu polja za unos', () => {
     expect(uPoljuZaUnos(document.createElement('input'))).toBe(true);
     expect(uPoljuZaUnos(document.createElement('textarea'))).toBe(true);
@@ -63,7 +79,7 @@ describe('uPoljuZaUnos', () => {
   });
 
   it('contenteditable je polje za unos', () => {
-    // jsdom/Chrome: isContentEditable se izvodi iz atributa; ovde ga postavljamo direktno kao u pregledaču.
+    // isContentEditable se izvodi iz contentEditable; ovde ga postavljamo direktno kao u pregledaču.
     const el = document.createElement('div');
     el.contentEditable = 'true';
     document.body.appendChild(el);

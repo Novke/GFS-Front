@@ -48,8 +48,8 @@ describe('KonzolaKontroleComponent', () => {
     const gore = new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true });
     qr.dispatchEvent(gore);
     expect(f.componentInstance.precice).toEqual([{ komanda: 'REZULTATI' }]);
-    expect(dole.defaultPrevented).toBeTrue();
-    expect(gore.defaultPrevented).toBeTrue();
+    expect(dole.defaultPrevented).toBe(true);
+    expect(gore.defaultPrevented).toBe(true);
     expect(f.componentInstance.kliknuto.length).toBe(1);
     el.remove();
   });
@@ -70,7 +70,7 @@ describe('KonzolaKontroleComponent', () => {
     const f = TestBed.createComponent(DomacinKontrola);
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;
-    expect(dugme(el, 'Pokreni tajmer').disabled).toBeTrue();
-    expect(dugme(el, 'Tačan odgovor').disabled).toBeFalse();
+    expect(dugme(el, 'Pokreni tajmer').disabled).toBe(true);
+    expect(dugme(el, 'Tačan odgovor').disabled).toBe(false);
   });
 });

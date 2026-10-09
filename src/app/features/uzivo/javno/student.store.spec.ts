@@ -1,19 +1,20 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { IMessage } from '@stomp/stompjs';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { STOMP_FABRIKA } from '../data-access/stomp';
 import { JavnoPitanje, JavnoStanje, LicnoStanje, UcesnikInfo } from '../data-access/uzivo.models';
 import { GRESKA_TRAJANJE_MS, KRAJ_ZADRZI_MS, POTVRDA_MS, StudentStore, ekranStudenta, tacanOdgovor } from './student.store';
+import { pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 /** Lažna STOMP veza: po jedan Subject za svako odredište, stanje veze ručno, `publish` beleži poruke. */
 class LazniStomp {
   readonly connectionState$ = new BehaviorSubject<RxStompState>(RxStompState.CONNECTING);
   readonly odredista = new Map<string, Subject<IMessage>>();
-  readonly deactivate = jasmine.createSpy('deactivate').and.resolveTo();
-  readonly publish = jasmine.createSpy('publish');
+  readonly deactivate = vi.fn().mockResolvedValue(undefined);
+  readonly publish = vi.fn();
   watch(odrediste: string) {
     const s = new Subject<IMessage>();
     this.odredista.set(odrediste, s);
@@ -185,7 +186,7 @@ describe('StudentStore', () => {
       expect(store.ucesnik()).toBeNull();
     });
 
-    it('status ZAVRSENO -> faza kraj; lično stanje koje stigne posle javnog još ažurira konačno mesto, pa se veza zatvara', fakeAsync(() => {
+    it('status ZAVRSENO -> faza kraj; lično stanje koje stigne posle javnog još ažurira konačno mesto, pa se veza zatvara', saLaznimSatom(async () => {
       udji();
       store.prihvatiLicno(licno({ mesto: 4, poeni: 900 }));
       stomp().posalji('/topic/izvodjenja/5/javno', javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }));
@@ -196,27 +197,27 @@ describe('StudentStore', () => {
       stomp().posalji('/user/queue/licno', licno({ verzija: 2, mesto: 2, poeni: 1700 }));
       expect(store.licno()!.mesto).toBe(2);
       expect(store.licno()!.poeni).toBe(1700);
-      tick(KRAJ_ZADRZI_MS);
+      await pomeriSat(KRAJ_ZADRZI_MS);
       expect(stomp().deactivate).toHaveBeenCalled();
     }));
 
-    it('pocetno posle kraja: lično se obrađuje pre javnog, konačno mesto ostaje', fakeAsync(() => {
+    it('pocetno posle kraja: lično se obrađuje pre javnog, konačno mesto ostaje', saLaznimSatom(async () => {
       udji();
       pocetno(javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }), licno({ verzija: 4, mesto: 3, poeni: 1200 }));
       expect(store.faza()).toBe('kraj');
       expect(store.licno()!.mesto).toBe(3);
       expect(store.licno()!.poeni).toBe(1200);
-      tick(KRAJ_ZADRZI_MS);
+      await pomeriSat(KRAJ_ZADRZI_MS);
     }));
 
-    it('u kraju se lično stanje drugog učesnika i starija verzija ne prihvataju', fakeAsync(() => {
+    it('u kraju se lično stanje drugog učesnika i starija verzija ne prihvataju', saLaznimSatom(async () => {
       udji();
       store.prihvatiLicno(licno({ verzija: 3, mesto: 4 }));
       store.prihvatiJavno(javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }));
       store.prihvatiLicno(licno({ verzija: 2, mesto: 1 }));
       store.prihvatiLicno(licno({ verzija: 5, ucesnikId: 99, mesto: 1 }));
       expect(store.licno()!.mesto).toBe(4);
-      tick(KRAJ_ZADRZI_MS);
+      await pomeriSat(KRAJ_ZADRZI_MS);
     }));
 
     it('kraj i izbacivanje brišu zaostalu poruku greške (ne visi na ekranu kraja)', () => {
@@ -245,7 +246,7 @@ describe('StudentStore', () => {
       store.odgovori({ rundaId: 7, opcije: [11] });
       store.odgovori({ rundaId: 7, opcije: [12] });
       expect(store.poslato()).toBe(7);
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       expect(store.ekran()).toBe('primljen');
       expect(stomp().publish).toHaveBeenCalledTimes(1);
       expect(stomp().publish).toHaveBeenCalledWith({
@@ -274,75 +275,75 @@ describe('StudentStore', () => {
       pocetno(naPitanju(3), licno({ verzija: 3, odgovor: { rundaId: 7, primljen: true, tacno: null, poeni: null } }));
 
       expect(store.veza()).toBe('povezan');
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       expect(store.ekran()).toBe('primljen');
     });
 
     it('nova runda (drugi rundaId) otključava unos', () => {
       udji();
       pocetno(naPitanju(2), licno({ verzija: 2, odgovor: { rundaId: 7, primljen: true, tacno: null, poeni: null } }));
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       stomp().posalji('/topic/izvodjenja/5/javno', naPitanju(3, { rundaId: 8 }));
-      expect(store.unosZakljucan()).toBeFalse();
+      expect(store.unosZakljucan()).toBe(false);
       expect(store.ekran()).toBe('unos');
     });
 
-    it('"Pitanje je zatvoreno." zaključava unos; poruka nestaje posle 4 s', fakeAsync(() => {
+    it('"Pitanje je zatvoreno." zaključava unos; poruka nestaje posle 4 s', saLaznimSatom(async () => {
       udji();
       store.prihvatiJavno(naPitanju(2));
       store.odgovori({ rundaId: 7, opcije: [11] });
       stomp().posalji('/user/queue/greske', { poruka: 'Pitanje je zatvoreno.' });
       expect(store.greska()).toBe('Pitanje je zatvoreno.');
       expect(store.poslato()).toBeNull();
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       expect(store.ekran()).toBe('isteklo');
-      tick(GRESKA_TRAJANJE_MS);
+      await pomeriSat(GRESKA_TRAJANJE_MS);
       expect(store.greska()).toBeNull();
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       store.destroy();
     }));
 
-    it('greška provere ("Unesi broj.") otključava da student ispravi', fakeAsync(() => {
+    it('greška provere ("Unesi broj.") otključava da student ispravi', saLaznimSatom(async () => {
       udji();
       store.prihvatiJavno(naPitanju(2, { tip: 'BROJ', opcije: null, brojOpcija: null }));
       store.odgovori({ rundaId: 7, broj: '3' });
       stomp().posalji('/user/queue/greske', { poruka: 'Unesi broj.' });
-      expect(store.unosZakljucan()).toBeFalse();
+      expect(store.unosZakljucan()).toBe(false);
       expect(store.greska()).toBe('Unesi broj.');
       store.destroy();
     }));
 
-    it('"Već si odgovorio." ostaje zaključano', fakeAsync(() => {
+    it('"Već si odgovorio." ostaje zaključano', saLaznimSatom(async () => {
       udji();
       store.prihvatiJavno(naPitanju(2));
       store.odgovori({ rundaId: 7, opcije: [11] });
       stomp().posalji('/user/queue/greske', { poruka: 'Već si odgovorio.' });
-      expect(store.unosZakljucan()).toBeTrue();
+      expect(store.unosZakljucan()).toBe(true);
       expect(store.ekran()).toBe('primljen');
       store.destroy();
     }));
 
-    it('bez potvrde servera dok je veza otvorena, unos se posle roka otključava', fakeAsync(() => {
+    it('bez potvrde servera dok je veza otvorena, unos se posle roka otključava', saLaznimSatom(async () => {
       udji();
       stomp().connectionState$.next(RxStompState.OPEN);
       store.prihvatiJavno(naPitanju(2));
       store.odgovori({ rundaId: 7, opcije: [11] });
-      tick(POTVRDA_MS - 1);
-      expect(store.unosZakljucan()).toBeTrue();
-      tick(1);
-      expect(store.unosZakljucan()).toBeFalse();
+      await pomeriSat(POTVRDA_MS - 1);
+      expect(store.unosZakljucan()).toBe(true);
+      await pomeriSat(1);
+      expect(store.unosZakljucan()).toBe(false);
       expect(store.greska()).toBe('Odgovor nije stigao. Pošalji ponovo.');
       store.destroy();
     }));
 
-    it('potvrda kroz lično stanje gasi rok za otključavanje', fakeAsync(() => {
+    it('potvrda kroz lično stanje gasi rok za otključavanje', saLaznimSatom(async () => {
       udji();
       stomp().connectionState$.next(RxStompState.OPEN);
       store.prihvatiJavno(naPitanju(2));
       store.odgovori({ rundaId: 7, opcije: [11] });
       stomp().posalji('/user/queue/licno', licno({ verzija: 2, odgovor: { rundaId: 7, primljen: true, tacno: null, poeni: null } }));
-      tick(POTVRDA_MS * 2);
-      expect(store.unosZakljucan()).toBeTrue();
+      await pomeriSat(POTVRDA_MS * 2);
+      expect(store.unosZakljucan()).toBe(true);
       expect(store.greska()).toBeNull();
       store.destroy();
     }));
@@ -387,13 +388,13 @@ describe('StudentStore', () => {
       expect(store.greska()).toBe('Izvođenje sa ovim kodom ne postoji ili je završeno.');
     });
 
-    it('nacrt odgovora ostaje za istu rundu i posle otključavanja (rok potvrde); otvori ga briše', fakeAsync(() => {
+    it('nacrt odgovora ostaje za istu rundu i posle otključavanja (rok potvrde); otvori ga briše', saLaznimSatom(async () => {
       udji();
       stomp().connectionState$.next(RxStompState.OPEN);
       store.prihvatiJavno(naPitanju(2, { tip: 'VISE_TACNIH' }));
       store.sacuvajNacrt({ rundaId: 7, izabrane: [11, 12], broj: '', tekst: '' });
       store.odgovori({ rundaId: 7, opcije: [11, 12] });
-      tick(POTVRDA_MS);
+      await pomeriSat(POTVRDA_MS);
       expect(store.ekran()).toBe('unos');
       expect(store.nacrt()).toEqual({ rundaId: 7, izabrane: [11, 12], broj: '', tekst: '' });
       store.otvori('123456');

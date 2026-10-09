@@ -39,12 +39,12 @@ describe('odgovor-unos: pravila', () => {
   });
 
   it('VISE_TACNIH: "Pošalji" tek uz bar jedan izbor; ostali tipovi po svom polju', () => {
-    expect(mozeDaPosalje('VISE_TACNIH', { izabrane: [], broj: '', tekst: '' })).toBeFalse();
-    expect(mozeDaPosalje('VISE_TACNIH', { izabrane: [12], broj: '', tekst: '' })).toBeTrue();
-    expect(mozeDaPosalje('BROJ', { izabrane: [], broj: '  ', tekst: '' })).toBeFalse();
-    expect(mozeDaPosalje('BROJ', { izabrane: [], broj: 'abc', tekst: '' })).toBeTrue(); // poruka tek na "Pošalji"
-    expect(mozeDaPosalje('KRATAK_TEKST', { izabrane: [], broj: '', tekst: ' ' })).toBeFalse();
-    expect(mozeDaPosalje('KRATAK_TEKST', { izabrane: [], broj: '', tekst: 'Novi Sad' })).toBeTrue();
+    expect(mozeDaPosalje('VISE_TACNIH', { izabrane: [], broj: '', tekst: '' })).toBe(false);
+    expect(mozeDaPosalje('VISE_TACNIH', { izabrane: [12], broj: '', tekst: '' })).toBe(true);
+    expect(mozeDaPosalje('BROJ', { izabrane: [], broj: '  ', tekst: '' })).toBe(false);
+    expect(mozeDaPosalje('BROJ', { izabrane: [], broj: 'abc', tekst: '' })).toBe(true); // poruka tek na "Pošalji"
+    expect(mozeDaPosalje('KRATAK_TEKST', { izabrane: [], broj: '', tekst: ' ' })).toBe(false);
+    expect(mozeDaPosalje('KRATAK_TEKST', { izabrane: [], broj: '', tekst: 'Novi Sad' })).toBe(true);
   });
 
   it('tekstOpcije: tekst sa servera, a za tačno/netačno uvek "Tačno"/"Netačno" (redosled je fiksan)', () => {
@@ -80,7 +80,7 @@ describe('OdgovorUnosComponent', () => {
     a.click();
     expect(poslato).toEqual([{ rundaId: 7, opcije: [11] }]);
     fixture.detectChanges();
-    expect(dugmad().every(d => d.disabled)).toBeTrue();
+    expect(dugmad().every(d => d.disabled)).toBe(true);
   });
 
   it('dugmad imaju aria-label sa slovom, nazivom oblika i tekstom kad postoji', () => {
@@ -91,12 +91,12 @@ describe('OdgovorUnosComponent', () => {
 
   it('VISE_TACNIH: "Pošalji" onemogućen bez izbora, pa šalje izabrane jednom', () => {
     napravi(pitanje('VISE_TACNIH'));
-    expect(dugme('Pošalji').disabled).toBeTrue();
+    expect(dugme('Pošalji').disabled).toBe(true);
     dugmad()[0].click();
     dugmad()[2].click();
     fixture.detectChanges();
     expect(dugmad()[0].getAttribute('aria-pressed')).toBe('true');
-    expect(dugme('Pošalji').disabled).toBeFalse();
+    expect(dugme('Pošalji').disabled).toBe(false);
     dugme('Pošalji').click();
     dugme('Pošalji').click();
     expect(poslato).toEqual([{ rundaId: 7, opcije: [11, 13] }]);
@@ -140,7 +140,7 @@ describe('OdgovorUnosComponent', () => {
     napravi(pitanje('VISE_TACNIH'), false, nacrti[nacrti.length - 1]);
     expect(dugmad()[0].getAttribute('aria-pressed')).toBe('true');
     expect(dugmad()[2].getAttribute('aria-pressed')).toBe('true');
-    expect(dugme('Pošalji').disabled).toBeFalse();
+    expect(dugme('Pošalji').disabled).toBe(false);
     dugme('Pošalji').click();
     expect(poslato).toEqual([{ rundaId: 7, opcije: [11, 13] }]);
   });
@@ -161,7 +161,7 @@ describe('OdgovorUnosComponent', () => {
     expect(nacrti[nacrti.length - 1]).toEqual({ rundaId: 7, izabrane: [], broj: '', tekst: 'Sava' });
     napravi(pitanje('KRATAK_TEKST', { opcije: null, brojOpcija: null }), true, nacrti[nacrti.length - 1]);
     expect((fixture.nativeElement.querySelector('input') as HTMLInputElement).value).toBe('Sava');
-    expect(dugme('Pošalji').disabled).toBeFalse();
+    expect(dugme('Pošalji').disabled).toBe(false);
   });
 
   it('nova runda briše izbor i otključava', () => {
@@ -172,6 +172,6 @@ describe('OdgovorUnosComponent', () => {
     fixture.componentRef.setInput('pitanje', pitanje('VISE_TACNIH', { rundaId: 8 }));
     fixture.detectChanges();
     expect(dugmad()[1].getAttribute('aria-pressed')).toBe('false');
-    expect(dugmad()[1].disabled).toBeFalse();
+    expect(dugmad()[1].disabled).toBe(false);
   });
 });

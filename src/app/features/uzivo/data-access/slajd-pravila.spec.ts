@@ -13,8 +13,8 @@ describe('slajd-pravila', () => {
   });
 
   it('tipovi bez opcija: broj (odstupanje 0, apsolutno), kratak tekst (oblak), skala', () => {
-    expect(novoPitanje('BROJ')).toEqual(jasmine.objectContaining({ opcije: [], brojOdstupanje: 0, odstupanjeTip: 'APSOLUTNO' }));
-    expect(novoPitanje('KRATAK_TEKST')).toEqual(jasmine.objectContaining({ opcije: [], tekstPrikaz: 'OBLAK' }));
+    expect(novoPitanje('BROJ')).toEqual(expect.objectContaining({ opcije: [], brojOdstupanje: 0, odstupanjeTip: 'APSOLUTNO' }));
+    expect(novoPitanje('KRATAK_TEKST')).toEqual(expect.objectContaining({ opcije: [], tekstPrikaz: 'OBLAK' }));
     expect(novoPitanje('SKALA').opcije).toEqual([]);
   });
 
@@ -30,7 +30,7 @@ describe('slajd-pravila', () => {
     expect(jedan.tekst).toBe('Šta važi?');
     expect(jedan.vremeSekunde).toBe(30);
     expect(jedan.opcije.map(o => o.tacna)).toEqual([false, true, false]);
-    expect(promeniTipPitanja(vise, 'ANKETA').opcije.every(o => !o.tacna)).toBeTrue();
+    expect(promeniTipPitanja(vise, 'ANKETA').opcije.every(o => !o.tacna)).toBe(true);
     expect(promeniTipPitanja(vise, 'TACNO_NETACNO').opcije.map(o => o.tekst)).toEqual(['Tačno', 'Netačno']);
     expect(promeniTipPitanja(vise, 'BROJ').opcije).toEqual([]);
   });
