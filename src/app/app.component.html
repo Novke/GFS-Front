@@ -1,7 +1,7 @@
 @if (isStaging) {
   <div class="env-strip">STAGING — test podaci</div>
 }
-@if (!javnaStranica) {
+@if (!sakrijToolbar) {
   <mat-toolbar color="primary">
     <mat-toolbar-row>
       <a [routerLink]="routes.home" mat-button>Home</a>
@@ -9,6 +9,7 @@
       <a [routerLink]="routes.predavanjeSelect" mat-button>Predavanja</a>
       <a [routerLink]="routes.domaciSelect" mat-button>Domaći</a>
       <a [routerLink]="routes.testSelect" mat-button>Testovi</a>
+      <a [routerLink]="routes.prezentacije" mat-button>Prezentacije</a>
       <a [routerLink]="routes.ocenjivanjeSelect" mat-button>Ocene</a>
       <span class="spacer"></span>
       @if (isStaging) {
