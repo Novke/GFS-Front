@@ -7,6 +7,7 @@ import type { TipAktivnosti } from './predavanja.models';
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
 import { GrupaInfo, PredmetInfo, TipTestaInfo } from './reference.api';
+import type { OpcijeZahteva } from './opcije-zahteva';
 
 /**
  * Red liste studenata; ogleda backend `dto/student/StudentListItem`. `godina` je godina upisa;
@@ -195,67 +196,62 @@ export interface GrupaSaStudentima {
   studenti: GrupaStudentInfo[];
 }
 
-/** Opcije zahteva: `tiho` = greška ne ide u snackbar (`LOCAL_ERRORS`), pozivalac je prikazuje sam. */
-export interface OpcijeStudenta {
-  tiho?: boolean;
-}
-
 /** Studenti (`StudentRest`, `BeleskaRest`). Sve putanje su relativne na `<base href>`. */
 @Injectable({ providedIn: 'root' })
 export class StudentiApi {
   private readonly http = inject(HttpClient);
 
-  private kontekst(opcije: OpcijeStudenta): HttpContext {
+  private kontekst(opcije: OpcijeZahteva): HttpContext {
     return new HttpContext().set(LOCAL_ERRORS, opcije.tiho ?? false);
   }
 
   /** `GET studenti/{id}`: aktivnosti, urađeni domaći i polaganja (polaganja bez određenog redosleda). */
-  get(id: number, opcije: OpcijeStudenta = {}): Observable<StudentPregledDetails> {
+  get(id: number, opcije: OpcijeZahteva = {}): Observable<StudentPregledDetails> {
     return this.http.get<StudentPregledDetails>(`${API_URL}/studenti/${id}`, { context: this.kontekst(opcije) });
   }
 
   /** `GET studenti/{id}/predmeti`: kartica po predmetu (prazno za studenta bez grupe i aktivnosti). */
-  predmeti(id: number, opcije: OpcijeStudenta = {}): Observable<StudentPredmetKartica[]> {
+  predmeti(id: number, opcije: OpcijeZahteva = {}): Observable<StudentPredmetKartica[]> {
     return this.http.get<StudentPredmetKartica[]>(`${API_URL}/studenti/${id}/predmeti`, { context: this.kontekst(opcije) });
   }
 
   /** `GET studenti/{id}/predmet/{predmetId}`: aktivnosti, domaći i testovi po tipu na jednom predmetu. */
-  naPredmetu(id: number, predmetId: number, opcije: OpcijeStudenta = {}): Observable<StudentNaPredmetuDetails> {
+  naPredmetu(id: number, predmetId: number, opcije: OpcijeZahteva = {}): Observable<StudentNaPredmetuDetails> {
     return this.http.get<StudentNaPredmetuDetails>(`${API_URL}/studenti/${id}/predmet/${predmetId}`, { context: this.kontekst(opcije) });
   }
 
   /** `PUT studenti/{id}`: izmena podataka i premeštanje u drugu grupu (`grupaId`); vidi {@link UpdateStudentCmd}. */
-  izmeni(id: number, cmd: UpdateStudentCmd, opcije: OpcijeStudenta = {}): Observable<StudentInfo> {
+  izmeni(id: number, cmd: UpdateStudentCmd, opcije: OpcijeZahteva = {}): Observable<StudentInfo> {
     return this.http.put<StudentInfo>(`${API_URL}/studenti/${id}`, cmd, { context: this.kontekst(opcije) });
   }
 
   /** `GET grupe/{id}`: studenti grupe (za prethodni/sledeći u profilu). */
-  grupa(grupaId: number, opcije: OpcijeStudenta = {}): Observable<GrupaSaStudentima> {
+  grupa(grupaId: number, opcije: OpcijeZahteva = {}): Observable<GrupaSaStudentima> {
     return this.http.get<GrupaSaStudentima>(`${API_URL}/grupe/${grupaId}`, { context: this.kontekst(opcije) });
   }
 
   /** `GET studenti/{id}/beleske`: najnovije prve (kreirano, pa id opadajuće). */
-  beleske(id: number, opcije: OpcijeStudenta = {}): Observable<BeleskaInfo[]> {
+  beleske(id: number, opcije: OpcijeZahteva = {}): Observable<BeleskaInfo[]> {
     return this.http.get<BeleskaInfo[]>(`${API_URL}/studenti/${id}/beleske`, { context: this.kontekst(opcije) });
   }
 
   /** `POST studenti/{id}/beleske`: tekst do 2000 znakova, obavezan (server ga skida sa razmaka). */
-  dodajBelesku(id: number, tekst: string, opcije: OpcijeStudenta = {}): Observable<BeleskaInfo> {
+  dodajBelesku(id: number, tekst: string, opcije: OpcijeZahteva = {}): Observable<BeleskaInfo> {
     return this.http.post<BeleskaInfo>(`${API_URL}/studenti/${id}/beleske`, { tekst }, { context: this.kontekst(opcije) });
   }
 
   /** `PUT beleske/{id}`: `id` je id beleške, ne studenta. */
-  izmeniBelesku(id: number, tekst: string, opcije: OpcijeStudenta = {}): Observable<BeleskaInfo> {
+  izmeniBelesku(id: number, tekst: string, opcije: OpcijeZahteva = {}): Observable<BeleskaInfo> {
     return this.http.put<BeleskaInfo>(`${API_URL}/beleske/${id}`, { tekst }, { context: this.kontekst(opcije) });
   }
 
   /** `DELETE beleske/{id}` (204). */
-  obrisiBelesku(id: number, opcije: OpcijeStudenta = {}): Observable<void> {
+  obrisiBelesku(id: number, opcije: OpcijeZahteva = {}): Observable<void> {
     return this.http.delete<void>(`${API_URL}/beleske/${id}`, { context: this.kontekst(opcije) });
   }
 
   /** `tiho`: greška ne ide u snackbar (`LOCAL_ERRORS`), pozivalac je prikazuje sam. */
-  pretraga(params: StudentiPretraga, opcije: { tiho?: boolean } = {}): Observable<Strana<StudentListItem>> {
+  pretraga(params: StudentiPretraga, opcije: OpcijeZahteva = {}): Observable<Strana<StudentListItem>> {
     let p = new HttpParams();
     for (const [kljuc, v] of Object.entries(params) as [keyof StudentiPretraga, StudentiPretraga[keyof StudentiPretraga]][]) {
       const tekst = typeof v === 'number' ? (Number.isFinite(v) ? String(v) : '') : (v ?? '').trim();

@@ -554,10 +554,18 @@ describe('TestStore', () => {
 
   it('nesačuvane izmene (čekanje, u toku, neuspelo) se vide u NesacuvaneIzmene; posle potvrde ih nema', () => {
     const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+    /** `true` = pregledač bi pitao "Napustiti sajt?". */
+    const pita = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
     ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
     expect(nesacuvane.broj()).toBe(0);
+    expect(pita()).toBe(false);
     store.izmeni(1, { grupa: 'A', poeni: '12' });
     expect(nesacuvane.broj()).toBe(1); // čeka debounce
+    expect(pita()).toBe(true);
     vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
     const req = http.expectOne('api/test/5/polaganje');
     expect(nesacuvane.broj()).toBe(1); // u toku
@@ -567,6 +575,7 @@ describe('TestStore', () => {
     store.ponovo(1);
     http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
     expect(nesacuvane.broj()).toBe(0);
+    expect(pita()).toBe(false);
   });
 
   /** Evidentiran test (prag se i tada menja): stanje kao da je završen. */

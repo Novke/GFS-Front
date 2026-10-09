@@ -9,7 +9,9 @@ export interface IzvorNesacuvanog {
 /**
  * Zaštita od zatvaranja ili osvežavanja kartice dok čuvanje traje (root). Sesije čuvanja (`RegistarCuvanja`) se ovde
  * prijavljuju; `beforeunload` traži od pregledača njegov "Napustiti sajt?" samo dok neka prijavljena sesija ima
- * nesačuvanih izmena. Slušalac postoji samo dok ima prijavljenih izvora (bez njega pregledač može da koristi bfcache).
+ * nesačuvanih izmena. Slušalac postoji **samo dok ima nesačuvanog** (`broj() > 0`): kad je sve sačuvano, pregledač može da
+ * koristi bfcache. Izvori su obični brojači (ne signali), pa sesija posle svake promene brojača javlja {@link proveri}
+ * (preko `RegistarCuvanja.promena`).
  *
  * Instancira se tek kad nastavnički ekran napravi store koji čuva (preko `RegistarCuvanja`), nikad na javnoj ruti
  * `upis/:token` (pravilo `gfs/javna-ruta-uvozi`: `core/state` nije na spisku dozvoljenog).
@@ -34,14 +36,17 @@ export class NesacuvaneIzmene {
 
   prijavi(izvor: IzvorNesacuvanog): void {
     this.izvori.add(izvor);
-    this.postaviSlusaoca(true);
+    this.proveri();
   }
 
   odjavi(izvor: IzvorNesacuvanog): void {
     this.izvori.delete(izvor);
-    if (this.izvori.size === 0) {
-      this.postaviSlusaoca(false);
-    }
+    this.proveri();
+  }
+
+  /** Posle promene nekog brojača: slušalac se dodaje kad ima nesačuvanog, skida kad ga više nema. */
+  proveri(): void {
+    this.postaviSlusaoca(this.broj() > 0);
   }
 
   /** Ukupno nesačuvanih izmena svih prijavljenih izvora. */

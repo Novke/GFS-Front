@@ -564,13 +564,22 @@ describe('PredavanjeStore', () => {
 
     it('klikovi koje server još nije primio se vide u NesacuvaneIzmene', () => {
       const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+      /** `true` = pregledač bi pitao "Napustiti sajt?". */
+      const pita = () => {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      };
       ucitaj();
+      expect(pita()).toBe(false);
       store.klik(1);
       store.klik(1);
       store.klik(2);
       expect(nesacuvane.broj()).toBe(3);
+      expect(pita()).toBe(true);
       odgovaraj();
       expect(nesacuvane.broj()).toBe(0);
+      expect(pita()).toBe(false);
     });
   });
 });

@@ -48,8 +48,9 @@ src/app/
   `shared/` never import `features/`. API clients and DTOs used by more than one feature live in `core/api/` (DTO field
   names mirror the backend exactly), shared stores in `core/state/` (e.g. the list stores reused by the grupa/predmet
   hubs). Importing another feature's `ui/` is allowed.
-- Every API method takes `OpcijeZahteva` (`core/api/opcije-zahteva.ts`): `{ tiho: true }` sets `LOCAL_ERRORS`, so the
-  global error interceptor shows no snackbar and the caller reports the error itself.
+- Request options have one type, `OpcijeZahteva` (`core/api/opcije-zahteva.ts`; never a per-client copy): `{ tiho: true }`
+  sets `LOCAL_ERRORS`, so the global error interceptor shows no snackbar and the caller reports the error itself. Clients
+  whose callers always use the snackbar (`ReferenceApi`, global search) and the public `upis.api` take no options.
 - Breadcrumbs: `data.mrvice` built with `mrvica(label, url?)` from `core/layout/mrvica.ts`.
 - `withComponentInputBinding()` is on: route and query params bind to same-named inputs of routed components.
 

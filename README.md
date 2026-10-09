@@ -39,6 +39,10 @@ ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom br
 - Staging: svaki push na `staging` se automatski deployuje (oko minut) na `https://gfs.dev.trif.rs` (basic-auth,
   samo izmišljeni podaci); ishod je commit status `staging-deploy`. Detalji u deploy repou `Novke/GFS-deploy` (`README.md`).
 - CI: `.github/workflows/ci.yml`, job `build`, na PR i push na `staging`/`master`: Node 24, `npm ci`, `npx ng lint` (ESLint,
-  angular-eslint), `npx ng test --watch=false` (Vitest + jsdom, ne treba browser), `npx ng build --configuration production`, pa
-  `docker build`. Nijedan korak nije `continue-on-error`: crven lint ili test blokira merge.
-  Lokalno isto: `npm ci && npx ng lint && npx ng test --watch=false && npx ng build --configuration production`.
+  angular-eslint i dva sopstvena pravila iz `eslint-rules/`), `npm run test:eslint-pravila` (testovi tih pravila i stvarnog
+  `eslint.config.js`), `npx ng test --watch=false` (Vitest + jsdom, ne treba browser), `npx ng build --configuration production`,
+  pa `docker build`. Nijedan korak nije `continue-on-error`: crven lint ili test blokira merge.
+  Lokalno isto: `npm ci && npx ng lint && npm run test:eslint-pravila && npx ng test --watch=false && npx ng build --configuration production`.
+- Sopstvena ESLint pravila: `gfs/javna-ruta-uvozi` (javna ruta `upis/:token`, kasnije `uzivo/javno`, sme da uvozi samo sebe i
+  spisak iz `eslint-rules/javna-ruta-konfig.js`, jer svaki zaključan `/api/*` studentu otvara dijalog za lozinku) i
+  `gfs/granice-featurea` (feature ne uvozi tuđi `data-access/`; `core/` i `shared/` ne uvoze `features/`).

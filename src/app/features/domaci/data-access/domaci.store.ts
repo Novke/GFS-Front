@@ -307,6 +307,7 @@ export const DomaciStore = signalStore(
         (korak$: Observable<unknown>) => bezPrekidaReda(korak$, store._greske),
         finalize(() => {
           s.uToku--;
+          store._registar.promena();
           if (s.uToku === 0) {
             if (s.zatvorena) {
               store._registar.odjavi(s);
@@ -336,6 +337,7 @@ export const DomaciStore = signalStore(
         s.timeri.delete(sId);
       }
       s.uToku++;
+      store._registar.promena();
       red(s, sId).next();
     }
 
@@ -447,6 +449,7 @@ export const DomaciStore = signalStore(
           clearTimeout(stari);
         }
         s.timeri.set(sId, setTimeout(() => posalji(s, sId), DEBOUNCE_REDA_MS));
+        store._registar.promena();
       },
 
       /** Ne čeka debounce (Enter u polju): šalje red odmah, ako ima šta da se pošalje. */
@@ -500,6 +503,10 @@ export const DomaciStore = signalStore(
                     clearTimeout(t);
                     s.timeri.delete(r.studentId);
                   }
+                  if (oslobodjen) {
+                    // oslobođen red je samo za čitanje: neuspelo čuvanje se više ne može ponoviti ni brojati kao nesačuvano
+                    s.greske.delete(r.studentId);
+                  }
                   s.lokalno.set(r.studentId, potvrdjeno);
                   patchState(store, st => ({
                     vrednosti: { ...st.vrednosti, [r.studentId]: potvrdjeno },
@@ -508,6 +515,7 @@ export const DomaciStore = signalStore(
                   }));
                 }
               }
+              store._registar.promena();
               store._obavestenja.uspeh(novih > 0 ? `Oslobođeno studenata: ${novih}.` : 'Nema novih studenata za oslobađanje.');
               return true;
             }),
@@ -551,6 +559,9 @@ export const DomaciStore = signalStore(
             switchMap(() => (tekuca(s) ? store._api.zavrsi(s.domaciId).pipe(map(() => true)) : of(false))),
             map(uspelo => {
               if (uspelo) {
+                // pregledan domaći je samo za čitanje: redovi sa greškom se više ne mogu ponoviti (poruka ih je navela)
+                s.greske.clear();
+                store._registar.promena();
                 patchState(store, st => (st.domaci ? { domaci: { ...st.domaci, pregledan: true } } : {}));
                 store._obavestenja.uspeh('Pregled je završen.');
               }
@@ -574,6 +585,7 @@ export const DomaciStore = signalStore(
         s.obrisan = true;
         s.timeri.forEach(t => clearTimeout(t));
         s.timeri.clear();
+        store._registar.promena();
         return firstValueFrom(
           sacekaj(s).pipe(
             switchMap(() => store._api.obrisi(s.domaciId)),

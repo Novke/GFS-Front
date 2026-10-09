@@ -618,6 +618,7 @@ export const TestStore = signalStore(
         (posao$: Observable<unknown>) => bezPrekidaReda(posao$, store._greske),
         finalize(() => {
           s.uToku--;
+          store._registar.promena();
           if (s.uToku === 0) {
             if (s.zatvorena) {
               store._registar.odjavi(s);
@@ -638,6 +639,7 @@ export const TestStore = signalStore(
 
     function zakazi(s: Sesija, posao: Posao): void {
       s.uToku++;
+      store._registar.promena();
       s.red.next(posao);
     }
 
@@ -789,6 +791,7 @@ export const TestStore = signalStore(
             setTimeout(() => posalji(s, sId), DEBOUNCE_REDA_MS),
           );
         }
+        store._registar.promena();
       },
 
       /** "Pokušaj ponovo" posle greške čuvanja. */
@@ -940,6 +943,7 @@ export const TestStore = signalStore(
         s.obrisan = true;
         s.timeri.forEach(t => clearTimeout(t));
         s.timeri.clear();
+        store._registar.promena();
         return firstValueFrom(
           sacekaj(s).pipe(
             switchMap(() => store._api.obrisi(s.tId)),

@@ -42,7 +42,7 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
         'core/layout/shell',
         'features/domaci/domaci.routes',
         'shared/ui/student-picker',
-        'models/model',
+        'features/predavanja/data-access/predavanje.store',
       ]) {
         it(`obara uvoz ${zabranjen}`, async () => {
           const m = await poruke(feature, `import { X } from '${gore}${zabranjen}';\nexport const y = X;\n`);

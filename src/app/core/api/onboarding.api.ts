@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
 import type { GrupaInfo } from './reference.api';
+import type { OpcijeZahteva } from './opcije-zahteva';
 
 export type StatusPrijave = 'NA_CEKANJU' | 'PRIHVACENA' | 'ODBIJENA';
 
@@ -80,10 +81,6 @@ export interface OdbijPrijavuCmd {
   napomena: string | null;
 }
 
-export interface OpcijeOnboardinga {
-  tiho?: boolean;
-}
-
 /**
  * Nastavnički onboarding (`OnboardingRest`, iza basic-auth-a; premešteno iz `onboarding/onboarding.service.ts`, isti
  * endpointi). Javni deo (`api/public/upis`) je samo u `features/upis`.
@@ -92,41 +89,41 @@ export interface OpcijeOnboardinga {
 export class OnboardingApi {
   private readonly http = inject(HttpClient);
 
-  private kontekst(o: OpcijeOnboardinga): HttpContext {
+  private kontekst(o: OpcijeZahteva): HttpContext {
     return new HttpContext().set(LOCAL_ERRORS, o.tiho ?? false);
   }
 
   /** `GET grupe/{id}/onboarding`: sesije grupe. */
-  sesije(grupaId: number, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaInfo[]> {
+  sesije(grupaId: number, o: OpcijeZahteva = {}): Observable<OnboardingSesijaInfo[]> {
     return this.http.get<OnboardingSesijaInfo[]>(`${API_URL}/grupe/${grupaId}/onboarding`, { context: this.kontekst(o) });
   }
 
-  pokreni(grupaId: number, cmd: CreateOnboardingCmd, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaInfo> {
+  pokreni(grupaId: number, cmd: CreateOnboardingCmd, o: OpcijeZahteva = {}): Observable<OnboardingSesijaInfo> {
     return this.http.post<OnboardingSesijaInfo>(`${API_URL}/grupe/${grupaId}/onboarding`, cmd, { context: this.kontekst(o) });
   }
 
-  sesija(id: number, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaDetails> {
+  sesija(id: number, o: OpcijeZahteva = {}): Observable<OnboardingSesijaDetails> {
     return this.http.get<OnboardingSesijaDetails>(`${API_URL}/onboarding/${id}`, { context: this.kontekst(o) });
   }
 
   /** `PATCH onboarding/{id}`: zatvori (`aktivna=false`) ili ponovo otvori. */
-  promeniAktivnost(id: number, cmd: UpdateOnboardingCmd, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaInfo> {
+  promeniAktivnost(id: number, cmd: UpdateOnboardingCmd, o: OpcijeZahteva = {}): Observable<OnboardingSesijaInfo> {
     return this.http.patch<OnboardingSesijaInfo>(`${API_URL}/onboarding/${id}`, cmd, { context: this.kontekst(o) });
   }
 
-  izmeniPrijavu(id: number, prijavaId: number, cmd: UpdatePrijavaCmd, o: OpcijeOnboardinga = {}): Observable<PrijavaInfo> {
+  izmeniPrijavu(id: number, prijavaId: number, cmd: UpdatePrijavaCmd, o: OpcijeZahteva = {}): Observable<PrijavaInfo> {
     return this.http.put<PrijavaInfo>(`${API_URL}/onboarding/${id}/prijave/${prijavaId}`, cmd, { context: this.kontekst(o) });
   }
 
-  prihvati(id: number, prijavaId: number, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaDetails> {
+  prihvati(id: number, prijavaId: number, o: OpcijeZahteva = {}): Observable<OnboardingSesijaDetails> {
     return this.http.post<OnboardingSesijaDetails>(`${API_URL}/onboarding/${id}/prijave/${prijavaId}/prihvati`, {}, { context: this.kontekst(o) });
   }
 
-  odbij(id: number, prijavaId: number, cmd: OdbijPrijavuCmd, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaDetails> {
+  odbij(id: number, prijavaId: number, cmd: OdbijPrijavuCmd, o: OpcijeZahteva = {}): Observable<OnboardingSesijaDetails> {
     return this.http.post<OnboardingSesijaDetails>(`${API_URL}/onboarding/${id}/prijave/${prijavaId}/odbij`, cmd, { context: this.kontekst(o) });
   }
 
-  prihvatiSve(id: number, o: OpcijeOnboardinga = {}): Observable<OnboardingSesijaDetails> {
+  prihvatiSve(id: number, o: OpcijeZahteva = {}): Observable<OnboardingSesijaDetails> {
     return this.http.post<OnboardingSesijaDetails>(`${API_URL}/onboarding/${id}/prihvati-sve`, {}, { context: this.kontekst(o) });
   }
 }

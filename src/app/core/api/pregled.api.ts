@@ -8,6 +8,7 @@ import type { TestListItem } from './testovi.models';
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
 import type { GrupaInfo, PredmetInfo } from './reference.api';
+import type { OpcijeZahteva } from './opcije-zahteva';
 
 /** Ogleda backend `dto/pregled/SledecePredavanjeInfo`: predlog sledećeg predavanja (`rb + 1` je samo predlog). */
 export interface SledecePredavanjeInfo {
@@ -77,7 +78,7 @@ export class PregledApi {
   private readonly http = inject(HttpClient);
 
   /** `tiho`: greška ne ide u snackbar (`LOCAL_ERRORS`), npr. za brojače koji se osvežavaju u pozadini. */
-  kontrolnaTabla(opcije: { tiho?: boolean } = {}): Observable<KontrolnaTablaInfo> {
+  kontrolnaTabla(opcije: OpcijeZahteva = {}): Observable<KontrolnaTablaInfo> {
     return this.http.get<KontrolnaTablaInfo>(`${API_URL}/pregled/kontrolna-tabla`, {
       context: new HttpContext().set(LOCAL_ERRORS, opcije.tiho ?? false),
     });

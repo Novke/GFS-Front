@@ -25,9 +25,12 @@ describe('NesacuvaneIzmene', () => {
     servis.prijavi(izvor);
     expect(zatvaranje().defaultPrevented).toBe(false);
     n = 2;
+    servis.proveri(); // izvor javlja promenu brojača
     expect(servis.broj()).toBe(2);
     expect(zatvaranje().defaultPrevented).toBe(true);
     n = 0;
+    expect(zatvaranje().defaultPrevented).toBe(false); // i pre provere: slušalac gleda broj() u trenutku zatvaranja
+    servis.proveri();
     expect(zatvaranje().defaultPrevented).toBe(false);
   });
 
@@ -44,17 +47,27 @@ describe('NesacuvaneIzmene', () => {
     expect(zatvaranje().defaultPrevented).toBe(false);
   });
 
-  it('slušalac postoji samo dok ima prijavljenih izvora; uklanja se i pri uništenju injektora', () => {
+  it('slušalac postoji samo dok ima nesačuvanog (bfcache kad je sve sačuvano); skida se i pri uništenju injektora', () => {
     const dodaj = vi.spyOn(window, 'addEventListener');
     const ukloni = vi.spyOn(window, 'removeEventListener');
-    const izvor = { nesacuvano: () => 1 };
-    servis.prijavi(izvor);
-    servis.prijavi({ nesacuvano: () => 0 });
-    expect(dodaj.mock.calls.filter(([tip]) => tip === 'beforeunload')).toHaveLength(1);
-    servis.odjavi(izvor);
-    expect(ukloni.mock.calls.filter(([tip]) => tip === 'beforeunload')).toHaveLength(0); // još jedan izvor
+    const dodato = () => dodaj.mock.calls.filter(([tip]) => tip === 'beforeunload').length;
+    const uklonjeno = () => ukloni.mock.calls.filter(([tip]) => tip === 'beforeunload').length;
+    let n = 0;
+    servis.prijavi({ nesacuvano: () => n });
+    expect(dodato()).toBe(0); // prijavljen izvor bez nesačuvanog: nema slušaoca
+    n = 1;
+    servis.proveri();
+    expect(dodato()).toBe(1);
+    servis.proveri();
+    expect(dodato()).toBe(1); // ne dodaje se dvaput
+    n = 0;
+    servis.proveri();
+    expect(uklonjeno()).toBe(1);
+    n = 2;
+    servis.proveri();
+    expect(dodato()).toBe(2);
     TestBed.resetTestingModule(); // root injektor uništen
-    expect(ukloni.mock.calls.filter(([tip]) => tip === 'beforeunload')).toHaveLength(1);
+    expect(uklonjeno()).toBe(2);
     expect(zatvaranje().defaultPrevented).toBe(false);
     dodaj.mockRestore();
     ukloni.mockRestore();

@@ -371,6 +371,7 @@ export const PredavanjeStore = signalStore(
         (korak$: Observable<unknown>) => bezPrekidaReda(korak$, store._greske),
         finalize(() => {
           ses.uToku--;
+          store._registar.promena();
           if (ses.uToku === 0) {
             if (!ses.aktivna) {
               store._registar.odjavi(ses);
@@ -411,6 +412,7 @@ export const PredavanjeStore = signalStore(
       }));
       ses.naCekanju.set(sId, naCekanju + 1);
       ses.uToku++;
+      store._registar.promena();
       red(ses, sId).next({ cilj, prethodno, napomena });
     }
 

@@ -53,7 +53,7 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { S } from '../../../core/layout/shell';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { D } from '../../domaci/domaci.routes';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { D } from 'src/app/features/domaci/domaci.routes';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
-    { code: "import { M } from 'src/app/models/model';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { M } from 'src/app/features/predavanja/data-access/predavanje.store';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "export { D } from '../../domaci/domaci.routes';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "const m = () => import('../../../core/state/reference.store');", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import type { T } from '../../../shared/ui/student-picker';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },

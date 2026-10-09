@@ -628,6 +628,62 @@ describe('DomaciStore', () => {
     });
   });
 
+  describe('upozorenje pre zatvaranja kartice (NesacuvaneIzmene)', () => {
+    /** `beforeunload` kao iz pregledača; `defaultPrevented` = pregledač pita "Napustiti sajt?". */
+    function zatvaranje(): boolean {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    }
+
+    it('slušalac samo dok ima nesačuvanog: izmena ga dodaje, potvrda servera skida', () => {
+      const dodaj = vi.spyOn(window, 'addEventListener');
+      const ukloni = vi.spyOn(window, 'removeEventListener');
+      const broj = (spy: typeof dodaj | typeof ukloni) => spy.mock.calls.filter(([tip]) => tip === 'beforeunload').length;
+      ucitaj();
+      expect(broj(dodaj)).toBe(0); // učitan domaći bez izmena: bfcache ostaje
+      store.izmeni(2, { bodovi: 4 });
+      expect(broj(dodaj)).toBe(1);
+      expect(zatvaranje()).toBe(true);
+      tece();
+      server.odgovori(evidentiraj()[0]);
+      expect(broj(ukloni)).toBe(1);
+      expect(zatvaranje()).toBe(false);
+      dodaj.mockRestore();
+      ukloni.mockRestore();
+    });
+
+    it('greška reda pa "oslobodi" (red postaje samo za čitanje): ništa nesačuvano, zatvaranje ne pita', async () => {
+      const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+      ucitaj();
+      store.izmeni(1, { bodovi: 3 }); // Ana je aktivna (zadatak)
+      tece();
+      evidentiraj()[0].flush({ reason: 'Greška baze.' }, { status: 400, statusText: 'Bad Request' });
+      expect(nesacuvane.broj()).toBe(1);
+      expect(zatvaranje()).toBe(true);
+      const obecanje = store.oslobodi();
+      server.studenti[0] = { ...server.studenti[0], oslobodjen: true, bodovi: 10, uradjenDomaciId: 9 };
+      http.expectOne('api/domaci/5/oslobodi').flush(server.details());
+      expect(await obecanje).toBe(true);
+      expect(nesacuvane.broj()).toBe(0);
+      expect(zatvaranje()).toBe(false);
+    });
+
+    it('greška reda pa završen pregled (tabela samo za čitanje): ništa nesačuvano, zatvaranje ne pita', async () => {
+      const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+      ucitaj();
+      store.izmeni(2, { bodovi: 3 });
+      tece();
+      evidentiraj()[0].flush({ reason: 'Greška baze.' }, { status: 400, statusText: 'Bad Request' });
+      expect(nesacuvane.broj()).toBe(1);
+      const obecanje = store.zavrsi();
+      http.expectOne(r => r.method === 'PATCH' && r.url === 'api/domaci/5').flush(null);
+      expect(await obecanje).toBe(true);
+      expect(nesacuvane.broj()).toBe(0);
+      expect(zatvaranje()).toBe(false);
+    });
+  });
+
   it('napuštanje ekrana (uništen store) šalje izmenu koja je čekala debounce', () => {
     // store provajdovan u komponenti, kao u `DomaciDetalj`: uništava se sa njom, a HttpClient (root) ostaje
     const f = TestBed.createComponent(Domacin);

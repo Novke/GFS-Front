@@ -35,6 +35,11 @@ export class RegistarCuvanja {
     this.nesacuvane.odjavi(s);
   }
 
+  /** Sesija javlja da se promenio njen broj nesačuvanih izmena (upozorenje pre zatvaranja kartice se uključuje/isključuje). */
+  promena(): void {
+    this.nesacuvane.proveri();
+  }
+
   /** Emituje jednom kad nijedna prijavljena sesija ključa `kljuc` nema posao u redu ni u izvršenju; odmah ako ih nema. */
   sacekaj(kljuc: string): Observable<unknown> {
     return defer(() => {
