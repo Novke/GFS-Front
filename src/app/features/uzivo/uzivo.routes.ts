@@ -29,6 +29,10 @@ export const UZIVO_ROUTES: Routes = [
     path: AppRoutes.izvodjenjeKonzola(':id'),
     loadComponent: () => import('./pages/konzola.page').then(m => m.KonzolaPage),
   },
-  { path: AppRoutes.uzivo, loadComponent: uIzradi, data: { ekran: 'Unos koda' } },
-  { path: AppRoutes.uzivoKod(':kod'), loadComponent: uIzradi, data: { ekran: 'Uživo' } },
+  // Javno (student): uvozi samo javno/ i čiste delove data-access/ i ui/, nikad nastavnički API ni pages/.
+  { path: AppRoutes.uzivo, loadComponent: () => import('./javno/uzivo-kod.page').then(m => m.UzivoKodPage) },
+  {
+    path: AppRoutes.uzivoKod(':kod'),
+    loadComponent: () => import('./javno/uzivo-student.page').then(m => m.UzivoStudentPage),
+  },
 ];
