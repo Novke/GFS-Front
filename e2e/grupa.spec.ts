@@ -38,7 +38,7 @@ test.describe('grupa', () => {
     await expect(page.locator('tbody tr')).toHaveCount(6);
 
     await page.getByRole('button', { name: 'Kopiraj emailove' }).click();
-    await expect(page.getByText('Kopirano 4 adresa')).toBeVisible();
+    await expect(page.getByText('Kopirano: 4 adrese')).toBeVisible();
     const kopirano = await page.evaluate(() => navigator.clipboard.readText());
     // Bojan nema email, Dragana ima Goranovu adresu velikim slovima (duplikat)
     expect(kopirano.split('; ').sort()).toEqual([

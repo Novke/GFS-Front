@@ -1,6 +1,8 @@
 /*
- * Statički server za e2e: služi produkcioni build (`dist/gfs-front/browser`) kao nginx u kontejneru (`docker/nginx.conf`):
- * postojeći fajl ide kakav jeste, sve ostalo je `index.html` (SPA fallback). `/api/*` i `assets/env.json` ovde nikad ne
+ * Statički server za e2e: služi produkcioni build (`dist/gfs-front/browser`) po istim pravilima kao nginx u kontejneru
+ * (`docker/nginx.conf`): postojeći fajl ide kakav jeste; fajl sa heš imenom (`main-AB12CD34.js`) koji ne postoji je 404
+ * (`try_files $uri =404`); sve ostalo je `index.html` (SPA fallback, `try_files $uri $uri/ /index.html`). `/api/*` i
+ * `assets/env.json` ovde nikad ne
  * stižu: presreće ih mok u pregledaču (`e2e/mock-api.ts`). Pokreće ga `playwright.config.ts` (webServer), bez zavisnosti.
  *
  *   node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/staticki-server.ts [port]
@@ -12,6 +14,8 @@ import { extname, join, resolve, sep } from 'node:path';
 const KOREN = resolve('dist/gfs-front/browser');
 const PORT = Number(process.argv[2] ?? process.env['E2E_PORT'] ?? 4300);
 const INDEX = join(KOREN, 'index.html');
+/** Isti izraz kao `location ~` za heširane fajlove u `docker/nginx.conf`. */
+const HESIRAN = /(\.[0-9a-f]{8,}|-[0-9A-Z]{8})\.(js|css|woff2?|png|jpe?g|gif|svg|ico)$/;
 
 const TIPOVI: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -48,7 +52,12 @@ function fajl(putanja: string): string | null {
 
 createServer((req, res) => {
   const putanja = new URL(req.url ?? '/', 'http://localhost').pathname;
-  const pronadjen = fajl(putanja) ?? INDEX;
+  const postojeci = fajl(putanja);
+  if (!postojeci && HESIRAN.test(putanja)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nema fajla.');
+    return;
+  }
+  const pronadjen = postojeci ?? INDEX;
   res.writeHead(200, {
     'Content-Type': TIPOVI[extname(pronadjen)] ?? 'application/octet-stream',
     'Cache-Control': 'no-store',

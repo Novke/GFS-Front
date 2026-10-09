@@ -3,9 +3,12 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * E2E (Playwright): produkcioni build (`npx ng build`) sa statičkog servera i mokovan API (`e2e/mock-api.ts`), bez
  * backenda. Lokalno: `npm run e2e` (build + provera tipova + testovi). CI: korak posle produkcionog builda.
+ * Port: `E2E_PORT` (podrazumevano 4300). Server se uvek pokreće iznova; `E2E_REUSE=1` koristi već pokrenut server na tom
+ * portu (samo ako je tvoj: drugi worktree na istom portu služi svoj, drugačiji dist).
  */
-const PORT = Number(process.env['E2E_PORT'] ?? 4300);
+const PORT = Number(process.env['E2E_PORT'] || 4300);
 const CI = !!process.env['CI'];
+const REUSE = process.env['E2E_REUSE'] === '1';
 
 export default defineConfig({
   testDir: 'e2e',
@@ -27,7 +30,7 @@ export default defineConfig({
   webServer: {
     command: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/staticki-server.ts ${PORT}`,
     url: `http://127.0.0.1:${PORT}/`,
-    reuseExistingServer: !CI,
+    reuseExistingServer: REUSE && !CI,
     timeout: 30_000,
   },
 });

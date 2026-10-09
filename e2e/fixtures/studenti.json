@@ -1,9 +1,9 @@
 {
   "_napomena": "Izmišljeni studenti (nijedan nije stvaran); domen primer.test je rezervisan za testove.",
   "studenti": [
-    { "id": 1, "ime": "Ana", "prezime": "Primerović", "indeks": "GD1", "godina": 2025, "email": "ana.primerovic@primer.test", "brojTelefona": "060 111 0001", "grupaId": 1, "datumRodjenja": "2006-03-14", "opstina": "Subotica" },
+    { "id": 1, "ime": "Ana", "prezime": "Primerović", "indeks": "GD1", "godina": 2025, "email": "ana.primerovic@primer.test", "brojTelefona": "000 000 0001", "grupaId": 1, "datumRodjenja": "2006-03-14", "opstina": "Subotica" },
     { "id": 2, "ime": "Bojan", "prezime": "Izmišljenović", "indeks": "GD2", "godina": 2025, "email": null, "brojTelefona": null, "grupaId": 1, "datumRodjenja": null, "opstina": null },
-    { "id": 3, "ime": "Vesna", "prezime": "Testić", "indeks": "GD3", "godina": 2025, "email": "vesna.testic@primer.test", "brojTelefona": "060 111 0003", "grupaId": 1, "datumRodjenja": null, "opstina": "Bačka Topola" },
+    { "id": 3, "ime": "Vesna", "prezime": "Testić", "indeks": "GD3", "godina": 2025, "email": "vesna.testic@primer.test", "brojTelefona": "000 000 0003", "grupaId": 1, "datumRodjenja": null, "opstina": "Bačka Topola" },
     { "id": 4, "ime": "Goran", "prezime": "Probić", "indeks": "GD4", "godina": 2025, "email": "goran.probic@primer.test", "brojTelefona": null, "grupaId": 1, "datumRodjenja": null, "opstina": null },
     { "id": 5, "ime": "Dragana", "prezime": "Uzorković", "indeks": "GD5", "godina": 2025, "email": "GORAN.PROBIC@primer.test", "brojTelefona": null, "grupaId": 1, "datumRodjenja": null, "opstina": null },
     { "id": 6, "ime": "Đorđe", "prezime": "Lažić", "indeks": "GD6", "godina": 2025, "email": "djordje.lazic@primer.test", "brojTelefona": null, "grupaId": 1, "datumRodjenja": null, "opstina": null },

@@ -18,8 +18,12 @@ test.describe('predavanje uživo', () => {
     expect(prvi.telo).toEqual({ id: 1 });
     await klik();
     await klik();
-    // optimistično: prikazuje se poslednji klik, a dok prvi zahtev čeka, drugi se ne šalje (jedan zahtev po studentu)
+    // optimistično: prikazuje se poslednji klik, pločica čeka server
     await expect(plocica).toHaveAttribute('data-stanje', 'zvezdica');
+    await expect(plocica).toHaveClass(/\bceka\b/);
+    // dok prvi zahtev čeka, drugi se ne šalje (jedan zahtev po studentu). Granica bez spavanja: zahtev poslat posle
+    // klikova stiže do moka posle svega što je aplikacija poslala tokom klikova
+    expect(await page.evaluate(() => fetch('api/predmeti').then(r => r.status))).toBe(200);
     expect(mock.zahteviZa(IZMENA_AKTIVNOSTI).map(z => `${z.metod} ${z.putanja}`)).toEqual(['PATCH predavanja/1/prisustvo']);
 
     // sad stiže zakasneli odgovor (PRISUSTVO); sledeći korak (zvezdica) zadržavamo da se vidi prikaz između njih

@@ -14,6 +14,7 @@ import { EmptyState } from '../../../shared/ui/list-states';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { kopirajTekst } from '../../../shared/util/kopiraj';
+import { brojAdresaTekst } from '../../../shared/util/mnozina';
 import { GrupaStore } from '../data-access/grupa.store';
 import {
   emailoviZaKopiranje,
@@ -314,7 +315,7 @@ export class GrupaStudentiTab {
       return;
     }
     void kopirajTekst(adrese.join(SEPARATOR_EMAILOVA), this.dokument).then(ok =>
-      ok ? this.obavestenja.uspeh(`Kopirano ${adrese.length} adresa`) : this.obavestenja.greska('Kopiranje nije uspelo. Pregledač ne dozvoljava pristup clipboardu.'),
+      ok ? this.obavestenja.uspeh(`Kopirano: ${brojAdresaTekst(adrese.length)}`) : this.obavestenja.greska('Kopiranje nije uspelo. Pregledač ne dozvoljava pristup clipboardu.'),
     );
   }
 
