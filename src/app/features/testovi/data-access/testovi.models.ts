@@ -1,12 +1,23 @@
 import { GrupaInfo, PredmetInfo, TipTestaInfo } from '../../../core/api/reference.api';
 
+/** `1 ispitanik`, `2 ispitanika`, `5 ispitanika`, `21 ispitanik`, `11 ispitanika`. */
+export function brojIspitanika(n: number): string {
+  return `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'ispitanik' : 'ispitanika'}`;
+}
+
+/** `1 polaganje`, `2 polaganja`, `5 polaganja`, `21 polaganje`. */
+export function brojPolaganja(n: number): string {
+  return `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'polaganje' : 'polaganja'}`;
+}
+
 /** Varijanta (grupa) testa; ogleda backend enum `TestGrupa`. Test sa `brojGrupa = n` ima prvih `n`. */
 export type TestGrupa = 'A' | 'B' | 'C' | 'D';
 export const VARIJANTE: readonly TestGrupa[] = ['A', 'B', 'C', 'D'];
 
 /**
  * Red liste testova; ogleda backend `dto/test/TestListItem`. `prosek` i `procenatProlaznosti` (0-100) su `null` kad
- * nijedno polaganje nema upisane poene; prolaz je serverska oznaka `polozio = true`.
+ * nijedno polaganje nema upisane poene. `procenatProlaznosti` računa server (lista nema polaganja); na detalju i u
+ * statistici prolaz računa front (`jePolozio` u `test.store.ts`).
  */
 export interface TestListItem {
   id: number;
@@ -52,7 +63,10 @@ export interface TestStudentInfo {
   brojTelefona?: string | null;
 }
 
-/** Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). */
+/**
+ * Ogleda `TestPolaganjeInfo`. Tek dodat ispitanik nema ni varijantu ni poene (`null`). `polozio` se na frontu ne koristi
+ * (prolaz računa `jePolozio`).
+ */
 export interface TestPolaganjeInfo {
   id: number;
   student: TestStudentInfo;
@@ -70,7 +84,10 @@ export interface TestStatistikaPoGrupiInfo {
   procenatProlaznosti: number;
 }
 
-/** Ogleda `TestStatistikaInfo` (računa se samo u `GET test/{id}`; prolaz je oznaka `polozio`). */
+/**
+ * Ogleda `TestStatistikaInfo` (računa se samo u `GET test/{id}`). Front iz nje prikazuje broj, prosek, min, max i
+ * standardnu devijaciju; prolaz (ukupno i po varijantama) računa sam (`jePolozio`).
+ */
 export interface TestStatistikaInfo {
   ukupnoPolaganja: number;
   prosecniPoeni: number;

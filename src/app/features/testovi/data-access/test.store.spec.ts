@@ -54,14 +54,15 @@ describe('Testovi: čiste funkcije', () => {
     expect(parsirajPoene('-3')).toBeNaN();
   });
 
-  it('poeni veći od max su greška validacije; varijanta je obavezna kad ih ima više', () => {
+  it('poeni veći od max su greška validacije polja poena; varijanta je obavezna kad ih ima više', () => {
     const v = { grupa: 'A' as const, poeni: '31', prepisivao: false, napomene: '' };
-    expect(greskaReda(v, 30, ['A', 'B'])).toBe('Najviše 30.');
+    expect(greskaReda(v, 30, ['A', 'B'])).toEqual({ polje: 'poeni', poruka: 'Najviše 30.' });
     expect(greskaReda({ ...v, poeni: '30' }, 30, ['A', 'B'])).toBeNull();
     expect(greskaReda({ ...v, poeni: '0' }, 30, ['A', 'B'])).toBeNull();
-    expect(greskaReda({ ...v, grupa: null, poeni: '12' }, 30, ['A', 'B'])).toBe('Izaberi varijantu.');
+    expect(greskaReda({ ...v, grupa: null, poeni: '12' }, 30, ['A', 'B'])).toEqual({ polje: 'varijanta', poruka: 'Izaberi varijantu.' });
     expect(greskaReda({ ...v, grupa: null, poeni: '12' }, 30, ['A'])).toBeNull();
     expect(greskaReda({ ...v, grupa: null, poeni: '' }, 30, ['A', 'B'])).toBeNull();
+    expect(greskaReda({ ...v, poeni: '5', napomene: 'x'.repeat(256) }, 30, ['A', 'B'])?.polje).toBe('napomena');
   });
 
   it('statistika uživo ignoriše prazne unose: prosek, prolaz (pola max, bez prepisivanja), min i max', () => {
@@ -153,7 +154,7 @@ describe('TestStore', () => {
   it('poeni veći od max: greška validacije, ništa se ne šalje', () => {
     ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
     store.izmeni(1, { grupa: 'A', poeni: '45' });
-    expect(store.greskeValidacije()[1]).toBe('Najviše 30.');
+    expect(store.greskeValidacije()[1]).toEqual({ polje: 'poeni', poruka: 'Najviše 30.' });
     expect(store.statusi()[1]).toBeNull();
     vi.advanceTimersByTime(DEBOUNCE_REDA_MS * 3);
     http.expectNone('api/test/5/polaganje');
@@ -204,29 +205,138 @@ describe('TestStore', () => {
     expect(store.statusi()[1]).toBe('sacuvano');
   });
 
-  it('greška mreže: uneto ostaje, "Pokušaj ponovo" šalje ponovo', () => {
+  it('greška mreže: uneto ostaje, poruka se javlja odmah, "Pokušaj ponovo" šalje ponovo', () => {
     ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
     store.izmeni(1, { grupa: 'A', poeni: '10' });
     vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
     http.expectOne('api/test/5/polaganje').error(new ProgressEvent('error'), { status: 0 });
-    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', null)])); // usaglašavanje
+    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', null)])); // usaglašavanje potvrđenog
     expect(store.statusi()[1]).toBe('greska');
     expect(store.greske()[1]).toBe('Nema veze sa serverom.');
     expect(store.vrednosti()[1].poeni).toBe('10');
+    expect(poruke.at(-1)).toMatchObject({ tip: 'greska', tekst: 'Ana P: Nema veze sa serverom.', grupa: 'test-5-cuvanje' });
     store.ponovo(1);
     http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 10, 'A')]));
     expect(store.statusi()[1]).toBe('sacuvano');
   });
 
-  it('4xx (pravilo servera): red se vraća na stanje servera i javlja se razlog', () => {
+  it('4xx (pravilo servera): uneto ostaje, razlog je u redu do sledeće izmene', () => {
     ucitaj([polaganje(1, 'Ana', 'GD2', 8, 'A')]);
     store.izmeni(1, { poeni: '9' });
     vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
     http.expectOne('api/test/5/polaganje').flush({ reason: 'Test je oznacen kao pregledan!' }, { status: 400, statusText: 'Bad Request' });
     http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 8, 'A')]));
-    expect(store.vrednosti()[1].poeni).toBe('8');
-    expect(store.statusi()[1]).toBeNull();
-    expect(poruke.at(-1)).toMatchObject({ tip: 'greska', tekst: 'Ana P: Test je oznacen kao pregledan!' });
+    expect(store.vrednosti()[1].poeni).toBe('9');
+    expect(store.statusi()[1]).toBe('greska');
+    expect(store.greske()[1]).toBe('Test je oznacen kao pregledan!');
+    expect(poruke.at(-1)).toMatchObject({ tip: 'greska', tekst: 'Ana P: Test je oznacen kao pregledan!', grupa: 'test-5-cuvanje' });
+    store.izmeni(1, { poeni: '7' });
+    expect(store.greske()[1]).toBeNull();
+    expect(store.statusi()[1]).toBe('cuva');
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 7, 'A')]));
+  });
+
+  it('greške više redova: jedna zbirna poruka koja zamenjuje prethodnu', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null), polaganje(2, 'Bora', 'GD3', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '10' });
+    store.izmeni(2, { grupa: 'B', poeni: '11' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').error(new ProgressEvent('error'), { status: 0 });
+    http.expectOne('api/test/5').flush(test([]));
+    http.expectOne('api/test/5/polaganje').flush({ reason: 'x' }, { status: 503, statusText: 'Unavailable' });
+    http.expectOne('api/test/5').flush(test([]));
+    expect(poruke.filter(p => p.tip === 'greska').map(p => [p.tekst, p.grupa])).toEqual([
+      ['Ana P: Nema veze sa serverom.', 'test-5-cuvanje'],
+      ['Nije sačuvano za 2 ispitanika. Sistemska greška. Pokušaj ponovo.', 'test-5-cuvanje'],
+    ]);
+  });
+
+  it('vraćanje na potvrđenu vrednost dok je zahtev u toku: server na kraju ima prikazanu vrednost', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 10, 'A')]);
+    store.izmeni(1, { poeni: '20' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    const prvi = http.expectOne('api/test/5/polaganje');
+    expect(prvi.request.body.ostvareniPoeni).toBe(20);
+    store.izmeni(1, { poeni: '10' }); // isto kao potvrđeno pre slanja, ali server će imati 20
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    prvi.flush(odgovor([polaganje(1, 'Ana', 'GD2', 20, 'A')]));
+    expect(store.statusi()[1]).toBe('cuva'); // odgovor za staru verziju ne javlja "Sačuvano"
+    const drugi = http.expectOne('api/test/5/polaganje');
+    expect(drugi.request.body.ostvareniPoeni).toBe(10);
+    drugi.flush(odgovor([polaganje(1, 'Ana', 'GD2', 10, 'A')]));
+    expect(store.statusi()[1]).toBe('sacuvano');
+    expect(store.vrednosti()[1].poeni).toBe('10');
+  });
+
+  it('veći max u zaglavlju šalje red koji je do tada bio neispravan', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '45' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectNone('api/test/5/polaganje');
+    void store.izmeniZaglavlje({ datum: '2025-10-16', maxPoena: 50, tipTestaId: 2 });
+    http.expectOne(r => r.method === 'PUT' && r.url === 'api/test/5').flush({ ...test([], 50), polaganja: null });
+    expect(store.greskeValidacije()[1]).toBeNull();
+    const req = http.expectOne('api/test/5/polaganje');
+    expect(req.request.body.ostvareniPoeni).toBe(45);
+    req.flush(odgovor([polaganje(1, 'Ana', 'GD2', 45, 'A')]));
+    expect(store.statusi()[1]).toBe('sacuvano');
+  });
+
+  it('uklanjanje prvo šalje izmenu na čekanju; ako uklanjanje ne uspe, uneto je sačuvano', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    store.ukloni(1);
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    http.expectOne(r => r.method === 'DELETE' && r.url === 'api/test/5/polaganje/1').flush({ reason: 'ne' }, { status: 400, statusText: 'Bad' });
+    expect(store.redovi().map(r => r.id)).toEqual([1]);
+    expect(store.vrednosti()[1].poeni).toBe('12');
+    expect(store.zauzet()[1]).toBeUndefined();
+  });
+
+  it('"Završi" šalje izmene na čekanju i čeka da se red isprazni pre PATCH-a testa', async () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 20, 'A')]);
+    store.izmeni(1, { poeni: '21' });
+    const gotovo = store.zavrsi();
+    http.expectNone(r => r.method === 'PATCH' && r.url === 'api/test/5');
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 21, 'A')]));
+    http.expectOne(r => r.method === 'PATCH' && r.url === 'api/test/5').flush({ ...test([]), pregledan: true });
+    await expect(gotovo).resolves.toBe(true);
+    expect(store.evidentiran()).toBe(true);
+  });
+
+  it('"Završi" ne šalje PATCH kad čuvanje nije uspelo', async () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 20, 'A')]);
+    store.izmeni(1, { poeni: '21' });
+    const gotovo = store.zavrsi();
+    http.expectOne('api/test/5/polaganje').error(new ProgressEvent('error'), { status: 0 });
+    http.expectOne(r => r.method === 'GET' && r.url === 'api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 20, 'A')]));
+    await expect(gotovo).resolves.toBe(false);
+    http.expectNone(r => r.method === 'PATCH' && r.url === 'api/test/5');
+  });
+
+  it('brisanje otkazuje izmene na čekanju (ne šalju se obrisanom testu)', async () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    const gotovo = store.obrisi();
+    http.expectOne(r => r.method === 'DELETE' && r.url === 'api/test/5').flush(null, { status: 204, statusText: 'No Content' });
+    await expect(gotovo).resolves.toBe(true);
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS * 2);
+    http.expectNone('api/test/5/polaganje');
+  });
+
+  it('prelazak na drugi test (/testovi/5 -> /testovi/6): izmena ide na test 5, test 6 se čita posle nje', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    store.ucitaj(6);
+    http.expectNone('api/test/6'); // čeka se pražnjenje sesije testa 5
+    const req = http.expectOne('api/test/5/polaganje');
+    expect(req.request.body).toMatchObject({ studentId: 1, ostvareniPoeni: 12 });
+    req.flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    http.expectOne('api/test/6').flush({ ...test([polaganje(3, 'Ceca', 'GD4', 5, 'B')]), id: 6 });
+    expect(store.test()?.id).toBe(6);
+    expect(store.redovi().map(r => r.id)).toEqual([3]);
+    expect(store.statusi()[1]).toBeUndefined();
   });
 
   it('posle napuštanja ekrana zakazano čuvanje se šalje odmah (poeni se ne gube)', () => {
@@ -236,7 +346,8 @@ describe('TestStore', () => {
     const req = http.expectOne('api/test/5/polaganje');
     expect(req.request.body).toMatchObject({ studentId: 1, grupa: 'B', ostvareniPoeni: 17 });
     req.error(new ProgressEvent('error'), { status: 0 });
-    expect(poruke.at(-1)).toMatchObject({ tip: 'greska' });
+    http.expectOne('api/test/5').flush(test([])); // tiho usaglašavanje i posle napuštanja ekrana
+    expect(poruke.at(-1)).toMatchObject({ tip: 'greska', grupa: 'test-5-cuvanje' });
     expect(poruke.at(-1)?.tekst).toContain('Ana P');
   });
 

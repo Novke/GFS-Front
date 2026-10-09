@@ -3,7 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
-import { filter, of, switchMap } from 'rxjs';
+import { filter, of } from 'rxjs';
 
 import { UpdateTestCmd } from '../data-access/testovi.models';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
@@ -15,9 +15,10 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { formatDatum } from '../../../shared/util/datum.pipe';
-import { formatBroja, PRAG_PROLAZA, TestStore } from '../data-access/test.store';
-import { brojIspitanika, brojPolaganja } from '../ui/testovi-tabela';
+import { formatBroja, OPIS_PROLAZA, TestStore } from '../data-access/test.store';
+import { brojIspitanika } from '../data-access/testovi.models';
 import { TestZaglavlje } from '../ui/test-zaglavlje';
+import { obrisiTestUzPotvrdu } from './obrisi-test';
 import { UnosPoenaRed } from '../ui/unos-poena-red';
 
 /** `Kolokvijum 1 · 16. 10. 2025.` (mrvice, "Nedavno"). */
@@ -71,7 +72,7 @@ export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: stri
         @if (store.evidentiran()) {
           <mat-icon svgIcon="info" aria-hidden="true" />Evidentiranje je završeno; poeni su samo za čitanje.
         } @else {
-          Prolaz: najmanje {{ procenatPraga }} % max poena, bez prepisivanja. Svaki red se čuva sam; Enter prelazi na sledeći red.
+          Prolaz: {{ opisProlaza }}. Svaki red se čuva sam; Enter prelazi na sledeći red.
           @if (store.spremnost().razlog; as r) {
             <span id="razlog-zavrsetka" class="razlog" data-razlog> {{ r }}</span>
           }
@@ -152,7 +153,7 @@ export class TestDetalj {
   /** Id iz putanje (`withComponentInputBinding`); matcher rute već propušta samo brojeve. */
   readonly id = input.required<string>();
   protected readonly tId = computed(() => (JE_ID.test(this.id()) ? Number(this.id()) : null));
-  protected readonly procenatPraga = PRAG_PROLAZA * 100;
+  protected readonly opisProlaza = OPIS_PROLAZA;
 
   protected readonly s = computed(() => this.store.statistikaUzivo());
   protected readonly prosek = computed(() => (this.s().prosek === null ? null : formatBroja(this.s().prosek)));
@@ -254,18 +255,7 @@ export class TestDetalj {
   }
 
   protected obrisi(): void {
-    const n = this.store.redovi().length;
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Obriši test?',
-      tekst: `${n > 0 ? `Briše se test i ${brojPolaganja(n)} (ispitanici i njihovi poeni).` : 'Briše se test (nema ispitanika).'} Ovo se ne može poništiti.`,
-      potvrdi: 'Obriši',
-      destruktivno: true,
-    })
-      .pipe(
-        filter(Boolean),
-        switchMap(() => this.store.obrisi()),
-        filter(Boolean),
-      )
-      .subscribe(() => void this.router.navigate(['/testovi']));
+    obrisiTestUzPotvrdu(this.dialog, this.router, this.store);
   }
+
 }

@@ -7,7 +7,7 @@ import { MatIcon } from '@angular/material/icon';
 import { SaveStatus, StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
-import { MAX_NAPOMENA, RedIspitanika, VrednostiReda } from '../data-access/test.store';
+import { GreskaReda, MAX_NAPOMENA, PoljeReda, RedIspitanika, VrednostiReda } from '../data-access/test.store';
 import { TestGrupa } from '../data-access/testovi.models';
 
 /** Kolone sa poljem za unos (Enter prelazi na isto polje u sledećem redu). */
@@ -39,6 +39,7 @@ export type KolonaUnosa = 'poeni' | 'napomena';
         <span class="mono">{{ vrednost().grupa ?? '—' }}</span>
       } @else {
         <mat-button-toggle-group class="segment" [attr.aria-label]="'Varijanta, ' + ime()" [hideSingleSelectionIndicator]="true"
+          [attr.aria-invalid]="neispravno('varijanta')" [attr.aria-describedby]="opis('varijanta')"
           [value]="vrednost().grupa" [disabled]="!!zauzet()" (change)="izmena.emit({ grupa: $event.value })">
           @for (v of varijante(); track v) {
             <mat-button-toggle [value]="v" [attr.data-varijanta]="v">{{ v }}</mat-button-toggle>
@@ -53,7 +54,7 @@ export type KolonaUnosa = 'poeni' | 'napomena';
         <span class="poeni-polje">
           <input class="unos mono" type="text" inputmode="decimal" autocomplete="off" data-kolona="poeni"
             [attr.aria-label]="'Poeni, ' + ime() + (max() !== null ? ', od 0 do ' + max() : '')"
-            [attr.aria-invalid]="greskaPoena() ? 'true' : null" [attr.aria-describedby]="greskaValidacije() ? idGreske() : null"
+            [attr.aria-invalid]="neispravno('poeni')" [attr.aria-describedby]="opis('poeni')"
             [value]="vrednost().poeni" [disabled]="!!zauzet()"
             (input)="izmena.emit({ poeni: $any($event.target).value })" (keydown.enter)="dalje($event, 'poeni')" />
           @if (max() !== null) {
@@ -62,7 +63,9 @@ export type KolonaUnosa = 'poeni' | 'napomena';
         </span>
       }
       @if (greskaValidacije(); as g) {
-        <span class="greska" [id]="idGreske()" data-greska>{{ g }}</span>
+        <span class="greska" [id]="idGreske()" data-greska>{{ g.poruka }}</span>
+      } @else if (stanje() === 'greska' && greskaServera()) {
+        <span class="greska" [id]="idGreske()" data-greska-servera>Nije sačuvano: {{ greskaServera() }}</span>
       }
     </td>
     <td class="c-prepisivao">
@@ -84,7 +87,8 @@ export type KolonaUnosa = 'poeni' | 'napomena';
         <span [class.nema]="!vrednost().napomene">{{ vrednost().napomene || '—' }}</span>
       } @else {
         <input class="unos" type="text" autocomplete="off" data-kolona="napomena" [attr.maxlength]="maxNapomena"
-          [attr.aria-label]="'Napomena, ' + ime()" placeholder="Napomena" [value]="vrednost().napomene" [disabled]="!!zauzet()"
+          [attr.aria-label]="'Napomena, ' + ime()" [attr.aria-invalid]="neispravno('napomena')" [attr.aria-describedby]="opis('napomena')"
+          placeholder="Napomena" [value]="vrednost().napomene" [disabled]="!!zauzet()"
           (input)="izmena.emit({ napomene: $any($event.target).value })" (keydown.enter)="dalje($event, 'napomena')" />
       }
     </td>
@@ -158,7 +162,7 @@ export class UnosPoenaRed {
   readonly max = input<number | null>(null);
   readonly stanje = input<StanjeCuvanja | null | undefined>(null);
   readonly greskaServera = input<string | null | undefined>(null);
-  readonly greskaValidacije = input<string | null | undefined>(null);
+  readonly greskaValidacije = input<GreskaReda | null | undefined>(null);
   readonly zauzet = input<'dodaje' | 'uklanja' | undefined>(undefined);
   readonly samoCitanje = input(false);
 
@@ -169,11 +173,18 @@ export class UnosPoenaRed {
   protected readonly maxNapomena = MAX_NAPOMENA;
   protected readonly ime = computed(() => [this.red().ime, this.red().prezime].filter(Boolean).join(' ') || 'Student');
   protected readonly idGreske = computed(() => `greska-reda-${this.red().id}`);
-  /** Greška se odnosi na polje poena (ne na varijantu ili napomenu). */
-  protected readonly greskaPoena = computed(() => {
+  /** `aria-invalid` za polje na koje se odnosi greška validacije (greška servera se vezuje za poene). */
+  protected neispravno(polje: PoljeReda): 'true' | null {
     const g = this.greskaValidacije();
-    return !!g && !g.startsWith('Izaberi') && !g.startsWith('Napomena');
-  });
+    return g ? (g.polje === polje ? 'true' : null) : polje === 'poeni' && this.serverska() ? 'true' : null;
+  }
+
+  /** `aria-describedby` ka poruci ispod poena, za polje na koje se poruka odnosi. */
+  protected opis(polje: PoljeReda): string | null {
+    return this.neispravno(polje) ? this.idGreske() : null;
+  }
+
+  private readonly serverska = computed(() => this.stanje() === 'greska' && !!this.greskaServera());
 
   /** Enter: isto polje u sledećem redu (Shift+Enter: u prethodnom). */
   protected dalje(e: Event, kolona: KolonaUnosa): void {

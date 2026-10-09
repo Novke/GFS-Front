@@ -3,32 +3,29 @@ import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
-import { filter, switchMap } from 'rxjs';
 
 import { JE_ID } from '../../../core/route-matchers';
-import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { Histogram, StubacHistograma } from '../../../shared/ui/histogram';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { StatTile } from '../../../shared/ui/stat-tile';
 import {
   formatBroja,
   korpePoena,
-  PRAG_PROLAZA,
+  OPIS_PROLAZA,
   statistikaPoena,
   StatistikaVarijante,
   statistikaPoVarijantama,
   TestStore,
 } from '../data-access/test.store';
 import { TestZaglavlje } from '../ui/test-zaglavlje';
-import { brojPolaganja } from '../ui/testovi-tabela';
+import { obrisiTestUzPotvrdu } from './obrisi-test';
 
 const procenat = (p: number | null) => (p === null ? '—' : `${Math.round(p)} %`);
 
 /**
  * Statistika testa (`/testovi/:id/statistika`): postojeća serverska `statistika` (broj polaganja, prosek, min, max,
  * standardna devijacija), raspodela poena (histogram, korpe po 10 % max poena; učitava se `@defer`) i tabela po
- * varijantama. Prolaz se računa iz poena (najmanje pola max, bez prepisivanja), isto kao statistika uživo na unosu:
- * serverski `procenatProlaznosti` broji oznaku `polozio`, koju evidentiranje ne postavlja.
+ * varijantama. Prolaz (ukupno i po varijantama) računa `jePolozio`, isto kao statistika uživo na unosu.
  */
 @Component({
   selector: 'app-test-statistika',
@@ -55,7 +52,7 @@ const procenat = (p: number | null) => (p === null ? '—' : `${Math.round(p)} %
           <app-stat-tile labela="max" [vrednost]="broj(t.statistika?.maxPoeni ?? lokalno().max)" />
           <app-stat-tile labela="std. devijacija" [vrednost]="broj(t.statistika?.standardnaDevijacija ?? null)" />
         </div>
-        <p class="napomena">Prolaz: najmanje {{ procenatPraga }} % max poena, bez prepisivanja.</p>
+        <p class="napomena">Prolaz: {{ opisProlaza }}.</p>
 
         <section class="kartica" aria-labelledby="naslov-raspodele">
           <h2 id="naslov-raspodele">Raspodela poena</h2>
@@ -134,7 +131,7 @@ export class TestStatistika {
 
   readonly id = input.required<string>();
   protected readonly tId = computed(() => (JE_ID.test(this.id()) ? Number(this.id()) : null));
-  protected readonly procenatPraga = PRAG_PROLAZA * 100;
+  protected readonly opisProlaza = OPIS_PROLAZA;
   protected readonly procenat = procenat;
 
   protected readonly polaganja = computed(() => this.store.test()?.polaganja ?? []);
@@ -177,18 +174,7 @@ export class TestStatistika {
   }
 
   protected obrisi(): void {
-    const n = this.polaganja().length;
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Obriši test?',
-      tekst: `${n > 0 ? `Briše se test i ${brojPolaganja(n)} (ispitanici i njihovi poeni).` : 'Briše se test (nema ispitanika).'} Ovo se ne može poništiti.`,
-      potvrdi: 'Obriši',
-      destruktivno: true,
-    })
-      .pipe(
-        filter(Boolean),
-        switchMap(() => this.store.obrisi()),
-        filter(Boolean),
-      )
-      .subscribe(() => void this.router.navigate(['/testovi']));
+    obrisiTestUzPotvrdu(this.dialog, this.router, this.store);
   }
+
 }

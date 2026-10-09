@@ -3,23 +3,13 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
 import { formatBroja } from '../data-access/test.store';
-import { TestListItem } from '../data-access/testovi.models';
+import { brojIspitanika, TestListItem } from '../data-access/testovi.models';
 
 /** Kolone koje ruta može da zaključa (hub grupe zaključava `grupa`, hub predmeta `predmet`). */
 export type ZakljucanaKolona = 'predmet' | 'grupa';
 
 /** Polja po kojima se tabela sortira (zaglavlje); isto što backend prihvata. */
 export type PoljeSorta = 'datum' | 'maxPoena';
-
-/** `1 ispitanik`, `2 ispitanika`, `5 ispitanika`, `21 ispitanik`, `11 ispitanika`. */
-export function brojIspitanika(n: number): string {
-  return `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'ispitanik' : 'ispitanika'}`;
-}
-
-/** `1 polaganje`, `2 polaganja`, `5 polaganja`, `21 polaganje`. */
-export function brojPolaganja(n: number): string {
-  return `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'polaganje' : 'polaganja'}`;
-}
 
 /** Prosek uz max: `18,5 / 30`; bez proseka `—`. */
 export function prosekPrikaz(t: Pick<TestListItem, 'prosek' | 'maxPoena'>): string {
@@ -35,7 +25,7 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
 }
 
 /**
- * Tabela testova (spec 5: tip, datum, predmet, grupa, broj ispitanika, prosek, prolaz %, evidentiran); ispod 600 px
+ * Tabela testova (spec 5: tip, datum, predmet, grupa, broj ispitanika, max, prosek, prolaz %, evidentiran); ispod 600 px
  * redovi su kartice. Koriste je lista testova i hubovi grupe i predmeta (`zakljucano` kolone se ne prikazuju).
  * Klik ili Enter na tip (ili klik na red) emituje `otvori(id)`.
  */
@@ -61,8 +51,9 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
             }
             <th scope="col" class="broj">Ispitanika</th>
             <th scope="col" class="broj" [attr.aria-sort]="ariaSort('maxPoena')">
-              <button type="button" class="sortiraj" data-sort="maxPoena" (click)="sortiraj('maxPoena')">Prosek / max<span aria-hidden="true">{{ strelica('maxPoena') }}</span></button>
+              <button type="button" class="sortiraj" data-sort="maxPoena" (click)="sortiraj('maxPoena')">Max<span aria-hidden="true">{{ strelica('maxPoena') }}</span></button>
             </th>
+            <th scope="col" class="broj">Prosek</th>
             <th scope="col" class="broj">Prolaz</th>
             <th scope="col">Status</th>
           </tr>
@@ -81,7 +72,8 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
                 <td class="samo-desktop brojevi-sitno" [class.nema]="!t.grupa">{{ t.grupa?.naziv || '—' }}</td>
               }
               <td class="samo-desktop mono broj">{{ t.brojPolaganja ?? 0 }}</td>
-              <td class="samo-desktop mono broj brojevi-sitno">{{ prosek(t) }}</td>
+              <td class="samo-desktop mono broj">{{ t.maxPoena ?? '—' }}</td>
+              <td class="samo-desktop mono broj">{{ prosekBroj(t) }}</td>
               <td class="samo-desktop mono broj">{{ prolaz(t) }}</td>
               <td class="c-st">
                 @if (t.pregledan === true) {
@@ -143,15 +135,15 @@ export class TestoviTabela {
     return t.tipTesta?.naziv?.trim() || 'Test';
   }
 
-  protected prosek(t: TestListItem): string {
-    return prosekPrikaz(t);
+  protected prosekBroj(t: TestListItem): string {
+    return formatBroja(t.prosek);
   }
 
   protected prolaz(t: TestListItem): string {
     return prolazPrikaz(t);
   }
 
-  /** Red kartice na telefonu: `16. 10. · UPR · GD-2025 · 12 ispitanika · prosek 18,5 / 30`. */
+  /** Red kartice na telefonu: `16. 10. · UPR · GD-2025 · 12 ispitanika · prosek 18,5 / 30 · prolaz 67 %`. */
   protected meta(t: TestListItem): string {
     const delovi = [formatDatum(t.datum, this.punDatum() ? 'pun' : 'kratko')];
     if (this.prikazPredmeta()) {
@@ -163,6 +155,9 @@ export class TestoviTabela {
     delovi.push(brojIspitanika(t.brojPolaganja ?? 0));
     if (t.prosek !== null && t.prosek !== undefined) {
       delovi.push(`prosek ${prosekPrikaz(t)}`);
+    }
+    if (t.procenatProlaznosti !== null && t.procenatProlaznosti !== undefined) {
+      delovi.push(`prolaz ${prolazPrikaz(t)}`);
     }
     return delovi.join(' · ');
   }

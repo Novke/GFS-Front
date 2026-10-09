@@ -59,7 +59,10 @@ describe('TestoviLista', () => {
     expect(redovi[0].textContent).toContain('18,46 / 30');
     expect(redovi[0].textContent).toContain('67 %');
     expect(redovi[0].textContent).toContain('Za evidentiranje');
+    expect(redovi[0].querySelector('.c-meta')?.textContent).toContain('prolaz 67 %');
     expect(redovi[1].textContent).toContain('—');
+    // zaglavlje koje sortira po max poena se tako i zove (prosek nije sortabilan)
+    expect(el.querySelector('th[aria-sort="ascending"] [data-sort="maxPoena"]')?.textContent).toContain('Max');
     expect(el.textContent).toContain('2 testa');
   });
 

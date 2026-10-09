@@ -127,4 +127,59 @@ describe('TestDetalj', () => {
     expect(el().querySelector<HTMLButtonElement>('button[data-zavrsi]')!.disabled).toBe(true);
     expect(el().querySelector('[data-razlog]')?.textContent).toContain('još 1');
   });
+
+  it('varijanta koja fali: aria-invalid i opis na izboru varijante, ne na poenima', async () => {
+    await otvori([ana]);
+    const polje = el().querySelector<HTMLInputElement>('tr[data-student="1"] input[data-kolona="poeni"]')!;
+    polje.value = '12';
+    polje.dispatchEvent(new Event('input'));
+    harness.detectChanges();
+    const varijanta = el().querySelector('tr[data-student="1"] mat-button-toggle-group')!;
+    expect(varijanta.getAttribute('aria-invalid')).toBe('true');
+    expect(varijanta.getAttribute('aria-describedby')).toBe('greska-reda-1');
+    expect(polje.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('greška servera se vidi u redu (uneto ostaje) do sledeće izmene', async () => {
+    await otvori([ana]);
+    vi.useFakeTimers();
+    el().querySelector<HTMLElement>('tr[data-student="1"] [data-varijanta="A"] button')!.click();
+    const polje = el().querySelector<HTMLInputElement>('tr[data-student="1"] input[data-kolona="poeni"]')!;
+    polje.value = '12';
+    polje.dispatchEvent(new Event('input'));
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush({ reason: 'Test je oznacen kao pregledan!' }, { status: 400, statusText: 'Bad Request' });
+    http.expectOne('api/test/5').flush(test([ana]));
+    harness.detectChanges();
+    expect(el().querySelector('tr[data-student="1"] [data-greska-servera]')?.textContent).toContain('Test je oznacen kao pregledan!');
+    expect(polje.value).toBe('12');
+    expect(polje.getAttribute('aria-invalid')).toBe('true');
+    polje.value = '13';
+    polje.dispatchEvent(new Event('input'));
+    harness.detectChanges();
+    expect(el().querySelector('tr[data-student="1"] [data-greska-servera]')).toBeNull();
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush(test([{ ...ana, grupa: 'A', ostvareniPoeni: 13 }]));
+  });
+
+  it('ista komponenta, drugi test (/testovi/5 -> /testovi/6): izmena ide na test 5, pa se učitava test 6', async () => {
+    await otvori([ana]);
+    vi.useFakeTimers();
+    el().querySelector<HTMLElement>('tr[data-student="1"] [data-varijanta="B"] button')!.click();
+    const polje = el().querySelector<HTMLInputElement>('tr[data-student="1"] input[data-kolona="poeni"]')!;
+    polje.value = '9';
+    polje.dispatchEvent(new Event('input'));
+    vi.useRealTimers();
+    const komponenta = harness.routeDebugElement!.componentInstance;
+    await harness.navigateByUrl('/testovi/6');
+    expect(harness.routeDebugElement!.componentInstance).toBe(komponenta); // komponenta je ponovo upotrebljena
+    http.expectNone('api/test/6');
+    const req = http.expectOne('api/test/5/polaganje');
+    expect(req.request.body).toMatchObject({ studentId: 1, grupa: 'B', ostvareniPoeni: 9 });
+    req.flush(test([{ ...ana, grupa: 'B', ostvareniPoeni: 9 }]));
+    http.expectOne('api/test/6').flush({ ...test([]), id: 6, tipTesta: { id: 3, naziv: 'Popravni', aktivan: true } });
+    harness.detectChanges();
+    expect(el().querySelector('h1')?.textContent).toContain('Popravni');
+    expect(el().querySelector('tr[data-student="1"]')).toBeNull();
+  });
 });

@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
-import { catchError, concatMap, defer, EMPTY, firstValueFrom, map, Observable, of, Subject, Subscription, tap } from 'rxjs';
+import { catchError, concatMap, defer, EMPTY, finalize, firstValueFrom, map, Observable, of, Subject, Subscription, switchMap, take, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { StudentListItem } from '../../../core/api/studenti.api';
@@ -10,17 +10,19 @@ import { setError, setLoaded, setLoading, withRequestStatus } from '../../../sha
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StubacHistograma } from '../../../shared/ui/histogram';
 import { TestoviApi } from './testovi.api';
-import { TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from './testovi.models';
+import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from './testovi.models';
 
 /** Koliko se čeka posle poslednje izmene reda pre nego što se red pošalje serveru (spec 4, tabelarni unos). */
 export const DEBOUNCE_REDA_MS = 600;
 /** Kolona `polaganja.napomene` je `varchar(255)`. */
 export const MAX_NAPOMENA = 255;
 /**
- * Prolaz za statistiku uživo: najmanje pola max poena, bez prepisivanja (isto pravilo kao sintetički podaci stejdžinga).
- * Server oznaku `polozio` pri evidentiranju ne postavlja, pa se prolaz novih unosa ne može čitati sa servera.
+ * Prag prolaza kao deo max poena. Koristi ga samo {@link jePolozio} (jedino mesto pravila prolaza) i {@link OPIS_PROLAZA}.
+ * Privremeno: prag će biti opciono polje testa sa servera.
  */
 export const PRAG_PROLAZA = 0.5;
+/** Tekst pravila prolaza za ekran (uz {@link jePolozio}). */
+export const OPIS_PROLAZA = `najmanje ${PRAG_PROLAZA * 100} % max poena, bez prepisivanja`;
 
 /** Ono što nastavnik unosi u redu; `poeni` je tekst kako je otkucan (`14,5`), prazan = još nije uneto. */
 export interface VrednostiReda {
@@ -110,23 +112,31 @@ export function greskaPoena(tekst: string, max: number | null | undefined): stri
   return null;
 }
 
+/** Polje na koje se odnosi greška validacije reda (za `aria-invalid` i `aria-describedby` na pravom polju). */
+export type PoljeReda = 'poeni' | 'varijanta' | 'napomena';
+
+export interface GreskaReda {
+  polje: PoljeReda;
+  poruka: string;
+}
+
 /**
  * Greška validacije reda (`null` = može da se sačuva čim su poeni uneti): poeni 0-max, varijanta kad test ima više
  * varijanti, napomena do {@link MAX_NAPOMENA} znakova. Red sa greškom se ne šalje.
  */
-export function greskaReda(v: VrednostiReda, max: number | null | undefined, varijante: readonly TestGrupa[]): string | null {
+export function greskaReda(v: VrednostiReda, max: number | null | undefined, varijante: readonly TestGrupa[]): GreskaReda | null {
   const poeni = greskaPoena(v.poeni, max);
   if (poeni) {
-    return poeni;
+    return { polje: 'poeni', poruka: poeni };
   }
   if (v.napomene.length > MAX_NAPOMENA) {
-    return `Napomena: najviše ${MAX_NAPOMENA} znakova.`;
+    return { polje: 'napomena', poruka: `Napomena: najviše ${MAX_NAPOMENA} znakova.` };
   }
   if (parsirajPoene(v.poeni) === null && (v.prepisivao || v.napomene.trim() !== '')) {
-    return 'Unesi poene da bi se red sačuvao.';
+    return { polje: 'poeni', poruka: 'Unesi poene da bi se red sačuvao.' };
   }
   if (parsirajPoene(v.poeni) !== null && !v.grupa && varijante.length > 1) {
-    return 'Izaberi varijantu.';
+    return { polje: 'varijanta', poruka: 'Izaberi varijantu.' };
   }
   return null;
 }
@@ -136,6 +146,7 @@ export function zaSlanje(v: VrednostiReda, max: number | null | undefined, varij
   return greskaReda(v, max, varijante) === null && parsirajPoene(v.poeni) !== null && (v.grupa !== null || varijante.length <= 1);
 }
 
+/** Jedino mesto pravila prolaza (statistika uživo, stranica statistike, tabela po varijantama). */
 export function jePolozio(poeni: number, max: number | null | undefined, prepisivao: boolean): boolean {
   return !prepisivao && max !== null && max !== undefined && max > 0 && poeni >= max * PRAG_PROLAZA;
 }
@@ -212,11 +223,6 @@ function porukaGreske(e: unknown): string {
   return e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
 }
 
-/** Greška koju vredi ponoviti (mreža, 5xx); 4xx je odbijanje po pravilima i vraća se na stanje servera. */
-function prolaznaGreska(e: unknown): boolean {
-  return !(e instanceof HttpErrorResponse) || e.status === 0 || e.status >= 500;
-}
-
 /** `StudentInfo.godina` je `int`: student bez godine stiže kao 0. */
 function godinaUpisa(g: number | null | undefined): number | null {
   return g !== null && g !== undefined && Number.isInteger(g) && g > 0 ? g : null;
@@ -274,29 +280,49 @@ function jednako(v: VrednostiReda, p: Potvrdjeno | undefined): boolean {
   );
 }
 
+const jednakeVrednosti = (a: VrednostiReda, b: VrednostiReda): boolean =>
+  a.grupa === b.grupa && a.poeni === b.poeni && a.prepisivao === b.prepisivao && a.napomene === b.napomene;
+
 const imeReda = (r: Pick<RedIspitanika, 'ime' | 'prezime'> | undefined): string =>
   r ? [r.ime, r.prezime].filter(Boolean).join(' ') || 'Student' : 'Student';
 
 type Posao = { tip: 'cuvaj'; sId: number } | { tip: 'dodaj'; red: RedIspitanika } | { tip: 'ukloni'; sId: number };
 
 /**
- * Knjigovodstvo jednog učitanog testa. Posle napuštanja ekrana (ili učitavanja drugog testa) sesija je neaktivna:
- * zakazana čuvanja se šalju odmah, red poslova se **prazni do servera** (HttpClient je u root injektoru, uneti poeni se ne
- * gube), ali se stanje store-a više ne menja; greške se i dalje javljaju.
+ * Sesija jednog učitanog testa: sve što treba poslati i pratiti za njegove redove. Ne zavisi od stanja store-a ni od toga
+ * koji je test sada na ekranu: zahtev nosi `tId` i vrednosti iz sesije, pa izmena napravljena na jednom testu uvek stigne
+ * na taj test, i kad je ekran u međuvremenu prešao na drugi (`/testovi/5` -> `/testovi/6`, ista komponenta).
  */
-interface Sesija {
-  tId: number;
-  aktivna: boolean;
-  red: Subject<Posao>;
-  tajmeri: Map<number, ReturnType<typeof setTimeout>>;
-  /** Zakazani poslovi čuvanja po studentu (u redu, još neizvršeni). */
-  naCekanju: Map<number, number>;
-  potvrdjeno: Map<number, Potvrdjeno>;
-  /** Poslednje unete vrednosti (i posle zatvaranja sesije, kad store više nije izvor). */
-  zadnje: Map<number, VrednostiReda>;
-  imena: Map<number, RedIspitanika>;
-  max: number | null;
-  varijante: TestGrupa[];
+class Sesija {
+  /** Jedan red poslova testa (`concatMap`): čuvanja, dodavanja i uklanjanja, redom. */
+  readonly red = new Subject<Posao>();
+  /** Debounce tajmeri izmena koje još nisu poslate. */
+  readonly timeri = new Map<number, ReturnType<typeof setTimeout>>();
+  /** Poslednje unete vrednosti (ono što treba poslati). */
+  readonly lokalno = new Map<number, VrednostiReda>();
+  /** Poslednje vrednosti koje je server potvrdio. */
+  readonly potvrdjeno = new Map<number, Potvrdjeno>();
+  /** Raste sa svakom izmenom reda; odgovor ili greška važe za prikaz samo ako je verzija ista kao pri slanju. */
+  readonly verzije = new Map<number, number>();
+  readonly imena = new Map<number, RedIspitanika>();
+  /** Redovi čije poslednje čuvanje nije uspelo (za zbirnu poruku). */
+  readonly greske = new Set<number>();
+  /** Poslovi u redu ili u izvršenju (tajmeri se ne računaju). */
+  uToku = 0;
+  /** `uToku` je pao na 0 (čekanje pražnjenja). */
+  readonly mirovanje = new Subject<void>();
+  /** Test se briše: izmene se ne šalju. */
+  obrisan = false;
+
+  constructor(
+    readonly tId: number,
+    public max: number | null,
+    readonly varijante: TestGrupa[],
+  ) {}
+
+  verzija(sId: number): number {
+    return this.verzije.get(sId) ?? 0;
+  }
 }
 
 interface TestState {
@@ -304,7 +330,7 @@ interface TestState {
   redovi: RedIspitanika[];
   vrednosti: Record<number, VrednostiReda>;
   statusi: Record<number, StanjeCuvanja | null>;
-  /** Poruka greške servera za red (uz "Pokušaj ponovo"). */
+  /** Razlog poslednje neuspele izmene reda (sa servera), prikazuje se u redu do sledeće izmene. */
   greske: Record<number, string | null>;
   /** Red koji se dodaje ili uklanja (polja zaključana). */
   zauzet: Record<number, 'dodaje' | 'uklanja' | undefined>;
@@ -312,35 +338,24 @@ interface TestState {
 
 const PRAZNO_STANJE: TestState = { test: null, redovi: [], vrednosti: {}, statusi: {}, greske: {}, zauzet: {} };
 
-/** Prazni zakazana čuvanja (šalje ih odmah) i zatvara red: završava se tek kad pošalje sve poslove. */
-function zatvoriSesijuStore(r: { sesija: Sesija | null }, posalji: (ses: Sesija, sId: number) => void): void {
-  const ses = r.sesija;
-  r.sesija = null;
-  if (!ses) {
-    return;
-  }
-  ses.aktivna = false;
-  for (const [sId, t] of [...ses.tajmeri]) {
-    clearTimeout(t);
-    ses.tajmeri.delete(sId);
-    posalji(ses, sId);
-  }
-  ses.red.complete();
-}
-
 /**
- * Detalj testa sa tabelarnim unosom poena (provajduje se u `TestDetalj`).
+ * Detalj testa sa tabelarnim unosom poena (provajduje se u `TestDetalj` i `TestStatistika`).
  *
  * Svaka izmena reda je **optimistična** (vidi se odmah, statistika uživo se odmah preračunava) i čuva se sama posle
  * {@link DEBOUNCE_REDA_MS} bez novih izmena tog reda. Red sa greškom validacije (poeni > max, bez varijante…) se ne šalje.
- * Svi zahtevi testa idu kroz **jedan red** (`concatMap`): za studenta je najviše jedan zahtev u toku, a server
- * (`evidentirajIspitanika` briše i ponovo upisuje polaganje) ne dobija paralelne izmene istog testa. Posao čuvanja
- * šalje **poslednje** unete vrednosti u trenutku kad dođe na red; zastareo posao (noviji je u redu) ili vrednost koju
- * je server već potvrdio se preskače. Status reda (čuva se / sačuvano / greška) prikazuje `SaveStatus`.
+ * Svaka izmena ispravnog reda ide u red poslova testa (i kad je jednaka potvrđenoj: zahtev u toku može da je promeni);
+ * posao u trenutku izvršenja poredi **poslednje unete** vrednosti sa potvrđenim i šalje samo razliku. Svi poslovi testa
+ * idu kroz **jedan red** (`concatMap`): za studenta je najviše jedan zahtev u toku, a server (`evidentirajIspitanika`
+ * briše i ponovo upisuje polaganje) ne dobija paralelne izmene istog testa. Odgovor ili greška menjaju prikaz reda samo
+ * ako red od slanja nije menjan (`verzije`), pa "Sačuvano" uvek znači da server ima baš prikazanu vrednost.
  *
- * Greška: mreža ili 5xx -> uneto ostaje, status "Nije sačuvano" sa "Pokušaj ponovo"; 4xx (pravilo servera) -> red se
- * vraća na potvrđeno stanje i javlja se razlog. U oba slučaja se test ponovo čita (tiho) da se potvrđeno stanje
- * usaglasi sa serverom, za slučaj da je izmena ipak upisana a odgovor izgubljen.
+ * Greška (mreža, 5xx ili pravilo servera, 4xx): uneto ostaje u polju, status reda je "Nije sačuvano" sa "Pokušaj ponovo",
+ * a razlog se vidi u redu do sledeće izmene; greške više redova se javljaju jednom porukom ("Nije sačuvano za N
+ * ispitanika", grupa `test-<id>-cuvanje` zamenjuje prethodnu). Potvrđeno stanje se tiho usaglašava ponovnim čitanjem.
+ *
+ * Kad `ucitaj` pređe na drugi test, sesija prethodnog se **zatvara, ne otkazuje** (izmene na čekanju se odmah šalju, red se
+ * prazni), a novi test se učitava tek kad se stara sesija isprazni. Isto pri napuštanju ekrana. `zavrsi` šalje izmene i čeka
+ * pražnjenje pre PATCH-a; `obrisi` otkazuje izmene na čekanju tog testa.
  */
 export const TestStore = signalStore(
   withState<TestState>(PRAZNO_STANJE),
@@ -373,7 +388,7 @@ export const TestStore = signalStore(
         );
       }),
       /** Greška validacije po redu (prikazuje je red; red sa greškom se ne šalje). */
-      greskeValidacije: computed<Record<number, string | null>>(() => {
+      greskeValidacije: computed<Record<number, GreskaReda | null>>(() => {
         const v = vrednosti();
         const m = max();
         const vr = varijante();
@@ -406,127 +421,93 @@ export const TestStore = signalStore(
     imaNesacuvanih: computed(() => Object.values(statusi()).some(s => s === 'cuva' || s === 'greska')),
   })),
   withMethods(store => {
-    const aktivnaZa = (ses: Sesija) => ses.aktivna && !store._r.unisten && store.test()?.id === ses.tId;
+    /** Stanje (za ekran) menja samo sesija koja je sada na ekranu; stara sesija samo završava svoje zahteve. */
+    const tekuca = (s: Sesija) => store._r.sesija === s && !store._r.unisten;
 
-    function postaviStatus(sId: number, status: StanjeCuvanja | null, greska: string | null = null): void {
-      patchState(store, s => ({ statusi: { ...s.statusi, [sId]: status }, greske: { ...s.greske, [sId]: greska } }));
-    }
-
-    function zakazi(ses: Sesija, posao: Posao): void {
-      if (posao.tip === 'cuvaj') {
-        ses.naCekanju.set(posao.sId, (ses.naCekanju.get(posao.sId) ?? 0) + 1);
+    function postaviStatus(s: Sesija, sId: number, status: StanjeCuvanja | null, greska: string | null = null): void {
+      if (tekuca(s)) {
+        patchState(store, st => ({ statusi: { ...st.statusi, [sId]: status }, greske: { ...st.greske, [sId]: greska } }));
       }
-      ses.red.next(posao);
     }
 
-    /** Šalje čuvanje reda odmah (posle debounce-a, "Pokušaj ponovo", napuštanja ekrana). */
-    function posaljiOdmah(ses: Sesija, sId: number): void {
-      const t = ses.tajmeri.get(sId);
-      if (t !== undefined) {
-        clearTimeout(t);
-        ses.tajmeri.delete(sId);
-      }
-      zakazi(ses, { tip: 'cuvaj', sId });
+    /** Jedna poruka za sve redove bez čuvanja (nova zamenjuje prethodnu iste sesije); javlja se i posle napuštanja ekrana. */
+    function javiGresku(s: Sesija, sId: number, razlog: string): void {
+      const n = s.greske.size;
+      const tekst = n <= 1 ? `${imeReda(s.imena.get(sId))}: ${razlog}` : `Nije sačuvano za ${brojIspitanika(n)}. ${razlog}`;
+      store._obavestenja.greska(tekst, { grupa: `test-${s.tId}-cuvanje` });
     }
 
-    /** Posle greške: ponovo čita test i usaglašava potvrđeno stanje studenta; 4xx vraća i prikaz na stanje servera. */
-    function osveziPotvrdjeno(ses: Sesija, sId: number, vratiPrikaz: boolean): void {
-      store._api.get(ses.tId, { tiho: true }).subscribe({
+    /** Posle greške: tiho ponovo čita potvrđeno stanje reda (izmena je možda upisana a odgovor izgubljen). Prikaz ostaje. */
+    function osveziPotvrdjeno(s: Sesija, sId: number): void {
+      store._api.get(s.tId, { tiho: true }).subscribe({
         next: det => {
           const p = det.polaganja?.find(x => x.student?.id === sId);
-          ses.potvrdjeno.set(sId, potvrdjenoIz(p));
-          if (!vratiPrikaz || !aktivnaZa(ses) || ses.tajmeri.has(sId) || (ses.naCekanju.get(sId) ?? 0) > 0) {
-            return; // u međuvremenu nova izmena: ona određuje prikaz
+          if (p) {
+            s.potvrdjeno.set(sId, potvrdjenoIz(p));
           }
-          const v = vrednostiIz(p, ses.varijante);
-          ses.zadnje.set(sId, v);
-          patchState(store, s => ({ vrednosti: { ...s.vrednosti, [sId]: v } }));
         },
         error: () => undefined,
       });
     }
 
-    function zavrsiCuvanje(ses: Sesija, sId: number, greska: unknown): void {
-      if (ses.tajmeri.has(sId) || (ses.naCekanju.get(sId) ?? 0) > 0) {
-        return; // noviji unos čeka: on određuje status
+    function cuvaj(s: Sesija, sId: number): Observable<unknown> {
+      const trenutna = s.verzija(sId);
+      const v = s.lokalno.get(sId);
+      if (s.obrisan || !v || !s.imena.has(sId) || !zaSlanje(v, s.max, s.varijante)) {
+        return EMPTY; // neispravan red se ne šalje; poruku prikazuje red
       }
-      const ime = imeReda(ses.imena.get(sId));
-      if (!aktivnaZa(ses)) {
-        if (greska !== null) {
-          store._obavestenja.greska(`${ime}: poeni nisu sačuvani (${porukaGreske(greska)})`);
+      if (jednako(v, s.potvrdjeno.get(sId))) {
+        if (s.verzija(sId) === trenutna && !s.timeri.has(sId)) {
+          s.greske.delete(sId);
+          postaviStatus(s, sId, 'sacuvano');
         }
-        return;
-      }
-      if (greska === null) {
-        postaviStatus(sId, 'sacuvano');
-        return;
-      }
-      const poruka = porukaGreske(greska);
-      if (prolaznaGreska(greska)) {
-        postaviStatus(sId, 'greska', poruka);
-        osveziPotvrdjeno(ses, sId, false);
-      } else {
-        postaviStatus(sId, null);
-        store._obavestenja.greska(`${ime}: ${poruka}`);
-        osveziPotvrdjeno(ses, sId, true);
-      }
-    }
-
-    function cuvaj(ses: Sesija, sId: number): Observable<unknown> {
-      const ostalo = (ses.naCekanju.get(sId) ?? 1) - 1;
-      ses.naCekanju.set(sId, ostalo);
-      if (ostalo > 0 || ses.tajmeri.has(sId)) {
-        return EMPTY; // nadjačan novijim unosom: on šalje poslednje vrednosti
-      }
-      const v = ses.zadnje.get(sId);
-      if (!v || !ses.imena.has(sId) || !zaSlanje(v, ses.max, ses.varijante)) {
-        // red je u međuvremenu postao neispravan (ili je uklonjen): ne šalje se, poruku prikazuje red
-        if (v && aktivnaZa(ses) && ses.imena.has(sId)) {
-          postaviStatus(sId, null);
-        }
-        return EMPTY;
-      }
-      if (jednako(v, ses.potvrdjeno.get(sId))) {
-        zavrsiCuvanje(ses, sId, null);
         return EMPTY;
       }
       const poeni = parsirajPoene(v.poeni) as number;
-      const grupa = (v.grupa ?? ses.varijante[0] ?? 'A') as TestGrupa;
+      const grupa = (v.grupa ?? s.varijante[0] ?? 'A') as TestGrupa;
       const napomene = v.napomene.trim() || null;
       return store._api
-        .evidentiraj(ses.tId, { studentId: sId, grupa, ostvareniPoeni: poeni, prepisivao: v.prepisivao, napomene }, { tiho: true })
+        .evidentiraj(s.tId, { studentId: sId, grupa, ostvareniPoeni: poeni, prepisivao: v.prepisivao, napomene }, { tiho: true })
         .pipe(
           tap(det => {
             const p = det.polaganja?.find(x => x.student?.id === sId);
-            ses.potvrdjeno.set(sId, p ? potvrdjenoIz(p) : { grupa, poeni, prepisivao: v.prepisivao, napomene: napomene ?? '' });
-            zavrsiCuvanje(ses, sId, null);
+            s.potvrdjeno.set(sId, p ? potvrdjenoIz(p) : { grupa, poeni, prepisivao: v.prepisivao, napomene: napomene ?? '' });
+            if (s.verzija(sId) === trenutna && !s.timeri.has(sId)) {
+              s.greske.delete(sId);
+              postaviStatus(s, sId, 'sacuvano');
+            }
           }),
           catchError((e: unknown) => {
-            zavrsiCuvanje(ses, sId, e);
+            osveziPotvrdjeno(s, sId);
+            if (s.verzija(sId) === trenutna) {
+              const razlog = porukaGreske(e);
+              s.greske.add(sId);
+              postaviStatus(s, sId, 'greska', razlog);
+              javiGresku(s, sId, razlog);
+            }
             return EMPTY;
           }),
         );
     }
 
-    function dodaj(ses: Sesija, red: RedIspitanika): Observable<unknown> {
-      return store._api.dodajPolaganje(ses.tId, red.id, { tiho: true }).pipe(
+    function dodaj(s: Sesija, red: RedIspitanika): Observable<unknown> {
+      return store._api.dodajPolaganje(s.tId, red.id, { tiho: true }).pipe(
         tap(det => {
           const p = det.polaganja?.find(x => x.student?.id === red.id);
-          ses.potvrdjeno.set(red.id, potvrdjenoIz(p));
-          if (!aktivnaZa(ses)) {
-            return;
+          s.potvrdjeno.set(red.id, potvrdjenoIz(p));
+          if (tekuca(s)) {
+            patchState(store, st => ({ zauzet: { ...st.zauzet, [red.id]: undefined }, statusi: { ...st.statusi, [red.id]: null } }));
           }
-          patchState(store, s => ({ zauzet: { ...s.zauzet, [red.id]: undefined }, statusi: { ...s.statusi, [red.id]: null } }));
         }),
         catchError((e: unknown) => {
-          ses.imena.delete(red.id);
-          ses.zadnje.delete(red.id);
+          s.imena.delete(red.id);
+          s.lokalno.delete(red.id);
           store._obavestenja.greska(`${imeReda(red)}: ${porukaGreske(e)}`);
-          if (aktivnaZa(ses)) {
-            patchState(store, s => ({
-              redovi: s.redovi.filter(r => r.id !== red.id),
-              zauzet: { ...s.zauzet, [red.id]: undefined },
-              statusi: { ...s.statusi, [red.id]: null },
+          if (tekuca(s)) {
+            patchState(store, st => ({
+              redovi: st.redovi.filter(r => r.id !== red.id),
+              zauzet: { ...st.zauzet, [red.id]: undefined },
+              statusi: { ...st.statusi, [red.id]: null },
             }));
           }
           return EMPTY;
@@ -534,103 +515,137 @@ export const TestStore = signalStore(
       );
     }
 
-    function ukloni(ses: Sesija, sId: number): Observable<unknown> {
-      const red = ses.imena.get(sId);
-      return store._api.ukloniPolaganje(ses.tId, sId, { tiho: true }).pipe(
+    function ukloni(s: Sesija, sId: number): Observable<unknown> {
+      const red = s.imena.get(sId);
+      return store._api.ukloniPolaganje(s.tId, sId, { tiho: true }).pipe(
         tap(() => {
-          ses.imena.delete(sId);
-          ses.zadnje.delete(sId);
-          ses.potvrdjeno.delete(sId);
-          if (!aktivnaZa(ses)) {
+          s.imena.delete(sId);
+          s.lokalno.delete(sId);
+          s.potvrdjeno.delete(sId);
+          s.greske.delete(sId);
+          if (!tekuca(s)) {
             return;
           }
-          patchState(store, s => {
-            const vrednosti = { ...s.vrednosti };
+          patchState(store, st => {
+            const vrednosti = { ...st.vrednosti };
             delete vrednosti[sId];
             return {
-              redovi: s.redovi.filter(r => r.id !== sId),
+              redovi: st.redovi.filter(r => r.id !== sId),
               vrednosti,
-              zauzet: { ...s.zauzet, [sId]: undefined },
-              statusi: { ...s.statusi, [sId]: null },
+              zauzet: { ...st.zauzet, [sId]: undefined },
+              statusi: { ...st.statusi, [sId]: null },
+              greske: { ...st.greske, [sId]: null },
             };
           });
-          store._obavestenja.uspeh(`${imeReda(red)} je uklonjen sa testa.`, undefined, { grupa: `test-${ses.tId}` });
+          store._obavestenja.uspeh(`${imeReda(red)} je uklonjen sa testa.`, undefined, { grupa: `test-${s.tId}` });
         }),
         catchError((e: unknown) => {
           store._obavestenja.greska(`${imeReda(red)}: ${porukaGreske(e)}`);
-          if (aktivnaZa(ses)) {
-            patchState(store, s => ({ zauzet: { ...s.zauzet, [sId]: undefined } }));
+          if (tekuca(s)) {
+            patchState(store, st => ({ zauzet: { ...st.zauzet, [sId]: undefined } }));
           }
           return EMPTY;
         }),
       );
     }
 
-    function izvrsi(ses: Sesija, posao: Posao): Observable<unknown> {
+    function izvrsi(s: Sesija, posao: Posao): Observable<unknown> {
       return defer(() => {
         switch (posao.tip) {
           case 'cuvaj':
-            return cuvaj(ses, posao.sId);
+            return cuvaj(s, posao.sId);
           case 'dodaj':
-            return dodaj(ses, posao.red);
+            return dodaj(s, posao.red);
           case 'ukloni':
-            return ukloni(ses, posao.sId);
+            return ukloni(s, posao.sId);
         }
-      });
+      }).pipe(
+        finalize(() => {
+          s.uToku--;
+          if (s.uToku === 0) {
+            s.mirovanje.next();
+          }
+        }),
+      );
     }
 
-    function novaSesija(det: TestDetails): Sesija {
-      const varijante = VARIJANTE.filter(v => (det.grupe ?? []).includes(v));
-      const ses: Sesija = {
-        tId: det.id,
-        aktivna: true,
-        red: new Subject<Posao>(),
-        tajmeri: new Map(),
-        naCekanju: new Map(),
-        potvrdjeno: new Map(),
-        zadnje: new Map(),
-        imena: new Map(),
-        max: det.maxPoena ?? null,
-        varijante,
-      };
-      // pretplata se namerno ne otkazuje: posle zatvaranja sesije red se završava tek kad pošalje sve poslove
-      ses.red.pipe(concatMap(p => izvrsi(ses, p))).subscribe();
-      return ses;
+    function nova(det: TestDetails): Sesija {
+      const s = new Sesija(det.id, det.maxPoena ?? null, VARIJANTE.filter(v => (det.grupe ?? []).includes(v)));
+      // pretplata se namerno ne otkazuje: posle zatvaranja sesije red se završava tek kad izvrši sve poslove
+      s.red.pipe(concatMap(p => izvrsi(s, p))).subscribe();
+      return s;
     }
 
-    const zatvoriSesiju = () => zatvoriSesijuStore(store._r, posaljiOdmah);
+    function zakazi(s: Sesija, posao: Posao): void {
+      s.uToku++;
+      s.red.next(posao);
+    }
 
-    function postaviTest(det: TestDetails): void {
-      zatvoriSesiju();
-      const ses = novaSesija(det);
-      store._r.sesija = ses;
+    /** Šalje čuvanje reda odmah (otkazuje debounce koji je čekao). */
+    function posalji(s: Sesija, sId: number): void {
+      const t = s.timeri.get(sId);
+      if (t !== undefined) {
+        clearTimeout(t);
+        s.timeri.delete(sId);
+      }
+      zakazi(s, { tip: 'cuvaj', sId });
+    }
+
+    function posaljiCekajuce(s: Sesija): void {
+      for (const sId of [...s.timeri.keys()]) {
+        posalji(s, sId);
+      }
+    }
+
+    /** Emituje (jednom) kad nema poslova u redu ni u izvršenju; odmah ako ih nema. */
+    const sacekaj = (s: Sesija): Observable<unknown> => defer(() => (s.uToku === 0 ? of(null) : s.mirovanje.pipe(take(1))));
+
+    /** Zatvara sesiju: izmene na čekanju se šalju, poslovi u toku i u redu se završavaju (ne otkazuju). */
+    function zatvori(s: Sesija): void {
+      posaljiCekajuce(s);
+      s.red.complete();
+    }
+
+    /** Ispravni redovi koji se razlikuju od potvrđenih idu ponovo na čuvanje (novi max, neuspelo brisanje). */
+    function posaljiNepotvrdjeno(s: Sesija): void {
+      for (const [sId, v] of s.lokalno) {
+        if (!s.timeri.has(sId) && zaSlanje(v, s.max, s.varijante) && !jednako(v, s.potvrdjeno.get(sId))) {
+          postaviStatus(s, sId, 'cuva');
+          posalji(s, sId);
+        }
+      }
+    }
+
+    function postaviPodatke(det: TestDetails): void {
+      const s = nova(det);
       const grupaGodina = det.grupa?.godinaUpisa;
       const polaganja = (det.polaganja ?? []).filter(p => p.student);
       const redovi = polaganja.map(p => redIz(p.student, grupaGodina)).sort(poIndeksu);
       const vrednosti: Record<number, VrednostiReda> = {};
       for (const p of polaganja) {
-        vrednosti[p.student.id] = vrednostiIz(p, ses.varijante);
-        ses.zadnje.set(p.student.id, vrednosti[p.student.id]);
-        ses.potvrdjeno.set(p.student.id, potvrdjenoIz(p));
+        vrednosti[p.student.id] = vrednostiIz(p, s.varijante);
+        s.lokalno.set(p.student.id, vrednosti[p.student.id]);
+        s.potvrdjeno.set(p.student.id, potvrdjenoIz(p));
       }
-      redovi.forEach(r => ses.imena.set(r.id, r));
+      redovi.forEach(r => s.imena.set(r.id, r));
+      store._r.sesija = s;
       patchState(store, { ...PRAZNO_STANJE, test: det, redovi, vrednosti }, setLoaded());
     }
 
     /** Samo polja zaglavlja iz odgovora izmene (polaganja u store-u su potvrđena po redu i ne prepisuju se). */
-    function zaglavljeIz(det: TestDetails): void {
-      const ses = store._r.sesija;
-      if (ses) {
-        ses.max = det.maxPoena ?? ses.max;
+    function zaglavljeIz(s: Sesija, det: TestDetails): void {
+      s.max = det.maxPoena ?? s.max;
+      if (!tekuca(s)) {
+        return;
       }
-      patchState(store, s =>
-        s.test
+      patchState(store, st =>
+        st.test
           ? {
               test: {
-                ...s.test,
+                ...st.test,
                 datum: det.datum,
                 maxPoena: det.maxPoena,
-                tipTesta: det.tipTesta ?? s.test.tipTesta,
+                tipTesta: det.tipTesta ?? st.test.tipTesta,
                 pregledan: det.pregledan,
               },
             }
@@ -638,119 +653,140 @@ export const TestStore = signalStore(
       );
     }
 
-    const tId = () => store.test()?.id ?? null;
+    /** Aktivna sesija na ekranu (ne posle uništenja ili brisanja). */
+    const aktivna = (): Sesija | null => {
+      const s = store._r.sesija;
+      return s && tekuca(s) && !s.obrisan ? s : null;
+    };
 
     return {
+      /** Zatvara tekuću sesiju (uništenje store-a); `_` = privatno, vidljivo samo u `withHooks`. */
+      _zatvori(): void {
+        if (store._r.sesija) {
+          zatvori(store._r.sesija);
+        }
+      },
+
+      /**
+       * Učitava test. Sesija prethodnog testa se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni,
+       * pa ni ponovno učitavanje istog testa ne može da pročita stanje pre sopstvenih izmena.
+       */
       ucitaj(id: number): void {
         store._r.ucitavanje?.unsubscribe();
-        zatvoriSesiju();
+        const stara = store._r.sesija;
+        store._r.sesija = null;
+        if (stara) {
+          zatvori(stara);
+        }
         patchState(store, PRAZNO_STANJE, setLoading());
-        store._r.ucitavanje = store._api.get(id, { tiho: true }).subscribe({
-          next: det => postaviTest(det),
-          error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
-        });
+        store._r.ucitavanje = (stara ? sacekaj(stara) : of(null))
+          .pipe(switchMap(() => store._api.get(id, { tiho: true })))
+          .subscribe({
+            next: det => postaviPodatke(det),
+            error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
+          });
       },
 
       /** Izmena reda (deo vrednosti); ispravan red se čuva sam posle {@link DEBOUNCE_REDA_MS}. */
       izmeni(sId: number, izmena: Partial<VrednostiReda>): void {
-        const ses = store._r.sesija;
-        const staro = store.vrednosti()[sId];
-        if (!ses || !aktivnaZa(ses) || !staro || store.evidentiran() || store.zauzet()[sId]) {
+        const s = aktivna();
+        const staro = s?.lokalno.get(sId);
+        if (!s || !staro || store.evidentiran() || store.zauzet()[sId]) {
           return;
         }
         const novo = { ...staro, ...izmena };
-        ses.zadnje.set(sId, novo);
-        patchState(store, s => ({ vrednosti: { ...s.vrednosti, [sId]: novo } }));
-        const t = ses.tajmeri.get(sId);
+        if (jednakeVrednosti(staro, novo)) {
+          return;
+        }
+        s.lokalno.set(sId, novo);
+        s.verzije.set(sId, s.verzija(sId) + 1);
+        s.greske.delete(sId);
+        const t = s.timeri.get(sId);
         if (t !== undefined) {
           clearTimeout(t);
-          ses.tajmeri.delete(sId);
+          s.timeri.delete(sId);
         }
-        const uRedu = (ses.naCekanju.get(sId) ?? 0) > 0;
-        if (!zaSlanje(novo, ses.max, ses.varijante)) {
-          // neispravno ili nepotpuno: ne šalje se; poruku prikazuje red (posao u redu, ako ga ima, se preskače)
-          if (!uRedu) {
-            postaviStatus(sId, null);
-          }
-          return;
+        const salje = zaSlanje(novo, s.max, s.varijante);
+        patchState(store, st => ({
+          vrednosti: { ...st.vrednosti, [sId]: novo },
+          // neispravno ili nepotpuno: ne šalje se, poruku prikazuje red
+          statusi: { ...st.statusi, [sId]: salje ? ('cuva' as const) : null },
+          greske: { ...st.greske, [sId]: null },
+        }));
+        if (salje) {
+          s.timeri.set(
+            sId,
+            setTimeout(() => posalji(s, sId), DEBOUNCE_REDA_MS),
+          );
         }
-        if (jednako(novo, ses.potvrdjeno.get(sId)) && !uRedu) {
-          postaviStatus(sId, store.statusi()[sId] === 'sacuvano' ? 'sacuvano' : null);
-          return;
-        }
-        postaviStatus(sId, 'cuva');
-        ses.tajmeri.set(
-          sId,
-          setTimeout(() => {
-            ses.tajmeri.delete(sId);
-            zakazi(ses, { tip: 'cuvaj', sId });
-          }, DEBOUNCE_REDA_MS),
-        );
       },
 
       /** "Pokušaj ponovo" posle greške čuvanja. */
       ponovo(sId: number): void {
-        const ses = store._r.sesija;
-        if (!ses || !aktivnaZa(ses) || !store.vrednosti()[sId]) {
+        const s = aktivna();
+        if (!s || !s.lokalno.has(sId)) {
           return;
         }
-        postaviStatus(sId, 'cuva');
-        posaljiOdmah(ses, sId);
+        postaviStatus(s, sId, 'cuva');
+        posalji(s, sId);
       },
 
       /** Dodaje ispitanike (birač: iz grupe i stariji); već dodati se preskaču. Server proverava pravo na test. */
       dodajIspitanike(studenti: readonly StudentListItem[]): void {
-        const ses = store._r.sesija;
-        if (!ses || !aktivnaZa(ses) || store.evidentiran()) {
+        const s = aktivna();
+        if (!s || store.evidentiran()) {
           return;
         }
         const grupaGodina = store.test()?.grupa?.godinaUpisa;
         const postojeci = new Set(store.redovi().map(r => r.id));
         const novi = studenti
-          .filter((s, i) => !postojeci.has(s.id) && studenti.findIndex(x => x.id === s.id) === i)
-          .map(s => redIz(s, grupaGodina));
+          .filter((x, i) => !postojeci.has(x.id) && studenti.findIndex(y => y.id === x.id) === i)
+          .map(x => redIz(x, grupaGodina));
         if (novi.length === 0) {
           return;
         }
-        const vrednosti = Object.fromEntries(novi.map(r => [r.id, vrednostiIz(undefined, ses.varijante)]));
+        const vrednosti = Object.fromEntries(novi.map(r => [r.id, vrednostiIz(undefined, s.varijante)]));
         for (const r of novi) {
-          ses.imena.set(r.id, r);
-          ses.zadnje.set(r.id, vrednosti[r.id]);
+          s.imena.set(r.id, r);
+          s.lokalno.set(r.id, vrednosti[r.id]);
         }
-        patchState(store, s => ({
-          redovi: [...s.redovi, ...novi].sort(poIndeksu),
-          vrednosti: { ...s.vrednosti, ...vrednosti },
-          statusi: { ...s.statusi, ...Object.fromEntries(novi.map(r => [r.id, 'cuva' as const])) },
-          zauzet: { ...s.zauzet, ...Object.fromEntries(novi.map(r => [r.id, 'dodaje' as const])) },
+        patchState(store, st => ({
+          redovi: [...st.redovi, ...novi].sort(poIndeksu),
+          vrednosti: { ...st.vrednosti, ...vrednosti },
+          statusi: { ...st.statusi, ...Object.fromEntries(novi.map(r => [r.id, 'cuva' as const])) },
+          zauzet: { ...st.zauzet, ...Object.fromEntries(novi.map(r => [r.id, 'dodaje' as const])) },
         }));
-        novi.forEach(red => zakazi(ses, { tip: 'dodaj', red }));
+        novi.forEach(red => zakazi(s, { tip: 'dodaj', red }));
       },
 
-      /** Uklanja ispitanika (posle čuvanja koja su već u redu, redom). */
+      /**
+       * Uklanja ispitanika. Izmena koja čeka debounce se prvo šalje (ako uklanjanje ne uspe, uneto nije izgubljeno),
+       * pa uklanjanje ide u red posle nje.
+       */
       ukloni(sId: number): void {
-        const ses = store._r.sesija;
-        if (!ses || !aktivnaZa(ses) || store.evidentiran() || store.zauzet()[sId] || !store.vrednosti()[sId]) {
+        const s = aktivna();
+        if (!s || store.evidentiran() || store.zauzet()[sId] || !s.lokalno.has(sId)) {
           return;
         }
-        const t = ses.tajmeri.get(sId);
-        if (t !== undefined) {
-          clearTimeout(t);
-          ses.tajmeri.delete(sId);
+        if (s.timeri.has(sId)) {
+          posalji(s, sId);
         }
-        patchState(store, s => ({ zauzet: { ...s.zauzet, [sId]: 'uklanja' as const }, statusi: { ...s.statusi, [sId]: null } }));
-        zakazi(ses, { tip: 'ukloni', sId });
+        patchState(store, st => ({ zauzet: { ...st.zauzet, [sId]: 'uklanja' as const } }));
+        zakazi(s, { tip: 'ukloni', sId });
       },
 
+      /** Tip, datum, max. Posle većeg max-a se šalju redovi koji su do tada bili neispravni (poeni > stari max). */
       izmeniZaglavlje(izmena: UpdateTestCmd): Promise<boolean> {
-        const id = tId();
-        if (id === null) {
+        const s = aktivna();
+        if (!s) {
           return Promise.resolve(false);
         }
         return firstValueFrom(
-          store._api.update(id, izmena).pipe(
+          store._api.update(s.tId, izmena).pipe(
             map(det => {
-              zaglavljeIz(det);
+              zaglavljeIz(s, det);
               store._obavestenja.uspeh('Izmene su sačuvane.');
+              posaljiNepotvrdjeno(s);
               return true;
             }),
             catchError(() => of(false)), // grešku je već prikazao interceptor
@@ -758,49 +794,81 @@ export const TestStore = signalStore(
         );
       },
 
+      /**
+       * `PATCH test/{id}`: završava evidentiranje. Pre PATCH-a se šalju izmene koje čekaju debounce i čeka se da se red
+       * isprazni; ako tada neki ispitanik nema potvrđene poene (ili čuvanje nije uspelo), ne završava se.
+       */
       zavrsi(): Promise<boolean> {
-        const id = tId();
-        if (id === null || !store.spremnost().moze) {
+        const s = aktivna();
+        if (!s || store.evidentiran()) {
           return Promise.resolve(false);
         }
+        posaljiCekajuce(s);
         return firstValueFrom(
-          store._api.zavrsi(id).pipe(
-            map(det => {
-              zaglavljeIz({ ...det, pregledan: true });
-              store._obavestenja.uspeh('Evidentiranje je završeno.', undefined, { grupa: `test-${id}` });
-              return true;
+          sacekaj(s).pipe(
+            switchMap(() => {
+              if (!tekuca(s)) {
+                return of(false);
+              }
+              const nepotvrdjeno = [...s.imena.keys()].filter(sId => {
+                const v = s.lokalno.get(sId);
+                const p = s.potvrdjeno.get(sId);
+                return s.greske.has(sId) || !v || p?.poeni === null || p?.poeni === undefined || !jednako(v, p);
+              });
+              if (nepotvrdjeno.length > 0) {
+                store._obavestenja.greska(`Nisu sačuvani poeni za ${brojIspitanika(nepotvrdjeno.length)}; evidentiranje nije završeno.`);
+                return of(false);
+              }
+              return store._api.zavrsi(s.tId).pipe(
+                map(det => {
+                  zaglavljeIz(s, { ...det, pregledan: true });
+                  store._obavestenja.uspeh('Evidentiranje je završeno.', undefined, { grupa: `test-${s.tId}` });
+                  return true;
+                }),
+              );
             }),
             catchError(() => of(false)),
           ),
+          { defaultValue: false },
         );
       },
 
+      /**
+       * `DELETE test/{id}`: izmene na čekanju se otkazuju i ne šalju obrisanom testu; poslovi koji su već u redu se sačekaju
+       * pre brisanja. Ako brisanje ne uspe, nepotvrđeno se šalje ponovo.
+       */
       obrisi(): Promise<boolean> {
-        const id = tId();
-        if (id === null) {
+        const s = aktivna();
+        if (!s) {
           return Promise.resolve(false);
         }
+        s.obrisan = true;
+        s.timeri.forEach(t => clearTimeout(t));
+        s.timeri.clear();
         return firstValueFrom(
-          store._api.obrisi(id).pipe(
+          sacekaj(s).pipe(
+            switchMap(() => store._api.obrisi(s.tId)),
             map(() => {
               store._obavestenja.uspeh('Test je obrisan.');
               return true;
             }),
-            catchError(() => of(false)),
+            catchError(() => {
+              s.obrisan = false;
+              posaljiNepotvrdjeno(s);
+              return of(false);
+            }),
           ),
           { defaultValue: true },
         );
       },
-
-      _zatvoriSesiju: zatvoriSesiju,
     };
   }),
   withHooks({
     onDestroy(store) {
       store._r.unisten = true;
       store._r.ucitavanje?.unsubscribe();
-      store._r.ucitavanje = null;
-      store._zatvoriSesiju();
+      // ekran se napušta: izmene na čekanju se šalju, zahtevi u toku se ne otkazuju
+      store._zatvori();
     },
   }),
 );
