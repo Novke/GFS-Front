@@ -209,4 +209,96 @@ describe('GlobalnaPretraga', () => {
     await osvezi();
     expect(dialog.openDialogs.length).toBe(1);
   });
+
+  it('razmak na kraju upita: Enter i dalje otvara aktivan rezultat (nema novog zahteva)', async () => {
+    await otvori();
+    await pretrazi('vuk');
+    await ukucaj('vuk ');
+    await sacekajDebounce();
+    http.expectNone(r => r.url === 'api/pretraga');
+    tipka('Enter');
+    await pauza(0);
+    expect(router.url).toBe('/studenti/11');
+  });
+
+  it('izmena pa vraćanje na isti upit u okviru debounce-a: Enter otvara', async () => {
+    await otvori();
+    await pretrazi('vuk');
+    await ukucaj('vuko');
+    await ukucaj('vuk');
+    await sacekajDebounce();
+    http.expectNone(r => r.url === 'api/pretraga');
+    tipka('Enter');
+    await pauza(0);
+    expect(router.url).toBe('/studenti/11');
+  });
+
+  it('posle greške Enter ponavlja isti upit', async () => {
+    await otvori();
+    await ukucaj('zzz');
+    await sacekajDebounce();
+    http.expectOne('api/pretraga?q=zzz').flush({ reason: 'Greška pretrage.' }, { status: 400, statusText: 'Bad Request' });
+    await osvezi();
+    expect(document.querySelector('[data-greska]')).not.toBeNull();
+    tipka('Enter');
+    await osvezi();
+    http.expectOne('api/pretraga?q=zzz').flush(REZULTAT);
+    await osvezi();
+    expect(document.querySelector('[data-greska]')).toBeNull();
+    expect(opcije().length).toBe(4);
+  });
+
+  it('dok traje novi zahtev stari rezultati ostaju (prigušeni), pa se zamene', async () => {
+    await otvori();
+    await pretrazi('vuk');
+    await ukucaj('vukov');
+    await sacekajDebounce();
+    const req = http.expectOne('api/pretraga?q=vukov');
+    await osvezi();
+    expect(opcije().length).toBe(4);
+    expect(document.querySelector('#pretraga-lista')!.classList.contains('zamucena')).toBe(true);
+    expect(document.querySelector('[data-trazim]')).toBeNull();
+    req.flush({ studenti: [], predavanja: [], testovi: [], grupe: [GRUPA] });
+    await osvezi();
+    expect(opcije().length).toBe(1);
+    expect(document.querySelector('#pretraga-lista')!.classList.contains('zamucena')).toBe(false);
+  });
+
+  it('stalna živa regija i listbox na koji pokazuje aria-controls postoje i pre rezultata', async () => {
+    await otvori();
+    expect(document.getElementById(polje().getAttribute('aria-controls')!)).not.toBeNull();
+    expect(polje().getAttribute('aria-expanded')).toBe('false');
+    const status = document.querySelector('[data-status]')!;
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    await pretrazi('vuk');
+    expect(document.querySelector('[data-status]')).toBe(status); // isti element, menja se samo tekst
+    expect(status.textContent).toBe('4 rezultata');
+    expect(polje().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('po zatvaranju fokus se vraća na element koji je otvorio pretragu', async () => {
+    const dugme = document.createElement('button');
+    document.body.appendChild(dugme);
+    dugme.focus();
+    await otvori();
+    for (let i = 0; i < 20 && document.activeElement !== polje(); i++) {
+      await pauza(50);
+    }
+    expect(document.activeElement).toBe(polje());
+    dialog.closeAll();
+    for (let i = 0; i < 20 && document.activeElement !== dugme; i++) {
+      await pauza(50);
+    }
+    expect(document.activeElement).toBe(dugme);
+    dugme.remove();
+  });
+
+  it('ne otvara se dok je otvoren drugi dijalog', async () => {
+    @Component({ template: 'drugi' })
+    class Drugi {}
+    dialog.open(Drugi);
+    await osvezi();
+    expect(GlobalnaPretraga.otvori(dialog)).toBeNull();
+    expect(document.querySelector('app-globalna-pretraga')).toBeNull();
+  });
 });

@@ -10,7 +10,7 @@ import type { DomaciListItem } from '../../features/domaci/data-access/domaci.mo
 import type { TestListItem } from '../../features/testovi/data-access/testovi.models';
 import { LOCAL_ERRORS } from '../api/api-error';
 import { KontrolnaTablaInfo } from '../api/pregled.api';
-import { DashboardCountsStore, PERIOD_MS, RAZMAK_NAVIGACIJA_MS } from './dashboard-counts.store';
+import { DashboardCountsStore, PERIOD_MS, RAZMAK_NAVIGACIJA_MS, SVEZ_ZAHTEV_MS } from './dashboard-counts.store';
 
 const URL = 'api/pregled/kontrolna-tabla';
 
@@ -110,5 +110,39 @@ describe('DashboardCountsStore', () => {
     const store = TestBed.inject(DashboardCountsStore);
     http.expectOne(URL).flush({});
     expect([store.testovi(), store.domaci(), store.prijave()]).toEqual([0, 0, 0]);
+  });
+
+  it('čuva ceo odgovor i status; greška se pamti, a stara tabla ostaje', () => {
+    const store = TestBed.inject(DashboardCountsStore);
+    expect(store.status()).toBe('loading');
+    http.expectOne(URL).flush(tabla(2, 0, []));
+    expect(store.status()).toBe('loaded');
+    expect(store.tabla()?.ceka.brojTestova).toBe(2);
+    vi.advanceTimersByTime(PERIOD_MS);
+    http.expectOne(URL).flush({ reason: 'Nešto nije u redu.' }, { status: 400, statusText: 'Bad Request' });
+    expect(store.status()).toBe('error');
+    expect(store.greska()).toBe('Nešto nije u redu.');
+    expect(store.tabla()?.ceka.brojTestova).toBe(2);
+  });
+
+  it('osveziSada ne pravi drugi zahtev dok je upravo počeo jedan; posle odgovora i greške šalje novi', () => {
+    const store = TestBed.inject(DashboardCountsStore);
+    store.osveziSada(); // zahtev iz nastanka je u toku
+    store.osveziSada();
+    http.expectOne(URL).flush(tabla(1, 0, []));
+    store.osveziSada();
+    http.expectOne(URL).flush(null, { status: 500, statusText: 'Server Error' });
+    store.osveziSada(); // posle greške
+    http.expectOne(URL).flush(tabla(3, 0, []));
+    expect(store.testovi()).toBe(3);
+  });
+
+  it('osveziSada šalje novi zahtev ako je prethodni zapeo duže od SVEZ_ZAHTEV_MS', () => {
+    const store = TestBed.inject(DashboardCountsStore);
+    const prvi = http.expectOne(URL);
+    vi.advanceTimersByTime(SVEZ_ZAHTEV_MS + 1);
+    store.osveziSada();
+    expect(prvi.cancelled).toBe(true);
+    http.expectOne(URL).flush(tabla(0, 0, []));
   });
 });

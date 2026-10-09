@@ -7,6 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { KontrolnaTablaInfo } from '../../../core/api/pregled.api';
+import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
 import { PREFS_KLJUC } from '../../../core/state/preferences.store';
 import { DomaciListItem } from '../../domaci/data-access/domaci.models';
 import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
@@ -180,8 +181,8 @@ describe('Pocetna', () => {
     expect(veza('testovi').getAttribute('href')).toBe('/testovi?status=za-evidentiranje');
     expect(veza('domaci').getAttribute('href')).toBe('/domaci?status=za-pregled');
     expect(veza('prijave-9').getAttribute('href')).toBe('/grupe/4/onboarding/9');
-    expect(veza('nezavrsena').getAttribute('href')).toBe('/predavanja/9');
-    expect(veza('nezavrsena').textContent).toContain('Završi');
+    expect(veza('nezavrsena-9').getAttribute('href')).toBe('/predavanja/9');
+    expect(veza('nezavrsena-9').textContent).toContain('Završi');
     const ceka = el().querySelector('app-ceka-na-tebe')!.textContent!;
     expect(ceka).toContain('23'); // ukupno, ne 10
     expect(ceka).toContain('Kolokvijum 1 · GD-2025 · 9. 10., Kolokvijum 2');
@@ -219,5 +220,27 @@ describe('Pocetna', () => {
     const a = el().querySelector<HTMLAnchorElement>('app-nedavno a')!;
     expect(a.textContent).toContain('Grupa GD-2025');
     expect(a.getAttribute('href')).toBe('/grupe/4');
+  });
+
+  it('više nezavršenih predavanja: svako ima svoj red sa vezom na detalj; preostali idu u "+N"', async () => {
+    const lista = Array.from({ length: 8 }, (_, i) => predavanje(20 + i, { datum: '2025-09-30', tema: i === 0 ? 'Petlje' : null }));
+    await otvori({ ...PRAZNA, ceka: { ...PRAZNA.ceka, nezavrsena: lista, brojNezavrsenih: 12 } });
+    const veze = [...el().querySelectorAll<HTMLAnchorElement>('[data-ceka^="nezavrsena-"]')].map(a => a.getAttribute('href'));
+    expect(veze).toEqual(['/predavanja/20', '/predavanja/21', '/predavanja/22', '/predavanja/23', '/predavanja/24']);
+    expect(el().querySelector('[data-ceka="nezavrsena-20"]')!.closest('li')!.textContent).toContain('Predavanje 20 · Petlje');
+    const jos = el().querySelector('[data-jos-nezavrsenih]')!;
+    expect(jos.textContent).toContain('+7 nezavršenih predavanja'); // 12 - 5 prikazanih
+    expect(jos.querySelector('a')!.getAttribute('href')).toBe('/predavanja?status=u-toku');
+  });
+
+  it('Početna ne pravi drugi zahtev kad je ljuska već pokrenula učitavanje (isti odgovor za ekran i brojače)', async () => {
+    const brojaci = TestBed.inject(DashboardCountsStore); // kao Shell: zahtev kreće pri nastanku
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/');
+    http.expectOne('api/pregled/kontrolna-tabla').flush({ ...PRAZNA, ceka: { ...PRAZNA.ceka, brojTestova: 4 } });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(brojaci.testovi()).toBe(4);
+    expect(el().querySelector('[data-ceka="testovi"]')).not.toBeNull();
   });
 });

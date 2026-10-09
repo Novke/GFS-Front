@@ -8,10 +8,13 @@ import { oblik } from '../data-access/pocetna.vreme';
 
 /** Koliko se imena stavki ispisuje u podnaslovu reda; ostalo ide u "+N još". */
 const IMENA = 3;
+/** Najviše pojedinačnih redova nezavršenih predavanja; ostalo ide u "+N još". */
+const MAX_NEZAVRSENIH = 5;
 
 interface Red {
   kljuc: string;
-  broj: number;
+  /** Tekst u značku: broj stavki, ili `!` za pojedinačno nezavršeno predavanje. */
+  broj: string;
   /** `warn` za stvari koje kasne (testovi, nezavršena predavanja). */
   ton: 'warn' | 'info';
   naslov: string;
@@ -40,7 +43,7 @@ function pomocni(imena: string[], ukupno: number): string {
   template: `
     <section class="kartica" aria-labelledby="ceka-naslov">
       <div class="zaglavlje"><h2 id="ceka-naslov">Čeka na tebe</h2></div>
-      @if (redovi().length > 0 || josPrijava() > 0) {
+      @if (redovi().length > 0 || josPrijava() > 0 || josNezavrsenih() > 0) {
         <ul class="sanduce">
           @for (r of redovi(); track r.kljuc) {
             <li>
@@ -51,12 +54,15 @@ function pomocni(imena: string[], ukupno: number): string {
                   <div class="s">{{ r.podnaslov }}</div>
                 }
               </div>
-              <a class="ide" [routerLink]="r.veza" [queryParams]="r.query" [attr.data-ceka]="r.kljuc">{{ r.akcija }}<span class="sr-only"> — {{ r.naslov }}</span></a>
+              <a class="ide" [routerLink]="r.veza" [queryParams]="r.query" [attr.data-ceka]="r.kljuc">{{ r.akcija }}<span class="sr-only"> — {{ r.naslov }}@if (r.podnaslov) {: {{ r.podnaslov }}}</span></a>
             </li>
           }
         </ul>
         @if (josPrijava() > 0) {
           <p class="jos">+{{ josPrijava() }} {{ josPrijavaRec() }} u drugim sesijama · <a routerLink="/grupe">Grupe</a></p>
+        }
+        @if (josNezavrsenih() > 0) {
+          <p class="jos" data-jos-nezavrsenih>+{{ josNezavrsenih() }} {{ josNezavrsenihRec() }} · <a routerLink="/predavanja" [queryParams]="{ status: 'u-toku' }">Predavanja u toku</a></p>
         }
       } @else {
         <p class="prazno" data-nista>
@@ -97,7 +103,7 @@ export class CekaNaTebe {
     if (c.brojTestova > 0) {
       redovi.push({
         kljuc: 'testovi',
-        broj: c.brojTestova,
+        broj: String(c.brojTestova),
         ton: 'warn',
         naslov: `${oblik(c.brojTestova, 'Test', 'Testa', 'Testova')} za evidentiranje`,
         podnaslov: pomocni(c.testovi.map(t => `${t.tipTesta?.naziv ?? 'Test'} · ${t.grupa?.naziv ?? '—'} · ${formatDatum(t.datum, 'kratko')}`), c.brojTestova),
@@ -111,7 +117,7 @@ export class CekaNaTebe {
       const istice = p.istice ? ` · ističe ${formatDatum(p.istice, 'kratko')}` : '';
       redovi.push({
         kljuc: `prijave-${p.sesijaId}`,
-        broj: p.brojNaCekanju,
+        broj: String(p.brojNaCekanju),
         ton: 'info',
         naslov: oblik(p.brojNaCekanju, 'Prijava', 'Prijave', 'Prijava') + ' na čekanju',
         podnaslov: `Onboarding ${p.grupa?.naziv ?? '—'}${istice}`,
@@ -124,7 +130,7 @@ export class CekaNaTebe {
     if (c.brojDomacih > 0) {
       redovi.push({
         kljuc: 'domaci',
-        broj: c.brojDomacih,
+        broj: String(c.brojDomacih),
         ton: 'info',
         naslov: `${oblik(c.brojDomacih, 'Domaći', 'Domaća', 'Domaćih')} za pregled`,
         podnaslov: pomocni(c.domaci.map(d => `${d.naslov?.trim() || 'Domaći'} · ${d.grupa?.naziv ?? '—'}`), c.brojDomacih),
@@ -134,23 +140,26 @@ export class CekaNaTebe {
       });
     }
 
-    if (c.brojNezavrsenih > 0) {
-      const jedno = c.brojNezavrsenih === 1 && c.nezavrsena.length === 1 ? c.nezavrsena[0] : null;
+    // Svako nezavršeno predavanje je svoj red sa vezom na detalj (zbirna veza na listu bi prikazala i današnja, pa se brojevi ne bi slagali)
+    for (const p of c.nezavrsena.slice(0, MAX_NEZAVRSENIH)) {
       redovi.push({
-        kljuc: 'nezavrsena',
-        broj: c.brojNezavrsenih,
+        kljuc: `nezavrsena-${p.id}`,
+        broj: '!',
         ton: 'warn',
-        naslov: oblik(c.brojNezavrsenih, 'Nezavršeno predavanje', 'Nezavršena predavanja', 'Nezavršenih predavanja'),
-        podnaslov: pomocni(
-          c.nezavrsena.map(p => `Predavanje ${p.rb} · ${p.predmet?.naziv ?? '—'} · ${p.grupa?.naziv ?? '—'} · ${formatDatum(p.datum, 'kratko')}`),
-          c.brojNezavrsenih,
-        ),
-        akcija: jedno ? 'Završi' : 'Otvori',
-        veza: jedno ? ['/predavanja', jedno.id] : ['/predavanja'],
-        query: jedno ? null : { status: 'u-toku' },
+        naslov: 'Nezavršeno predavanje',
+        podnaslov: `Predavanje ${p.rb}${p.tema ? ` · ${p.tema}` : ''} · ${p.predmet?.naziv ?? '—'} · ${p.grupa?.naziv ?? '—'} · ${formatDatum(p.datum, 'kratko')}`,
+        akcija: 'Završi',
+        veza: ['/predavanja', p.id],
+        query: null,
       });
     }
     return redovi;
+  });
+
+  /** Nezavršenih predavanja više nego što je redova (server šalje najviše 10, ovde se prikazuje {@link MAX_NEZAVRSENIH}). */
+  protected readonly josNezavrsenih = computed(() => {
+    const c = this.ceka();
+    return Math.max(0, c.brojNezavrsenih - Math.min(c.nezavrsena.length, MAX_NEZAVRSENIH));
   });
 
   /** Prijave u sesijama koje nisu među prikazanim (server vraća najviše 10 sesija). */
@@ -158,5 +167,6 @@ export class CekaNaTebe {
     const c = this.ceka();
     return Math.max(0, c.brojPrijava - c.prijave.reduce((zbir, p) => zbir + p.brojNaCekanju, 0));
   });
+  protected readonly josNezavrsenihRec = computed(() => oblik(this.josNezavrsenih(), 'nezavršeno predavanje', 'nezavršena predavanja', 'nezavršenih predavanja'));
   protected readonly josPrijavaRec = computed(() => oblik(this.josPrijava(), 'prijava', 'prijave', 'prijava'));
 }

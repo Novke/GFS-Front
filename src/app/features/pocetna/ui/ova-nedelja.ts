@@ -51,7 +51,7 @@ function veza(s: AgendaStavkaInfo): string[] {
     </section>
   `,
   styles: `
-    :host { display: block; }
+    :host { display: block; container-type: inline-size; }
     .kartica { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
     .zaglavlje { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
     h2 { font-size: 16px; }
@@ -68,9 +68,13 @@ function veza(s: AgendaStavkaInfo): string[] {
     .ev.test { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
     .ev .mat-icon { flex: none; width: 14px; height: 14px; margin-top: 1px; }
     .vikend { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; }
-    @media (max-width: 899.98px) {
-      .telo { overflow-x: auto; }
-      .agenda { grid-template-columns: repeat(5, minmax(120px, 1fr)); }
+    /* Uska kartica (telefon, 1024-1300 px uz drugu kolonu): dani su redovi (oznaka levo, stavke desno), bez skrola i bez gnječenja */
+    @container (max-width: 600px) {
+      .agenda { grid-template-columns: minmax(0, 1fr); }
+      .dan { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: start; gap: 4px 8px; min-height: 0; }
+      .dan.danas { box-shadow: inset 4px 0 0 var(--primary); }
+      h3 { grid-column: 1; grid-row: 1; margin: 4px 0 0; }
+      .ev { grid-column: 2; margin-bottom: 0; }
     }
   `,
 })

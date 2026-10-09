@@ -1,16 +1,11 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { catchError, of, pipe, switchMap, tap } from 'rxjs';
+import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
-import { KontrolnaTablaCeka, KontrolnaTablaInfo, PregledApi } from '../../../core/api/pregled.api';
-import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
+import { KontrolnaTablaCeka } from '../../../core/api/pregled.api';
+import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
 import { agendaNedelje } from './pocetna.vreme';
 
 interface PocetnaState {
-  tabla: KontrolnaTablaInfo | null;
   /** Trenutak poslednjeg učitavanja: pozdrav, "danas" i nedelja se računaju od njega. */
   sada: Date;
 }
@@ -31,15 +26,18 @@ const broj = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v
 const lista = <T>(v: readonly T[] | null | undefined): readonly T[] => (Array.isArray(v) ? v : []);
 
 /**
- * Kontrolna tabla (`/`), P1-P4: jedan zahtev `GET pregled/kontrolna-tabla`. Provajduje se u stranici. Greška ne ide
- * u snackbar (`tiho`), nego u panel greške sa "Pokušaj ponovo". Dok se tabla osvežava, stari podaci ostaju na ekranu.
+ * Kontrolna tabla (`/`), P1-P4. Odgovor `GET pregled/kontrolna-tabla` je jedan za ceo ekran: drži ga
+ * `DashboardCountsStore` (iz njega su i brojači u navigaciji), pa Početna ne pravi drugi zahtev uz onaj iz ljuske.
+ * Provajduje se u stranici. Greška ne ide u snackbar (zahtev je tih), nego u panel sa "Pokušaj ponovo". Dok se tabla
+ * osvežava, stari podaci ostaju na ekranu.
  */
 export const PocetnaStore = signalStore(
-  withState<PocetnaState>({ tabla: null, sada: new Date() }),
-  withRequestStatus(),
+  withState<PocetnaState>({ sada: new Date() }),
+  withProps(() => ({ _izvor: inject(DashboardCountsStore) })),
   withComputed(store => {
+    const tabla = computed(() => store._izvor.tabla());
     const ceka = computed<KontrolnaTablaCeka>(() => {
-      const c = store.tabla()?.ceka;
+      const c = tabla()?.ceka;
       return c
         ? {
             testovi: lista(c.testovi),
@@ -54,29 +52,21 @@ export const PocetnaStore = signalStore(
         : PRAZNO_CEKA;
     });
     return {
-      sledece: computed(() => store.tabla()?.sledece ?? null),
-      uToku: computed(() => lista(store.tabla()?.uToku)),
+      tabla,
+      ucitava: computed(() => store._izvor.status() === 'loading'),
+      imaGresku: computed(() => store._izvor.status() === 'error'),
+      greska: computed(() => store._izvor.greska()),
+      sledece: computed(() => tabla()?.sledece ?? null),
+      uToku: computed(() => lista(tabla()?.uToku)),
       ceka,
-      nedelja: computed(() => agendaNedelje(lista(store.tabla()?.nedelja), store.sada())),
+      nedelja: computed(() => agendaNedelje(lista(tabla()?.nedelja), store.sada())),
     };
   }),
-  withMethods(store => {
-    const api = inject(PregledApi);
-    return {
-      ucitaj: rxMethod<void>(
-        pipe(
-          tap(() => patchState(store, setLoading(), { sada: new Date() })),
-          switchMap(() =>
-            api.kontrolnaTabla({ tiho: true }).pipe(
-              tap(tabla => patchState(store, { tabla }, setLoaded())),
-              catchError((e: unknown) => {
-                patchState(store, setError(e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM));
-                return of(null);
-              }),
-            ),
-          ),
-        ),
-      ),
-    };
-  }),
+  withMethods(store => ({
+    /** Osvežava tablu (bez drugog zahteva ako je jedan upravo počeo) i sat za pozdrav i "danas". */
+    ucitaj(): void {
+      patchState(store, { sada: new Date() });
+      store._izvor.osveziSada();
+    },
+  })),
 );
