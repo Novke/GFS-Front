@@ -113,7 +113,7 @@ let sledeciId = 0;
         <mat-label>Tip pitanja</mat-label>
         <mat-select [value]="tip" (selectionChange)="promeniTip($event.value)">
           @for (t of tipovi; track t.tip) {
-            <mat-option [value]="t.tip"><mat-icon>{{ t.ikona }}</mat-icon>{{ t.naziv }}</mat-option>
+            <mat-option [value]="t.tip"><mat-icon [svgIcon]="t.ikona" />{{ t.naziv }}</mat-option>
           }
         </mat-select>
       </mat-form-field>
@@ -129,7 +129,7 @@ let sledeciId = 0;
       }
     </div>
 
-    <mat-form-field class="uz-ed-puno">
+    <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
       <mat-label>Tekst pitanja</mat-label>
       <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" [formControl]="f.controls.tekst"></textarea>
       <mat-hint>Markdown: **podebljano**, *kurziv*, \`kod\`</mat-hint>
@@ -147,13 +147,13 @@ let sledeciId = 0;
             <mat-radio-button value="LISTA">Lista</mat-radio-button>
           </mat-radio-group>
         </div>
-        <mat-form-field class="uz-ed-puno">
+        <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
           <mat-label>Prihvatljivi odgovori</mat-label>
           <mat-chip-grid #lista aria-label="Prihvatljivi odgovori">
             @for (a of f.controls.prihvatljiviOdgovori.value; track $index) {
               <mat-chip-row (removed)="ukloniPrihvatljiv($index)">
                 {{ a }}
-                <button matChipRemove type="button" [attr.aria-label]="'Ukloni ' + a"><mat-icon>cancel</mat-icon></button>
+                <button matChipRemove type="button" [attr.aria-label]="'Ukloni ' + a"><mat-icon svgIcon="cancel" /></button>
               </mat-chip-row>
             }
             <input placeholder="Upiši odgovor i pritisni Enter" [matChipInputFor]="lista"
@@ -224,18 +224,18 @@ let sledeciId = 0;
               @if (!tn) {
                 <span class="uz-ed-opcija-dugmad">
                   <button mat-icon-button type="button" [disabled]="prva" (click)="pomeriOpciju(i, -1)"
-                          [attr.aria-label]="'Pomeri odgovor ' + slovo(i) + ' gore'"><mat-icon>arrow_upward</mat-icon></button>
+                          [attr.aria-label]="'Pomeri odgovor ' + slovo(i) + ' gore'"><mat-icon svgIcon="arrow_upward" /></button>
                   <button mat-icon-button type="button" [disabled]="poslednja" (click)="pomeriOpciju(i, 1)"
-                          [attr.aria-label]="'Pomeri odgovor ' + slovo(i) + ' dole'"><mat-icon>arrow_downward</mat-icon></button>
+                          [attr.aria-label]="'Pomeri odgovor ' + slovo(i) + ' dole'"><mat-icon svgIcon="arrow_downward" /></button>
                   <button mat-icon-button type="button" [disabled]="f.controls.opcije.length <= minOpcija"
-                          (click)="ukloniOpciju(i)" [attr.aria-label]="'Ukloni odgovor ' + slovo(i)"><mat-icon>close</mat-icon></button>
+                          (click)="ukloniOpciju(i)" [attr.aria-label]="'Ukloni odgovor ' + slovo(i)"><mat-icon svgIcon="close" /></button>
                 </span>
               }
             </div>
           }
           @if (!tn) {
             <button mat-stroked-button type="button" [disabled]="f.controls.opcije.length >= maxOpcija" (click)="dodajOpciju()">
-              <mat-icon>add</mat-icon>Dodaj odgovor
+              <mat-icon svgIcon="add" />Dodaj odgovor
             </button>
           }
           @if (tip === 'ANKETA') {

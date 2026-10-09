@@ -1,0 +1,63 @@
+<div class="tabela-okvir">
+  <table class="lista-tabela">
+    <caption class="sr-only">Predavanja</caption>
+    <thead>
+      <tr>
+        <th scope="col" [attr.aria-sort]="ariaSort('rb')">
+          <button type="button" class="sortiraj" data-sort="rb" (click)="sortiraj('rb')">#<span aria-hidden="true">{{ strelica('rb') }}</span></button>
+        </th>
+        <th scope="col" [attr.aria-sort]="ariaSort('tema')">
+          <button type="button" class="sortiraj" data-sort="tema" (click)="sortiraj('tema')">Tema<span aria-hidden="true">{{ strelica('tema') }}</span></button>
+        </th>
+        <th scope="col" [attr.aria-sort]="ariaSort('datum')">
+          <button type="button" class="sortiraj" data-sort="datum" (click)="sortiraj('datum')">Datum<span aria-hidden="true">{{ strelica('datum') }}</span></button>
+        </th>
+        @if (prikazPredmeta()) {
+          <th scope="col">Predmet</th>
+        }
+        @if (prikazGrupe()) {
+          <th scope="col">Grupa</th>
+        }
+        <th scope="col">Prisutni</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (p of stavke(); track p.id) {
+        <tr (click)="otvori.emit(p.id)">
+          <td class="c-rb mono">{{ p.rb }}</td>
+          <td class="c-glavno">
+            <button type="button" class="otvori" (click)="$event.stopPropagation(); otvori.emit(p.id)">
+              <span class="sr-only">Predavanje {{ p.rb }}: </span>{{ p.tema?.trim() || '—' }}
+            </button>
+          </td>
+          <td class="samo-desktop mono brojevi-sitno">{{ p.datum | datum }}</td>
+          @if (prikazPredmeta()) {
+            <td class="samo-desktop">{{ nazivPredmeta(p) }}</td>
+          }
+          @if (prikazGrupe()) {
+            <td class="samo-desktop brojevi-sitno" [class.nema]="!p.grupa">{{ nazivGrupe(p) }}</td>
+          }
+          <td class="samo-desktop brojevi-sitno">
+            @let pr = prisutni(p);
+            @if (pr.procenat !== null) {
+              <span class="traka" aria-hidden="true"><i [style.width.%]="pr.procenat"></i></span>
+            }
+            <span class="mono">{{ pr.brojevi }}</span>
+            @if (pr.stariji > 0) {
+              <span class="stariji" title="{{ pr.stariji }} starijih studenata van grupe">+{{ pr.stariji }}<span class="sr-only"> starijih</span></span>
+            }
+          </td>
+          <td class="c-st">
+            @if (uToku(p)) {
+              <app-status-chip tekst="U toku" ton="uToku" />
+            } @else {
+              <app-status-chip tekst="Završeno" />
+            }
+          </td>
+          <td class="c-meta">{{ meta(p) }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

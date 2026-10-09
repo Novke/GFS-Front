@@ -10,11 +10,14 @@ export interface OblikOpcije {
   readonly naziv: string;
 }
 
-/** Oblici i boje opcija po redu (spec 2.13, Kahoot obrazac): beli simbol i slovo na boji. */
+/**
+ * Oblici i boje opcija po redu (spec 2.13, Kahoot obrazac): beli simbol i slovo na boji. Boje ne zavise od teme, i svaka
+ * ima bar 4.5:1 sa belim (WCAG AA za tekst; proverava spec); žuta je zato tamni oker.
+ */
 export const OBLICI: readonly OblikOpcije[] = Object.freeze([
   { slovo: 'A', simbol: '▲', boja: '#d6363c', naziv: 'crveni trougao' },
   { slovo: 'B', simbol: '◆', boja: '#2456a6', naziv: 'plavi romb' },
-  { slovo: 'C', simbol: '●', boja: '#c98a00', naziv: 'žuti krug' },
+  { slovo: 'C', simbol: '●', boja: '#9a6a00', naziv: 'žuti krug' },
   { slovo: 'D', simbol: '■', boja: '#1d7a55', naziv: 'zeleni kvadrat' },
   { slovo: 'E', simbol: '★', boja: '#7a4bd6', naziv: 'ljubičasta zvezda' },
   { slovo: 'F', simbol: '⬟', boja: '#0f7d8c', naziv: 'tirkizni petougao' },

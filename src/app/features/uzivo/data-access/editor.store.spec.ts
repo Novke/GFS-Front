@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore, NijeSacuvano } from './editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
@@ -209,6 +210,19 @@ describe('EditorStore', () => {
     http.expectNone('api/prezentacije/1/redosled');
     store.pomeri(1, 3);
     expect(http.expectOne('api/prezentacije/1/redosled').request.body).toEqual({ slajdIds: [12, 13, 11] });
+  });
+
+  it('neuspelo čuvanje pri izlasku (prelaz na drugu prezentaciju) javlja grešku korisniku', () => {
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    ucitaj();
+    store.izmeniSlajd(11, info('Pre izlaska'));
+    store.ucitaj(2);
+    http.expectOne('api/prezentacije/2').flush(prezentacija([slajd(21, 1)]));
+    const put = http.expectOne('api/slajdovi/11');
+    expect(put.request.body).toMatchObject({ naslov: 'Pre izlaska' });
+    put.flush({ reason: 'Slajd nije pronađen.' }, { status: 404, statusText: 'Not Found' });
+    expect(greska).toHaveBeenCalledExactlyOnceWith('Izmena slajda nije sačuvana: Slajd nije pronađen.', expect.anything());
+    vi.restoreAllMocks();
   });
 
   describe('sacuvajSve', () => {

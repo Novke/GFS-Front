@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { AppRoutes } from '../../../app.routes';
+import { UzivoPutanje } from '../uzivo-putanje';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { JavnoApi } from './javno.api';
 
@@ -17,9 +17,9 @@ export function samoCifre(unos: string): string {
 @Component({
   selector: 'app-uzivo-kod',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'uz-st uz-dan', lang: 'sr-Latn' },
+  host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn' },
   template: `
-    <main class="uz-st-sredina">
+    <div class="uz-st-sredina">
       <h1 class="uz-st-naslov">Uživo</h1>
       <form class="uz-st-forma" (submit)="$event.preventDefault(); udji()">
         <label class="uz-st-oznaka" for="uz-st-kod">Kod sa table</label>
@@ -32,7 +32,7 @@ export function samoCifre(unos: string): string {
           {{ proverava() ? 'Proveravam…' : 'Uđi' }}
         </button>
       </form>
-    </main>
+    </div>
   `,
 })
 export class UzivoKodPage {
@@ -63,7 +63,7 @@ export class UzivoKodPage {
     this.proverava.set(true);
     this.provera.unsubscribe();
     this.provera = this.api.info(kod).subscribe({
-      next: () => void this.router.navigate([AppRoutes.uzivoKod(kod)]),
+      next: () => void this.router.navigate([UzivoPutanje.uzivoKod(kod)]),
       error: e => {
         this.proverava.set(false);
         this.greska.set(razlogGreske(e, 'Kod nije proveren. Pokušaj ponovo.'));

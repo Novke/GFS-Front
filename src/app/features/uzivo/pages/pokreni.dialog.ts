@@ -98,7 +98,7 @@ export function otvoriPokreni(dialog: MatDialog, podaci: PokreniPodaci): Observa
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" mat-dialog-close>Otkaži</button>
-      <button mat-flat-button color="primary" type="button" [disabled]="!cmd() || salje()" (click)="pokreni()">Pokreni</button>
+      <button mat-flat-button type="button" [disabled]="!cmd() || salje()" (click)="pokreni()">Pokreni</button>
     </mat-dialog-actions>
   `,
 })

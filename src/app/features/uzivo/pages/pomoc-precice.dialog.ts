@@ -58,7 +58,7 @@ export function precice(kontekst: KontekstPrecica): Red[] {
       <p class="uz-pomoc-napomena">Prečice ne rade dok kucaš u polje. Daljinski za prezentacije šalje PageDown i PageUp.</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-flat-button color="primary" type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
+      <button mat-flat-button type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
     </mat-dialog-actions>
   `,
 })

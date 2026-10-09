@@ -1,0 +1,15 @@
+// Globalni stilovi. Tokeni i zajednički stilovi su ovde (src/styles/), ne u komponentama (budžet anyComponentStyle).
+@use 'styles/fonts';
+@use 'styles/tokens';
+@use 'styles/theme';
+@use 'styles/base';
+@use 'styles/ui';
+@use 'styles/liste';
+@use 'styles/unos';
+@use 'styles/print';
+
+// Uživo: zajednički stilovi prikaza (globalni, prefiks uz-), kao u starom styles.css.
+@use 'app/features/uzivo/ui/uzivo-tokeni';
+@use 'app/features/uzivo/pages/uzivo-editor';
+@use 'app/features/uzivo/pages/uzivo-izvodjenje';
+@use 'app/features/uzivo/javno/uzivo-javno';

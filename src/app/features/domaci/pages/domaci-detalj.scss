@@ -1,0 +1,17 @@
+:host { display: block; }
+.traka { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 8px; }
+.aktivni { font-size: 13px; color: var(--muted); }
+.akcije { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.uputstvo { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.uputstvo .mat-icon { width: 18px; height: 18px; flex: none; }
+.tabela-kartica {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+@media (max-width: 599.98px) {
+  .akcije { width: 100%; margin-left: 0; }
+  .akcije > * { flex: 1 1 0; }
+}

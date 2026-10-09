@@ -4,11 +4,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { oznakaDalje, oznakaOtvoriZatvori, oznakaTajmera } from '../data-access/izvodjenje-pravila';
 import { NastavnickoStanje, TipKomande } from '../data-access/uzivo.models';
 import { pustiFokusPosleKlika } from './precice';
+import type { NazivIkone } from '../../../core/layout/icons';
 
 export interface KomandaZahtev { tip: TipKomande; vrednost?: number; }
 
 interface Dugme {
-  tip: TipKomande; vrednost?: number; oznaka: string; taster: string; ikona: string;
+  tip: TipKomande; vrednost?: number; oznaka: string; taster: string; ikona: NazivIkone;
   /** `null` = nije prekidač; inače da li je uključen (aria-pressed). */
   ukljuceno: boolean | null; glavno?: boolean;
 }
@@ -35,7 +36,7 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
                     [attr.aria-pressed]="d.ukljuceno === null ? null : d.ukljuceno"
                     [attr.aria-keyshortcuts]="d.taster" [disabled]="!dozvoljene().has(d.tip)"
                     (click)="pustiFokus($event); komanda.emit({ tip: d.tip, vrednost: d.vrednost })">
-              <mat-icon aria-hidden="true">{{ d.ikona }}</mat-icon>
+              <mat-icon aria-hidden="true" [svgIcon]="d.ikona" />
               <span class="uz-kon-dugme-tekst">{{ d.oznaka }}</span>
               <kbd class="uz-kbd" aria-hidden="true">{{ d.taster }}</kbd>
             </button>
@@ -85,7 +86,7 @@ export class KonzolaKontroleComponent {
       {
         naslov: 'Ekran i telefoni',
         dugmad: [
-          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'M', ikona: 'smartphone', ukljuceno: null },
+          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'M', ikona: 'mobile', ukljuceno: null },
           { tip: 'DETALJI', oznaka: 'Dozvoli „Detalje“', taster: 'D', ikona: 'description', ukljuceno: s.detaljiDozvoljeni },
           { tip: 'QR', oznaka: 'QR preko ekrana', taster: 'Q', ikona: 'qr_code', ukljuceno: s.qrPrikazan },
           { tip: 'EKRAN_CRN', oznaka: 'Crn ekran', taster: 'B', ikona: 'brightness_2', ukljuceno: s.ekran === 'CRN' },

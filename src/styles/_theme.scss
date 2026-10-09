@@ -1,0 +1,127 @@
+// Material 3 tema vezana za tokene "Nacrt" (_tokens.scss).
+// mat.theme daje osnovu (theme-type: color-scheme -> light-dark() prema `color-scheme` na <html>), a sistemski i
+// komponentni override-i usmeravaju ključne boje na naše promenljive, pa sve Material komponente prate `data-mode`.
+@use '@angular/material' as mat;
+
+$_porodica: ('IBM Plex Sans', system-ui, sans-serif);
+
+html {
+  @include mat.theme((
+    color: (
+      theme-type: color-scheme,
+      primary: mat.$azure-palette,
+      tertiary: mat.$orange-palette,
+    ),
+    typography: (
+      plain-family: $_porodica,
+      brand-family: $_porodica,
+      regular-weight: 400,
+      medium-weight: 500,
+      bold-weight: 600,
+    ),
+    density: 0,
+  ));
+}
+
+// Na `.rezim-dan` se ponavlja, jer se var() u --mat-sys-* razrešava na elementu koji ih deklariše.
+html,
+.rezim-dan {
+  @include mat.theme-overrides((
+    primary: var(--primary),
+    on-primary: var(--primary-ink),
+    primary-container: var(--primary-soft),
+    on-primary-container: var(--primary-soft-ink),
+    inverse-primary: var(--snack-link),
+    secondary: var(--ink-2),
+    on-secondary: var(--surface),
+    secondary-container: var(--primary-soft),
+    on-secondary-container: var(--primary-soft-ink),
+    tertiary: var(--accent),
+    on-tertiary: var(--accent-ink),
+    tertiary-container: var(--warn-soft),
+    on-tertiary-container: var(--warn),
+    error: var(--danger),
+    on-error: var(--danger-ink),
+    error-container: var(--danger-soft),
+    on-error-container: var(--danger),
+    background: var(--bg),
+    on-background: var(--ink),
+    surface: var(--surface),
+    on-surface: var(--ink),
+    on-surface-variant: var(--muted),
+    surface-variant: var(--surface-2),
+    surface-dim: var(--bg),
+    surface-bright: var(--surface),
+    surface-container-lowest: var(--surface),
+    surface-container-low: var(--surface),
+    surface-container: var(--surface),
+    surface-container-high: var(--surface),
+    surface-container-highest: var(--surface-2),
+    inverse-surface: var(--snack-bg),
+    inverse-on-surface: var(--snack-ink),
+    outline: var(--muted),
+    outline-variant: var(--line),
+    corner-extra-small: var(--radius-sm),
+    corner-small: var(--radius-sm),
+    corner-medium: var(--radius),
+  ));
+}
+
+// Komponente; i ovde `.rezim-dan`, iz istog razloga kao gore.
+html,
+.rezim-dan {
+  @include mat.button-overrides((
+    filled-container-shape: var(--radius-sm),
+    outlined-container-shape: var(--radius-sm),
+    outlined-outline-color: var(--line),
+    protected-container-shape: var(--radius-sm),
+    text-container-shape: var(--radius-sm),
+    tonal-container-shape: var(--radius-sm),
+  ));
+
+  @include mat.sidenav-overrides((
+    container-background-color: var(--side-bg),
+    container-text-color: var(--side-ink),
+    container-divider-color: var(--side-line),
+    container-shape: 0,
+    content-background-color: transparent,
+    content-text-color: var(--ink),
+  ));
+
+  @include mat.table-overrides((
+    background-color: var(--surface),
+    header-headline-color: var(--muted),
+    row-item-label-text-color: var(--ink),
+    row-item-outline-color: var(--line),
+  ));
+
+  // Ivica polja ostaje M3 `outline` (= --muted, 4.9:1): granica polja mora imati ≥ 3:1, a --line ima 1.3:1.
+  @include mat.form-field-overrides((
+    outlined-container-shape: var(--radius-sm),
+    outlined-hover-outline-color: var(--ink-2),
+    outlined-focus-outline-color: var(--primary),
+  ));
+
+  @include mat.snack-bar-overrides((
+    container-color: var(--snack-bg),
+    supporting-text-color: var(--snack-ink),
+    button-color: var(--snack-link),
+    container-shape: var(--radius-sm),
+  ));
+
+  @include mat.card-overrides((
+    elevated-container-shape: var(--radius),
+    outlined-container-shape: var(--radius),
+    outlined-container-color: var(--surface),
+    outlined-outline-color: var(--line),
+  ));
+
+  @include mat.dialog-overrides((
+    container-shape: var(--radius),
+    container-color: var(--surface),
+  ));
+
+  @include mat.chips-overrides((
+    container-shape-radius: var(--radius-sm),
+  ));
+}

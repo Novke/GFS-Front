@@ -1,19 +1,20 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { AppRoutes } from '../../../app.routes';
+import { UzivoPutanje } from '../uzivo-putanje';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { imaBrojeve, mozePregled, opisVeze } from '../data-access/izvodjenje-pravila';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { IzvodjenjeInfo } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from '../ui/format';
-import { potvrdi } from '../ui/potvrda.dialog';
+import { NotificationStore } from '../../../core/state/notification.store';
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /**
  * Izvođenja jedne prezentacije (spec 6.2), najnovije prvo: aktivno ima "Nastavi" (konzola), završeno sa čuvanjem
@@ -24,10 +25,10 @@ import { potvrdi } from '../ui/potvrda.dialog';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
   template: `
-    <main class="uz-ed-strana">
+    <div class="uz-ed-strana">
       <header class="uz-ed-strana-zaglavlje">
         <a mat-icon-button [routerLink]="'/' + rute.prezentacija(prezentacijaId)" aria-label="Nazad na prezentaciju">
-          <mat-icon>arrow_back</mat-icon>
+          <mat-icon svgIcon="arrow_back" />
         </a>
         <h1>Izvođenja{{ naziv() ? ': ' + naziv() : '' }}</h1>
       </header>
@@ -88,25 +89,26 @@ import { potvrdi } from '../ui/potvrda.dialog';
           </div>
         } @else {
           <section class="uz-ed-prazno-stanje">
-            <mat-icon aria-hidden="true">history</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="history" />
             <h2>Ova prezentacija još nije izvođena.</h2>
             <p>Pokrenuta izvođenja se pojavljuju ovde, a sačuvani rezultati ostaju dostupni i posle časa.</p>
-            <a mat-flat-button color="primary" [routerLink]="'/' + rute.prezentacija(prezentacijaId)">Nazad na prezentaciju</a>
+            <a mat-flat-button [routerLink]="'/' + rute.prezentacija(prezentacijaId)">Nazad na prezentaciju</a>
           </section>
         }
       } @else if (!greska()) {
         <mat-progress-bar mode="indeterminate" aria-label="Učitavanje izvođenja" />
       }
-    </main>
+    </div>
   `,
 })
 export class IzvodjenjaListaPage {
   private readonly api = inject(IzvodjenjaApi);
   private readonly prezentacije = inject(PrezentacijeApi);
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly obavestenja = inject(NotificationStore);
+  private readonly mrvice = inject(BreadcrumbService);
 
-  protected readonly rute = AppRoutes;
+  protected readonly rute = UzivoPutanje;
   protected readonly prezentacijaId = Number(inject(ActivatedRoute).snapshot.paramMap.get('id'));
   protected readonly lista = signal<IzvodjenjeInfo[] | null>(null);
   protected readonly greska = signal<string | null>(null);
@@ -126,24 +128,29 @@ export class IzvodjenjaListaPage {
     });
     // Naziv se čita i posebno, da zaglavlje ima naslov i kad lista još nema nijedno izvođenje.
     this.prezentacije.detalji(this.prezentacijaId).subscribe({ next: p => this.nazivIzDetalja.set(p.naziv), error: () => undefined });
+    // Pretposlednja mrvica (prezentacija) dobija naziv.
+    effect(() => {
+      const naziv = this.naziv();
+      if (naziv) untracked(() => this.mrvice.postavi('Izvođenja', naziv));
+    });
   }
 
   protected obrisi(i: IzvodjenjeInfo): void {
     const poruke = i.cuvanje
       ? ['Izvođenje sa svim sačuvanim odgovorima i rang-listom biće trajno obrisano.']
       : ['Izvođenje će nestati iz liste. Odgovori ove sesije ionako nisu čuvani.'];
-    potvrdi(this.dialog, { naslov: 'Obrisati izvođenje?', poruke, potvrdi: 'Obriši', opasno: true }).subscribe(da => {
+    ConfirmDialog.otvori(this.dialog, { naslov: 'Obrisati izvođenje?', tekst: poruke, potvrdi: 'Obriši', destruktivno: true }).subscribe(da => {
       if (!da) return;
       this.brise.set(i.id);
       this.api.obrisi(i.id).subscribe({
         next: () => {
           this.brise.set(null);
           this.lista.update(l => l?.filter(x => x.id !== i.id) ?? l);
-          this.snack.open('Izvođenje je obrisano.', undefined, { duration: 4000 });
+          this.obavestenja.uspeh('Izvođenje je obrisano.');
         },
         error: e => {
           this.brise.set(null);
-          this.snack.open(razlogGreske(e, 'Brisanje nije uspelo.'), 'U redu', { duration: 8000 });
+          this.obavestenja.greska(razlogGreske(e, 'Brisanje nije uspelo.'));
         },
       });
     });

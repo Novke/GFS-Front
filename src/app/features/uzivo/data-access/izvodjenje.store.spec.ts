@@ -1,12 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { IMessage } from '@stomp/stompjs';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { naPitanju, stanje } from './izvodjenje-podaci.testing';
-import { IzvodjenjeStore } from './izvodjenje.store';
+import { GRUPA_PORUKA, IzvodjenjeStore } from './izvodjenje.store';
 import { STOMP_FABRIKA } from './stomp';
 import { NastavnickoStanje } from './uzivo.models';
 
@@ -29,17 +29,17 @@ describe('IzvodjenjeStore', () => {
   let store: InstanceType<typeof IzvodjenjeStore>;
   let http: HttpTestingController;
   let stomp: LazniStomp;
-  let snack: { open: ReturnType<typeof vi.fn> };
+  let obavestenja: { info: ReturnType<typeof vi.fn> };
   let putanje: string[];
 
   beforeEach(() => {
     stomp = new LazniStomp();
     putanje = [];
-    snack = { open: vi.fn() };
+    obavestenja = { info: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         IzvodjenjeStore, provideHttpClient(), provideHttpClientTesting(),
-        { provide: MatSnackBar, useValue: snack },
+        { provide: NotificationStore, useValue: obavestenja },
         { provide: STOMP_FABRIKA, useValue: (p: string) => { putanje.push(p); return stomp as unknown as RxStomp; } },
       ],
     });
@@ -177,13 +177,13 @@ describe('IzvodjenjeStore', () => {
       expect(store.salje()).toBe(false);
     });
 
-    it('greška komande postavlja `greska` iz reason i prikazuje je 3 s', () => {
+    it('greška komande postavlja `greska` iz reason i prikazuje je kao kratku poruku (nova zamenjuje staru)', () => {
       init();
       store.komanda('TACAN');
       http.expectOne('api/izvodjenja/5/komande').flush(
         { reason: 'Prvo zatvori pitanje.' }, { status: 409, statusText: 'Conflict' });
       expect(store.greska()).toBe('Prvo zatvori pitanje.');
-      expect(snack.open).toHaveBeenCalledWith('Prvo zatvori pitanje.', undefined, { duration: 3000 });
+      expect(obavestenja.info).toHaveBeenCalledWith('Prvo zatvori pitanje.', { grupa: GRUPA_PORUKA });
       expect(store.salje()).toBe(false);
     });
 

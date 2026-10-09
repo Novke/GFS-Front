@@ -1,0 +1,15 @@
+{
+  "_napomena": "Token je izmišljen (link ka mokovanim podacima, nije tajna).",
+  "sesije": [
+    { "id": 7, "grupaId": 1, "token": "e2eTokenZaUpis_0123456789abcdefg", "aktivna": true, "maxPrijava": 50, "napomena": null,
+      "kreirano": "2026-10-01T10:00:00", "isticeZaDana": 7 }
+  ],
+  "prijave": [
+    { "id": 1, "sesijaId": 7, "ime": "Lazar", "prezime": "Novajlić", "indeks": "GD9", "godina": 2025, "email": "lazar.novajlic@primer.test",
+      "brojTelefona": "000 000 0009", "datumRodjenja": null, "opstina": null, "status": "NA_CEKANJU", "podneto": "2026-10-01T10:05:00",
+      "obradjeno": null, "studentId": null, "napomena": null },
+    { "id": 2, "sesijaId": 7, "ime": "Mila", "prezime": "Prijavić", "indeks": "GD10", "godina": 2025, "email": "mila.prijavic@primer.test",
+      "brojTelefona": "000 000 0010", "datumRodjenja": null, "opstina": null, "status": "NA_CEKANJU", "podneto": "2026-10-01T10:06:00",
+      "obradjeno": null, "studentId": null, "napomena": null }
+  ]
+}

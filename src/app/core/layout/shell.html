@@ -1,0 +1,16 @@
+<a class="skip-link" href="#sadrzaj" (click)="preskoci($event)">Preskoči na sadržaj</a>
+<mat-sidenav-container class="kontejner">
+  <mat-sidenav class="bocna ljuska-tamna" [mode]="siroko() ? 'side' : 'over'" [opened]="siroko() || otvorena()"
+               [disableClose]="siroko()"
+               (openedChange)="promenaOtvorenosti($event)">
+    <app-side-nav [predmeti]="reference.predmeti()" [brojaci]="brojaci()" [staging]="okruzenje.jeStaging()"
+                  (izabrano)="zatvoriAkoJeDrawer()" />
+  </mat-sidenav>
+  <mat-sidenav-content class="desno">
+    <app-top-bar [prikaziMeni]="!siroko()" [staging]="okruzenje.jeStaging()" (meni)="otvorena.set(true)"
+                 (pretraga)="otvoriPretragu()" />
+    <main #sadrzaj id="sadrzaj" class="sadrzaj" tabindex="-1">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

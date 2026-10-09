@@ -1,0 +1,70 @@
+<div class="naslov-blok">
+  @if (zavrseno()) {
+    <app-status-chip tekst="Završeno" />
+  } @else {
+    <app-status-chip tekst="U toku" ton="uToku" />
+  }
+
+  @if (izmena()) {
+    <form class="izmena" [formGroup]="forma" (ngSubmit)="posalji()" novalidate aria-label="Izmena predavanja">
+      <mat-form-field appearance="outline" class="rb">
+        <mat-label>Redni broj</mat-label>
+        <input matInput type="number" inputmode="numeric" min="1" formControlName="rb" data-rb />
+        @if (poruka('rb'); as m) {
+          <mat-error>{{ m }}</mat-error>
+        }
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="tema">
+        <mat-label>Tema</mat-label>
+        <input matInput formControlName="tema" [maxlength]="maxTema" data-tema />
+        @if (poruka('tema'); as m) {
+          <mat-error>{{ m }}</mat-error>
+        }
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="datum">
+        <mat-label>Datum</mat-label>
+        <input matInput type="date" formControlName="datum" data-datum />
+        @if (poruka('datum'); as m) {
+          <mat-error>{{ m }}</mat-error>
+        }
+      </mat-form-field>
+      <div class="dugmad">
+        <button matButton type="button" (click)="izmena.set(false)">Odustani</button>
+        <button matButton="filled" type="submit" data-sacuvaj [disabled]="cuva()">
+          @if (cuva()) {
+            <mat-progress-spinner mode="indeterminate" diameter="18" aria-label="Čuvanje" />
+          }
+          Sačuvaj
+        </button>
+      </div>
+    </form>
+  } @else {
+    <div class="naslov-red">
+      <h1>{{ naslov() }}</h1>
+      <button matIconButton type="button" class="izmeni" aria-label="Izmeni temu, redni broj i datum" data-izmeni (click)="pocniIzmenu()">
+        <mat-icon svgIcon="edit" />
+      </button>
+    </div>
+  }
+
+  <div class="kontekst">
+    <span class="oznaka ton-neutral" title="Predmet">{{ predavanje().predmet?.naziv ?? '—' }}</span>
+    <span class="oznaka ton-neutral" title="Grupa">{{ predavanje().grupa?.naziv ?? 'Bez grupe' }}</span>
+    <span class="oznaka ton-neutral mono" title="Datum"><mat-icon svgIcon="event" aria-hidden="true" />{{ predavanje().datum | datum }}</span>
+  </div>
+</div>
+
+<div class="desno">
+  <div class="kpi" aria-label="Brojke predavanja" role="group">
+    <app-stat-tile labela="prisutno" [vrednost]="brojevi().prisutnoIzGrupe" [podtekst]="prisutnoPodtekst()" data-kpi-prisutno />
+    <app-stat-tile labela="zadataka" [vrednost]="brojevi().zadaci" data-kpi-zadaci />
+    <app-stat-tile labela="zvezdica" [vrednost]="brojevi().zvezdice" data-kpi-zvezdice />
+  </div>
+  <button matIconButton type="button" [matMenuTriggerFor]="meni" aria-label="Još akcija" data-meni>
+    <mat-icon svgIcon="more_vert" />
+  </button>
+  <mat-menu #meni="matMenu" xPosition="before">
+    <button mat-menu-item type="button" (click)="pocniIzmenu()"><mat-icon svgIcon="edit" />Izmeni temu, broj i datum</button>
+    <button mat-menu-item type="button" class="opasno" data-obrisi (click)="obrisi.emit()"><mat-icon svgIcon="delete" />Obriši predavanje</button>
+  </mat-menu>
+</div>

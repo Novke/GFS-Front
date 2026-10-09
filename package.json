@@ -7,7 +7,9 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "test:eslint-pravila": "node --test \"eslint-rules/*.test.js\"",
+    "e2e": "ng build && tsc -p e2e/tsconfig.json && playwright test"
   },
   "private": true,
   "dependencies": {
@@ -19,22 +21,25 @@
     "@angular/material": "^22.2.2",
     "@angular/platform-browser": "^22.2.1",
     "@angular/router": "^22.2.1",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@ngrx/signals": "^22.0.1",
     "@stomp/rx-stomp": "^2.4.0",
     "@stomp/stompjs": "^7.3.0",
-    "bootstrap": "^5.3.3",
     "marked": "^18.1.0",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
-    "uuid": "^14.0.2",
-    "zone.js": "~0.15.1"
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
     "@angular/build": "^22.2.2",
     "@angular/cli": "~22.2.2",
     "@angular/compiler-cli": "^22.2.1",
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
+    "@material-symbols/svg-400": "^0.47.6",
+    "@playwright/test": "1.64.0",
+    "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.5",
     "angular-eslint": "22.5.0",
     "eslint": "^10.9.1",

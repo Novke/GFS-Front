@@ -1,0 +1,59 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+ol {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-width: 0;
+
+  + li::before {
+    content: "/";
+    color: var(--muted);
+  }
+}
+
+a {
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 4px;
+
+  &:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+}
+
+.tekuca {
+  color: var(--ink);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Telefon: samo tekuća stranica.
+@media (max-width: 599.98px) {
+  li:not(:last-child) {
+    display: none;
+  }
+
+  li + li::before {
+    content: none;
+  }
+}

@@ -1,0 +1,248 @@
+// Zajednički elementi iz shared/ui koje deli više komponenti (budžet anyComponentStyle): chip filtera
+// (ChipSelect, DateRangeChip, segment u biraču studenata) i oznaka statusa (StatusChip, "stariji").
+
+// Chip filtera: neaktivan "Labela ▾", aktivan "Labela: Vrednost ✕" (spec 4, Lista; maketa `.chip`).
+.chip {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &.aktivan {
+    border-color: transparent;
+    background: var(--primary-soft);
+    color: var(--primary-soft-ink);
+    font-weight: 600;
+  }
+
+  &.zakljucan {
+    align-items: center;
+    padding: 0 10px;
+    border-style: dashed;
+    border-color: var(--muted);
+    background: transparent;
+    color: var(--ink-2);
+  }
+
+  > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+
+    &:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+  }
+
+  // Duga vrednost ("Predmet: Uvod u primenu računara") se na uskom ekranu skraćuje sa …; pun tekst je u `title`.
+  .chip-tekst {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Dugme ✕ uz aktivan chip.
+  > .chip-x {
+    flex: none;
+    padding: 0 8px;
+    border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  }
+
+  .mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+  }
+
+  @media (max-width: 599.98px) {
+    min-height: 44px; // dodirne mete ≥ 44 px
+  }
+}
+
+// Oznaka statusa: tekst uvek uz boju (spec 3), na mekoj pozadini tamna varijanta iste boje.
+.oznaka {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--surface-2);
+  color: var(--ink-2);
+
+  &.ton-ok { background: var(--ok-soft); color: var(--ok); }
+  &.ton-warn { background: var(--warn-soft); color: var(--warn); }
+  &.ton-danger { background: var(--danger-soft); color: var(--danger); }
+  &.ton-info { background: var(--primary-soft); color: var(--primary-soft-ink); }
+
+  .mat-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  // "U toku": tačka sa prstenom (maketa `.status.live`).
+  .tacka {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
+  }
+}
+
+// Zajednička legenda grafikona (Heatmap, Histogram): uzorak + tekst u tokenu teksta, nikad u boji serije.
+.legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-2);
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+// Heatmap prisustva (G3): redna skala jedne boje iz --primary, mešane sa --surface (42 % / 70 % / 100 %), pa radi u
+// danu i noći (noću je skala obrnuta: više = svetlije). Proveren `dataviz` validatorom (--ordinal): monotona svetlina,
+// vidljivi koraci, najsvetliji korak >= 2:1 prema --surface. Ikona na srednjem koraku je --ink (4.9:1 dan, 3.6:1 noć),
+// na punom --primary-ink (7.1:1 / 7.3:1). Odsutan je prazna ćelija sa okvirom (oblik, ne samo boja).
+.heatmap-okvir {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+
+  &:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+.heatmap {
+  border-collapse: separate;
+  border-spacing: 2px; // razmak u boji površine između ćelija
+  font-size: 12.5px;
+
+  th {
+    font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  thead th {
+    min-width: 28px;
+    padding: 0 0 4px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+
+    &.ugao {
+      font-family: var(--font);
+      text-align: left;
+    }
+  }
+
+  tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    padding: 2px 12px 2px 0;
+    background: var(--surface);
+    text-align: left;
+
+    .labela {
+      display: block;
+      color: var(--ink);
+    }
+
+    .podlabela {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+  }
+
+  .ukupno-z,
+  .ukupno {
+    padding-left: 10px;
+    text-align: right;
+  }
+
+  .ukupno {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  tbody tr:hover th .labela {
+    text-decoration: underline;
+  }
+}
+
+.heatmap .celija,
+.legenda .uzorak {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  text-align: center;
+  vertical-align: middle;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+
+  .mat-icon {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+  }
+
+  &.n0 { box-shadow: inset 0 0 0 1px var(--line); }
+  &.n1 { background: color-mix(in srgb, var(--primary) 42%, var(--surface)); }
+  &.n2 { background: color-mix(in srgb, var(--primary) 70%, var(--surface)); color: var(--ink); }
+  &.n3 { background: var(--primary); color: var(--primary-ink); }
+}
+
+.legenda .uzorak {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+
+  .mat-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.heatmap-prazno,
+.histogram-prazno {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--muted);
+}

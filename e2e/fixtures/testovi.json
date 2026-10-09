@@ -1,0 +1,16 @@
+[
+  { "id": 1, "datum": "2026-10-05", "tipTestaId": 1, "predmetId": 1, "grupaId": 1, "maxPoena": 30, "pragProlaza": 15, "pregledan": false, "grupe": ["A"],
+    "polaganja": [
+      { "id": 11, "studentId": 1, "grupa": null, "ostvareniPoeni": null, "prepisivao": false, "napomene": null },
+      { "id": 12, "studentId": 2, "grupa": null, "ostvareniPoeni": null, "prepisivao": false, "napomene": null },
+      { "id": 13, "studentId": 3, "grupa": null, "ostvareniPoeni": null, "prepisivao": false, "napomene": null },
+      { "id": 14, "studentId": 4, "grupa": null, "ostvareniPoeni": null, "prepisivao": false, "napomene": null }
+    ] },
+  { "id": 2, "datum": "2026-09-15", "tipTestaId": 2, "predmetId": 1, "grupaId": 3, "maxPoena": 20, "pragProlaza": 10, "pregledan": true, "grupe": ["A", "B"],
+    "polaganja": [
+      { "id": 21, "studentId": 11, "grupa": "A", "ostvareniPoeni": 14.5, "prepisivao": false, "napomene": null },
+      { "id": 22, "studentId": 12, "grupa": "B", "ostvareniPoeni": 8, "prepisivao": false, "napomene": "Kasnio 10 minuta." }
+    ] },
+  { "id": 3, "datum": "2026-10-02", "tipTestaId": 3, "predmetId": 2, "grupaId": 2, "maxPoena": 10, "pragProlaza": null, "pregledan": false, "grupe": ["A"],
+    "polaganja": [] }
+]

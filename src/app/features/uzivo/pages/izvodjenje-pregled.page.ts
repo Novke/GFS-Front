@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { AppRoutes } from '../../../app.routes';
+import { UzivoPutanje } from '../uzivo-putanje';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { opisVeze } from '../data-access/izvodjenje-pravila';
 import { razlogGreske } from '../data-access/razlog-greske';
@@ -12,6 +12,7 @@ import { IzvodjenjeRezultati, RezultatPitanja, medijUrl } from '../data-access/u
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { renderMarkdown } from '../ui/markdown';
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
 export function procenatTacnihTekst(p: Pick<RezultatPitanja, 'brojOdgovora' | 'procenatTacnih'>): string {
@@ -52,7 +53,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent],
   template: `
-    <main class="uz-ed-strana uz-pr">
+    <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
         <p class="uz-ed-greska" role="alert">{{ g }}</p>
       }
@@ -61,7 +62,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
         <header class="uz-pr-zaglavlje">
           <a mat-icon-button [routerLink]="'/' + rute.prezentacijaIzvodjenja(r.izvodjenje.prezentacija.id)"
              aria-label="Nazad na izvođenja">
-            <mat-icon>arrow_back</mat-icon>
+            <mat-icon svgIcon="arrow_back" />
           </a>
           <div class="uz-pr-naslovi">
             <h1>{{ r.izvodjenje.prezentacija.naziv }}</h1>
@@ -78,7 +79,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
 
         @if (!r.izvodjenje.cuvanje) {
           <section class="uz-ed-prazno-stanje">
-            <mat-icon aria-hidden="true">visibility_off</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="visibility_off" />
             <h2>Rezultati ovog izvođenja nisu čuvani.</h2>
             <p>Odgovori studenata postoje samo tokom izvođenja.</p>
           </section>
@@ -87,7 +88,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
             <p class="uz-ed-napomena">Izvođenje je još u toku, rezultati se menjaju.</p>
           }
           @for (k of kartice(); track k.p.rundaId; let i = $index) {
-            <section class="uz-dan uz-pr-karta" [attr.aria-labelledby]="'pitanje-' + k.p.rundaId">
+            <section class="rezim-dan uz-dan uz-pr-karta" [attr.aria-labelledby]="'pitanje-' + k.p.rundaId">
               <header class="uz-pr-karta-zaglavlje">
                 <h2 [id]="'pitanje-' + k.p.rundaId">Pitanje {{ i + 1 }}</h2>
                 @if (k.p.rbSlajda) {
@@ -114,13 +115,13 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
             </section>
           } @empty {
             <section class="uz-ed-prazno-stanje">
-              <mat-icon aria-hidden="true">quiz</mat-icon>
+              <mat-icon aria-hidden="true" svgIcon="quiz" />
               <h2>U ovom izvođenju nije bilo pitanja.</h2>
             </section>
           }
 
           @if (takmicenje()) {
-            <section class="uz-dan uz-pr-karta" aria-labelledby="pr-rang">
+            <section class="rezim-dan uz-dan uz-pr-karta" aria-labelledby="pr-rang">
               <header class="uz-pr-karta-zaglavlje"><h2 id="pr-rang">Rang-lista</h2></header>
               <div class="uz-pr-sadrzaj"><app-rang-lista [stavke]="r.rangLista" /></div>
             </section>
@@ -129,13 +130,14 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
       } @else if (!greska()) {
         <mat-progress-bar mode="indeterminate" aria-label="Učitavanje pregleda" />
       }
-    </main>
+    </div>
   `,
 })
 export class IzvodjenjePregledPage {
   private readonly api = inject(IzvodjenjaApi);
+  private readonly mrvice = inject(BreadcrumbService);
 
-  protected readonly rute = AppRoutes;
+  protected readonly rute = UzivoPutanje;
   protected readonly podaci = signal<IzvodjenjeRezultati | null>(null);
   protected readonly greska = signal<string | null>(null);
 
@@ -155,7 +157,10 @@ export class IzvodjenjePregledPage {
   constructor() {
     const id = Number(inject(ActivatedRoute).snapshot.paramMap.get('id'));
     this.api.rezultati(id).subscribe({
-      next: r => this.podaci.set(r),
+      next: r => {
+        this.podaci.set(r);
+        this.mrvice.postavi(`Pregled · ${r.izvodjenje.prezentacija.naziv}`);
+      },
       error: e => this.greska.set(razlogGreske(e, 'Pregled nije učitan.')),
     });
   }

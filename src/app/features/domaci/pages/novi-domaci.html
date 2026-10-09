@@ -1,0 +1,88 @@
+<app-page-header naslov="Nov domaći" podnaslov="Izaberi predmet i grupu; predavanje, naslov i opis su opcioni." />
+
+@if (reference.imaGresku() && !referencePodaci()) {
+  <app-error-panel [poruka]="reference.greska()" (ponovo)="reference.ucitaj()" />
+}
+
+<form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
+  <app-form-error-banner [poruka]="greska()" />
+
+  <mat-form-field appearance="outline">
+    <mat-label>Predmet</mat-label>
+    <mat-select formControlName="predmet" data-predmet>
+      @for (p of reference.predmeti(); track p.id) {
+        <mat-option [value]="p.id">{{ p.naziv }}</mat-option>
+      }
+    </mat-select>
+    @if (poruka('predmet'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Grupa</mat-label>
+    <mat-select formControlName="grupa" data-grupa>
+      @for (g of reference.grupe(); track g.id) {
+        <mat-option [value]="g.id">{{ g.naziv }}</mat-option>
+      }
+    </mat-select>
+    @if (poruka('grupa'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Predavanje (opciono)</mat-label>
+    <mat-select formControlName="predavanje" data-predavanje>
+      <mat-option [value]="null">Bez predavanja</mat-option>
+      @for (p of ponudaPredavanja(); track p.id) {
+        <mat-option [value]="p.id">{{ opisPredavanja(p) }}</mat-option>
+      }
+    </mat-select>
+    @if (predavanja.isLoading()) {
+      <mat-hint>Učitavam predavanja…</mat-hint>
+    } @else if (predavanjaGreska()) {
+      <mat-hint data-predavanja-greska>Predavanja nisu učitana; domaći se može zadati i bez njih.</mat-hint>
+    } @else if (forma.controls.predmet.value === null || forma.controls.grupa.value === null) {
+      <mat-hint>Izaberi predmet i grupu da vidiš njihova predavanja.</mat-hint>
+    } @else if (ponudaPredavanja().length === 0) {
+      <mat-hint>Za ovaj predmet i grupu nema predavanja.</mat-hint>
+    } @else {
+      <mat-hint>Sa predavanja se uzima aktivnost studenata i može se "Osloboditi aktivne".</mat-hint>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Naslov (opciono)</mat-label>
+    <input matInput formControlName="naslov" [maxlength]="maxNaslov" autocomplete="off" data-naslov />
+    @if (poruka('naslov'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Datum</mat-label>
+    <input matInput type="date" formControlName="datum" data-datum />
+    @if (poruka('datum'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Opis (opciono)</mat-label>
+    <textarea matInput rows="4" formControlName="opis" [maxlength]="maxOpis" data-opis></textarea>
+    @if (poruka('opis'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <div class="dugmad">
+    <a matButton routerLink="/domaci">Odustani</a>
+    <button matButton="filled" type="submit" data-zadaj [disabled]="salje()">
+      @if (salje()) {
+        <mat-progress-spinner mode="indeterminate" diameter="18" aria-label="Zadavanje" />
+      }
+      Zadaj domaći
+    </button>
+  </div>
+</form>

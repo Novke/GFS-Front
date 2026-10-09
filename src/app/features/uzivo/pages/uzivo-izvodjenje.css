@@ -1,7 +1,8 @@
 /*
  * Uživo: prikaz za publiku (`uz-pub-`), scena projektora (`uz-scena-`) i konzola (`uz-kon-`). Globalno uključeno iz
- * src/styles.css (posle uzivo-tokeni.css), da stilovi komponenti ostanu ispod budžeta `anyComponentStyle`.
- * Boje kroz tokene redizajna sa dnevnim podrazumevanim vrednostima; bez Bootstrap klasa.
+ * src/styles.scss (posle uzivo-tokeni.css), da stilovi komponenti ostanu ispod budžeta `anyComponentStyle`.
+ * Boje kroz tokene redizajna (projektor i konzola su uvek dnevni, `rezim-dan`); crni i beli ekran (taster B/W)
+ * su namerno čisto crni i beli.
  */
 
 /* ---------- Scena projektora (16:9, širinu daje roditelj) ---------- */
@@ -37,12 +38,12 @@
   font-family: inherit;
   font-size: 9cqw;
   font-weight: 800;
-  color: var(--primary, #2456a6);
+  color: var(--primary);
 }
 
 .uz-platno .uz-scena-podnaslov {
   font-size: 3cqw;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
 }
 
 .uz-scena-postolje {
@@ -83,7 +84,7 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
-  color: var(--primary, #2456a6);
+  color: var(--primary);
 }
 
 .uz-scena-ekran {
@@ -99,7 +100,7 @@
 
 .uz-scena-ekran--beo {
   background: #fff;
-  color: #5f6c84;
+  color: var(--muted);
 }
 
 /* ---------- Prikaz za publiku (ceo prozor, letterbox) ---------- */
@@ -125,7 +126,7 @@
 .uz-pub-poruka {
   padding: 2em 3em;
   border-radius: 12px;
-  background: var(--surface, #fff);
+  background: var(--surface);
   font-size: clamp(18px, 3vw, 40px);
 }
 
@@ -141,15 +142,15 @@
   margin: 0;
   padding: 8px 14px;
   border-radius: 8px;
-  font: 600 16px/1.3 Roboto, "Helvetica Neue", sans-serif;
+  font: 600 16px/1.3 var(--font);
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.3);
 }
 
 .uz-pub-veza {
   top: 12px;
   right: 12px;
-  background: #b42318;
-  color: #fff;
+  background: var(--danger);
+  color: var(--danger-ink);
 }
 
 .uz-pub-natpis,
@@ -157,8 +158,8 @@
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #121a2a;
-  color: #fff;
+  background: var(--snack-bg);
+  color: var(--snack-ink);
   font-size: 22px;
 }
 
@@ -168,9 +169,9 @@
   display: block;
   min-height: 100dvh;
   box-sizing: border-box;
-  background: var(--surface-2, #eef1f6);
-  color: var(--ink, #121a2a);
-  font-family: Roboto, "Helvetica Neue", sans-serif;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font);
 }
 
 .uz-kon-zaglavlje {
@@ -182,8 +183,8 @@
   align-items: center;
   gap: 8px 16px;
   padding: 10px 16px;
-  background: var(--surface, #fff);
-  border-bottom: 1px solid var(--line, #dce2eb);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
 
 .uz-kon-naslovi {
@@ -205,22 +206,22 @@
   flex-wrap: wrap;
   gap: 4px 14px;
   margin: 2px 0 0;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
   font-size: 14px;
 }
 
 .uz-kon-meta strong {
-  color: var(--ink, #121a2a);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .uz-kon-veza {
-  color: var(--danger, #b42318);
+  color: var(--danger);
   font-weight: 600;
 }
 
 .uz-kon-veza--ok {
-  color: var(--ok, #1d7a55);
+  color: var(--ok);
 }
 
 .uz-kon-akcije {
@@ -258,9 +259,9 @@
 
 .uz-kon-kartica {
   padding: 12px 14px 14px;
-  border: 1px solid var(--line, #dce2eb);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface, #fff);
+  background: var(--surface);
 }
 
 .uz-kon .uz-kon-naslov {
@@ -270,7 +271,7 @@
   margin: 0 0 10px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--ink-2, #34405a);
+  color: var(--ink-2);
 }
 
 .uz-kon .uz-kon-podnaslov {
@@ -307,8 +308,8 @@
 .uz-kon-odgovorili--svi strong {
   padding: 0 8px;
   border-radius: 6px;
-  background: var(--ok-soft, #dff2e9);
-  color: var(--ok, #1d7a55);
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 
 .uz-kon-rezultat {
@@ -342,7 +343,7 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
 }
 
 .uz-kon-dugmad {
@@ -357,21 +358,21 @@
   gap: 8px;
   min-height: 52px;
   padding: 8px 10px;
-  border: 1px solid var(--line, #dce2eb);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface, #fff);
-  color: var(--ink, #121a2a);
-  font: 500 15px/1.2 Roboto, "Helvetica Neue", sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 15px/1.2 var(--font);
   text-align: left;
   cursor: pointer;
 }
 
 .uz-kon-dugme:hover:not(:disabled) {
-  border-color: var(--primary, #2456a6);
+  border-color: var(--primary);
 }
 
 .uz-kon-dugme:focus-visible {
-  outline: 3px solid var(--primary, #2456a6);
+  outline: 3px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -382,16 +383,16 @@
 
 .uz-kon-dugme--glavno {
   grid-column: span 2;
-  border-color: var(--primary, #2456a6);
-  background: var(--primary, #2456a6);
-  color: var(--primary-ink, #fff);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
   font-weight: 700;
 }
 
 .uz-kon-dugme--ukljuceno {
-  border-color: var(--primary, #2456a6);
-  background: var(--primary-soft, #e4ecf8);
-  color: var(--primary-soft-ink, #1b4386);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-soft-ink);
   font-weight: 700;
 }
 
@@ -415,7 +416,7 @@
 
 .uz-kon .uz-kon-zbir {
   margin: 0 0 8px;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
 }
 
 .uz-kon-ucesnici-lista,
@@ -433,11 +434,11 @@
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  border-bottom: 1px solid var(--line, #dce2eb);
+  border-bottom: 1px solid var(--line);
 }
 
 .uz-kon-ucesnik--odsutan .uz-kon-ucesnik-ime {
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
 }
 
 .uz-kon-tacka {
@@ -445,13 +446,13 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 2px solid var(--muted, #5f6c84);
+  border: 2px solid var(--muted);
   box-sizing: border-box;
 }
 
 .uz-kon-tacka--da {
-  border-color: var(--ok, #1d7a55);
-  background: var(--ok, #1d7a55);
+  border-color: var(--ok);
+  background: var(--ok);
 }
 
 .uz-kon-ucesnik-ime,
@@ -462,7 +463,7 @@
 }
 
 .uz-kon-odgovorio {
-  color: var(--ok, #1d7a55);
+  color: var(--ok);
 }
 
 .uz-kon-poeni,
@@ -499,7 +500,7 @@
 
 .uz-kon-telefon-link {
   overflow-wrap: anywhere;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -510,7 +511,7 @@
 
 .uz-pomoc :is(th, td) {
   padding: 5px 8px;
-  border-bottom: 1px solid var(--line, #dce2eb);
+  border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
 }
@@ -522,7 +523,7 @@
 
 .uz-pomoc-napomena {
   margin-top: 12px;
-  color: var(--muted, #5f6c84);
+  color: var(--muted);
 }
 
 .uz-kon-poruka {
@@ -570,23 +571,23 @@
   grid-template-columns: 1fr 1fr 1fr 1.3fr;
   gap: 6px;
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-  background: var(--surface, #fff);
-  border-top: 1px solid var(--line, #dce2eb);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
   box-shadow: 0 -2px 10px rgb(0 0 0 / 0.08);
 }
 
 .uz-kon-traka button {
   min-height: 52px;
-  border: 1px solid var(--line, #dce2eb);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface, #fff);
-  color: var(--ink, #121a2a);
-  font: 600 15px/1.2 Roboto, "Helvetica Neue", sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 15px/1.2 var(--font);
 }
 
 .uz-kon-traka button[aria-pressed="true"] {
-  background: var(--primary-soft, #e4ecf8);
-  border-color: var(--primary, #2456a6);
+  background: var(--primary-soft);
+  border-color: var(--primary);
 }
 
 .uz-kon-traka button:disabled {
@@ -594,9 +595,9 @@
 }
 
 .uz-kon-traka .uz-kon-traka-glavno {
-  border-color: var(--primary, #2456a6);
-  background: var(--primary, #2456a6);
-  color: var(--primary-ink, #fff);
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

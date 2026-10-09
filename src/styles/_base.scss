@@ -1,0 +1,131 @@
+// Osnova: tipografska skala, mono brojevi, papir, fokus, smanjeno kretanje.
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  background-color: var(--bg);
+  // Milimetarski papir kao pozadina sadržaja (ljuska preko njega crta svoju tamnu traku).
+  background-image: var(--pattern);
+  background-size: var(--pattern-size);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+h1 { font-size: 28px; line-height: 1.2; }
+h2 { font-size: 20px; line-height: 1.3; }
+h3 { font-size: 16px; line-height: 1.35; }
+
+small,
+.tekst-sitno { font-size: 13px; }
+.tekst-prigusen { color: var(--muted); }
+
+// Indeksi, datumi u tabelama, brojevi.
+.mono,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.brojevi { font-variant-numeric: tabular-nums; }
+
+a { color: var(--primary); }
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--primary-soft-ink);
+}
+
+:focus-visible,
+// Material (MDC) dugmad gase outline; isti prsten važi i za njih. Polja (mat-form-field) imaju svoj fokus (deblja ivica).
+.mat-mdc-button-base:focus-visible,
+.mat-mdc-icon-button:focus-visible,
+.mat-mdc-chip-action:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+// Tamna ljuska je ista u oba režima: tamni ćilibar (--focus danju) na njoj ima 2.7:1, zato svetli.
+.mat-drawer:not(.mat-drawer-content),
+.ljuska-tamna {
+  --focus: var(--side-focus);
+}
+
+// Papir za pojedinačne površine (npr. sadržaj ljuske kad ima svoju pozadinu).
+.papir {
+  background-color: var(--bg);
+  background-image: var(--pattern);
+  background-size: var(--pattern-size);
+}
+
+// Oznaka okruženja (assets/env.json) u javnom i projektorskom layoutu; ljuska ima oznaku u gornjoj traci.
+.traka-okruzenja {
+  padding: 2px 0;
+  background: #c62828;
+  color: #fff;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+// Oznaka STAGING u ljusci (gornja traka, dno bočne navigacije).
+.oznaka-okruzenja {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #fff;
+  background: #c62828;
+}
+
+// Samo za čitače ekrana.
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.samo-stampa { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

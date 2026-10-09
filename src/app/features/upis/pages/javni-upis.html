@@ -1,0 +1,133 @@
+<article class="upis">
+  <header class="zaglavlje">
+    <span class="znak" aria-hidden="true"><img src="assets/images/gfs-logo.png" alt="" width="170" height="128"></span>
+    <div class="naslovi">
+      <p class="nadnaslov">Građevinski fakultet Subotica</p>
+      <h1>{{ info() ? 'Prijava za grupu ' + info()?.grupaNaziv : 'Prijava' }}</h1>
+      @if (info(); as i) {
+        <p class="godina">Godina upisa: <strong>{{ i.godinaUpisa }}</strong></p>
+      }
+    </div>
+  </header>
+
+  <div class="telo">
+    @switch (stanje()) {
+      @case ('ucitavanje') {
+        <p class="stanje" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
+        </p>
+      }
+
+      @case ('nepostoji') {
+        <p class="poruka upozorenje" role="alert">
+          Link za prijavu nije ispravan. Proveri da li si ceo link prepisao/skenirao.
+        </p>
+      }
+
+      @case ('zatvorena') {
+        <p class="poruka neutralno" role="alert">Prijava je zatvorena.</p>
+      }
+
+      @case ('greska') {
+        <p class="poruka opasnost" role="alert">Greška na serveru, pokušaj ponovo.</p>
+        <button type="button" mat-flat-button class="dugme" (click)="pokusajPonovo()">Pokušaj ponovo</button>
+      }
+
+      @case ('uspeh') {
+        @if (poslato(); as p) {
+          <p class="poruka uspeh" role="status">Prijava primljena. Asistent će je odobriti.</p>
+          <dl class="pregled">
+            <dt>Ime</dt><dd>{{ p.ime }}</dd>
+            <dt>Prezime</dt><dd>{{ p.prezime }}</dd>
+            <dt>Indeks</dt><dd class="mono">{{ p.indeks }}</dd>
+            <dt>Godina upisa</dt><dd class="mono">{{ p.godina }}</dd>
+            <dt>Email</dt><dd>{{ p.email }}</dd>
+            <dt>Telefon</dt><dd class="mono">{{ p.brojTelefona }}</dd>
+          </dl>
+        }
+      }
+
+      @case ('forma') {
+        <form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Ime</mat-label>
+            <input matInput type="text" formControlName="ime" autocomplete="given-name" autocapitalize="words" maxlength="60">
+            @if (poruka('ime'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Prezime</mat-label>
+            <input matInput type="text" formControlName="prezime" autocomplete="family-name" autocapitalize="words" maxlength="60">
+            @if (poruka('prezime'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Indeks</mat-label>
+            <input matInput type="text" formControlName="indeks" class="mono" autocomplete="off" autocapitalize="characters"
+              autocorrect="off" spellcheck="false" maxlength="20">
+            <mat-hint>Latinicom, npr. GD12</mat-hint>
+            @if (poruka('indeks'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Godina upisa</mat-label>
+            <input matInput type="number" formControlName="godina" inputmode="numeric" step="1" [attr.min]="2000"
+              [attr.max]="granice.maxGodina">
+            @if (poruka('godina'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Email</mat-label>
+            <input matInput type="email" formControlName="email" inputmode="email" autocomplete="email" autocapitalize="off"
+              spellcheck="false" maxlength="120">
+            @if (poruka('email'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Broj telefona</mat-label>
+            <input matInput type="tel" formControlName="brojTelefona" inputmode="tel" autocomplete="tel">
+            @if (poruka('brojTelefona'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Datum rođenja (opciono)</mat-label>
+            <input matInput type="date" formControlName="datumRodjenja" autocomplete="bday" min="1920-01-01"
+              [attr.max]="granice.danas">
+            @if (poruka('datumRodjenja'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Opština (opciono)</mat-label>
+            <input matInput type="text" formControlName="opstina" autocomplete="address-level2" maxlength="100">
+            @if (poruka('opstina'); as m) {
+              <mat-error>{{ m }}</mat-error>
+            }
+          </mat-form-field>
+
+          <app-form-error-banner [poruka]="greskaServera()" />
+
+          <button type="submit" mat-flat-button class="dugme" [disabled]="salje()">
+            @if (salje()) {
+              <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
+            }
+            Pošalji
+          </button>
+        </form>
+      }
+    }
+  </div>
+</article>

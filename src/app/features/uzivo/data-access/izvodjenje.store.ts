@@ -1,6 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import {
@@ -8,6 +7,7 @@ import {
 } from 'rxjs';
 import { IzvodjenjaApi } from './izvodjenja.api';
 import { dozvoljeneKomande } from './izvodjenje-pravila';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { razlogGreske } from './razlog-greske';
 import { ServerskiSat } from './sat';
 import { STOMP_FABRIKA } from './stomp';
@@ -25,7 +25,8 @@ export interface IzvodjenjeState {
 
 /** Komanda bez odgovora ovoliko dugo se odustaje, da red ne stane (stanje ionako stiže kroz STOMP). */
 export const KOMANDA_TIMEOUT_MS = 15_000;
-const PORUKA_TRAJANJE_MS = 3000;
+/** Grupa poruka komandi u `NotificationStore`: nova poruka sklanja prethodnu. */
+export const GRUPA_PORUKA = 'uzivo-komanda';
 const PORUKA_TIMEOUT = 'Server ne odgovara. Pokušaj ponovo.';
 
 interface Posao { zahtev: () => Observable<NastavnickoStanje>; greska: string; }
@@ -85,7 +86,7 @@ export const IzvodjenjeStore = signalStore(
   })),
   withMethods(store => {
     const api = inject(IzvodjenjaApi);
-    const snack = inject(MatSnackBar);
+    const obavestenja = inject(NotificationStore);
     const fabrika = inject(STOMP_FABRIKA);
 
     let izvodjenjeId: number | null = null;
@@ -131,7 +132,8 @@ export const IzvodjenjeStore = signalStore(
     function prijaviGresku(e: unknown, podrazumevano: string): void {
       const poruka = e instanceof TimeoutError ? PORUKA_TIMEOUT : razlogGreske(e, podrazumevano);
       patchState(store, { greska: poruka });
-      snack.open(poruka, undefined, { duration: PORUKA_TRAJANJE_MS });
+      // Kratka poruka (ne greška koja čeka zatvaranje): nastavnik pritiska komande u brzom nizu, nova zamenjuje staru.
+      obavestenja.info(poruka, { grupa: GRUPA_PORUKA });
       if (e instanceof HttpErrorResponse && e.status === 410) osvezi();
     }
 

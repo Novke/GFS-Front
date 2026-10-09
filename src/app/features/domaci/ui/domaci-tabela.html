@@ -1,0 +1,62 @@
+<div class="tabela-okvir">
+  <table class="lista-tabela">
+    <caption class="sr-only">Domaći</caption>
+    <thead>
+      <tr>
+        <th scope="col" [attr.aria-sort]="ariaSort('naslov')">
+          <button type="button" class="sortiraj" data-sort="naslov" (click)="sortiraj('naslov')">Naslov<span aria-hidden="true">{{ strelica('naslov') }}</span></button>
+        </th>
+        <th scope="col" [attr.aria-sort]="ariaSort('datum')">
+          <button type="button" class="sortiraj" data-sort="datum" (click)="sortiraj('datum')">Datum<span aria-hidden="true">{{ strelica('datum') }}</span></button>
+        </th>
+        @if (prikazPredmeta()) {
+          <th scope="col">Predmet</th>
+        }
+        @if (prikazGrupe()) {
+          <th scope="col">Grupa</th>
+        }
+        <th scope="col">Predavanje</th>
+        <th scope="col">Urađeno</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (d of stavke(); track d.id) {
+        <tr (click)="otvori.emit(d.id)">
+          <td class="c-glavno">
+            <button type="button" class="otvori" [class.nema]="bezNaslova(d)" (click)="$event.stopPropagation(); otvori.emit(d.id)">{{ naslov(d) }}</button>
+          </td>
+          <td class="samo-desktop mono brojevi-sitno">{{ d.datum | datum }}</td>
+          @if (prikazPredmeta()) {
+            <td class="samo-desktop">{{ nazivPredmeta(d) }}</td>
+          }
+          @if (prikazGrupe()) {
+            <td class="samo-desktop brojevi-sitno" [class.nema]="!d.grupa">{{ nazivGrupe(d) }}</td>
+          }
+          <td class="samo-desktop brojevi-sitno" [class.nema]="!d.predavanje">
+            @if (d.predavanje; as p) {
+              <a class="veza" [routerLink]="['/predavanja', p.id]" (click)="$event.stopPropagation()">Predavanje {{ p.rb ?? '—' }}</a>
+            } @else {
+              —
+            }
+          </td>
+          <td class="samo-desktop brojevi-sitno">
+            @let u = uradjeno(d);
+            @if (u.procenat !== null) {
+              <span class="traka" aria-hidden="true"><i [style.width.%]="u.procenat"></i></span>
+            }
+            <span class="mono" [class.nema]="!d.grupa">{{ u.tekst }}</span>
+          </td>
+          <td class="c-st">
+            @if (pregledan(d)) {
+              <app-status-chip tekst="Pregledan" ton="ok" />
+            } @else {
+              <app-status-chip tekst="Za pregled" ton="warn" />
+            }
+          </td>
+          <td class="c-meta">{{ meta(d) }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

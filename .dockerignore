@@ -4,3 +4,6 @@ dist
 .git
 .idea
 .vscode
+playwright-report
+test-results
+blob-report

@@ -9,10 +9,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
-import { AppRoutes } from '../../../app.routes';
+import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
@@ -20,16 +19,20 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
 import { IzvodjenjeInfo, PokreniCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from '../ui/format';
-import { potvrdi } from '../ui/potvrda.dialog';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import type { NazivIkone } from '../../../core/layout/icons';
+import { NotificationStore } from '../../../core/state/notification.store';
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
  * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje"), u sredini
- * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `uz-dan`). Ispod
+ * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
  * 1200 px pregled ide ispod forme. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
  */
@@ -50,7 +53,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
       <div class="uz-ed">
         <header class="uz-ed-zaglavlje">
           <a mat-icon-button [routerLink]="'/' + rute.prezentacije" [queryParams]="{ predmet: p.predmet.id }"
-             aria-label="Nazad na prezentacije"><mat-icon>arrow_back</mat-icon></a>
+             aria-label="Nazad na prezentacije"><mat-icon svgIcon="arrow_back" /></a>
           <div class="uz-ed-naslovi">
             <input class="uz-ed-naziv" aria-label="Naziv prezentacije" maxlength="200" [value]="p.naziv"
                    (change)="sacuvajNaziv($any($event.target))" (keydown.enter)="$any($event.target).blur()">
@@ -59,26 +62,26 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <span class="uz-ed-predmet">{{ p.predmet.naziv }}</span>
           </div>
           <span class="uz-ed-status" role="status" [class.uz-ed-status--greska]="store.cuvanje() === 'greska'">
-            @if (store.cuvanje() === 'greska') { <mat-icon aria-hidden="true">error_outline</mat-icon> }
+            @if (store.cuvanje() === 'greska') { <mat-icon aria-hidden="true" svgIcon="error" /> }
             {{ statusTekst() }}
           </span>
           <div class="uz-ed-akcije">
-            <a mat-button [routerLink]="'/' + rute.prezentacijaIzvodjenja(p.id)"><mat-icon>history</mat-icon>Izvođenja</a>
+            <a mat-button [routerLink]="'/' + rute.prezentacijaIzvodjenja(p.id)"><mat-icon svgIcon="history" />Izvođenja</a>
             <button mat-button type="button" [disabled]="radi()" (click)="duplirajPrezentaciju()">
-              <mat-icon>content_copy</mat-icon>Dupliraj prezentaciju
+              <mat-icon svgIcon="content_copy" />Dupliraj prezentaciju
             </button>
             <button mat-button type="button" [disabled]="radi()" (click)="obrisiPrezentaciju()">
-              <mat-icon>delete</mat-icon>Obriši
+              <mat-icon svgIcon="delete" />Obriši
             </button>
-            <button mat-flat-button color="primary" type="button" [disabled]="radi()" (click)="pokreni()">
-              <mat-icon>play_arrow</mat-icon>Pokreni
+            <button mat-flat-button type="button" [disabled]="radi()" (click)="pokreni()">
+              <mat-icon svgIcon="play_arrow" />Pokreni
             </button>
           </div>
         </header>
 
         @if (aktivno(); as a) {
           <div class="uz-ed-traka" role="status">
-            <mat-icon aria-hidden="true">sensors</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="sensors" />
             <span>Izvođenje u toku · kod <strong>{{ kod(a.kod) }}</strong></span>
             <a mat-flat-button [routerLink]="'/' + rute.izvodjenjeKonzola(a.id)">Nastavi</a>
           </div>
@@ -115,18 +118,18 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               @for (s of store.slajdovi(); track store.kljuc(s.id); let i = $index) {
                 <li class="uz-ed-stavka" cdkDrag cdkDragLockAxis="y"
                     [class.uz-ed-stavka--izabrana]="s.id === store.izabraniId()">
-                  <mat-icon class="uz-ed-rucka" cdkDragHandle aria-hidden="true">drag_indicator</mat-icon>
+                  <mat-icon class="uz-ed-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
                   <button class="uz-ed-stavka-dugme" type="button" (click)="store.izaberi(s.id)"
                           [attr.aria-current]="s.id === store.izabraniId() ? 'true' : null">
                     <span class="uz-ed-rb">{{ s.rb }}</span>
-                    <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)">{{ ikona(s) }}</mat-icon>
+                    <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)" [svgIcon]="ikona(s)" />
                     <span class="uz-ed-oznaka">{{ oznaka(s) }}</span>
                     @if (store.neispravni().has(s.id) || s.id < 0) {
-                      <mat-icon class="uz-ed-upozorenje" aria-label="Nije sačuvan" title="Nije sačuvan">error_outline</mat-icon>
+                      <mat-icon class="uz-ed-upozorenje" aria-label="Nije sačuvan" title="Nije sačuvan" svgIcon="error" />
                     }
                   </button>
                   <button mat-icon-button type="button" [matMenuTriggerFor]="meniSlajda" [matMenuTriggerData]="{ s, i }"
-                          [attr.aria-label]="'Radnje za slajd ' + s.rb"><mat-icon>more_vert</mat-icon></button>
+                          [attr.aria-label]="'Radnje za slajd ' + s.rb"><mat-icon svgIcon="more_vert" /></button>
                 </li>
               }
             </ol>
@@ -134,28 +137,28 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd ili pitanje.</p>
             }
             <div class="uz-ed-dodaj">
-              <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon>add</mat-icon>Info</button>
-              <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon>add</mat-icon>Pitanje</button>
+              <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
+              <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
             </div>
           </nav>
 
           <mat-menu #meniPitanja="matMenu">
             @for (t of tipovi; track t.tip) {
               <button mat-menu-item type="button" (click)="store.dodaj('PITANJE', t.tip)">
-                <mat-icon>{{ t.ikona }}</mat-icon>{{ t.naziv }}
+                <mat-icon [svgIcon]="t.ikona" />{{ t.naziv }}
               </button>
             }
           </mat-menu>
           <mat-menu #meniSlajda="matMenu">
             <ng-template matMenuContent let-s="s" let-i="i">
-              <button mat-menu-item type="button" (click)="store.dupliraj(s.id)"><mat-icon>content_copy</mat-icon>Dupliraj</button>
+              <button mat-menu-item type="button" (click)="store.dupliraj(s.id)"><mat-icon svgIcon="content_copy" />Dupliraj</button>
               <button mat-menu-item type="button" [disabled]="i === 0" (click)="store.pomeri(i, i - 1)">
-                <mat-icon>arrow_upward</mat-icon>Pomeri gore
+                <mat-icon svgIcon="arrow_upward" />Pomeri gore
               </button>
               <button mat-menu-item type="button" [disabled]="i === store.slajdovi().length - 1" (click)="store.pomeri(i, i + 1)">
-                <mat-icon>arrow_downward</mat-icon>Pomeri dole
+                <mat-icon svgIcon="arrow_downward" />Pomeri dole
               </button>
-              <button mat-menu-item type="button" (click)="obrisiSlajd(s)"><mat-icon>delete</mat-icon>Obriši</button>
+              <button mat-menu-item type="button" (click)="obrisiSlajd(s)"><mat-icon svgIcon="delete" />Obriši</button>
             </ng-template>
           </mat-menu>
 
@@ -169,7 +172,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 
           <aside class="uz-ed-pregled" aria-label="Pregled slajda">
             @if (store.izabrani(); as s) {
-              <div class="uz-dan uz-ed-platno">
+              <div class="rezim-dan uz-dan uz-ed-platno">
                 <app-slajd-prikaz [slajd]="s" />
               </div>
               <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
@@ -178,25 +181,26 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
         </div>
       </div>
     } @else if (store.greska(); as g) {
-      <main class="uz-ed-strana">
+      <div class="uz-ed-strana">
         <p class="uz-ed-greska" role="alert">{{ g }}</p>
-        <a mat-button [routerLink]="'/' + rute.prezentacije"><mat-icon>arrow_back</mat-icon>Nazad na prezentacije</a>
-      </main>
+        <a mat-button [routerLink]="'/' + rute.prezentacije"><mat-icon svgIcon="arrow_back" />Nazad na prezentacije</a>
+      </div>
     } @else {
       <mat-progress-bar mode="indeterminate" aria-label="Učitavanje prezentacije" />
     }
   `,
 })
-export class PrezentacijaEditorPage {
+export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly store = inject(EditorStore);
   private readonly api = inject(PrezentacijeApi);
   private readonly izvodjenja = inject(IzvodjenjaApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly obavestenja = inject(NotificationStore);
+  private readonly mrvice = inject(BreadcrumbService);
 
-  protected readonly rute = AppRoutes;
+  protected readonly rute = UzivoPutanje;
   protected readonly tipovi = TIPOVI_PITANJA;
   protected readonly kod = kodSaRazmakom;
   protected readonly oznaka = (s: SlajdDetails) => oznakaSlajda(s, 48);
@@ -235,13 +239,26 @@ export class PrezentacijaEditorPage {
         .subscribe({ next: l => this.aktivno.set(l[0] ?? null), error: () => this.aktivno.set(null) });
       onCleanup(() => pretplata.unsubscribe());
     });
+    // Poslednja mrvica: naziv prezentacije (prati i izmenu naziva u zaglavlju).
+    effect(() => {
+      const naziv = this.store.prezentacija()?.naziv;
+      if (naziv) untracked(() => this.mrvice.postavi(naziv));
+    });
   }
 
-  /** Za `canDeactivate`: neispravni ili nesačuvani nacrti bi se izgubili (ispravne izmene store pošalje sam). */
-  mozeDaNapusti(): boolean {
-    const nesacuvani = this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id));
-    return !nesacuvani.length
-      || confirm(`Nesačuvanih slajdova: ${nesacuvani.length} (nisu potpuni, vidi upozorenja u listi). Napusti editor i odbaci ih?`);
+  /** Nepotpuni nacrti i neispravni slajdovi: store ih ne šalje, pa bi se napuštanjem izgubili (ispravne izmene šalje sam). */
+  private nesacuvaniSlajdovi(): number {
+    return this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id)).length;
+  }
+
+  /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
+  imaNesacuvanihIzmena(): boolean {
+    return this.nesacuvaniSlajdovi() > 0;
+  }
+
+  tekstNapustanja(): string {
+    return `Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
+      + 'Ako napustiš editor, odbacuju se.';
   }
 
   protected tastatura(e: KeyboardEvent): void {
@@ -258,7 +275,7 @@ export class PrezentacijaEditorPage {
     }
   }
 
-  protected ikona(s: SlajdDetails): string {
+  protected ikona(s: SlajdDetails): NazivIkone {
     return s.tip === 'PITANJE' && s.pitanje ? opisTipa(s.pitanje.tip).ikona : 'article';
   }
 
@@ -294,8 +311,8 @@ export class PrezentacijaEditorPage {
   }
 
   protected obrisiSlajd(s: SlajdDetails): void {
-    potvrdi(this.dialog, {
-      naslov: `Obrisati slajd ${s.rb}?`, poruke: [`„${oznakaSlajda(s)}“ biće obrisan.`], potvrdi: 'Obriši', opasno: true,
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: `Obrisati slajd ${s.rb}?`, tekst: `„${oznakaSlajda(s)}“ biće obrisan.`, potvrdi: 'Obriši', destruktivno: true,
     }).subscribe(da => da && this.store.obrisi(s.id));
   }
 
@@ -328,8 +345,8 @@ export class PrezentacijaEditorPage {
       next: () => this.api.dupliraj(p.id).subscribe({
         next: kopija => {
           this.radi.set(false);
-          this.snack.open(`Napravljena je kopija „${kopija.naziv}“.`, 'U redu', { duration: 5000 });
-          this.router.navigate(['/' + AppRoutes.prezentacija(kopija.id)]);
+          this.obavestenja.uspeh(`Napravljena je kopija „${kopija.naziv}“.`);
+          this.router.navigate(['/' + UzivoPutanje.prezentacija(kopija.id)]);
         },
         error: e => this.neuspeh(e, 'Dupliranje nije uspelo.'),
       }),
@@ -344,14 +361,14 @@ export class PrezentacijaEditorPage {
     if (p.brojIzvodjenja > 0) {
       poruke.push(`Brišu se i sačuvana izvođenja sa rezultatima: ${p.brojIzvodjenja}.`);
     }
-    potvrdi(this.dialog, { naslov: 'Obrisati prezentaciju?', poruke, potvrdi: 'Obriši', opasno: true }).subscribe(da => {
+    ConfirmDialog.otvori(this.dialog, { naslov: 'Obrisati prezentaciju?', tekst: poruke, potvrdi: 'Obriši', destruktivno: true }).subscribe(da => {
       if (!da) return;
       this.radi.set(true);
       this.api.obrisi(p.id).subscribe({
         next: () => {
           this.radi.set(false);
-          this.snack.open('Prezentacija je obrisana.', undefined, { duration: 4000 });
-          this.router.navigate(['/' + AppRoutes.prezentacije], { queryParams: { predmet: p.predmet.id } });
+          this.obavestenja.uspeh('Prezentacija je obrisana.');
+          this.router.navigate(['/' + UzivoPutanje.prezentacije], { queryParams: { predmet: p.predmet.id } });
         },
         error: e => this.neuspeh(e, 'Brisanje nije uspelo.'),
       });
@@ -376,6 +393,6 @@ export class PrezentacijaEditorPage {
   private neuspeh(e: unknown, poruka: string, uvod?: string): void {
     this.radi.set(false);
     const razlog = e instanceof NijeSacuvano ? e.message : razlogGreske(e, poruka);
-    this.snack.open(uvod ? `${uvod}: ${razlog}` : razlog, 'U redu', { duration: 8000 });
+    this.obavestenja.greska(uvod ? `${uvod}: ${razlog}` : razlog);
   }
 }

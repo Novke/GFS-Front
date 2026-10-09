@@ -53,7 +53,7 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button type="button" mat-dialog-close>Otkaži</button>
-        <button mat-flat-button color="primary" type="submit" [disabled]="salje()">Napravi</button>
+        <button mat-flat-button type="submit" [disabled]="salje()">Napravi</button>
       </mat-dialog-actions>
     </form>
   `,

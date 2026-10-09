@@ -40,7 +40,7 @@ const nn = { nonNullable: true } as const;
           <mat-label>Naslov</mat-label>
           <input matInput formControlName="naslov">
         </mat-form-field>
-        <mat-form-field class="uz-ed-puno">
+        <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
           <mat-label>Tekst (Markdown)</mat-label>
           <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="6" formControlName="sadrzaj"></textarea>
           <mat-hint>**podebljano** · *kurziv* · "- " stavka liste · "1. " numerisana · "## " podnaslov · [veza](https://…)</mat-hint>
@@ -50,7 +50,7 @@ const nn = { nonNullable: true } as const;
       } @else {
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
       }
-      <mat-form-field class="uz-ed-puno">
+      <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
         <mat-label>Beleške za predavača</mat-label>
         <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" formControlName="beleske"></textarea>
         <mat-hint>Vide se samo u konzoli, ne na projektoru.</mat-hint>

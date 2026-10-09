@@ -1,0 +1,67 @@
+// Štampa: bez navigacije i dugmadi, crno na belom, bez papira i senki.
+@media print {
+  :root,
+  :root[data-mode] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #ffffff;
+    --ink: #000000;
+    --ink-2: #000000;
+    --muted: #333333;
+    --line: #999999;
+    --primary: #000000;
+    --primary-ink: #ffffff;
+    --primary-soft: #ffffff;
+    --primary-soft-ink: #000000;
+    --pattern: none;
+    --shadow: none;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000;
+    font-size: 11pt;
+  }
+
+  // Navigacija i kontrole ekrana.
+  nav,
+  mat-sidenav,
+  .mat-drawer:not(.mat-drawer-content),
+  mat-toolbar,
+  .mat-toolbar,
+  .mat-mdc-paginator,
+  .mat-mdc-snack-bar-container,
+  .ne-stampaj,
+  [role="navigation"],
+  button:not(.stampaj) {
+    display: none !important;
+  }
+
+  .mat-drawer-content,
+  .mat-drawer-container {
+    margin: 0 !important;
+    background: none !important;
+  }
+
+  .samo-stampa { display: block !important; }
+
+  *,
+  *::before,
+  *::after {
+    color: #000000 !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  a { text-decoration: none; }
+
+  table { page-break-inside: auto; }
+  tr,
+  img { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  h1,
+  h2,
+  h3 { page-break-after: avoid; }
+}
