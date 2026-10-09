@@ -7,7 +7,7 @@ import { provideRouter, Router, withComponentInputBinding } from '@angular/route
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { StudentListItem, StudentPregledDetails, StudentPredmetKartica } from '../../../core/api/studenti.api';
+import { StudentPregledDetails, StudentPredmetKartica } from '../../../core/api/studenti.api';
 import { IKONE } from '../../../core/layout/icons';
 import { STUDENTI_RUTE } from '../studenti.routes';
 
@@ -17,7 +17,13 @@ function student(izmene: Partial<StudentPregledDetails> = {}): StudentPregledDet
     ime: 'Ana',
     prezime: 'Radić',
     indeks: 'GD12',
+    godina: 2025,
+    email: 'ana@gf.uns.ac.rs',
+    brojTelefona: '064 123 456',
+    datumRodjenja: '2006-03-04',
+    opstina: 'Subotica',
     grupa: 'GD-2025',
+    grupaId: 4,
     aktivnosti: [
       { id: 1, predavanjeId: 11, tip: 'ZADATAK', napomene: null, datum: '2025-10-14', tema: 'Petlje' },
       { id: 2, predavanjeId: 12, tip: 'PRISUSTVO', napomene: 'kasnila', datum: '2025-10-21', tema: 'Nizovi' },
@@ -25,13 +31,6 @@ function student(izmene: Partial<StudentPregledDetails> = {}): StudentPregledDet
     uradjeniDomaci: [{ id: 1, domaciId: 21, bodovi: 8, napomene: null, prepisivanje: false, oslobodjen: false, datum: '2025-10-18', naslov: 'Domaći 1' }],
     polaganja: [{ id: 1, testId: 31, ostvareniPoeni: 40, polozio: true, prepisivao: false, napomene: null, datum: '2025-11-20', tipTesta: { id: 1, naziv: 'Kolokvijum 1' } }],
     ...izmene,
-  };
-}
-
-function red(id: number, izmene: Partial<StudentListItem> = {}): StudentListItem {
-  return {
-    id, ime: 'Ana', prezime: 'Radić', indeks: 'GD12', godina: 2025, email: 'ana@gf.uns.ac.rs', brojTelefona: '064 123 456',
-    grupa: { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 3 }, ...izmene,
   };
 }
 
@@ -84,19 +83,16 @@ describe('StudentProfil', () => {
     harness.detectChanges();
   };
 
-  /** Otvara profil i odgovara na zahteve: student, zaglavlje (pretraga po indeksu), grupa, kartice taba Pregled. */
-  async function otvori(opcije: { d?: StudentPregledDetails; zaglavlje?: StudentListItem | null; ids?: number[]; url?: string } = {}) {
+  /** Otvara profil i odgovara na zahteve: student (sa zaglavljem) i, ako ima grupu, studenti grupe. Nema `pretraga` poziva. */
+  async function otvori(opcije: { d?: StudentPregledDetails; ids?: number[]; url?: string } = {}) {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(opcije.url ?? '/studenti/5');
-    http.expectOne('api/studenti/5').flush(opcije.d ?? student());
-    const z = opcije.zaglavlje === undefined ? red(5) : opcije.zaglavlje;
-    const pretraga = http.expectOne(r => r.url === 'api/studenti/pretraga');
-    expect(pretraga.request.params.get('q')).toBe((opcije.d ?? student()).indeks);
-    expect(pretraga.request.params.get('size')).toBe('100');
-    pretraga.flush({ content: z ? [red(99, { indeks: 'GD12' }), z] : [], page: { size: 100, number: 0, totalElements: 2, totalPages: 1 } });
-    if (z?.grupa) {
-      http.expectOne(`api/grupe/${z.grupa.id}`).flush(grupa(opcije.ids ?? [3, 5, 9]));
+    const d = opcije.d ?? student();
+    http.expectOne('api/studenti/5').flush(d);
+    if (d.grupaId) {
+      http.expectOne(`api/grupe/${d.grupaId}`).flush(grupa(opcije.ids ?? [3, 5, 9]));
     }
+    http.expectNone(r => r.url === 'api/studenti/pretraga');
     await stani();
   }
 
@@ -107,7 +103,7 @@ describe('StudentProfil', () => {
     kartice(http.expectOne('api/studenti/5/predmeti'));
     await stani();
     expect(el().querySelector('h1')!.textContent).toBe('Ana Radić');
-    expect(el().querySelector('[data-indeks]')!.textContent).toBe('GD12/2025');
+    expect(el().querySelector('[data-indeks]')!.textContent).toBe('Indeks: GD12/2025');
     expect(el().querySelector('a[data-grupa]')!.getAttribute('href')).toBe('/grupe/4');
     expect(el().querySelector('[data-godina]')!.textContent).toContain('2025');
     expect(el().querySelector('a[data-mail]')!.getAttribute('href')).toBe('mailto:ana@gf.uns.ac.rs');
@@ -115,7 +111,7 @@ describe('StudentProfil', () => {
   });
 
   it('student bez emaila (i telefona) nema mailto ni tel link, nego "—"', async () => {
-    await otvori({ zaglavlje: red(5, { email: null, brojTelefona: '' }) });
+    await otvori({ d: student({ email: null, brojTelefona: '' }) });
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
     expect(el().querySelector('a[data-mail]')).toBeNull();
@@ -126,36 +122,44 @@ describe('StudentProfil', () => {
   });
 
   it('student bez godine i grupe (stari red): indeks bez godine, "Bez grupe", godina "—", bez izuzetaka', async () => {
-    await otvori({ d: student({ grupa: null }), zaglavlje: red(5, { godina: null, grupa: null }) });
+    await otvori({ d: student({ grupa: null, grupaId: null, godina: null }) });
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
-    expect(el().querySelector('[data-indeks]')!.textContent).toBe('GD12');
-    expect(el().querySelector('[data-grupa]')!.textContent).toBe('Bez grupe');
+    expect(el().querySelector('[data-indeks]')!.textContent).toBe('Indeks: GD12');
+    expect(el().querySelector('[data-grupa]')!.textContent).toBe('Grupa: Bez grupe');
     expect(el().querySelector('a[data-grupa]')).toBeNull();
     expect(el().querySelector('[data-godina]')!.textContent).toContain('—');
     expect(el().querySelector('[data-susedi]')).toBeNull();
   });
 
-  it('zaglavlje koje se ne učita ne ruši profil: ime i tabovi ostaju, godina i kontakt "—"', async () => {
+  it('zaglavlje je iz GET studenti/{id}: student čiji indeks ima mnogo istih (preko 100 rezultata pretrage) ima podatke, bez pretrage', async () => {
+    await otvori({ d: student({ indeks: 'GD1' }) });
+    http.expectOne('api/studenti/5/predmeti').flush([]);
+    await stani();
+    expect(el().querySelector('[data-indeks]')!.textContent).toContain('GD1/2025');
+    expect(el().querySelector('a[data-mail]')!.getAttribute('href')).toBe('mailto:ana@gf.uns.ac.rs');
+    expect(el().querySelector('a[data-grupa]')!.getAttribute('href')).toBe('/grupe/4');
+  });
+
+  it('studenti grupe se ne učitaju: profil radi, bez strelica prethodni/sledeći', async () => {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/studenti/5');
     http.expectOne('api/studenti/5').flush(student());
-    http.expectOne(r => r.url === 'api/studenti/pretraga').flush('greška', { status: 500, statusText: 'Server Error' });
+    http.expectOne('api/grupe/4').flush('greška', { status: 500, statusText: 'Server Error' });
     await stani();
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
     expect(el().querySelector('h1')!.textContent).toBe('Ana Radić');
-    expect(el().querySelector('[data-indeks]')!.textContent).toBe('GD12');
-    expect(el().querySelector('[data-grupa]')!.textContent).toBe('GD-2025');
-    expect(el().querySelector('[data-bez-maila]')).not.toBeNull();
+    expect(el().querySelector('a[data-grupa]')).not.toBeNull();
+    expect(el().querySelector('[data-susedi]')).toBeNull();
   });
 
   it('prethodni/sledeći: u sredini su linkovi na susede, mesto u grupi je "2 / 3"', async () => {
     await otvori({ ids: [3, 5, 9] });
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
-    expect(el().querySelector('[data-prethodni]')!.getAttribute('href')).toBe('/studenti/3');
-    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/9');
+    expect(el().querySelector('[data-prethodni]')!.getAttribute('href')).toBe('/studenti/3/pregled');
+    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/9/pregled');
     expect(el().querySelector('.mesto')!.textContent!.trim()).toBe('2 / 3');
   });
 
@@ -166,7 +170,7 @@ describe('StudentProfil', () => {
     const prethodni = el().querySelector<HTMLButtonElement>('[data-prethodni]')!;
     expect(prethodni.tagName).toBe('BUTTON');
     expect(prethodni.disabled).toBe(true);
-    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/8');
+    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/8/pregled');
   });
 
   it('poslednji student: sledeći je onemogućen', async () => {
@@ -176,7 +180,18 @@ describe('StudentProfil', () => {
     const sledeci = el().querySelector<HTMLButtonElement>('[data-sledeci]')!;
     expect(sledeci.tagName).toBe('BUTTON');
     expect(sledeci.disabled).toBe(true);
-    expect(el().querySelector('[data-prethodni]')!.getAttribute('href')).toBe('/studenti/3');
+    expect(el().querySelector('[data-prethodni]')!.getAttribute('href')).toBe('/studenti/3/pregled');
+  });
+
+  it('prethodni/sledeći čuvaju otvoreni tab', async () => {
+    await otvori({ url: '/studenti/5/hronologija', ids: [3, 5, 9] });
+    expect(el().querySelector('[data-prethodni]')!.getAttribute('href')).toBe('/studenti/3/hronologija');
+    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/9/hronologija');
+    await harness.navigateByUrl('/studenti/5/beleske');
+    await stani();
+    http.expectOne('api/studenti/5/beleske').flush([]);
+    await stani();
+    expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/9/beleske');
   });
 
   it('/studenti/5 ide na tab Pregled i prikazuje kartice po predmetu', async () => {
@@ -211,8 +226,11 @@ describe('StudentProfil', () => {
     await stani();
     expect(el().querySelector('app-error-panel')!.textContent).toContain('Student ne postoji! ID = 5');
     el().querySelector<HTMLButtonElement>('[data-ponovo]')!.click();
+    await stani();
+    expect(el().querySelector('app-error-panel')).toBeNull();
+    expect(el().querySelector('app-skeleton-rows')).not.toBeNull();
     http.expectOne('api/studenti/5').flush(student());
-    http.expectOne(r => r.url === 'api/studenti/pretraga').flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
+    http.expectOne('api/grupe/4').flush(grupa([3, 5, 9]));
     await stani();
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
@@ -225,7 +243,6 @@ describe('StudentProfil', () => {
     await stani();
     await harness.navigateByUrl('/studenti/9/pregled');
     http.expectOne('api/studenti/9').flush(student({ id: 9, ime: 'Marko', prezime: 'Ilić', indeks: 'GD9' }));
-    http.expectOne(r => r.url === 'api/studenti/pretraga').flush({ content: [red(9, { ime: 'Marko', indeks: 'GD9' })], page: { size: 100, number: 0, totalElements: 1, totalPages: 1 } });
     http.expectOne('api/grupe/4').flush(grupa([3, 5, 9]));
     await stani();
     http.expectOne('api/studenti/9/predmeti').flush([]);

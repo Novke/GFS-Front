@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { filter } from 'rxjs';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
@@ -17,8 +18,8 @@ import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
 /**
  * Profil studenta (`/studenti/:id/{pregled,hronologija,beleske}`): zaglavlje (ime, indeks sa godinom upisa, grupa kao
  * link, `mailto:` i `tel:` linkovi, meni Izmeni / Premesti), prethodni i sledeći student grupe (S5) i tabovi kao child
- * rute. Store je na ovoj komponenti, pa ga tabovi dele. Podaci koje `GET studenti/{id}` nema (godina, kontakt, id grupe)
- * stižu odvojeno; dok ih nema (ili ih student nema) prikazuje se `—`.
+ * rute. Store je na ovoj komponenti, pa ga tabovi dele. Godina upisa, kontakt i id grupe dolaze u `GET studenti/{id}`;
+ * ono što student nema prikazuje se kao `—`. Prethodni/sledeći otvaraju isti tab.
  */
 @Component({
   selector: 'app-student-profil',
@@ -31,24 +32,22 @@ import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
         <div class="naslov-blok">
           <h1>{{ store.ime() }}</h1>
           <div class="kontekst">
-            <span class="oznaka mono" title="Indeks" data-indeks>{{ store.indeks() }}</span>
-            @if (store.zaglavlje()?.grupa; as g) {
-              <a class="oznaka ton-info" [routerLink]="['/grupe', g.id]" data-grupa title="Grupa">{{ g.naziv }}</a>
+            <span class="oznaka mono" data-indeks><span class="sr-only">Indeks: </span>{{ store.indeks() }}</span>
+            @if (p.grupaId; as gid) {
+              <a class="oznaka ton-info" [routerLink]="['/grupe', gid]" data-grupa><span class="sr-only">Grupa: </span>{{ p.grupa }}</a>
             } @else {
-              <span class="oznaka" data-grupa title="Grupa">{{ p.grupa || 'Bez grupe' }}</span>
+              <span class="oznaka" data-grupa><span class="sr-only">Grupa: </span>{{ p.grupa || 'Bez grupe' }}</span>
             }
-            @if (store.zaglavljeUcitano()) {
-              <span class="oznaka" title="Godina upisa" data-godina>Upis: {{ store.zaglavlje()?.godina ?? '—' }}</span>
-              @if (mail(); as href) {
-                <a class="oznaka ton-info" [href]="href" data-mail><mat-icon svgIcon="mail" aria-hidden="true" />{{ store.zaglavlje()?.email }}</a>
-              } @else {
-                <span class="oznaka nema" data-bez-maila><mat-icon svgIcon="mail" aria-hidden="true" />—</span>
-              }
-              @if (tel(); as href) {
-                <a class="oznaka ton-info" [href]="href" data-tel><mat-icon svgIcon="call" aria-hidden="true" />{{ store.zaglavlje()?.brojTelefona }}</a>
-              } @else {
-                <span class="oznaka nema" data-bez-telefona><mat-icon svgIcon="call" aria-hidden="true" />—</span>
-              }
+            <span class="oznaka" data-godina>Upis: {{ p.godina ?? '—' }}</span>
+            @if (mail(); as href) {
+              <a class="oznaka ton-info" [href]="href" data-mail><mat-icon svgIcon="mail" aria-hidden="true" /><span class="sr-only">Email: </span>{{ p.email }}</a>
+            } @else {
+              <span class="oznaka nema" data-bez-maila><mat-icon svgIcon="mail" aria-hidden="true" /><span class="sr-only">Email: nema </span><span aria-hidden="true">—</span></span>
+            }
+            @if (tel(); as href) {
+              <a class="oznaka ton-info" [href]="href" data-tel><mat-icon svgIcon="call" aria-hidden="true" /><span class="sr-only">Telefon: </span>{{ p.brojTelefona }}</a>
+            } @else {
+              <span class="oznaka nema" data-bez-telefona><mat-icon svgIcon="call" aria-hidden="true" /><span class="sr-only">Telefon: nema </span><span aria-hidden="true">—</span></span>
             }
           </div>
         </div>
@@ -56,13 +55,13 @@ import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
           @if (store.susedi().mesto !== null) {
             <nav class="susedi" aria-label="Studenti grupe" data-susedi>
               @if (store.susedi().prethodni; as id) {
-                <a matIconButton [routerLink]="['/studenti', id]" aria-label="Prethodni student" data-prethodni><mat-icon svgIcon="chevron_left" /></a>
+                <a matIconButton [routerLink]="['/studenti', id, tab()]" aria-label="Prethodni student" data-prethodni><mat-icon svgIcon="chevron_left" /></a>
               } @else {
                 <button matIconButton type="button" disabled aria-label="Prethodni student" data-prethodni><mat-icon svgIcon="chevron_left" /></button>
               }
               <span class="mesto mono" aria-live="polite">{{ store.susedi().mesto }} / {{ store.susedi().ukupno }}</span>
               @if (store.susedi().sledeci; as id) {
-                <a matIconButton [routerLink]="['/studenti', id]" aria-label="Sledeći student" data-sledeci><mat-icon svgIcon="chevron_right" /></a>
+                <a matIconButton [routerLink]="['/studenti', id, tab()]" aria-label="Sledeći student" data-sledeci><mat-icon svgIcon="chevron_right" /></a>
               } @else {
                 <button matIconButton type="button" disabled aria-label="Sledeći student" data-sledeci><mat-icon svgIcon="chevron_right" /></button>
               }
@@ -114,6 +113,8 @@ export class StudentProfil {
   private readonly dialog = inject(MatDialog);
   private readonly mrvice = inject(BreadcrumbService);
   private readonly preference = inject(PreferencesStore);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   /** Id iz putanje (`withComponentInputBinding`); matcher rute već propušta samo brojeve. */
   readonly id = input.required<string>();
@@ -125,8 +126,17 @@ export class StudentProfil {
   ] as const;
 
   protected readonly sId = computed(() => (JE_ID.test(this.id()) ? Number(this.id()) : null));
-  protected readonly mail = computed(() => mailtoHref(this.store.zaglavlje()?.email));
-  protected readonly tel = computed(() => telHref(this.store.zaglavlje()?.brojTelefona));
+  protected readonly mail = computed(() => mailtoHref(this.store.podaci()?.email));
+  protected readonly tel = computed(() => telHref(this.store.podaci()?.brojTelefona));
+  /** Tab koji je sada otvoren; prethodni/sledeći student otvaraju isti tab. */
+  protected readonly tab = toSignal(
+    this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd),
+      map(() => this.trenutniTab()),
+      startWith(this.trenutniTab()),
+    ),
+    { requireSync: true },
+  );
   /** Id i ime učitanog studenta; poređenje po vrednostima, pa osvežavanje istog studenta ne pokreće ponovo efekat. */
   private readonly oznaka = computed(
     () => {
@@ -158,6 +168,12 @@ export class StudentProfil {
     });
   }
 
+  /** Segment child rute (`pregled`, `hronologija`, `beleske`); nepoznat ili odsutan je `pregled`. */
+  private trenutniTab(): string {
+    const segment = this.route.firstChild?.snapshot?.url[0]?.path;
+    return this.tabovi.some(t => t.putanja === segment) ? (segment as string) : 'pregled';
+  }
+
   protected ponovo(): void {
     const id = this.sId();
     if (id !== null) {
@@ -170,7 +186,7 @@ export class StudentProfil {
     if (id === null) {
       return;
     }
-    StudentIzmenaDialog.otvori(this.dialog, { id, nacin, grupaId: this.store.zaglavlje()?.grupa?.id ?? null })
+    StudentIzmenaDialog.otvori(this.dialog, { id, nacin, grupaId: this.store.podaci()?.grupaId ?? null })
       .pipe(filter(Boolean))
       .subscribe(() => this.store.ucitaj(id));
   }

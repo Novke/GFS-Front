@@ -184,10 +184,12 @@ export class StudentBeleskeTab {
     })
       .pipe(filter(Boolean))
       .subscribe(() => {
-        if (this.uIzmeni() === b.id) {
-          this.uIzmeni.set(null);
-        }
-        void this.store.obrisiBelesku(b.id);
+        // stanje izmene se čisti tek kad server obriše: posle greške unos u izmeni ostaje
+        void this.store.obrisiBelesku(b.id).then(ok => {
+          if (ok && this.uIzmeni() === b.id) {
+            this.uIzmeni.set(null);
+          }
+        });
       });
   }
 }

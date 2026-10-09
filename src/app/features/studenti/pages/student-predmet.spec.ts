@@ -8,6 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { StudentNaPredmetuDetails, StudentPregledTestInfo } from '../../../core/api/studenti.api';
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { IKONE } from '../../../core/layout/icons';
 import { STUDENTI_RUTE } from '../studenti.routes';
 import { redoviTestova } from './student-predmet';
@@ -96,12 +97,21 @@ describe('StudentPredmet', () => {
   it('zaglavlje: student, indeks, predmet, grupa, poeni i link na profil', async () => {
     await otvori();
     expect(el().querySelector('h1')!.textContent).toBe('Ana Radić');
-    expect(el().querySelector('[data-indeks]')!.textContent).toBe('GD12/2025');
-    expect(el().querySelector('[data-predmet]')!.textContent).toBe('UPR');
-    expect(el().querySelector('[data-grupa]')!.textContent).toBe('GD-2025');
+    expect(el().querySelector('[data-indeks]')!.textContent).toBe('Indeks: GD12/2025');
+    expect(el().querySelector('[data-predmet]')!.textContent).toBe('Predmet: UPR');
+    expect(el().querySelector('[data-grupa]')!.textContent).toBe('Grupa: GD-2025');
     expect(el().querySelector('[data-kpi-aktivnost]')!.textContent).toContain('12,5');
     expect(el().querySelector('[data-kpi-domaci]')!.textContent).toContain('18');
     expect(el().querySelector('[data-profil]')!.getAttribute('href')).toBe('/studenti/5');
+  });
+
+  it('mrvice: ime studenta (sa linkom na profil) i naziv predmeta', async () => {
+    await otvori();
+    expect(TestBed.inject(BreadcrumbService).mrvice()).toEqual([
+      { label: 'Studenti', url: '/studenti' },
+      { label: 'Ana Radić', url: '/studenti/5' },
+      { label: 'UPR' },
+    ]);
   });
 
   it('aktivnosti i domaći: najnovije prvo, sa linkovima; domaći bez naslova i oslobođen su označeni', async () => {
@@ -135,8 +145,8 @@ describe('StudentPredmet', () => {
     expect(el().textContent).toContain('Nema zabeleženih aktivnosti na ovom predmetu.');
     expect(el().textContent).toContain('Nema urađenih domaćih na ovom predmetu.');
     expect(el().textContent).toContain('Predmet nema tipove testa.');
-    expect(el().querySelector('[data-grupa]')!.textContent).toBe('Bez grupe');
-    expect(el().querySelector('[data-predmet]')!.textContent).toBe('—');
+    expect(el().querySelector('[data-grupa]')!.textContent).toBe('Grupa: Bez grupe');
+    expect(el().querySelector('[data-predmet]')!.textContent).toBe('Predmet: —');
   });
 
   it('greška: panel sa "Pokušaj ponovo"', async () => {

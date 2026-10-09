@@ -52,9 +52,9 @@ const daNe = (v: boolean | null | undefined): string => (v === true ? 'Da' : v =
     @if (store.podaci(); as d) {
       <app-page-header [naslov]="ime()">
         <div kontekst class="kontekst">
-          <span class="oznaka mono" title="Indeks" data-indeks>{{ indeks() }}</span>
-          <span class="oznaka ton-info" title="Predmet" data-predmet>{{ d.predmet?.naziv ?? '—' }}</span>
-          <span class="oznaka" title="Grupa" data-grupa>{{ d.grupaNaziv || 'Bez grupe' }}</span>
+          <span class="oznaka mono" data-indeks><span class="sr-only">Indeks: </span>{{ indeks() }}</span>
+          <span class="oznaka ton-info" data-predmet><span class="sr-only">Predmet: </span>{{ d.predmet?.naziv ?? '—' }}</span>
+          <span class="oznaka" data-grupa><span class="sr-only">Grupa: </span>{{ d.grupaNaziv || 'Bez grupe' }}</span>
         </div>
         <a akcije matButton="outlined" [routerLink]="['/studenti', d.student.id]" data-profil>
           <mat-icon svgIcon="person" aria-hidden="true" />Profil studenta
@@ -230,7 +230,14 @@ export class StudentPredmet {
   protected readonly aktivnosti = computed(() => sortirajPoDatumu(this.store.podaci()?.aktivnosti ?? []));
   protected readonly domaci = computed(() => sortirajPoDatumu(this.store.podaci()?.domaci ?? []));
   protected readonly testovi = computed(() => redoviTestova(this.store.podaci()?.testoviPoTipu ?? []));
-  private readonly nazivPredmeta = computed(() => this.store.podaci()?.predmet?.naziv ?? null);
+  /** Mrvice: predmet je poslednja, ime studenta pretposlednja (umesto opšteg "Student"); string, pa se menja samo sa tekstom. */
+  private readonly mrviceLabele = computed(
+    () => {
+      const naziv = this.store.podaci()?.predmet?.naziv;
+      return naziv ? { naziv, ime: this.ime() } : null;
+    },
+    { equal: (a, b) => a?.naziv === b?.naziv && a?.ime === b?.ime },
+  );
 
   constructor() {
     effect(() => {
@@ -241,9 +248,9 @@ export class StudentPredmet {
     });
 
     effect(() => {
-      const naziv = this.nazivPredmeta();
-      if (naziv) {
-        untracked(() => this.mrvice.postavi(naziv));
+      const l = this.mrviceLabele();
+      if (l) {
+        untracked(() => this.mrvice.postavi(l.naziv, l.ime && l.ime !== '—' ? l.ime : undefined));
       }
     });
   }

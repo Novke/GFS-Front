@@ -36,14 +36,23 @@ export class BreadcrumbService {
   private readonly router = inject(Router);
   private readonly osnovne = signal<Mrvica[]>(mrviceZa(this.router.routerState.snapshot.root));
   private readonly labela = signal<string | null>(null);
+  private readonly prethodna = signal<string | null>(null);
 
   readonly mrvice = computed<Mrvica[]>(() => {
     const osnovne = this.osnovne();
     const labela = this.labela();
-    if (!labela || osnovne.length === 0) {
+    const prethodna = this.prethodna();
+    if (osnovne.length === 0) {
       return osnovne;
     }
-    return [...osnovne.slice(0, -1), { ...osnovne[osnovne.length - 1], label: labela }];
+    const rez = [...osnovne];
+    if (prethodna && rez.length > 1) {
+      rez[rez.length - 2] = { ...rez[rez.length - 2], label: prethodna };
+    }
+    if (labela) {
+      rez[rez.length - 1] = { ...rez[rez.length - 1], label: labela };
+    }
+    return rez;
   });
 
   constructor() {
@@ -55,12 +64,17 @@ export class BreadcrumbService {
       .subscribe(e => {
         this.osnovne.set(mrviceZa(e.state.root));
         this.labela.set(null);
+        this.prethodna.set(null);
       });
   }
 
-  /** Dinamička labela tekuće stranice (naziv predavanja, ime studenta…); važi do sledeće navigacije. */
-  postavi(labela: string): void {
+  /**
+   * Dinamička labela tekuće stranice (naziv predavanja, ime studenta…); važi do sledeće navigacije. `prethodna` zamenjuje
+   * labelu pretposlednje mrvice (npr. "Student" -> ime studenta na stranici studenta na predmetu).
+   */
+  postavi(labela: string, prethodna?: string): void {
     this.labela.set(labela);
+    this.prethodna.set(prethodna ?? null);
   }
 }
 

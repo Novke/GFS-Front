@@ -55,6 +55,14 @@ describe('BreadcrumbService', () => {
     expect(svc.mrvice().at(-1)).toEqual({ label: 'Testovi' });
   });
 
+  it('postavi(labela, prethodna) menja i pretposlednju mrvicu, zadržava njen link, i važi do sledeće navigacije', async () => {
+    await router.navigateByUrl('/testovi/7/statistika');
+    svc.postavi('Statistika kolokvijuma', 'Kolokvijum 1');
+    expect(svc.mrvice()).toEqual([{ label: 'Kolokvijum 1', url: '/testovi/7' }, { label: 'Statistika kolokvijuma' }]);
+    await router.navigateByUrl('/testovi/8/statistika');
+    expect(svc.mrvice()).toEqual([{ label: 'Test', url: '/testovi/8' }, { label: 'Statistika' }]);
+  });
+
   it('ruta bez mrvica daje praznu listu', async () => {
     await router.navigateByUrl('/bez');
     expect(svc.mrvice()).toEqual([]);

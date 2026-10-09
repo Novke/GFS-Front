@@ -39,7 +39,7 @@ export interface StudentiPretraga {
   sort?: string | null;
 }
 
-/** `StudentInfo`: odgovor `PUT studenti/{id}` i red `GET studenti`; `godina` je godina upisa (`int` na serveru). */
+/** `StudentInfo`: odgovor `PUT studenti/{id}` i student u kartici po predmetu; `godina` je godina upisa (`int` na serveru). */
 export interface StudentInfo {
   id: number;
   ime: string;
@@ -104,15 +104,21 @@ export interface StudentPregledTestInfo {
 }
 
 /**
- * `GET studenti/{id}` (`StudentPregledDetails`). Nema godine upisa, kontakta ni id-a grupe (`grupa` je samo naziv):
- * zaglavlje profila ih uzima iz `pretraga`.
+ * `GET studenti/{id}` (`StudentPregledDetails`). `grupa` je naziv grupe, `grupaId` njen id (`null` za studenta bez grupe);
+ * `godina` je godina upisa. `email`, `brojTelefona`, `datumRodjenja` (`YYYY-MM-DD`) i `opstina` mogu biti `null`.
  */
 export interface StudentPregledDetails {
   id: number;
   ime: string | null;
   prezime: string | null;
+  godina: number | null;
   indeks: string | null;
+  brojTelefona: string | null;
+  email: string | null;
+  datumRodjenja: string | null;
+  opstina: string | null;
   grupa: string | null;
+  grupaId: number | null;
   aktivnosti: StudentPregledAktivnostInfo[];
   uradjeniDomaci: StudentPregledDomaciInfo[];
   polaganja: StudentPregledTestInfo[];
@@ -216,11 +222,6 @@ export class StudentiApi {
   /** `GET studenti/{id}/predmet/{predmetId}`: aktivnosti, domaći i testovi po tipu na jednom predmetu. */
   naPredmetu(id: number, predmetId: number, opcije: OpcijeStudenta = {}): Observable<StudentNaPredmetuDetails> {
     return this.http.get<StudentNaPredmetuDetails>(`${API_URL}/studenti/${id}/predmet/${predmetId}`, { context: this.kontekst(opcije) });
-  }
-
-  /** `GET studenti`: svi studenti (`StudentInfo`, sa datumom rođenja i opštinom koje `pretraga` ne vraća). */
-  svi(opcije: OpcijeStudenta = {}): Observable<StudentInfo[]> {
-    return this.http.get<StudentInfo[]>(`${API_URL}/studenti`, { context: this.kontekst(opcije) });
   }
 
   /** `PUT studenti/{id}`: izmena podataka i premeštanje u drugu grupu (`grupaId`); vidi {@link UpdateStudentCmd}. */

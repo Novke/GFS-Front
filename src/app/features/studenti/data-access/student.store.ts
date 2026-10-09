@@ -1,25 +1,20 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
-import { catchError, firstValueFrom, map, Observable, of, Subscription, switchMap } from 'rxjs';
+import { catchError, firstValueFrom, map, of, Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import {
   BeleskaInfo,
   StudentiApi,
-  StudentListItem,
   StudentNaPredmetuDetails,
   StudentPredmetKartica,
   StudentPregledDetails,
 } from '../../../core/api/studenti.api';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
-import { Strana } from '../../../shared/models/strana';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { hronologija, punoIme, redosledStudenata, susedi } from './studenti.models';
-
-/** Najviše studenata koje `studenti/pretraga` vraća u jednoj strani; toliko se traži pri nalaženju zaglavlja po indeksu. */
-const MAX_STRANA = 100;
 
 /** Stanje dela ekrana koji se učitava zasebno (kartice, beleške). */
 export type StanjeDela = 'idle' | 'loading' | 'loaded' | 'error';
@@ -27,9 +22,6 @@ export type StanjeDela = 'idle' | 'loading' | 'loaded' | 'error';
 interface StudentState {
   id: number | null;
   podaci: StudentPregledDetails | null;
-  /** Red iz `pretraga` (godina upisa, kontakt, grupa sa id-jem); `null` dok se ne učita ili ako ga nema. */
-  zaglavlje: StudentListItem | null;
-  zaglavljeUcitano: boolean;
   /** Studenti grupe po redosledu indeksa (za prethodni/sledeći); prazno bez grupe ili posle greške. */
   redosled: { id: number }[];
   kartice: StudentPredmetKartica[] | null;
@@ -43,8 +35,6 @@ interface StudentState {
 const POCETNO: StudentState = {
   id: null,
   podaci: null,
-  zaglavlje: null,
-  zaglavljeUcitano: false,
   redosled: [],
   kartice: null,
   karticeStatus: 'idle',
@@ -59,12 +49,12 @@ function porukaGreske(e: unknown): string {
 }
 
 /**
- * Profil studenta (`/studenti/:id` i tabovi). `ucitaj(id)` učitava `GET studenti/{id}` (glavni zahtev, greška ide u panel)
- * i posle njega, tiho, zaglavlje (`pretraga` po indeksu daje godinu upisa, kontakt i grupu sa id-jem, jer
- * `StudentPregledDetails` toga nema) i studente grupe (`GET grupe/{id}`, za prethodni/sledeći). Neuspeh zaglavlja ne
- * ruši profil: godina i kontakt su `—`. Kartice po predmetu i beleške učitavaju tabovi (`ucitajKartice`,
- * `ucitajBeleske`: idempotentno po studentu). Promena `id` otkazuje sve zahteve u toku; ista komponenta se koristi za
- * sve studente. Ponovno učitavanje istog studenta (posle izmene) ne prazni ekran.
+ * Profil studenta (`/studenti/:id` i tabovi). `ucitaj(id)` učitava `GET studenti/{id}` (glavni zahtev, greška ide u panel;
+ * u njemu su i godina upisa, kontakt i `grupaId` za zaglavlje) i posle njega, tiho, studente grupe (`GET grupe/{grupaId}`,
+ * za prethodni/sledeći; neuspeh ostavlja prazan redosled, bez strelica). Kartice po predmetu i beleške učitavaju tabovi
+ * kad je deo `idle` (`ucitajKartice`, `ucitajBeleske`; ponovni pokušaj posle greške je `ucitajKartice(true)`). Promena `id`
+ * otkazuje sve zahteve u toku; ista komponenta se koristi za sve studente. Ponovno učitavanje istog studenta (posle izmene)
+ * ne prazni ekran, osim kad je prethodno učitavanje palo (tada se ponovo prikazuje učitavanje).
  */
 export const StudentStore = signalStore(
   withState<StudentState>(POCETNO),
@@ -72,15 +62,15 @@ export const StudentStore = signalStore(
   withProps(() => ({
     _api: inject(StudentiApi),
     _obavestenja: inject(NotificationStore),
-    _veze: { glavna: null as Subscription | null, zaglavlje: null as Subscription | null, kartice: null as Subscription | null, beleske: null as Subscription | null },
+    _veze: { glavna: null as Subscription | null, redosled: null as Subscription | null, kartice: null as Subscription | null, beleske: null as Subscription | null },
   })),
-  withComputed(({ id, podaci, zaglavlje, redosled }) => ({
+  withComputed(({ id, podaci, redosled }) => ({
     ime: computed(() => {
       const p = podaci();
       return p ? punoIme(p) : '';
     }),
-    /** `GD12/2025`; dok zaglavlje nije stiglo (ili godine nema) samo indeks. */
-    indeks: computed(() => formatIndeks(podaci()?.indeks, zaglavlje()?.godina)),
+    /** `GD12/2025`; bez godine upisa samo indeks. */
+    indeks: computed(() => formatIndeks(podaci()?.indeks, podaci()?.godina)),
     hronologija: computed(() => {
       const p = podaci();
       return p ? hronologija(p) : [];
@@ -95,25 +85,20 @@ export const StudentStore = signalStore(
       }
     };
 
-    /** Zaglavlje i redosled grupe; svaki korak je tih i neuspeh ostavlja `null`/prazno. */
-    const ucitajZaglavlje = (id: number, d: StudentPregledDetails) => {
-      zatvori(['zaglavlje']);
-      const indeks = d.indeks?.trim();
-      const trazi$: Observable<Strana<StudentListItem> | null> = indeks ? store._api.pretraga({ q: indeks, size: MAX_STRANA }, { tiho: true }) : of(null);
-      store._veze.zaglavlje = trazi$
+    /** Redosled studenata grupe (za prethodni/sledeći); tih, neuspeh ostavlja prazno. */
+    const ucitajRedosled = (grupaId: number | null) => {
+      zatvori(['redosled']);
+      if (grupaId === null) {
+        patchState(store, { redosled: [] });
+        return;
+      }
+      store._veze.redosled = store._api
+        .grupa(grupaId, { tiho: true })
         .pipe(
-          map(strana => strana?.content?.find(s => s.id === id) ?? null),
-          catchError(() => of(null)),
-          switchMap(z =>
-            z?.grupa
-              ? store._api.grupa(z.grupa.id, { tiho: true }).pipe(
-                  map(g => ({ z, redosled: redosledStudenata(g?.studenti ?? []).map(s => ({ id: s.id })) })),
-                  catchError(() => of({ z, redosled: [] as { id: number }[] })),
-                )
-              : of({ z, redosled: [] as { id: number }[] }),
-          ),
+          map(g => redosledStudenata(g?.studenti ?? []).map(x => ({ id: x.id }))),
+          catchError(() => of([] as { id: number }[])),
         )
-        .subscribe(({ z, redosled }) => patchState(store, { zaglavlje: z, zaglavljeUcitano: true, redosled }));
+        .subscribe(redosled => patchState(store, { redosled }));
     };
 
     const ucitajKartice = (osvezi = false) => {
@@ -156,7 +141,7 @@ export const StudentStore = signalStore(
     return {
       ucitaj(id: number): void {
         const isti = store.id() === id;
-        zatvori(['glavna', 'zaglavlje', 'kartice', 'beleske']);
+        zatvori(['glavna', 'redosled', 'kartice', 'beleske']);
         // zahtev koji je otkazan ne sme da ostavi deo ekrana u `loading`: ide na `idle`, pa ga tab učitava ponovo
         patchState(store, s => ({
           karticeStatus: s.karticeStatus === 'loading' ? 'idle' : s.karticeStatus,
@@ -164,12 +149,14 @@ export const StudentStore = signalStore(
         }));
         if (!isti) {
           patchState(store, { ...POCETNO, id }, setLoading());
+        } else if (store.podaci() === null) {
+          patchState(store, setLoading()); // ponovni pokušaj posle greške: opet skeleton umesto panela greške
         }
         // isti student (osvežavanje): stari prikaz ostaje, a tabovi koji su već učitani se učitavaju ponovo
         store._veze.glavna = store._api.get(id, { tiho: true }).subscribe({
           next: d => {
             patchState(store, { podaci: d }, setLoaded());
-            ucitajZaglavlje(id, d);
+            ucitajRedosled(d.grupaId ?? null);
             if (isti) {
               if (store.kartice() !== null) {
                 ucitajKartice(true);

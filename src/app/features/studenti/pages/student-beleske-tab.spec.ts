@@ -83,7 +83,6 @@ describe('StudentBeleskeTab', () => {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/studenti/5/beleske');
     http.expectOne('api/studenti/5').flush({ id: 5, ime: 'Ana', prezime: 'Radić', indeks: 'GD12', grupa: null, aktivnosti: [], uradjeniDomaci: [], polaganja: [] });
-    http.expectOne(r => r.url === 'api/studenti/pretraga').flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
     await stani();
     http.expectOne('api/studenti/5/beleske').flush(beleske);
     await stani();
@@ -175,11 +174,39 @@ describe('StudentBeleskeTab', () => {
     expect(poruke.map(p => p.tekst)).toContain('Beleška je obrisana.');
   });
 
+  it('neuspelo brisanje: izmena koja je u toku i uneti tekst ostaju', async () => {
+    await otvori();
+    await klik('[data-beleska="2"] [data-izmeni]');
+    upisi('[data-izmena]', 'Nesačuvana izmena');
+    // brisanje druge beleške: potvrda, pa server odbija
+    await vi.waitFor(() => expect(el().querySelector('[data-izmena]')).not.toBeNull());
+    await klik('[data-beleska="1"] [data-obrisi]');
+    await vi.waitFor(() => expect(overlay().querySelector('[data-potvrdi]')).not.toBeNull());
+    overlay().querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+    const z = await vi.waitFor(() => http.expectOne('api/beleske/1'));
+    z.flush({ reason: 'Beleška ne postoji' }, { status: 404, statusText: 'Not Found' });
+    await stani();
+    expect(el().querySelectorAll('[data-beleska]').length).toBe(2);
+    expect(el().querySelector<HTMLTextAreaElement>('[data-izmena]')!.value).toBe('Nesačuvana izmena');
+  });
+
+  it('uspešno brisanje druge beleške ne zatvara izmenu koja je u toku', async () => {
+    await otvori();
+    await klik('[data-beleska="2"] [data-izmeni]');
+    await klik('[data-beleska="1"] [data-obrisi]');
+    await vi.waitFor(() => expect(overlay().querySelector('[data-potvrdi]')).not.toBeNull());
+    overlay().querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+    const z = await vi.waitFor(() => http.expectOne('api/beleske/1'));
+    z.flush(null, { status: 204, statusText: 'No Content' });
+    await stani();
+    expect(el().querySelectorAll('[data-beleska]').length).toBe(1);
+    expect(el().querySelector('[data-izmena]')).not.toBeNull();
+  });
+
   it('greška učitavanja: panel sa "Pokušaj ponovo"', async () => {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/studenti/5/beleske');
     http.expectOne('api/studenti/5').flush({ id: 5, ime: 'Ana', prezime: 'Radić', indeks: 'GD12', grupa: null, aktivnosti: [], uradjeniDomaci: [], polaganja: [] });
-    http.expectOne(r => r.url === 'api/studenti/pretraga').flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
     await stani();
     http.expectOne('api/studenti/5/beleske').flush({ reason: 'Nema veze' }, { status: 400, statusText: 'Bad Request' });
     await stani();

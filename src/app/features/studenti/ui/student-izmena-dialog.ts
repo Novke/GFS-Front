@@ -10,7 +10,7 @@ import { MatOption, MatSelect } from '@angular/material/select';
 import { Observable } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
-import { StudentiApi, StudentInfo, UpdateStudentCmd } from '../../../core/api/studenti.api';
+import { StudentiApi, StudentPregledDetails, UpdateStudentCmd } from '../../../core/api/studenti.api';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ReferenceStore } from '../../../core/state/reference.store';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
@@ -44,8 +44,9 @@ const prazno = (v: string): string | null => v.trim() || null;
 
 /**
  * Izmena podataka i premeštanje studenta (`PUT studenti/{id}`). Server prima pun zapis i briše izostavljena opciona polja,
- * a profil ne zna datum rođenja ni opštinu, pa dijalog pri otvaranju učitava studenta (`GET studenti`) i tek tada se
- * može sačuvati. Greška servera (npr. duplikat indeksa u godini upisa) ide u traku iznad forme. Vraća `true` posle uspeha.
+ * pa dijalog pri otvaranju učitava studenta (`GET studenti/{id}`, sa datumom rođenja i opštinom) i tek tada se može
+ * sačuvati. Proverava se svih devet polja u oba načina: ako u "Premesti" neko nevidljivo polje nije ispravno (npr. stari red
+ * bez godine upisa), šalje se samo upozorenje da se prvo uradi "Izmeni podatke". Greška servera (npr. duplikat indeksa u godini upisa) ide u traku iznad forme. Vraća `true` posle uspeha.
  */
 @Component({
   selector: 'app-student-izmena-dialog',
@@ -152,8 +153,7 @@ const prazno = (v: string): string | null => v.trim() || null;
   `,
   styles: `
     .polja { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
-    .uputstvo { grid-column: 1 / -1; }
-    .uputstvo { margin: 0 0 12px; color: var(--ink-2); }
+    .uputstvo { grid-column: 1 / -1; margin: 0 0 12px; color: var(--ink-2); }
     .ucitava { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--muted); }
     button mat-progress-spinner { display: inline-block; margin-right: 8px; }
     @media (max-width: 599.98px) { .polja { grid-template-columns: 1fr; } }
@@ -193,14 +193,9 @@ export class StudentIzmenaDialog implements OnInit {
   protected ucitaj(): void {
     this.ucitava.set(true);
     this.greskaUcitavanja.set(null);
-    this.api.svi({ tiho: true }).subscribe({
-      next: svi => {
-        const s = svi?.find(x => x.id === this.cfg.id);
-        if (!s) {
-          this.greskaUcitavanja.set('Student nije pronađen.');
-        } else {
-          this.popuni(s);
-        }
+    this.api.get(this.cfg.id, { tiho: true }).subscribe({
+      next: s => {
+        this.popuni(s);
         this.ucitava.set(false);
       },
       error: (e: unknown) => {
@@ -210,12 +205,13 @@ export class StudentIzmenaDialog implements OnInit {
     });
   }
 
-  private popuni(s: StudentInfo): void {
+  private popuni(s: StudentPregledDetails): void {
     this.imeStudenta.set([s.ime, s.prezime].filter(Boolean).join(' ') || 'Student');
     this.forma.patchValue({
       ime: s.ime ?? '',
       prezime: s.prezime ?? '',
       indeks: s.indeks ?? '',
+      grupa: s.grupaId ?? this.cfg.grupaId,
       godina: s.godina ?? null,
       email: s.email ?? '',
       telefon: s.brojTelefona ?? '',
@@ -234,10 +230,13 @@ export class StudentIzmenaDialog implements OnInit {
     if (this.salje() || this.ucitava() || this.greskaUcitavanja() !== null) {
       return;
     }
-    // u "premesti" nacinu se vide samo grupa: ostala polja vec imaju vrednosti sa servera
-    const kontrole = this.cfg.nacin === 'premesti' ? [this.forma.controls.grupa] : Object.values(this.forma.controls);
-    kontrole.forEach(k => k.markAsTouched());
-    if (kontrole.some(k => k.invalid)) {
+    // server prima pun zapis, pa se proveravaju sva polja, i u "premesti" načinu gde je vidljiva samo grupa
+    this.forma.markAllAsTouched();
+    if (this.forma.invalid) {
+      if (this.cfg.nacin === 'premesti' && this.forma.controls.grupa.valid) {
+        this.greska.set(null);
+        this.greska.set('Podaci studenta nisu potpuni ili ispravni (npr. godina upisa), pa ga nije moguće premestiti. Prvo ih ispravi kroz „Izmeni podatke“.');
+      }
       return;
     }
     const v = this.forma.getRawValue();
