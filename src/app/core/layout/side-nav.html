@@ -14,7 +14,8 @@
     <ul [attr.aria-labelledby]="sekcija.id">
       @for (s of sekcija.stavke; track s.url) {
         <li>
-          <a class="stavka" [routerLink]="s.url" routerLinkActive="aktivna" ariaCurrentWhenActive="page" (click)="izabrano.emit()">
+          <a class="stavka" [routerLink]="s.url" [class.aktivna]="aktivna(s)" [attr.aria-current]="aktivna(s) ? 'page' : null"
+             (click)="izabrano.emit()">
             <mat-icon [svgIcon]="s.ikona" aria-hidden="true" /><span class="tekst">{{ s.label }}</span>
             @if (s.brojac && brojaci()[s.brojac] > 0) {
               <span class="brojac">{{ brojaci()[s.brojac] }}<span class="sr-only"> {{ opisBrojaca[s.brojac] }}</span></span>
