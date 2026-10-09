@@ -11,7 +11,8 @@ wrapper repo `Novke/GFS-deploy` (`CLAUDE.md`, `README.md`). This repo is **publi
 Angular 22, standalone components only, **zoneless** (`provideZonelessChangeDetection()`, no zone.js), OnPush
 everywhere, signals + NgRx SignalStore (`@ngrx/signals`), Angular Material 22 (M3) on our own tokens, STOMP over WebSocket
 (`@stomp/rx-stomp`) and `marked` for uživo, Vitest + jsdom
-through `ng test` (no browser), ESLint (angular-eslint) with two project rules in `eslint-rules/`. CI runs Node 24.
+through `ng test` (no browser; `src/test-setup.ts` stubs canvas `getContext`), ESLint (angular-eslint) with two project rules
+in `eslint-rules/`. CI runs Node 24.
 All UI text is Serbian Latin; code identifiers are Serbian too (predmet, grupa, predavanje, domaći, test, ocena).
 
 ## Commands
@@ -33,12 +34,22 @@ with your own proxy file (`--proxy-config`). CI (`.github/workflows/ci.yml`, job
 `ng test`, `ng build --configuration production`, the e2e suite and `docker build`; nothing is `continue-on-error`.
 
 E2E (`e2e/`, Playwright + `@axe-core/playwright`): `playwright.config.ts` serves `dist/gfs-front/browser` with
-`e2e/staticki-server.ts` (SPA fallback, port 4300 or `E2E_PORT`) and every spec imports `test` from `e2e/fixture.ts`,
+`e2e/staticki-server.ts` (SPA fallback, port 4300 or `E2E_PORT`) and every browser spec imports `test` from `e2e/fixture.ts`,
 which installs `MockApi` (`e2e/mock-api.ts`, invented data in `e2e/fixtures/*.json`, state per test). A request the mock
 has no route for gets 404 **and fails the test**, so a new endpoint needs a mock route; so does an uncaught page error.
 `mock.na(...)` overrides one route, `mock.zadrzi(...)` holds a response until the test releases it (no fixed sleeps).
 `pristupacnost.spec.ts` runs axe (WCAG 2.0/2.1/2.2 A+AA) day and night: 0 serious/critical violations; fix the app,
 do not disable rules.
+
+Public paths: `e2e/javne-putanje.ts` holds the public-path regex (`JAVNI_IZRAZ`, a copy of the server's: `staging public gfs`
+on the box and the commented public line in the wrapper's `deploy/nginx/` templates; change all of them together) and the
+long-cache regex of `docker/nginx.conf` (`DUGI_KES_IZRAZ`, also used by the e2e static server). `javne-putanje.spec.ts`
+(no browser) checks them against the real build: every file except `index.html` is public, every hashed file (root and
+`media/`) is long-cached, `assets/` never is, and `nginx.conf` uses the same string. Public-route specs (`javni-upis`,
+`uzivo-javno`) import `test` from `e2e/javna-mreza.ts`: every request whose path does not match the public regex (static
+files too, e.g. a lazy chunk) gets 401 and fails the test, as on staging; `dozvoljeniApi` lists the allowed `/api/` calls.
+Angular 22 lazy chunks have mixed-case base64url hashes (`chunk-CtOh0Kox.js`, `chunk-_fBU7IqW.js`), so the hashed-file
+branch is `[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`.
 
 ## Layout
 
@@ -61,7 +72,8 @@ src/app/
   hubs). Importing another feature's `ui/` is allowed.
 - Request options have one type, `OpcijeZahteva` (`core/api/opcije-zahteva.ts`; never a per-client copy): `{ tiho: true }`
   sets `LOCAL_ERRORS`, so the global error interceptor shows no snackbar and the caller reports the error itself. Clients
-  whose callers always use the snackbar (`ReferenceApi`, global search) and the public `upis.api` take no options.
+  whose callers always use the snackbar (`ReferenceApi`) take no options; global search (`PretragaApi`) always sets
+  `LOCAL_ERRORS` (its dialog shows the error), and the public `upis.api` takes no options.
 - Breadcrumbs: `data.mrvice` built with `mrvica(label, url?)` from `core/layout/mrvica.ts`.
 - `withComponentInputBinding()` is on: route and query params bind to same-named inputs of routed components.
 
@@ -131,12 +143,14 @@ over STOMP; teacher commands are REST.
   `data-access/razlog-greske`, `ui/format`, `ui/markdown`, `ui/opcija-oblik`, `ui/rang-lista.component`,
   `ui/tajmer.component` (and `lazni-sat.testing` in specs). Never `prezentacije.api`, `izvodjenja.api`, the stores,
   `pages/` or `core/state`. After touching `javno/` or the routes, check that `uzivo/<kod>` makes no `/api/` call outside
-  `/api/public/` (the wrapper's `staging/e2e/uzivo_e2e.py` checks it).
+  `/api/public/` (`e2e/uzivo-javno.spec.ts` checks it with a fake STOMP broker; the wrapper's `staging/e2e/uzivo_e2e.py`
+  against a real backend).
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
   `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the
   text colour, which is inherited as a computed value). The black/white screens (keys B/W) are deliberately pure black and
-  white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`).
+  white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared
+  `ConfirmDialog`, and the editor's leave guard is the shared `unsavedChangesGuard` (`tekstNapustanja` gives its text).
 - Zoneless: all state is signals (STOMP messages go through `patchState`, the timer interval sets a signal). Component
   specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
   `animationsDisabled: true`, otherwise MatFormField leaves 300 ms timers behind.
