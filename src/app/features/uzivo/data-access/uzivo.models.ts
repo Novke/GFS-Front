@@ -49,7 +49,7 @@ export interface IzvodjenjeInfo {
   brojUcesnika: number; brojPitanja: number;
 }
 export interface KomandaCmd { tip: TipKomande; vrednost?: number | null; }
-export interface RezultatOpcija { id: number; tekst: string; broj: number; tacna: boolean | null; }
+export interface RezultatOpcija { id: number; tekst: string | null; broj: number; tacna: boolean | null; }
 export interface BrojStavka { vrednost: number; broj: number; }
 export interface RezultatBrojevi { medijana: number | null; uOdstupanju: number | null; najcesce: BrojStavka[]; }
 export interface RezultatTekst { kljuc: string; tekst: string; broj: number; sakriven: boolean; tacan: boolean | null; }
