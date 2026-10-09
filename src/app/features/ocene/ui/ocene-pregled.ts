@@ -4,7 +4,7 @@ import { rxResource } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
-import { catchError, forkJoin, map, Observable, of } from 'rxjs';
+import { catchError, map, Observable, of, switchMap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { Histogram } from '../../../shared/ui/histogram';
@@ -83,11 +83,11 @@ export class OcenePregled {
 
   protected readonly podaci = rxResource<Stanje, { predmet: number; grupa: number }>({
     params: () => ({ predmet: this.predmetId(), grupa: this.grupaId() }),
+    // Redom, ne paralelno: oba poziva prave podrazumevane koeficijente kad ih predmet nema (jedinstven predmet_id), pa bi
+    // istovremeni zahtevi za nov predmet pali na serveru. Prvo koeficijenti, pa rezultati.
     stream: ({ params }): Observable<Stanje> =>
-      forkJoin({
-        koef: this.api.koeficijenti(params.predmet, { tiho: true }),
-        rezultati: this.api.rezultati(params.predmet, params.grupa, { tiho: true }),
-      }).pipe(
+      this.api.koeficijenti(params.predmet, { tiho: true }).pipe(
+        switchMap(koef => this.api.rezultati(params.predmet, params.grupa, { tiho: true }).pipe(map(rezultati => ({ koef, rezultati })))),
         map(p => ({ podaci: { koef: p.koef, rezultati: p.rezultati ?? [] }, greska: null })),
         catchError((e: unknown) => of({ podaci: null, greska: e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM })),
       ),

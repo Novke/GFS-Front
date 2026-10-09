@@ -3,7 +3,8 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
@@ -111,6 +112,7 @@ export class GrupaDetalj {
   private readonly preference = inject(PreferencesStore);
   private readonly reference = inject(ReferenceStore);
   private readonly obavestenja = inject(NotificationStore);
+  private readonly router = inject(Router);
 
   /** Id iz putanje (`withComponentInputBinding`); matcher rute propušta samo brojeve. */
   readonly id = input<string>();
@@ -143,6 +145,18 @@ export class GrupaDetalj {
         });
       }
     });
+    // Mrvice se računaju iznova na svaku navigaciju (i prelazak između tabova, kad se detalj ne pravi ponovo): vrati naziv.
+    this.router.events
+      .pipe(
+        filter(e => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        const o = this.oznaka();
+        if (o) {
+          this.mrvice.postavi(o.naziv);
+        }
+      });
   }
 
   protected izmeniGrupu(): void {

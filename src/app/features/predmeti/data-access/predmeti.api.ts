@@ -1,4 +1,4 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { EMPTY, expand, Observable, reduce } from 'rxjs';
 
@@ -55,9 +55,13 @@ export class PredmetiApi {
     return this.http.post<PredmetInfo>(`${API_URL}/predmeti`, cmd, { context: this.kontekst(o) });
   }
 
-  /** `GET predmeti/{id}/tipovi`: samo **aktivni** tipovi testa (server ne vraća isključene). */
-  tipovi(id: number, o: OpcijePredmeta = {}): Observable<TipTestaInfo[]> {
-    return this.http.get<TipTestaInfo[]>(`${API_URL}/predmeti/${id}/tipovi`, { context: this.kontekst(o) });
+  /**
+   * `GET predmeti/{id}/tipovi`: aktivni tipovi testa; sa `svi` (`?svi=true`) i isključeni, sa `aktivan`, po id-ju
+   * (H5, da se isključen tip može ponovo uključiti).
+   */
+  tipovi(id: number, o: OpcijePredmeta & { svi?: boolean } = {}): Observable<TipTestaInfo[]> {
+    const params = o.svi ? new HttpParams().set('svi', 'true') : undefined;
+    return this.http.get<TipTestaInfo[]>(`${API_URL}/predmeti/${id}/tipovi`, { params, context: this.kontekst(o) });
   }
 
   /** `PUT test/tip/{id}`: preimenovanje i (de)aktivacija (H5). */

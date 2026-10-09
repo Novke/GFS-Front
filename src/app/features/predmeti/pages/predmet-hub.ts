@@ -5,7 +5,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatSelect } from '@angular/material/select';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, IsActiveMatchOptions, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
@@ -75,7 +75,7 @@ export function opcijeGrupaHuba(
 
       <nav class="tabovi" aria-label="Odeljci predmeta">
         @for (t of tabovi; track t.putanja) {
-          <a [routerLink]="t.putanja" [queryParams]="parametriTaba()" routerLinkActive="aktivan" ariaCurrentWhenActive="page"
+          <a [routerLink]="t.putanja" [queryParams]="parametriTaba()" routerLinkActive="aktivan" [routerLinkActiveOptions]="aktivanTab" ariaCurrentWhenActive="page"
             [attr.data-tab]="t.putanja">{{ t.naslov }}</a>
         }
       </nav>
@@ -123,6 +123,11 @@ export class PredmetHub implements OnInit {
   readonly grupa = input<string>();
 
   protected readonly tabovi = TABOVI_PREDMETA;
+  /**
+   * Tab je aktivan po putanji, bez obzira na query parametre: link uvek nosi `godina`, a URL je može nemati
+   * (`/predmeti/5`, link iz bočne navigacije) ili imati parametre liste (strana, sort).
+   */
+  protected readonly aktivanTab: IsActiveMatchOptions = { paths: 'subset', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' };
   protected readonly pId = computed(() => (JE_ID.test(this.id() ?? '') ? Number(this.id()) : null));
   protected readonly godinaH = computed(() => parseGodinaHuba(this.godina()));
   protected readonly grupaH = computed(() => parseGrupaHuba(this.grupa()));

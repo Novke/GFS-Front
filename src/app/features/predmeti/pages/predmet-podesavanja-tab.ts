@@ -19,7 +19,7 @@ import { KoeficijentiInfo } from '../../ocene/data-access/ocene.models';
 import { KoeficijentiForma } from '../../ocene/ui/koeficijenti-forma';
 import { PredmetStore } from '../data-access/predmet.store';
 import { PredmetiApi } from '../data-access/predmeti.api';
-import { TipTestaInfo } from '../data-access/predmeti.models';
+import { TipTestaInfo, UpdateTipTestaCmd } from '../data-access/predmeti.models';
 import { TipTestaDialog } from '../ui/tip-testa-dialog';
 
 /** Red H5. */
@@ -30,17 +30,17 @@ export interface TipUPodesavanjima {
 }
 
 /**
- * Tipovi testa za H5. Server daje samo aktivne (`GET predmeti/{id}/tipovi`); isključeni se vide ako imaju sačuvan red u
- * koeficijentima (`koeficijentiTipova`), a tipovi menjani u ovoj sesiji (`izmene`, odgovori `PUT`/`POST`) uvek. Redosled:
- * aktivni sa servera, isključeni iz koeficijenata, novi iz sesije.
+ * Tipovi testa za H5: svi tipovi predmeta sa servera (`GET predmeti/{id}/tipovi?svi=true`, i isključeni, po id-ju), pa
+ * tip iz koeficijenata koga tu nema (isključen), pa tipovi menjani ili dodati u ovoj sesiji (`izmene`, odgovori
+ * `PUT`/`POST`), koji važe preko svega.
  */
 export function tipoviZaPodesavanja(
-  aktivni: readonly TipTestaInfo[],
+  sviTipovi: readonly TipTestaInfo[],
   koef: Pick<KoeficijentiInfo, 'koeficijentiTipova'> | null | undefined,
   izmene: ReadonlyMap<number, TipTestaInfo>,
 ): TipUPodesavanjima[] {
   const redovi = new Map<number, TipUPodesavanjima>();
-  for (const t of aktivni) {
+  for (const t of sviTipovi) {
     if (typeof t?.id === 'number') {
       redovi.set(t.id, { id: t.id, naziv: t.naziv?.trim() || `Tip ${t.id}`, aktivan: t.aktivan !== false });
     }
@@ -93,7 +93,7 @@ interface StanjeReda {
           <h2 id="naslov-tipova">Tipovi testa</h2>
           <button matButton="outlined" type="button" (click)="novTip()" data-nov-tip><mat-icon svgIcon="add" aria-hidden="true" />Nov tip</button>
         </div>
-        <p class="objasnjenje">Isključen tip se ne nudi za nove testove i ne ulazi u predlog ocena; postojeći testovi tog tipa ostaju.</p>
+        <p class="objasnjenje">Isključen tip se ne nudi za nove testove i ne ulazi u predlog ocena; postojeći testovi tog tipa ostaju, a tip se može ponovo uključiti.</p>
         @if (tipovi().length === 0) {
           <p class="prazno">Predmet još nema tipova testa.</p>
         } @else {
@@ -109,6 +109,7 @@ interface StanjeReda {
                   <tr [attr.data-tip]="t.id">
                     <td>
                       <input class="naziv-polje" type="text" maxlength="60" [value]="t.naziv" [attr.aria-label]="'Naziv tipa ' + t.naziv"
+                        [disabled]="r?.stanje === 'cuva'"
                         [attr.aria-invalid]="r?.greska ? true : null" (keydown.enter)="preimenuj(t, $any($event.target))"
                         (keydown.escape)="$any($event.target).value = t.naziv" (blur)="preimenuj(t, $any($event.target))" data-naziv-tipa />
                       @if (r?.greska) {
@@ -175,7 +176,7 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
   protected readonly podaci = rxResource<Ucitano, number | undefined>({
     params: () => this.predmetId() ?? undefined,
     stream: ({ params: id }): Observable<Ucitano> =>
-      forkJoin({ koef: this.ocene.koeficijenti(id, { tiho: true }), tipovi: this.predmeti.tipovi(id, { tiho: true }) }).pipe(
+      forkJoin({ koef: this.ocene.koeficijenti(id, { tiho: true }), tipovi: this.predmeti.tipovi(id, { tiho: true, svi: true }) }).pipe(
         map(x => ({ koef: x.koef, tipovi: x.tipovi ?? [], greska: null })),
         catchError((e: unknown) => of({ koef: null, tipovi: [], greska: e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM })),
       ),
@@ -187,8 +188,8 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
   private readonly izmene = signal<ReadonlyMap<number, TipTestaInfo>>(new Map());
   protected readonly tipovi = computed(() => tipoviZaPodesavanja(this.stanje()?.tipovi ?? [], this.koef(), this.izmene()));
   protected readonly redovi = signal<Record<number, StanjeReda>>({});
-  /** Poslednji neuspeli zahtev po tipu, za "Pokušaj ponovo". */
-  private readonly neuspeli = new Map<number, { naziv: string; aktivan: boolean }>();
+  /** Poslednja neuspela izmena po tipu, za "Pokušaj ponovo". */
+  private readonly neuspeli = new Map<number, Partial<UpdateTipTestaCmd>>();
 
   imaNesacuvanihIzmena(): boolean {
     return this.forma()?.imaNesacuvanihIzmena() ?? false;
@@ -207,7 +208,12 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
       });
   }
 
-  protected preimenuj(t: TipUPodesavanjima, polje: HTMLInputElement): void {
+  protected preimenuj(red: TipUPodesavanjima, polje: HTMLInputElement): void {
+    // Enter pa blur (ili blur kad se polje onemogući dok se čuva) ne šalju drugi zahtev
+    if (this.cuva(red.id)) {
+      return;
+    }
+    const t = this.trenutni(red.id) ?? red;
     const naziv = (polje.value ?? '').trim();
     if (naziv === t.naziv) {
       polje.value = t.naziv;
@@ -219,12 +225,12 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
       return;
     }
     polje.value = naziv;
-    this.posalji(t.id, { naziv, aktivan: t.aktivan });
+    this.posalji(t.id, { naziv });
   }
 
   protected promeniAktivan(t: TipUPodesavanjima, aktivan: boolean, prekidac: MatSlideToggle): void {
     if (aktivan) {
-      this.posalji(t.id, { naziv: t.naziv, aktivan: true }, prekidac);
+      this.posalji(t.id, { aktivan: true }, prekidac);
       return;
     }
     ConfirmDialog.otvori(this.dialog, {
@@ -233,7 +239,7 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
       potvrdi: 'Isključi',
     }).subscribe(da => {
       if (da) {
-        this.posalji(t.id, { naziv: t.naziv, aktivan: false }, prekidac);
+        this.posalji(t.id, { aktivan: false }, prekidac);
       } else {
         prekidac.checked = true;
       }
@@ -247,23 +253,43 @@ export class PredmetPodesavanjaTab implements NemaNesacuvanih {
     }
   }
 
-  /** `PUT test/tip/{id}`; prekidač koji je promenio stanje se posle greške vraća na staro. */
-  private posalji(id: number, cmd: { naziv: string; aktivan: boolean }, prekidac?: MatSlideToggle): void {
+  /**
+   * `PUT test/tip/{id}` sa izmenom primenjenom na **trenutno** stanje reda (ne na snimak iz trenutka klika), pa promena
+   * naziva ne vraća `aktivan` i obrnuto. Dok zahtev za red traje, nov se ne šalje (polje i prekidač su onemogućeni).
+   * Prekidač koji je promenio stanje se posle greške vraća na staro.
+   */
+  private posalji(id: number, izmena: Partial<UpdateTipTestaCmd>, prekidac?: MatSlideToggle): void {
+    const t = this.trenutni(id);
+    if (!t || this.cuva(id)) {
+      if (prekidac && t) {
+        prekidac.checked = t.aktivan;
+      }
+      return;
+    }
+    const cmd: UpdateTipTestaCmd = { naziv: t.naziv, aktivan: t.aktivan, ...izmena };
     this.postaviRed(id, { stanje: 'cuva', greska: null });
     this.predmeti.izmeniTip(id, cmd, { tiho: true }).subscribe({
-      next: t => {
+      next: odgovor => {
         this.neuspeli.delete(id);
-        this.zapamti({ ...t, id, aktivan: t?.aktivan ?? cmd.aktivan, naziv: t?.naziv ?? cmd.naziv });
+        this.zapamti({ ...odgovor, id, aktivan: odgovor?.aktivan ?? cmd.aktivan, naziv: odgovor?.naziv ?? cmd.naziv });
         this.postaviRed(id, { stanje: 'sacuvano', greska: null });
       },
       error: (e: unknown) => {
-        this.neuspeli.set(id, cmd);
+        this.neuspeli.set(id, izmena);
         if (prekidac) {
           prekidac.checked = !cmd.aktivan;
         }
         this.postaviRed(id, { stanje: 'greska', greska: e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM });
       },
     });
+  }
+
+  private trenutni(id: number): TipUPodesavanjima | undefined {
+    return this.tipovi().find(x => x.id === id);
+  }
+
+  private cuva(id: number): boolean {
+    return this.redovi()[id]?.stanje === 'cuva';
   }
 
   private zapamti(t: TipTestaInfo): void {

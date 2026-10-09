@@ -8,6 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { StudentPregledDetails, StudentPredmetKartica } from '../../../core/api/studenti.api';
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { IKONE } from '../../../core/layout/icons';
 import { STUDENTI_RUTE } from '../studenti.routes';
 
@@ -192,6 +193,19 @@ describe('StudentProfil', () => {
     http.expectOne('api/studenti/5/beleske').flush([]);
     await stani();
     expect(el().querySelector('[data-sledeci]')!.getAttribute('href')).toBe('/studenti/9/beleske');
+  });
+
+  it('mrvice nose ime studenta i posle prelaska na drugi tab (profil se ne pravi ponovo)', async () => {
+    const mrvice = TestBed.inject(BreadcrumbService);
+    await otvori({ url: '/studenti/5/hronologija' });
+    const ime = mrvice.mrvice().at(-1)?.label;
+    expect(ime).toBeTruthy();
+    expect(ime).toBe(el().querySelector('h1')?.textContent?.trim());
+    await harness.navigateByUrl('/studenti/5/beleske');
+    await stani();
+    http.expectOne('api/studenti/5/beleske').flush([]);
+    await stani();
+    expect(mrvice.mrvice().at(-1)?.label).toBe(ime);
   });
 
   it('/studenti/5 ide na tab Pregled i prikazuje kartice po predmetu', async () => {

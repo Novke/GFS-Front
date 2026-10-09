@@ -7,6 +7,7 @@ import { provideRouter, Router, withComponentInputBinding } from '@angular/route
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { GrupaPregledInfo, GrupaStudentStat } from '../data-access/grupe.models';
 import { GrupaStore } from '../data-access/grupa.store';
 import { GRUPE_RUTE } from '../grupe.routes';
@@ -166,6 +167,23 @@ describe('rute grupe', () => {
     harness.fixture.detectChanges();
     const novo = el.querySelector('[data-novo-predavanje]') as HTMLAnchorElement;
     expect(novo.getAttribute('href')).toBe('/predavanja/novo?grupa=4');
+  });
+
+  it('mrvice nose naziv grupe i posle prelaska na drugi tab (detalj se ne pravi ponovo)', { timeout: 15_000 }, async () => {
+    const mrvice = TestBed.inject(BreadcrumbService);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/grupe/4/pregled');
+    http.expectOne('api/grupe/4/pregled').flush(pregled);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    http.match(r => r.url === 'api/predavanja/pretraga').forEach(r => r.flush({ content: [], page: { size: 5, number: 0, totalElements: 0, totalPages: 0 } }));
+    expect(mrvice.mrvice().at(-1)?.label).toBe('GD-2025');
+
+    await harness.navigateByUrl('/grupe/4/studenti');
+    harness.fixture.detectChanges();
+    expect(mrvice.mrvice().at(-1)?.label).toBe('GD-2025');
+    await harness.navigateByUrl('/grupe/4/studenti?sort=ime,desc');
+    expect(mrvice.mrvice().at(-1)?.label).toBe('GD-2025');
   });
 
   it('neuspelo osvežavanje učitane grupe: prikaz ostaje, iznad tabova je panel greške', { timeout: 15_000 }, async () => {

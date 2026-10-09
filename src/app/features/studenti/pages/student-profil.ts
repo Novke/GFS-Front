@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
@@ -166,6 +166,18 @@ export class StudentProfil {
         this.preference.zabeleziNedavno({ tip: 'student', id: kljuc.id, naslov: kljuc.ime, url: `/studenti/${kljuc.id}` });
       });
     });
+    // Mrvice se računaju iznova na svaku navigaciju (i prelazak između tabova, kad se profil ne pravi ponovo): vrati ime.
+    this.router.events
+      .pipe(
+        filter(e => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        const o = this.oznaka();
+        if (o) {
+          this.mrvice.postavi(o.ime);
+        }
+      });
   }
 
   /** Segment child rute (`pregled`, `hronologija`, `beleske`); nepoznat ili odsutan je `pregled`. */

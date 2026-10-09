@@ -52,6 +52,7 @@ const LISTA_STILOVI = `
   .grafikon { margin-bottom: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
   .grafikon h2 { margin: 0 0 4px; font-size: 16px; }
   .grafikon .podnaslov { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .mesto-grafikona { min-height: 168px; }
 `;
 
 // ------------------------------------------------------------------------------------------------ predavanja
@@ -189,7 +190,7 @@ const TestoviPredmetaStore = signalStore(withListaTestova({ kljuc: 'testovi-pred
           @defer (on viewport) {
             <app-prosek-po-tipu [serije]="serije()" />
           } @placeholder {
-            <div style="min-height: 168px"></div>
+            <div class="mesto-grafikona"></div>
           }
         }
         @case ('error') {

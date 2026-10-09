@@ -1,5 +1,5 @@
-import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { formatNumber } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, input, LOCALE_ID, signal } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 
@@ -14,6 +14,10 @@ import {
   sortirajPoUkupnom,
 } from '../data-access/ocene.models';
 
+function jeBroj(v: number | null | undefined): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 /**
  * Tabela predloga ocena (kolone kao u starom ekranu: #, student, indeks, domaći i aktivnost razdvojeno ili
  * "Predispitne" zbirno po koeficijentima predmeta, po kolona za svaki tip testa, ukupno, ocena). Sve vrednosti su sa
@@ -22,7 +26,7 @@ import {
  */
 @Component({
   selector: 'app-ocene-tabela',
-  imports: [DecimalPipe, MatIcon, RouterLink],
+  imports: [MatIcon, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="tabela-okvir">
@@ -61,16 +65,16 @@ import {
               </td>
               <td class="samo-desktop mono brojevi-sitno">{{ indeks(r) }}</td>
               @if (zbirno()) {
-                <td class="samo-desktop broj mono">{{ r.poeniPredispitne ?? 0 | number: '1.1-1' }}</td>
+                <td class="samo-desktop broj mono" [class.nema]="!jeBroj(r.poeniPredispitne)">{{ poeniTekst(r.poeniPredispitne) }}</td>
               } @else {
-                <td class="samo-desktop broj mono">{{ r.poeniDomaci ?? 0 | number: '1.1-1' }}</td>
-                <td class="samo-desktop broj mono">{{ r.poeniAktivnost ?? 0 | number: '1.1-1' }}</td>
+                <td class="samo-desktop broj mono" [class.nema]="!jeBroj(r.poeniDomaci)">{{ poeniTekst(r.poeniDomaci) }}</td>
+                <td class="samo-desktop broj mono" [class.nema]="!jeBroj(r.poeniAktivnost)">{{ poeniTekst(r.poeniAktivnost) }}</td>
               }
               @for (k of kolone(); track k.id) {
                 @let p = poeni(r, k.id);
-                <td class="samo-desktop broj mono" [class.nema]="p === null">{{ p === null ? '—' : (p | number: '1.1-1') }}</td>
+                <td class="samo-desktop broj mono" [class.nema]="p === null">{{ poeniTekst(p) }}</td>
               }
-              <td class="samo-desktop broj mono"><strong>{{ r.ukupno ?? 0 | number: '1.1-1' }}</strong></td>
+              <td class="samo-desktop broj mono" [class.nema]="!jeBroj(r.ukupno)"><strong>{{ poeniTekst(r.ukupno) }}</strong></td>
               <td class="c-st">
                 @if (r.predlogOcene !== null && r.predlogOcene !== undefined && r.predlogOcene >= 6) {
                   <span class="oznaka ton-ok" data-ocena>{{ r.predlogOcene }}</span>
@@ -95,6 +99,8 @@ import {
   `,
 })
 export class OceneTabela {
+  private readonly locale = inject(LOCALE_ID);
+
   readonly rezultati = input.required<readonly RezultatiStudentaInfo[]>();
   readonly koeficijenti = input<KoeficijentiInfo | null>(null);
   readonly predmetId = input.required<number>();
@@ -106,6 +112,13 @@ export class OceneTabela {
 
   protected promeniSmer(): void {
     this.smer.update(s => (s === 'desc' ? 'asc' : 'desc'));
+  }
+
+  protected readonly jeBroj = jeBroj;
+
+  /** Poeni sa jednom decimalom po `LOCALE_ID` (`6,1`); nedostaje ili nije broj: `—` (kao kolone tipova). */
+  protected poeniTekst(v: number | null | undefined): string {
+    return jeBroj(v) ? formatNumber(v, this.locale, '1.1-1') : '—';
   }
 
   protected poeni(r: RezultatiStudentaInfo, tipId: number): number | null {
@@ -129,7 +142,6 @@ export class OceneTabela {
 
   /** Red kartice na telefonu: indeks i ukupno. */
   protected meta(r: RezultatiStudentaInfo): string {
-    const ukupno = typeof r.ukupno === 'number' ? r.ukupno.toLocaleString('sr-Latn', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—';
-    return `${this.indeks(r)} · ukupno ${ukupno}`;
+    return `${this.indeks(r)} · ukupno ${this.poeniTekst(r.ukupno)}`;
   }
 }
