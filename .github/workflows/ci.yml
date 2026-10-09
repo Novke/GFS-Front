@@ -25,6 +25,8 @@ jobs:
       - run: npm ci
       - name: Lint (ESLint)
         run: npx ng lint
+      - name: Pravila ESLint-a za javnu rutu (/upis)
+        run: npm run test:eslint-pravila
       - name: Unit testovi (Vitest)
         run: npx ng test --watch=false
       - name: Produkcioni build

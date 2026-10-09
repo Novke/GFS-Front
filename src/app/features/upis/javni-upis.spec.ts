@@ -16,8 +16,6 @@ function info(izmene: Partial<JavniUpisInfo> = {}): JavniUpisInfo {
   return { grupaNaziv: 'GD-2025', godinaUpisa: 2025, otvorena: true, istice: '2026-12-01T10:00:00', ...izmene };
 }
 
-vi.setConfig({ testTimeout: 15000 }); // prvi test u zagušenom paralelnom pokretanju hladno učitava Material
-
 describe('JavniUpis (upis/:token)', () => {
   let http: HttpTestingController;
   let fixture: ComponentFixture<JavniUpis>;

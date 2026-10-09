@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",
-    "test:eslint-pravila": "node --test eslint-rules/javna-ruta-uvozi.test.js"
+    "test:eslint-pravila": "node --test \"eslint-rules/*.test.js\""
   },
   "private": true,
   "dependencies": {

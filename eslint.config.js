@@ -4,20 +4,7 @@ const { defineConfig } = require("eslint/config");
 const tseslint = require("typescript-eslint");
 const angular = require("angular-eslint");
 const javnaRutaUvozi = require("./eslint-rules/javna-ruta-uvozi");
-
-// Javne rute (student na telefonu, bez basic-auth-a): smeju da zovu samo assets/env.json i api/public/*. Fajlovi tih
-// feature-a smeju da uvoze samo sebe i ovaj spisak (putanje u odnosu na src/app, "/**" = ceo direktorijum). Novi javni
-// feature (uzivo/javno) se dodaje u JAVNI_FEATURE; svaki dodatak na spisku mora svesno da se proveri (da ne zove /api/*).
-const JAVNI_FEATURE = ["features/upis", "features/uzivo/javno"];
-const JAVNO_DOZVOLJENO = [
-  "core/api/api-url",
-  "core/api/api-error", // samo HttpContextToken i toApiError, bez store-a
-  "core/layout/public-layout",
-  "core/layout/okruzenje", // assets/env.json
-  "shared/forms/**", // pomocne klase za forme, bez poziva API-ja
-  "shared/util/**",
-  "shared/models/**",
-];
+const { JAVNI_FEATURE, JAVNO_DOZVOLJENO } = require("./eslint-rules/javna-ruta-konfig");
 
 module.exports = defineConfig([
   {
