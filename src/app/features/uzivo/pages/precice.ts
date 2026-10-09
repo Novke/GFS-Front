@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { GotoBafer, TasterAkcija, tasterUAkciju, uPoljuZaUnos } from '../tastatura';
+import { GotoBafer, TasterAkcija, kljucPrecice, tasterUAkciju, uPoljuZaUnos } from '../tastatura';
 
 /** Elementi koji sami koriste strelice, Enter ili Space (Material select, meni, tabovi, radio, klizač) i overlay-i. */
 const SVOJA_TASTATURA = [
@@ -40,7 +40,8 @@ const GOTO_PRIKAZ_MS = 3000;
 
 /**
  * Tastatura izvođenja (ista u publici i konzoli): `G` + broj + `Enter` kroz `GotoBafer` sa indikatorom
- * (`gotoUnos`, sam se sakrije posle 3 s), ostalo kroz `tasterUAkciju`.
+ * (`gotoUnos`, sam se sakrije posle 3 s), ostalo kroz `tasterUAkciju`. Slova rade i na ćiriličnom rasporedu
+ * (`kljucPrecice`: `e.code` kad je `e.key` slovo van ASCII-ja).
  */
 export class TastaturaIzvodjenja {
   /** `null` = nije u G režimu; inače do sada otkucane cifre. */
@@ -53,7 +54,7 @@ export class TastaturaIzvodjenja {
   /** Akcija za taster ili `null`; kad je taster prečica, poziva `preventDefault` (Space ne skroluje, Enter ne klikne). */
   akcija(e: KeyboardEvent, brojSlajdova: number, dijalogOtvoren: boolean): TasterAkcija | null {
     if (preskociPrecicu(e, dijalogOtvoren)) return null;
-    const g = e.ctrlKey || e.metaKey || e.altKey ? null : this.goto.obradi(e.key);
+    const g = e.ctrlKey || e.metaKey || e.altKey ? null : this.goto.obradi(kljucPrecice(e));
     this.prikaziGoto();
     if (g === 'progutao') {
       e.preventDefault();

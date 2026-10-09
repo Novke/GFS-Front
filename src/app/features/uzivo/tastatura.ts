@@ -2,18 +2,33 @@ import { TipKomande } from './data-access/uzivo.models';
 
 export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC';
 export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija };
-type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>;
+type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string };
 
 export function uPoljuZaUnos(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el || !el.tagName) return false;
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable === true;
 }
 
-/** Mapa iz spec-a 6.4. `G` + cifre + Enter vodi `GotoBafer`; ovde ga ne obrađujemo. */
+/**
+ * Taster za prečicu: `e.key`, osim kad je to slovo van ASCII-ja (srpska ćirilica: `ц` na mestu `C`), a fizički taster
+ * je slovo (`e.code` = `KeyC`): tada slovo latinične tastature na istom mestu, pa prečice rade i na ćiriličnom
+ * rasporedu. ASCII tasteri (i drugi latinični rasporedi, npr. Dvorak) ostaju po `e.key`, a `š`, `đ`, `č`... nisu na
+ * `Key*` tasterima, pa se ne preslikavaju.
+ */
+export function kljucPrecice(e: Pick<Taster, 'key' | 'code'>): string {
+  const k = e.key;
+  if (k.length === 1 && k.charCodeAt(0) > 0x7f) {
+    const slovo = /^Key([A-Z])$/.exec(e.code ?? '');
+    if (slovo) return k === k.toLowerCase() ? slovo[1].toLowerCase() : slovo[1];
+  }
+  return k;
+}
+
+/** Mapa iz spec-a 6.4. `G` + cifre + Enter vodi `GotoBafer`; ovde ga ne obrađujemo. Slova i na ćirilici (`kljucPrecice`). */
 export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
-  switch (e.key) {
+  switch (kljucPrecice(e)) {
     case 'ArrowRight': case 'PageDown': case 'Enter': return { komanda: 'SLEDECI' };
     case 'ArrowLeft': case 'PageUp': return { komanda: 'PRETHODNI' };
     case 'Home': return { komanda: 'IDI_NA', vrednost: -1 };

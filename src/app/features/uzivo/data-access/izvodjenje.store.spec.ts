@@ -115,6 +115,41 @@ describe('IzvodjenjeStore', () => {
       expect(store.greska()).toBe('Izvođenje nije pronađeno.');
     });
 
+    it('404 i 410 na GET stanje: STOMP se ne otvara (nema večnog ponovnog povezivanja)', () => {
+      store.init(5);
+      http.expectOne('api/izvodjenja/5/stanje').flush({ reason: 'Izvođenje nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
+      expect(putanje).toEqual([]);
+
+      store.init(6);
+      http.expectOne('api/izvodjenja/6/stanje').flush({ reason: 'Izvođenje je završeno.' }, { status: 410, statusText: 'Gone' });
+      expect(putanje).toEqual([]);
+      expect(store.greska()).toBe('Izvođenje je završeno.');
+    });
+
+    it('druga greška (5xx, mreža): STOMP se otvara, stanje stiže kroz početni snimak', () => {
+      store.init(5);
+      http.expectOne('api/izvodjenja/5/stanje').flush(null, { status: 502, statusText: 'Bad Gateway' });
+      expect(putanje).toEqual(['api/ws']);
+      stomp.posalji('/app/izvodjenja/5/nastavnik-pocetno', stanje({ verzija: 4 }));
+      expect(store.stanje()!.verzija).toBe(4);
+    });
+
+    it('destroy pre odgovora otkazuje GET stanje i ništa ne otvara', () => {
+      store.init(5);
+      const zahtev = http.expectOne('api/izvodjenja/5/stanje');
+      store.destroy();
+      expect(zahtev.cancelled).toBe(true);
+      expect(putanje).toEqual([]);
+    });
+
+    it('novi init otkazuje GET stanje prethodnog', () => {
+      store.init(5);
+      const prvi = http.expectOne('api/izvodjenja/5/stanje');
+      store.init(6);
+      expect(prvi.cancelled).toBe(true);
+      http.expectOne('api/izvodjenja/6/stanje').flush(stanje());
+    });
+
     it('destroy deaktivira STOMP', () => {
       init();
       store.destroy();

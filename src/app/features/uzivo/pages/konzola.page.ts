@@ -11,7 +11,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, filter, firstValueFrom, map } from 'rxjs';
 import { AppRoutes } from '../../../app.routes';
-import { oznakaDalje, oznakaOtvoriZatvori, oznakaPolozaja } from '../data-access/izvodjenje-pravila';
+import { odgovorili, oznakaDalje, oznakaOtvoriZatvori, oznakaPolozaja } from '../data-access/izvodjenje-pravila';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { TipKomande } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
@@ -145,8 +145,9 @@ export class IzborEkranaDialog {
             @if (s.rezultatiPrikazani) { <span class="uz-cip">na projektoru</span> }
           </h2>
           @if (s.runda && s.trenutniSlajd?.pitanje; as p) {
-            <p class="uz-kon-odgovorili" [class.uz-kon-odgovorili--svi]="sviOdgovorili()">
-              Odgovorili <strong>{{ s.brojOdgovora }}/{{ s.brojPovezanih }}</strong>
+            @let o = odgovoriliSu();
+            <p class="uz-kon-odgovorili" [class.uz-kon-odgovorili--svi]="o?.svi">
+              Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
             </p>
             @if (s.rezultat; as r) {
               <app-rezultat-prikaz class="uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
@@ -266,9 +267,9 @@ export class KonzolaPage {
   protected readonly vezaTekst = computed(() => ({
     povezan: 'Povezano', povezivanje: 'Povezivanje…', prekinut: 'Veza prekinuta, povezujem…',
   })[this.store.veza()]);
-  protected readonly sviOdgovorili = computed(() => {
+  protected readonly odgovoriliSu = computed(() => {
     const s = this.store.stanje();
-    return !!s && s.brojPovezanih > 0 && s.brojOdgovora >= s.brojPovezanih;
+    return s ? odgovorili(s) : null;
   });
 
   private otisao = false;

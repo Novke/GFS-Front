@@ -1,4 +1,4 @@
-import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, Rezultat, TipKomande } from './uzivo.models';
+import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, TipKomande } from './uzivo.models';
 
 const UVEK: readonly TipKomande[] = ['TELEFON_PRIKAZ', 'DETALJI', 'EKRAN_CRN', 'EKRAN_BEO', 'QR', 'ZAVRSI'];
 
@@ -51,16 +51,13 @@ export function ispravanIndeks(vrednost: number | undefined, brojSlajdova: numbe
 }
 
 /**
- * Rezultat za projektor iz nastavničkog: bez sakrivenih tekstova, a tačnost se ne vidi dok tačan odgovor nije
- * prikazan (isto što server šalje u `JavnoStanje`).
+ * "Odgovorili x/y" u konzoli: imenilac su učesnici koji su povezani **ili** su već odgovorili u ovoj rundi (student koji
+ * je odgovorio pa izgubio vezu se i dalje broji), pa nikad nema 31/30, a "svi odgovorili" ne pali pre vremena.
  */
-export function javniRezultat(r: Rezultat | null, tacanPrikazan: boolean): Rezultat | null {
-  if (!r) return null;
-  return {
-    ...r,
-    opcije: r.opcije?.map(o => (tacanPrikazan ? o : { ...o, tacna: null })) ?? null,
-    tekstovi: r.tekstovi?.filter(t => !t.sakriven).map(t => (tacanPrikazan ? t : { ...t, tacan: null })) ?? null,
-  };
+export function odgovorili(s: NastavnickoStanje): { broj: number; od: number; svi: boolean } {
+  const aktivni = s.ucesnici.filter(u => u.povezan || u.odgovorio).length;
+  const od = Math.max(aktivni, s.brojPovezanih, s.brojOdgovora);
+  return { broj: s.brojOdgovora, od, svi: od > 0 && s.brojOdgovora >= od };
 }
 
 /** Šta radi `→` u ovom trenutku (oznaka glavnog dugmeta u konzoli). */

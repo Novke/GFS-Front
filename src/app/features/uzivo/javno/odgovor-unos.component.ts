@@ -79,8 +79,9 @@ const SKALA = [1, 2, 3, 4, 5] as const;
           <div class="uz-st-polje-red">
             <input id="uz-st-broj" class="uz-st-polje" type="text" inputmode="decimal" autocomplete="off"
                    [value]="broj()" (input)="broj.set(vrednost($event)); porukaBroja.set(null); javiNacrt()" [disabled]="onemoguceno()"
-                   [attr.aria-invalid]="porukaBroja() ? 'true' : null" aria-describedby="uz-st-broj-poruka" />
-            @if (p.jedinica) { <span class="uz-st-jedinica">{{ p.jedinica }}</span> }
+                   [attr.aria-invalid]="porukaBroja() ? 'true' : null"
+                   [attr.aria-describedby]="p.jedinica ? 'uz-st-jedinica uz-st-broj-poruka' : 'uz-st-broj-poruka'" />
+            @if (p.jedinica) { <span id="uz-st-jedinica" class="uz-st-jedinica">{{ p.jedinica }}</span> }
           </div>
           <p id="uz-st-broj-poruka" class="uz-st-poruka-polja" role="alert">{{ porukaBroja() }}</p>
           <button type="submit" class="uz-st-dugme uz-st-dugme--glavno" [disabled]="onemoguceno() || !mozeSlati()">Pošalji</button>

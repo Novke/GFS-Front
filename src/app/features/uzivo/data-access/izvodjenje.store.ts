@@ -39,6 +39,9 @@ const link = (putanja: string) => new URL(putanja, document.baseURI).href;
  *
  * - `init(id)`: `GET stanje`, pa STOMP (`api/ws`) sa pretplatama na `/topic/izvodjenja/{id}/nastavnik` (snimak posle
  *   svake promene) i `/app/izvodjenja/{id}/nastavnik-pocetno` (snimak odmah, i posle svakog ponovnog povezivanja).
+ *   Na 404/410 (pogrešan id, izvođenje ne postoji) STOMP se ne otvara, inače bi se večno ponovo povezivao; na druge
+ *   greške (mreža, 5xx) se otvara, pa stanje stiže kroz početni snimak. HTTP zahtev je deo veze: novi `init` i
+ *   `destroy` ga otkazuju.
  * - `prihvati`: server je jedini izvor istine; snimak sa manjom verzijom od trenutne se odbacuje, a jednaka verzija se
  *   prihvata (posle odgovora studenata server šalje svežije rezultate bez promene verzije). Usklađuje `ServerskiSat`.
  * - `komanda`, `preimenuj`, `izbaci`, `sakrij`: jedan red (`concatMap`), pa brzo `→ → →` stiže na server redom i nijedna
@@ -134,7 +137,19 @@ export const IzvodjenjeStore = signalStore(
 
     function osvezi(): void {
       if (izvodjenjeId === null) return;
-      api.stanje(izvodjenjeId).subscribe({ next: prihvati, error: () => undefined });
+      veza.add(api.stanje(izvodjenjeId).subscribe({ next: prihvati, error: () => undefined }));
+    }
+
+    function povezi(id: number): void {
+      const s = fabrika('api/ws');
+      stomp = s;
+      let biloPovezano = false;
+      veza.add(s.connectionState$.subscribe(st => {
+        if (st === RxStompState.OPEN) biloPovezano = true;
+        patchState(store, { veza: st === RxStompState.OPEN ? 'povezan' : biloPovezano ? 'prekinut' : 'povezivanje' });
+      }));
+      veza.add(s.watch(`/topic/izvodjenja/${id}/nastavnik`).subscribe(m => prihvatiPoruku(m.body)));
+      veza.add(s.watch(`/app/izvodjenja/${id}/nastavnik-pocetno`).subscribe(m => prihvatiPoruku(m.body)));
     }
 
     function posalji(zahtev: () => Observable<NastavnickoStanje>, greska: string): void {
@@ -156,20 +171,17 @@ export const IzvodjenjeStore = signalStore(
         zatvoriVezu();
         izvodjenjeId = id;
         patchState(store, { ...POCETNO });
-        api.stanje(id).subscribe({
-          next: prihvati,
-          error: e => patchState(store, { greska: razlogGreske(e, 'Izvođenje nije učitano.') }),
-        });
-
-        const s = fabrika('api/ws');
-        stomp = s;
-        let biloPovezano = false;
-        veza.add(s.connectionState$.subscribe(st => {
-          if (st === RxStompState.OPEN) biloPovezano = true;
-          patchState(store, { veza: st === RxStompState.OPEN ? 'povezan' : biloPovezano ? 'prekinut' : 'povezivanje' });
+        veza.add(api.stanje(id).subscribe({
+          next: s => {
+            prihvati(s);
+            povezi(id);
+          },
+          error: e => {
+            patchState(store, { greska: razlogGreske(e, 'Izvođenje nije učitano.') });
+            const nePostoji = e instanceof HttpErrorResponse && (e.status === 404 || e.status === 410);
+            if (!nePostoji) povezi(id);
+          },
         }));
-        veza.add(s.watch(`/topic/izvodjenja/${id}/nastavnik`).subscribe(m => prihvatiPoruku(m.body)));
-        veza.add(s.watch(`/app/izvodjenja/${id}/nastavnik-pocetno`).subscribe(m => prihvatiPoruku(m.body)));
       },
 
       prihvati,

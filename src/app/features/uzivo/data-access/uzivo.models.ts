@@ -61,13 +61,18 @@ export interface Rezultat {
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }
 export interface UcesnikStanje { id: number; ime: string; poeni: number; povezan: boolean; odgovorio: boolean; }
+/**
+ * Snimak za nastavnika. `rezultat` i `rangLista` su nastavnički (tačnost i poeni trenutne runde uživo, samo konzola);
+ * projektor prikazuje `javniRezultat` i `javnaRangLista`, koje server gradi istim kodom kao `JavnoStanje.rezultat` i
+ * `JavnoStanje.rangLista` (null dok nisu prikazani).
+ */
 export interface NastavnickoStanje {
   izvodjenje: IzvodjenjeInfo; verzija: number; serverVremeMs: number; prikaz: Prikaz; korak: number; brojStavki: number;
   indeks: number; brojSlajdova: number; trenutniSlajd: SlajdDetails | null; sledeciSlajd: SlajdDetails | null;
   faza: Faza | null; runda: RundaInfo | null; rezultatiPrikazani: boolean; tacanPrikazan: boolean;
   rangListaPrikazana: boolean; ekran: Ekran; qrPrikazan: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
   takmicenje: boolean; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
-  ucesnici: UcesnikStanje[]; rangLista: RangStavka[];
+  ucesnici: UcesnikStanje[]; rangLista: RangStavka[]; javniRezultat: Rezultat | null; javnaRangLista: RangStavka[] | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

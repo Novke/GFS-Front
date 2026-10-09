@@ -82,6 +82,25 @@ describe('TastaturaIzvodjenja', () => {
     expect(drugiGore.defaultPrevented).toBe(false);
   });
 
+  it('ćirilični raspored: г 3 Enter -> IDI_NA 2, ц -> TACAN', () => {
+    const t = new TastaturaIzvodjenja();
+    expect(t.akcija(taster('г', document.body, { code: 'KeyG' }), 20, false)).toBeNull();
+    expect(t.gotoUnos()).toBe('');
+    t.akcija(taster('3', document.body, { code: 'Digit3' }), 20, false);
+    expect(t.akcija(taster('Enter', document.body, { code: 'Enter' }), 20, false)).toEqual({ komanda: 'IDI_NA', vrednost: 2 });
+    const c = taster('ц', document.body, { code: 'KeyC' });
+    expect(t.akcija(c, 20, false)).toEqual({ komanda: 'TACAN' });
+    expect(c.defaultPrevented).toBe(true);
+    t.unisti();
+  });
+
+  it('ćirilično slovo u polju za unos ostaje tekst (nije prečica)', () => {
+    const t = new TastaturaIzvodjenja();
+    const e = taster('ц', element('<input>'), { code: 'KeyC' });
+    expect(t.akcija(e, 20, false)).toBeNull();
+    expect(e.defaultPrevented).toBe(false);
+  });
+
   it('Space je prečica i ne skroluje; Ctrl+G nije G režim', () => {
     const t = new TastaturaIzvodjenja();
     const e = taster(' ');

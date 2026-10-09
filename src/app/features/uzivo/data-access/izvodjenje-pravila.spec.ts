@@ -1,9 +1,8 @@
 import { infoSlajd, naPitanju, pitanjeSlajd, stanje } from './izvodjenje-podaci.testing';
 import {
-  datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, javniRezultat, mozePregled, opisVeze,
+  datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, mozePregled, odgovorili, opisVeze,
   oznakaDalje, oznakaTajmera,
 } from './izvodjenje-pravila';
-import { Rezultat } from './uzivo.models';
 
 describe('dozvoljeneKomande', () => {
   it('završeno izvođenje: ništa', () => {
@@ -91,26 +90,39 @@ describe('imaTacanOdgovor i ispravanIndeks', () => {
   });
 });
 
-describe('javniRezultat', () => {
-  const r: Rezultat = {
-    tip: 'KRATAK_TEKST', ukupno: 3, opcije: null, brojevi: null, skala: null,
-    tekstovi: [
-      { kljuc: 'beton', tekst: 'Beton', broj: 2, sakriven: false, tacan: true },
-      { kljuc: 'glupost', tekst: 'Glupost', broj: 1, sakriven: true, tacan: false },
-    ],
-  };
+describe('odgovorili (x/y u konzoli)', () => {
+  const u = (id: number, povezan: boolean, odgovorio: boolean) => ({ id, ime: 'U' + id, poeni: 0, povezan, odgovorio });
 
-  it('sakriveni tekstovi se ne vide, tačnost tek posle C', () => {
-    expect(javniRezultat(r, false)!.tekstovi).toEqual([{ kljuc: 'beton', tekst: 'Beton', broj: 2, sakriven: false, tacan: null }]);
-    expect(javniRezultat(r, true)!.tekstovi![0].tacan).toBe(true);
-    expect(javniRezultat(null, true)).toBeNull();
+  it('odgovorio pa izgubio vezu: ostaje u imeniocu, nema 3/2', () => {
+    const s = naPitanju('OTVORENO', {
+      ucesnici: [u(1, true, true), u(2, true, true), u(3, false, true), u(4, false, false)],
+      brojOdgovora: 3, brojPovezanih: 2,
+    });
+    expect(odgovorili(s)).toEqual({ broj: 3, od: 3, svi: true });
   });
 
-  it('opcije bez tačnosti dok tačan nije prikazan', () => {
-    const o: Rezultat = { tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, skala: null, tekstovi: null,
-      opcije: [{ id: 1, tekst: '4', broj: 1, tacna: true }] };
-    expect(javniRezultat(o, false)!.opcije![0].tacna).toBeNull();
-    expect(javniRezultat(o, true)!.opcije![0].tacna).toBe(true);
+  it('"svi odgovorili" ne pali dok povezani nisu odgovorili', () => {
+    // 2 povezana, oba bez odgovora; treći odgovorio pa otišao: 1/3, ne 1/2 pa 2/2 prerano
+    const s = naPitanju('OTVORENO', {
+      ucesnici: [u(1, true, false), u(2, true, false), u(3, false, true)],
+      brojOdgovora: 1, brojPovezanih: 2,
+    });
+    expect(odgovorili(s)).toEqual({ broj: 1, od: 3, svi: false });
+    const posle = naPitanju('OTVORENO', {
+      ucesnici: [u(1, true, true), u(2, true, false), u(3, false, true)],
+      brojOdgovora: 2, brojPovezanih: 2,
+    });
+    expect(odgovorili(posle)).toEqual({ broj: 2, od: 3, svi: false });
+  });
+
+  it('niko povezan i niko odgovorio: 0/0 bez isticanja', () => {
+    const s = naPitanju('OTVORENO', { ucesnici: [u(1, false, false)], brojOdgovora: 0, brojPovezanih: 0 });
+    expect(odgovorili(s)).toEqual({ broj: 0, od: 0, svi: false });
+  });
+
+  it('imenilac nikad manji od broja povezanih ni broja odgovora', () => {
+    const s = naPitanju('OTVORENO', { ucesnici: [], brojOdgovora: 4, brojPovezanih: 5 });
+    expect(odgovorili(s)).toEqual({ broj: 4, od: 5, svi: false });
   });
 });
 

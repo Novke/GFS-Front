@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, linkedSignal, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute } from '@angular/router';
 import { distinctUntilChanged, filter, map } from 'rxjs';
 import { ispravanIndeks } from '../data-access/izvodjenje-pravila';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
+import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
 import { otvoriPomoc } from './pomoc-precice.dialog';
@@ -15,9 +16,21 @@ import { PublikaScenaComponent } from './publika-scena.component';
 const PONOVI_ROK_MS = 2000;
 
 /**
+ * Šta scena prikazuje: aktivno izvođenje uvek svoj snimak; posle "Završi" ostaje poslednji prikaz KRAJ (postolje ili
+ * "Hvala!"), da pobednici ne nestanu sa platna (bez čuvanja server do tada obriše i učesnike). Završeno izvođenje
+ * otvoreno iz nekog drugog prikaza (ili tek učitano) nema scenu.
+ */
+export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoStanje | null): NastavnickoStanje | null {
+  if (!s) return null;
+  if (s.izvodjenje.status !== 'ZAVRSENO') return s;
+  return prethodna?.prikaz === 'KRAJ' && prethodna.izvodjenje.id === s.izvodjenje.id ? prethodna : null;
+}
+
+/**
  * Prikaz za publiku (spec 6.4): ceo prozor, scena 16:9 centrirana sa crnim ivicama (letterbox), uvek dnevne boje.
  * Vodi se tastaturom ili daljinskim (iste prečice kao konzola); komande koje u ovoj fazi ne važe se tiho preskaču, da
- * projektor ne prikazuje greške. Indikator veze u uglu samo dok veza nije uspostavljena.
+ * projektor ne prikazuje greške. Indikator veze u uglu samo dok veza nije uspostavljena (i samo kad ima stanja: za
+ * nepostojeće izvođenje se veza i ne otvara).
  */
 @Component({
   selector: 'app-publika',
@@ -32,18 +45,18 @@ const PONOVI_ROK_MS = 2000;
     '(document:keyup)': 'tast.pusten($event)',
   },
   template: `
-    @if (store.stanje(); as s) {
-      @if (s.izvodjenje.status === 'ZAVRSENO') {
-        <div class="uz-pub-poruka uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
+    @if (store.stanje()) {
+      @if (scena(); as sc) {
+        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" />
       } @else {
-        <app-publika-scena class="uz-pub-scena" [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" />
+        <div class="uz-pub-poruka uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
     } @else if (store.greska(); as g) {
       <div class="uz-pub-poruka uz-dan" role="alert"><p>{{ g }}</p></div>
     } @else {
       <div class="uz-pub-poruka uz-dan" role="status"><p>Učitavanje…</p></div>
     }
-    @if (store.veza() !== 'povezan') {
+    @if (store.stanje() && store.veza() !== 'povezan') {
       <p class="uz-pub-veza" role="status">
         {{ store.veza() === 'prekinut' ? 'Veza prekinuta, povezujem…' : 'Povezivanje…' }}
       </p>
@@ -60,6 +73,10 @@ export class PublikaPage {
   private readonly dialog = inject(MatDialog);
   protected readonly tast = new TastaturaIzvodjenja();
   protected readonly ponoviCeka = signal(false);
+  protected readonly scena = linkedSignal<NastavnickoStanje | null, NastavnickoStanje | null>({
+    source: this.store.stanje,
+    computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
+  });
   private ponoviTajmer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {

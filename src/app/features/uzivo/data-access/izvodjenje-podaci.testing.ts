@@ -30,6 +30,8 @@ export function stanje(izmene: Partial<NastavnickoStanje> = {}): NastavnickoStan
       { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: false },
     ],
     rangLista: [],
+    javniRezultat: null,
+    javnaRangLista: null,
     ...izmene,
   };
 }

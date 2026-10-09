@@ -1,4 +1,4 @@
-import { GotoBafer, TasterAkcija, tasterUAkciju, uPoljuZaUnos } from './tastatura';
+import { GotoBafer, TasterAkcija, kljucPrecice, tasterUAkciju, uPoljuZaUnos } from './tastatura';
 
 const taster = (key: string, mod: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {}) =>
   ({ key, ctrlKey: false, metaKey: false, altKey: false, ...mod });
@@ -52,6 +52,46 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
     expect(tasterUAkciju(taster('x'), 5)).toBeNull();
     expect(tasterUAkciju(taster('Escape'), 5)).toBeNull();
     expect(tasterUAkciju(taster('g'), 5)).toBeNull();
+  });
+});
+
+describe('prečice na srpskoj ćirilici (e.key ćirilično, e.code latinični taster)', () => {
+  const cir = (key: string, code: string, mod: { ctrlKey?: boolean } = {}) => ({ ...taster(key, mod), code });
+  // srpski ćirilični raspored: C=ц, L=л, O=о, R=р, T=т, M=м, D=д, Q=љ, B=б, W=њ, F=ф, P=п
+  const tabela: [string, string, TasterAkcija][] = [
+    ['ц', 'KeyC', { komanda: 'TACAN' }],
+    ['Ц', 'KeyC', { komanda: 'TACAN' }],
+    ['л', 'KeyL', { komanda: 'RANG_LISTA' }],
+    ['о', 'KeyO', { komanda: 'OTVORI_ZATVORI' }],
+    ['р', 'KeyR', { komanda: 'PONOVI' }],
+    ['т', 'KeyT', { komanda: 'TAJMER' }],
+    ['м', 'KeyM', { komanda: 'TELEFON_PRIKAZ' }],
+    ['д', 'KeyD', { komanda: 'DETALJI' }],
+    ['љ', 'KeyQ', { komanda: 'QR' }],
+    ['б', 'KeyB', { komanda: 'EKRAN_CRN' }],
+    ['њ', 'KeyW', { komanda: 'EKRAN_BEO' }],
+    ['ф', 'KeyF', { lokalno: 'CEO_EKRAN' }],
+    ['п', 'KeyP', { lokalno: 'KONZOLA' }],
+  ];
+  for (const [key, code, akcija] of tabela) {
+    it(`'${key}' (${code}) -> ${JSON.stringify(akcija)}`, () => {
+      expect(tasterUAkciju(cir(key, code), 10)).toEqual(akcija);
+    });
+  }
+
+  it('Ctrl sa ćiriličnim slovom se ne hvata', () => {
+    expect(tasterUAkciju(cir('ц', 'KeyC', { ctrlKey: true }), 5)).toBeNull();
+  });
+
+  it('kljucPrecice: ASCII i tasteri van Key* ostaju po e.key', () => {
+    expect(kljucPrecice({ key: 'г', code: 'KeyG' })).toBe('g');
+    expect(kljucPrecice({ key: 'Г', code: 'KeyG' })).toBe('G');
+    // Dvorak: fizički KeyC daje 'j' (ASCII), to nije C
+    expect(kljucPrecice({ key: 'j', code: 'KeyC' })).toBe('j');
+    // srpska latinica: š je na BracketLeft, ne preslikava se
+    expect(kljucPrecice({ key: 'š', code: 'BracketLeft' })).toBe('š');
+    expect(kljucPrecice({ key: 'ArrowRight', code: 'ArrowRight' })).toBe('ArrowRight');
+    expect(kljucPrecice({ key: 'ц' })).toBe('ц');
   });
 });
 

@@ -121,6 +121,22 @@ describe('OdgovorUnosComponent', () => {
     expect(poslato).toEqual([{ rundaId: 7, broj: '3,5' }]);
   });
 
+  it('BROJ u režimu DUGMAD (bez Detalja): jedinica stoji uz polje', () => {
+    // server šalje jedinicu u svakom režimu telefona; tekst pitanja ostaje skriven
+    napravi(pitanje('BROJ', { opcije: null, brojOpcija: null, jedinica: 'm/s²' }), false);
+    const jedinica = fixture.nativeElement.querySelector('.uz-st-polje-red .uz-st-jedinica') as HTMLElement;
+    expect(jedinica.textContent).toBe('m/s²');
+    const polje = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    expect(polje.getAttribute('aria-describedby')).toBe('uz-st-jedinica uz-st-broj-poruka');
+  });
+
+  it('BROJ bez jedinice: nema oznake jedinice', () => {
+    napravi(pitanje('BROJ', { opcije: null, brojOpcija: null, jedinica: null }), false);
+    expect(fixture.nativeElement.querySelector('.uz-st-jedinica')).toBeNull();
+    const polje = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    expect(polje.getAttribute('aria-describedby')).toBe('uz-st-broj-poruka');
+  });
+
   it('SKALA: pet dugmadi, dodir šalje vrednost', () => {
     napravi(pitanje('SKALA', { opcije: null, brojOpcija: null }));
     expect(dugmad().length).toBe(5);
