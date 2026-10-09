@@ -24,8 +24,6 @@ export const SIROKO = '(min-width: 1024px)';
 @Component({
   selector: 'app-shell',
   imports: [MatSidenavContainer, MatSidenav, MatSidenavContent, RouterOutlet, SideNav, TopBar],
-  // Stari ekrani (Eager, bez signala) u outletu se osvežavaju i ispod OnPush ljuske (Angular 22 obilazi Eager
-  // poglede u kontejnerima); proverava test "stari ekran ..." u shell.spec.ts.
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

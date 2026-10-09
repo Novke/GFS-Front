@@ -12,7 +12,7 @@ export interface ConfirmDialogCfg {
   destruktivno?: boolean;
 }
 
-/** Potvrda umesto `confirm()`. Esc, klik van dijaloga i "Odustani" daju `false`. Destruktivna varijanta počinje fokusom na "Odustani". */
+/** Potvrda umesto prozora brauzera. Esc, klik van dijaloga i "Odustani" daju `false`. Destruktivna varijanta počinje fokusom na "Odustani". */
 @Component({
   selector: 'app-confirm-dialog',
   imports: [MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle],

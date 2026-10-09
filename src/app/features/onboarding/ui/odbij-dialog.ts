@@ -19,7 +19,7 @@ export interface OdbijRezultat {
   napomena: string | null;
 }
 
-/** "Odbij" prijavu sa opcionim razlogom (umesto `prompt()`). Destruktivno: fokus počinje na polju, "Odbij" je crveno. */
+/** "Odbij" prijavu sa opcionim razlogom (umesto prozora brauzera). Destruktivno: fokus počinje na polju, "Odbij" je crveno. */
 @Component({
   selector: 'app-odbij-dialog',
   imports: [MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, MatError, MatFormField, MatHint, MatInput, MatLabel, ReactiveFormsModule],

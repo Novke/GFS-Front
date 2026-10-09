@@ -1,6 +1,4 @@
 // Globalni stilovi. Tokeni i zajednički stilovi su ovde (src/styles/), ne u komponentama (budžet anyComponentStyle).
-// Bootstrap ostaje samo za stare ekrane, do Task 27.
-@use 'bootstrap/dist/css/bootstrap.min';
 @use 'styles/fonts';
 @use 'styles/tokens';
 @use 'styles/theme';
@@ -8,5 +6,4 @@
 @use 'styles/ui';
 @use 'styles/liste';
 @use 'styles/unos';
-@use 'styles/legacy';
 @use 'styles/print';

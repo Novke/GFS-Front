@@ -38,7 +38,8 @@ class Host {
 }
 
 function napravi(stavke: DomaciListItem[], zakljucano: ZakljucanaKolona[] = []) {
-  TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  // Klik na link navigira (zoneless: greška posle kraja testa bi ostala neuhvaćena), pa ruta postoji.
+  TestBed.configureTestingModule({ providers: [provideRouter([{ path: '**', children: [] }])] });
   const f = TestBed.createComponent(Host);
   f.componentInstance.stavke.set(stavke);
   f.componentInstance.zakljucano.set(zakljucano);

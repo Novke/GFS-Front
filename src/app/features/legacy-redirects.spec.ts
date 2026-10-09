@@ -12,7 +12,6 @@ import { PublicLayout } from '../core/layout/public-layout';
 import { Shell } from '../core/layout/shell';
 import { OnboardingQr } from './onboarding/pages/onboarding-qr';
 import { Pocetna } from './pocetna/pages/pocetna';
-import { AppRoutes } from './privremeno/app-putanje';
 
 /** Lanac komponenti od korena do lista (bez outleta: komponente se ne prave, samo se ruta prepoznaje). */
 function komponente(router: Router): unknown[] {
@@ -147,8 +146,8 @@ describe('preusmerenja starih ruta', () => {
   });
 
   it('stari ekrani sa poznatom grupom vode direktno na grupe/:g/onboarding/:sid[/qr] (bez preusmerenja i GET-a sesije)', async () => {
-    expect(await idi('/' + AppRoutes.onboardingPrijave(3, 7))).toBe('/grupe/3/onboarding/7');
-    expect(await idi('/' + AppRoutes.onboardingQr(3, 7))).toBe('/grupe/3/onboarding/7/qr');
+    expect(await idi('/grupe/3/onboarding/7')).toBe('/grupe/3/onboarding/7');
+    expect(await idi('/grupe/3/onboarding/7/qr')).toBe('/grupe/3/onboarding/7/qr');
     expect(komponente(router)).toEqual([ProjectorLayout, OnboardingQr]);
     http.expectNone('api/onboarding/7');
   });

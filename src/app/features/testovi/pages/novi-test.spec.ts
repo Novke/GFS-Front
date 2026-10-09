@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { NOV_TIP, NoviTest } from './novi-test';
@@ -72,8 +72,8 @@ describe('NoviTest', () => {
     expect(req.request.body).toMatchObject({ tipTestaId: 2, predmetId: 1, grupaId: 4, brojGrupa: 2, maxPoena: 30, pragProlaza: null });
     expect(req.request.body.datum).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     req.flush({ id: 77 });
-    await harness.fixture.whenStable();
-    expect(TestBed.inject(Router).url).toBe('/testovi/77');
+    // zoneless: obećanja i navigacija nisu praćeni u whenStable, pa se čeka ishod
+    await vi.waitFor(() => expect(TestBed.inject(Router).url).toBe('/testovi/77'));
   });
 
   it('max poena preko 100 ili 0 se ne šalje', async () => {
@@ -100,9 +100,11 @@ describe('NoviTest', () => {
     tip.flush({ id: 8, naziv: 'Kolokvijum 2', aktivan: true });
     await harness.fixture.whenStable();
     http.expectOne('api/predmeti/1/tipovi').flush([]); // invalidacija keša tipova
-    http.expectOne('api/test').flush({ reason: 'Grupa ne postoji!' }, { status: 404, statusText: 'Not Found' });
-    await harness.fixture.whenStable();
-    harness.detectChanges();
+    (await vi.waitFor(() => http.expectOne('api/test'))).flush({ reason: 'Grupa ne postoji!' }, { status: 404, statusText: 'Not Found' });
+    await vi.waitFor(() => {
+      harness.detectChanges();
+      expect(el().querySelector('[role=alert]')).not.toBeNull();
+    });
     expect(el().querySelector('[role=alert]')?.textContent).toContain('Grupa ne postoji!');
 
     await posalji();

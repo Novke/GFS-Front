@@ -42,4 +42,3 @@ ili user-defined mreži koja ima servis po imenu `backend`; na podrazumevanom br
   angular-eslint), `npx ng test --watch=false` (Vitest + jsdom, ne treba browser), `npx ng build --configuration production`, pa
   `docker build`. Nijedan korak nije `continue-on-error`: crven lint ili test blokira merge.
   Lokalno isto: `npm ci && npx ng lint && npx ng test --watch=false && npx ng build --configuration production`.
-  Stari ekrani imaju per-fajl isključena pravila u `eslint.config.js` (komentar "zamenjuje se u F2").

@@ -1,13 +1,13 @@
 import { MediaMatcher } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ChangeDetectionStrategy, Component, inject, provideAppInitializer, signal } from '@angular/core';
+import { inject, provideAppInitializer, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By, DomSanitizer } from '@angular/platform-browser';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
-import { provideRouter, ROUTES, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -191,28 +191,4 @@ describe('Shell', () => {
     expect(el.querySelector('app-not-found')).not.toBeNull();
     expect(el.querySelector('app-not-found .na-pocetnu')).toBeNull();
   });
-
-  it('stari ekran (bez signala) u outletu ljuske se osvežava posle asinhrone promene', async () => {
-    podesi(1280);
-    TestBed.overrideProvider(ROUTES, { useValue: [{ path: '', component: Shell, children: [{ path: '', component: StariEkran }] }], multi: true });
-    const harness = await RouterTestingHarness.create('/');
-    await vi.waitFor(() => {
-      harness.detectChanges();
-      expect(harness.fixture.nativeElement.textContent).toContain('učitano');
-    });
-  });
 });
-
-// Kao stari ekrani: podrazumevana detekcija promena, polje se menja u callback-u bez markForCheck.
-@Component({
-  selector: 'app-stari-ekran',
-  template: '{{ tekst }}',
-  // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
-  changeDetection: ChangeDetectionStrategy.Eager,
-})
-class StariEkran {
-  tekst = 'čeka';
-  constructor() {
-    setTimeout(() => (this.tekst = 'učitano'), 80);
-  }
-}

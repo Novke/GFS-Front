@@ -11,10 +11,7 @@ import { Okruzenje } from './okruzenje';
 @Component({
   selector: 'app-public-layout',
   imports: [RouterOutlet],
-  // PRIVREMENO (do Task 27): stari ekrani u outletu ne javljaju promene (bez signala/markForCheck); ispod OnPush
-  // roditelja ne bi se nikad osvežili. Kad nestanu, vraća se OnPush.
-  // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'rezim-dan papir' },
   template: `
     @if (okruzenje.jeStaging()) {

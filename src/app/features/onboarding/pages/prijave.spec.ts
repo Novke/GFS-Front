@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { putanjaSaId } from '../../../core/route-matchers';
 import { OnboardingSesijaDetails, PrijavaInfo } from '../../../core/api/onboarding.api';
@@ -70,6 +70,8 @@ describe('Prijave', () => {
   });
 
   const el = () => harness.fixture.nativeElement as HTMLElement;
+  // Zatvaranje dijaloga ima tajmer koji zoneless whenStable ne prati: zahtev se čeka dok ne stigne.
+  const zahtev = (url: string) => vi.waitFor(() => http.expectOne(url));
   const redovi = () => [...el().querySelectorAll('tbody tr')];
 
   async function otvori(url: string, odgovor: OnboardingSesijaDetails) {
@@ -94,7 +96,7 @@ describe('Prijave', () => {
     harness.fixture.detectChanges();
     await harness.fixture.whenStable();
 
-    const req = http.expectOne('api/onboarding/9/prijave/2/odbij');
+    const req = await zahtev('api/onboarding/9/prijave/2/odbij');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ napomena: 'Nepotpuni podaci' });
     req.flush(detalji([prijava(1), prijava(2, { status: 'ODBIJENA', napomena: 'Nepotpuni podaci' })]));
@@ -125,9 +127,7 @@ describe('Prijave', () => {
     (document.querySelector('app-confirm-dialog [data-potvrdi]') as HTMLButtonElement).click();
     harness.fixture.detectChanges();
     await harness.fixture.whenStable();
-    http
-      .expectOne('api/onboarding/9/prihvati-sve')
-      .flush(detalji([prijava(1, { status: 'PRIHVACENA' }), prijava(2, { status: 'PRIHVACENA' }), prijava(3, { status: 'PRIHVACENA' })], 'Prihvaćeno: 2.'));
+    (await zahtev('api/onboarding/9/prihvati-sve')).flush(detalji([prijava(1, { status: 'PRIHVACENA' }), prijava(2, { status: 'PRIHVACENA' }), prijava(3, { status: 'PRIHVACENA' })], 'Prihvaćeno: 2.'));
     harness.fixture.detectChanges();
     expect(el().querySelector('[data-poruka]')?.textContent).toContain('Prihvaćeno: 2');
   });

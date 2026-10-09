@@ -10,10 +10,7 @@ import { SnackbarHost } from './core/layout/snackbar-host';
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet, SnackbarHost],
-  // PRIVREMENO (do Task 27): stari ekrani u outletu ne javljaju promene (bez signala/markForCheck); ispod OnPush
-  // roditelja ne bi se nikad osvežili. Kad nestanu, vraća se OnPush.
-  // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet />
     <app-snackbar-host />

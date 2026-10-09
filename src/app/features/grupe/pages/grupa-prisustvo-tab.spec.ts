@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@a
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
 import { GrupaPregledInfo, PrisustvoMatricaInfo } from '../../../core/api/grupe.models';
@@ -101,9 +101,12 @@ describe('GrupaPrisustvoTab', () => {
     expect(m.request.params.get('predmetId')).toBe('2');
     expect(m.request.params.get('godina')).toBe('2024');
     m.flush(matrica);
-    await stabilno();
-    expect(el().textContent).toContain('Predmet: Nacrtna geometrija');
-    expect(el().querySelector('app-heatmap td.ukupno')?.textContent).toBe('1/1'); // ZADATAK je prisustvo
+    // zoneless: prikaz matrice stiže posle mikrotaskova koje whenStable ne prati
+    await vi.waitFor(() => {
+      harness.fixture.detectChanges();
+      expect(el().textContent).toContain('Predmet: Nacrtna geometrija');
+      expect(el().querySelector('app-heatmap td.ukupno')?.textContent).toBe('1/1'); // ZADATAK je prisustvo
+    });
   });
 
   it('bez ?godina šalje tekuću školsku godinu', { timeout: 15_000 }, async () => {
