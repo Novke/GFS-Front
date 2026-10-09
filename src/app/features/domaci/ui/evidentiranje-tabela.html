@@ -1,5 +1,5 @@
 <div class="tabela-okvir">
-  <table class="evidentiranje">
+  <table class="unos-tabela">
     <caption class="sr-only">Evidentiranje domaćeg po studentima</caption>
     <thead>
       <tr>
@@ -32,7 +32,7 @@
             @if (zakljucan) {
               <span class="mono" data-bodovi-tekst>{{ bodovi(s) ?? '—' }}</span>
             } @else {
-              <input type="number" inputmode="numeric" min="0" [max]="maxBodova" step="1" class="polje polje-bodovi mono"
+              <input type="number" inputmode="numeric" min="0" [max]="maxBodova" step="1" class="unos-polje unos-bodovi mono"
                 data-polje="bodovi" [value]="bodovi(s)" [attr.aria-label]="'Bodovi: ' + ime(s)"
                 [attr.aria-invalid]="neispravniBodovi().has(s.id) ? 'true' : null"
                 (input)="unosBodova(s, $any($event.target))" (keydown.enter)="enter($event, s, 'bodovi')" />
@@ -42,7 +42,7 @@
             @if (zakljucan) {
               <span [class.nema]="!prepisivanje(s)">{{ prepisivanje(s) ? 'Da' : '—' }}</span>
             } @else {
-              <input type="checkbox" class="potvrda" data-polje="prepisivanje" [checked]="prepisivanje(s)"
+              <input type="checkbox" class="unos-potvrda" data-polje="prepisivanje" [checked]="prepisivanje(s)"
                 [attr.aria-label]="'Prepisivanje: ' + ime(s)" (change)="unosPrepisivanja(s, $any($event.target))" />
             }
           </td>
@@ -50,7 +50,7 @@
             @if (zakljucan) {
               <span [class.nema]="!napomena(s)">{{ napomena(s) || '—' }}</span>
             } @else {
-              <input type="text" class="polje polje-napomena" data-polje="napomene" [value]="napomena(s)" [maxLength]="maxNapomena"
+              <input type="text" class="unos-polje unos-napomena" data-polje="napomene" [value]="napomena(s)" [maxLength]="maxNapomena"
                 autocomplete="off" [attr.aria-label]="'Napomena: ' + ime(s)"
                 (input)="unosNapomene(s, $any($event.target))" (keydown.enter)="enter($event, s, 'napomene')" />
             }
@@ -59,7 +59,7 @@
             @if (s.oslobodjen) {
               <app-status-chip tekst="Oslobođen" ton="ok" />
             } @else if (neispravniBodovi().has(s.id)) {
-              <span class="neispravno" role="alert" data-neispravno>Bodovi: ceo broj od 0 do {{ maxBodova }}.</span>
+              <span class="unos-greska" role="alert" data-neispravno>Bodovi: ceo broj od 0 do {{ maxBodova }}.</span>
             } @else if (!zakljucan) {
               <app-save-status [stanje]="statusi()[s.id]" kompaktno (ponovo)="ponovo.emit(s.id)" />
             }

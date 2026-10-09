@@ -24,7 +24,8 @@ function podesavanje(p: Poruka): MatSnackBarConfig {
 /**
  * Prikazuje poruke iz `NotificationStore` kroz `MatSnackBar`, jednu po jednu: sledeća tek kad se prethodna
  * zatvori (`MatSnackBar.open` bi inače zamenio otvorenu, pa bi uspeh sakrio grešku koja mora da ostane do zatvaranja).
- * Poruka sa `grupa` zamenjuje ranije poruke iste grupe (iz reda, a otvorenu zatvara), osim grešaka.
+ * Poruka sa `grupa` zamenjuje ranije poruke iste grupe (iz reda, a otvorenu zatvara); greške samo nova greška iste grupe,
+ * nikad uspeh ili info.
  * Postavlja se jednom, u `AppComponent`.
  */
 @Component({
@@ -45,8 +46,8 @@ export class SnackbarHost {
   }
 
   private primi(p: Poruka): void {
-    const zamenjiva = (q: Poruka) => p.grupa !== undefined && q.grupa === p.grupa && q.tip !== 'greska';
-    if (p.grupa !== undefined && p.tip !== 'greska') {
+    const zamenjiva = (q: Poruka) => p.grupa !== undefined && q.grupa === p.grupa && (q.tip !== 'greska' || p.tip === 'greska');
+    if (p.grupa !== undefined) {
       for (let i = this.red.length - 1; i >= 0; i--) {
         if (zamenjiva(this.red[i])) {
           this.red.splice(i, 1);
@@ -54,7 +55,7 @@ export class SnackbarHost {
       }
     }
     this.red.push(p);
-    if (p.tip !== 'greska' && this.tekuca && zamenjiva(this.tekuca.poruka)) {
+    if (this.tekuca && zamenjiva(this.tekuca.poruka)) {
       this.tekuca.ref.dismiss(); // afterDismissed prikazuje sledeću
       return;
     }

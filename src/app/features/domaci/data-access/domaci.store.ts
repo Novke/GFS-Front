@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
-import { catchError, concatMap, defer, EMPTY, firstValueFrom, map, Observable, of, Subject, Subscription, tap } from 'rxjs';
+import { catchError, concatMap, defer, EMPTY, finalize, firstValueFrom, map, Observable, of, Subject, Subscription, switchMap, take, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -9,7 +9,7 @@ import { setError, setLoaded, setLoading, withRequestStatus } from '../../../sha
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { TipAktivnosti } from '../../predavanja/data-access/predavanja.models';
 import { DomaciApi } from './domaci.api';
-import { DomaciDetails, DomaciStudentiInfo, DomaciPodaci } from './domaci.models';
+import { brojStudenata, DomaciDetails, DomaciPodaci, DomaciStudentiInfo } from './domaci.models';
 
 /** Koliko se čeka posle poslednje izmene reda pre nego što se red pošalje serveru (spec 4, tabelarni unos). */
 export const DEBOUNCE_REDA_MS = 600;
@@ -110,6 +110,39 @@ function zaglavljeIzOdgovora(det: DomaciDetails): DomaciPodaci {
 }
 
 /**
+ * Sesija jednog učitanog domaćeg: sve što treba da se pošalje i prati za njegove redove. Ne zavisi od stanja store-a ni od
+ * toga koji je domaći sada na ekranu: zahtev nosi `domaciId` i vrednosti iz sesije, pa izmena napravljena na jednom domaćem
+ * uvek stigne na taj domaći, i kad je ekran u međuvremenu prešao na drugi.
+ */
+class Sesija {
+  /** Redovi zahteva po studentu: najviše jedan zahtev u toku, ostali čekaju (`concatMap`). */
+  readonly redovi = new Map<number, Subject<void>>();
+  /** Debounce tajmeri izmena koje još nisu poslate. */
+  readonly timeri = new Map<number, ReturnType<typeof setTimeout>>();
+  /** Poslednje vrednosti koje je korisnik uneo (ono što treba poslati). */
+  readonly lokalno = new Map<number, VrednostiReda>();
+  /** Poslednje vrednosti koje je server potvrdio. */
+  readonly potvrdjeno = new Map<number, VrednostiReda>();
+  /** Raste sa svakom izmenom reda; odgovor važi samo ako je verzija ista kao pri slanju. */
+  readonly verzije = new Map<number, number>();
+  readonly imena = new Map<number, string>();
+  /** Redovi čije poslednje čuvanje nije uspelo. */
+  readonly greske = new Set<number>();
+  /** Koraci koji su u redu ili se izvršavaju (ne računaju se tajmeri). */
+  uToku = 0;
+  /** Poslednji korak je završen i `uToku` je pao na 0 (za čekanje pražnjenja). */
+  readonly mirovanje = new Subject<void>();
+  /** Domaći se briše: izmene se ne šalju. */
+  obrisan = false;
+
+  constructor(readonly domaciId: number) {}
+
+  verzija(sId: number): number {
+    return this.verzije.get(sId) ?? 0;
+  }
+}
+
+/**
  * Detalj domaćeg: zaglavlje i tabela evidentiranja (provajduje se u `DomaciDetalj`).
  *
  * Svaki red (student) se čuva sam: izmena je vidljiva odmah, a zahtev (`POST domaci/evidentiraj`, ceo red) ide posle
@@ -117,7 +150,13 @@ function zaglavljeIzOdgovora(det: DomaciDetails): DomaciPodaci {
  * **serijalizovani po studentu** (`concatMap`, kao u `PredavanjeStore`): za jednog studenta je najviše jedan zahtev u toku,
  * a kad red dođe na izvršenje šalju se **najnovije** vrednosti reda, pa konačno stanje na serveru uvek odgovara poslednjoj
  * izmeni (i prvi upis ne može da napravi dupli red). Odgovor koji stigne dok je red u međuvremenu menjan ne prepisuje
- * unos (`verzije`). Greška ostavlja uneto u polju i postavlja status reda na `greska` ("Pokušaj ponovo" = `ponovi`).
+ * unos (`verzije`). Greška ostavlja uneto u polju i postavlja status reda na `greska` ("Pokušaj ponovo" = `ponovi`);
+ * greške više redova se javljaju jednom porukom ("Nije sačuvano za N studenata", grupa poruka zamenjuje prethodnu).
+ *
+ * Svaki učitani domaći ima svoju {@link Sesija}. Kad `ucitaj` pređe na drugi domaći (ista komponenta, drugi `:id`), sesija
+ * prethodnog se **zatvara, ne otkazuje**: izmene koje čekaju debounce se odmah šalju, zahtevi u toku se završavaju, a
+ * odgovori stare sesije ne diraju stanje novog domaćeg. Novi domaći se učitava tek kad se stara sesija isprazni.
+ * `zavrsi` pre PATCH-a šalje izmene i čeka da se redovi isprazne; `obrisi` otkazuje izmene na čekanju tog domaćeg.
  * Oslobođeni redovi i pregledan domaći su samo za čitanje.
  */
 export const DomaciStore = signalStore(
@@ -126,18 +165,8 @@ export const DomaciStore = signalStore(
   withProps(() => ({
     _api: inject(DomaciApi),
     _obavestenja: inject(NotificationStore),
-    /** Promenljivo knjigovodstvo (nije stanje): redovi zahteva, tajmeri debounce-a, potvrđene vrednosti, verzije unosa. */
-    _r: {
-      redovi: new Map<number, Subject<void>>(),
-      veze: new Subscription(),
-      timeri: new Map<number, ReturnType<typeof setTimeout>>(),
-      /** Poslednje vrednosti koje je server potvrdio, po studentu. */
-      potvrdjeno: new Map<number, VrednostiReda>(),
-      /** Raste sa svakom izmenom reda; odgovor važi samo ako je verzija ista kao pri slanju. */
-      verzije: new Map<number, number>(),
-      ucitavanje: null as Subscription | null,
-      unisten: false,
-    },
+    /** Promenljivo knjigovodstvo (nije stanje): tekuća sesija, učitavanje u toku, uništen store. */
+    _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
   })),
   withComputed(({ domaci, studenti, vrednosti, statusi }) => ({
     pregledan: computed(() => domaci()?.pregledan === true),
@@ -165,118 +194,175 @@ export const DomaciStore = signalStore(
     }),
   })),
   withMethods(store => {
-    const id = () => store.domaci()?.id ?? null;
-    const verzija = (sId: number) => store._r.verzije.get(sId) ?? 0;
+    /** Stanje (za ekran) se menja samo za sesiju koja je sada na ekranu; stara sesija samo završava svoje zahteve. */
+    const tekuca = (s: Sesija) => store._r.sesija === s;
 
-    function postaviStatus(sId: number, status: StanjeCuvanja | null): void {
-      patchState(store, s => ({ statusi: { ...s.statusi, [sId]: status } }));
-    }
-
-    function imeStudenta(sId: number): string {
-      const s = store.studenti().find(x => x.id === sId);
-      return s ? [s.ime, s.prezime].filter(Boolean).join(' ') || 'Student' : 'Student';
+    function postaviStatus(s: Sesija, sId: number, status: StanjeCuvanja | null): void {
+      if (tekuca(s)) {
+        patchState(store, st => ({ statusi: { ...st.statusi, [sId]: status } }));
+      }
     }
 
     /** Odgovor servera: potvrđene vrednosti reda; unos se prepisuje samo ako red u međuvremenu nije menjan. */
-    function uskladi(sId: number, det: DomaciDetails, poslataVerzija: number): void {
-      const red = det.studenti?.find(s => s.studentId === sId);
+    function uskladi(s: Sesija, sId: number, det: DomaciDetails, poslataVerzija: number): void {
+      const red = det.studenti?.find(r => r.studentId === sId);
       if (!red) {
         return;
       }
       const potvrdjeno = izRedaServera(red);
-      store._r.potvrdjeno.set(sId, potvrdjeno);
-      if (verzija(sId) !== poslataVerzija) {
+      s.potvrdjeno.set(sId, potvrdjeno);
+      if (s.verzija(sId) !== poslataVerzija) {
         return; // noviji unos čeka ili je u redu: on određuje konačno stanje
       }
-      patchState(store, s => ({
-        vrednosti: { ...s.vrednosti, [sId]: potvrdjeno },
-        statusi: { ...s.statusi, [sId]: 'sacuvano' as StanjeCuvanja },
-      }));
+      s.lokalno.set(sId, potvrdjeno);
+      s.greske.delete(sId);
+      if (tekuca(s)) {
+        patchState(store, st => ({
+          vrednosti: { ...st.vrednosti, [sId]: potvrdjeno },
+          statusi: { ...st.statusi, [sId]: 'sacuvano' as StanjeCuvanja },
+        }));
+      }
     }
 
-    function izvrsi(sId: number): Observable<unknown> {
+    /** Jedna poruka za sve redove bez čuvanja (nova zamenjuje prethodnu iste sesije). */
+    function javiGresku(s: Sesija, sId: number, e: unknown): void {
+      const n = s.greske.size;
+      const razlog = porukaGreske(e);
+      const tekst = n <= 1 ? `${s.imena.get(sId) ?? 'Student'}: ${razlog}` : `Nije sačuvano za ${brojStudenata(n)}. ${razlog}`;
+      store._obavestenja.greska(tekst, { grupa: `domaci-${s.domaciId}-cuvanje` });
+    }
+
+    function izvrsi(s: Sesija, sId: number): Observable<unknown> {
       return defer(() => {
-        const dId = id();
-        const trenutna = verzija(sId);
-        const v = store.vrednosti()[sId];
-        const potvrdjeno = store._r.potvrdjeno.get(sId);
-        if (dId === null || !v) {
+        const trenutna = s.verzija(sId);
+        const v = s.lokalno.get(sId);
+        const potvrdjeno = s.potvrdjeno.get(sId);
+        if (s.obrisan || !v) {
           return EMPTY;
         }
         if (potvrdjeno && jednake(v, potvrdjeno)) {
           // npr. izmena vraćena na staro ili ju je već sačuvao prethodni korak reda
-          if (verzija(sId) === trenutna) {
-            postaviStatus(sId, 'sacuvano');
+          if (s.verzija(sId) === trenutna) {
+            s.greske.delete(sId);
+            postaviStatus(s, sId, 'sacuvano');
           }
           return EMPTY;
         }
         return store._api
           .evidentiraj(
-            { studentId: sId, domaciId: dId, bodovi: v.bodovi ?? 0, napomene: v.napomene, prepisivanje: v.prepisivanje },
+            { studentId: sId, domaciId: s.domaciId, bodovi: v.bodovi ?? 0, napomene: v.napomene, prepisivanje: v.prepisivanje },
             { tiho: true },
           )
           .pipe(
-            tap(det => uskladi(sId, det, trenutna)),
+            tap(det => uskladi(s, sId, det, trenutna)),
             catchError((e: unknown) => {
-              if (verzija(sId) === trenutna) {
-                postaviStatus(sId, 'greska');
-                store._obavestenja.greska(`${imeStudenta(sId)}: ${porukaGreske(e)}`);
+              if (s.verzija(sId) === trenutna) {
+                s.greske.add(sId);
+                postaviStatus(s, sId, 'greska');
+                javiGresku(s, sId, e);
               }
               return EMPTY;
             }),
           );
-      });
+      }).pipe(
+        finalize(() => {
+          s.uToku--;
+          if (s.uToku === 0) {
+            s.mirovanje.next();
+          }
+        }),
+      );
     }
 
-    function red(sId: number): Subject<void> {
-      let r = store._r.redovi.get(sId);
+    function red(s: Sesija, sId: number): Subject<void> {
+      let r = s.redovi.get(sId);
       if (!r) {
         const novi = new Subject<void>();
-        store._r.veze.add(novi.pipe(concatMap(() => izvrsi(sId))).subscribe());
-        store._r.redovi.set(sId, novi);
+        novi.pipe(concatMap(() => izvrsi(s, sId))).subscribe();
+        s.redovi.set(sId, novi);
         r = novi;
       }
       return r;
     }
 
-    function posalji(sId: number): void {
-      const t = store._r.timeri.get(sId);
+    /** Stavlja red studenta na izvršenje (otkazuje debounce koji je čekao). */
+    function posalji(s: Sesija, sId: number): void {
+      const t = s.timeri.get(sId);
       if (t !== undefined) {
         clearTimeout(t);
-        store._r.timeri.delete(sId);
+        s.timeri.delete(sId);
       }
-      red(sId).next();
+      s.uToku++;
+      red(s, sId).next();
     }
 
-    function resetuj(): void {
-      store._r.veze.unsubscribe();
-      store._r.veze = new Subscription();
-      store._r.redovi.clear();
-      store._r.timeri.forEach(t => clearTimeout(t));
-      store._r.timeri.clear();
-      store._r.potvrdjeno.clear();
-      store._r.verzije.clear();
+    /** Šalje sve izmene koje čekaju debounce. */
+    function posaljiCekajuce(s: Sesija): void {
+      for (const sId of [...s.timeri.keys()]) {
+        posalji(s, sId);
+      }
+    }
+
+    /** Emituje (jednom) kad nema koraka u redu ni u izvršenju; odmah ako ih nema. */
+    const sacekaj = (s: Sesija): Observable<unknown> => defer(() => (s.uToku === 0 ? of(null) : s.mirovanje.pipe(take(1))));
+
+    /** Zatvara sesiju: izmene na čekanju se šalju, zahtevi u toku i u redu se završavaju (ne otkazuju). */
+    function zatvori(s: Sesija): void {
+      posaljiCekajuce(s);
+      s.redovi.forEach(r => r.complete());
+    }
+
+    /** Šta nije potvrđeno ponovo ide na izvršenje (posle neuspelog brisanja). */
+    function ponoviNepotvrdjeno(s: Sesija): void {
+      for (const [sId, v] of s.lokalno) {
+        const p = s.potvrdjeno.get(sId);
+        if (p && !jednake(v, p)) {
+          posalji(s, sId);
+        }
+      }
     }
 
     function postaviPodatke(det: DomaciDetails): void {
+      const s = new Sesija(det.id);
       const redovi = (det.studenti ?? []).map(uRed);
       const vrednosti: Record<number, VrednostiReda> = {};
       for (const r of det.studenti ?? []) {
-        vrednosti[r.studentId] = izRedaServera(r);
-        store._r.potvrdjeno.set(r.studentId, vrednosti[r.studentId]);
+        const v = izRedaServera(r);
+        vrednosti[r.studentId] = v;
+        s.lokalno.set(r.studentId, v);
+        s.potvrdjeno.set(r.studentId, v);
+        s.imena.set(r.studentId, [r.ime, r.prezime].filter(Boolean).join(' ') || 'Student');
       }
+      store._r.sesija = s;
       patchState(store, { domaci: zaglavljeIzOdgovora(det), studenti: redovi, vrednosti, statusi: {} }, setLoaded());
     }
 
     return {
+      /** Zatvara tekuću sesiju (uništenje store-a); `_` = privatno, vidljivo samo u `withHooks`. */
+      _zatvori(): void {
+        if (store._r.sesija) {
+          zatvori(store._r.sesija);
+        }
+      },
+
+      /**
+       * Učitava domaći. Sesija prethodnog domaćeg se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni,
+       * pa ni ponovno učitavanje istog domaćeg ne može da pročita stanje pre sopstvenih izmena.
+       */
       ucitaj(dId: number): void {
         store._r.ucitavanje?.unsubscribe();
-        resetuj();
+        const stara = store._r.sesija;
+        store._r.sesija = null;
+        if (stara) {
+          zatvori(stara);
+        }
         patchState(store, { domaci: null, studenti: [], vrednosti: {}, statusi: {} }, setLoading());
-        store._r.ucitavanje = store._api.get(dId, { tiho: true }).subscribe({
-          next: det => postaviPodatke(det),
-          error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
-        });
+        store._r.ucitavanje = (stara ? sacekaj(stara) : of(null))
+          .pipe(switchMap(() => store._api.get(dId, { tiho: true })))
+          .subscribe({
+            next: det => postaviPodatke(det),
+            error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
+          });
       },
 
       /**
@@ -284,72 +370,84 @@ export const DomaciStore = signalStore(
        * (nisu ceo broj 0-10) se ne primaju; oslobođeni red i pregledan domaći se ne menjaju.
        */
       izmeni(sId: number, izmena: Partial<VrednostiReda>): void {
-        const r = store.studenti().find(s => s.id === sId);
-        if (store._r.unisten || !r || r.oslobodjen || store.pregledan() || !ispravniBodovi(izmena.bodovi ?? null)) {
+        const s = store._r.sesija;
+        const r = store.studenti().find(x => x.id === sId);
+        if (store._r.unisten || !s || s.obrisan || !r || r.oslobodjen || store.pregledan() || !ispravniBodovi(izmena.bodovi ?? null)) {
           return;
         }
-        const staro = store.vrednosti()[sId];
+        const staro = s.lokalno.get(sId);
+        if (!staro) {
+          return;
+        }
         const novo = { ...staro, ...izmena };
-        if (staro && jednake(staro, novo)) {
+        if (jednake(staro, novo)) {
           return;
         }
-        store._r.verzije.set(sId, verzija(sId) + 1);
-        patchState(store, s => ({
-          vrednosti: { ...s.vrednosti, [sId]: novo },
-          statusi: { ...s.statusi, [sId]: 'cuva' as StanjeCuvanja },
+        s.lokalno.set(sId, novo);
+        s.verzije.set(sId, s.verzija(sId) + 1);
+        patchState(store, st => ({
+          vrednosti: { ...st.vrednosti, [sId]: novo },
+          statusi: { ...st.statusi, [sId]: 'cuva' as StanjeCuvanja },
         }));
-        red(sId); // red zahteva postoji čim postoji izmena na čekanju (i pri napuštanju ekrana ima kome da se pošalje)
-        const stari = store._r.timeri.get(sId);
+        red(s, sId); // red zahteva postoji čim postoji izmena na čekanju
+        const stari = s.timeri.get(sId);
         if (stari !== undefined) {
           clearTimeout(stari);
         }
-        store._r.timeri.set(sId, setTimeout(() => posalji(sId), DEBOUNCE_REDA_MS));
+        s.timeri.set(sId, setTimeout(() => posalji(s, sId), DEBOUNCE_REDA_MS));
       },
 
       /** Ne čeka debounce (Enter u polju): šalje red odmah, ako ima šta da se pošalje. */
       sacuvajOdmah(sId: number): void {
-        if (store._r.timeri.has(sId)) {
-          posalji(sId);
+        const s = store._r.sesija;
+        if (s?.timeri.has(sId)) {
+          posalji(s, sId);
         }
       },
 
       /** "Pokušaj ponovo" posle greške: šalje trenutne vrednosti reda. */
       ponovi(sId: number): void {
-        if (store._r.unisten || store.statusi()[sId] !== 'greska') {
+        const s = store._r.sesija;
+        if (store._r.unisten || !s || s.obrisan || store.statusi()[sId] !== 'greska') {
           return;
         }
-        postaviStatus(sId, 'cuva');
-        posalji(sId);
+        postaviStatus(s, sId, 'cuva');
+        posalji(s, sId);
       },
 
       /** `POST domaci/{id}/oslobodi`: aktivni studenti dobijaju 10 bodova i oznaku; redovi koji se trenutno menjaju ostaju. */
       oslobodi(): Promise<boolean> {
-        const dId = id();
-        if (dId === null) {
+        const s = store._r.sesija;
+        if (!s) {
           return Promise.resolve(false);
         }
         return firstValueFrom(
-          store._api.oslobodi(dId).pipe(
+          store._api.oslobodi(s.domaciId).pipe(
             map(det => {
-              const ranije = new Set(store.studenti().filter(s => s.oslobodjen).map(s => s.id));
+              if (!tekuca(s)) {
+                return true; // korisnik je u međuvremenu otišao na drugi domaći
+              }
+              const ranije = new Set(store.studenti().filter(x => x.oslobodjen).map(x => x.id));
               let novih = 0;
               for (const r of det.studenti ?? []) {
                 const potvrdjeno = izRedaServera(r);
-                store._r.potvrdjeno.set(r.studentId, potvrdjeno);
-                const menja = store.statusi()[r.studentId] === 'cuva';
-                if (r.oslobodjen === true && !ranije.has(r.studentId)) {
+                s.potvrdjeno.set(r.studentId, potvrdjeno);
+                const oslobodjen = r.oslobodjen === true;
+                if (oslobodjen && !ranije.has(r.studentId)) {
                   novih++;
                 }
-                if (r.oslobodjen === true || !menja) {
-                  const t = store._r.timeri.get(r.studentId);
-                  if (t !== undefined && r.oslobodjen === true) {
+                const menja = store.statusi()[r.studentId] === 'cuva';
+                if (oslobodjen || !menja) {
+                  const t = s.timeri.get(r.studentId);
+                  if (t !== undefined && oslobodjen) {
                     clearTimeout(t);
-                    store._r.timeri.delete(r.studentId);
+                    s.timeri.delete(r.studentId);
                   }
-                  patchState(store, s => ({
-                    vrednosti: { ...s.vrednosti, [r.studentId]: potvrdjeno },
-                    statusi: { ...s.statusi, [r.studentId]: r.oslobodjen === true ? null : s.statusi[r.studentId] ?? null },
-                    studenti: s.studenti.map(x => (x.id === r.studentId ? { ...x, oslobodjen: r.oslobodjen === true } : x)),
+                  s.lokalno.set(r.studentId, potvrdjeno);
+                  patchState(store, st => ({
+                    vrednosti: { ...st.vrednosti, [r.studentId]: potvrdjeno },
+                    statusi: { ...st.statusi, [r.studentId]: oslobodjen ? null : (st.statusi[r.studentId] ?? null) },
+                    studenti: st.studenti.map(x => (x.id === r.studentId ? { ...x, oslobodjen } : x)),
                   }));
                 }
               }
@@ -363,14 +461,16 @@ export const DomaciStore = signalStore(
 
       /** Naslov, opis i datum; evidentiranje u tabeli se ne dira. */
       izmeniZaglavlje(izmena: IzmenaZaglavljaDomaceg): Promise<boolean> {
-        const dId = id();
-        if (dId === null) {
+        const s = store._r.sesija;
+        if (!s) {
           return Promise.resolve(false);
         }
         return firstValueFrom(
-          store._api.update(dId, { naslov: izmena.naslov, text: izmena.text, datum: izmena.datum }).pipe(
+          store._api.update(s.domaciId, { naslov: izmena.naslov, text: izmena.text, datum: izmena.datum }).pipe(
             map(det => {
-              patchState(store, { domaci: zaglavljeIzOdgovora(det) });
+              if (tekuca(s)) {
+                patchState(store, { domaci: zaglavljeIzOdgovora(det) });
+              }
               store._obavestenja.uspeh('Izmene su sačuvane.');
               return true;
             }),
@@ -379,18 +479,25 @@ export const DomaciStore = signalStore(
         );
       },
 
-      /** `PATCH domaci/{id}`: pregled je završen, tabela postaje samo za čitanje. */
+      /**
+       * `PATCH domaci/{id}`: pregled je završen, tabela postaje samo za čitanje. Pre PATCH-a se šalju izmene koje čekaju
+       * debounce i čeka se da se redovi isprazne, da evidencija bude potpuna kad se pregled zaključa.
+       */
       zavrsi(): Promise<boolean> {
-        const dId = id();
-        if (dId === null) {
+        const s = store._r.sesija;
+        if (!s) {
           return Promise.resolve(false);
         }
+        posaljiCekajuce(s);
         return firstValueFrom(
-          store._api.zavrsi(dId).pipe(
-            map(() => {
-              patchState(store, s => (s.domaci ? { domaci: { ...s.domaci, pregledan: true } } : {}));
-              store._obavestenja.uspeh('Pregled je završen.');
-              return true;
+          sacekaj(s).pipe(
+            switchMap(() => (tekuca(s) ? store._api.zavrsi(s.domaciId).pipe(map(() => true)) : of(false))),
+            map(uspelo => {
+              if (uspelo) {
+                patchState(store, st => (st.domaci ? { domaci: { ...st.domaci, pregledan: true } } : {}));
+                store._obavestenja.uspeh('Pregled je završen.');
+              }
+              return uspelo;
             }),
             catchError(() => of(false)),
           ),
@@ -398,21 +505,30 @@ export const DomaciStore = signalStore(
         );
       },
 
+      /**
+       * `DELETE domaci/{id}`: izmene na čekanju se otkazuju i ne šalju obrisanom domaćem; zahtevi koji su već u toku se
+       * sačekaju pre brisanja. Ako brisanje ne uspe, nepotvrđeno se šalje ponovo.
+       */
       obrisi(): Promise<boolean> {
-        const dId = id();
-        if (dId === null) {
+        const s = store._r.sesija;
+        if (!s) {
           return Promise.resolve(false);
         }
+        s.obrisan = true;
+        s.timeri.forEach(t => clearTimeout(t));
+        s.timeri.clear();
         return firstValueFrom(
-          store._api.obrisi(dId).pipe(
+          sacekaj(s).pipe(
+            switchMap(() => store._api.obrisi(s.domaciId)),
             map(() => {
-              // izmene koje čekaju debounce nemaju kome da se pošalju
-              store._r.timeri.forEach(t => clearTimeout(t));
-              store._r.timeri.clear();
               store._obavestenja.uspeh('Domaći je obrisan.');
               return true;
             }),
-            catchError(() => of(false)),
+            catchError(() => {
+              s.obrisan = false;
+              ponoviNepotvrdjeno(s);
+              return of(false);
+            }),
           ),
           { defaultValue: true },
         );
@@ -423,13 +539,8 @@ export const DomaciStore = signalStore(
     onDestroy(store) {
       store._r.unisten = true;
       store._r.ucitavanje?.unsubscribe();
-      // izmena koja još čeka debounce se šalje (ekran se napušta), a zahtevi u toku se ne otkazuju: redovi se samo zatvaraju
-      for (const [sId, t] of store._r.timeri) {
-        clearTimeout(t);
-        store._r.redovi.get(sId)?.next();
-      }
-      store._r.timeri.clear();
-      store._r.redovi.forEach(r => r.complete());
+      // ekran se napušta: izmene na čekanju se šalju, zahtevi u toku se ne otkazuju
+      store._zatvori();
     },
   }),
 );

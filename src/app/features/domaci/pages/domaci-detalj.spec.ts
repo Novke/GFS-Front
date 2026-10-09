@@ -9,8 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IKONE } from '../../../core/layout/icons';
 import { DEBOUNCE_REDA_MS } from '../data-access/domaci.store';
-import { DomaciDetails } from '../data-access/domaci.models';
-import { brojStudenata, DomaciDetalj } from './domaci-detalj';
+import { brojStudenata, DomaciDetails } from '../data-access/domaci.models';
+import { DomaciDetalj } from './domaci-detalj';
 
 function detalji(izmene: Partial<DomaciDetails> = {}): DomaciDetails {
   return {
@@ -139,6 +139,25 @@ describe('DomaciDetalj', () => {
     expect(el().querySelector<HTMLButtonElement>('[data-zavrsi]')!.disabled).toBe(true);
     await tece();
     evidentiraj()[0].flush(detalji());
+  });
+
+  it('prelazak /domaci/5 -> /domaci/6 (ista komponenta) šalje izmenu koja čeka debounce domaćem 5, pa učitava 6', async () => {
+    await otvori();
+    vi.useFakeTimers();
+    polje(1, 'bodovi').value = '7';
+    polje(1, 'bodovi').dispatchEvent(new Event('input'));
+    await harness.navigateByUrl('/domaci/6');
+    harness.detectChanges();
+    const [z] = evidentiraj();
+    expect(z.request.body).toMatchObject({ studentId: 1, domaciId: 5, bodovi: 7 });
+    http.expectNone('api/domaci/6');
+    z.flush(detalji({ studenti: [{ ...detalji().studenti[0], bodovi: 7, uradjenDomaciId: 61 }, detalji().studenti[1]] }));
+    vi.useRealTimers();
+    http.expectOne('api/domaci/6').flush(detalji({ id: 6, naslov: 'Domaći 6' }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el().querySelector('h1')!.textContent).toBe('Domaći 6');
+    expect(polje(1, 'bodovi').value).toBe('');
   });
 
   it('domaći bez predavanja i grupe prikazuje — i objašnjenje, bez dugmeta "Oslobodi aktivne"', async () => {

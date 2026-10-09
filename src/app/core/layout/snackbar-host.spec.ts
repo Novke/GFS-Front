@@ -109,7 +109,17 @@ describe('SnackbarHost', () => {
       expect(open.mock.calls.map(c => c[0])).toEqual(['Neuspelo.', 'B', 'Ana: zadatak']);
     });
 
-    it('greška sa grupom se ne zamenjuje', () => {
+    it('nova greška iste grupe zamenjuje ranije greške te grupe (otvorenu i one u redu), druge greške ostaju', () => {
+      poruke.next({ tip: 'greska', tekst: 'Nije sačuvano za 1 studenta.', grupa: 'g' });
+      poruke.next({ tip: 'greska', tekst: 'Druga greška.' });
+      poruke.next({ tip: 'greska', tekst: 'Nije sačuvano za 2 studenta.', grupa: 'g' });
+      poruke.next({ tip: 'greska', tekst: 'Nije sačuvano za 3 studenta.', grupa: 'g' });
+      zatvorene[zatvorene.length - 1].next();
+      zatvorene[zatvorene.length - 1].next();
+      expect(open.mock.calls.map(c => c[0])).toEqual(['Nije sačuvano za 1 studenta.', 'Druga greška.', 'Nije sačuvano za 3 studenta.']);
+    });
+
+    it('greška sa grupom se ne zamenjuje uspehom ni infom', () => {
       poruke.next({ tip: 'greska', tekst: 'Ana: odbijeno', grupa: 'p' });
       poruke.next({ tip: 'uspeh', tekst: 'Ana: zadatak', grupa: 'p' });
       expect(dismiss).not.toHaveBeenCalled();

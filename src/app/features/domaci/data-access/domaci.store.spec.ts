@@ -38,12 +38,13 @@ class Server {
   ];
   predavanje: DomaciDetails['predavanje'] = { id: 12, rb: 7, tema: 'Petlje', datum: '2025-10-14' };
   grupa: DomaciDetails['grupa'] = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025 };
+  id = 5;
   pregledan = false;
   primljeno: CreateUradjenDomaciCmd[] = [];
 
   details(): DomaciDetails {
     return {
-      id: 5,
+      id: this.id,
       predmet: { id: 1, naziv: 'Uvod u primenu računara' },
       naslov: 'Domaći 3',
       text: 'Petlje',
@@ -194,7 +195,7 @@ describe('DomaciStore', () => {
     expect(store.vrednosti()[2]).toEqual({ bodovi: 7, prepisivanje: false, napomene: 'u redu' });
     expect(store.statusi()[2]).toBe('greska');
     expect(store.brojGresaka()).toBe(1);
-    expect(poruke).toEqual([{ tip: 'greska', tekst: 'Marko Ilić: Max 10 bodova je dozvoljeno', akcija: undefined }]);
+    expect(poruke).toEqual([{ tip: 'greska', tekst: 'Marko Ilić: Max 10 bodova je dozvoljeno', akcija: undefined, grupa: 'domaci-5-cuvanje' }]);
 
     store.ponovi(2);
     expect(store.statusi()[2]).toBe('cuva');
@@ -364,6 +365,150 @@ describe('DomaciStore', () => {
     expect(await obecanje).toBe(true);
     tece();
     expect(evidentiraj()).toHaveLength(0);
+  });
+
+  describe('prelazak na drugi domaći (/domaci/5 -> /domaci/6)', () => {
+    const DRUGI = (): DomaciDetails => ({ ...new Server().details(), id: 6, naslov: 'Domaći 4', studenti: [red(2, 'Marko', 'Ilić', 'GD10')] });
+
+    it('izmena na čekanju se šalje starom domaćem, a novi se učitava tek kad se red isprazni', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 6 });
+      store.ucitaj(6);
+
+      const zahtevi = evidentiraj();
+      expect(zahtevi).toHaveLength(1);
+      expect(zahtevi[0].request.body).toEqual({ studentId: 2, domaciId: 5, bodovi: 6, napomene: '', prepisivanje: false });
+      http.expectNone('api/domaci/6'); // čeka pražnjenje stare sesije
+      expect(store.status()).toBe('loading');
+      tece(); // prošli tajmer ne šalje drugi put
+      expect(evidentiraj()).toHaveLength(0);
+
+      server.odgovori(zahtevi[0]);
+      http.expectOne('api/domaci/6').flush(DRUGI());
+      expect(store.domaci()).toMatchObject({ id: 6, naslov: 'Domaći 4' });
+      expect(store.vrednosti()[2]).toEqual({ bodovi: null, prepisivanje: false, napomene: '' });
+      expect(store.statusi()).toEqual({});
+      expect(server.primljeno).toHaveLength(1);
+    });
+
+    it('zahtev u toku se ne otkazuje; zakasneli odgovor ne dira stanje novog domaćeg', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 4 });
+      tece();
+      const [uToku] = evidentiraj();
+      store.ucitaj(6);
+      expect(uToku.cancelled).toBe(false);
+      server.odgovori(uToku);
+      http.expectOne('api/domaci/6').flush(DRUGI());
+      expect(store.domaci()?.id).toBe(6);
+      expect(store.vrednosti()[2].bodovi).toBeNull();
+      expect(store.statusi()[2]).toBeUndefined();
+    });
+
+    it('red koji čeka iza zahteva u toku se ipak šalje (sa najnovijim vrednostima), pa tek onda novi domaći', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 4 });
+      tece();
+      const [prvi] = evidentiraj();
+      store.izmeni(2, { bodovi: 9 }); // čeka debounce iza zahteva u toku
+      store.ucitaj(6);
+      server.odgovori(prvi);
+      const drugi = evidentiraj();
+      expect(drugi.map(z => (z.request.body as CreateUradjenDomaciCmd).bodovi)).toEqual([9]);
+      expect((drugi[0].request.body as CreateUradjenDomaciCmd).domaciId).toBe(5);
+      http.expectNone('api/domaci/6');
+      server.odgovori(drugi[0]);
+      http.expectOne('api/domaci/6').flush(DRUGI());
+      expect(server.primljeno.map(c => c.bodovi)).toEqual([4, 9]);
+    });
+
+    it('greška stare sesije se javlja, ali ne menja status ni vrednosti novog domaćeg', () => {
+      ucitaj();
+      store.izmeni(2, { bodovi: 4 });
+      tece();
+      const [uToku] = evidentiraj();
+      store.ucitaj(6);
+      uToku.flush({ reason: 'Domaci ne postoji' }, { status: 404, statusText: 'Not Found' });
+      expect(poruke).toEqual([{ tip: 'greska', tekst: 'Marko Ilić: Domaci ne postoji', akcija: undefined, grupa: 'domaci-5-cuvanje' }]);
+      http.expectOne('api/domaci/6').flush(DRUGI());
+      expect(store.brojGresaka()).toBe(0);
+      expect(store.vrednosti()[2].bodovi).toBeNull();
+    });
+
+    it('izmena novog domaćeg ide novom domaćem, nezavisno od starog', () => {
+      ucitaj();
+      store.ucitaj(6);
+      http.expectOne('api/domaci/6').flush(DRUGI());
+      store.izmeni(2, { bodovi: 7 });
+      tece();
+      const [z] = evidentiraj();
+      expect((z.request.body as CreateUradjenDomaciCmd).domaciId).toBe(6);
+      server.id = 6;
+      server.odgovori(z);
+    });
+  });
+
+  it('greške više redova se javljaju jednom porukom iste grupe: "Nije sačuvano za N studenata"', () => {
+    ucitaj();
+    store.izmeni(1, { bodovi: 1 });
+    store.izmeni(2, { bodovi: 2 });
+    store.izmeni(3, { bodovi: 3 });
+    tece();
+    const zahtevi = evidentiraj();
+    zahtevi.forEach(z => z.flush({ reason: 'Greška baze.' }, { status: 400, statusText: 'Bad Request' }));
+    expect(poruke.map(p => p.tekst)).toEqual([
+      'Ana Radić: Greška baze.',
+      'Nije sačuvano za 2 studenta. Greška baze.',
+      'Nije sačuvano za 3 studenta. Greška baze.',
+    ]);
+    expect(new Set(poruke.map(p => p.grupa))).toEqual(new Set(['domaci-5-cuvanje'])); // host ih zamenjuje poslednjom
+    expect(store.brojGresaka()).toBe(3);
+    // uspešno ponavljanje jednog reda smanjuje brojač
+    store.ponovi(1);
+    server.odgovori(evidentiraj()[0]);
+    expect(store.brojGresaka()).toBe(2);
+  });
+
+  it('zavrsi: šalje izmene koje čekaju debounce i čeka pražnjenje redova pre PATCH-a', async () => {
+    ucitaj();
+    store.izmeni(2, { bodovi: 6 });
+    const obecanje = store.zavrsi();
+    const [z] = evidentiraj();
+    expect(z).toBeDefined();
+    http.expectNone(r => r.method === 'PATCH'); // još čeka odgovor na čuvanje
+    server.odgovori(z);
+    const patch = http.expectOne(r => r.method === 'PATCH' && r.url === 'api/domaci/5');
+    patch.flush(null);
+    expect(await obecanje).toBe(true);
+    expect(store.pregledan()).toBe(true);
+    expect(store.statusi()[2]).toBe('sacuvano');
+  });
+
+  it('obrisi: izmene na čekanju se ne šalju, zahtev u toku se sačeka pre DELETE', async () => {
+    ucitaj();
+    store.izmeni(1, { bodovi: 3 });
+    tece();
+    const [uToku] = evidentiraj();
+    store.izmeni(2, { bodovi: 6 }); // čeka debounce
+    const obecanje = store.obrisi();
+    http.expectNone(r => r.method === 'DELETE');
+    server.odgovori(uToku);
+    tece();
+    expect(evidentiraj()).toHaveLength(0); // izmena na čekanju je otkazana
+    http.expectOne(r => r.method === 'DELETE' && r.url === 'api/domaci/5').flush(null, { status: 204, statusText: 'No Content' });
+    expect(await obecanje).toBe(true);
+  });
+
+  it('obrisi koje ne uspe vraća izmene na izvršenje', async () => {
+    ucitaj();
+    store.izmeni(2, { bodovi: 6 });
+    const obecanje = store.obrisi();
+    http.expectOne(r => r.method === 'DELETE').flush({ reason: 'Ne može.' }, { status: 400, statusText: 'Bad Request' });
+    expect(await obecanje).toBe(false);
+    const zahtevi = evidentiraj();
+    expect(zahtevi).toHaveLength(1);
+    server.odgovori(zahtevi[0]);
+    expect(store.statusi()[2]).toBe('sacuvano');
   });
 
   it('napuštanje ekrana (uništen store) šalje izmenu koja je čekala debounce', () => {

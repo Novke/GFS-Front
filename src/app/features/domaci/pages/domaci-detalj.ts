@@ -11,22 +11,9 @@ import { PreferencesStore } from '../../../core/state/preferences.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { DomaciStore, IzmenaZaglavljaDomaceg } from '../data-access/domaci.store';
-import { naslovDomaceg } from '../data-access/domaci.models';
+import { brojStudenata, naslovDomaceg } from '../data-access/domaci.models';
 import { DomaciZaglavlje } from '../ui/domaci-zaglavlje';
 import { EvidentiranjeTabela, IzmenaReda } from '../ui/evidentiranje-tabela';
-
-/** `1 student`, `2 studenta`, `5 studenata`, `21 student`, `12 studenata`. */
-export function brojStudenata(n: number): string {
-  const d = n % 10;
-  const dd = n % 100;
-  if (d === 1 && dd !== 11) {
-    return `${n} student`;
-  }
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) {
-    return `${n} studenta`;
-  }
-  return `${n} studenata`;
-}
 
 /**
  * Domaći (`/domaci/:id`): dok nije pregledan, tabelarno evidentiranje (bodovi, prepisivanje, napomena po studentu, svaki red

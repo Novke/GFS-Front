@@ -111,7 +111,7 @@ export class DomaciTabela {
     }
     delovi.push(`urađeno ${this.uradjeno(d).tekst}`);
     if (d.predavanje) {
-      delovi.push(`Predavanje ${d.predavanje.rb}`);
+      delovi.push(`Predavanje ${d.predavanje.rb ?? '—'}`);
     }
     return delovi.join(' · ');
   }

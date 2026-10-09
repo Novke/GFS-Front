@@ -14,7 +14,8 @@ export interface Poruka {
   akcija?: PorukaAkcija;
   /**
    * Poruke iste grupe se zamenjuju: nova sklanja prethodnu iz reda, a otvorenu zatvara (npr. live beleženje,
-   * gde "Poništi" ima smisla samo za poslednju izmenu). Greške se nikad ne zamenjuju.
+   * gde "Poništi" ima smisla samo za poslednju izmenu). Greška zamenjuje samo ranije greške iste grupe (npr. više redova
+   * tabele koji se ne čuvaju: jedna poruka sa poslednjim brojem); uspeh i info nikad ne zamenjuju grešku.
    */
   grupa?: string;
 }
@@ -39,8 +40,8 @@ export const NotificationStore = signalStore(
     uspeh(tekst: string, akcija?: PorukaAkcija, opcije?: OpcijePoruke): void {
       store._poruke.next(saGrupom({ tip: 'uspeh', tekst, akcija }, opcije));
     },
-    greska(tekst: string): void {
-      store._poruke.next({ tip: 'greska', tekst, akcija: undefined });
+    greska(tekst: string, opcije?: OpcijePoruke): void {
+      store._poruke.next(saGrupom({ tip: 'greska', tekst, akcija: undefined }, opcije));
     },
     info(tekst: string, opcije?: OpcijePoruke): void {
       store._poruke.next(saGrupom({ tip: 'info', tekst, akcija: undefined }, opcije));

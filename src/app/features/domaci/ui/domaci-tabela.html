@@ -35,7 +35,7 @@
           }
           <td class="samo-desktop brojevi-sitno" [class.nema]="!d.predavanje">
             @if (d.predavanje; as p) {
-              <a class="veza" [routerLink]="['/predavanja', p.id]" (click)="$event.stopPropagation()">Predavanje {{ p.rb }}</a>
+              <a class="veza" [routerLink]="['/predavanja', p.id]" (click)="$event.stopPropagation()">Predavanje {{ p.rb ?? '—' }}</a>
             } @else {
               —
             }

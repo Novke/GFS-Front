@@ -29,7 +29,9 @@ describe('NotificationStore', () => {
     store.uspeh('Ana: zadatak', undefined, { grupa: 'predavanje' });
     store.info('Ana je već prisutna.', { grupa: 'predavanje' });
     store.uspeh('Sačuvano.');
+    store.greska('Nije sačuvano.', { grupa: 'tabela' });
 
+    expect(primljene[3]).toEqual({ tip: 'greska', tekst: 'Nije sačuvano.', akcija: undefined, grupa: 'tabela' });
     expect(primljene[0].grupa).toBe('predavanje');
     expect(primljene[1].grupa).toBe('predavanje');
     expect('grupa' in primljene[2]).toBe(false);

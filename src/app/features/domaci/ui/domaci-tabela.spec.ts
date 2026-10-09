@@ -88,6 +88,14 @@ describe('DomaciTabela', () => {
     expect(c[7]).toBe('— · Uvod u primenu računara · — · urađeno —');
   });
 
+  it('predavanje bez rednog broja prikazuje — (link i kartica)', () => {
+    const { celije, el } = napravi([domaci({ predavanje: { id: 12, rb: null }, naslov: null })]);
+    expect(celije()[4]).toBe('Predavanje —');
+    expect(celije()[7]).toContain('Predavanje —');
+    expect(celije()[0]).toBe('Domaći bez naslova');
+    expect(el.querySelector('a.veza')?.getAttribute('href')).toBe('/predavanja/12');
+  });
+
   it('naslov iz predavanja kad domaći nema naslov', () => {
     const { celije } = napravi([domaci({ naslov: '  ' })]);
     expect(celije()[0]).toBe('Domaći sa predavanja 7');
