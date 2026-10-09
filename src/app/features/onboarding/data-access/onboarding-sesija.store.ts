@@ -40,8 +40,9 @@ function porukaGreske(e: unknown): string {
 
 /**
  * Prijave jedne onboarding sesije (`/grupe/:id/onboarding/:sid`). Jedna akcija u isto vreme; posle greške akcije (npr.
- * 409 "već obrađena") lista se tiho osveži da pokaže stvarno stanje. Odgovor osvežavanja koji je krenuo pre akcije se
- * odbacuje (`_verzija`), a odgovor za prethodnu sesiju posle promene rute takođe (`_generacija`).
+ * 409 "već obrađena") lista se tiho osveži da pokaže stvarno stanje. Osvežavanje koje je u toku kad akcija krene se
+ * otkazuje (odgovor starog stanja ne sme da pregazi rezultat akcije; osvežavanje ne može da krene dok akcija traje), a
+ * odgovor akcije za prethodnu sesiju posle promene rute se odbacuje (`generacija`).
  */
 export const OnboardingSesijaStore = signalStore(
   withState<SesijaState>({ sesijaId: null, detalji: null, poruka: null, zauzet: false, izmenaId: null, statusGreske: null }),
@@ -49,7 +50,7 @@ export const OnboardingSesijaStore = signalStore(
   withProps(() => ({
     _api: inject(OnboardingApi),
     _obavestenja: inject(NotificationStore),
-    _brojaci: { generacija: 0, verzija: 0, ucitavanje: null as Subscription | null },
+    _brojaci: { generacija: 0, ucitavanje: null as Subscription | null },
   })),
   withComputed(({ detalji }) => {
     const prijave = computed(() => detalji()?.prijave ?? []);
@@ -77,7 +78,7 @@ export const OnboardingSesijaStore = signalStore(
       patchState(store, { detalji, izmenaId: izmenaVazi ? izmenaId : null, statusGreske: null }, setLoaded());
     };
 
-    /** Učitavanje koje se ne primenjuje (otkazano, zastarelo, tiho palo) ne ostavlja status 'loading' nad prikazom. */
+    /** Učitavanje koje se ne primenjuje (otkazano ili tiho palo) ne ostavlja status 'loading' nad prikazom. */
     const zavrsiUcitavanje = () => {
       if (store.status() === 'loading' && store.detalji()) {
         patchState(store, setLoaded());
@@ -90,27 +91,16 @@ export const OnboardingSesijaStore = signalStore(
       if (id === null || store.zauzet() || b.ucitavanje) {
         return;
       }
-      const g = b.generacija;
-      const v = b.verzija;
       if (!tiho) {
         patchState(store, setLoading());
       }
-      b.ucitavanje = store._api.sesija(id, { tiho: true }).subscribe({
+      // promena sesije (ucitaj), akcija i uništenje otkazuju ovaj zahtev, pa odgovor uvek pripada tekućem stanju
+      const zahtev = store._api.sesija(id, { tiho: true }).subscribe({
         next: d => {
-          if (g !== b.generacija) {
-            return;
-          }
           b.ucitavanje = null;
-          if (v === b.verzija) {
-            primeni(d);
-          } else {
-            zavrsiUcitavanje();
-          }
+          primeni(d);
         },
         error: (e: unknown) => {
-          if (g !== b.generacija) {
-            return;
-          }
           b.ucitavanje = null;
           if (tiho && store.detalji()) {
             // prikaz ostaje; status ne sme da ostane 'loading' od ručnog osvežavanja koje je akcija otkazala
@@ -121,6 +111,8 @@ export const OnboardingSesijaStore = signalStore(
           patchState(store, { statusGreske: e instanceof HttpErrorResponse ? e.status : null }, setError(porukaGreske(e)));
         },
       });
+      // odgovor koji stigne odmah (sinhrono) je već završio zahtev; zatvorena veza ne sme da blokira sledeće osvežavanje
+      b.ucitavanje = zahtev.closed ? null : zahtev;
     };
 
     /** Jedna akcija na serveru; greška ide u snackbar (globalni interceptor), pa tiho osvežavanje. */
@@ -129,7 +121,7 @@ export const OnboardingSesijaStore = signalStore(
         return;
       }
       const g = b.generacija;
-      b.verzija++;
+      // osvežavanje u toku nosi stanje od pre akcije: otkazuje se, pa njegov odgovor nikad ne stiže
       b.ucitavanje?.unsubscribe();
       b.ucitavanje = null;
       zavrsiUcitavanje();

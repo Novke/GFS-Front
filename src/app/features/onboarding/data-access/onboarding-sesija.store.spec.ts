@@ -1,9 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OnboardingSesijaDetails, PrijavaInfo, StatusPrijave } from './onboarding.api';
+import { OnboardingApi, OnboardingSesijaDetails, PrijavaInfo, StatusPrijave } from './onboarding.api';
 import { OnboardingSesijaStore, parseFilterPrijava } from './onboarding-sesija.store';
 
 function prijava(id: number, status: StatusPrijave = 'NA_CEKANJU'): PrijavaInfo {
@@ -99,7 +100,7 @@ describe('OnboardingSesijaStore: zaštite od trka', () => {
     odbij.flush(detalji(9, [prijava(1, 'PRIHVACENA'), prijava(2, 'ODBIJENA')]));
   });
 
-  it('osvežavanje pokrenuto pre akcije se ne primenjuje (otkazano, i verzija ga odbacuje) i ne ostavlja "loading"', () => {
+  it('akcija otkazuje osvežavanje u toku: odgovor starog stanja ne stiže posle rezultata akcije; status nije "loading"', () => {
     ucitana();
     store.osvezi();
     const staro = http.expectOne('api/onboarding/9');
@@ -107,15 +108,31 @@ describe('OnboardingSesijaStore: zaštite od trka', () => {
 
     store.prihvati(prijava(1));
     expect(store.status()).toBe('loaded');
-    // zakasneli odgovor starog stanja (obe na čekanju) ne sme da pregazi rezultat akcije
+    expect(staro.cancelled).toBe(true);
+    http.expectOne('api/onboarding/9/prijave/1/prihvati').flush(detalji(9, [prijava(1, 'PRIHVACENA'), prijava(2)], 'Prihvaćeno: 1.'));
+    // bez otkazivanja bi odgovor starog stanja (obe na čekanju) stigao tek sada i pregazio rezultat akcije
     if (!staro.cancelled) {
       staro.flush(detalji(9, [prijava(1), prijava(2)]));
     }
-    http.expectOne('api/onboarding/9/prijave/1/prihvati').flush(detalji(9, [prijava(1, 'PRIHVACENA'), prijava(2)], 'Prihvaćeno: 1.'));
 
     expect(status(store, 1)).toBe('PRIHVACENA');
     expect(store.poruka()).toBe('Prihvaćeno: 1.');
     expect(store.status()).toBe('loaded');
+  });
+
+  it('promena sesije otkazuje osvežavanje prethodne: njen odgovor ne pregazi novu sesiju', () => {
+    ucitana();
+    store.osvezi(true);
+    const staro = http.expectOne('api/onboarding/9');
+
+    store.ucitaj(10);
+    expect(staro.cancelled).toBe(true);
+    http.expectOne('api/onboarding/10').flush(detalji(10, [prijava(5)]));
+    if (!staro.cancelled) {
+      staro.flush(detalji(9, [prijava(1), prijava(2)]));
+    }
+    expect(store.sesija()?.id).toBe(10);
+    expect(store.prijave().map(p => p.id)).toEqual([5]);
   });
 
   it('odgovor akcije za prethodnu sesiju (generacija) se odbacuje posle promene sesije', () => {
@@ -167,5 +184,18 @@ describe('OnboardingSesijaStore: zaštite od trka', () => {
     store.osvezi(true);
     http.expectOne('api/onboarding/9').flush(detalji(9, [prijava(1), prijava(2, 'PRIHVACENA')]));
     expect(store.izmenaId()).toBeNull();
+  });
+});
+
+describe('OnboardingSesijaStore: odgovor koji stigne odmah', () => {
+  it('sinhron odgovor ne ostavlja zatvorenu vezu koja bi blokirala sledeće osvežavanje', () => {
+    const sesija = vi.fn(() => of(detalji(9, [prijava(1)])));
+    TestBed.configureTestingModule({ providers: [OnboardingSesijaStore, { provide: OnboardingApi, useValue: { sesija } }] });
+    const store = TestBed.inject(OnboardingSesijaStore);
+    store.ucitaj(9);
+    store.osvezi(true);
+    store.osvezi();
+    expect(sesija).toHaveBeenCalledTimes(3);
+    expect(store.status()).toBe('loaded');
   });
 });

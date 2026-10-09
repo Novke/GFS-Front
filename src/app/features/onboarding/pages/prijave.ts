@@ -184,7 +184,7 @@ const TON_PRIJAVE: Record<StatusPrijave, TonStatusa> = { NA_CEKANJU: 'warn', PRI
     .siroko { overflow-wrap: anywhere; min-width: 12ch; }
     .napomena { min-width: 12ch; color: var(--ink-2); }
     .akcije-reda { white-space: nowrap; text-align: right; position: sticky; right: 0; background: var(--surface); }
-    .u-izmeni .akcije-reda { background: var(--surface-2); }
+    .u-izmeni .akcije-reda, .prijave-tabela tbody tr:hover .akcije-reda { background: var(--surface-2); }
     .akcije-reda > * + * { margin-left: 6px; }
     .odbij { color: var(--danger); }
     .u-izmeni { background: var(--surface-2); }
