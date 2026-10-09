@@ -217,6 +217,8 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
     .nema { color: var(--muted); }
     .kontakt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; overflow-wrap: anywhere; }
     .kontakt a, td a { color: var(--primary); }
+    /* email i telefon su jedan ispod drugog: svaki je cilj od bar 24 px (WCAG 2.5.8, axe target-size) */
+    .kontakt a { display: inline-flex; align-items: center; min-height: 24px; }
     .traka { display: inline-block; width: 48px; height: 6px; margin-right: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; vertical-align: middle; }
     .traka i { display: block; height: 100%; background: var(--primary); }
     @media print {
