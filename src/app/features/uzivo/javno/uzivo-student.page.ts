@@ -129,8 +129,9 @@ export function naslovIshoda(
                     @if (celoPitanje() && p.slikaId) {
                       <img class="uz-st-slika" [src]="slika(p.slikaId)" alt="Slika uz pitanje" />
                     }
-                    <gfs-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [zakljucano]="s.unosZakljucan()"
-                                      (posalji)="s.odgovori($event)" />
+                    <!-- montira se samo dok je unos otvoren; nacrt čuva izbor i tekst kroz zaključavanje i otključavanje -->
+                    <gfs-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [nacrt]="s.nacrt()"
+                                      (nacrtPromena)="s.sacuvajNacrt($event)" (posalji)="s.odgovori($event)" />
                   </div>
                 }
               }

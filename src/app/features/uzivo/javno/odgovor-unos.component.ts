@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, linkedSignal, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output, signal, untracked } from '@angular/core';
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import { OpcijaOblikComponent, oblikOpcije } from '../ui/opcija-oblik';
 
@@ -24,6 +24,9 @@ export function porukaZaTekst(unos: string): string | null {
 }
 
 export interface UnosOdgovora { izabrane: readonly number[]; broj: string; tekst: string; }
+
+/** Započet (neposlat) odgovor za rundu: roditelj ga čuva, pa izbor i ukucan tekst prežive ponovno montiranje. */
+export interface NacrtOdgovora { rundaId: number; izabrane: number[]; broj: string; tekst: string; }
 
 /** Da li je "Pošalji" omogućen (poruka o neispravnom broju stiže tek na dodir, da student zna šta ne valja). */
 export function mozeDaPosalje(tip: TipPitanja, u: UnosOdgovora): boolean {
@@ -56,8 +59,11 @@ const SKALA = [1, 2, 3, 4, 5] as const;
  * kratak tekst preko "Pošalji"; skala na dodir broja. `celoPitanje` (režim A) dodaje tekst opcija na dugmad; u režimu B
  * mreža obojenih oblika ide preko celog ekrana.
  *
- * Posle prvog slanja u rundi sva dugmad su zaključana odmah (lokalno, pre nego što roditelj osveži `zakljucano`), pa
- * dvostruki dodir ili dva brza dodira šalju jedan odgovor. Kad roditelj otključa (greška provere), unos se otvara.
+ * Roditelj prikazuje komponentu samo dok je unos otvoren (ekran `unos`); posle slanja je skida, a posle otključavanja
+ * (greška provere, rok potvrde) montira iznova. Zato:
+ * - posle prvog slanja sva dugmad su zaključana odmah (lokalno, u istom okviru), pa dvostruki dodir ili dva brza dodira
+ *   šalju jedan odgovor;
+ * - izbor i ukucan tekst idu roditelju kao `nacrtPromena`, a vraćaju se kroz `nacrt` iste runde pri novom montiranju.
  */
 @Component({
   selector: 'gfs-odgovor-unos',
@@ -72,7 +78,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
           <label class="uz-st-oznaka" for="uz-st-broj">Tvoj odgovor (broj)</label>
           <div class="uz-st-polje-red">
             <input id="uz-st-broj" class="uz-st-polje" type="text" inputmode="decimal" autocomplete="off"
-                   [value]="broj()" (input)="broj.set(vrednost($event)); porukaBroja.set(null)" [disabled]="onemoguceno()"
+                   [value]="broj()" (input)="broj.set(vrednost($event)); porukaBroja.set(null); javiNacrt()" [disabled]="onemoguceno()"
                    [attr.aria-invalid]="porukaBroja() ? 'true' : null" aria-describedby="uz-st-broj-poruka" />
             @if (p.jedinica) { <span class="uz-st-jedinica">{{ p.jedinica }}</span> }
           </div>
@@ -84,7 +90,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         <form class="uz-st-polje-forma" (submit)="$event.preventDefault(); posaljiTekst()">
           <label class="uz-st-oznaka" for="uz-st-tekst">Tvoj odgovor</label>
           <input id="uz-st-tekst" class="uz-st-polje" type="text" maxlength="200" autocomplete="off" enterkeyhint="send"
-                 [value]="tekst()" (input)="tekst.set(vrednost($event))" [disabled]="onemoguceno()"
+                 [value]="tekst()" (input)="tekst.set(vrednost($event)); javiNacrt()" [disabled]="onemoguceno()"
                  aria-describedby="uz-st-tekst-brojac" />
           <p id="uz-st-tekst-brojac" class="uz-st-brojac">{{ tekst().length }}/200</p>
           <button type="submit" class="uz-st-dugme uz-st-dugme--glavno" [disabled]="onemoguceno() || !mozeSlati()">Pošalji</button>
@@ -131,34 +137,39 @@ export class OdgovorUnosComponent {
   readonly pitanje = input.required<JavnoPitanje>();
   /** Režim A (celo pitanje): tekst opcija na dugmadi. */
   readonly celoPitanje = input(false);
-  /** Roditelj zaključava unos (odgovor poslat ili primljen, pitanje zatvoreno). */
-  readonly zakljucano = input(false);
+  /** Nacrt koji je roditelj sačuvao; važi samo za istu rundu. */
+  readonly nacrt = input<NacrtOdgovora | null>(null);
   readonly posalji = output<OdgovorCmd>();
+  readonly nacrtPromena = output<NacrtOdgovora>();
 
   protected readonly skala = SKALA;
   private readonly rundaId = computed(() => this.pitanje().rundaId);
   /** Runda u kojoj je ova komponenta već poslala odgovor (lokalna brava protiv dvostrukog dodira). */
   private readonly poslataRunda = signal<number | null>(null);
 
-  protected readonly izabrane = linkedSignal<number | null, number[]>({ source: this.rundaId, computation: () => [] });
-  protected readonly broj = linkedSignal<number | null, string>({ source: this.rundaId, computation: () => '' });
-  protected readonly tekst = linkedSignal<number | null, string>({ source: this.rundaId, computation: () => '' });
+  /** Nacrt za datu rundu (čita se van praćenja: osvežava se samo kad se promeni runda, ne na svaki `nacrt`). */
+  private nacrtZa(r: number | null): NacrtOdgovora | null {
+    const n = untracked(this.nacrt);
+    return r !== null && n?.rundaId === r ? n : null;
+  }
+
+  protected readonly izabrane = linkedSignal<number | null, number[]>({
+    source: this.rundaId, computation: r => [...(this.nacrtZa(r)?.izabrane ?? [])],
+  });
+  protected readonly broj = linkedSignal<number | null, string>({
+    source: this.rundaId, computation: r => this.nacrtZa(r)?.broj ?? '',
+  });
+  protected readonly tekst = linkedSignal<number | null, string>({
+    source: this.rundaId, computation: r => this.nacrtZa(r)?.tekst ?? '',
+  });
   protected readonly porukaBroja = linkedSignal<number | null, string | null>({ source: this.rundaId, computation: () => null });
 
   protected readonly opcije = computed(() => this.pitanje().opcije ?? []);
-  protected readonly onemoguceno = computed(() =>
-    this.zakljucano() || this.rundaId() === null || this.poslataRunda() === this.rundaId());
+  protected readonly onemoguceno = computed(() => this.rundaId() === null || this.poslataRunda() === this.rundaId());
   protected readonly mozeSlati = computed(() =>
     mozeDaPosalje(this.pitanje().tip, { izabrane: this.izabrane(), broj: this.broj(), tekst: this.tekst() }));
   /** Izabrane opcije redom kao na ekranu (ne redom dodira). */
   protected readonly izabraneRedom = computed(() => this.opcije().map(o => o.id).filter(id => this.izabrane().includes(id)));
-
-  constructor() {
-    // Roditelj je otključao (npr. "Unesi broj." sa servera): lokalna brava pada.
-    effect(() => {
-      if (!this.zakljucano()) untracked(() => this.poslataRunda.set(null));
-    });
-  }
 
   protected boja(i: number): string { return oblikOpcije(i).boja; }
   protected oznaka(i: number): string { return oznakaOpcije(this.pitanje(), i); }
@@ -181,9 +192,15 @@ export class OdgovorUnosComponent {
     if (this.onemoguceno()) return;
     if (this.pitanje().tip === 'VISE_TACNIH') {
       this.izabrane.update(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
+      this.javiNacrt();
       return;
     }
     this.posalji1({ rundaId: this.rundaId()!, opcije: [id] });
+  }
+
+  protected javiNacrt(): void {
+    const r = this.rundaId();
+    if (r !== null) this.nacrtPromena.emit({ rundaId: r, izabrane: this.izabrane(), broj: this.broj(), tekst: this.tekst() });
   }
 
   protected posaljiBroj(): void {
@@ -196,7 +213,7 @@ export class OdgovorUnosComponent {
     if (!porukaZaTekst(this.tekst())) this.posalji1({ rundaId: this.rundaId()!, tekst: this.tekst().trim() });
   }
 
-  /** Jedino mesto slanja: najviše jednom po rundi dok roditelj ne otključa. */
+  /** Jedino mesto slanja: najviše jednom po rundi u ovoj instanci (posle otključavanja roditelj montira novu). */
   protected posalji1(cmd: OdgovorCmd): void {
     if (this.onemoguceno() || !this.mozeSlati()) return;
     this.poslataRunda.set(cmd.rundaId);

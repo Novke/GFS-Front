@@ -11,6 +11,7 @@ import {
 } from '../data-access/uzivo.models';
 import { decimalni } from '../ui/format';
 import { JavnoApi } from './javno.api';
+import type { NacrtOdgovora } from './odgovor-unos.component';
 
 export type FazaStudenta = 'kod' | 'ime' | 'uzivo' | 'kraj' | 'izbacen' | 'greska';
 export type Veza = 'povezivanje' | 'povezan' | 'prekinut';
@@ -30,6 +31,8 @@ export interface StudentState {
   greska: string | null;
   /** Prijava imenom čeka odgovor servera. */
   salje: boolean;
+  /** Započet odgovor trenutne runde (izbor, ukucan broj ili tekst), da preživi zaključavanje i otključavanje unosa. */
+  nacrt: NacrtOdgovora | null;
 }
 
 /**
@@ -50,6 +53,11 @@ export interface TacanOdgovor {
 export const GRESKA_TRAJANJE_MS = 4000;
 /** Poslat odgovor bez potvrde servera ovoliko dugo (dok je veza otvorena) smatra se izgubljenim. */
 export const POTVRDA_MS = 8000;
+/**
+ * Posle `ZAVRSENO` veza ostaje otvorena još ovoliko: server šalje javno pa lično stanje, pa konačno mesto i poeni
+ * stižu tek posle prelaza na kraj.
+ */
+export const KRAJ_ZADRZI_MS = 2000;
 /** Najviše jedna provera prijave (`GET ja`) posle neuspelog povezivanja u ovom razmaku (limit javnih putanja). */
 const PROVERA_RAZMAK_MS = 10_000;
 
@@ -64,11 +72,11 @@ const ZAVRSENO = 'Izvođenje je završeno.';
 
 const POCETNO: StudentState = {
   faza: 'kod', kod: null, info: null, ucesnik: null, javno: null, licno: null, veza: 'povezivanje',
-  poslato: null, zakljucano: null, greska: null, salje: false,
+  poslato: null, zakljucano: null, greska: null, salje: false, nacrt: null,
 };
 
 const BEZ_UCESNIKA: Partial<StudentState> = {
-  ucesnik: null, javno: null, licno: null, veza: 'povezivanje', poslato: null, zakljucano: null,
+  ucesnik: null, javno: null, licno: null, veza: 'povezivanje', poslato: null, zakljucano: null, nacrt: null,
 };
 
 /** Ime kao na serveru: kontrolni znaci u razmak, razmaci skraćeni. */
@@ -135,11 +143,12 @@ const je404 = (e: unknown) => e instanceof HttpErrorResponse && e.status === 404
  *
  * - `otvori(kod)`: `info` (naziv), pa `ja` -> kolačić važi: STOMP i faza `uzivo`; 404: faza `ime`.
  * - STOMP: `/topic/izvodjenja/{id}/javno`, `/user/queue/licno`, `/user/queue/greske` i `/app/izvodjenja/{id}/pocetno`
- *   (snimak odmah, i posle svakog ponovnog povezivanja, jer `watch` ponovo pretplaćuje). Starija verzija se odbacuje.
+ *   (snimak odmah, i posle svakog ponovnog povezivanja, jer `watch` ponovo pretplaćuje; lično pre javnog). Starija
+ *   verzija se odbacuje. Posle `ZAVRSENO` veza ostaje još `KRAJ_ZADRZI_MS` za konačno lično stanje.
  * - `odgovori`: `poslato` odmah (dugmad zaključana), poruka kroz STOMP (RxStomp je čuva dok veza ne proradi). Potvrda je
  *   `licno.odgovor.primljen` za tu rundu; ako je nema `POTVRDA_MS` dok je veza otvorena, unos se otključava.
- * - Rukovanje odbijeno (zatvoreno pre otvaranja): `GET ja`; 404 -> kolačić više ne važi (izbačen, istekao, kraj), pa
- *   `otvori` iznova (ime ili greška).
+ * - Rukovanje odbijeno (zatvoreno pre otvaranja): `GET ja`; 404 -> kolačić više ne važi (izbačen, istekao, kraj):
+ *   `GET info` -> unos imena, ili kraj sa poslednjim mestom kad je izvođenje završeno (inače greška).
  */
 export const StudentStore = signalStore(
   withState<StudentState>(POCETNO),
@@ -190,6 +199,7 @@ export const StudentStore = signalStore(
     let zahtevi = new Subscription();
     let greskaTajmer: ReturnType<typeof setTimeout> | undefined;
     let potvrdaTajmer: ReturnType<typeof setTimeout> | undefined;
+    let krajTajmer: ReturnType<typeof setTimeout> | undefined;
     /** Runda poslatog odgovora koji server još nije potvrdio. */
     let cekaPotvrdu: number | null = null;
     let poslednjaProvera = -Infinity;
@@ -203,6 +213,7 @@ export const StudentStore = signalStore(
     }
 
     function zatvoriVezu(): void {
+      clearTimeout(krajTajmer);
       veza.unsubscribe();
       veza = new Subscription();
       clearTimeout(potvrdaTajmer);
@@ -229,8 +240,16 @@ export const StudentStore = signalStore(
       postaviGresku(poruka);
     }
 
-    function zavrsi(faza: 'kraj' | 'izbacen'): void {
-      zatvoriVezu();
+    /** Kraj: veza ostaje još `KRAJ_ZADRZI_MS` za konačno lično stanje (osim kad je već prekinuta); izbačen: odmah. */
+    function zavrsi(faza: 'kraj' | 'izbacen', zadrziVezu = faza === 'kraj'): void {
+      if (zadrziVezu) {
+        clearTimeout(krajTajmer);
+        clearTimeout(potvrdaTajmer);
+        cekaPotvrdu = null;
+        krajTajmer = setTimeout(zatvoriVezu, KRAJ_ZADRZI_MS);
+      } else {
+        zatvoriVezu();
+      }
       patchState(store, { faza });
       postaviGresku(null); // zaostala poruka (npr. "Vreme je isteklo.") ne visi na ekranu kraja
     }
@@ -266,15 +285,17 @@ export const StudentStore = signalStore(
       if (j.status === 'ZAVRSENO') zavrsi('kraj');
     }
 
+    /** I u fazi `kraj` (konačno mesto i poeni stižu posle javnog stanja), ali tada bez prelaza na izbačen. */
     function prihvatiLicno(l: LicnoStanje): void {
-      if (store.faza() !== 'uzivo') return;
+      const faza = store.faza();
+      if (faza !== 'uzivo' && faza !== 'kraj') return;
       const u = store.ucesnik();
       if (u && l.ucesnikId !== u.ucesnikId) return;
       const t = store.licno();
       if (t && l.verzija < t.verzija) return;
       patchState(store, { licno: l });
       if (cekaPotvrdu !== null && primljenU(l, cekaPotvrdu)) potvrdi();
-      if (l.izbacen) zavrsi('izbacen');
+      if (l.izbacen && faza === 'uzivo') zavrsi('izbacen');
     }
 
     function greskaServera(poruka: string): void {
@@ -313,7 +334,11 @@ export const StudentStore = signalStore(
       dalje(t);
     }
 
-    /** Rukovanje odbijeno: da li kolačić još važi? 404 -> ispočetka (ime ili greška); ostalo je mreža, veza pokušava sama. */
+    /**
+     * Rukovanje odbijeno: da li kolačić još važi? `ja` 404 -> postoji li izvođenje (`info`): da -> unos imena; 404 ->
+     * kraj sa poslednjim poznatim mestom ako ga imamo (telefon je prespavao kraj), inače greška. Ostalo je mreža, veza
+     * pokušava sama.
+     */
     function proveriPrijavu(): void {
       const kod = store.kod();
       const sada = Date.now();
@@ -321,7 +346,19 @@ export const StudentStore = signalStore(
       poslednjaProvera = sada;
       zahtevi.add(api.ja(kod).subscribe({
         error: e => {
-          if (je404(e) && store.faza() === 'uzivo') otvori(kod);
+          if (!je404(e) || store.faza() !== 'uzivo') return;
+          zahtevi.add(api.info(kod).subscribe({
+            next: info => {
+              if (store.faza() !== 'uzivo') return;
+              patchState(store, { info });
+              naIme();
+            },
+            error: e2 => {
+              if (store.faza() !== 'uzivo') return;
+              if (je404(e2) && store.licno()) zavrsi('kraj', false);
+              else fazaGreska(e2, 'Izvođenje nije učitano. Pokušaj ponovo.');
+            },
+          }));
         },
       }));
     }
@@ -355,9 +392,10 @@ export const StudentStore = signalStore(
       veza.add(s.watch('/user/queue/greske').subscribe(m => procitaj<{ poruka?: unknown }>(m.body, g => {
         if (typeof g?.poruka === 'string') greskaServera(g.poruka);
       })));
+      // lično pre javnog: javno sa ZAVRSENO prelazi na kraj, a konačno mesto je u ličnom
       veza.add(s.watch(`/app/izvodjenja/${id}/pocetno`).subscribe(m => procitaj<PocetnoStanje>(m.body, p => {
-        if (p?.javno) prihvatiJavno(p.javno);
         if (p?.licno) prihvatiLicno(p.licno);
+        if (p?.javno) prihvatiJavno(p.javno);
       })));
     }
 
@@ -422,6 +460,11 @@ export const StudentStore = signalStore(
         cekaPotvrdu = cmd.rundaId;
         stomp.publish({ destination: `/app/izvodjenja/${u.izvodjenjeId}/odgovor`, body: JSON.stringify(cmd) });
         pratiPotvrdu();
+      },
+
+      /** Nacrt odgovora trenutne runde (iz `gfs-odgovor-unos`). */
+      sacuvajNacrt(n: NacrtOdgovora): void {
+        if (store.faza() === 'uzivo' && n.rundaId === store.pitanje()?.rundaId) patchState(store, { nacrt: n });
       },
 
       /** Posle izbacivanja: novo ime (isti kod, naziv ostaje). */

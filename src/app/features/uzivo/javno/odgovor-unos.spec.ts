@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import {
-  OdgovorUnosComponent, mozeDaPosalje, normalizujBroj, porukaZaBroj, porukaZaTekst, tekstOpcije,
+  NacrtOdgovora, OdgovorUnosComponent, mozeDaPosalje, normalizujBroj, porukaZaBroj, porukaZaTekst, tekstOpcije,
 } from './odgovor-unos.component';
 
 function pitanje(tip: TipPitanja, izmene: Partial<JavnoPitanje> = {}): JavnoPitanje {
@@ -59,10 +59,11 @@ describe('OdgovorUnosComponent', () => {
   let fixture: ComponentFixture<OdgovorUnosComponent>;
   let poslato: OdgovorCmd[];
 
-  function napravi(p: JavnoPitanje, celoPitanje = false): void {
+  function napravi(p: JavnoPitanje, celoPitanje = false, nacrt: NacrtOdgovora | null = null): void {
     fixture = TestBed.createComponent(OdgovorUnosComponent);
     fixture.componentRef.setInput('pitanje', p);
     fixture.componentRef.setInput('celoPitanje', celoPitanje);
+    fixture.componentRef.setInput('nacrt', nacrt);
     poslato = [];
     fixture.componentInstance.posalji.subscribe(c => poslato.push(c));
     fixture.detectChanges();
@@ -127,28 +128,40 @@ describe('OdgovorUnosComponent', () => {
     expect(poslato).toEqual([{ rundaId: 7, skala: 4 }]);
   });
 
-  it('zaključan unos (npr. "Pitanje je zatvoreno.") ne šalje ništa', () => {
-    napravi(pitanje('JEDAN_TACAN'));
-    fixture.componentRef.setInput('zakljucano', true);
-    fixture.detectChanges();
+  it('nacrt iste runde se vraća posle ponovnog montiranja (izbor kod više tačnih)', () => {
+    napravi(pitanje('VISE_TACNIH'));
+    const nacrti: NacrtOdgovora[] = [];
+    fixture.componentInstance.nacrtPromena.subscribe(n => nacrti.push(n));
     dugmad()[0].click();
-    expect(poslato).toEqual([]);
+    dugmad()[2].click();
+    expect(nacrti[nacrti.length - 1]).toEqual({ rundaId: 7, izabrane: [11, 13], broj: '', tekst: '' });
+
+    // otključavanje posle greške ili roka potvrde: komponenta se montira iznova sa nacrtom iz store-a
+    napravi(pitanje('VISE_TACNIH'), false, nacrti[nacrti.length - 1]);
+    expect(dugmad()[0].getAttribute('aria-pressed')).toBe('true');
+    expect(dugmad()[2].getAttribute('aria-pressed')).toBe('true');
+    expect(dugme('Pošalji').disabled).toBeFalse();
+    dugme('Pošalji').click();
+    expect(poslato).toEqual([{ rundaId: 7, opcije: [11, 13] }]);
   });
 
-  it('kad roditelj otključa (greška provere), može ponovo da pošalje', () => {
-    napravi(pitanje('KRATAK_TEKST', { opcije: null, brojOpcija: null }));
+  it('nacrt iste runde vraća ukucan broj i tekst; nacrt druge runde se ignoriše', () => {
+    const brojP = pitanje('BROJ', { opcije: null, brojOpcija: null });
+    napravi(brojP, true, { rundaId: 7, izabrane: [], broj: '12,5', tekst: '' });
+    expect((fixture.nativeElement.querySelector('input') as HTMLInputElement).value).toBe('12,5');
+    napravi(brojP, true, { rundaId: 6, izabrane: [], broj: '99', tekst: '' });
+    expect((fixture.nativeElement.querySelector('input') as HTMLInputElement).value).toBe('');
+
+    napravi(pitanje('KRATAK_TEKST', { opcije: null, brojOpcija: null }), true);
+    const nacrti: NacrtOdgovora[] = [];
+    fixture.componentInstance.nacrtPromena.subscribe(n => nacrti.push(n));
     const polje = fixture.nativeElement.querySelector('input') as HTMLInputElement;
     polje.value = 'Sava';
     polje.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    dugme('Pošalji').click();
-    fixture.componentRef.setInput('zakljucano', true);
-    fixture.detectChanges();
-    fixture.componentRef.setInput('zakljucano', false);
-    fixture.detectChanges();
+    expect(nacrti[nacrti.length - 1]).toEqual({ rundaId: 7, izabrane: [], broj: '', tekst: 'Sava' });
+    napravi(pitanje('KRATAK_TEKST', { opcije: null, brojOpcija: null }), true, nacrti[nacrti.length - 1]);
+    expect((fixture.nativeElement.querySelector('input') as HTMLInputElement).value).toBe('Sava');
     expect(dugme('Pošalji').disabled).toBeFalse();
-    dugme('Pošalji').click();
-    expect(poslato.length).toBe(2);
   });
 
   it('nova runda briše izbor i otključava', () => {

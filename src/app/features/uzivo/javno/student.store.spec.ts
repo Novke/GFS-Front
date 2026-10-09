@@ -6,7 +6,7 @@ import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { STOMP_FABRIKA } from '../data-access/stomp';
 import { JavnoPitanje, JavnoStanje, LicnoStanje, UcesnikInfo } from '../data-access/uzivo.models';
-import { GRESKA_TRAJANJE_MS, POTVRDA_MS, StudentStore, ekranStudenta, tacanOdgovor } from './student.store';
+import { GRESKA_TRAJANJE_MS, KRAJ_ZADRZI_MS, POTVRDA_MS, StudentStore, ekranStudenta, tacanOdgovor } from './student.store';
 
 /** Lažna STOMP veza: po jedan Subject za svako odredište, stanje veze ručno, `publish` beleži poruke. */
 class LazniStomp {
@@ -185,15 +185,39 @@ describe('StudentStore', () => {
       expect(store.ucesnik()).toBeNull();
     });
 
-    it('status ZAVRSENO -> faza kraj i veza se zatvara', () => {
+    it('status ZAVRSENO -> faza kraj; lično stanje koje stigne posle javnog još ažurira konačno mesto, pa se veza zatvara', fakeAsync(() => {
       udji();
-      store.prihvatiLicno(licno({ mesto: 2, poeni: 1700 }));
+      store.prihvatiLicno(licno({ mesto: 4, poeni: 900 }));
       stomp().posalji('/topic/izvodjenja/5/javno', javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }));
       expect(store.faza()).toBe('kraj');
       expect(store.ekran()).toBe('kraj');
+      expect(stomp().deactivate).not.toHaveBeenCalled();
+      // server šalje javno pa lično: konačno mesto stiže posle prelaza na kraj
+      stomp().posalji('/user/queue/licno', licno({ verzija: 2, mesto: 2, poeni: 1700 }));
       expect(store.licno()!.mesto).toBe(2);
+      expect(store.licno()!.poeni).toBe(1700);
+      tick(KRAJ_ZADRZI_MS);
       expect(stomp().deactivate).toHaveBeenCalled();
-    });
+    }));
+
+    it('pocetno posle kraja: lično se obrađuje pre javnog, konačno mesto ostaje', fakeAsync(() => {
+      udji();
+      pocetno(javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }), licno({ verzija: 4, mesto: 3, poeni: 1200 }));
+      expect(store.faza()).toBe('kraj');
+      expect(store.licno()!.mesto).toBe(3);
+      expect(store.licno()!.poeni).toBe(1200);
+      tick(KRAJ_ZADRZI_MS);
+    }));
+
+    it('u kraju se lično stanje drugog učesnika i starija verzija ne prihvataju', fakeAsync(() => {
+      udji();
+      store.prihvatiLicno(licno({ verzija: 3, mesto: 4 }));
+      store.prihvatiJavno(javno({ verzija: 9, status: 'ZAVRSENO', prikaz: 'KRAJ' }));
+      store.prihvatiLicno(licno({ verzija: 2, mesto: 1 }));
+      store.prihvatiLicno(licno({ verzija: 5, ucesnikId: 99, mesto: 1 }));
+      expect(store.licno()!.mesto).toBe(4);
+      tick(KRAJ_ZADRZI_MS);
+    }));
 
     it('kraj i izbacivanje brišu zaostalu poruku greške (ne visi na ekranu kraja)', () => {
       udji();
@@ -334,11 +358,49 @@ describe('StudentStore', () => {
       udji();
       stomp().connectionState$.next(RxStompState.CLOSED);
       http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
-      expect(stompovi[0].deactivate).toHaveBeenCalled();
       http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1' });
-      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      expect(stompovi[0].deactivate).toHaveBeenCalled();
       expect(store.faza()).toBe('ime');
+      expect(store.info()).toEqual({ naziv: 'Statika 1' });
     });
+
+    it('telefon prespava kraj (odbijeno rukovanje, ja 404, info 404) -> kraj sa poslednjim mestom, ne greška', () => {
+      udji();
+      store.prihvatiJavno(javno({ verzija: 3, prikaz: 'SLAJD', slajdTip: 'INFO' }));
+      store.prihvatiLicno(licno({ verzija: 3, mesto: 5, poeni: 2100 }));
+      stomp().connectionState$.next(RxStompState.CLOSED);
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456').flush(...nijePronadjeno('Izvođenje sa ovim kodom ne postoji ili je završeno.'));
+      expect(store.faza()).toBe('kraj');
+      expect(store.ekran()).toBe('kraj');
+      expect(store.licno()!.mesto).toBe(5);
+      expect(store.greska()).toBeNull();
+      expect(stompovi[0].deactivate).toHaveBeenCalled();
+    });
+
+    it('ja 404 i info 404 bez ličnog stanja -> greška sa porukom servera', () => {
+      udji();
+      stomp().connectionState$.next(RxStompState.CLOSED);
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456').flush(...nijePronadjeno('Izvođenje sa ovim kodom ne postoji ili je završeno.'));
+      expect(store.faza()).toBe('greska');
+      expect(store.greska()).toBe('Izvođenje sa ovim kodom ne postoji ili je završeno.');
+    });
+
+    it('nacrt odgovora ostaje za istu rundu i posle otključavanja (rok potvrde); otvori ga briše', fakeAsync(() => {
+      udji();
+      stomp().connectionState$.next(RxStompState.OPEN);
+      store.prihvatiJavno(naPitanju(2, { tip: 'VISE_TACNIH' }));
+      store.sacuvajNacrt({ rundaId: 7, izabrane: [11, 12], broj: '', tekst: '' });
+      store.odgovori({ rundaId: 7, opcije: [11, 12] });
+      tick(POTVRDA_MS);
+      expect(store.ekran()).toBe('unos');
+      expect(store.nacrt()).toEqual({ rundaId: 7, izabrane: [11, 12], broj: '', tekst: '' });
+      store.otvori('123456');
+      expect(store.nacrt()).toBeNull();
+      http.expectOne('api/public/uzivo/123456');
+      store.destroy();
+    }));
 
     it('prekid posle otvorene veze nije odbijeno rukovanje: nema provere, samo traka', () => {
       udji();
