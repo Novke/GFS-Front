@@ -71,7 +71,7 @@ describe('preusmerenja starih ruta', () => {
     ['/test/3/pregled', '/testovi/3'],
     ['/test/3', '/testovi/3'],
     ['/test/grupa/1/predmet/2', '/testovi?grupa=1&predmet=2'],
-    ['/student/4', '/studenti/4'],
+    ['/student/4', '/studenti/4/pregled'],  // profil ide na tab Pregled
     ['/student/4/predmet/2', '/studenti/4/predmeti/2'],
   ])('%s -> %s', async (staro, novo) => {
     expect(await idi(staro)).toBe(novo);
