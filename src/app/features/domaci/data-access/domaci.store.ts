@@ -134,6 +134,8 @@ class Sesija implements SesijaCuvanja {
   readonly imena = new Map<number, string>();
   /** Redovi čije poslednje čuvanje nije uspelo. */
   readonly greske = new Set<number>();
+  /** Redovi koje je `oslobodi` u ovoj sesiji zaključao (samo za čitanje): kasna greška čuvanja ih ne vraća u greške. */
+  readonly oslobodjeni = new Set<number>();
   /** Koraci koji su u redu ili se izvršavaju (ne računaju se tajmeri). */
   uToku = 0;
   /** Poslednji korak je završen i `uToku` je pao na 0 (za čekanje pražnjenja). */
@@ -294,7 +296,7 @@ export const DomaciStore = signalStore(
             catchError((e: unknown) => {
               // server je možda ipak upisao (izgubljen odgovor): sledeći korak reda šalje i vrednost jednaku staroj
               s.potvrdi(sId, undefined);
-              if (s.verzija(sId) === trenutna) {
+              if (s.verzija(sId) === trenutna && !s.oslobodjeni.has(sId)) {
                 s.greske.add(sId);
                 postaviStatus(s, sId, 'greska');
                 javiGresku(s, sId, e);
@@ -504,8 +506,10 @@ export const DomaciStore = signalStore(
                     s.timeri.delete(r.studentId);
                   }
                   if (oslobodjen) {
-                    // oslobođen red je samo za čitanje: neuspelo čuvanje se više ne može ponoviti ni brojati kao nesačuvano
+                    // oslobođen red je samo za čitanje: neuspelo čuvanje se više ne može ponoviti ni brojati kao nesačuvano,
+                    // ni ono koje je bilo u toku i padne tek posle ovog odgovora
                     s.greske.delete(r.studentId);
+                    s.oslobodjeni.add(r.studentId);
                   }
                   s.lokalno.set(r.studentId, potvrdjeno);
                   patchState(store, st => ({

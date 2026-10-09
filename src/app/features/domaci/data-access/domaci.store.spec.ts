@@ -669,6 +669,24 @@ describe('DomaciStore', () => {
       expect(zatvaranje()).toBe(false);
     });
 
+    it('čuvanje u toku pa "oslobodi", pa greška tog čuvanja: oslobođen red ne postaje greška (samo za čitanje)', async () => {
+      const nesacuvane = TestBed.inject(NesacuvaneIzmene);
+      ucitaj();
+      store.izmeni(1, { bodovi: 3 }); // Ana je aktivna (zadatak)
+      tece();
+      const cuvanje = evidentiraj()[0]; // u toku
+      const obecanje = store.oslobodi();
+      server.studenti[0] = { ...server.studenti[0], oslobodjen: true, bodovi: 10, uradjenDomaciId: 9 };
+      http.expectOne('api/domaci/5/oslobodi').flush(server.details());
+      expect(await obecanje).toBe(true);
+      cuvanje.flush({ reason: 'Greška baze.' }, { status: 400, statusText: 'Bad Request' });
+      expect(store.statusi()[1]).toBeNull();
+      expect(store.brojGresaka()).toBe(0);
+      expect(nesacuvane.broj()).toBe(0);
+      expect(zatvaranje()).toBe(false);
+      expect(poruke.filter(p => p.tip === 'greska')).toEqual([]);
+    });
+
     it('greška reda pa završen pregled (tabela samo za čitanje): ništa nesačuvano, zatvaranje ne pita', async () => {
       const nesacuvane = TestBed.inject(NesacuvaneIzmene);
       ucitaj();
