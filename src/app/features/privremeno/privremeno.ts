@@ -44,7 +44,6 @@ export function prikazPregleda(putanjaApi: string, zavrseno: (dto: Record<string
 }
 
 export const domaciPregledan = prikazPregleda('domaci', d => d['pregledan'] === true);
-export const testPregledan = prikazPregleda('test', d => d['pregledan'] === true);
 
 /** Ruta iz novog stabla čiji ekran još ne postoji (pravi ga kasniji zadatak). */
 @Component({

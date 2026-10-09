@@ -2,14 +2,16 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, provideRouter, Router } from '@angular/router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { routes } from '../../app.routes';
 import { NovoPredavanje } from '../predavanja/pages/novo-predavanje';
 import { PredavanjaLista } from '../predavanja/pages/predavanja-lista';
 import { PredavanjeDetalj } from '../predavanja/pages/predavanje-detalj';
-import { TestEvidentiranjeComponent } from '../../test/test-evidentiranje/test-evidentiranje.component';
-import { TestPregledComponent } from '../../test/test-pregled/test-pregled.component';
+import { NoviTest } from '../testovi/pages/novi-test';
+import { TestDetalj } from '../testovi/pages/test-detalj';
+import { TestStatistika } from '../testovi/pages/test-statistika';
+import { TestoviLista } from '../testovi/pages/testovi-lista';
 import { AppRoutes } from './app-putanje';
 
 function list(router: Router): unknown {
@@ -50,36 +52,18 @@ describe('privremeni izbor starih ekrana na novim rutama', () => {
     http.expectNone(() => true);
   });
 
-  it('test: detalj sa ?prikaz bira stranicu bez poziva API-ja', async () => {
-    await router.navigateByUrl(AppRoutes.testPregled(3));
-    expect(list(router)).toBe(TestPregledComponent);
-    await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
-    expect(list(router)).toBe(TestEvidentiranjeComponent);
-    http.expectNone(() => true);
-  });
-
-  it.each([
-    [{ pregledan: true }, TestPregledComponent],
-    [{ pregledan: false }, TestEvidentiranjeComponent],
-  ])('test: detalj bez ?prikaz bira po stanju (%o)', async (dto, ocekivana) => {
-    const gotovo = router.navigateByUrl('/testovi/3');
-    await vi.waitFor(() => http.expectOne('api/test/3').flush(dto));
-    await gotovo;
-    expect(list(router)).toBe(ocekivana);
-  });
-
-  it('test: greška pri čitanju stanja otvara evidentiranje (ono samo prikazuje grešku)', async () => {
-    const gotovo = router.navigateByUrl('/testovi/3');
-    await vi.waitFor(() => http.expectOne('api/test/3').flush(null, { status: 404, statusText: 'Not Found' }));
-    await gotovo;
-    expect(list(router)).toBe(TestEvidentiranjeComponent);
-  });
-
-  it('test: stara stranica na istoj ruti prelazi na drugu (evidentiranje -> pregled -> evidentiranje)', async () => {
-    await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
-    await router.navigateByUrl(AppRoutes.testPregled(3));
-    expect(list(router)).toBe(TestPregledComponent);
-    await router.navigateByUrl(AppRoutes.testEvidentiranje(3));
-    expect(list(router)).toBe(TestEvidentiranjeComponent);
+  it('testovi: lista (i sa ?grupa&predmet iz starih linkova), "Nov test", detalj i statistika su novi ekrani (Task 21)', async () => {
+    await router.navigateByUrl(AppRoutes.testGrupaPredmet(1, 2));
+    expect(router.url).toBe('/testovi?grupa=1&predmet=2');
+    expect(list(router)).toBe(TestoviLista);
+    await router.navigateByUrl('/testovi/novo');
+    expect(list(router)).toBe(NoviTest);
+    for (const url of ['/testovi/3', AppRoutes.testPregled(3), AppRoutes.testEvidentiranje(3)]) {
+      await router.navigateByUrl(url);
+      expect(list(router)).toBe(TestDetalj);
+    }
+    await router.navigateByUrl('/testovi/3/statistika');
+    expect(list(router)).toBe(TestStatistika);
+    http.expectNone(() => true); // rutiranje više ne čita stanje testa (stari `testPregledan`)
   });
 });

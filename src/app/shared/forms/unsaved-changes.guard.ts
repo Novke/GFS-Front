@@ -11,7 +11,8 @@ export interface NemaNesacuvanih {
 
 /** `CanDeactivate`: sa nesačuvanim izmenama pita za potvrdu napuštanja. */
 export const unsavedChangesGuard: CanDeactivateFn<NemaNesacuvanih> = component => {
-  if (!component.imaNesacuvanihIzmena()) {
+  // bez komponente (outlet nije prikazan, komponenta već uništena) nema šta da se izgubi
+  if (!component?.imaNesacuvanihIzmena()) {
     return true;
   }
   return ConfirmDialog.otvori(inject(MatDialog), {

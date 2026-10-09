@@ -9,7 +9,7 @@ import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { legacyRedirects } from './features/legacy-redirects';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
-import { imaGrupuIPredmet, testPregledan } from './features/privremeno/privremeno';
+import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
 
 /*
  * Stablo ruta (spec, sekcija 2). Putanje su relativne na <base href>; filteri lista su query parametri.
@@ -68,50 +68,12 @@ const nastavnickeRute: Routes = [
     children: DOMACI_RUTE,
   },
 
-  // Testovi (Task 21)
+  // Testovi (Task 21: lista, nov, detalj sa unosom poena, statistika)
   {
     path: 'testovi',
     title: 'Testovi',
     data: stalne(m('Nastava'), m('Testovi')),
-    children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        canMatch: [imaGrupuIPredmet],
-        loadComponent: () => import('./test/test-list/test-list.component').then(x => x.TestListComponent),
-      },
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () => import('./test/test-select/test-select.component').then(x => x.TestSelectComponent),
-      },
-      {
-        path: 'novo',
-        title: 'Nov test',
-        data: stalne(m('Testovi', '/testovi'), m('Nov test')),
-        loadComponent: () => import('./test/nov-test/nov-test.component').then(x => x.NovTestComponent),
-      },
-      {
-        matcher: putanjaSaId(':id/statistika'),
-        title: 'Statistika testa',
-        data: mrvice((p: Params) => [m('Testovi', '/testovi'), m('Test', `/testovi/${p['id']}`), m('Statistika')]),
-        loadComponent: uskoro,
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Test',
-        data: stalne(m('Testovi', '/testovi'), m('Test')),
-        canMatch: [testPregledan],
-        loadComponent: () => import('./test/test-pregled/test-pregled.component').then(x => x.TestPregledComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Test',
-        data: stalne(m('Testovi', '/testovi'), m('Test')),
-        loadComponent: () =>
-          import('./test/test-evidentiranje/test-evidentiranje.component').then(x => x.TestEvidentiranjeComponent),
-      },
-    ],
+    children: TESTOVI_RUTE,
   },
 
   // Ocene (Task 24)
