@@ -398,7 +398,4 @@ export interface PoljaPrijave {
   datumRodjenja: string | null; opstina: string | null;
 }
 export interface UpdatePrijavaCmd extends PoljaPrijave {}
-export interface PodnesiPrijavuCmd extends PoljaPrijave {}
 export interface OdbijPrijavuCmd { napomena: string | null; }
-export interface JavniUpisInfo { grupaNaziv: string; godinaUpisa: number; otvorena: boolean; istice: string; }
-export interface PodnetaPrijavaInfo { id: number; }

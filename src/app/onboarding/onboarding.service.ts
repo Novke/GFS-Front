@@ -1,15 +1,11 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  CreateOnboardingCmd, JavniUpisInfo, OdbijPrijavuCmd, OnboardingSesijaDetails, OnboardingSesijaInfo,
-  PodnesiPrijavuCmd, PodnetaPrijavaInfo, PrijavaInfo, UpdateOnboardingCmd, UpdatePrijavaCmd
+  CreateOnboardingCmd, OdbijPrijavuCmd, OnboardingSesijaDetails, OnboardingSesijaInfo,
+  PrijavaInfo, UpdateOnboardingCmd, UpdatePrijavaCmd
 } from '../models/model';
 import { API_URL } from '../core/api/api-url';
-import { LOCAL_ERRORS } from '../core/api/api-error';
-
-// Javna forma sama prikazuje grešku; nastavnički snackbar se ne sme pojaviti na telefonu studenta.
-const LOKALNE_GRESKE = new HttpContext().set(LOCAL_ERRORS, true);
 
 @Injectable({
   providedIn: 'root'
@@ -50,14 +46,5 @@ export class OnboardingService {
 
   prihvatiSve(id: number): Observable<OnboardingSesijaDetails> {
     return this.http.post<OnboardingSesijaDetails>(`${this.apiUrl}/onboarding/${id}/prihvati-sve`, {});
-  }
-
-  // Javni endpointi (bez prijave): koristi ih samo stranica upis/:token.
-  getJavniUpis(token: string): Observable<JavniUpisInfo> {
-    return this.http.get<JavniUpisInfo>(`${this.apiUrl}/public/upis/${token}`, { context: LOKALNE_GRESKE });
-  }
-
-  podnesiPrijavu(token: string, cmd: PodnesiPrijavuCmd): Observable<PodnetaPrijavaInfo> {
-    return this.http.post<PodnetaPrijavaInfo>(`${this.apiUrl}/public/upis/${token}`, cmd, { context: LOKALNE_GRESKE });
   }
 }

@@ -3,6 +3,21 @@ const eslint = require("@eslint/js");
 const { defineConfig } = require("eslint/config");
 const tseslint = require("typescript-eslint");
 const angular = require("angular-eslint");
+const javnaRutaUvozi = require("./eslint-rules/javna-ruta-uvozi");
+
+// Javne rute (student na telefonu, bez basic-auth-a): smeju da zovu samo assets/env.json i api/public/*. Fajlovi tih
+// feature-a smeju da uvoze samo sebe i ovaj spisak (putanje u odnosu na src/app, "/**" = ceo direktorijum). Novi javni
+// feature (uzivo/javno) se dodaje u JAVNI_FEATURE; svaki dodatak na spisku mora svesno da se proveri (da ne zove /api/*).
+const JAVNI_FEATURE = ["features/upis", "features/uzivo/javno"];
+const JAVNO_DOZVOLJENO = [
+  "core/api/api-url",
+  "core/api/api-error", // samo HttpContextToken i toApiError, bez store-a
+  "core/layout/public-layout",
+  "core/layout/okruzenje", // assets/env.json
+  "shared/forms/**", // pomocne klase za forme, bez poziva API-ja
+  "shared/util/**",
+  "shared/models/**",
+];
 
 module.exports = defineConfig([
   {
@@ -41,6 +56,12 @@ module.exports = defineConfig([
     ],
     rules: {},
   },
+  // Javne rute: zabrana uvoza svega sto zove zakljucan /api/* (pravilo i obrazlozenje: eslint-rules/javna-ruta-uvozi.js).
+  ...JAVNI_FEATURE.map((feature) => ({
+    files: [`src/app/${feature}/**/*.ts`],
+    plugins: { gfs: { rules: { "javna-ruta-uvozi": javnaRutaUvozi } } },
+    rules: { "gfs/javna-ruta-uvozi": ["error", { feature, dozvoljeno: JAVNO_DOZVOLJENO }] },
+  })),
   // Stari ekrani, zamenjuju se u F2. Pravila ostaju ukljucena za sav novi kod; ovde su isključena samo za
   // postojece fajlove sa prekrsajima. Kada F2 zameni ekran, fajl se brise i izlazi sa ove liste.
   // OnPush: komponente su namerno na Eager (Angular 22 migracija, zone.js ostaje) do F2 (OnPush + signali).
@@ -57,7 +78,6 @@ module.exports = defineConfig([
   "src/app/home/home.component.ts",
   "src/app/models/model.ts",
   "src/app/ocenjivanje/ocenjivanje-select.component.ts",
-  "src/app/onboarding/javni-upis/javni-upis.component.ts",
   "src/app/onboarding/onboarding-prijave/onboarding-prijave.component.ts",
   "src/app/onboarding/onboarding-qr/onboarding-qr.component.ts",
   "src/app/predavanje/live-predavanje/live-predavanje.component.ts",

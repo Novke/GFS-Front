@@ -223,7 +223,7 @@ export const routes: Routes = [
       {
         matcher: neprazanParametar('token'),
         title: 'Prijava za grupu',
-        loadComponent: () => import('./onboarding/javni-upis/javni-upis.component').then(x => x.JavniUpisComponent),
+        loadComponent: () => import('./features/upis/pages/javni-upis').then(x => x.JavniUpis),
       },
       // Pogrešan link pod /upis ostaje u javnom layoutu: 404 u ljusci bi zvao zaključan API (dijalog za lozinku).
       { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
