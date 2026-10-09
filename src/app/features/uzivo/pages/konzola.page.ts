@@ -16,7 +16,6 @@ import { TipKomande } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { kodSaRazmakom } from '../ui/format';
 import { EkranOpis, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
-import { potvrdi } from '../ui/potvrda.dialog';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
@@ -28,6 +27,7 @@ import { PublikaScenaComponent } from './publika-scena.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
@@ -327,9 +327,9 @@ export class KonzolaPage {
   }
 
   private ponovi(): void {
-    potvrdi(this.dialog, {
+    ConfirmDialog.otvori(this.dialog, {
       naslov: 'Ponoviti pitanje?',
-      poruke: ['Otvara se nova runda; dosadašnji odgovori ostaju u prethodnoj rundi.'],
+      tekst: 'Otvara se nova runda; dosadašnji odgovori ostaju u prethodnoj rundi.',
       potvrdi: 'Ponovi',
     }).subscribe(da => {
       if (da) this.store.komanda('PONOVI');
@@ -373,7 +373,7 @@ export class KonzolaPage {
     if (!s) return;
     const poruke = ['Studenti vide kraj.'];
     if (!s.izvodjenje.cuvanje) poruke.push('Odgovori se brišu.');
-    potvrdi(this.dialog, { naslov: 'Završiti izvođenje?', poruke, potvrdi: 'Završi', opasno: true }).subscribe(da => {
+    ConfirmDialog.otvori(this.dialog, { naslov: 'Završiti izvođenje?', tekst: poruke, potvrdi: 'Završi', destruktivno: true }).subscribe(da => {
       if (da) this.store.komanda('ZAVRSI');
     });
   }

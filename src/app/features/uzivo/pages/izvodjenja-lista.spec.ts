@@ -90,11 +90,13 @@ describe('IzvodjenjaListaPage', () => {
     (redovi(el)[0].querySelector('button') as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(potvrda).toHaveBeenCalledTimes(1);
-    const podaci = (potvrda.mock.calls[0][1] as { data: { naslov: string; poruke: string[]; potvrdi: string; opasno: boolean } }).data;
-    expect(podaci.opasno).toBe(true);
+    const konfig = potvrda.mock.calls[0][1] as { role: string; data: { naslov: string; tekst: string[]; potvrdi: string; destruktivno: boolean } };
+    expect(konfig.role).toBe('alertdialog');
+    const podaci = konfig.data;
+    expect(podaci.destruktivno).toBe(true);
     expect(podaci.potvrdi).toBe('Obriši');
     expect(podaci.naslov).toBe('Obrisati izvođenje?');
-    expect(podaci.poruke[0]).toContain('trajno obrisano');
+    expect(podaci.tekst[0]).toContain('trajno obrisano');
     expect(redovi(el).length).toBe(1);
     expect(uspeh).not.toHaveBeenCalled();
     expect(greska).not.toHaveBeenCalled();

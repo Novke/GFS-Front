@@ -26,4 +26,10 @@ describe('unsavedChangesGuard', () => {
     expect(otvori).toHaveBeenCalledOnce();
     expect(otvori.mock.calls[0][1].destruktivno).toBe(true);
   });
+
+  it('tekst potvrde daje komponenta kad ga ima', () => {
+    const otvori = vi.spyOn(ConfirmDialog, 'otvori').mockReturnValue(of(false));
+    pozovi({ imaNesacuvanihIzmena: () => true, tekstNapustanja: () => 'Nepotpunih slajdova: 2.' });
+    expect(otvori.mock.calls[0][1].tekst).toBe('Nepotpunih slajdova: 2.');
+  });
 });

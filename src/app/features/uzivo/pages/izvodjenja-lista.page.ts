@@ -12,9 +12,9 @@ import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { IzvodjenjeInfo } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from '../ui/format';
-import { potvrdi } from '../ui/potvrda.dialog';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /**
  * Izvođenja jedne prezentacije (spec 6.2), najnovije prvo: aktivno ima "Nastavi" (konzola), završeno sa čuvanjem
@@ -139,7 +139,7 @@ export class IzvodjenjaListaPage {
     const poruke = i.cuvanje
       ? ['Izvođenje sa svim sačuvanim odgovorima i rang-listom biće trajno obrisano.']
       : ['Izvođenje će nestati iz liste. Odgovori ove sesije ionako nisu čuvani.'];
-    potvrdi(this.dialog, { naslov: 'Obrisati izvođenje?', poruke, potvrdi: 'Obriši', opasno: true }).subscribe(da => {
+    ConfirmDialog.otvori(this.dialog, { naslov: 'Obrisati izvođenje?', tekst: poruke, potvrdi: 'Obriši', destruktivno: true }).subscribe(da => {
       if (!da) return;
       this.brise.set(i.id);
       this.api.obrisi(i.id).subscribe({

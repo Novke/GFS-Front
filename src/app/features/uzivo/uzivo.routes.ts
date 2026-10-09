@@ -3,7 +3,7 @@ import { Params, Route } from '@angular/router';
 import { NotFound } from '../../core/layout/not-found';
 import { mrvica as m } from '../../core/layout/mrvica';
 import { neprazanParametar, putanjaSaId } from '../../core/route-matchers';
-import type { PrezentacijaEditorPage } from './pages/prezentacija-editor.page';
+import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
 
 /*
  * Rute uživo (spec uživo 6.2). Putanje su iste kao pre redizajna (QR kodovi i linkovi su možda već podeljeni), samo su
@@ -36,8 +36,8 @@ export const PREZENTACIJE_RUTE: Route[] = [
     title: 'Prezentacija',
     data: { mrvice: () => [m('Prezentacije', '/prezentacije'), m('Prezentacija')] },
     loadComponent: () => import('./pages/prezentacija-editor.page').then(x => x.PrezentacijaEditorPage),
-    // Bez komponente (navigacija pre nego što je napravljena) nema šta da se sačuva.
-    canDeactivate: [(editor: PrezentacijaEditorPage | null) => editor?.mozeDaNapusti() ?? true],
+    // Nepotpuni slajdovi: potvrda kroz ConfirmDialog (bez komponente nema šta da se izgubi).
+    canDeactivate: [unsavedChangesGuard],
   },
 ];
 

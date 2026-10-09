@@ -7,6 +7,8 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 /** Komponenta duže forme koja štiti nesačuvane izmene. */
 export interface NemaNesacuvanih {
   imaNesacuvanihIzmena(): boolean;
+  /** Tekst potvrde kad ekran zna tačnije šta se gubi (npr. broj nepotpunih slajdova); inače opšti tekst. */
+  tekstNapustanja?(): string;
 }
 
 /** `CanDeactivate`: sa nesačuvanim izmenama pita za potvrdu napuštanja. */
@@ -17,7 +19,7 @@ export const unsavedChangesGuard: CanDeactivateFn<NemaNesacuvanih> = component =
   }
   return ConfirmDialog.otvori(inject(MatDialog), {
     naslov: 'Napustiti stranicu?',
-    tekst: 'Imaš nesačuvane izmene. Ako napustiš stranicu, izmene se gube.',
+    tekst: component.tekstNapustanja?.() ?? 'Imaš nesačuvane izmene. Ako napustiš stranicu, izmene se gube.',
     potvrdi: 'Napusti',
     destruktivno: true,
   });

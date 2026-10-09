@@ -6,8 +6,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { UcesnikStanje } from '../data-access/uzivo.models';
-import { potvrdi } from '../ui/potvrda.dialog';
 import { grupisiCifre } from '../ui/format';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /** Ime učesnika: 1-40 znakova posle `trim` (kao server, spec 2.8). */
 export const IME_MAKS = 40;
@@ -101,10 +101,10 @@ export class UcesniciPanelComponent {
   }
 
   protected izbaciPotvrda(u: UcesnikStanje): void {
-    potvrdi(this.dialog, {
+    ConfirmDialog.otvori(this.dialog, {
       naslov: `Izbaciti „${u.ime}“?`,
-      poruke: ['Učesnik više ne može da odgovara; može ponovo da uđe pod novim imenom.'],
-      potvrdi: 'Izbaci', opasno: true,
+      tekst: 'Učesnik više ne može da odgovara; može ponovo da uđe pod novim imenom.',
+      potvrdi: 'Izbaci', destruktivno: true,
     }).subscribe(da => {
       if (da) this.izbaci.emit(u.id);
     });

@@ -67,4 +67,23 @@ describe('ConfirmDialog', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(overlay.querySelector('[data-potvrdi]')));
     dialog.closeAll();
   });
+
+  it('alertdialog: tekst je opis dijaloga (aria-describedby)', async () => {
+    ConfirmDialog.otvori(dialog, CFG).subscribe();
+    await tick();
+    const panel = overlay.querySelector('mat-dialog-container')!;
+    expect(panel.getAttribute('role')).toBe('alertdialog');
+    const opis = document.getElementById(panel.getAttribute('aria-describedby') ?? '');
+    expect(opis?.textContent?.trim()).toBe('Briše se predavanje i 31 aktivnost.');
+    dialog.closeAll();
+  });
+
+  it('tekst kao niz: svaki pasus posebno, svi u opisu', async () => {
+    ConfirmDialog.otvori(dialog, { ...CFG, tekst: ['Prvi pasus.', 'Drugi pasus.'] }).subscribe();
+    await tick();
+    const panel = overlay.querySelector('mat-dialog-container')!;
+    const opis = document.getElementById(panel.getAttribute('aria-describedby') ?? '')!;
+    expect([...opis.querySelectorAll('p')].map(p => p.textContent)).toEqual(['Prvi pasus.', 'Drugi pasus.']);
+    dialog.closeAll();
+  });
 });

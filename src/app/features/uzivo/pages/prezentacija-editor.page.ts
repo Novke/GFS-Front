@@ -19,13 +19,14 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
 import { IzvodjenjeInfo, PokreniCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from '../ui/format';
-import { potvrdi } from '../ui/potvrda.dialog';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
@@ -189,7 +190,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
     }
   `,
 })
-export class PrezentacijaEditorPage {
+export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly store = inject(EditorStore);
   private readonly api = inject(PrezentacijeApi);
   private readonly izvodjenja = inject(IzvodjenjaApi);
@@ -245,11 +246,19 @@ export class PrezentacijaEditorPage {
     });
   }
 
-  /** Za `canDeactivate`: neispravni ili nesačuvani nacrti bi se izgubili (ispravne izmene store pošalje sam). */
-  mozeDaNapusti(): boolean {
-    const nesacuvani = this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id));
-    return !nesacuvani.length
-      || confirm(`Nesačuvanih slajdova: ${nesacuvani.length} (nisu potpuni, vidi upozorenja u listi). Napusti editor i odbaci ih?`);
+  /** Nepotpuni nacrti i neispravni slajdovi: store ih ne šalje, pa bi se napuštanjem izgubili (ispravne izmene šalje sam). */
+  private nesacuvaniSlajdovi(): number {
+    return this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id)).length;
+  }
+
+  /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
+  imaNesacuvanihIzmena(): boolean {
+    return this.nesacuvaniSlajdovi() > 0;
+  }
+
+  tekstNapustanja(): string {
+    return `Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
+      + 'Ako napustiš editor, odbacuju se.';
   }
 
   protected tastatura(e: KeyboardEvent): void {
@@ -302,8 +311,8 @@ export class PrezentacijaEditorPage {
   }
 
   protected obrisiSlajd(s: SlajdDetails): void {
-    potvrdi(this.dialog, {
-      naslov: `Obrisati slajd ${s.rb}?`, poruke: [`„${oznakaSlajda(s)}“ biće obrisan.`], potvrdi: 'Obriši', opasno: true,
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: `Obrisati slajd ${s.rb}?`, tekst: `„${oznakaSlajda(s)}“ biće obrisan.`, potvrdi: 'Obriši', destruktivno: true,
     }).subscribe(da => da && this.store.obrisi(s.id));
   }
 
@@ -352,7 +361,7 @@ export class PrezentacijaEditorPage {
     if (p.brojIzvodjenja > 0) {
       poruke.push(`Brišu se i sačuvana izvođenja sa rezultatima: ${p.brojIzvodjenja}.`);
     }
-    potvrdi(this.dialog, { naslov: 'Obrisati prezentaciju?', poruke, potvrdi: 'Obriši', opasno: true }).subscribe(da => {
+    ConfirmDialog.otvori(this.dialog, { naslov: 'Obrisati prezentaciju?', tekst: poruke, potvrdi: 'Obriši', destruktivno: true }).subscribe(da => {
       if (!da) return;
       this.radi.set(true);
       this.api.obrisi(p.id).subscribe({

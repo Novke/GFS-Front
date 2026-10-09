@@ -130,4 +130,12 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     expect(navigate).toHaveBeenCalledWith(['/prezentacije/2']);
     await pomeriSat(800);
   }));
+
+  it('napuštanje: pita (unsavedChangesGuard) samo dok postoji nepotpun slajd, tekst kaže koliko ih je', () => {
+    const editor = fixture.componentInstance;
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+    store.dodaj('INFO');
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+  });
 });
