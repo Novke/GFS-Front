@@ -32,15 +32,17 @@ export interface OznakaRunde {
  */
 export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] {
   const kljuc = (p: RezultatPitanja) => (p.slajdId ?? p.pitanje.slajdId) ?? `pitanje-${p.pitanje.pitanjeId}`;
-  const poSlajdu = new Map<number | string, RezultatPitanja[]>();
+  const ukupno = new Map<number | string, number>();
   for (const p of pitanja) {
-    const k = kljuc(p);
-    poSlajdu.set(k, [...(poSlajdu.get(k) ?? []), p]);
+    ukupno.set(kljuc(p), (ukupno.get(kljuc(p)) ?? 0) + 1);
   }
+  // `redniBroj` na serveru je broj runde unutar slajda, pa se runde broje po redosledu (pitanja su po redu otvaranja).
+  const vidjeno = new Map<number | string, number>();
   return pitanja.map(p => {
-    const grupa = poSlajdu.get(kljuc(p)) ?? [p];
-    const rb = grupa.filter(x => x.redniBroj <= p.redniBroj).length;
-    return { runda: rb, ukupno: grupa.length };
+    const k = kljuc(p);
+    const runda = (vidjeno.get(k) ?? 0) + 1;
+    vidjeno.set(k, runda);
+    return { runda, ukupno: ukupno.get(k) ?? 1 };
   });
 }
 
@@ -89,10 +91,10 @@ export function imaTakmicenje(r: Pick<IzvodjenjeRezultati, 'rangLista'>): boolea
           @if (r.izvodjenje.status === 'AKTIVNO') {
             <p class="uz-ed-napomena">Izvođenje je još u toku, rezultati se menjaju.</p>
           }
-          @for (k of kartice(); track k.p.rundaId) {
+          @for (k of kartice(); track k.p.rundaId; let i = $index) {
             <section class="uz-dan uz-pr-karta" [attr.aria-labelledby]="'pitanje-' + k.p.rundaId">
               <header class="uz-pr-karta-zaglavlje">
-                <h2 [id]="'pitanje-' + k.p.rundaId">Pitanje {{ k.p.redniBroj }}</h2>
+                <h2 [id]="'pitanje-' + k.p.rundaId">Pitanje {{ i + 1 }}</h2>
                 @if (k.p.rbSlajda) {
                   <span class="uz-ed-napomena">slajd {{ k.p.rbSlajda }}</span>
                 }

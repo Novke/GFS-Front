@@ -81,6 +81,28 @@ describe('IzvodjenjaListaPage', () => {
     expect(poruka).toHaveBeenCalledWith('Izvođenje je obrisano.', undefined, expect.anything());
   });
 
+  it('otkazana potvrda ne šalje DELETE', () => {
+    const fixture = otvori([izv(2)]);
+    potvrda.mockReturnValue({ afterClosed: () => of(false) } as unknown as MatDialogRef<unknown>);
+    const el = fixture.nativeElement as HTMLElement;
+    (redovi(el)[0].querySelector('button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(potvrda).toHaveBeenCalledTimes(1);
+    const podaci = (potvrda.mock.calls[0][1] as { data: { naslov: string; poruke: string[]; potvrdi: string; opasno: boolean } }).data;
+    expect(podaci.opasno).toBe(true);
+    expect(podaci.potvrdi).toBe('Obriši');
+    expect(podaci.naslov).toBe('Obrisati izvođenje?');
+    expect(podaci.poruke[0]).toContain('trajno obrisano');
+    expect(redovi(el).length).toBe(1);
+    expect(poruka).not.toHaveBeenCalled();
+    http.expectNone('api/izvodjenja/2');
+  });
+
+  it('tabela ima skriven naslov', () => {
+    const el = otvori([izv(1)]).nativeElement as HTMLElement;
+    expect(el.querySelector('table caption')?.textContent).toBe('Izvođenja prezentacije');
+  });
+
   it('greška pri brisanju ostavlja red i javlja razlog', () => {
     const fixture = otvori([izv(2)]);
     const el = fixture.nativeElement as HTMLElement;

@@ -14,6 +14,7 @@ function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 
   };
 }
 
+/** `redniBroj` je kao na serveru: broj runde unutar slajda (1 za prvo otvaranje, 2 za ponavljanje). */
 function runda(rundaId: number, redniBroj: number, slajdId: number | null, izmene: Partial<RezultatPitanja> = {}): RezultatPitanja {
   return {
     rundaId, slajdId, rbSlajda: slajdId, redniBroj, pitanje: snimak(50 + (slajdId ?? 0), slajdId),
@@ -48,18 +49,18 @@ describe('procenatTacnihTekst', () => {
 
 describe('oznakeRundi', () => {
   it('slajd sa jednom rundom nema oznaku', () => {
-    expect(oznakeRundi([runda(1, 1, 10), runda(2, 2, 11)])).toEqual([{ runda: 1, ukupno: 1 }, { runda: 1, ukupno: 1 }]);
+    expect(oznakeRundi([runda(1, 1, 10), runda(2, 1, 11)])).toEqual([{ runda: 1, ukupno: 1 }, { runda: 1, ukupno: 1 }]);
   });
 
   it('ponovljeno pitanje: 1. i 2. runda, drugi slajd ostaje sam', () => {
-    expect(oznakeRundi([runda(1, 1, 10), runda(2, 2, 11), runda(3, 3, 10)]))
+    expect(oznakeRundi([runda(1, 1, 10), runda(2, 1, 11), runda(3, 2, 10)]))
       .toEqual([{ runda: 1, ukupno: 2 }, { runda: 1, ukupno: 1 }, { runda: 2, ukupno: 2 }]);
   });
 
   it('obrisan slajd: runde se spajaju po pitanju iz snimka', () => {
     const a = runda(1, 1, null, { pitanje: snimak(77, null) });
     const b = runda(2, 2, null, { pitanje: snimak(77, null) });
-    const c = runda(3, 3, null, { pitanje: snimak(78, null) });
+    const c = runda(3, 1, null, { pitanje: snimak(78, null) });
     expect(oznakeRundi([a, b, c])).toEqual([{ runda: 1, ukupno: 2 }, { runda: 2, ukupno: 2 }, { runda: 1, ukupno: 1 }]);
   });
 
@@ -98,7 +99,7 @@ describe('IzvodjenjePregledPage', () => {
   it('zaglavlje, karte pitanja, oznake rundi i rang-lista', () => {
     const el = otvori({
       izvodjenje: INFO,
-      pitanja: [runda(1, 1, 10), runda(2, 2, 11, { procenatTacnih: null, brojOdgovora: 2 }), runda(3, 3, 10, { procenatTacnih: 100 })],
+      pitanja: [runda(1, 1, 10), runda(2, 1, 11, { procenatTacnih: null, brojOdgovora: 2 }), runda(3, 2, 10, { procenatTacnih: 100 })],
       rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 940 }, { mesto: 2, ucesnikId: 2, ime: 'Bojan', poeni: 700 }],
     });
     expect(el.querySelector('h1')?.textContent).toContain('Statika');
@@ -109,6 +110,8 @@ describe('IzvodjenjePregledPage', () => {
 
     const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
     expect(karte.length).toBe(4);
+    const naslovi = karte.map(k => k.querySelector('h2')?.textContent);
+    expect(naslovi).toEqual(['Pitanje 1', 'Pitanje 2', 'Pitanje 3', 'Rang-lista']);
     expect(karte[0].textContent).toContain('1. runda');
     expect(karte[0].textContent).toContain('Odgovora 4 · tačnih 75 %');
     expect(karte[0].textContent).toContain('Za poene važi samo poslednja runda.');

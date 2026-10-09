@@ -40,6 +40,7 @@ import { potvrdi } from '../ui/potvrda.dialog';
         @if (l.length) {
           <div class="uz-ed-tabela-okvir">
             <table class="uz-ed-tabela">
+              <caption class="uz-sr">Izvođenja prezentacije</caption>
               <thead>
                 <tr>
                   <th scope="col">Početak</th>
