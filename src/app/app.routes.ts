@@ -42,7 +42,7 @@ const nastavnickeRute: Routes = [
     pathMatch: 'full',
     title: 'Početna',
     data: stalne(m('Početna')),
-    loadComponent: () => import('./home/home.component').then(x => x.HomeComponent),
+    loadComponent: () => import('./features/pocetna/pages/pocetna').then(x => x.Pocetna),
   },
 
   // Predavanja (Task 18: lista i novo; Task 19: detalj i projektor)

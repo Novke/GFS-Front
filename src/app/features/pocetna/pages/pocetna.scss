@@ -1,0 +1,42 @@
+:host { display: block; }
+
+.u-toku {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
+  border-radius: var(--radius);
+  background: var(--ok-soft);
+  color: var(--ink);
+  font-size: 14px;
+
+  b { color: var(--ink); }
+}
+
+.u-toku-tekst { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+
+.nastavi {
+  --mat-button-filled-container-color: var(--ok);
+  --mat-button-filled-label-text-color: var(--ok-ink);
+}
+
+.tabla {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.kolona {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+}
+
+@media (max-width: 1023.98px) {
+  .tabla { grid-template-columns: minmax(0, 1fr); }
+}

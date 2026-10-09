@@ -1,10 +1,12 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/material/sidenav';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
+import { GlobalnaPretraga } from '../search/globalna-pretraga';
 import { DashboardCountsStore } from '../state/dashboard-counts.store';
 import { ReferenceStore } from '../state/reference.store';
 import { Okruzenje } from './okruzenje';
@@ -29,6 +31,7 @@ export const SIROKO = '(min-width: 1024px)';
   styleUrl: './shell.scss',
 })
 export class Shell {
+  private readonly dialog = inject(MatDialog);
   private readonly brojaciStore = inject(DashboardCountsStore);
   protected readonly reference = inject(ReferenceStore);
   protected readonly okruzenje = inject(Okruzenje);
@@ -69,8 +72,9 @@ export class Shell {
     }
   }
 
+  /** Dugme, Ctrl+K i `/` (TopBar): globalna pretraga; ako je već otvorena, ostaje ta. */
   protected otvoriPretragu(): void {
-    // Globalna pretraga (GlobalnaPretraga) dolazi u Task 25; do tada prečice i dugme ne rade ništa.
+    GlobalnaPretraga.otvori(this.dialog);
   }
 
   /** Skip-link: `href="#sadrzaj"` bi uz `<base href>` otvorio početnu stranu, zato fokus ide ručno. */

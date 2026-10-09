@@ -10,8 +10,8 @@ import { NotFound } from '../core/layout/not-found';
 import { ProjectorLayout } from '../core/layout/projector-layout';
 import { PublicLayout } from '../core/layout/public-layout';
 import { Shell } from '../core/layout/shell';
-import { HomeComponent } from '../home/home.component';
 import { OnboardingQr } from './onboarding/pages/onboarding-qr';
+import { Pocetna } from './pocetna/pages/pocetna';
 import { AppRoutes } from './privremeno/app-putanje';
 
 /** Lanac komponenti od korena do lista (bez outleta: komponente se ne prave, samo se ruta prepoznaje). */
@@ -93,7 +93,7 @@ describe('preusmerenja starih ruta', () => {
 
   it('/ je početna u ljusci', async () => {
     expect(await idi('/')).toBe('/');
-    expect(komponente(router)).toEqual([Shell, HomeComponent]);
+    expect(komponente(router)).toEqual([Shell, Pocetna]);
   });
 
   it('nepoznata putanja -> 404 u ljusci', async () => {

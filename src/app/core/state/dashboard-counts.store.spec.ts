@@ -6,6 +6,8 @@ import { NavigationEnd, provideRouter, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { DomaciListItem } from '../../features/domaci/data-access/domaci.models';
+import type { TestListItem } from '../../features/testovi/data-access/testovi.models';
 import { LOCAL_ERRORS } from '../api/api-error';
 import { KontrolnaTablaInfo } from '../api/pregled.api';
 import { DashboardCountsStore, PERIOD_MS, RAZMAK_NAVIGACIJA_MS } from './dashboard-counts.store';
@@ -15,10 +17,13 @@ const URL = 'api/pregled/kontrolna-tabla';
 /** Liste u `ceka` backend ograničava na 10 stavki; brojači dolaze iz ukupnih vrednosti `broj*`. */
 function tabla(testovi: number, domaci: number, prijave: number[]): KontrolnaTablaInfo {
   return {
+    sledece: null,
+    uToku: [],
+    nedelja: [],
     ceka: {
-      testovi: Array.from({ length: Math.min(testovi, 10) }, (_, i) => ({ id: i })),
-      domaci: Array.from({ length: Math.min(domaci, 10) }, (_, i) => ({ id: i })),
-      prijave: prijave.slice(0, 10).map(brojNaCekanju => ({ brojNaCekanju })),
+      testovi: Array.from({ length: Math.min(testovi, 10) }, (_, i) => ({ id: i }) as TestListItem),
+      domaci: Array.from({ length: Math.min(domaci, 10) }, (_, i) => ({ id: i }) as DomaciListItem),
+      prijave: prijave.slice(0, 10).map((brojNaCekanju, i) => ({ sesijaId: i + 1, grupa: null, brojNaCekanju, istice: null })),
       nezavrsena: [],
       brojTestova: testovi,
       brojDomacih: domaci,

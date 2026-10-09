@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ChangeDetectionStrategy, Component, inject, provideAppInitializer, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By, DomSanitizer } from '@angular/platform-browser';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
 import { provideRouter, ROUTES, withComponentInputBinding } from '@angular/router';
@@ -157,6 +158,27 @@ describe('Shell', () => {
     for (const url of zahtevi) {
       expect(url === 'assets/env.json' || url.startsWith('api/public/upis/')).toBe(true);
     }
+  });
+
+  it('Ctrl+K otvara globalnu pretragu (jednu), a / u njenom polju je obična kosa crta', async () => {
+    podesi(1280);
+    const harness = await RouterTestingHarness.create('/nepostoji');
+    const precica = (key: string, cilj: EventTarget, ctrlKey = false) => {
+      const e = new KeyboardEvent('keydown', { key, ctrlKey, bubbles: true, cancelable: true });
+      cilj.dispatchEvent(e);
+      return e;
+    };
+    expect(precica('k', document.body, true).defaultPrevented).toBe(true);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    const polje = document.querySelector<HTMLInputElement>('app-globalna-pretraga input')!;
+    expect(polje).not.toBeNull();
+
+    expect(precica('/', polje).defaultPrevented).toBe(false);
+    precica('k', polje, true); // već otvorena: ne pravi se drugi dijalog
+    harness.fixture.detectChanges();
+    expect(document.querySelectorAll('app-globalna-pretraga').length).toBe(1);
+    TestBed.inject(MatDialog).closeAll();
   });
 
   it('404 u ljusci nudi povratak na početnu, a javni 404 pod /upis ne', async () => {
