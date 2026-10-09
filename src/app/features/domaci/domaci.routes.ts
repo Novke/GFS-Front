@@ -1,10 +1,8 @@
 import { Route } from '@angular/router';
 
-import { Mrvica } from '../../core/layout/breadcrumbs';
+import { mrvica as m } from '../../core/layout/mrvica';
 import { putanjaSaId } from '../../core/route-matchers';
 import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
-
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
 
 /**
  * Rute domaćih (deca rute `domaci` u `app.routes.ts`, koja daje naslov i mrvice "Nastava > Domaći"): lista, "Nov domaći"

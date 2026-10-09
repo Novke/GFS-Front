@@ -1,8 +1,6 @@
 import { Route } from '@angular/router';
 
-import { Mrvica } from '../../core/layout/breadcrumbs';
-
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
+import { mrvica as m } from '../../core/layout/mrvica';
 
 /**
  * Rute predavanja koje su već na novim ekranima (deca rute `predavanja` u `app.routes.ts`): lista i "Novo".

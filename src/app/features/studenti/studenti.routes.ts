@@ -1,9 +1,7 @@
 import { Params, Route } from '@angular/router';
 
-import { Mrvica } from '../../core/layout/breadcrumbs';
+import { mrvica as m } from '../../core/layout/mrvica';
 import { putanjaSaId } from '../../core/route-matchers';
-
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
 
 /**
  * Rute studenata (deca rute `studenti` u `app.routes.ts`, koja daje naslov i mrvice "Ljudi > Studenti"): lista, profil sa

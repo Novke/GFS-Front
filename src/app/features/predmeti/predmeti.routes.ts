@@ -1,10 +1,8 @@
 import { Route } from '@angular/router';
 
-import { Mrvica } from '../../core/layout/breadcrumbs';
+import { mrvica as m } from '../../core/layout/mrvica';
 import { putanjaSaId } from '../../core/route-matchers';
 import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
-
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
 
 /** Tabovi huba predmeta (child rute); prvi je podrazumevani (`/predmeti/:id` -> `pregled`). */
 export const TABOVI_PREDMETA = [

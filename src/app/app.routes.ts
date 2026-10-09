@@ -1,6 +1,7 @@
 import { Route, Routes } from '@angular/router';
 
 import { Mrvica, MrviceFn } from './core/layout/breadcrumbs';
+import { mrvica as m } from './core/layout/mrvica';
 import { NotFound } from './core/layout/not-found';
 import { ProjectorLayout } from './core/layout/projector-layout';
 import { PublicLayout } from './core/layout/public-layout';
@@ -22,7 +23,6 @@ import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
  * (`BreadcrumbService.postavi`). Id u putanji mora biti broj (`putanjaSaId`), inače 404.
  */
 
-const m = (label: string, url?: string): Mrvica => (url ? { label, url } : { label });
 const mrvice = (fn: MrviceFn): Route['data'] => ({ mrvice: fn });
 const stalne = (...lista: Mrvica[]): Route['data'] => mrvice(() => lista);
 
