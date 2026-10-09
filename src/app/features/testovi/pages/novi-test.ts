@@ -293,6 +293,8 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
         tip.enable();
       }
     });
+    // prag se proverava prema max poena: nov max briše staru grešku praga (`iznadMax`, `server`) i proverava ponovo
+    this.forma.controls.maxPoena.valueChanges.subscribe(() => this.forma.controls.pragProlaza.updateValueAndValidity());
     this.forma.controls.tip.valueChanges.subscribe(t => {
       if (t === NOV_TIP) {
         this.forma.controls.novTip.enable();

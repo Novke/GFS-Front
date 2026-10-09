@@ -55,6 +55,8 @@ export function parsirajPrag(tekst: string, max: number | null | undefined): { p
   `,
 })
 export class PragProlaza {
+  /** Test čiji je prag (komponenta se ponovo koristi pri prelazu na drugi test: tada se polje vraća na stanje servera). */
+  readonly kljuc = input<number | null>(null);
   readonly prag = input<number | null>(null);
   readonly max = input<number | null>(null);
   /** Čuva prag; vraća `null` kad je sačuvano, inače razlog greške. */
@@ -66,6 +68,9 @@ export class PragProlaza {
   private readonly menja = signal(false);
   private readonly sacuvan = computed(() => (this.prag() === null ? '' : String(this.prag())));
 
+  /** Tekst koji se upravo čuva (`null` = ništa); blur i Enter za vreme čuvanja se ne šalju ponovo. */
+  private uToku: string | null = null;
+
   constructor() {
     // vrednost sa servera prepisuje polje samo dok korisnik ne kuca
     effect(() => {
@@ -73,6 +78,17 @@ export class PragProlaza {
       if (!untracked(this.menja)) {
         this.tekst.set(v);
       }
+    });
+    // drugi test (ista komponenta): započeta izmena i greška prethodnog testa se odbacuju
+    effect(() => {
+      this.kljuc();
+      untracked(() => {
+        this.menja.set(false);
+        this.greska.set(null);
+        this.stanje.set(null);
+        this.uToku = null;
+        this.tekst.set(this.sacuvan());
+      });
     });
   }
 
@@ -93,7 +109,11 @@ export class PragProlaza {
   }
 
   protected async sacuvaj(): Promise<void> {
-    const r = parsirajPrag(this.tekst(), this.max());
+    if (this.uToku !== null) {
+      return; // čuvanje je u toku; posle njega se novi tekst čuva na sledeći blur ili Enter
+    }
+    const poslato = this.tekst();
+    const r = parsirajPrag(poslato, this.max());
     if ('greska' in r) {
       this.greska.set(r.greska);
       return;
@@ -102,11 +122,18 @@ export class PragProlaza {
       this.menja.set(false);
       return;
     }
+    const kljuc = this.kljuc();
+    this.uToku = poslato;
     this.stanje.set('cuva');
     const greska = await this.cuvaj()(r.prag);
+    if (this.kljuc() !== kljuc || this.uToku !== poslato) {
+      return; // u međuvremenu drugi test: odgovor se odnosi na prethodni
+    }
+    this.uToku = null;
     this.greska.set(greska);
     this.stanje.set(greska ? 'greska' : 'sacuvano');
-    if (!greska) {
+    if (!greska && this.tekst() === poslato) {
+      // korisnik nije kucao dok je čuvanje trajalo: polje prikazuje stanje servera
       this.menja.set(false);
       this.tekst.set(this.sacuvan());
     }

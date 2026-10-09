@@ -123,7 +123,7 @@ export function varijantePrikaz(grupe: readonly string[] | null | undefined): st
         <span class="oznaka ton-neutral mono" title="Varijante">var. {{ varijante() }}</span>
       </div>
       @if (cuvajPrag(); as cuvaj) {
-        <app-prag-prolaza [prag]="test().pragProlaza ?? null" [max]="test().maxPoena ?? null" [cuvaj]="cuvaj" />
+        <app-prag-prolaza [kljuc]="test().id" [prag]="test().pragProlaza ?? null" [max]="test().maxPoena ?? null" [cuvaj]="cuvaj" />
       }
     </div>
 

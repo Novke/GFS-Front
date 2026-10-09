@@ -67,7 +67,7 @@ describe('TestoviLista', () => {
     // zaglavlje koje sortira po max poena se tako i zove (prosek nije sortabilan)
     expect(el.querySelector('th[aria-sort="ascending"] [data-sort="maxPoena"]')?.textContent).toContain('Max');
     expect(redovi[2].querySelectorAll('td')[7].textContent?.trim()).toBe('—'); // prolaz bez praga
-    expect(redovi[2].querySelector('.c-meta')?.textContent).not.toContain('prolaz');
+    expect(redovi[2].querySelector('.c-meta')?.textContent).toContain('prolaz —'); // kao u ostalim prikazima
     expect(el.textContent).toContain('3 testa');
   });
 

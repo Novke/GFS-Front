@@ -128,4 +128,19 @@ describe('NoviTest', () => {
     expect(el().querySelector('[role=alert]')).toBeNull(); // ne u traci iznad forme
     expect(el().querySelector('mat-error')?.textContent).toContain('Prag prolaza mora biti između 0 i maksimalnog broja poena.');
   });
+
+  it('greška praga iznad max nestaje kad se max poveća', async () => {
+    await otvori();
+    forma().controls.tip.setValue(2);
+    forma().controls.maxPoena.setValue(20);
+    forma().controls.pragProlaza.setValue(25);
+    await posalji();
+    http.expectNone('api/test');
+    expect(el().querySelector('mat-error')?.textContent).toContain('Prag prolaza mora biti između 0');
+    forma().controls.maxPoena.setValue(30);
+    harness.detectChanges();
+    expect(el().querySelector('mat-error')).toBeNull();
+    await posalji();
+    expect(http.expectOne('api/test').request.body).toMatchObject({ maxPoena: 30, pragProlaza: 25 });
+  });
 });

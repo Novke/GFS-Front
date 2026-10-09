@@ -9,6 +9,7 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StubacHistograma } from '../../../shared/ui/histogram';
+import { CuvanjaTestova } from './cuvanja-testova';
 import { TestoviApi } from './testovi.api';
 import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from './testovi.models';
 
@@ -313,8 +314,13 @@ class Sesija {
   readonly timeri = new Map<number, ReturnType<typeof setTimeout>>();
   /** Poslednje unete vrednosti (ono što treba poslati). */
   readonly lokalno = new Map<number, VrednostiReda>();
-  /** Poslednje vrednosti koje je server potvrdio. */
+  /**
+   * Poslednje vrednosti koje je server potvrdio; nema unosa = nepoznato (npr. posle greške čuvanja: server je možda
+   * ipak upisao), pa sledeći posao reda uvek šalje.
+   */
   readonly potvrdjeno = new Map<number, Potvrdjeno>();
+  /** Raste sa svakom promenom potvrđenog stanja reda (odgovor upisa, greška); zastareo GET usaglašavanja se odbacuje. */
+  readonly potvrde = new Map<number, number>();
   /** Raste sa svakom izmenom reda; odgovor ili greška važe za prikaz samo ako je verzija ista kao pri slanju. */
   readonly verzije = new Map<number, number>();
   readonly imena = new Map<number, RedIspitanika>();
@@ -326,6 +332,8 @@ class Sesija {
   readonly mirovanje = new Subject<void>();
   /** Test se briše: izmene se ne šalju. */
   obrisan = false;
+  /** Sesija je zatvorena (ekran napušten ili prelaz na drugi test): odjavljuje se iz registra kad isprazni red. */
+  zatvorena = false;
 
   constructor(
     readonly tId: number,
@@ -335,6 +343,20 @@ class Sesija {
 
   verzija(sId: number): number {
     return this.verzije.get(sId) ?? 0;
+  }
+
+  potvrda(sId: number): number {
+    return this.potvrde.get(sId) ?? 0;
+  }
+
+  /** Novo potvrđeno stanje reda (`undefined` = nepoznato). */
+  potvrdi(sId: number, p: Potvrdjeno | undefined): void {
+    if (p) {
+      this.potvrdjeno.set(sId, p);
+    } else {
+      this.potvrdjeno.delete(sId);
+    }
+    this.potvrde.set(sId, this.potvrda(sId) + 1);
   }
 }
 
@@ -367,7 +389,8 @@ const PRAZNO_STANJE: TestState = { test: null, redovi: [], vrednosti: {}, status
  * ispitanika", grupa `test-<id>-cuvanje` zamenjuje prethodnu). Potvrđeno stanje se tiho usaglašava ponovnim čitanjem.
  *
  * Kad `ucitaj` pređe na drugi test, sesija prethodnog se **zatvara, ne otkazuje** (izmene na čekanju se odmah šalju, red se
- * prazni), a novi test se učitava tek kad se stara sesija isprazni. Isto pri napuštanju ekrana. `zavrsi` šalje izmene i čeka
+ * prazni), a novi test se učitava tek kad se stara sesija isprazni i kad nijedna sesija tog testa u aplikaciji (registar
+ * `CuvanjaTestova`) nema posao na putu. Isto pri napuštanju ekrana. `zavrsi` šalje izmene i čeka
  * pražnjenje pre PATCH-a; `obrisi` otkazuje izmene na čekanju tog testa.
  */
 export const TestStore = signalStore(
@@ -375,6 +398,7 @@ export const TestStore = signalStore(
   withRequestStatus(),
   withProps(() => ({
     _api: inject(TestoviApi),
+    _registar: inject(CuvanjaTestova),
     _obavestenja: inject(NotificationStore),
     _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
   })),
@@ -451,13 +475,17 @@ export const TestStore = signalStore(
       store._obavestenja.greska(tekst, { grupa: `test-${s.tId}-cuvanje` });
     }
 
-    /** Posle greške: tiho ponovo čita potvrđeno stanje reda (izmena je možda upisana a odgovor izgubljen). Prikaz ostaje. */
+    /**
+     * Posle greške: tiho ponovo čita potvrđeno stanje reda (izmena je možda upisana a odgovor izgubljen). Prikaz ostaje.
+     * Odgovor važi samo ako za red u međuvremenu nije stigla novija potvrda (upis koji je prošao posle slanja GET-a).
+     */
     function osveziPotvrdjeno(s: Sesija, sId: number): void {
+      const potvrda = s.potvrda(sId);
       store._api.get(s.tId, { tiho: true }).subscribe({
         next: det => {
           const p = det.polaganja?.find(x => x.student?.id === sId);
-          if (p) {
-            s.potvrdjeno.set(sId, potvrdjenoIz(p));
+          if (p && s.potvrda(sId) === potvrda) {
+            s.potvrdi(sId, potvrdjenoIz(p));
           }
         },
         error: () => undefined,
@@ -485,13 +513,15 @@ export const TestStore = signalStore(
         .pipe(
           tap(det => {
             const p = det.polaganja?.find(x => x.student?.id === sId);
-            s.potvrdjeno.set(sId, p ? potvrdjenoIz(p) : { grupa, poeni, prepisivao: v.prepisivao, napomene: napomene ?? '' });
+            s.potvrdi(sId, p ? potvrdjenoIz(p) : { grupa, poeni, prepisivao: v.prepisivao, napomene: napomene ?? '' });
             if (s.verzija(sId) === trenutna && !s.timeri.has(sId)) {
               s.greske.delete(sId);
               postaviStatus(s, sId, 'sacuvano');
             }
           }),
           catchError((e: unknown) => {
+            // server je možda ipak upisao (izgubljen odgovor): potvrđeno je nepoznato dok ga GET ne usaglasi
+            s.potvrdi(sId, undefined);
             osveziPotvrdjeno(s, sId);
             if (s.verzija(sId) === trenutna) {
               const razlog = porukaGreske(e);
@@ -508,7 +538,7 @@ export const TestStore = signalStore(
       return store._api.dodajPolaganje(s.tId, red.id, { tiho: true }).pipe(
         tap(det => {
           const p = det.polaganja?.find(x => x.student?.id === red.id);
-          s.potvrdjeno.set(red.id, potvrdjenoIz(p));
+          s.potvrdi(red.id, potvrdjenoIz(p));
           if (tekuca(s)) {
             patchState(store, st => ({ zauzet: { ...st.zauzet, [red.id]: undefined }, statusi: { ...st.statusi, [red.id]: null } }));
           }
@@ -535,7 +565,7 @@ export const TestStore = signalStore(
         tap(() => {
           s.imena.delete(sId);
           s.lokalno.delete(sId);
-          s.potvrdjeno.delete(sId);
+          s.potvrdi(sId, undefined);
           s.greske.delete(sId);
           if (!tekuca(s)) {
             return;
@@ -577,6 +607,9 @@ export const TestStore = signalStore(
         finalize(() => {
           s.uToku--;
           if (s.uToku === 0) {
+            if (s.zatvorena) {
+              store._registar.odjavi(s);
+            }
             s.mirovanje.next();
           }
         }),
@@ -587,6 +620,7 @@ export const TestStore = signalStore(
       const s = new Sesija(det.id, det.maxPoena ?? null, VARIJANTE.filter(v => (det.grupe ?? []).includes(v)));
       // pretplata se namerno ne otkazuje: posle zatvaranja sesije red se završava tek kad izvrši sve poslove
       s.red.pipe(concatMap(p => izvrsi(s, p))).subscribe();
+      store._registar.prijavi(s);
       return s;
     }
 
@@ -617,7 +651,11 @@ export const TestStore = signalStore(
     /** Zatvara sesiju: izmene na čekanju se šalju, poslovi u toku i u redu se završavaju (ne otkazuju). */
     function zatvori(s: Sesija): void {
       posaljiCekajuce(s);
+      s.zatvorena = true;
       s.red.complete();
+      if (s.uToku === 0) {
+        store._registar.odjavi(s);
+      }
     }
 
     /** Ispravni redovi koji se razlikuju od potvrđenih idu ponovo na čuvanje (novi max, neuspelo brisanje). */
@@ -683,8 +721,9 @@ export const TestStore = signalStore(
       },
 
       /**
-       * Učitava test. Sesija prethodnog testa se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni,
-       * pa ni ponovno učitavanje istog testa ne može da pročita stanje pre sopstvenih izmena.
+       * Učitava test. Sesija prethodnog testa se zatvara (izmene na čekanju se šalju) i novi se učitava kad se ona isprazni
+       * i kad se isprazne sve druge sesije istog testa ({@link CuvanjaTestova}: napušten ekran, drugi store), pa učitano
+       * stanje ne može da prethodi izmenama koje su još na putu.
        */
       ucitaj(id: number): void {
         store._r.ucitavanje?.unsubscribe();
@@ -694,8 +733,12 @@ export const TestStore = signalStore(
           zatvori(stara);
         }
         patchState(store, PRAZNO_STANJE, setLoading());
+        // prvo stara sesija ovog store-a (i kad je drugi test), pa sve sesije testa `id` u aplikaciji (registar)
         store._r.ucitavanje = (stara ? sacekaj(stara) : of(null))
-          .pipe(switchMap(() => store._api.get(id, { tiho: true })))
+          .pipe(
+            switchMap(() => store._registar.sacekaj(id)),
+            switchMap(() => store._api.get(id, { tiho: true })),
+          )
           .subscribe({
             next: det => postaviPodatke(det),
             error: (e: unknown) => patchState(store, setError(porukaGreske(e))),

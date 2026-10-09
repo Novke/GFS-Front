@@ -298,6 +298,39 @@ describe('TestStore', () => {
     expect(store.vrednosti()[1].poeni).toBe('10');
   });
 
+  it('izgubljen odgovor (server ipak upisao 20), pa vraćeno na 10: sledeći posao ipak šalje 10', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 10, 'A')]);
+    store.izmeni(1, { poeni: '20' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    const prvi = http.expectOne('api/test/5/polaganje');
+    store.izmeni(1, { poeni: '10' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS); // posao "10" čeka u redu iza zahteva u toku
+    prvi.flush({ reason: 'x' }, { status: 504, statusText: 'Gateway Timeout' }); // server je upisao 20, odgovor izgubljen
+    const drugi = http.expectOne('api/test/5/polaganje');
+    expect(drugi.request.body.ostvareniPoeni).toBe(10);
+    drugi.flush(odgovor([polaganje(1, 'Ana', 'GD2', 10, 'A')]));
+    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 10, 'A')])); // usaglašavanje posle greške
+    expect(store.statusi()[1]).toBe('sacuvano');
+  });
+
+  it('zastareo GET usaglašavanja ne pregazi noviju potvrdu (vraćanje na 10 se ipak šalje)', async () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', 10, 'A')]);
+    store.izmeni(1, { poeni: '20' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush({ reason: 'Odbijeno' }, { status: 400, statusText: 'Bad Request' });
+    const zastareo = http.expectOne(r => r.method === 'GET' && r.url === 'api/test/5'); // usaglašavanje, odgovor kasni
+    store.izmeni(1, { poeni: '30' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    http.expectOne('api/test/5/polaganje').flush(odgovor([polaganje(1, 'Ana', 'GD2', 30, 'A')]));
+    zastareo.flush(test([polaganje(1, 'Ana', 'GD2', 10, 'A')])); // stanje pre upisa 30
+    store.izmeni(1, { poeni: '10' });
+    vi.advanceTimersByTime(DEBOUNCE_REDA_MS);
+    const vracanje = http.expectOne('api/test/5/polaganje');
+    expect(vracanje.request.body.ostvareniPoeni).toBe(10);
+    vracanje.flush(odgovor([polaganje(1, 'Ana', 'GD2', 10, 'A')]));
+    expect(store.statusi()[1]).toBe('sacuvano');
+  });
+
   it('veći max u zaglavlju šalje red koji je do tada bio neispravan', () => {
     ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
     store.izmeni(1, { grupa: 'A', poeni: '45' });
@@ -366,6 +399,33 @@ describe('TestStore', () => {
     expect(store.test()?.id).toBe(6);
     expect(store.redovi().map(r => r.id)).toEqual([3]);
     expect(store.statusi()[1]).toBeUndefined();
+  });
+
+  it('napušten ekran pa ponovo otvoren isti test (novi store): GET čeka upis prethodnog ekrana', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    injector.destroy(); // ekran napušten: izmena se šalje
+    const upis = http.expectOne('api/test/5/polaganje');
+    const drugi = createEnvironmentInjector([TestStore], TestBed.inject(EnvironmentInjector)).get(TestStore);
+    drugi.ucitaj(5);
+    http.expectNone('api/test/5'); // registar: sesija napuštenog ekrana još upisuje
+    upis.flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    expect(drugi.vrednosti()[1].poeni).toBe('12');
+  });
+
+  it('5 -> 6 -> 5: povratak na test 5 čeka upis zatvorene sesije testa 5', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
+    store.izmeni(1, { grupa: 'A', poeni: '12' });
+    store.ucitaj(6);
+    const upis = http.expectOne('api/test/5/polaganje');
+    store.ucitaj(5); // pre nego što se 6 uopšte učitao
+    http.expectNone('api/test/6');
+    http.expectNone('api/test/5');
+    upis.flush(odgovor([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    http.expectOne('api/test/5').flush(test([polaganje(1, 'Ana', 'GD2', 12, 'A')]));
+    expect(store.test()?.id).toBe(5);
+    expect(store.vrednosti()[1].poeni).toBe('12');
   });
 
   it('posle napuštanja ekrana zakazano čuvanje se šalje odmah (poeni se ne gube)', () => {

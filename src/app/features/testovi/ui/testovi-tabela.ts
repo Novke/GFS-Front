@@ -156,9 +156,7 @@ export class TestoviTabela {
     if (t.prosek !== null && t.prosek !== undefined) {
       delovi.push(`prosek ${prosekPrikaz(t)}`);
     }
-    if (t.procenatProlaznosti !== null && t.procenatProlaznosti !== undefined) {
-      delovi.push(`prolaz ${prolazPrikaz(t)}`);
-    }
+    delovi.push(`prolaz ${prolazPrikaz(t)}`); // bez praga ili bez poena: `prolaz —`, kao u ostalim prikazima
     return delovi.join(' · ');
   }
 }
