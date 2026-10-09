@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import { PredavanjeListItem } from '../data-access/predavanja.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 import { PredavanjaTabela, prisutniPrikaz, ZakljucanaKolona } from './predavanja-tabela';
 
 const gd = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 38 };

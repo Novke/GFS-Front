@@ -14,7 +14,7 @@ import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { formatBroja, PORUKA_PRAGA } from '../data-access/test.store';
-import { TestDetails, UpdateTestCmd, VARIJANTE } from '../data-access/testovi.models';
+import { TestDetails, UpdateTestCmd, VARIJANTE } from '../../../core/api/testovi.models';
 import { PragProlaza } from './prag-prolaza';
 
 const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;

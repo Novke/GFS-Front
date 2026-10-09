@@ -4,7 +4,11 @@ const { defineConfig } = require("eslint/config");
 const tseslint = require("typescript-eslint");
 const angular = require("angular-eslint");
 const javnaRutaUvozi = require("./eslint-rules/javna-ruta-uvozi");
+const graniceFeaturea = require("./eslint-rules/granice-featurea");
 const { JAVNI_FEATURE, JAVNO_DOZVOLJENO } = require("./eslint-rules/javna-ruta-konfig");
+
+/** Sopstvena pravila (jedan objekat plugina: flat config ne dozvoljava dva razlicita plugina istog imena). */
+const gfs = { rules: { "javna-ruta-uvozi": javnaRutaUvozi, "granice-featurea": graniceFeaturea } };
 
 module.exports = defineConfig([
   {
@@ -43,10 +47,16 @@ module.exports = defineConfig([
     ],
     rules: {},
   },
+  // Granice: feature ne uvozi tudji data-access, core/ i shared/ ne uvoze features/ (eslint-rules/granice-featurea.js).
+  {
+    files: ["src/app/**/*.ts"],
+    plugins: { gfs },
+    rules: { "gfs/granice-featurea": "error" },
+  },
   // Javne rute: zabrana uvoza svega sto zove zakljucan /api/* (pravilo i obrazlozenje: eslint-rules/javna-ruta-uvozi.js).
   ...JAVNI_FEATURE.map((feature) => ({
     files: [`src/app/${feature}/**/*.ts`],
-    plugins: { gfs: { rules: { "javna-ruta-uvozi": javnaRutaUvozi } } },
+    plugins: { gfs },
     rules: { "gfs/javna-ruta-uvozi": ["error", { feature, dozvoljeno: JAVNO_DOZVOLJENO }] },
   })),
   // Stari ekrani, zamenjuju se u F2. Pravila ostaju ukljucena za sav novi kod; ovde su isključena samo za

@@ -4,7 +4,7 @@ import { filter, switchMap } from 'rxjs';
 
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { TestStore } from '../data-access/test.store';
-import { brojPolaganja } from '../data-access/testovi.models';
+import { brojPolaganja } from '../../../core/api/testovi.models';
 
 /** "Obriši test" (⋮ na detalju i statistici): potvrda sa brojem polaganja, brisanje kroz store, pa na listu. */
 export function obrisiTestUzPotvrdu(dialog: MatDialog, router: Router, store: TestStore): void {

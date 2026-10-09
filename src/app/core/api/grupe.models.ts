@@ -1,7 +1,7 @@
-import type { GrupaInfo } from '../../../core/api/reference.api';
-import type { StanjePrisustva } from '../../../shared/ui/heatmap';
+import type { GrupaInfo } from './reference.api';
+import type { StanjePrisustva } from '../../shared/ui/heatmap';
 
-export type { GrupaInfo } from '../../../core/api/reference.api';
+export type { GrupaInfo } from './reference.api';
 
 /** `CreateGrupaCmd`: naziv do 60 znakova, godina upisa 2000-2100 (obe obavezne). */
 export interface CreateGrupaCmd {

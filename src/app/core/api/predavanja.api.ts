@@ -2,10 +2,11 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { API_URL } from '../../../core/api/api-url';
-import { Strana } from '../../../shared/models/strana';
-import { ListQuery, toHttpParams } from '../../../shared/store/list-params';
+import { LOCAL_ERRORS } from './api-error';
+import { API_URL } from './api-url';
+import type { OpcijeZahteva } from './opcije-zahteva';
+import { Strana } from '../../shared/models/strana';
+import { ListQuery, toHttpParams } from '../../shared/store/list-params';
 import {
   PredavanjaFilteri,
   PredavanjeAktivnostInfo,
@@ -14,11 +15,6 @@ import {
   StartPredavanjeCmd,
   UpdatePredavanjeCmd,
 } from './predavanja.models';
-
-/** Opcije zahteva: `tiho` = greška ne ide u snackbar (`LOCAL_ERRORS`), pozivalac je prikazuje sam. */
-export interface OpcijeZahteva {
-  tiho?: boolean;
-}
 
 /** `status` liste u parametar `zavrseno`; nepoznata vrednost (ručno izmenjen URL) znači bez filtera. */
 export function zavrsenoZaStatus(status: PredavanjaFilteri['status'] | string | null | undefined): boolean | null {

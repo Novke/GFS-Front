@@ -24,8 +24,8 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { StudentiApi, StudentListItem } from '../../../core/api/studenti.api';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
-import { PredavanjaApi } from './predavanja.api';
-import { PredavanjeAktivnostInfo, PredavanjeDetails, TipAktivnosti } from './predavanja.models';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { PredavanjeAktivnostInfo, PredavanjeDetails, TipAktivnosti } from '../../../core/api/predavanja.models';
 
 /** Stanje studenta na predavanju; `odsutan` = nema aktivnosti. */
 export type StanjeStudenta = 'odsutan' | 'prisutan' | 'zadatak' | 'zvezdica';

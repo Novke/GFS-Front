@@ -8,7 +8,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
-import { GrupaPregledInfo, GrupaStudentStat } from '../data-access/grupe.models';
+import { GrupaPregledInfo, GrupaStudentStat } from '../../../core/api/grupe.models';
 import { GrupaStore } from '../data-access/grupa.store';
 import { GRUPE_RUTE } from '../grupe.routes';
 import { GrupaDetalj } from './grupa-detalj';

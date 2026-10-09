@@ -2,8 +2,8 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { API_URL } from '../../../core/api/api-url';
+import { LOCAL_ERRORS } from './api-error';
+import { API_URL } from './api-url';
 import { KoeficijentiInfo, RezultatiStudentaInfo, SaveKoeficijentiCmd } from './ocene.models';
 
 /** `tiho` = greška ne ide u snackbar (`LOCAL_ERRORS`), pozivalac je prikazuje sam. */

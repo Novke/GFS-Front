@@ -1,11 +1,11 @@
 import { inject } from '@angular/core';
 import { signalStore } from '@ngrx/signals';
 
-import { ListQuery } from '../../../shared/store/list-params';
-import { withListQuery } from '../../../shared/store/list-query.feature';
-import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
-import { TestoviApi } from './testovi.api';
-import { TESTOVI_SORT_POLJA, TestListItem, TestoviFilteri } from './testovi.models';
+import { ListQuery } from '../../shared/store/list-params';
+import { withListQuery } from '../../shared/store/list-query.feature';
+import { tekucaSkolskaGodina } from '../../shared/util/skolska-godina';
+import { TestoviApi } from '../api/testovi.api';
+import { TESTOVI_SORT_POLJA, TestListItem, TestoviFilteri } from '../api/testovi.models';
 
 /** Podrazumevano: tekuća školska godina, najnoviji testovi prvo (kao backend). */
 export function podrazumevanaListaTestova(): ListQuery<TestoviFilteri> {

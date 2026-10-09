@@ -6,11 +6,11 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { Strana } from '../../../shared/models/strana';
-import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
+import { LOCAL_ERRORS } from '../api/api-error';
+import { Strana } from '../../shared/models/strana';
+import { tekucaSkolskaGodina } from '../../shared/util/skolska-godina';
 import { PredavanjaListaStore } from './predavanja-lista.store';
-import { PredavanjeListItem } from './predavanja.models';
+import { PredavanjeListItem } from '../api/predavanja.models';
 
 @Component({ template: '', providers: [PredavanjaListaStore], changeDetection: ChangeDetectionStrategy.OnPush })
 class Lista {

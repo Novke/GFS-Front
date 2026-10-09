@@ -6,7 +6,7 @@ import { formatSkolskaGodina, tekucaSkolskaGodina } from '../../../shared/util/s
 import { PreferencesStore } from '../../../core/state/preferences.store';
 import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
-import { PredavanjaApi } from '../../predavanja/data-access/predavanja.api';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
 import { PocetnaStore } from '../data-access/pocetna.store';
 import { naslovDatuma, pozdravZaSat } from '../data-access/pocetna.vreme';
 import { CekaNaTebe } from '../ui/ceka-na-tebe';

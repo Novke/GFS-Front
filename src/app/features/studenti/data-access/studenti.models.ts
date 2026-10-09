@@ -8,8 +8,9 @@ import type {
 } from '../../../core/api/studenti.api';
 import { parseDatum } from '../../../shared/util/datum.pipe';
 import { ListQuery } from '../../../shared/store/list-params';
+import { brojStudenataTekst } from '../../../shared/util/mnozina';
 import type { NazivIkone } from '../../../core/layout/icons';
-import type { TipAktivnosti } from '../../predavanja/data-access/predavanja.models';
+import type { TipAktivnosti } from '../../../core/api/predavanja.models';
 
 /** Filteri liste studenata; ime filtera je ime query parametra. `stariji` je id grupe (`starijiOdGrupe`). */
 export interface StudentiFilteri extends Record<string, string | number | boolean | null> {
@@ -33,22 +34,11 @@ export function pretragaZaUpit(q: ListQuery<StudentiFilteri>): StudentiPretraga 
   };
 }
 
+export { brojStudenataTekst };
+
 /** `Ana Radić`; student bez imena i prezimena je `—`. */
 export function punoIme(s: { ime?: string | null; prezime?: string | null }): string {
   return [s.ime, s.prezime].map(d => d?.trim()).filter(Boolean).join(' ') || '—';
-}
-
-/** `1 student`, `2 studenta`, `5 studenata`, `21 student`, `12 studenata`. */
-export function brojStudenataTekst(n: number): string {
-  const poslednja = n % 10;
-  const poslednjeDve = n % 100;
-  if (poslednja === 1 && poslednjeDve !== 11) {
-    return `${n} student`;
-  }
-  if (poslednja >= 2 && poslednja <= 4 && (poslednjeDve < 12 || poslednjeDve > 14)) {
-    return `${n} studenta`;
-  }
-  return `${n} studenata`;
 }
 
 /** Broj sa zarezom i najviše `decimale` decimala (`72,6`, `7`); neispravan ili nedostajući broj je `—`. */

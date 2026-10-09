@@ -10,8 +10,8 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { JE_ID } from '../../../core/route-matchers';
 import { StudentiApi } from '../../../core/api/studenti.api';
 import { sviStudentiGrupe } from '../data-access/predavanje.store';
-import { PredavanjaApi } from '../data-access/predavanja.api';
-import { PredavanjeDetails } from '../data-access/predavanja.models';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { PredavanjeDetails } from '../../../core/api/predavanja.models';
 
 /** Projektor osvežava broj prisutnih na 10 s (samo dok je tab vidljiv). */
 export const OSVEZAVANJE_MS = 10_000;

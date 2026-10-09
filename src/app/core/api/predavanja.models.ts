@@ -1,4 +1,4 @@
-import { GrupaInfo, PredmetInfo } from '../../../core/api/reference.api';
+import { GrupaInfo, PredmetInfo } from './reference.api';
 
 /**
  * Red liste predavanja; ogleda backend `dto/predavanje/PredavanjeListItem`. `grupa` je `null` za stara predavanja bez

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StudentListItem } from '../../../core/api/studenti.api';
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { DEBOUNCE_REDA_MS } from '../data-access/test.store';
-import { TestDetails, TestPolaganjeInfo } from '../data-access/testovi.models';
+import { TestDetails, TestPolaganjeInfo } from '../../../core/api/testovi.models';
 import { TestDetalj } from './test-detalj';
 
 const GRUPA = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 30 };

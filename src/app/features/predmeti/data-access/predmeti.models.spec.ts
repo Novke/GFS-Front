@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { DomaciListItem } from '../../domaci/data-access/domaci.models';
-import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
-import { TestListItem } from '../../testovi/data-access/testovi.models';
+import { DomaciListItem } from '../../../core/api/domaci.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
+import { TestListItem } from '../../../core/api/testovi.models';
 import {
   grupeSaNastavom,
   grupeSaPredavanjima,

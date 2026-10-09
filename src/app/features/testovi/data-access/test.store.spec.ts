@@ -18,7 +18,7 @@ import {
   statistikaPoVarijantama,
   TestStore,
 } from './test.store';
-import { TestDetails, TestPolaganjeInfo } from './testovi.models';
+import { TestDetails, TestPolaganjeInfo } from '../../../core/api/testovi.models';
 
 const GRUPA = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 3 };
 

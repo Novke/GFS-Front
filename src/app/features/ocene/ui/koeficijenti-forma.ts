@@ -11,8 +11,8 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { SaveStatus, StanjeCuvanja } from '../../../shared/ui/save-status';
-import { OceneApi } from '../data-access/ocene.api';
-import { KoeficijentiInfo, PODRAZUMEVANI_KOEFICIJENTI, SaveKoeficijentiCmd } from '../data-access/ocene.models';
+import { OceneApi } from '../../../core/api/ocene.api';
+import { KoeficijentiInfo, PODRAZUMEVANI_KOEFICIJENTI, SaveKoeficijentiCmd } from '../../../core/api/ocene.models';
 
 /** Tip testa kako ga zna hub (H5): naziv i da li je aktivan. */
 export interface TipZaKoeficijente {

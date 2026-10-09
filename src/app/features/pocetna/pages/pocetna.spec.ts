@@ -9,9 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KontrolnaTablaInfo } from '../../../core/api/pregled.api';
 import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
 import { PREFS_KLJUC } from '../../../core/state/preferences.store';
-import { DomaciListItem } from '../../domaci/data-access/domaci.models';
-import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
-import { TestListItem } from '../../testovi/data-access/testovi.models';
+import { DomaciListItem } from '../../../core/api/domaci.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
+import { TestListItem } from '../../../core/api/testovi.models';
 import { Pocetna } from './pocetna';
 
 @Component({ template: 'stub' })

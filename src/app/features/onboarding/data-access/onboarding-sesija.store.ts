@@ -6,7 +6,7 @@ import { Observable, Subscription } from 'rxjs';
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
-import { OnboardingApi, OnboardingSesijaDetails, PrijavaInfo, StatusPrijave, UpdatePrijavaCmd } from './onboarding.api';
+import { OnboardingApi, OnboardingSesijaDetails, PrijavaInfo, StatusPrijave, UpdatePrijavaCmd } from '../../../core/api/onboarding.api';
 
 export type FilterPrijava = 'SVE' | StatusPrijave;
 

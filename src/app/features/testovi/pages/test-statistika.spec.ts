@@ -5,7 +5,7 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { TestDetails, TestPolaganjeInfo } from '../data-access/testovi.models';
+import { TestDetails, TestPolaganjeInfo } from '../../../core/api/testovi.models';
 import { TestStatistika } from './test-statistika';
 
 const polaganje = (id: number, poeni: number | null, grupa: 'A' | 'B' | null, prepisivao = false): TestPolaganjeInfo => ({

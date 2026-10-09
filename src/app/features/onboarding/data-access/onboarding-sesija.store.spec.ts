@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OnboardingApi, OnboardingSesijaDetails, PrijavaInfo, StatusPrijave } from './onboarding.api';
+import { OnboardingApi, OnboardingSesijaDetails, PrijavaInfo, StatusPrijave } from '../../../core/api/onboarding.api';
 import { OnboardingSesijaStore, parseFilterPrijava } from './onboarding-sesija.store';
 
 function prijava(id: number, status: StatusPrijave = 'NA_CEKANJU'): PrijavaInfo {

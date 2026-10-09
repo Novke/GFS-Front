@@ -1,4 +1,4 @@
-import type { StubacHistograma } from '../../../shared/ui/histogram';
+import type { StubacHistograma } from '../../shared/ui/histogram';
 
 /** Student u redu predloga; ogleda backend `dto/student/StudentInfo` (deo koji ocene prikazuju). */
 export interface OceneStudentInfo {

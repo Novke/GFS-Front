@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { Strana } from '../../../shared/models/strana';
-import { TestListItem } from '../data-access/testovi.models';
+import { TestListItem } from '../../../core/api/testovi.models';
 import { TestoviLista } from './testovi-lista';
 
 const red: TestListItem = {

@@ -6,8 +6,8 @@ import { catchError, EMPTY, pipe, switchMap, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
-import { GrupeApi } from './grupe.api';
-import { GrupaPregledInfo } from './grupe.models';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { GrupaPregledInfo } from '../../../core/api/grupe.models';
 
 interface GrupaState {
   id: number | null;

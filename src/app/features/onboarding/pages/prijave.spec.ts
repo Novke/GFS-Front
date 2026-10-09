@@ -6,7 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { putanjaSaId } from '../../../core/route-matchers';
-import { OnboardingSesijaDetails, PrijavaInfo } from '../data-access/onboarding.api';
+import { OnboardingSesijaDetails, PrijavaInfo } from '../../../core/api/onboarding.api';
 import { Prijave } from './prijave';
 
 function prijava(id: number, izmene: Partial<PrijavaInfo> = {}): PrijavaInfo {

@@ -6,7 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
-import { GrupaPregledInfo, PrisustvoMatricaInfo } from '../data-access/grupe.models';
+import { GrupaPregledInfo, PrisustvoMatricaInfo } from '../../../core/api/grupe.models';
 import { GRUPE_RUTE } from '../grupe.routes';
 
 const PREDMETI = [

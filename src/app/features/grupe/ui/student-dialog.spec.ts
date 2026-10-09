@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StudentInfo } from '../data-access/grupe.models';
+import { StudentInfo } from '../../../core/api/grupe.models';
 import { StudentDialog, StudentDialogCfg } from './student-dialog';
 
 const student: StudentInfo = {

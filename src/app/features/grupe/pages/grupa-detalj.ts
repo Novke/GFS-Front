@@ -15,7 +15,7 @@ import { ReferenceStore } from '../../../core/state/reference.store';
 import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { GrupaStore } from '../data-access/grupa.store';
-import { GrupaInfo } from '../data-access/grupe.models';
+import { GrupaInfo } from '../../../core/api/grupe.models';
 import { TABOVI_GRUPE } from '../grupe.routes';
 import { GrupaDialog } from '../ui/grupa-dialog';
 

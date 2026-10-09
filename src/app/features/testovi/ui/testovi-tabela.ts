@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
 import { formatBroja } from '../data-access/test.store';
-import { brojIspitanika, TestListItem } from '../data-access/testovi.models';
+import { brojIspitanika, TestListItem } from '../../../core/api/testovi.models';
 
 /** Kolone koje ruta može da zaključa (hub grupe zaključava `grupa`, hub predmeta `predmet`). */
 export type ZakljucanaKolona = 'predmet' | 'grupa';

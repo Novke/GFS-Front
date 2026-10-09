@@ -12,7 +12,7 @@ import {
   RezultatiStudentaInfo,
   SmerSorta,
   sortirajPoUkupnom,
-} from '../data-access/ocene.models';
+} from '../../../core/api/ocene.models';
 
 function jeBroj(v: number | null | undefined): v is number {
   return typeof v === 'number' && Number.isFinite(v);

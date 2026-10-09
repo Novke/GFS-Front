@@ -3,9 +3,9 @@ import type { NazivIkone } from '../../../core/layout/icons';
 import { JE_ID } from '../../../core/route-matchers';
 import { parseDatum } from '../../../shared/util/datum.pipe';
 import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
-import type { DomaciListItem } from '../../domaci/data-access/domaci.models';
-import type { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
-import type { TestListItem } from '../../testovi/data-access/testovi.models';
+import type { DomaciListItem } from '../../../core/api/domaci.models';
+import type { PredavanjeListItem } from '../../../core/api/predavanja.models';
+import type { TestListItem } from '../../../core/api/testovi.models';
 
 export type { GrupaInfo, PredmetInfo, TipTestaInfo } from '../../../core/api/reference.api';
 

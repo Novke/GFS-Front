@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { Strana } from '../../../shared/models/strana';
-import { PredavanjeListItem } from '../data-access/predavanja.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 import { NovoPredavanje } from './novo-predavanje';
 
 @Component({ template: 'detalj' })

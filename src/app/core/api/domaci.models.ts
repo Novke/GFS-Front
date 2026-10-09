@@ -1,5 +1,6 @@
-import { GrupaInfo, PredmetInfo } from '../../../core/api/reference.api';
-import { TipAktivnosti } from '../../predavanja/data-access/predavanja.models';
+import { brojStudenataTekst } from '../../shared/util/mnozina';
+import { GrupaInfo, PredmetInfo } from './reference.api';
+import { TipAktivnosti } from './predavanja.models';
 
 /** Predavanje na kome je domaći zadat (`DomaciPredavanjeRef`): id i redni broj, za link i prikaz "Predavanje 7". */
 export interface DomaciPredavanjeRef {
@@ -132,15 +133,5 @@ export function naslovDomaceg(d: { naslov: string | null; predavanje?: { rb: num
   return rb !== null && rb !== undefined ? `Domaći sa predavanja ${rb}` : 'Domaći bez naslova';
 }
 
-/** `1 student`, `2 studenta`, `5 studenata`, `21 student`, `12 studenata`. */
-export function brojStudenata(n: number): string {
-  const d = n % 10;
-  const dd = n % 100;
-  if (d === 1 && dd !== 11) {
-    return `${n} student`;
-  }
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) {
-    return `${n} studenta`;
-  }
-  return `${n} studenata`;
-}
+/** `1 student`, `2 studenta`, `5 studenata` (isto kao `brojStudenataTekst`). */
+export const brojStudenata = brojStudenataTekst;

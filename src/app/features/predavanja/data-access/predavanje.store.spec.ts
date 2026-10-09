@@ -9,7 +9,7 @@ import { StudentListItem } from '../../../core/api/studenti.api';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
 import { Strana } from '../../../shared/models/strana';
 import { PredavanjeStore } from './predavanje.store';
-import { PredavanjeDetails, TipAktivnosti } from './predavanja.models';
+import { PredavanjeDetails, TipAktivnosti } from '../../../core/api/predavanja.models';
 
 const GRUPA = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 3 };
 

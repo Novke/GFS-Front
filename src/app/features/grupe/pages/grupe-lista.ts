@@ -14,9 +14,9 @@ import { FilterBar } from '../../../shared/ui/filter-bar';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
-import { OnboardingApi, OnboardingSesijaInfo } from '../../onboarding/data-access/onboarding.api';
-import { GrupeApi } from '../data-access/grupe.api';
-import { GrupaInfo } from '../data-access/grupe.models';
+import { OnboardingApi, OnboardingSesijaInfo } from '../../../core/api/onboarding.api';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { GrupaInfo } from '../../../core/api/grupe.models';
 import { GrupaDialog } from '../ui/grupa-dialog';
 
 /** Otvoren onboarding grupe: najnovija otvorena sesija, `null` = nema je, `undefined` = još se učitava ili nije uspelo. */

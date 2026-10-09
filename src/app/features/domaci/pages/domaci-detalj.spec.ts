@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IKONE } from '../../../core/layout/icons';
 import { DEBOUNCE_REDA_MS } from '../data-access/domaci.store';
-import { brojStudenata, DomaciDetails } from '../data-access/domaci.models';
+import { brojStudenata, DomaciDetails } from '../../../core/api/domaci.models';
 import { DomaciDetalj } from './domaci-detalj';
 
 function detalji(izmene: Partial<DomaciDetails> = {}): DomaciDetails {

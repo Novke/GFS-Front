@@ -10,9 +10,9 @@ import { FilterBar } from '../../../shared/ui/filter-bar';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { formatSkolskaGodina } from '../../../shared/util/skolska-godina';
-import { GrupeApi } from '../../grupe/data-access/grupe.api';
-import { GrupaStudentStat, imeStudenta, procenat } from '../../grupe/data-access/grupe.models';
-import { brojStudenataTekst } from '../../studenti/data-access/studenti.models';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { GrupaStudentStat, imeStudenta, procenat } from '../../../core/api/grupe.models';
+import { brojStudenataTekst } from '../../../shared/util/mnozina';
 import { PredmetStore } from '../data-access/predmet.store';
 import { grupeSaPredavanjima } from '../data-access/predmeti.models';
 

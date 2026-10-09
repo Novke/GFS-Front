@@ -6,8 +6,8 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
+import { LOCAL_ERRORS } from '../api/api-error';
+import { tekucaSkolskaGodina } from '../../shared/util/skolska-godina';
 import { DomaciListaStore } from './domaci-lista.store';
 
 @Component({ template: '', providers: [DomaciListaStore], changeDetection: ChangeDetectionStrategy.OnPush })

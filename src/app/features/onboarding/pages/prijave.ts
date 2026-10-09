@@ -14,7 +14,7 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { StatusChip, TonStatusa } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
-import { NAZIV_STATUSA_PRIJAVE, PrijavaInfo, StatusPrijave, statusSesije } from '../data-access/onboarding.api';
+import { NAZIV_STATUSA_PRIJAVE, PrijavaInfo, StatusPrijave, statusSesije } from '../../../core/api/onboarding.api';
 import { FILTERI_PRIJAVA, FilterPrijava, OnboardingSesijaStore, parseFilterPrijava } from '../data-access/onboarding-sesija.store';
 import { OdbijDialog } from '../ui/odbij-dialog';
 

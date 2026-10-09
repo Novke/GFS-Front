@@ -6,8 +6,8 @@ import { NavigationEnd, provideRouter, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DomaciListItem } from '../../features/domaci/data-access/domaci.models';
-import type { TestListItem } from '../../features/testovi/data-access/testovi.models';
+import type { DomaciListItem } from '../api/domaci.models';
+import type { TestListItem } from '../api/testovi.models';
 import { LOCAL_ERRORS } from '../api/api-error';
 import { KontrolnaTablaInfo } from '../api/pregled.api';
 import { DashboardCountsStore, PERIOD_MS, RAZMAK_NAVIGACIJA_MS, SVEZ_ZAHTEV_MS } from './dashboard-counts.store';

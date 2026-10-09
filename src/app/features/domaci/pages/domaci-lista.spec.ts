@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { IKONE } from '../../../core/layout/icons';
 import { Strana } from '../../../shared/models/strana';
-import { DomaciListItem } from '../data-access/domaci.models';
+import { DomaciListItem } from '../../../core/api/domaci.models';
 import { brojDomacih, DomaciLista } from './domaci-lista';
 
 @Component({ template: 'stub' })

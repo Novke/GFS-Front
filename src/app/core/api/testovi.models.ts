@@ -1,4 +1,4 @@
-import { GrupaInfo, PredmetInfo, TipTestaInfo } from '../../../core/api/reference.api';
+import { GrupaInfo, PredmetInfo, TipTestaInfo } from './reference.api';
 
 /** `1 ispitanik`, `2 ispitanika`, `5 ispitanika`, `21 ispitanik`, `11 ispitanika`. */
 export function brojIspitanika(n: number): string {

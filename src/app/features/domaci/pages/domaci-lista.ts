@@ -11,8 +11,8 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { PageHeader } from '../../../shared/ui/page-header';
 import { Paginator } from '../../../shared/ui/paginator';
 import { formatSkolskaGodina, opcijeSkolskihGodina } from '../../../shared/util/skolska-godina';
-import { DomaciListaStore } from '../data-access/domaci-lista.store';
-import { StatusDomaceg } from '../data-access/domaci.models';
+import { DomaciListaStore } from '../../../core/state/domaci-lista.store';
+import { StatusDomaceg } from '../../../core/api/domaci.models';
 import { DomaciTabela } from '../ui/domaci-tabela';
 
 const STATUSI: readonly ChipOpcija<StatusDomaceg>[] = [

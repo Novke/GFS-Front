@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DomaciListItem } from '../data-access/domaci.models';
+import { DomaciListItem } from '../../../core/api/domaci.models';
 import { DomaciTabela, uradjenoPrikaz, ZakljucanaKolona } from './domaci-tabela';
 
 const gd = { id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 38 };

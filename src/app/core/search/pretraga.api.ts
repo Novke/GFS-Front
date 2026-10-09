@@ -2,8 +2,8 @@ import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import type { PredavanjeListItem } from '../../features/predavanja/data-access/predavanja.models';
-import type { TestListItem } from '../../features/testovi/data-access/testovi.models';
+import type { PredavanjeListItem } from '../api/predavanja.models';
+import type { TestListItem } from '../api/testovi.models';
 import { LOCAL_ERRORS } from '../api/api-error';
 import { API_URL } from '../api/api-url';
 import type { GrupaInfo } from '../api/reference.api';

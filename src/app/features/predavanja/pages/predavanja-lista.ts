@@ -11,8 +11,8 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { PageHeader } from '../../../shared/ui/page-header';
 import { Paginator } from '../../../shared/ui/paginator';
 import { formatSkolskaGodina, opcijeSkolskihGodina } from '../../../shared/util/skolska-godina';
-import { PredavanjaListaStore } from '../data-access/predavanja-lista.store';
-import { StatusPredavanja } from '../data-access/predavanja.models';
+import { PredavanjaListaStore } from '../../../core/state/predavanja-lista.store';
+import { StatusPredavanja } from '../../../core/api/predavanja.models';
 import { PredavanjaTabela } from '../ui/predavanja-tabela';
 
 const STATUSI: readonly ChipOpcija<StatusPredavanja>[] = [

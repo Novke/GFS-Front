@@ -20,9 +20,9 @@ import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ErrorPanel } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { formatDatum } from '../../../shared/util/datum.pipe';
-import { PredavanjaApi } from '../../predavanja/data-access/predavanja.api';
-import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
-import { DomaciApi } from '../data-access/domaci.api';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
+import { DomaciApi } from '../../../core/api/domaci.api';
 
 /** Kolone: `domaci.naslov` je `varchar(255)`, `domaci.text` `varchar(3000)`. */
 const MAX_NASLOV = 255;

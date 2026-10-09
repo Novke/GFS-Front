@@ -2,9 +2,9 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import type { DomaciListItem } from '../../features/domaci/data-access/domaci.models';
-import type { PredavanjeListItem } from '../../features/predavanja/data-access/predavanja.models';
-import type { TestListItem } from '../../features/testovi/data-access/testovi.models';
+import type { DomaciListItem } from './domaci.models';
+import type { PredavanjeListItem } from './predavanja.models';
+import type { TestListItem } from './testovi.models';
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
 import type { GrupaInfo, PredmetInfo } from './reference.api';

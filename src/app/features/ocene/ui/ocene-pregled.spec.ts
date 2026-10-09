@@ -7,7 +7,7 @@ import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { IKONE } from '../../../core/layout/icons';
-import { KoeficijentiInfo, RezultatiStudentaInfo } from '../data-access/ocene.models';
+import { KoeficijentiInfo, RezultatiStudentaInfo } from '../../../core/api/ocene.models';
 import { OcenePregled } from './ocene-pregled';
 import { OceneTabela } from './ocene-tabela';
 

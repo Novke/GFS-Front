@@ -7,7 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { Strana } from '../../../shared/models/strana';
-import { PredavanjeListItem } from '../data-access/predavanja.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 import { brojPredavanja, PredavanjaLista } from './predavanja-lista';
 
 @Component({ template: 'detalj' })

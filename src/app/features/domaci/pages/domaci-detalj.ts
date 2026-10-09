@@ -11,7 +11,7 @@ import { PreferencesStore } from '../../../core/state/preferences.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { DomaciStore, IzmenaZaglavljaDomaceg } from '../data-access/domaci.store';
-import { brojStudenata, naslovDomaceg } from '../data-access/domaci.models';
+import { brojStudenata, naslovDomaceg } from '../../../core/api/domaci.models';
 import { DomaciZaglavlje } from '../ui/domaci-zaglavlje';
 import { EvidentiranjeTabela, IzmenaReda } from '../ui/evidentiranje-tabela';
 

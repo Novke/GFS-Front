@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
-import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo } from './domaci.models';
+import { CreateUradjenDomaciCmd, DomaciDetails, DomaciStudentiInfo } from '../../../core/api/domaci.models';
 import { DEBOUNCE_REDA_MS, DomaciStore } from './domaci.store';
 
 const red = (studentId: number, ime: string, prezime: string, indeks: string, izmene: Partial<DomaciStudentiInfo> = {}): DomaciStudentiInfo => ({

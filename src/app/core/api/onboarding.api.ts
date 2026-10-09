@@ -2,9 +2,9 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { API_URL } from '../../../core/api/api-url';
-import type { GrupaInfo } from '../../../core/api/reference.api';
+import { LOCAL_ERRORS } from './api-error';
+import { API_URL } from './api-url';
+import type { GrupaInfo } from './reference.api';
 
 export type StatusPrijave = 'NA_CEKANJU' | 'PRIHVACENA' | 'ODBIJENA';
 

@@ -6,12 +6,12 @@ import { catchError, EMPTY, forkJoin, pipe, switchMap, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
-import { DomaciApi } from '../../domaci/data-access/domaci.api';
-import { podrazumevanaListaDomacih } from '../../domaci/data-access/domaci-lista.store';
-import { PredavanjaApi } from '../../predavanja/data-access/predavanja.api';
-import { podrazumevanaListaPredavanja } from '../../predavanja/data-access/predavanja-lista.store';
-import { TestoviApi } from '../../testovi/data-access/testovi.api';
-import { podrazumevanaListaTestova } from '../../testovi/data-access/testovi-lista.store';
+import { DomaciApi } from '../../../core/api/domaci.api';
+import { podrazumevanaListaDomacih } from '../../../core/state/domaci-lista.store';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { podrazumevanaListaPredavanja } from '../../../core/state/predavanja-lista.store';
+import { TestoviApi } from '../../../core/api/testovi.api';
+import { podrazumevanaListaTestova } from '../../../core/state/testovi-lista.store';
 import { PredmetiApi, sveStrane, VELICINA_STRANE } from './predmeti.api';
 import { grupeSaNastavom, NastavaGodine, PredmetInfo } from './predmeti.models';
 

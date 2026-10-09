@@ -14,7 +14,7 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { IzmenaZaglavlja, PredavanjeStore, StanjeStudenta } from '../data-access/predavanje.store';
-import { TipAktivnosti } from '../data-access/predavanja.models';
+import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { BrziUnos } from '../ui/brzi-unos';
 import { NapomenaDialog } from '../ui/napomena-dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';

@@ -24,7 +24,7 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { JE_ID } from '../../../core/route-matchers';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { kopirajTekst } from '../../../shared/util/kopiraj';
-import { OnboardingApi, OnboardingSesijaInfo, upisLink } from '../data-access/onboarding.api';
+import { OnboardingApi, OnboardingSesijaInfo, upisLink } from '../../../core/api/onboarding.api';
 
 /** Najmanja i najveća širina QR koda (projektor; telefon studenta skenira i sa zadnjih klupa). */
 export const QR_MIN_PX = 320;

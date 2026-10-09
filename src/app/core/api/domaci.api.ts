@@ -2,11 +2,11 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { LOCAL_ERRORS } from '../../../core/api/api-error';
-import { API_URL } from '../../../core/api/api-url';
-import { Strana } from '../../../shared/models/strana';
-import { ListQuery, toHttpParams } from '../../../shared/store/list-params';
-import type { OpcijeZahteva } from '../../predavanja/data-access/predavanja.api';
+import { LOCAL_ERRORS } from './api-error';
+import { API_URL } from './api-url';
+import { Strana } from '../../shared/models/strana';
+import { ListQuery, toHttpParams } from '../../shared/store/list-params';
+import type { OpcijeZahteva } from './opcije-zahteva';
 import {
   CreateUradjenDomaciCmd,
   DodajDomaciCmd,

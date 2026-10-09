@@ -11,8 +11,8 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { PageHeader } from '../../../shared/ui/page-header';
 import { Paginator } from '../../../shared/ui/paginator';
 import { formatSkolskaGodina, opcijeSkolskihGodina } from '../../../shared/util/skolska-godina';
-import { TestoviListaStore } from '../data-access/testovi-lista.store';
-import { StatusTesta } from '../data-access/testovi.models';
+import { TestoviListaStore } from '../../../core/state/testovi-lista.store';
+import { StatusTesta } from '../../../core/api/testovi.models';
 import { TestoviTabela } from '../ui/testovi-tabela';
 
 const STATUSI: readonly ChipOpcija<StatusTesta>[] = [

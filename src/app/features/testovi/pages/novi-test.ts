@@ -20,8 +20,8 @@ import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ErrorPanel } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { PORUKA_PRAGA } from '../data-access/test.store';
-import { TestoviApi } from '../data-access/testovi.api';
-import { VARIJANTE } from '../data-access/testovi.models';
+import { TestoviApi } from '../../../core/api/testovi.api';
+import { VARIJANTE } from '../../../core/api/testovi.models';
 
 /** Vrednost izbora tipa za "Nov tip…" (pravi id je uvek pozitivan). */
 export const NOV_TIP = -1;

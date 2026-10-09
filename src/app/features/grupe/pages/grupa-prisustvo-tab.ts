@@ -16,11 +16,11 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { formatDatum } from '../../../shared/util/datum.pipe';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { formatSkolskaGodina, opcijeSkolskihGodina, tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
-import { PredavanjaApi } from '../../predavanja/data-access/predavanja.api';
-import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 import { GrupaStore } from '../data-access/grupa.store';
-import { GrupeApi } from '../data-access/grupe.api';
-import { imeStudenta, PrisustvoMatricaInfo, stanjeCelije } from '../data-access/grupe.models';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { imeStudenta, PrisustvoMatricaInfo, stanjeCelije } from '../../../core/api/grupe.models';
 
 /** Koliko predavanja grupe u godini se čita da bi se našli predmeti (max veličina strane na serveru). */
 const MAX_PREDAVANJA_ZA_PREDMETE = 100;

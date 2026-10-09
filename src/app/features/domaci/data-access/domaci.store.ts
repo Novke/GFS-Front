@@ -7,9 +7,9 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
-import { TipAktivnosti } from '../../predavanja/data-access/predavanja.models';
-import { DomaciApi } from './domaci.api';
-import { brojStudenata, DomaciDetails, DomaciPodaci, DomaciStudentiInfo } from './domaci.models';
+import { TipAktivnosti } from '../../../core/api/predavanja.models';
+import { DomaciApi } from '../../../core/api/domaci.api';
+import { brojStudenata, DomaciDetails, DomaciPodaci, DomaciStudentiInfo } from '../../../core/api/domaci.models';
 
 /** Koliko se čeka posle poslednje izmene reda pre nego što se red pošalje serveru (spec 4, tabelarni unos). */
 export const DEBOUNCE_REDA_MS = 600;

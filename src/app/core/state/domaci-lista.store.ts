@@ -1,11 +1,11 @@
 import { inject } from '@angular/core';
 import { signalStore } from '@ngrx/signals';
 
-import { ListQuery } from '../../../shared/store/list-params';
-import { withListQuery } from '../../../shared/store/list-query.feature';
-import { tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
-import { DomaciApi } from './domaci.api';
-import { DOMACI_SORT_POLJA, DomaciFilteri, DomaciListItem } from './domaci.models';
+import { ListQuery } from '../../shared/store/list-params';
+import { withListQuery } from '../../shared/store/list-query.feature';
+import { tekucaSkolskaGodina } from '../../shared/util/skolska-godina';
+import { DomaciApi } from '../api/domaci.api';
+import { DOMACI_SORT_POLJA, DomaciFilteri, DomaciListItem } from '../api/domaci.models';
 
 /** Podrazumevano: tekuća školska godina, najnoviji domaći prvo (kao backend). */
 export function podrazumevanaListaDomacih(): ListQuery<DomaciFilteri> {

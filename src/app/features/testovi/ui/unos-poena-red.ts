@@ -8,7 +8,7 @@ import { SaveStatus, StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { GreskaReda, MAX_NAPOMENA, PoljeReda, RedIspitanika, VrednostiReda } from '../data-access/test.store';
-import { TestGrupa } from '../data-access/testovi.models';
+import { TestGrupa } from '../../../core/api/testovi.models';
 
 /** Kolone sa poljem za unos (Enter prelazi na isto polje u sledećem redu). */
 export type KolonaUnosa = 'poeni' | 'napomena';

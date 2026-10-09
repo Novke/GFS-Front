@@ -8,8 +8,8 @@ import { Subscription } from 'rxjs';
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
-import { PredavanjaApi } from '../../predavanja/data-access/predavanja.api';
-import { PredavanjeListItem } from '../../predavanja/data-access/predavanja.models';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 import { PredavanjaTabela } from '../../predavanja/ui/predavanja-tabela';
 import { GrupaStore } from '../data-access/grupa.store';
 

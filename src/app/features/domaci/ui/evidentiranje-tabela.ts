@@ -4,7 +4,7 @@ import { MatIcon } from '@angular/material/icon';
 import { SaveStatus, StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
-import { TipAktivnosti } from '../../predavanja/data-access/predavanja.models';
+import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { MAX_BODOVA, MAX_NAPOMENA, RedStudenta, VrednostiReda } from '../data-access/domaci.store';
 
 export type PoljeReda = 'bodovi' | 'napomene';

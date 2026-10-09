@@ -3,7 +3,7 @@ import { RouterLink } from '@angular/router';
 
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
-import { DomaciListItem, naslovDomaceg } from '../data-access/domaci.models';
+import { DomaciListItem, naslovDomaceg } from '../../../core/api/domaci.models';
 
 /** Kolone koje ruta može da zaključa (hub grupe zaključava `grupa`, hub predmeta `predmet`). */
 export type ZakljucanaKolona = 'predmet' | 'grupa';

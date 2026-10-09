@@ -12,7 +12,7 @@ import { StatTile } from '../../../shared/ui/stat-tile';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { BrojeviPredavanja, IzmenaZaglavlja } from '../data-access/predavanje.store';
-import { PredavanjeDetails } from '../data-access/predavanja.models';
+import { PredavanjeDetails } from '../../../core/api/predavanja.models';
 
 /** Kolona `predavanja.tema` je `varchar(255)`. */
 const MAX_TEMA = 255;

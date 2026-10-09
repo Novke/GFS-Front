@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { KoeficijentiInfo, SaveKoeficijentiCmd } from '../data-access/ocene.models';
+import { KoeficijentiInfo, SaveKoeficijentiCmd } from '../../../core/api/ocene.models';
 import { KoeficijentiForma } from './koeficijenti-forma';
 
 const KOEF: KoeficijentiInfo = {

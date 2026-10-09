@@ -6,7 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { putanjaSaId } from '../../../core/route-matchers';
-import { upisLink } from '../data-access/onboarding.api';
+import { upisLink } from '../../../core/api/onboarding.api';
 import { OnboardingQr, sirinaQr } from './onboarding-qr';
 
 const TOKEN = 'Ab3_-xYz'.repeat(4);

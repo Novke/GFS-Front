@@ -3,7 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { Strana } from '../../shared/models/strana';
-import type { TipAktivnosti } from '../../features/predavanja/data-access/predavanja.models';
+import type { TipAktivnosti } from './predavanja.models';
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
 import { GrupaInfo, PredmetInfo, TipTestaInfo } from './reference.api';

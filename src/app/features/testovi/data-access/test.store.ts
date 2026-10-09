@@ -10,8 +10,8 @@ import { setError, setLoaded, setLoading, withRequestStatus } from '../../../sha
 import { StanjeCuvanja } from '../../../shared/ui/save-status';
 import { StubacHistograma } from '../../../shared/ui/histogram';
 import { CuvanjaTestova } from './cuvanja-testova';
-import { TestoviApi } from './testovi.api';
-import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from './testovi.models';
+import { TestoviApi } from '../../../core/api/testovi.api';
+import { brojIspitanika, TestDetails, TestGrupa, TestPolaganjeInfo, TestStudentInfo, UpdateTestCmd, VARIJANTE } from '../../../core/api/testovi.models';
 
 /** Koliko se čeka posle poslednje izmene reda pre nego što se red pošalje serveru (spec 4, tabelarni unos). */
 export const DEBOUNCE_REDA_MS = 600;

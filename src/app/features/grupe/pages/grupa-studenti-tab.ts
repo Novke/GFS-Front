@@ -22,7 +22,7 @@ import {
   procenat,
   SEPARATOR_EMAILOVA,
   StudentInfo,
-} from '../data-access/grupe.models';
+} from '../../../core/api/grupe.models';
 import { NacinStudentDialoga, StudentDialog } from '../ui/student-dialog';
 
 export const POLJA_SORTA_STUDENATA = ['indeks', 'ime', 'prisutnost', 'domaci'] as const;

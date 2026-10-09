@@ -11,7 +11,7 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { StatusChip, TonStatusa } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
-import { moguceZatvoriti, OnboardingApi, OnboardingSesijaInfo, statusSesije, StatusSesije } from '../../onboarding/data-access/onboarding.api';
+import { moguceZatvoriti, OnboardingApi, OnboardingSesijaInfo, statusSesije, StatusSesije } from '../../../core/api/onboarding.api';
 import { PokreniOnboardingDialog } from '../../onboarding/ui/pokreni-onboarding-dialog';
 import { GrupaStore } from '../data-access/grupa.store';
 

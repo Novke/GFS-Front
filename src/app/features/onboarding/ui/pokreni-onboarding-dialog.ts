@@ -10,7 +10,7 @@ import { Observable } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
-import { OnboardingApi, OnboardingSesijaInfo } from '../data-access/onboarding.api';
+import { OnboardingApi, OnboardingSesijaInfo } from '../../../core/api/onboarding.api';
 
 export interface PokreniOnboardingCfg {
   grupaId: number;

@@ -12,7 +12,7 @@ import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
-import { DomaciPodaci, naslovDomaceg } from '../data-access/domaci.models';
+import { DomaciPodaci, naslovDomaceg } from '../../../core/api/domaci.models';
 import { BrojeviDomaceg, IzmenaZaglavljaDomaceg } from '../data-access/domaci.store';
 
 /** Kolone: `domaci.naslov` je `varchar(255)`, `domaci.text` `varchar(3000)`. */

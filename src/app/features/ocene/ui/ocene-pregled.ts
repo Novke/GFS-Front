@@ -9,9 +9,9 @@ import { catchError, map, Observable, of, switchMap } from 'rxjs';
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { Histogram } from '../../../shared/ui/histogram';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
-import { brojStudenataTekst } from '../../studenti/data-access/studenti.models';
-import { OceneApi } from '../data-access/ocene.api';
-import { KoeficijentiInfo, raspodelaOcena, RezultatiStudentaInfo } from '../data-access/ocene.models';
+import { brojStudenataTekst } from '../../../shared/util/mnozina';
+import { OceneApi } from '../../../core/api/ocene.api';
+import { KoeficijentiInfo, raspodelaOcena, RezultatiStudentaInfo } from '../../../core/api/ocene.models';
 import { OceneTabela } from './ocene-tabela';
 
 /** Rezultat učitavanja: podaci ili poruka greške (greška se hvata u toku, pa `value()` nikad ne baca). */

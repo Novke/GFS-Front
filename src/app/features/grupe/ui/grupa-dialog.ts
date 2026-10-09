@@ -11,8 +11,8 @@ import { Observable } from 'rxjs';
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
-import { GrupeApi } from '../data-access/grupe.api';
-import { GrupaInfo } from '../data-access/grupe.models';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { GrupaInfo } from '../../../core/api/grupe.models';
 
 export interface GrupaDialogCfg {
   /** Bez grupe: nova grupa; sa grupom: izmena (`PUT grupe/{id}`). */

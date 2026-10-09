@@ -13,8 +13,8 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { ReferenceStore } from '../../../core/state/reference.store';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
-import { GrupeApi } from '../data-access/grupe.api';
-import { grupeZaPremestanje, imeStudenta, StudentInfo } from '../data-access/grupe.models';
+import { GrupeApi } from '../../../core/api/grupe.api';
+import { grupeZaPremestanje, imeStudenta, StudentInfo } from '../../../core/api/grupe.models';
 
 export type NacinStudentDialoga = 'dodaj' | 'izmena' | 'premesti';
 

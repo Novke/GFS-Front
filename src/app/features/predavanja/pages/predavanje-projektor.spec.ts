@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PredavanjeDetails } from '../data-access/predavanja.models';
+import { PredavanjeDetails } from '../../../core/api/predavanja.models';
 import { OSVEZAVANJE_MS, PredavanjeProjektor } from './predavanje-projektor';
 
 const akt = (id: number, ime: string) => ({ id: 100 + id, student: { id, ime, prezime: 'Petrović', indeks: `GD${id}` }, tip: 'PRISUSTVO' as const, napomene: null });

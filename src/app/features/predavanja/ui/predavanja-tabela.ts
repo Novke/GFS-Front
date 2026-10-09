@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
-import { PredavanjeListItem } from '../data-access/predavanja.models';
+import { PredavanjeListItem } from '../../../core/api/predavanja.models';
 
 /** Kolone koje rutom može da zaključa (hub grupe zaključava `grupa`, hub predmeta `predmet`). */
 export type ZakljucanaKolona = 'predmet' | 'grupa';

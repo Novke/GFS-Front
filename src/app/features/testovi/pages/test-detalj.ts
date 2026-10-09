@@ -5,7 +5,7 @@ import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
 import { filter, of } from 'rxjs';
 
-import { UpdateTestCmd } from '../data-access/testovi.models';
+import { UpdateTestCmd } from '../../../core/api/testovi.models';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
 import { PreferencesStore } from '../../../core/state/preferences.store';
@@ -16,7 +16,7 @@ import { StatTile } from '../../../shared/ui/stat-tile';
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { formatDatum } from '../../../shared/util/datum.pipe';
 import { formatBroja, opisProlaza, TestStore } from '../data-access/test.store';
-import { brojIspitanika } from '../data-access/testovi.models';
+import { brojIspitanika } from '../../../core/api/testovi.models';
 import { TestZaglavlje } from '../ui/test-zaglavlje';
 import { obrisiTestUzPotvrdu } from './obrisi-test';
 import { UnosPoenaRed } from '../ui/unos-poena-red';

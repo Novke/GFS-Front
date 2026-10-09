@@ -17,7 +17,7 @@ import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { ErrorPanel } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { formatDatum } from '../../../shared/util/datum.pipe';
-import { PredavanjaApi } from '../data-access/predavanja.api';
+import { PredavanjaApi } from '../../../core/api/predavanja.api';
 
 type ImeKontrole = 'predmet' | 'grupa';
 
