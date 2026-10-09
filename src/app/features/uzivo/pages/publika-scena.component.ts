@@ -24,7 +24,7 @@ export function hostAplikacije(base: string = document.baseURI): string {
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PostoljeComponent, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
-  host: { class: 'uz-scena uz-dan' },
+  host: { class: 'uz-scena rezim-dan uz-dan' },
   template: `
     @let s = stanje();
     @switch (s.prikaz) {

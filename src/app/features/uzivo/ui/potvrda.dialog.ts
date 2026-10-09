@@ -23,7 +23,7 @@ export interface PotvrdaPodaci {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button type="button" [mat-dialog-close]="false" cdkFocusInitial>Otkaži</button>
-      <button mat-flat-button type="button" [color]="d.opasno ? 'warn' : 'primary'" [mat-dialog-close]="true">
+      <button mat-flat-button type="button" [class.uz-opasno]="d.opasno" [mat-dialog-close]="true">
         {{ d.potvrdi ?? 'U redu' }}
       </button>
     </mat-dialog-actions>

@@ -30,7 +30,7 @@ export const IME_MAKS = 40;
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button type="button" mat-dialog-close>Otkaži</button>
-        <button mat-flat-button color="primary" type="submit">Sačuvaj</button>
+        <button mat-flat-button type="submit">Sačuvaj</button>
       </mat-dialog-actions>
     </form>
   `,
@@ -67,13 +67,13 @@ export class PreimenujDialog {
           <li class="uz-kon-ucesnik" [class.uz-kon-ucesnik--odsutan]="!u.povezan">
             <span class="uz-kon-tacka" [class.uz-kon-tacka--da]="u.povezan" aria-hidden="true"></span>
             <span class="uz-kon-ucesnik-ime">{{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}</span></span>
-            @if (u.odgovorio) { <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio">check</mat-icon> }
+            @if (u.odgovorio) { <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" /> }
             @if (takmicenje()) { <span class="uz-kon-poeni">{{ poeni(u.poeni) }}</span> }
             <button mat-icon-button type="button" [attr.aria-label]="'Preimenuj ' + u.ime" (click)="preimenujDialog(u)">
-              <mat-icon>edit</mat-icon>
+              <mat-icon svgIcon="edit" />
             </button>
             <button mat-icon-button type="button" [attr.aria-label]="'Izbaci ' + u.ime" (click)="izbaciPotvrda(u)">
-              <mat-icon>person_remove</mat-icon>
+              <mat-icon svgIcon="person_remove" />
             </button>
           </li>
         }

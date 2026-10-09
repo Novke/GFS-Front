@@ -1,6 +1,7 @@
 import {
   MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda,
 } from './uzivo.models';
+import type { NazivIkone } from '../../../core/layout/icons';
 
 /**
  * Pravila editora slajdova: podrazumevane vrednosti, prevođenje SlajdDetails <-> SlajdCmd i klijentska validacija.
@@ -55,7 +56,7 @@ export const PORUKE = {
   opis: 'Opis može imati najviše 1000 znakova.',
 } as const;
 
-export interface TipPitanjaOpis { readonly tip: TipPitanja; readonly naziv: string; readonly ikona: string; }
+export interface TipPitanjaOpis { readonly tip: TipPitanja; readonly naziv: string; readonly ikona: NazivIkone; }
 
 /** Redosled i srpski nazivi za meni "+ Pitanje" i izbor tipa. */
 export const TIPOVI_PITANJA: readonly TipPitanjaOpis[] = Object.freeze([

@@ -49,12 +49,12 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
       @if (scena(); as sc) {
         <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" />
       } @else {
-        <div class="uz-pub-poruka uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
+        <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
     } @else if (store.greska(); as g) {
-      <div class="uz-pub-poruka uz-dan" role="alert"><p>{{ g }}</p></div>
+      <div class="uz-pub-poruka rezim-dan uz-dan" role="alert"><p>{{ g }}</p></div>
     } @else {
-      <div class="uz-pub-poruka uz-dan" role="status"><p>Učitavanje…</p></div>
+      <div class="uz-pub-poruka rezim-dan uz-dan" role="status"><p>Učitavanje…</p></div>
     }
     @if (store.stanje() && store.veza() !== 'povezan') {
       <p class="uz-pub-veza" role="status">

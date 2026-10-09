@@ -7,14 +7,13 @@ const { RuleTester } = require('eslint');
 const tseslint = require('typescript-eslint');
 
 const pravilo = require('./javna-ruta-uvozi');
-const { JAVNO_DOZVOLJENO } = require('./javna-ruta-konfig');
+const { dozvoljenoZa } = require('./javna-ruta-konfig');
 
 RuleTester.describe = describe;
 RuleTester.it = it;
 
 const APP = path.resolve(__dirname, '..', 'src', 'app');
-const DOZVOLJENO = JAVNO_DOZVOLJENO;
-const opcije = (feature) => [{ feature, dozvoljeno: DOZVOLJENO }];
+const opcije = (feature) => [{ feature, dozvoljeno: dozvoljenoZa(feature) }];
 const upis = path.join(APP, 'features/upis/pages/javni-upis.ts');
 const upisKoren = path.join(APP, 'features/upis/upis.api.ts');
 const uzivo = path.join(APP, 'features/uzivo/javno/pages/ekran.ts');
@@ -33,6 +32,12 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { a } from 'src/app/features/upis/upis.api';", filename: upis, options: opcije('features/upis') },
     { code: "import { a } from '../javno.api';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from '../data-access/uzivo.api';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    // uživo: čisti moduli van javnog dela (spisak u javna-ruta-konfig.js, DOZVOLJENO_PO_FEATURE)
+    { code: "import { a } from '../../data-access/uzivo.models';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from '../../data-access/stomp';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from '../../ui/rang-lista.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from 'src/app/features/uzivo/ui/tajmer.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from '../../uzivo-putanje';", filename: uzivo, options: opcije('features/uzivo/javno') },
   ],
   invalid: [
     // fail-closed: dinamički izvor, šablon sa izrazom, van src/app, apsolutna putanja
@@ -62,5 +67,12 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { a } from '../../../upis/upis.api';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
     // druga polovina uzivo feature-a (nastavnicka strana) nije javna
     { code: "import { a } from '../../data-access/nastavnik.api';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../data-access/prezentacije.api';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../data-access/izvodjenja.api';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../data-access/izvodjenje.store';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../pages/konzola.page';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "const m = () => import('../../ui/slajd-prikaz.component');", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    // dodatak uživa ne važi za upis
+    { code: "import { a } from '../../uzivo/data-access/uzivo.models';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
   ],
 });

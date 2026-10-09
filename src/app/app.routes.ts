@@ -15,7 +15,7 @@ import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
 import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
 import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
-import { UZIVO_ROUTES } from './features/uzivo/uzivo.routes';
+import { IZVODJENJA_RUTE, PREZENTACIJE_RUTE, UZIVO_JAVNE_RUTE } from './features/uzivo/uzivo.routes';
 
 /*
  * Stablo ruta (spec, sekcija 2). Putanje su relativne na <base href>; filteri lista su query parametri.
@@ -77,6 +77,21 @@ const nastavnickeRute: Routes = [
     children: OCENE_RUTE,
   },
 
+  // Prezentacije uživo (Task 30): lista, editor, izvođenja; pregled izvođenja je pod `izvodjenja`, publika i konzola su
+  // ispod u ProjectorLayout-u, studentske stranice u javnom layoutu (`uzivo`).
+  {
+    path: 'prezentacije',
+    title: 'Prezentacije',
+    data: stalne(m('Nastava'), m('Prezentacije')),
+    children: PREZENTACIJE_RUTE,
+  },
+  {
+    path: 'izvodjenja',
+    title: 'Izvođenja',
+    data: stalne(m('Nastava'), m('Prezentacije', '/prezentacije'), m('Izvođenja')),
+    children: IZVODJENJA_RUTE,
+  },
+
   // Grupe i onboarding (Task 22: lista, detalj sa tabovima, prijave; QR je ispod, u ProjectorLayout-u)
   {
     path: 'grupe',
@@ -123,6 +138,15 @@ export const routes: Routes = [
     ],
   },
 
+  // Uživo za studente (telefon, bez basic-auth-a): samo assets/*, api/public/uzivo/*, api/public/mediji/* i api/public/ws.
+  // Strane uživo crtaju ceo ekran same (`celaStrana`: layout bez okvira sadržaja).
+  {
+    path: 'uzivo',
+    component: PublicLayout,
+    data: { celaStrana: true },
+    children: UZIVO_JAVNE_RUTE,
+  },
+
   // Projektor (bez ljuske, uvek svetao)
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
@@ -147,8 +171,23 @@ export const routes: Routes = [
     ],
   },
 
-  // Uživo (merge sa staging-om): privremeno bez layouta, kao na staging-u.
-  ...UZIVO_ROUTES,
+  // Izvođenje uživo na projektoru i konzola (desktop i telefon): bez ljuske, uvek svetlo, ceo ekran.
+  {
+    matcher: putanjaSaId('izvodjenja/:id/publika'),
+    component: ProjectorLayout,
+    data: { celaStrana: true },
+    children: [
+      { path: '', title: 'Publika', loadComponent: () => import('./features/uzivo/pages/publika.page').then(x => x.PublikaPage) },
+    ],
+  },
+  {
+    matcher: putanjaSaId('izvodjenja/:id/konzola'),
+    component: ProjectorLayout,
+    data: { celaStrana: true },
+    children: [
+      { path: '', title: 'Konzola', loadComponent: () => import('./features/uzivo/pages/konzola.page').then(x => x.KonzolaPage) },
+    ],
+  },
 
   { path: '', component: Shell, children: nastavnickeRute },
 ];

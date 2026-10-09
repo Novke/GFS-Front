@@ -2,9 +2,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
@@ -38,13 +39,18 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [PrezentacijaEditorPage],
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      // Bez animacija: MatFormField i MatExpansionPanel inače posle prvog crtanja (zoneless autoDetect) ostave tajmere od
+      // 200-300 ms, koje `saLaznimSatom` (kao fakeAsync) prijavljuje kao zaostale.
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     dijalog = vi.spyOn(TestBed.inject(MatDialog), 'open')
       .mockReturnValue({ afterClosed: () => of(undefined) } as unknown as MatDialogRef<unknown>);
-    poruka = vi.spyOn(TestBed.inject(MatSnackBar), 'open').mockReturnValue(undefined as never);
+    poruka = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
     fixture = TestBed.createComponent(PrezentacijaEditorPage);
     strana = fixture.componentInstance as unknown as typeof strana;
     store = fixture.debugElement.injector.get(EditorStore);
@@ -100,7 +106,7 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     http.expectOne('api/slajdovi/11').flush({ reason: 'Slajd nije pronađen.' }, { status: 404, statusText: 'Not Found' });
     http.expectNone(POKRENI);
     expect(dijalog).not.toHaveBeenCalled();
-    expect(poruka).toHaveBeenCalledWith('Pokretanje je zaustavljeno: Slajd nije pronađen.', 'U redu', expect.any(Object));
+    expect(poruka).toHaveBeenCalledWith('Pokretanje je zaustavljeno: Slajd nije pronađen.');
     expect(strana.radi()).toBe(false);
     await pomeriSat(800);
   }));
@@ -110,7 +116,7 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     strana.pokreni();
     http.expectNone(() => true);
     expect(poruka).toHaveBeenCalledWith(
-      'Pokretanje je zaustavljeno: Slajd 1 nije sačuvan: Info slajd mora imati naslov, tekst ili sliku.', 'U redu', expect.any(Object));
+      'Pokretanje je zaustavljeno: Slajd 1 nije sačuvan: Info slajd mora imati naslov, tekst ili sliku.');
     await pomeriSat(800);
   }));
 

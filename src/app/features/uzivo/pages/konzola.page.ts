@@ -6,7 +6,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, filter, firstValueFrom, map } from 'rxjs';
@@ -28,6 +27,7 @@ import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './pr
 import { PublikaScenaComponent } from './publika-scena.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
+import { NotificationStore } from '../../../core/state/notification.store';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
@@ -44,7 +44,7 @@ const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu 
       <p class="uz-kon-telefon-link">{{ link }}</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-flat-button color="primary" type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
+      <button mat-flat-button type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
     </mat-dialog-actions>
   `,
 })
@@ -63,7 +63,7 @@ export class TelefonDialog {
       <div class="uz-kon-ekrani">
         @for (e of ekrani; track $index) {
           <button mat-stroked-button type="button" [mat-dialog-close]="e">
-            <mat-icon>{{ e.primarni ? 'laptop' : 'tv' }}</mat-icon>{{ e.oznaka }}
+            <mat-icon [svgIcon]="e.primarni ? 'computer' : 'tv'" />{{ e.oznaka }}
           </button>
         }
       </div>
@@ -106,19 +106,19 @@ export class IzborEkranaDialog {
           </p>
         </div>
         @if (usko()) {
-          <button mat-icon-button type="button" [matMenuTriggerFor]="meni" aria-label="Još radnji"><mat-icon>more_vert</mat-icon></button>
+          <button mat-icon-button type="button" [matMenuTriggerFor]="meni" aria-label="Još radnji"><mat-icon svgIcon="more_vert" /></button>
           <mat-menu #meni="matMenu">
-            <button mat-menu-item type="button" (click)="telefon()"><mat-icon>smartphone</mat-icon>Telefon</button>
-            <button mat-menu-item type="button" (click)="otvoriPublikuProzor()"><mat-icon>open_in_new</mat-icon>Otvori publiku</button>
-            <button mat-menu-item type="button" (click)="zavrsi()"><mat-icon>stop_circle</mat-icon>Završi</button>
+            <button mat-menu-item type="button" (click)="telefon()"><mat-icon svgIcon="mobile" />Telefon</button>
+            <button mat-menu-item type="button" (click)="otvoriPublikuProzor()"><mat-icon svgIcon="open_in_new" />Otvori publiku</button>
+            <button mat-menu-item type="button" (click)="zavrsi()"><mat-icon svgIcon="stop_circle" />Završi</button>
           </mat-menu>
         } @else {
           <div class="uz-kon-akcije">
-            <button mat-stroked-button type="button" (click)="otvoriPublikuProzor()"><mat-icon>open_in_new</mat-icon>Otvori publiku</button>
-            <button mat-stroked-button type="button" (click)="naMonitor()"><mat-icon>tv</mat-icon>Otvori na monitoru</button>
-            <button mat-stroked-button type="button" (click)="telefon()"><mat-icon>smartphone</mat-icon>Telefon</button>
-            <button mat-icon-button type="button" (click)="pomoc()" aria-label="Prečice"><mat-icon>keyboard</mat-icon></button>
-            <button mat-flat-button color="warn" type="button" (click)="zavrsi()"><mat-icon>stop_circle</mat-icon>Završi</button>
+            <button mat-stroked-button type="button" (click)="otvoriPublikuProzor()"><mat-icon svgIcon="open_in_new" />Otvori publiku</button>
+            <button mat-stroked-button type="button" (click)="naMonitor()"><mat-icon svgIcon="tv" />Otvori na monitoru</button>
+            <button mat-stroked-button type="button" (click)="telefon()"><mat-icon svgIcon="mobile" />Telefon</button>
+            <button mat-icon-button type="button" (click)="pomoc()" aria-label="Prečice"><mat-icon svgIcon="keyboard" /></button>
+            <button mat-flat-button class="uz-opasno" type="button" (click)="zavrsi()"><mat-icon svgIcon="stop_circle" />Završi</button>
           </div>
         }
       </header>
@@ -150,7 +150,7 @@ export class IzborEkranaDialog {
               Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
             </p>
             @if (s.rezultat; as r) {
-              <app-rezultat-prikaz class="uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
+              <app-rezultat-prikaz class="rezim-dan uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
                                    [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
               @if (r.tip === 'KRATAK_TEKST') {
                 <h3 class="uz-kon-podnaslov">Tekstovi</h3>
@@ -210,7 +210,7 @@ export class IzborEkranaDialog {
             <section class="uz-kon-kartica uz-kon-sledeci" aria-label="Sledeće">
               <h2 class="uz-kon-naslov">Sledeće</h2>
               @if (s.sledeciSlajd; as sl) {
-                <div class="uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" /></div>
+                <div class="rezim-dan uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" /></div>
               } @else {
                 <p class="uz-prazno">{{ s.prikaz === 'KRAJ' ? 'Ovo je kraj. Završi izvođenje dugmetom „Završi“.' : 'Kraj prezentacije.' }}</p>
               }
@@ -230,7 +230,7 @@ export class IzborEkranaDialog {
     } @else if (store.greska(); as g) {
       <div class="uz-kon-poruka" role="alert">
         <p>{{ g }}</p>
-        <a mat-flat-button color="primary" [routerLink]="'/' + rute.prezentacije">Prezentacije</a>
+        <a mat-flat-button [routerLink]="'/' + rute.prezentacije">Prezentacije</a>
       </div>
     } @else {
       <div class="uz-kon-poruka" role="status"><p>Učitavanje…</p></div>
@@ -243,7 +243,7 @@ export class IzborEkranaDialog {
 export class KonzolaPage {
   protected readonly store = inject(IzvodjenjeStore);
   private readonly dialog = inject(MatDialog);
-  private readonly snack = inject(MatSnackBar);
+  private readonly obavestenja = inject(NotificationStore);
   private readonly router = inject(Router);
   protected readonly rute = UzivoPutanje;
   protected readonly tast = new TastaturaIzvodjenja();
@@ -287,7 +287,7 @@ export class KonzolaPage {
       if (!s || s.izvodjenje.status !== 'ZAVRSENO' || this.otisao) return;
       this.otisao = true;
       untracked(() => {
-        this.snack.open('Izvođenje je završeno.', undefined, { duration: 4000 });
+        this.obavestenja.info('Izvođenje je završeno.');
         const cilj = s.izvodjenje.cuvanje
           ? UzivoPutanje.izvodjenjePregled(s.izvodjenje.id)
           : UzivoPutanje.prezentacija(s.izvodjenje.prezentacija.id);
@@ -343,7 +343,7 @@ export class KonzolaPage {
   protected otvoriPublikuProzor(): void {
     const link = this.store.publikaLink();
     if (link && !otvoriIliFokusiraj(link, PROZOR_PUBLIKE, 'popup')) {
-      this.snack.open(PORUKA_BLOKIRAN, 'U redu', { duration: 6000 });
+      this.obavestenja.greska(PORUKA_BLOKIRAN);
     }
   }
 
@@ -360,7 +360,7 @@ export class KonzolaPage {
     };
     const w = await otvoriPublikuNaMonitoru(link, izbor);
     if (!w && !otkazano) {
-      this.snack.open(PORUKA_BLOKIRAN, 'U redu', { duration: 6000 });
+      this.obavestenja.greska(PORUKA_BLOKIRAN);
     }
   }
 

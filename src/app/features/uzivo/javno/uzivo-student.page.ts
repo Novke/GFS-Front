@@ -34,25 +34,25 @@ export function naslovIshoda(
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [StudentStore],
   imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent],
-  host: { class: 'uz-st uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
+  host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
     @let s = store;
     @switch (s.faza()) {
       @case ('kod') {
-        <main class="uz-st-sredina" role="status"><p class="uz-st-tekst">Učitavanje…</p></main>
+        <div class="uz-st-sredina" role="status"><p class="uz-st-tekst">Učitavanje…</p></div>
       }
       @case ('greska') {
-        <main class="uz-st-sredina">
+        <div class="uz-st-sredina">
           <h1 class="uz-st-naslov">Uživo</h1>
           <p class="uz-st-tekst" role="alert">{{ s.greska() }}</p>
           <div class="uz-st-akcije">
             <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="s.otvori(s.kod() ?? '')">Pokušaj ponovo</button>
             <a class="uz-st-dugme" [routerLink]="['/', rute.uzivo]">Unesi drugi kod</a>
           </div>
-        </main>
+        </div>
       }
       @case ('ime') {
-        <main class="uz-st-sredina">
+        <div class="uz-st-sredina">
           <h1 class="uz-st-naslov">{{ s.info()?.naziv ?? 'Uživo' }}</h1>
           <form class="uz-st-forma" (submit)="$event.preventDefault(); s.prijavi(ime.value)">
             <label class="uz-st-oznaka" for="uz-st-ime">Tvoje ime</label>
@@ -64,13 +64,13 @@ export function naslovIshoda(
               {{ s.salje() ? 'Ulazim…' : 'Uđi' }}
             </button>
           </form>
-        </main>
+        </div>
       }
       @case ('izbacen') {
-        <main class="uz-st-sredina">
+        <div class="uz-st-sredina">
           <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio. Možeš ponovo da uđeš sa drugim imenom.</p>
           <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="s.ponovoUdji()">Uđi ponovo</button>
-        </main>
+        </div>
       }
       @default {
         @let j = s.javno();
@@ -96,7 +96,7 @@ export function naslovIshoda(
         @if (s.greska(); as g) {
           <p class="uz-st-greska" role="alert">{{ g }}</p>
         }
-        <main class="uz-st-telo" [class.uz-st-telo--unos]="s.ekran() === 'unos'">
+        <div class="uz-st-telo" [class.uz-st-telo--unos]="s.ekran() === 'unos'">
           @if (rangVidljiv() && j?.rangLista; as rang) {
             <section class="uz-st-rang" aria-labelledby="uz-st-rang-naslov">
               <h2 id="uz-st-rang-naslov" class="uz-st-podnaslov">Rang-lista</h2>
@@ -181,7 +181,7 @@ export function naslovIshoda(
               }
             }
           }
-        </main>
+        </div>
         @if (detaljiOtvoreni() && detaljiMoguci() && p) {
           <div class="uz-st-detalji" role="dialog" aria-modal="true" aria-labelledby="uz-st-detalji-naslov">
             <div class="uz-st-detalji-vrh">

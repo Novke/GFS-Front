@@ -5,7 +5,7 @@ const tseslint = require("typescript-eslint");
 const angular = require("angular-eslint");
 const javnaRutaUvozi = require("./eslint-rules/javna-ruta-uvozi");
 const graniceFeaturea = require("./eslint-rules/granice-featurea");
-const { JAVNI_FEATURE, JAVNO_DOZVOLJENO } = require("./eslint-rules/javna-ruta-konfig");
+const { JAVNI_FEATURE, dozvoljenoZa } = require("./eslint-rules/javna-ruta-konfig");
 
 /** Sopstvena pravila (jedan objekat plugina: flat config ne dozvoljava dva razlicita plugina istog imena). */
 const gfs = { rules: { "javna-ruta-uvozi": javnaRutaUvozi, "granice-featurea": graniceFeaturea } };
@@ -57,6 +57,6 @@ module.exports = defineConfig([
   ...JAVNI_FEATURE.map((feature) => ({
     files: [`src/app/${feature}/**/*.ts`],
     plugins: { gfs },
-    rules: { "gfs/javna-ruta-uvozi": ["error", { feature, dozvoljeno: JAVNO_DOZVOLJENO }] },
+    rules: { "gfs/javna-ruta-uvozi": ["error", { feature, dozvoljeno: dozvoljenoZa(feature) }] },
   })),
 ]);

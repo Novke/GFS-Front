@@ -7,7 +7,7 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { ESLint } = require('eslint');
 
-const { JAVNI_FEATURE, JAVNO_DOZVOLJENO } = require('./javna-ruta-konfig');
+const { JAVNI_FEATURE, DOZVOLJENO_PO_FEATURE, dozvoljenoZa } = require('./javna-ruta-konfig');
 
 const KORENI = path.resolve(__dirname, '..');
 const RULE_ID = 'gfs/javna-ruta-uvozi';
@@ -57,7 +57,7 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
         assert.equal((await poruke(feature, `export const m = (x: string) => import(x);\n`))[0]?.messageId, 'dinamicki');
       });
 
-      for (const dozvoljen of JAVNO_DOZVOLJENO) {
+      for (const dozvoljen of dozvoljenoZa(feature)) {
         it(`ćuti za dozvoljen uvoz ${dozvoljen}`, async () => {
           assert.deepEqual(await poruke(feature, `import * as X from '${gore}${dozvoljen}';\nexport const y = X;\n`), []);
         });
@@ -75,6 +75,44 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       });
     });
   }
+
+  describe('features/uzivo/javno: dodatak važi samo za uživo, nastavnička strana ostaje zabranjena', () => {
+    const gore = dubina('features/uzivo/javno');
+
+    for (const zabranjen of [
+      'features/uzivo/data-access/prezentacije.api',
+      'features/uzivo/data-access/izvodjenja.api',
+      'features/uzivo/data-access/izvodjenje.store',
+      'features/uzivo/data-access/editor.store',
+      'features/uzivo/data-access/slajd-pravila',
+      'features/uzivo/pages/konzola.page',
+      'features/uzivo/pages/publika-scena.component',
+      'features/uzivo/ui/slajd-prikaz.component',
+      'features/uzivo/ui/monitor',
+      'features/uzivo/uzivo.routes',
+      'core/state/notification.store',
+      'core/layout/icons',
+    ]) {
+      it(`obara uvoz ${zabranjen}`, async () => {
+        const m = await poruke('features/uzivo/javno', `import { X } from '${gore}${zabranjen}';\nexport const y = X;\n`);
+        assert.equal(m.length, 1, JSON.stringify(m));
+        assert.equal(m[0].messageId, 'zabranjen');
+      });
+    }
+
+    it('stvarni javni fajlovi (uzivo-kod.page) uvoze samo dozvoljeno', async () => {
+      const kod = `import { UzivoPutanje } from '../uzivo-putanje';\nimport { razlogGreske } from '../data-access/razlog-greske';\n` +
+        `export const y = [UzivoPutanje, razlogGreske];\n`;
+      assert.deepEqual(await poruke('features/uzivo/javno', kod, 'uzivo-kod.page.ts'), []);
+    });
+
+    for (const dodatak of DOZVOLJENO_PO_FEATURE['features/uzivo/javno']) {
+      it(`upis ne sme da uvozi dodatak uživa ${dodatak}`, async () => {
+        const m = await poruke('features/upis', `import * as X from '${dubina('features/upis')}${dodatak}';\nexport const y = X;\n`);
+        assert.equal(m.length, 1, JSON.stringify(m));
+      });
+    }
+  });
 
   it('ne primenjuje pravilo van javnih feature-a (obim glob-a)', async () => {
     const [r] = await eslint.lintText(`import { X } from '${odStranice('core/state/reference.store')}';\nexport const y = X;\n`, {

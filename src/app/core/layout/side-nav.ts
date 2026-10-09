@@ -17,6 +17,7 @@ export interface NavStavka {
 
 export const NASTAVA: readonly NavStavka[] = [
   { label: 'Predavanja', url: '/predavanja', ikona: 'co_present' },
+  { label: 'Prezentacije', url: '/prezentacije', ikona: 'slideshow' },
   { label: 'Domaći', url: '/domaci', ikona: 'description', brojac: 'domaci' },
   { label: 'Testovi', url: '/testovi', ikona: 'assignment', brojac: 'testovi' },
   { label: 'Ocene', url: '/ocene', ikona: 'bar_chart' },

@@ -17,9 +17,9 @@ export function samoCifre(unos: string): string {
 @Component({
   selector: 'app-uzivo-kod',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'uz-st uz-dan', lang: 'sr-Latn' },
+  host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn' },
   template: `
-    <main class="uz-st-sredina">
+    <div class="uz-st-sredina">
       <h1 class="uz-st-naslov">Uživo</h1>
       <form class="uz-st-forma" (submit)="$event.preventDefault(); udji()">
         <label class="uz-st-oznaka" for="uz-st-kod">Kod sa table</label>
@@ -32,7 +32,7 @@ export function samoCifre(unos: string): string {
           {{ proverava() ? 'Proveravam…' : 'Uđi' }}
         </button>
       </form>
-    </main>
+    </div>
   `,
 })
 export class UzivoKodPage {

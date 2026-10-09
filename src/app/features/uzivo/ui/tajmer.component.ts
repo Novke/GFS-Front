@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, NgZone, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal, untracked } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
 
 export interface TajmerStanje { preostaloMs: number; sekunde: number; pauza: boolean; upozorenje: boolean; }
@@ -94,15 +94,14 @@ export class TajmerComponent {
   });
 
   constructor() {
-    const zona = inject(NgZone);
-    // Osvežavanje samo dok tajmer radi; interval je van zone, signal sam zakazuje osvežavanje prikaza.
+    // Osvežavanje samo dok tajmer radi (aplikacija je bez zone.js): signal `sada` sam zakazuje osvežavanje prikaza.
     effect((onCleanup) => {
       const radi = this.rokMs() !== null && this.preostaloMs() === null;
       if (!radi) {
         return;
       }
       this.sada.set(Date.now());
-      const id = zona.runOutsideAngular(() => setInterval(() => this.sada.set(Date.now()), OSVEZAVANJE_MS));
+      const id = setInterval(() => this.sada.set(Date.now()), OSVEZAVANJE_MS);
       onCleanup(() => clearInterval(id));
     });
     // Pun krug: najveće preostalo vreme od početka runde; posle isteka (0) ili bez tajmera kreće ispočetka.

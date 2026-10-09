@@ -25,7 +25,7 @@ function predmetIzUpita(v: string | null): number | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatProgressBarModule, MatSelectModule],
   template: `
-    <main class="uz-ed-strana">
+    <div class="uz-ed-strana">
       <header class="uz-ed-strana-zaglavlje">
         <h1>Prezentacije</h1>
         <mat-form-field class="uz-ed-filter" subscriptSizing="dynamic">
@@ -37,8 +37,8 @@ function predmetIzUpita(v: string | null): number | null {
             }
           </mat-select>
         </mat-form-field>
-        <button mat-flat-button color="primary" type="button" (click)="nova()">
-          <mat-icon>add</mat-icon>Nova prezentacija
+        <button mat-flat-button type="button" (click)="nova()">
+          <mat-icon svgIcon="add" />Nova prezentacija
         </button>
       </header>
 
@@ -78,21 +78,21 @@ function predmetIzUpita(v: string | null): number | null {
           </table>
         } @else {
           <section class="uz-ed-prazno-stanje">
-            <mat-icon aria-hidden="true">co_present</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="co_present" />
             <h2>{{ predmetId() ? 'Ovaj predmet još nema prezentacija.' : 'Još nema prezentacija.' }}</h2>
             <p>
               Prezentacija je niz slajdova sa tekstom i pitanjima. Tokom predavanja je pokreneš, studenti uđu preko QR
               koda sa telefona i odgovaraju na pitanja, a ti biraš kada se vide rezultati.
             </p>
-            <button mat-flat-button color="primary" type="button" (click)="nova()">
-              <mat-icon>add</mat-icon>Nova prezentacija
+            <button mat-flat-button type="button" (click)="nova()">
+              <mat-icon svgIcon="add" />Nova prezentacija
             </button>
           </section>
         }
       } @else if (!greska()) {
         <mat-progress-bar mode="indeterminate" aria-label="Učitavanje prezentacija" />
       }
-    </main>
+    </div>
   `,
 })
 export class PrezentacijeListaPage {

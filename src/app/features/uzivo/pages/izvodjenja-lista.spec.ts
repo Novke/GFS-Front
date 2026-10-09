@@ -2,9 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { IzvodjenjeInfo } from '../data-access/uzivo.models';
 import { IzvodjenjaListaPage } from './izvodjenja-lista.page';
 
@@ -19,7 +19,8 @@ function izv(id: number, izmene: Partial<IzvodjenjeInfo> = {}): IzvodjenjeInfo {
 describe('IzvodjenjaListaPage', () => {
   let http: HttpTestingController;
   let potvrda: ReturnType<typeof vi.spyOn>;
-  let poruka: ReturnType<typeof vi.spyOn>;
+  let uspeh: ReturnType<typeof vi.spyOn>;
+  let greska: ReturnType<typeof vi.spyOn>;
 
   function otvori(lista: IzvodjenjeInfo[]) {
     TestBed.configureTestingModule({
@@ -31,7 +32,8 @@ describe('IzvodjenjaListaPage', () => {
     http = TestBed.inject(HttpTestingController);
     potvrda = vi.spyOn(TestBed.inject(MatDialog), 'open')
       .mockReturnValue({ afterClosed: () => of(true) } as unknown as MatDialogRef<unknown>);
-    poruka = vi.spyOn(TestBed.inject(MatSnackBar), 'open').mockReturnValue(undefined as never);
+    uspeh = vi.spyOn(TestBed.inject(NotificationStore), 'uspeh');
+    greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
     const fixture = TestBed.createComponent(IzvodjenjaListaPage);
     http.expectOne('api/izvodjenja?prezentacijaId=3').flush(lista);
     http.expectOne('api/prezentacije/3').flush({ id: 3, naziv: 'Statika' });
@@ -78,7 +80,7 @@ describe('IzvodjenjaListaPage', () => {
     http.expectOne({ method: 'DELETE', url: 'api/izvodjenja/2' }).flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(redovi(el).length).toBe(1);
-    expect(poruka).toHaveBeenCalledWith('Izvođenje je obrisano.', undefined, expect.anything());
+    expect(uspeh).toHaveBeenCalledWith('Izvođenje je obrisano.');
   });
 
   it('otkazana potvrda ne šalje DELETE', () => {
@@ -94,7 +96,8 @@ describe('IzvodjenjaListaPage', () => {
     expect(podaci.naslov).toBe('Obrisati izvođenje?');
     expect(podaci.poruke[0]).toContain('trajno obrisano');
     expect(redovi(el).length).toBe(1);
-    expect(poruka).not.toHaveBeenCalled();
+    expect(uspeh).not.toHaveBeenCalled();
+    expect(greska).not.toHaveBeenCalled();
     http.expectNone('api/izvodjenja/2');
   });
 
@@ -110,7 +113,7 @@ describe('IzvodjenjaListaPage', () => {
     http.expectOne('api/izvodjenja/2').flush({ reason: 'Izvođenje je u toku.' }, { status: 409, statusText: 'Conflict' });
     fixture.detectChanges();
     expect(redovi(el).length).toBe(1);
-    expect(poruka).toHaveBeenCalledWith('Izvođenje je u toku.', 'U redu', expect.anything());
+    expect(greska).toHaveBeenCalledWith('Izvođenje je u toku.');
   });
 
   it('prazna lista', () => {

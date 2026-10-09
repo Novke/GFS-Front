@@ -32,11 +32,11 @@ export function proveriSliku(fajl: { size: number; type: string }): string | nul
       }
       <div class="uz-ed-slika-akcije">
         <button mat-stroked-button type="button" [disabled]="salje()" (click)="fajl.click()">
-          <mat-icon>image</mat-icon>{{ slikaId() ? 'Zameni sliku' : 'Dodaj sliku' }}
+          <mat-icon svgIcon="image" />{{ slikaId() ? 'Zameni sliku' : 'Dodaj sliku' }}
         </button>
         @if (slikaId()) {
           <button mat-button type="button" [disabled]="salje()" (click)="ukloni()">
-            <mat-icon>hide_image</mat-icon>Ukloni sliku
+            <mat-icon svgIcon="hide_image" />Ukloni sliku
           </button>
         }
         <span class="uz-ed-napomena">PNG, JPEG, GIF ili WebP, do 10 MB</span>
