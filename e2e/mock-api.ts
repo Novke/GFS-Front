@@ -49,6 +49,8 @@ interface Prijava {
   datumRodjenja: string | null; opstina: string | null; status: StatusPrijave; podneto: string; obradjeno: string | null;
   studentId: number | null; napomena: string | null;
 }
+interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
+interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
@@ -66,6 +68,9 @@ export interface Podaci {
   sesije: Sesija[];
   prijave: Prijava[];
   kontrolnaTabla: KontrolnaTablaPodesavanje;
+  izvodjenja: UzivoIzvodjenje[];
+  /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
+  ucesnici: Ucesnik[];
 }
 
 const FIKSTURE = join(__dirname, 'fixtures');
@@ -88,6 +93,8 @@ export function ucitajPodatke(): Podaci {
     sesije: onboarding.sesije,
     prijave: onboarding.prijave,
     kontrolnaTabla: ucitaj('kontrolna-tabla.json'),
+    izvodjenja: ucitaj<{ izvodjenja: UzivoIzvodjenje[] }>('uzivo.json').izvodjenja,
+    ucesnici: [],
   };
 }
 
@@ -728,6 +735,27 @@ export class MockApi {
       };
       d.prijave.push(prijava);
       return { status: 201, telo: { id: prijava.id } };
+    });
+
+    // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec
+    const aktivnoZaKod = (kod: string) => d.izvodjenja.find(i => i.kod === kod && i.status === 'AKTIVNO');
+    get('public/uzivo/:token', (_z, p) => {
+      const i = aktivnoZaKod(p['token']);
+      return i ? ok({ naziv: i.naziv }) : greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
+    });
+    get('public/uzivo/:token/ja', (_z, p) => {
+      const i = aktivnoZaKod(p['token']);
+      const u = i && d.ucesnici.find(x => x.izvodjenjeId === i.id);
+      return u ? ok(u) : greska(404, 'Nisi prijavljen na ovo izvođenje.');
+    });
+    post('public/uzivo/:token/prijava', (z, p) => {
+      const i = aktivnoZaKod(p['token']);
+      if (!i) {
+        return greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
+      }
+      const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime: (z.telo as { ime: string }).ime, izvodjenjeId: i.id };
+      d.ucesnici.push(ucesnik);
+      return { status: 201, telo: ucesnik };
     });
 
     return r;

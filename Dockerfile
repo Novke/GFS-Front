@@ -1,4 +1,4 @@
-# Build: Angular produkcioni build (BASE_HREF=/gfs/ iza host proxy-ja). Runtime: nginx.
+# Build: Angular produkcioni build (BASE_HREF=/ na stejdžingu i prodi; /gfs/ je bio istorijski). Runtime: nginx.
 FROM node:24-alpine AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
