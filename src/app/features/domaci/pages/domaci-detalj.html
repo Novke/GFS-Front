@@ -1,0 +1,48 @@
+@if (store.domaci(); as d) {
+  <app-domaci-zaglavlje [domaci]="d" [brojevi]="store.brojevi()" [sacuvaj]="sacuvajZaglavlje" (obrisi)="obrisi()" />
+
+  @if (!store.pregledan()) {
+    <div class="traka" role="toolbar" aria-label="Pregled domaćeg">
+      @if (d.predavanje) {
+        <button matButton="outlined" type="button" data-oslobodi [disabled]="store.brojevi().zaOslobadjanje === 0" (click)="oslobodi()">
+          <mat-icon svgIcon="task_alt" aria-hidden="true" />Oslobodi aktivne
+        </button>
+        <span class="aktivni" data-aktivni>Aktivnih na predavanju: {{ store.brojevi().aktivnih }}, oslobođeno: {{ store.brojevi().oslobodjenih }}</span>
+      }
+      <div class="akcije">
+        <button matButton="filled" type="button" data-zavrsi [disabled]="store.cuva()" (click)="zavrsi()">
+          <mat-icon svgIcon="check" aria-hidden="true" />Završi pregled
+        </button>
+      </div>
+    </div>
+    <p class="uputstvo">Izmene se čuvaju same. Enter ide u isto polje sledećeg studenta, Tab na sledeće polje.</p>
+  } @else {
+    <p class="uputstvo" data-samo-citanje>
+      <mat-icon svgIcon="info" aria-hidden="true" />Pregled je završen; evidentiranje je samo za čitanje.
+    </p>
+  }
+
+  @if (store.studenti().length === 0) {
+    <app-empty-state
+      ikona="groups"
+      [naslov]="d.grupa ? 'Grupa nema studenata.' : 'Domaći nema grupu, pa nema studenata za evidentiranje.'"
+    />
+  } @else {
+    <section class="tabela-kartica" aria-label="Evidentiranje po studentima" data-tabela>
+      <app-evidentiranje-tabela
+        [studenti]="store.studenti()"
+        [vrednosti]="store.vrednosti()"
+        [statusi]="store.statusi()"
+        [samoCitanje]="store.pregledan()"
+        [imaPredavanje]="!!d.predavanje"
+        (izmena)="izmena($event)"
+        (sacuvajOdmah)="store.sacuvajOdmah($event)"
+        (ponovo)="store.ponovi($event)" />
+    </section>
+  }
+} @else if (store.imaGresku()) {
+  <app-error-panel naslov="Domaći nije učitan." [poruka]="store.greska()" (ponovo)="ponovo()" />
+  <a matButton routerLink="/domaci"><mat-icon svgIcon="arrow_back" aria-hidden="true" />Svi domaći</a>
+} @else {
+  <app-skeleton-rows [redovi]="6" />
+}

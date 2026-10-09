@@ -6,9 +6,10 @@ import { ProjectorLayout } from './core/layout/projector-layout';
 import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
+import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { legacyRedirects } from './features/legacy-redirects';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
-import { domaciPregledan, imaGrupuIPredmet, testPregledan } from './features/privremeno/privremeno';
+import { imaGrupuIPredmet, testPregledan } from './features/privremeno/privremeno';
 
 /*
  * Stablo ruta (spec, sekcija 2). Putanje su relativne na <base href>; filteri lista su query parametri.
@@ -59,43 +60,12 @@ const nastavnickeRute: Routes = [
     ],
   },
 
-  // Domaći (Task 20)
+  // Domaći (Task 20: lista, nov i detalj sa evidentiranjem)
   {
     path: 'domaci',
     title: 'Domaći',
     data: stalne(m('Nastava'), m('Domaći')),
-    children: [
-      {
-        path: '',
-        pathMatch: 'full',
-        canMatch: [imaGrupuIPredmet],
-        loadComponent: () => import('./domaci/domaci-list/domaci-list.component').then(x => x.DomaciListComponent),
-      },
-      {
-        path: '',
-        pathMatch: 'full',
-        loadComponent: () => import('./domaci/domaci-select/domaci-select.component').then(x => x.DomaciSelectComponent),
-      },
-      {
-        path: 'novo',
-        title: 'Nov domaći',
-        data: stalne(m('Domaći', '/domaci'), m('Nov domaći')),
-        loadComponent: () => import('./domaci/nov-domaci/nov-domaci.component').then(x => x.NovDomaciComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Domaći',
-        data: stalne(m('Domaći', '/domaci'), m('Domaći')),
-        canMatch: [domaciPregledan],
-        loadComponent: () => import('./domaci/pregled-domaceg/pregled-domaceg.component').then(x => x.PregledDomacegComponent),
-      },
-      {
-        matcher: putanjaSaId(':id'),
-        title: 'Domaći',
-        data: stalne(m('Domaći', '/domaci'), m('Domaći')),
-        loadComponent: () => import('./domaci/evidentiranje/evidentiranje.component').then(x => x.EvidentiranjeComponent),
-      },
-    ],
+    children: DOMACI_RUTE,
   },
 
   // Testovi (Task 21)

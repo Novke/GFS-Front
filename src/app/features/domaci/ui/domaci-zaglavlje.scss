@@ -1,0 +1,27 @@
+:host { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 16px; }
+.naslov-blok { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.naslov-red { display: flex; align-items: center; gap: 4px; max-width: 100%; }
+h1 { font-size: 26px; overflow-wrap: anywhere; }
+h1.bez-naslova { color: var(--muted); font-weight: 500; }
+.izmeni { color: var(--muted); flex: none; }
+.kontekst { display: flex; flex-wrap: wrap; gap: 6px; }
+.kontekst .mat-icon { width: 16px; height: 16px; }
+.kontekst .oznaka { white-space: normal; overflow-wrap: anywhere; }
+.kontekst a.oznaka { text-decoration: none; }
+.kontekst a.oznaka:hover { text-decoration: underline; }
+.opis { margin: 4px 0 0; max-width: 72ch; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.izmena { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 12px; width: 100%; margin-top: 4px; }
+.izmena .naslov-polje { flex: 1 1 280px; }
+.izmena .datum { flex: 0 1 180px; }
+.izmena .opis-polje { flex: 1 1 100%; }
+.dugmad { display: flex; gap: 8px; padding-top: 4px; }
+.dugmad mat-progress-spinner { display: inline-block; margin-right: 8px; }
+.desno { display: flex; align-items: flex-end; gap: 8px; margin-left: auto; }
+.kpi { display: flex; flex-wrap: wrap; gap: 10px; }
+.opasno { color: var(--danger); }
+@media (max-width: 599.98px) {
+  h1 { font-size: 22px; }
+  .desno { width: 100%; justify-content: space-between; }
+  .kpi { flex: 1; }
+  .kpi app-stat-tile { flex: 1 1 0; min-width: 0; }
+}
