@@ -137,7 +137,7 @@ export function naslovSledeceg(k: SledeciKlik, brojSlajdova: number): string {
   switch (k.vrsta) {
     case 'KORAK': return `Sledeće · korak ${k.korak}/${k.brojKoraka}`;
     case 'SLAJD': return `Sledeće · slajd ${k.indeks + 1}/${brojSlajdova}`;
-    case 'PITANJE': return k.radnja === 'OTVARA' ? 'Sledeći klik otvara pitanje' : 'Sledeći klik zatvara pitanje';
+    case 'PITANJE': return 'Sledeće';
     case 'KRAJ': return 'Sledeće · kraj prezentacije';
     default: return 'Sledeće';
   }

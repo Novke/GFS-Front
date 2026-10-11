@@ -246,8 +246,8 @@ describe('naslovSledeceg', () => {
   it.each<[SledeciKlik, string]>([
     [{ vrsta: 'KORAK', slajd: infoSlajd(), indeks: 0, korak: 4, brojKoraka: 6 }, 'Sledeće · korak 4/6'],
     [{ vrsta: 'SLAJD', slajd: infoSlajd(), indeks: 12 }, 'Sledeće · slajd 13/48'],
-    [{ vrsta: 'PITANJE', radnja: 'OTVARA', potom: null, indeksPotom: 5 }, 'Sledeći klik otvara pitanje'],
-    [{ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 5 }, 'Sledeći klik zatvara pitanje'],
+    [{ vrsta: 'PITANJE', radnja: 'OTVARA', potom: null, indeksPotom: 5 }, 'Sledeće'],
+    [{ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 5 }, 'Sledeće'],
     [{ vrsta: 'KRAJ' }, 'Sledeće · kraj prezentacije'],
     [{ vrsta: 'NISTA' }, 'Sledeće'],
   ])('%#', (k, tekst) => expect(naslovSledeceg(k, 48)).toBe(tekst));

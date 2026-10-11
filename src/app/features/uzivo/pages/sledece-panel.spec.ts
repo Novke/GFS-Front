@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { animacija } from '../data-access/platno-podaci.testing';
 import { infoSlajd, naPitanju, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
@@ -30,8 +31,11 @@ describe('SledecePanelComponent', () => {
   });
 
   it('PLATNO korak 0/2: korak 1, bez animacije, tema prezentacije, prvi klik je vidljiv', async () => {
+    // druga KLIK animacija uvodi sloj tabele (u fabričkom platnu je to izlaz oblika)
+    const pl = platnoSlajd();
+    pl.platno!.animacije[3] = animacija('a4', 'tabela');
     const f = await prikazi(stanje({
-      prikaz: 'SLAJD', indeks: 0, trenutniSlajd: platnoSlajd(), korak: 0, brojStavki: 2, tema: 'TAMNA',
+      prikaz: 'SLAJD', indeks: 0, trenutniSlajd: pl, korak: 0, brojStavki: 2, tema: 'TAMNA',
     }));
     const p = prikazi1(f)[0];
     expect(p.korak()).toBe(1);
@@ -40,6 +44,7 @@ describe('SledecePanelComponent', () => {
     const sloj = (id: string) => f.nativeElement.querySelector(`[data-sloj="${id}"]`) as HTMLElement;
     expect(sloj('tekst').style.visibility).toBe('');
     expect(sloj('slika').style.visibility).toBe('');
+    expect(sloj('tabela').style.visibility).toBe('hidden');
   });
 
   it('pitanje CEKA: radnja "otvara" i pregled slajda posle pitanja', async () => {

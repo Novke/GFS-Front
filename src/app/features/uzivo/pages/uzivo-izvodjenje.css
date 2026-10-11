@@ -289,13 +289,6 @@
   max-width: 70%;
 }
 
-.uz-kon .uz-kon-beleske {
-  margin: 0;
-  white-space: pre-wrap;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
 .uz-kon .uz-kon-odgovorili {
   margin: 0 0 10px;
   font-size: 18px;
@@ -689,9 +682,19 @@
   margin-bottom: 12px;
 }
 
-.uz-kon-telefon-izbor [aria-pressed='true'] {
-  background: var(--primary);
+/* Izabrana opcija: tokeni dugmeta (Material ih čita posle ovog fajla) plus veća specifičnost od `.mat-mdc-outlined-button:not(:disabled)`. */
+.uz-kon-telefon-izbor .mat-mdc-outlined-button.mat-mdc-button-base[aria-pressed='true'] {
+  --mat-button-outlined-label-text-color: var(--primary-ink);
+  --mat-button-outlined-outline-color: var(--primary);
+  background-color: var(--primary);
   color: var(--primary-ink);
+}
+
+/* Uska konzola: naslovi i dugme "više" u prvom redu, štoperica i sat u svom redu. */
+.uz-kon--usko .uz-kon-vreme {
+  order: 3;
+  flex-basis: 100%;
+  margin-inline-start: 0;
 }
 
 .uz-kon-telefon-napomena {

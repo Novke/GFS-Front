@@ -133,8 +133,8 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
       .find((b) => b.textContent?.includes('Telefon')) as HTMLButtonElement;
     dugme.click();
     await f.whenStable();
-    const qr = () => document.querySelector('app-qr-kod [aria-label], app-qr-kod')?.outerHTML ?? '';
-    expect(qr()).toContain('izvodjenja/5/daljinski');
+    const qr = () => document.querySelector('app-qr-kod canvas')?.getAttribute('aria-label');
+    expect(qr()).toBe('QR kod: http://localhost/izvodjenja/5/daljinski');
     const konz = Array.from(document.querySelectorAll('.uz-kon-telefon-izbor button'))
       .find((b) => b.textContent?.includes('Cela konzola')) as HTMLButtonElement;
     expect(konz.getAttribute('aria-pressed')).toBe('false');
@@ -142,7 +142,7 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     f.detectChanges();
     await f.whenStable();
     expect(konz.getAttribute('aria-pressed')).toBe('true');
-    expect(qr()).toContain('izvodjenja/5/konzola');
+    expect(qr()).toBe('QR kod: http://localhost/izvodjenja/5/konzola');
   });
 
   it('povratak na stranicu zove store.posleVracanja', async () => {
@@ -150,5 +150,13 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     vidljivost('hidden');
     vidljivost('visible');
     expect(lazniStore.posleVracanja).toHaveBeenCalledTimes(1);
+  });
+
+  it('posle uništenja stranice povratak više ne zove store', async () => {
+    const f = await prikazi();
+    f.destroy();
+    vidljivost('hidden');
+    vidljivost('visible');
+    expect(lazniStore.posleVracanja).not.toHaveBeenCalled();
   });
 });
