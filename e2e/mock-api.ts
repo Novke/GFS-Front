@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import type { Page, Request, Route } from '@playwright/test';
 
+import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
+
 /*
  * Mokovan backend za e2e: `page.route('**\/api/**')` odgovara po metodi i putanji iz izmišljenih podataka
  * (`e2e/fixtures/*.json`), sa stanjem po testu (izmene kroz PATCH/POST/DELETE ostaju do kraja testa). DTO-i ogledaju
@@ -181,6 +183,8 @@ export interface Zadrzan {
 
 export class MockApi {
   readonly podaci = ucitajPodatke();
+  /** Nastavničko izvođenje 7 (daljinski, konzola): mašina stanja iz `mock-izvodjenje.ts`; STOMP (`api/ws`) mokuje spec. */
+  readonly izvodjenje = new MockIzvodjenje(ucitaj<FiksturaIzvodjenja>('uzivo-izvodjenje.json'));
   /** Svi zahtevi ka `api/` redom kojim su stigli. */
   readonly zahtevi: Zahtev[] = [];
   /** Zahtevi za koje mok nema rutu (test ih proverava u `afterEach`). */
@@ -801,6 +805,18 @@ export class MockApi {
       const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime: (z.telo as { ime: string }).ime, izvodjenjeId: i.id };
       d.ucesnici.push(ucesnik);
       return { status: 201, telo: ucesnik };
+    });
+
+    // nastavničko izvođenje (iza basic-auth-a): stanje i komande; snimci kroz STOMP idu preko `lazni-stomp.ts`
+    const izvodjenje = (id: string) => Number(id) === this.izvodjenje.id;
+    get('izvodjenja/:id/stanje', (_z, p) =>
+      izvodjenje(p['id']) ? ok(this.izvodjenje.stanje()) : greska(404, 'Izvođenje ne postoji.'));
+    post('izvodjenja/:id/komande', (z, p) => {
+      if (!izvodjenje(p['id'])) {
+        return greska(404, 'Izvođenje ne postoji.');
+      }
+      const cmd = z.telo as { tip: string; vrednost?: number | null };
+      return this.izvodjenje.primeni(cmd.tip, cmd.vrednost);
     });
 
     return r;

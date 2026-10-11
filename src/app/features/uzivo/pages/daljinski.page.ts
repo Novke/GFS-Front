@@ -102,7 +102,12 @@ export class DaljinskiPage {
   protected readonly prikazGreske = signal<string | null>(null);
   private readonly status = computed(() => this.store.stanje()?.izvodjenje.status ?? null);
   protected readonly zavrseno = computed(() => this.status() === 'ZAVRSENO');
-  private readonly bezVeze = computed(() => this.store.veza() !== 'povezan' && !this.zavrseno());
+  /**
+   * Stanje je učitano, a STOMP nije povezan. Bez učitanog stanja (404/410 pri otvaranju) se ne osvežava: store tada ni
+   * ne otvara STOMP, pa bi GET na 5 s trajao zauvek.
+   */
+  private readonly bezVeze = computed(() =>
+    this.store.veza() !== 'povezan' && !this.zavrseno() && this.store.stanje() !== null);
 
   protected readonly polozaj = computed(() => {
     const s = this.store.stanje();
@@ -150,6 +155,7 @@ export class DaljinskiPage {
 
     // Razlog neuspele komande u traci 6 s. Store ne menja `greska` kad ista komanda ponovo ne uspe, pa se prikaz
     // obnavlja i kad se red komandi isprazni (`salje` -> false) uz grešku; uspešna komanda grešku briše odmah.
+    // Zato se greška vidi tek kad red stane: komanda koja još čeka iza neuspele odlaže prikaz (njen ishod ga i odredi).
     effect(onCleanup => {
       const g = this.store.greska();
       const salje = this.store.salje();

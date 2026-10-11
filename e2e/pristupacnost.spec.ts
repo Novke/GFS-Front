@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
+import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
 /** Token otvorene sesije iz `fixtures/onboarding.json` (izmišljen). */
 const TOKEN = 'e2eTokenZaUpis_0123456789abcdefg';
@@ -25,6 +26,14 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 
+/** axe nad celom stranicom: samo serious/critical kršenja (sa prvih 5 elemenata za poruku). */
+async function ozbiljnaKrsenja(page: Page) {
+  const rezultat = await new AxeBuilder({ page }).withTags(OZNAKE).analyze();
+  return rezultat.violations
+    .filter(v => v.impact === 'serious' || v.impact === 'critical')
+    .map(v => ({ pravilo: v.id, uticaj: v.impact, opis: v.help, elementi: v.nodes.map(n => n.target.join(' ')).slice(0, 5) }));
+}
+
 for (const rezim of ['dan', 'noc'] as const) {
   test.describe(`pristupačnost (axe), režim ${rezim}`, () => {
     // režim "Sistem" (podrazumevan) prati prefers-color-scheme pregledača
@@ -38,12 +47,42 @@ for (const rezim of ['dan', 'noc'] as const) {
         await expect(s.spremno(page)).toBeVisible();
         await page.waitForLoadState('networkidle');
 
-        const rezultat = await new AxeBuilder({ page }).withTags(OZNAKE).analyze();
-        const ozbiljna = rezultat.violations
-          .filter(v => v.impact === 'serious' || v.impact === 'critical')
-          .map(v => ({ pravilo: v.id, uticaj: v.impact, opis: v.help, elementi: v.nodes.map(n => n.target.join(' ')).slice(0, 5) }));
-        expect(ozbiljna, `axe: /${s.putanja} (${rezim})`).toEqual([]);
+        expect(await ozbiljnaKrsenja(page), `axe: /${s.putanja} (${rezim})`).toEqual([]);
       });
     }
+
+    // Uživo za nastavnika (mok izvođenja + lažni STOMP broker): konzola je uvek svetla, daljinski prati dan/noć (`pratiRezim`).
+    test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {
+      await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/konzola');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.getByRole('region', { name: 'Sledeće' })).toBeVisible();
+      await expect(page.locator('app-projector-layout')).toHaveClass(/\brezim-dan\b/);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/konzola (${rezim})`).toEqual([]);
+    });
+
+    test.describe('daljinski na telefonu', () => {
+      test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+      test('/izvodjenja/7/daljinski (390 x 844): bez serious/critical kršenja, prati režim', async ({ page, mock }) => {
+        await budanEkranStub(page);
+        const broker = await nastavnickiBroker(page, mock);
+        await page.goto('izvodjenja/7/daljinski');
+        await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+        await expect(page.getByRole('button', { name: /^Napred/ })).toBeVisible();
+        await expect(page.locator('.uz-dalj-veza')).toHaveText('Povezano');
+        // daljinski ne nosi `rezim-dan` (u noći bi ga zaključao na dan)
+        await expect(page.locator('app-projector-layout')).not.toHaveClass(/\brezim-dan\b/);
+        await page.waitForLoadState('networkidle');
+        expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/daljinski, prijava (${rezim})`).toEqual([]);
+
+        // otvoreno pitanje (red Otvori/Zatvori, Rezultati, Tačan i "Odgovorili") stiže sa laptopa kroz STOMP
+        for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI');
+        broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('OTVORI_ZATVORI').telo);
+        await expect(page.getByRole('group', { name: 'Pitanje' }).getByText('Odgovorili 0/2')).toBeVisible();
+        expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/daljinski, pitanje (${rezim})`).toEqual([]);
+      });
+    });
   });
 }

@@ -215,6 +215,22 @@ describe('DaljinskiPage', () => {
     await zavrsi(f);
   }));
 
+  it('stanje nije učitano (404 pri otvaranju): poruka greške, bez osvežavanja na 5 s', saLaznimSatom(async () => {
+    stanjeS.set(null);
+    lazniStore.greska.set('Izvođenje ne postoji.');
+    lazniStore.veza.set('povezivanje');
+    const f = await prikazi();
+    expect(el(f).querySelector('.uz-dalj-kraj[role="alert"]')?.textContent).toContain('Izvođenje ne postoji.');
+    await pomeriSat(3 * OSVEZI_BEZ_VEZE_MS);
+    expect(lazniStore.osvezi).not.toHaveBeenCalled();
+    // stanje stiglo (npr. drugi pokušaj): bez veze se osvežava kao inače
+    stanjeS.set(naInfo());
+    await osvezi(f);
+    await pomeriSat(OSVEZI_BEZ_VEZE_MS);
+    expect(lazniStore.osvezi).toHaveBeenCalledTimes(1);
+    await zavrsi(f);
+  }));
+
   it('povratak na stranicu zove store.posleVracanja', saLaznimSatom(async () => {
     const f = await prikazi();
     vidljivost('hidden');
