@@ -648,3 +648,29 @@
   overflow-wrap: anywhere;
   line-height: 1.5;
 }
+
+.uz-vreme {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uz-vreme--kompaktno {
+  gap: 0;
+}
+
+.uz-vreme-stoperica,
+.uz-vreme-sat {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.uz-vreme-stoperica {
+  font-weight: 600;
+}
+
+.uz-vreme-sat {
+  margin-inline-start: 8px;
+  color: var(--muted);
+}
