@@ -6,7 +6,7 @@ import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { naPitanju, stanje } from './izvodjenje-podaci.testing';
-import { GRUPA_PORUKA, IzvodjenjeStore } from './izvodjenje.store';
+import { GRUPA_PORUKA, IzvodjenjeStore, PONOVO_POVEZI_POSLE_MS } from './izvodjenje.store';
 import { STOMP_FABRIKA } from './stomp';
 import { NastavnickoStanje } from './uzivo.models';
 
@@ -15,6 +15,7 @@ class LazniStomp {
   readonly connectionState$ = new BehaviorSubject<RxStompState>(RxStompState.CONNECTING);
   readonly odredista = new Map<string, Subject<IMessage>>();
   readonly deactivate = vi.fn().mockResolvedValue(undefined);
+  readonly stompClient = { forceDisconnect: vi.fn() };
   watch(odrediste: string) {
     const s = new Subject<IMessage>();
     this.odredista.set(odrediste, s);
@@ -161,6 +162,99 @@ describe('IzvodjenjeStore', () => {
       expect(store.joinLink()).toBe(new URL('uzivo/123456', document.baseURI).href);
       expect(store.konzolaLink()).toBe(new URL('izvodjenja/5/konzola', document.baseURI).href);
       expect(store.publikaLink()).toBe(new URL('izvodjenja/5/publika', document.baseURI).href);
+      expect(store.daljinskiLink()).toBe(new URL('izvodjenja/5/daljinski', document.baseURI).href);
+    });
+
+    it('linkovi su prazni pre učitanog stanja', () => {
+      expect(store.daljinskiLink()).toBe('');
+    });
+  });
+
+  describe('osvezi', () => {
+    it('GET stanje: novija verzija se prihvata, starija ne', () => {
+      init(stanje({ verzija: 3 }));
+      store.osvezi();
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 4, prikaz: 'SLAJD' }));
+      expect(store.stanje()!.verzija).toBe(4);
+      expect(store.stanje()!.prikaz).toBe('SLAJD');
+
+      store.osvezi();
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 2 }));
+      expect(store.stanje()!.verzija).toBe(4);
+    });
+
+    it('greška ne menja stanje, ne postavlja grešku i ne baca', () => {
+      init(stanje({ verzija: 3 }));
+      store.osvezi();
+      expect(() => http.expectOne('api/izvodjenja/5/stanje').flush(null, { status: 500, statusText: 'Server Error' }))
+        .not.toThrow();
+      expect(store.stanje()!.verzija).toBe(3);
+      expect(store.greska()).toBeNull();
+      expect(obavestenja.info).not.toHaveBeenCalled();
+    });
+
+    it('pre init (nema izvođenja) nema zahteva', () => {
+      store.osvezi();
+      http.expectNone('api/izvodjenja/5/stanje');
+    });
+  });
+
+  describe('ponovoPovezi i posleVracanja', () => {
+    it('ponovoPovezi prekida socket (rx-stomp se sam ponovo poveže); pre init ništa', () => {
+      expect(() => store.ponovoPovezi()).not.toThrow();
+      init();
+      store.ponovoPovezi();
+      expect(stomp.stompClient.forceDisconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('ponovoPovezi ne baca ni kad klijent baci', () => {
+      init();
+      stomp.stompClient.forceDisconnect.mockImplementation(() => { throw new Error('socket'); });
+      expect(() => store.ponovoPovezi()).not.toThrow();
+    });
+
+    it('kratko skrivena stranica: samo GET stanje, bez prekida veze', () => {
+      init();
+      store.posleVracanja(1_000);
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 2 }));
+      expect(stomp.stompClient.forceDisconnect).not.toHaveBeenCalled();
+      expect(store.stanje()!.verzija).toBe(2);
+    });
+
+    it(`skrivena >= ${PONOVO_POVEZI_POSLE_MS} ms ili ponovo na mreži: GET stanje i ponovno povezivanje`, () => {
+      init();
+      store.posleVracanja(PONOVO_POVEZI_POSLE_MS);
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 2 }));
+      expect(stomp.stompClient.forceDisconnect).toHaveBeenCalledTimes(1);
+
+      store.posleVracanja(Infinity);
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 3 }));
+      expect(stomp.stompClient.forceDisconnect).toHaveBeenCalledTimes(2);
+    });
+
+    it('prekid posle vraćanja daje prelaz povezan -> prekinut -> povezan (publika ne animira posle ponovnog povezivanja)', () => {
+      init();
+      stomp.connectionState$.next(RxStompState.OPEN);
+      stomp.stompClient.forceDisconnect.mockImplementation(() => stomp.connectionState$.next(RxStompState.CLOSED));
+      store.posleVracanja(60_000);
+      http.expectOne('api/izvodjenja/5/stanje').flush(stanje({ verzija: 2 }));
+      expect(store.veza()).toBe('prekinut');
+      stomp.connectionState$.next(RxStompState.OPEN);
+      expect(store.veza()).toBe('povezan');
+    });
+
+    it('pre init: nema zahteva ni izuzetka', () => {
+      expect(() => store.posleVracanja(Infinity)).not.toThrow();
+      http.expectNone(() => true);
+      expect(stomp.stompClient.forceDisconnect).not.toHaveBeenCalled();
+    });
+
+    it('posle 404 na GET stanje (bez STOMP-a): samo GET, bez prekida veze', () => {
+      store.init(5);
+      http.expectOne('api/izvodjenja/5/stanje').flush({ reason: 'Nema.' }, { status: 404, statusText: 'Not Found' });
+      store.posleVracanja(Infinity);
+      http.expectOne('api/izvodjenja/5/stanje').flush({ reason: 'Nema.' }, { status: 404, statusText: 'Not Found' });
+      expect(stomp.stompClient.forceDisconnect).not.toHaveBeenCalled();
     });
   });
 
