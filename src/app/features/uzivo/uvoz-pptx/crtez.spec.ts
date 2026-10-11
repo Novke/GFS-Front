@@ -1,4 +1,4 @@
-import { dekodirajTrag, MAX_SIROVIH_TACAKA, pretvoriCrtez, uprosti } from './crtez';
+import { dekodirajTrag, MAX_SIROVIH_TACAKA, NeispravanTrag, pretvoriCrtez, uprosti } from './crtez';
 import { kontekstZaTest } from './kontekst.testing';
 import { PNG_1X1, type VezaFabrike } from './pptx-fabrika.testing';
 import type { Kutija } from './tipovi';
@@ -57,15 +57,36 @@ const kodovi = (z: { upozorenja: { kod: string }[] }) => z.upozorenja.map((u) =>
 
 describe('dekodirajTrag', () => {
   it('eksplicitne vrednosti, prva i druga razlika (važe dok se ne promene)', () => {
-    expect(dekodirajTrag('10 20, 12 21, \'1 1, "0 0, "1 -1', 2)).toEqual([[10, 20], [12, 21], [13, 22], [14, 23], [16, 23]]);
+    expect(dekodirajTrag('10 20, 12 21, \'1\'1, "0"0, "1"-1', 2)).toEqual([[10, 20], [12, 21], [13, 22], [14, 23], [16, 23]]);
   });
 
-  it('lepljeni znaci: oznaka razlike važi i za sledeće vrednosti iste tačke', () => {
-    expect(dekodirajTrag("5 5,'-1-2,'-1-2", 2)).toEqual([[5, 5], [4, 3], [3, 1]]);
+  it('lepljeni znaci', () => {
+    expect(dekodirajTrag("5 5,'-1'-2,'-1'-2", 2)).toEqual([[5, 5], [4, 3], [3, 1]]);
   });
 
-  it('oznaka važi po kanalu i u sledećim tačkama; višak kanala se odbacuje; decimale i eksponent', () => {
-    expect(dekodirajTrag("1 1 9 9, '1 '2 !8, 1 2 0, !0.5 1e1 3", 3)).toEqual([[1, 1, 9], [2, 3, 8], [3, 5, 0], [0.5, 10, 3]]);
+  it('oznaka važi za svoj kanal i u sledećim tačkama, ne prelazi na sledeću vrednost iste tačke (W3C InkML 3.2.1)', () => {
+    expect(dekodirajTrag("10 20, 12 21, '1 1", 2)).toEqual([[10, 20], [12, 21], [13, 1]]);
+    expect(dekodirajTrag("5 5,'-1-2", 2)).toEqual([[5, 5], [4, -2]]);
+    expect(dekodirajTrag("1 1 9 9, '1 '2 !8, 1 2 0, !0.5 1e1 3", 3)).toEqual([[1, 1, 9], [2, 3, 8], [3, 5, 0], [0.5, 15, 3]]);
+  });
+
+  it('primer iz W3C InkML 3.2.1 (X, Y redovni kanali; isprekidani B1, B2 se ne čitaju)', () => {
+    const trag = '1125 18432,\'23\'43,"7"-8,3-5,7 -3,6 2,6 8,3 6 T,2 4*T,3 6,3-6 F F';
+    expect(dekodirajTrag(trag, 2)).toEqual([
+      [1125, 18432], [1148, 18475], [1178, 18510], [1211, 18540], [1251, 18567], [1297, 18596],
+      [1349, 18633], [1404, 18676], [1461, 18723], [1521, 18776], [1584, 18823],
+    ]);
+  });
+
+  it('razmak između oznake, minusa i broja je dozvoljen', () => {
+    expect(dekodirajTrag("10 20,' 1' 1", 2)).toEqual([[10, 20], [11, 21]]);
+    expect(dekodirajTrag("10 20,' - 1 ' -\t1, - 2 3", 2)).toEqual([[10, 20], [9, 19], [7, 22]]); // treća tačka bez oznake: i dalje prva razlika
+  });
+
+  it('džoker, T/F, heks, nepoznat znak ili beskonačan broj u čitanom kanalu -> NeispravanTrag', () => {
+    for (const t of ['1 2, * 3', '1 2, 3 ?', '1 2, T 3', '1 2, 3 F', '1 2, #1A 3', '1 2, 3 x', "1 2, ' ", '1 2, 3 1e', '1 2, 1e400 3', '1 2, -']) {
+      expect(() => dekodirajTrag(t, 2), t).toThrow(NeispravanTrag);
+    }
   });
 
   it('prazni komadi se preskaču; najvise prekida dekodiranje čim se pređe', () => {
@@ -190,6 +211,29 @@ describe('pretvoriCrtez', () => {
     const { s, z } = crtez({}, ink({ tragovi: [trag] }));
     expect(s!.potezi).toBeNull();
     expect(kodovi(z)).toEqual(['CRTEZ_BEZ_POTEZA']);
+  });
+
+  it('džoker ili T/F u čitanom kanalu traga -> potezi null + CRTEZ_BEZ_POTEZA (sloj ostaje kao slika)', () => {
+    for (const trag of ['0 0, * 1764, 3528 1764', '0 0, 3528 T']) {
+      const { s, z } = crtez({}, ink({ tragovi: [trag] }));
+      expect(s).toMatchObject({ tip: 'CRTEZ', medijId: 'pptx:ppt/media/image1.png', potezi: null });
+      expect(kodovi(z)).toEqual(['CRTEZ_BEZ_POTEZA']);
+    }
+  });
+
+  it('trag u definicijama se ne crta; rezolucija samo iz inkSource-a kome traceFormat pripada', () => {
+    const inkml = `${XML}<inkml:ink xmlns:inkml="http://www.w3.org/2003/InkML"><inkml:definitions>`
+      + '<inkml:traceFormat xml:id="tf0"><inkml:channel name="X"/><inkml:channel name="Y"/></inkml:traceFormat>'
+      + '<inkml:inkSource xml:id="drugi"><inkml:channelProperties>'
+      + '<inkml:channelProperty channel="X" name="resolution" value="500" units="1/cm"/>'
+      + '<inkml:channelProperty channel="Y" name="resolution" value="500" units="1/cm"/></inkml:channelProperties></inkml:inkSource>'
+      + '<inkml:brush xml:id="br0"><inkml:brushProperty name="width" value="0.1" units="cm"/></inkml:brush>'
+      + '<inkml:trace xml:id="sablon">99999 99999, -99999 -99999</inkml:trace>'
+      + '</inkml:definitions><inkml:trace brushRef="#br0">0 0, 3528 1764</inkml:trace></inkml:ink>';
+    const { s, z } = crtez({}, inkml);
+    // bez rezolucije razmera je 1 (sa tuđom rezolucijom 500 bi bila 0,5 -> 1,42)
+    expect(s!.potezi).toEqual([{ boja: '#000000', debljina: 2.83, tacke: [1, 1, 101, 51] }]);
+    expect(z.upozorenja).toEqual([]);
   });
 
   it('bez fallback slike -> null + OBJEKAT_PRESKOCEN', () => {

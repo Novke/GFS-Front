@@ -29,14 +29,24 @@ const CRNA = '#000000';
 
 // ------------------------------------------------------------------ dekoder i uprošćavanje
 
-const BROJ = /([!'"]?)(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)/g;
+/** Zapis traga koji uvoz ne čita: džoker (`*`, `?`), logička vrednost (`T`, `F`), heks broj ili nepoznat znak u kanalu. */
+export class NeispravanTrag extends Error {
+  constructor() {
+    super('InkML trag nije ispravan');
+  }
+}
+
+const jeRazmak = (c: string | undefined) => c === ' ' || c === '\t' || c === '\r' || c === '\n';
+const jeCifra = (c: string | undefined) => c !== undefined && c >= '0' && c <= '9';
 
 /**
- * Tačke InkML traga (`inkml:trace`): tačke su odvojene zarezom, vrednosti kanala razmakom (ili samo znakom: `'-1-2`).
- * Oznaka ispred vrednosti bira način: `!` eksplicitno, `'` prva razlika, `"` druga razlika. Način važi po kanalu dok se ne
- * promeni, a oznaka važi i za sledeće neoznačene vrednosti iste tačke (`'1 1` i `'-1-2` su obe razlike). Prva vrednost
- * kanala je uvek eksplicitna. Vrednosti preko `kanala` se odbacuju. Dekodiranje staje čim tačaka bude više od `najvise`
- * (vraća `najvise + 1`, da pozivalac vidi prekoračenje), bez deljenja celog teksta unapred.
+ * Tačke InkML traga (`inkml:trace`, W3C InkML 1.0, 3.2.1): tačke su odvojene zarezom, vrednosti razmakom ili samo znakom
+ * (`'-1'-2`). Gramatika vrednosti: `difference_order? wsp* "-"? wsp* number`. Oznaka bira način: `!` eksplicitno, `'` prva
+ * razlika, `"` druga razlika; vrednost bez oznake se tumači po poslednjoj oznaci **tog kanala** (nema je -> eksplicitno), a
+ * oznaka nikad ne prelazi na sledeću vrednost iste tačke. Prva vrednost kanala je uvek eksplicitna. Čita se najviše `kanala`
+ * vrednosti po tački; ostatak tačke (isprekidani kanali, npr. `4*T`) se ne čita. Džoker, `T`/`F`, heks i nepoznat znak među
+ * čitanim vrednostima, kao i beskonačan broj -> `NeispravanTrag` (ne pomeraju se kanali). Ručni prolaz bez regularnih izraza:
+ * posao je linearan u dužini teksta. Dekodiranje staje čim tačaka bude više od `najvise` (vraća `najvise + 1`).
  */
 export function dekodirajTrag(tekst: string, kanala: number, najvise = Infinity): number[][] {
   const tacke: number[][] = [];
@@ -48,16 +58,48 @@ export function dekodirajTrag(tekst: string, kanala: number, najvise = Infinity)
   while (poc < tekst.length) {
     let kraj = tekst.indexOf(',', poc);
     if (kraj < 0) kraj = tekst.length;
-    const komad = tekst.slice(poc, kraj);
-    poc = kraj + 1;
     const tacka: number[] = [];
-    let oznaka = '';
-    for (const [, q, s] of komad.matchAll(BROJ)) {
+    let j = poc;
+    poc = kraj + 1;
+    const preskociRazmak = () => {
+      while (j < kraj && jeRazmak(tekst[j])) j++;
+    };
+    while (tacka.length < kanala) {
+      preskociRazmak();
+      if (j >= kraj) break;
+      let q = '';
+      if (tekst[j] === '!' || tekst[j] === "'" || tekst[j] === '"') {
+        q = tekst[j++];
+        preskociRazmak();
+      }
+      let znak = 1;
+      if (tekst[j] === '-') {
+        znak = -1;
+        j++;
+        preskociRazmak();
+      }
+      const pocetak = j;
+      while (j < kraj && jeCifra(tekst[j])) j++;
+      let cifara = j - pocetak;
+      if (j < kraj && tekst[j] === '.') {
+        j++;
+        const posleTacke = j;
+        while (j < kraj && jeCifra(tekst[j])) j++;
+        cifara += j - posleTacke;
+      }
+      if (cifara === 0) throw new NeispravanTrag();
+      if (j < kraj && (tekst[j] === 'e' || tekst[j] === 'E')) {
+        let e = j + 1;
+        if (tekst[e] === '+' || tekst[e] === '-') e++;
+        if (e >= kraj || !jeCifra(tekst[e])) throw new NeispravanTrag();
+        j = e;
+        while (j < kraj && jeCifra(tekst[j])) j++;
+      }
+      const v = znak * Number(tekst.slice(pocetak, j));
+      if (!Number.isFinite(v)) throw new NeispravanTrag();
+
       const k = tacka.length;
-      if (k >= kanala) break;
-      if (q) oznaka = q;
-      if (oznaka) nacin[k] = oznaka;
-      const v = Number(s);
+      if (q) nacin[k] = q;
       const p = pre[k];
       let val: number;
       if (p === null || nacin[k] === '!') {
@@ -174,24 +216,36 @@ function xmlId(el: Element): string {
   return el.getAttributeNS(XML_NS, 'id') ?? el.getAttribute('xml:id') ?? '';
 }
 
-/** `#id` ili `id` iz atributa elementa ili najbližeg pretka (`inkml:traceGroup` nosi `contextRef`/`brushRef` za svoje tragove). */
-function referenca(el: Element, atribut: string, koren: Element): string {
-  for (let e: Element | null = el; e && e !== koren.parentElement; e = e.parentElement) {
+/** Najviše ugnežđenih `inkml:traceGroup` kroz koje se traži `contextRef`/`brushRef` traga. */
+const MAX_DUBINA_GRUPE = 32;
+
+/** `#id` ili `id` iz atributa elementa, inače iz okružujućih `inkml:traceGroup` (najviše `MAX_DUBINA_GRUPE` nivoa). */
+function referenca(el: Element, atribut: string): string {
+  let e: Element | null = el;
+  for (let nivo = 0; e && nivo <= MAX_DUBINA_GRUPE; nivo++) {
     const v = e.getAttribute(atribut)?.trim();
     if (v) return v.startsWith('#') ? v.slice(1) : v;
+    e = e.parentElement;
+    if (!e || e.namespaceURI !== NS.inkml || e.localName !== 'traceGroup') return '';
   }
   return '';
 }
 
-/** Tačaka po cm iz `inkml:channelProperty name="resolution"` (`1/cm`, `1/mm`, `1/in`); nema je -> `null`. */
-function rezolucija(izvor: Element | null, kanal: string): number | null {
-  if (!izvor) return null;
-  for (const cp of Array.from(izvor.getElementsByTagNameNS(NS.inkml, 'channelProperty'))) {
-    if (cp.getAttribute('channel') !== kanal || cp.getAttribute('name') !== 'resolution') continue;
-    const v = brojAtr(cp, 'value', 0);
-    if (!(v > 0)) return null;
-    const jedinica = (cp.getAttribute('units') ?? '1/cm').trim().toLowerCase();
-    return jedinica === '1/mm' ? v * 10 : jedinica === '1/in' ? v / 2.54 : v;
+/**
+ * Tačaka po cm iz `channelProperty name="resolution"` (`1/cm`, `1/mm`, `1/in`) samog `inkSource`-a kome `traceFormat`
+ * pripada (`inkSource/channelProperties`), ne iz drugih izvora u definicijama; nema je -> `null`.
+ */
+function rezolucija(tf: Element | null, kanal: string): number | null {
+  const izvor = tf?.parentElement;
+  if (!izvor || izvor.namespaceURI !== NS.inkml || izvor.localName !== 'inkSource') return null;
+  for (const svojstva of deca(izvor, NS.inkml, 'channelProperties')) {
+    for (const cp of deca(svojstva, NS.inkml, 'channelProperty')) {
+      if (cp.getAttribute('channel') !== kanal || cp.getAttribute('name') !== 'resolution') continue;
+      const v = brojAtr(cp, 'value', 0);
+      if (!(v > 0)) return null;
+      const jedinica = (cp.getAttribute('units') ?? '1/cm').trim().toLowerCase();
+      return jedinica === '1/mm' ? v * 10 : jedinica === '1/in' ? v / 2.54 : v;
+    }
   }
   return null;
 }
@@ -213,7 +267,7 @@ class Definicije {
   private readonly cetke = new Map<Element | null, Cetka>();
   private readonly prviFormat: Element | null;
 
-  constructor(private readonly koren: Element) {
+  constructor(koren: Element) {
     for (const ime of ['context', 'inkSource', 'traceFormat', 'brush']) {
       for (const el of Array.from(koren.getElementsByTagNameNS(NS.inkml, ime))) {
         const id = xmlId(el);
@@ -230,13 +284,13 @@ class Definicije {
 
   /** `inkml:traceFormat` traga: iz konteksta (sopstveni, pa `traceFormatRef`, pa `inkSourceRef`), inače prvi u delu. */
   private traceFormat(trag: Element): Element | null {
-    const kontekst = this.element(referenca(trag, 'contextRef', this.koren), 'context');
+    const kontekst = this.element(referenca(trag, 'contextRef'), 'context');
     if (kontekst) {
       const sopstveni = kontekst.getElementsByTagNameNS(NS.inkml, 'traceFormat')[0];
       if (sopstveni) return sopstveni;
-      const poRef = this.element(referenca(kontekst, 'traceFormatRef', kontekst), 'traceFormat');
+      const poRef = this.element(referenca(kontekst, 'traceFormatRef'), 'traceFormat');
       if (poRef) return poRef;
-      const izvor = this.element(referenca(kontekst, 'inkSourceRef', kontekst), 'inkSource');
+      const izvor = this.element(referenca(kontekst, 'inkSourceRef'), 'inkSource');
       const izIzvora = izvor?.getElementsByTagNameNS(NS.inkml, 'traceFormat')[0];
       if (izIzvora) return izIzvora;
     }
@@ -251,8 +305,7 @@ class Definicije {
       const kanali = tf ? deca(tf, NS.inkml, 'channel').map((c) => c.getAttribute('name')?.trim() ?? '') : ['X', 'Y'];
       const iX = kanali.indexOf('X');
       const iY = kanali.indexOf('Y');
-      const izvor = tf?.parentElement ?? null;
-      f = iX < 0 || iY < 0 ? null : { iX, iY, kanala: kanali.length, rezX: rezolucija(izvor, 'X'), rezY: rezolucija(izvor, 'Y') };
+      f = iX < 0 || iY < 0 ? null : { iX, iY, kanala: kanali.length, rezX: rezolucija(tf, 'X'), rezY: rezolucija(tf, 'Y') };
       this.formati.set(tf, f);
     }
     return f;
@@ -260,7 +313,7 @@ class Definicije {
 
   /** Četka traga (`brushRef`): `color` `#RRGGBB` (inače crna), `width` u pt (podrazumevano 0,05 cm). */
   cetka(trag: Element): Cetka {
-    const el = this.element(referenca(trag, 'brushRef', this.koren), 'brush');
+    const el = this.element(referenca(trag, 'brushRef'), 'brush');
     let c = this.cetke.get(el);
     if (!c) {
       let boja = CRNA;
@@ -287,10 +340,22 @@ function procitajTragove(koren: Element): Ishod<{ tragovi: SirovTrag[]; okvir: O
   const okvir: Okvir = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
   const tragovi: SirovTrag[] = [];
   let budzet = MAX_SIROVIH_TACAKA;
+  // Tragovi u `inkml:definitions` su definicije (na njih se poziva), ne potezi koji se crtaju.
+  const uDefinicijama = new Set<Element>();
+  for (const d of Array.from(koren.getElementsByTagNameNS(NS.inkml, 'definitions'))) {
+    for (const t of Array.from(d.getElementsByTagNameNS(NS.inkml, 'trace'))) uDefinicijama.add(t);
+  }
   for (const trag of Array.from(koren.getElementsByTagNameNS(NS.inkml, 'trace'))) {
+    if (uDefinicijama.has(trag)) continue;
     const format = def.format(trag);
     if (!format) return NEISPRAVAN;
-    const tacke = dekodirajTrag(trag.textContent ?? '', format.kanala, budzet);
+    let tacke: number[][];
+    try {
+      tacke = dekodirajTrag(trag.textContent ?? '', format.kanala, budzet);
+    } catch (e) {
+      if (e instanceof NeispravanTrag) return NEISPRAVAN;
+      throw e;
+    }
     if (tacke.length > budzet) return { razlog: `više od ${hiljade(MAX_SIROVIH_TACAKA)} zapisanih tačaka` };
     budzet -= tacke.length;
     const ravne: number[] = [];
