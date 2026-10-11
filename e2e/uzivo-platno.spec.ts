@@ -107,8 +107,10 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     }, { naziv, n, razmakMs });
 
     const greske: string[] = [];
+    // Staro ponašanje je padalo u ~4 od 25 serija; 15 serija ga hvata u velikoj većini pokretanja, a test traje ~30 s.
+    // Pokriva put editora (dugmad koraka); projektor deli isti renderer, a njegovu putanju kroz snimke pokrivaju unit testovi.
     const RAZMACI = [20, 35, 50, 65, 80];
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 15; i++) {
       await serija('Korak napred', 4, RAZMACI[i % RAZMACI.length]);
       await expect(status).toHaveText('Korak 4 / 4');
       await bezAnimacija();
@@ -131,7 +133,8 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     const tokomIzlaza = await page.evaluate(async () => {
       Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('Korak napred'))!.click();
       const sadrzaj = document.querySelector('.uz-ed-platno [data-sloj="slika"] > .uz-pl-sadrzaj')!;
-      for (let i = 0; i < 10 && sadrzaj.getAnimations().length === 0; i++) {
+      const rok = performance.now() + 250; // FADE traje 500 ms: animacija mora da je počela, a još traje
+      while (sadrzaj.getAnimations().length === 0 && performance.now() < rok) {
         await new Promise((r) => requestAnimationFrame(r));
       }
       return { animacija: sadrzaj.getAnimations().length, vidljivost: getComputedStyle(sadrzaj).visibility };
