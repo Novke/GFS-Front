@@ -1,5 +1,5 @@
 import {
-  Animacija, CrtezSloj, FormulaSloj, Okvir, OblikSloj, Pasus, Platno, SlikaSloj, TabelaSloj, TekstSloj,
+  Animacija, Celija, CrtezSloj, FormulaSloj, Okvir, OblikSloj, Pasus, Platno, SlikaSloj, TabelaSloj, TekstSloj,
 } from './platno.models';
 
 const osnova = (id: string) => ({
@@ -17,6 +17,13 @@ export function pasus(tekst: string): Pasus {
       tekst, font: 'Carlito', velicina: 18, boja: '#000000', podebljano: false, kurziv: false, podvuceno: false,
       precrtano: false, polozaj: 'OBICAN',
     }],
+  };
+}
+
+export function celija(tekst: string, deo: Partial<Celija> = {}): Celija {
+  return {
+    pasusi: [pasus(tekst)], popuna: null, ivice: { gore: null, dole: null, levo: null, desno: null },
+    spojDesno: 0, spojDole: 0, pokrivena: false, sidro: 'VRH', ...deo,
   };
 }
 
@@ -42,10 +49,7 @@ export function platno(): Platno {
   const oblik: OblikSloj = { ...osnova('oblik'), tip: 'OBLIK', oblik: 'ELIPSA', popuna: '#FFCC00', ivica: null, od: null, do: null };
   const tabela: TabelaSloj = {
     ...osnova('tabela'), tip: 'TABELA', kolone: [100, 100], redovi: [30],
-    celije: [[0, 1].map(() => ({
-      pasusi: [pasus('A')], popuna: null, ivice: { gore: null, dole: null, levo: null, desno: null },
-      spojDesno: 0, spojDole: 0, pokrivena: false, sidro: 'VRH' as const,
-    }))],
+    celije: [[celija('A'), celija('A')]],
   };
   const formula: FormulaSloj = {
     ...osnova('formula'), tip: 'FORMULA', latex: 'x^2', boja: '#000000', velicina: 24, poravnanje: 'CENTAR', slikaIzvora: null,
