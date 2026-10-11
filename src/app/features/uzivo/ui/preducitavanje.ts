@@ -50,7 +50,7 @@ const PODRAZUMEVANI = FONTOVI_PLATNA[0].naziv;
 const FONT_FORMULE = 'Cousine';
 
 /**
- * Fontovi koje prikaz koristi: naslov i telo teme (bez teme NACRT) i za PLATNO slajdove `deo.font` (nepoznat ->
+ * Fontovi koje prikaz koristi: naslov i telo teme (i teme NACRT) i za PLATNO slajdove `deo.font` (nepoznat ->
  * Carlito), uvek Carlito (podrazumevani font platna) i Cousine kad formula nema sliku izvora.
  */
 export function fontoviZaPrikaz(tema: Tema | null | undefined, slajdovi: readonly (SlajdDetails | null)[]): Set<string> {

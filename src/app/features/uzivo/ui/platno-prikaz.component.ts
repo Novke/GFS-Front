@@ -176,8 +176,11 @@ const SIRINA_PLATNA = 960;
 const VISINA_PLATNA = 540;
 
 const BRISANJE_OD: Record<string, string> = {
-  LEVO: 'inset(0 100% 0 0)', DESNO: 'inset(0 0 0 100%)', GORE: 'inset(0 0 100% 0)', DOLE: 'inset(100% 0 0 0)',
+  LEVO: 'inset(-50% 100% -50% 0)', DESNO: 'inset(-50% 0 -50% 100%)', GORE: 'inset(0 -50% 100% -50%)', DOLE: 'inset(100% -50% 0 -50%)',
 };
+
+/** Potpuno otkriveno stanje: negativni razmaci puštaju i poteze i vrhove strelica koji izlaze iz okvira sloja (fill traje do kraja grupe). */
+const CLIP_OTKRIVENO = 'inset(-50%)';
 
 /** Pomeraj ULET-a u px: sa ivice platna u smeru `smer`, izražen u koordinatama sloja (sadržaj je unutar rotiranog sloja). */
 function pomerajUleta(smer: Animacija['smer'], s: Sloj, pxPoJedinici: number): string {
@@ -204,14 +207,14 @@ export function kadroviAnimacije(a: Animacija, s: Sloj, pxPoJedinici: number): K
       ka = { transform: 'translate(0px, 0px)', opacity: 1 };
       break;
     case 'PODELI':
-      od = { clipPath: a.smer === 'HORIZONTALNO' ? 'inset(50% 0 50% 0)' : 'inset(0 50% 0 50%)' };
-      ka = { clipPath: 'inset(0)' };
+      od = { clipPath: a.smer === 'HORIZONTALNO' ? 'inset(50% -50% 50% -50%)' : 'inset(-50% 50% -50% 50%)' };
+      ka = { clipPath: CLIP_OTKRIVENO };
       break;
     case 'BRISANJE':
     case 'ISCRTAJ':
       // ISCRTAJ se u fazama 1-4 crta kao BRISANJE (potez po potez tek u fazi 5).
       od = { clipPath: BRISANJE_OD[a.smer ?? 'LEVO'] ?? BRISANJE_OD['LEVO'] };
-      ka = { clipPath: 'inset(0)' };
+      ka = { clipPath: CLIP_OTKRIVENO };
       break;
     case 'ZUM':
       od = { transform: 'scale(0.3)', opacity: 0 };

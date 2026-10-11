@@ -31,7 +31,7 @@ describe('SlajdFormaComponent: PLATNO', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelectorAll('textarea').length).toBe(1);
     expect(el.querySelector('input')).toBeNull();
-    expect(el.textContent).toContain('Slojevi i animacije se uređuju u fazi 4; za sad ih menja samo uvoz.');
+    expect(el.textContent).toContain('Slojevi i animacije ovog slajda se za sada ne uređuju ovde; menjaju se beleške.');
   });
 
   it('izmena beleški emituje PLATNO komandu sa istim platnom i novim beleškama', () => {

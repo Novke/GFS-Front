@@ -219,14 +219,14 @@ describe('kadroviAnimacije', () => {
 
   it('PODELI, BRISANJE i ISCRTAJ kroz clip-path', () => {
     const isecak = (deo: Partial<Animacija>) => kadroviAnimacije(a(deo), s, 1).map((k) => k['clipPath']);
-    expect(isecak({ efekat: 'PODELI', smer: 'VERTIKALNO' })).toEqual(['inset(0 50% 0 50%)', 'inset(0)']);
-    expect(isecak({ efekat: 'PODELI', smer: 'HORIZONTALNO' })).toEqual(['inset(50% 0 50% 0)', 'inset(0)']);
-    expect(isecak({ efekat: 'BRISANJE', smer: 'LEVO' })).toEqual(['inset(0 100% 0 0)', 'inset(0)']);
-    expect(isecak({ efekat: 'BRISANJE', smer: 'DESNO' })).toEqual(['inset(0 0 0 100%)', 'inset(0)']);
-    expect(isecak({ efekat: 'BRISANJE', smer: 'GORE' })).toEqual(['inset(0 0 100% 0)', 'inset(0)']);
-    expect(isecak({ efekat: 'BRISANJE', smer: 'DOLE' })).toEqual(['inset(100% 0 0 0)', 'inset(0)']);
-    expect(isecak({ efekat: 'ISCRTAJ', smer: 'LEVO' })).toEqual(['inset(0 100% 0 0)', 'inset(0)']);
-    expect(isecak({ efekat: 'BRISANJE', smer: 'LEVO', vrsta: 'IZLAZ' })).toEqual(['inset(0)', 'inset(0 100% 0 0)']);
-    expect(kadroviAnimacije(a({ efekat: 'PODELI', smer: 'VERTIKALNO' }), s, 1)[0]).toEqual({ clipPath: 'inset(0 50% 0 50%)', ...v });
+    expect(isecak({ efekat: 'PODELI', smer: 'VERTIKALNO' })).toEqual(['inset(-50% 50% -50% 50%)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'PODELI', smer: 'HORIZONTALNO' })).toEqual(['inset(50% -50% 50% -50%)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'BRISANJE', smer: 'LEVO' })).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'BRISANJE', smer: 'DESNO' })).toEqual(['inset(-50% 0 -50% 100%)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'BRISANJE', smer: 'GORE' })).toEqual(['inset(0 -50% 100% -50%)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'BRISANJE', smer: 'DOLE' })).toEqual(['inset(100% -50% 0 -50%)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'ISCRTAJ', smer: 'LEVO' })).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
+    expect(isecak({ efekat: 'BRISANJE', smer: 'LEVO', vrsta: 'IZLAZ' })).toEqual(['inset(-50%)', 'inset(-50% 100% -50% 0)']);
+    expect(kadroviAnimacije(a({ efekat: 'PODELI', smer: 'VERTIKALNO' }), s, 1)[0]).toEqual({ clipPath: 'inset(-50% 50% -50% 50%)', ...v });
   });
 });

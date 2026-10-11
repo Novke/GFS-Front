@@ -205,6 +205,31 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(el.textContent).toContain(`Korak 0 / ${n}`);
   });
 
+  it('Korak napred pušta animacije grupe (Element.animate), Korak nazad ne', () => {
+    const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise<void>(() => undefined) }));
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+    try {
+      store.izaberi(12);
+      fixture.detectChanges();
+      let ukupno = 0;
+      for (let i = 1; i <= brojKoraka(platno()); i++) {
+        dugme('Korak napred').click();
+        fixture.detectChanges();
+        TestBed.tick();
+        ukupno = animate.mock.calls.length;
+        if (ukupno > 0) break;
+      }
+      expect(ukupno).toBeGreaterThan(0);
+      animate.mockClear();
+      dugme('Korak nazad').click();
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(animate).not.toHaveBeenCalled();
+    } finally {
+      delete (Element.prototype as Partial<Element>).animate;
+    }
+  });
+
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
     const radio = (fixture.nativeElement as HTMLElement).querySelector('input[type=radio][value=PAPIR]') as HTMLInputElement;
     expect(radio).not.toBeNull();

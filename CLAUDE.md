@@ -160,7 +160,7 @@ over STOMP; teacher commands are REST.
   not cached). `publika-scena` counts reconnect epochs: no animation right after a reconnect or a late-opened window.
   Editor: a PLATNO slide shows the preview with steps, the form edits only notes and the theme (radio).
   **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (`slajdUCmd` and the form do it; omitting
-  it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`): the
+  it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
   `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through

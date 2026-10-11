@@ -191,7 +191,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           <aside class="uz-ed-pregled" aria-label="Pregled slajda">
             @if (store.izabrani(); as s) {
               <div class="rezim-dan uz-dan uz-ed-platno">
-                <app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" [korak]="korak()" />
+                <app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" [korak]="korak()" [animacija]="animacijaPregleda()" />
               </div>
               @if (s.tip === 'PLATNO') {
                 <div class="uz-ed-koraci">
@@ -248,6 +248,9 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     // izmena slajda može smanjiti broj koraka: korak se ograničava
     return s && k?.id === s.id ? Math.min(k.k, this.ukupnoKoraka()) : 0;
   });
+  /** Animacija pregleda: nov ključ pri svakom "Korak napred" (grupa = novi korak); nazad i promena slajda je gase. */
+  protected readonly animacijaPregleda = signal<{ kljuc: number; grupa: number } | null>(null);
+  private brojacAnimacije = 0;
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
   /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje). */
   protected readonly radi = signal(false);
@@ -279,7 +282,10 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     // Promena izabranog slajda vraća korak pregleda na 0 (i kad se posle vraćanja izabere isti slajd).
     effect(() => {
       this.store.izabraniId();
-      untracked(() => this.korakSlajda.set(null));
+      untracked(() => {
+        this.korakSlajda.set(null);
+        this.animacijaPregleda.set(null);
+      });
     });
     effect(onCleanup => {
       const id = this.aktivnoZa();
@@ -332,7 +338,9 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected pomeriKorak(razlika: number): void {
     const s = this.store.izabrani();
     if (!s) return;
-    this.korakSlajda.set({ id: s.id, k: Math.max(0, Math.min(this.ukupnoKoraka(), this.korak() + razlika)) });
+    const novi = Math.max(0, Math.min(this.ukupnoKoraka(), this.korak() + razlika));
+    this.korakSlajda.set({ id: s.id, k: novi });
+    this.animacijaPregleda.set(razlika > 0 && novi > 0 ? { kljuc: ++this.brojacAnimacije, grupa: novi } : null);
   }
 
   protected nazivTipa(s: SlajdDetails): string {

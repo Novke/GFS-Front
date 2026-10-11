@@ -16,6 +16,8 @@ describe('teme', () => {
       expect(kontrast(o.tekst, o.pozadina)).toBeGreaterThanOrEqual(4.5);
       expect(kontrast(o.naslov, o.pozadina)).toBeGreaterThanOrEqual(4.5);
       expect(kontrast(o.tabelaZaglavljeTekst, o.tabelaZaglavlje)).toBeGreaterThanOrEqual(4.5);
+      // akcent 1 je boja veza i oznaka lista na INFO slajdovima
+      expect(kontrast(o.akcenti[0], o.pozadina)).toBeGreaterThanOrEqual(4.5);
     });
   }
 
