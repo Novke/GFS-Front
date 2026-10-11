@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
+import { animacija, platno } from '../data-access/platno-podaci.testing';
 import { NastavnickoStanje, Rezultat } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { PublikaScenaComponent } from './publika-scena.component';
@@ -189,6 +190,55 @@ describe('PublikaScenaComponent (animacija prelaza i tema)', () => {
   it('skok na slajd usred koraka (preskočen slajd): bez animacije', async () => {
     const { slajd, posalji } = await scena(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), verzija: 3 }), true);
     await posalji(naPlatnu(0, 4, { indeks: 2 }));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Prethodni snimak se pamti za svaki prikaz, ne samo dok je na ekranu slajd: snimak prijave (ili kraja) mora da
+   * postane "prethodni", inače se prvi slajd poredi sa svežim prozorom ili sa slajdom od pre prijave.
+   */
+  const saGrupom0 = (id = 30) => platnoSlajd({
+    id, platno: { ...platno(), animacije: [animacija('a0', 'tabela', { okidac: 'SA_PRETHODNIM' }), ...platno().animacije] },
+  });
+  const prijava = (verzija: number) => stanje({ prikaz: 'PRIJAVA', indeks: -1, trenutniSlajd: null, verzija });
+  const kraj = (verzija: number) => stanje({ prikaz: 'KRAJ', indeks: 3, trenutniSlajd: null, verzija });
+  const prviSlajd = (verzija: number, korak = 0) =>
+    stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: saGrupom0(), korak, brojStavki: 2, verzija });
+
+  it('PRIJAVA (v5) -> prvi slajd korak 0 (v6): pušta grupu 0', async () => {
+    const { slajd, posalji } = await scena(prijava(5), true);
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 6, grupa: 0 });
+    expect(animate).toHaveBeenCalledTimes(1);
+  });
+
+  it('slajd 1 korak 2 -> Home (PRIJAVA) -> prvi slajd korak 0: pušta grupu 0 (ne poredi sa korakom pre prijave)', async () => {
+    const { slajd, posalji } = await scena(prviSlajd(4, 2), true);
+    await posalji(prijava(5));
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 6, grupa: 0 });
+  });
+
+  it('PRIJAVA kao prvi snimak, pa prekid veze: prvi slajd posle ponovnog povezivanja se ne animira', async () => {
+    const { fixture, slajd, posalji } = await scena(prijava(5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('KRAJ -> slajd: nikad animacija (ni sledeći slajd posle skoka sa kraja, ni nazad na poslednji)', async () => {
+    const { slajd, posalji } = await scena(prviSlajd(5), true);
+    await posalji(kraj(6));
+    // skok sa kraja na drugi slajd: bez kraja kao "prethodnog" ovo bi izgledalo kao korak napred sa slajda 1
+    await posalji(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: saGrupom0(31), korak: 0, brojStavki: 2, verzija: 7 }));
+    expect(slajd()!.animacija()).toBeNull();
+
+    await posalji(kraj(8));
+    await posalji(stanje({ prikaz: 'SLAJD', indeks: 2, trenutniSlajd: saGrupom0(32), korak: 2, brojStavki: 2, verzija: 9 }));
     expect(slajd()!.animacija()).toBeNull();
     expect(animate).not.toHaveBeenCalled();
   });

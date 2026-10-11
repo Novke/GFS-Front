@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, linkedSignal } from '@angular/core';
 import { StanjePrelaza, animacijaPrelaza } from '../data-access/platno-koraci';
 import { ServerskiSat } from '../data-access/sat';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
@@ -23,6 +23,7 @@ export function hostAplikacije(base: string = document.baseURI): string {
  * tekstova, tačnosti i poena trenutne runde pre `C`); nastavnički `rezultat` i `rangLista` se ovde nikad ne prikazuju.
  * Animacija PLATNO slajda (`animiraj`, samo prozor publike): scena pamti prethodni snimak i pita `animacijaPrelaza`;
  * prvi snimak (kasno otvoren prozor, ponovo učitana stranica), skok i korak nazad crtaju krajnje stanje bez animacije.
+ * Prethodni snimak se pamti za svaki prikaz (i prijavu i kraj), ne samo dok je na ekranu slajd.
  */
 @Component({
   selector: 'app-publika-scena',
@@ -143,4 +144,13 @@ export class PublikaScenaComponent {
     const sat = this.sat();
     return s.faza === 'OTVORENO' && s.runda && sat ? { rokMs: s.runda.rokMs, preostaloMs: s.runda.preostaloMs, sat } : null;
   });
+
+  constructor() {
+    // `prelaz` je lenj (`linkedSignal`), a šablon ga čita samo u grani SLAJD: bez ovog čitanja snimak prijave ili kraja
+    // nikad ne bi postao "prethodni", pa → sa prijave na prvi slajd ne bi pustio grupu 0. Efekat ga čita pri svakom
+    // novom snimku ili epohi, bez obzira na prikaz.
+    effect(() => {
+      this.prelaz();
+    });
+  }
 }
