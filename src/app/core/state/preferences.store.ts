@@ -20,6 +20,7 @@ export interface PreferencesState {
   rezim: Rezim;
   filteri: Record<string, Params>;
   nedavno: NedavnoStavka[];
+  velicinaBeleski: number;
 }
 
 /** Stanje store-a: filteri su privatni (`_filteri`), a čitaju se metodom `filteri(kljuc)`. */
@@ -27,6 +28,7 @@ interface PreferencesStoreState {
   rezim: Rezim;
   _filteri: Record<string, Params>;
   nedavno: NedavnoStavka[];
+  velicinaBeleski: number;
 }
 
 /**
@@ -36,11 +38,27 @@ interface PreferencesStoreState {
 export const PREFS_KLJUC = 'gfs.prefs.v1';
 export const MAX_NEDAVNO = 8;
 
+/** Koraci veličine slova beležaka (px) u konzoli i na daljinskom. */
+export const VELICINE_BELESKI = [14, 16, 18, 20, 22, 24, 28, 32, 36, 40] as const;
+export const PODRAZUMEVANA_VELICINA_BELESKI = 18;
+
+const jeVelicinaBeleski = (v: unknown): v is number => VELICINE_BELESKI.includes(v as never);
+
+/** Sledeći veći korak (na maksimumu ostaje). */
+export function vecaVelicinaBeleski(px: number): number {
+  return VELICINE_BELESKI.find(v => v > px) ?? VELICINE_BELESKI[VELICINE_BELESKI.length - 1];
+}
+
+/** Sledeći manji korak (na minimumu ostaje). */
+export function manjaVelicinaBeleski(px: number): number {
+  return [...VELICINE_BELESKI].reverse().find(v => v < px) ?? VELICINE_BELESKI[0];
+}
+
 const REZIMI: readonly Rezim[] = ['sistem', 'dan', 'noc'];
 const NEDAVNO_TIPOVI: readonly NedavnoTip[] = ['predavanje', 'test', 'domaci', 'grupa', 'student', 'predmet'];
 const TAMNA_SEMA = '(prefers-color-scheme: dark)';
 
-const podrazumevano = (): PreferencesState => ({ rezim: 'sistem', filteri: {}, nedavno: [] });
+const podrazumevano = (): PreferencesState => ({ rezim: 'sistem', filteri: {}, nedavno: [], velicinaBeleski: PODRAZUMEVANA_VELICINA_BELESKI });
 
 function jeObjekat(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -78,6 +96,9 @@ export function ucitajPreference(storage: Storage | null): PreferencesState {
   if (Array.isArray(nedavno)) {
     stanje.nedavno = nedavno.filter(jeNedavnoStavka).slice(0, MAX_NEDAVNO);
   }
+  if (jeVelicinaBeleski(sirovo['velicinaBeleski'])) {
+    stanje.velicinaBeleski = sirovo['velicinaBeleski'];
+  }
   return stanje;
 }
 
@@ -97,8 +118,8 @@ function bezbedanStorage(): Storage | null {
 export const PreferencesStore = signalStore(
   { providedIn: 'root' },
   withState<PreferencesStoreState>(() => {
-    const { rezim, filteri, nedavno } = ucitajPreference(bezbedanStorage());
-    return { rezim, _filteri: filteri, nedavno };
+    const { rezim, filteri, nedavno, velicinaBeleski } = ucitajPreference(bezbedanStorage());
+    return { rezim, _filteri: filteri, nedavno, velicinaBeleski };
   }),
   withProps(() => {
     const mql = typeof matchMedia === 'function' ? matchMedia(TAMNA_SEMA) : null;
@@ -132,6 +153,11 @@ export const PreferencesStore = signalStore(
       const svi = store._filteri();
       return Object.hasOwn(svi, kljuc) ? svi[kljuc] : null;
     },
+    postaviVelicinuBeleski(px: number): void {
+      if (jeVelicinaBeleski(px)) {
+        patchState(store, { velicinaBeleski: px });
+      }
+    },
     zabeleziNedavno(stavka: NedavnoStavka): void {
       patchState(store, s => ({
         nedavno: [stavka, ...s.nedavno.filter(n => n.tip !== stavka.tip || n.id !== stavka.id)].slice(0, MAX_NEDAVNO),
@@ -142,8 +168,8 @@ export const PreferencesStore = signalStore(
     onInit(store) {
       store._mql?.addEventListener('change', store._naPromenuSistema);
 
-      watchState(store, ({ rezim, _filteri, nedavno }) => {
-        const zaUpis: PreferencesState = { rezim, filteri: _filteri, nedavno };
+      watchState(store, ({ rezim, _filteri, nedavno, velicinaBeleski }) => {
+        const zaUpis: PreferencesState = { rezim, filteri: _filteri, nedavno, velicinaBeleski };
         try {
           store._storage?.setItem(PREFS_KLJUC, JSON.stringify(zaUpis));
         } catch {
