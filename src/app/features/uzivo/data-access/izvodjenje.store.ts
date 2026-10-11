@@ -51,12 +51,15 @@ const link = (putanja: string) => new URL(putanja, document.baseURI).href;
  *   `destroy` ga otkazuju.
  * - `prihvati`: server je jedini izvor istine; snimak sa manjom verzijom od trenutne se odbacuje, a jednaka verzija se
  *   prihvata (posle odgovora studenata server šalje svežije rezultate bez promene verzije). Usklađuje `ServerskiSat`.
+ *   Zato dva `GET stanje` pri buđenju (`visibilitychange` i `online`) mogu nakratko da pokažu malo starije brojeve
+ *   odgovora iste verzije, do sledećeg snimka kroz STOMP; to je prihvaćeno.
  * - `komanda`, `preimenuj`, `izbaci`, `sakrij`: jedan red (`concatMap`), pa brzo `→ → →` stiže na server redom i nijedna
  *   komanda se ne gubi dok prethodna čeka. Odgovor (novo stanje) ide kroz `prihvati`; greška (409, 400, ...) postavlja
  *   `greska` iz `reason` i prikazuje se 3 s; 410 (izvođenje završeno) još i ponovo učita stanje.
- * - `osvezi`: `GET stanje` kroz `prihvati` (greška tiho; stanje ionako stiže i kroz STOMP). `ponovoPovezi`: prekida
- *   socket (`forceDisconnect`), rx-stomp se sam ponovo poveže i dobije početni snimak; `veza` pri tome prolazi
- *   `povezan -> prekinut -> povezan`, pa publika prvi snimak posle toga ne animira.
+ * - `osvezi`: `GET stanje` kroz `prihvati` (greška tiho; stanje ionako stiže i kroz STOMP). `ponovoPovezi`: odbacuje
+ *   socket (`forceDisconnect`, uz `discardWebsocketOnCommFailure` iz `napraviStomp` odmah, i kad je socket tiho mrtav),
+ *   rx-stomp se sam ponovo poveže i dobije početni snimak; `veza` pri tome prolazi `povezan -> prekinut -> povezan`, pa
+ *   publika prvi snimak posle toga ne animira. Posle `destroy` ni `osvezi` ni `posleVracanja` ne rade ništa.
  * - `posleVracanja(skrivenoMs)` (uz `pratiPovratak`): stranica je ponovo vidljiva ili je mreža ponovo tu; uvek `osvezi`, a
  *   posle `PONOVO_POVEZI_POSLE_MS` i više (ili `Infinity` za `online`) još i `ponovoPovezi`.
  */
@@ -237,6 +240,7 @@ export const IzvodjenjeStore = signalStore(
       /** Zatvara STOMP vezu i red komandi (zove se i iz `onDestroy`). */
       destroy(): void {
         zatvoriVezu();
+        izvodjenjeId = null;
         redPretplata.unsubscribe();
       },
     };

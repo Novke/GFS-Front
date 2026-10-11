@@ -243,6 +243,15 @@ describe('IzvodjenjeStore', () => {
       expect(store.veza()).toBe('povezan');
     });
 
+    it('posle destroy: nema zahteva ni prekida veze', () => {
+      init();
+      store.destroy();
+      store.posleVracanja(Infinity);
+      store.osvezi();
+      http.expectNone(() => true);
+      expect(stomp.stompClient.forceDisconnect).not.toHaveBeenCalled();
+    });
+
     it('pre init: nema zahteva ni izuzetka', () => {
       expect(() => store.posleVracanja(Infinity)).not.toThrow();
       http.expectNone(() => true);
