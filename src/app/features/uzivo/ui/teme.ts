@@ -15,7 +15,8 @@ export interface TemaOpis {
 
 export const TEME: Record<Tema, TemaOpis> = {
   NACRT: {
-    tema: 'NACRT', naziv: 'Nacrt', pozadina: '#FFFFFF', tekst: '#121A2A', naslov: '#2456A6',
+    // Naslov je boje mastila (kao tekst), ne --primary: INFO slajdovi iz vremena pre tema izgledaju isto.
+    tema: 'NACRT', naziv: 'Nacrt', pozadina: '#FFFFFF', tekst: '#121A2A', naslov: '#121A2A',
     akcenti: ['#2456A6', '#F0A23B', '#1D7A55', '#B42318', '#8A5300', '#5F6C84'],
     fontNaslova: 'IBM Plex Sans', fontTela: 'IBM Plex Sans',
     tabelaZaglavlje: '#2456A6', tabelaZaglavljeTekst: '#FFFFFF', tabelaTraka: '#E4ECF8',

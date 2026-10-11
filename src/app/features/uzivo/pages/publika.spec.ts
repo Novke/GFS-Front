@@ -1,10 +1,13 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { infoSlajd, naPitanju, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje, medijUrl } from '../data-access/uzivo.models';
+import { resetujPreducitavanje } from '../ui/preducitavanje';
+import { PublikaScenaComponent } from './publika-scena.component';
 import { PublikaPage, scenaPosle } from './publika.page';
 
 const zavrseno = (s: NastavnickoStanje): NastavnickoStanje =>
@@ -68,9 +71,30 @@ describe('PublikaPage', () => {
     await f.whenStable();
   };
 
+  beforeEach(() => resetujPreducitavanje());
+
   afterEach(() => {
     window.name = '';
     lazniStore.stanje.set(null);
+    lazniStore.veza.set('povezan');
+  });
+
+  it('epoha veze raste pri svakom prekidu (povezan -> prekinut), ne pri ponovnom povezivanju', async () => {
+    lazniStore.stanje.set(naPitanju('CEKA'));
+    const f = await prikazi();
+    const epoha = () => (f.debugElement.query(By.directive(PublikaScenaComponent)).componentInstance as PublikaScenaComponent).epohaVeze();
+    expect(epoha()).toBe(0);
+    lazniStore.veza.set('prekinut');
+    await osvezi(f);
+    expect(epoha()).toBe(1);
+    lazniStore.veza.set('povezan');
+    await osvezi(f);
+    expect(epoha()).toBe(1);
+    lazniStore.veza.set('prekinut');
+    await osvezi(f);
+    lazniStore.veza.set('povezan');
+    await osvezi(f);
+    expect(epoha()).toBe(2);
   });
 
   it('"Završi" dok je postolje na platnu: postolje ostaje', async () => {
@@ -129,7 +153,8 @@ describe('PublikaPage', () => {
       expect(el.querySelector('app-publika-scena')).toBeNull();
       expect(el.textContent).toContain('Učitavanje…');
       const trazeni = new Set(load.mock.calls.map((c) => String(c[0]).replace(/^\d+ 32px /, '')));
-      expect([...trazeni].sort()).toEqual(['"Caladea"', '"Carlito"', '"Tinos"']);
+      // Cousine: formula fabričkog platna nema sliku izvora (LaTeX izvor se crta tim fontom)
+      expect([...trazeni].sort()).toEqual(['"Caladea"', '"Carlito"', '"Cousine"', '"Tinos"']);
 
       razresi();
       await new Promise((r) => setTimeout(r));

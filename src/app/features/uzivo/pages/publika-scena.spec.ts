@@ -143,6 +143,32 @@ describe('PublikaScenaComponent (animacija prelaza i tema)', () => {
     expect(slajd()!.animacija()).toBeNull();
   });
 
+  it('ponovno povezivanje (nova epoha veze): korak koji se desio tokom prekida se ne animira', async () => {
+    const { fixture, slajd, posalji } = await scena(naPlatnu(0, 5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(slajd()!.animacija()).toBeNull();
+
+    await posalji(naPlatnu(1, 6));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+
+    // posle ponovnog povezivanja sledeći korak se opet animira
+    await posalji(naPlatnu(2, 7));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 7, grupa: 2 });
+  });
+
+  it('epoha i snimak stignu zajedno (isti ciklus): bez animacije', async () => {
+    const { fixture, slajd } = await scena(naPlatnu(0, 5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.componentRef.setInput('stanje', naPlatnu(1, 6));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
   it('animiraj false (umanjen prikaz u konzoli): animacija je uvek null', async () => {
     const { slajd, posalji } = await scena(naPlatnu(0, 5), false);
     await posalji(naPlatnu(1, 6));

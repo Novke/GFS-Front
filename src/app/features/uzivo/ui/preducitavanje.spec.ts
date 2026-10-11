@@ -2,7 +2,11 @@ import { infoSlajd, pitanjeSlajd, platnoSlajd } from '../data-access/izvodjenje-
 import { platno } from '../data-access/platno-podaci.testing';
 import { FormulaSloj, SlikaSloj } from '../data-access/platno.models';
 import { MedijInfo, medijUrl } from '../data-access/uzivo.models';
-import { fontoviZaPrikaz, preducitajFontove, preducitajSlike, sacekajFontove, slikeSlajda } from './preducitavanje';
+import {
+  fontoviZaPrikaz, preducitajFontove, preducitajSlike, resetujPreducitavanje, sacekajFontove, slikeSlajda,
+} from './preducitavanje';
+
+beforeEach(() => resetujPreducitavanje());
 
 const medij = (id: string): MedijInfo => ({ id, naziv: `${id}.png`, mime: 'image/png', velicina: 10 });
 
@@ -43,16 +47,43 @@ describe('preducitajSlike', () => {
     preducitajSlike(['api/public/mediji/p-b', 'api/public/mediji/p-c']);
     expect(ucitane).toEqual(['api/public/mediji/p-a', 'api/public/mediji/p-b', 'api/public/mediji/p-c']);
   });
+
+  it('neuspelo učitavanje se ne pamti: sledeći poziv pokušava ponovo', () => {
+    const slike: { src: string; onerror: (() => void) | null }[] = [];
+    vi.stubGlobal('Image', class {
+      onerror: (() => void) | null = null;
+      src = '';
+      constructor() { slike.push(this); }
+    });
+    preducitajSlike(['api/public/mediji/greska']);
+    expect(slike.length).toBe(1);
+    slike[0].onerror?.();
+    preducitajSlike(['api/public/mediji/greska']);
+    expect(slike.length).toBe(2);
+    preducitajSlike(['api/public/mediji/greska']);
+    expect(slike.length).toBe(2);
+  });
 });
 
 describe('fontoviZaPrikaz', () => {
   it('fontovi teme (naslov, telo) i fontovi platna; nepoznat font postaje Carlito', () => {
     const p = platno();
     const tekst = p.slojevi.find((s) => s.tip === 'TEKST')!;
-    if (tekst.tip === 'TEKST') tekst.pasusi[1].delovi[0].font = 'Comic Sans MS';
-    const fontovi = fontoviZaPrikaz('PAPIR', [platnoSlajd({ platno: p }), infoSlajd(), null]);
-    expect([...fontovi].sort()).toEqual(['Caladea', 'Carlito']);
+    if (tekst.tip === 'TEKST') {
+      tekst.pasusi[0].delovi[0].font = 'Tinos';
+      tekst.pasusi[1].delovi[0].font = 'Comic Sans MS';
+    }
+    const fontovi = fontoviZaPrikaz('NACRT', [platnoSlajd({ platno: p }), infoSlajd(), null]);
+    // Carlito: podrazumevani font platna (i zamena za Comic Sans); Cousine: formula bez slike izvora
+    expect([...fontovi].sort()).toEqual(['Carlito', 'Cousine', 'IBM Plex Sans', 'Tinos']);
     expect([...fontoviZaPrikaz(undefined, [])]).toEqual(['IBM Plex Sans']);
+  });
+
+  it('PLATNO bez teksta uvek traži Carlito; formula sa slikom izvora ne traži Cousine', () => {
+    const p = platno();
+    p.slojevi = p.slojevi.filter((s) => s.tip === 'FORMULA');
+    (p.slojevi[0] as FormulaSloj).slikaIzvora = 'f';
+    expect([...fontoviZaPrikaz('NACRT', [platnoSlajd({ platno: p })])].sort()).toEqual(['Carlito', 'IBM Plex Sans']);
   });
 });
 
@@ -97,6 +128,16 @@ describe('sacekajFontove', () => {
   it('bez document.fonts (stari pregledač): odmah', async () => {
     postaviFonts(null);
     await expect(sacekajFontove(['Carlito'])).resolves.toBeUndefined();
+  });
+
+  it('preducitajFontove: odbijeno učitavanje se ne pamti', async () => {
+    postaviFonts(() => Promise.reject(new Error('mreža')));
+    preducitajFontove(['Arimo']);
+    await new Promise((r) => setTimeout(r));
+    preducitajFontove(['Arimo']);
+    expect(load.mock.calls.map((c) => c[0])).toEqual([
+      '400 32px "Arimo"', '700 32px "Arimo"', '400 32px "Arimo"', '700 32px "Arimo"',
+    ]);
   });
 
   it('preducitajFontove: isti font se ne traži dvaput', () => {

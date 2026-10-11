@@ -123,6 +123,11 @@ describe('SlajdPrikazComponent: PLATNO i teme', () => {
     expect(koren(el).classList).not.toContain('rezim-noc');
   });
 
+  it('NACRT INFO: naslov ostaje boje mastila (#121A2A), kao pre tema', async () => {
+    const { el } = await prikazi({ slajd: info('- a') });
+    expect(koren(el).style.getPropertyValue('--uz-tema-naslov')).toBe('#121A2A');
+  });
+
   it('bez teme (stari snimak) i podrazumevano: NACRT', async () => {
     const { el } = await prikazi({ slajd: slajdPitanje });
     expect(koren(el).style.getPropertyValue('--uz-tema-pozadina')).toBe('#FFFFFF');

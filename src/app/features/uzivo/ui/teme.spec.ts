@@ -34,6 +34,11 @@ describe('teme', () => {
     expect(promenljiveTeme('PAPIR')['--uz-tema-font-naslova']).toContain('Caladea');
   });
 
+  it('NACRT: naslov je boje mastila kao i tekst (postojeći INFO slajdovi ostaju isti)', () => {
+    expect(TEME.NACRT.naslov).toBe('#121A2A');
+    expect(TEME.NACRT.naslov).toBe(TEME.NACRT.tekst);
+  });
+
   it('tamne teme (za noćne tokene sadržaja slajda): TAMNA i PONOC', () => {
     expect(SVE.filter(tamnaTema)).toEqual(['TAMNA', 'PONOC']);
   });

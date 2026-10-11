@@ -94,16 +94,33 @@ export class PublikaScenaComponent {
   readonly umanjeno = input<boolean>(false);
   /** Pušta animacije koraka PLATNO slajda (prozor publike); umanjeni prikaz u konzoli crta samo krajnje stanje. */
   readonly animiraj = input<boolean>(false);
+  /**
+   * Broj prekida veze (raste kad veza padne). Snimak posle ponovnog povezivanja se ne poredi sa snimkom pre prekida:
+   * korak ili slajd napred tokom prekida crta se kao krajnje stanje, bez animacije (spec 5).
+   */
+  readonly epohaVeze = input<number>(0);
 
-  /** Poslednji snimak (kao `StanjePrelaza`) i grupa za animaciju prelaza sa prethodnog na njega; ključ je `verzija`. */
-  private readonly prelaz = linkedSignal<NastavnickoStanje, { stanje: StanjePrelaza; grupa: number | null }>({
-    source: this.stanje,
-    computation: (s, prethodni) => {
+  private readonly izvor = computed(() => ({ stanje: this.stanje(), epoha: this.epohaVeze() }));
+  /**
+   * Poslednji snimak (kao `StanjePrelaza`), epoha veze u kojoj je stigao i grupa za animaciju prelaza sa prethodnog
+   * snimka na njega (ključ je `verzija`). Promena same epohe (veza pala, snimak isti) ne menja zapamćeni snimak ni
+   * njegovu epohu, pa se prvi snimak posle ponovnog povezivanja ne poredi sa onim pre prekida.
+   */
+  private readonly prelaz = linkedSignal<
+    { stanje: NastavnickoStanje; epoha: number },
+    { stanje: StanjePrelaza; epoha: number; grupa: number | null }
+  >({
+    source: this.izvor,
+    computation: ({ stanje: s, epoha }, prethodni) => {
+      if (prethodni && prethodni.source.stanje === s) {
+        return { ...prethodni.value, grupa: null };
+      }
       const sada: StanjePrelaza = {
         verzija: s.verzija, prikaz: s.prikaz, indeks: s.indeks, slajdId: s.trenutniSlajd?.id ?? null,
         tip: s.trenutniSlajd?.tip ?? null, korak: s.korak,
       };
-      return { stanje: sada, grupa: animacijaPrelaza(prethodni?.value.stanje ?? null, sada) };
+      const pre = prethodni && prethodni.value.epoha === epoha ? prethodni.value.stanje : null;
+      return { stanje: sada, epoha, grupa: animacijaPrelaza(pre, sada) };
     },
   });
   protected readonly animacija = computed(() => {

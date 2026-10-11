@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { infoSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje, medijUrl } from '../data-access/uzivo.models';
+import { resetujPreducitavanje } from '../ui/preducitavanje';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { KonzolaPage } from './konzola.page';
 
@@ -36,6 +37,7 @@ describe('KonzolaPage: sledeći slajd', () => {
   }
 
   beforeEach(() => {
+    resetujPreducitavanje();
     ucitane = [];
     vi.stubGlobal('Image', class { set src(v: string) { ucitane.push(v); } });
   });

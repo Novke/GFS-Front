@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute } from '@angular/router';
 import { distinctUntilChanged, filter, map } from 'rxjs';
 import { ispravanIndeks } from '../data-access/izvodjenje-pravila';
-import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
+import { IzvodjenjeStore, Veza } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
@@ -51,7 +51,8 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
   template: `
     @if (store.stanje() && fontoviSpremni()) {
       @if (scena(); as sc) {
-        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" [animiraj]="true" />
+        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" [animiraj]="true"
+                            [epohaVeze]="epohaVeze()" />
       } @else {
         <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
@@ -80,6 +81,11 @@ export class PublikaPage {
   protected readonly scena = linkedSignal<NastavnickoStanje | null, NastavnickoStanje | null>({
     source: this.store.stanje,
     computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
+  });
+  /** +1 svaki put kad veza padne (`povezan` -> drugo): scena ne animira prvi snimak posle ponovnog povezivanja. */
+  protected readonly epohaVeze = linkedSignal<Veza, number>({
+    source: this.store.veza,
+    computation: (v, pre) => (pre ? pre.value + (pre.source === 'povezan' && v !== 'povezan' ? 1 : 0) : 0),
   });
   /** Fontovi prvog snimka su stigli (ili je prošlo 3 s). Pregledač bez `document.fonts` ne čeka. */
   protected readonly fontoviSpremni = signal(typeof (document as { fonts?: { load?: unknown } }).fonts?.load !== 'function');

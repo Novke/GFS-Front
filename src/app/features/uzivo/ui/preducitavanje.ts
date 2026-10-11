@@ -31,13 +31,14 @@ export function slikeSlajda(s: SlajdDetails | null): string[] {
 
 const ucitaneSlike = new Set<string>();
 
-/** Pokreće preuzimanje slika (`new Image()`); svaki URL samo jednom po prozoru. */
+/** Pokreće preuzimanje slika (`new Image()`); svaki URL samo jednom po prozoru (neuspelo se pokušava ponovo). */
 export function preducitajSlike(urls: string[]): void {
   for (const url of urls) {
     if (ucitaneSlike.has(url)) continue;
     ucitaneSlike.add(url);
     const slika = new Image();
     slika.decoding = 'async';
+    slika.onerror = () => ucitaneSlike.delete(url);
     slika.src = url;
   }
 }
@@ -45,13 +46,21 @@ export function preducitajSlike(urls: string[]): void {
 const POZNATI = new Set(FONTOVI_PLATNA.map((f) => f.naziv));
 const PODRAZUMEVANI = FONTOVI_PLATNA[0].naziv;
 
-/** Fontovi koje prikaz koristi: naslov i telo teme (bez teme NACRT) i `deo.font` PLATNO slajdova (nepoznat -> Carlito). */
+/** Font kojim se crta LaTeX izvor formule bez slike (`platno-prikaz`, faza 1). */
+const FONT_FORMULE = 'Cousine';
+
+/**
+ * Fontovi koje prikaz koristi: naslov i telo teme (bez teme NACRT) i za PLATNO slajdove `deo.font` (nepoznat ->
+ * Carlito), uvek Carlito (podrazumevani font platna) i Cousine kad formula nema sliku izvora.
+ */
 export function fontoviZaPrikaz(tema: Tema | null | undefined, slajdovi: readonly (SlajdDetails | null)[]): Set<string> {
   const t = TEME[vazecaTema(tema)];
   const fontovi = new Set<string>([t.fontNaslova, t.fontTela]);
   for (const s of slajdovi) {
     if (s?.tip === 'PLATNO' && s.platno) {
+      fontovi.add(PODRAZUMEVANI);
       for (const f of fontoviPlatna(s.platno)) fontovi.add(POZNATI.has(f) ? f : PODRAZUMEVANI);
+      if (s.platno.slojevi.some((sloj) => sloj.tip === 'FORMULA' && !sloj.slikaIzvora)) fontovi.add(FONT_FORMULE);
     }
   }
   return fontovi;
@@ -68,13 +77,9 @@ function skupFontova(): SkupFontova | null {
   return typeof fonts?.load === 'function' ? fonts : null;
 }
 
-/** Normalan i podebljan rez svakog fonta (kurziv se učita sam pri prvom crtanju). */
-function ucitaj(skup: SkupFontova, fontovi: Iterable<string>): Promise<unknown>[] {
-  const zahtevi: Promise<unknown>[] = [];
-  for (const f of new Set(fontovi)) {
-    for (const rez of REZOVI) zahtevi.push(skup.load(`${rez} 32px "${f}"`, UZORAK));
-  }
-  return zahtevi;
+/** Normalan i podebljan rez fonta (kurziv se učita sam pri prvom crtanju). */
+function ucitaj(skup: SkupFontova, font: string): Promise<unknown>[] {
+  return REZOVI.map((rez) => skup.load(`${rez} 32px "${font}"`, UZORAK));
 }
 
 /**
@@ -88,7 +93,7 @@ export function sacekajFontove(fontovi: Iterable<string>, maxMs = 3000): Promise
   }
   return new Promise<void>((razresi) => {
     const tajmer = setTimeout(razresi, maxMs);
-    void Promise.allSettled(ucitaj(skup, fontovi)).then(() => {
+    void Promise.allSettled([...new Set(fontovi)].flatMap((f) => ucitaj(skup, f))).then(() => {
       clearTimeout(tajmer);
       razresi();
     });
@@ -97,15 +102,22 @@ export function sacekajFontove(fontovi: Iterable<string>, maxMs = 3000): Promise
 
 const trazeniFontovi = new Set<string>();
 
-/** Pokreće učitavanje fontova bez čekanja; svaki font samo jednom po prozoru. */
+/** Pokreće učitavanje fontova bez čekanja; svaki font samo jednom po prozoru (odbijen se traži ponovo). */
 export function preducitajFontove(fontovi: Iterable<string>): void {
   const skup = skupFontova();
   if (!skup) {
     return;
   }
-  const novi = [...fontovi].filter((f) => !trazeniFontovi.has(f));
-  novi.forEach((f) => trazeniFontovi.add(f));
-  for (const zahtev of ucitaj(skup, novi)) {
-    zahtev.catch(() => undefined);
+  for (const f of fontovi) {
+    if (trazeniFontovi.has(f)) continue;
+    trazeniFontovi.add(f);
+    void Promise.all(ucitaj(skup, f)).catch(() => trazeniFontovi.delete(f));
   }
 }
+
+/** Samo za testove: zaboravlja učitane slike i tražene fontove (keševi traju koliko i prozor). */
+export function resetujPreducitavanje(): void {
+  ucitaneSlike.clear();
+  trazeniFontovi.clear();
+}
+
