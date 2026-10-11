@@ -659,6 +659,46 @@
   gap: 0;
 }
 
+.uz-vreme--kompaktno .mat-mdc-icon-button.mat-mdc-button-base {
+  --mat-icon-button-state-layer-size: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+}
+
+.uz-kon-vreme {
+  margin-inline-start: auto;
+}
+
+.uz-sled-radnja {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.uz-sled-zatim {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.uz-kon-telefon-izbor {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.uz-kon-telefon-izbor [aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.uz-kon-telefon-napomena {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .uz-vreme-stoperica,
 .uz-vreme-sat {
   font-family: var(--font-mono, monospace);

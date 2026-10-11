@@ -36,7 +36,7 @@ function bezbednoSkladiste(): Storage | null {
             (click)="pustiFokus($event); nulujStopericu()">
       <mat-icon aria-hidden="true" svgIcon="restart_alt" />
     </button>
-    <span class="uz-vreme-sat" aria-label="Sat">{{ satPrikaz() }}</span>
+    <span class="uz-vreme-sat" role="timer" aria-label="Sat">{{ satPrikaz() }}</span>
   `,
 })
 export class VremeIzvodjenjaComponent {
