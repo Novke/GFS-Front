@@ -237,7 +237,9 @@ export function pomesaj(boja: Boja, pozadina: string): string {
 }
 
 const APTOS = /^aptos( display| narrow)?$/i;
-const MONO = /mono|consolas|courier|console/i;
+// "mono" samo kao zasebna reč (Andale Mono, DejaVu Sans Mono), ne Monotype Corsiva/Sorts; "consol" pokriva Consolas i
+// Lucida Console.
+const MONO = /\bmono\b|monospace|consol|courier/i;
 const SERIF = /serif|times|roman|georgia|garamond|book|cambria/i;
 const SANS = /\bsans\b/i;
 

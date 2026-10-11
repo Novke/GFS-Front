@@ -108,6 +108,14 @@ describe('otvoriPaket: ispravan fajl', () => {
     expect(p.bajtovi('ppt/media/nema.png')).toBeNull();
   });
 
+  it('postoji: po centralnom direktorijumu, bez raspakivanja (i za delove koji nisu XML)', () => {
+    const p = otvoriPaket(napraviPptx({ slajdovi: [PRAZAN], delovi: { 'ppt/media/image1.png': PNG_1X1 } }), 'a.pptx');
+    expect(p.postoji('ppt/media/image1.png')).toBe(true);
+    expect(p.postoji('ppt/slides/slide1.xml')).toBe(true);
+    expect(p.postoji('ppt/media/nema.png')).toBe(false);
+    expect(p.postoji('#slajd1')).toBe(false);
+  });
+
   it('bajtovi: deo koji ne može da se raspakuje (nepoznat metod kompresije) je null, ne izuzetak', () => {
     const z = prepravi(napraviPptx({ slajdovi: [PRAZAN], delovi: { 'ppt/media/image1.png': PNG_1X1 } }), 'ppt/media/image1.png', 'metod', 99);
     const p = otvoriPaket(z, 'a.pptx');

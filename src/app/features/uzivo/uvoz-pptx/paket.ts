@@ -29,6 +29,8 @@ export interface Paket {
   vezaTipa(putanja: string, tip: string): Veza | null;
   /** Lenjo raspakivanje jednog dela (slike); `null` kad dela nema ili ne može da se raspakuje. */
   bajtovi(putanja: string): Uint8Array | null;
+  /** Da li deo postoji u centralnom direktorijumu zip-a (bez raspakivanja; proširenje ugovora u F3 za `medijIzVeze`). */
+  postoji(putanja: string): boolean;
 }
 
 const POTPIS_CFB = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
@@ -63,13 +65,14 @@ function sadrziUtf16le(b: Uint8Array, niz: string): boolean {
  * `max(size, originalSize)`: fflate 0.8.3 deo bez kompresije (stored) vraća u veličini `size` i ne gleda `originalSize`,
  * pa lažno mali `originalSize` ne sme da ga provuče; deflate deo se raspakuje u bafer tačno veličine `originalSize`.
  */
-function raspakujXml(bajtovi: Uint8Array): Unzipped {
+function raspakujXml(bajtovi: Uint8Array, imena: Set<string>): Unzipped {
   let delova = 0;
   let ukupno = 0;
   try {
     return unzipSync(bajtovi, {
       filter: (f) => {
         delova++;
+        imena.add(f.name);
         const velicina = Math.max(f.size, f.originalSize);
         ukupno += velicina;
         if (delova > GRANICE_PAKETA.delova || ukupno > GRANICE_PAKETA.ukupno) throw ostecen(`granica paketa: ${f.name}`);
@@ -108,7 +111,12 @@ class PptxPaket implements Paket {
   private readonly vezeDelova = new Map<string, readonly Veza[]>();
   private readonly raspakovano = new Map<string, Uint8Array | null>();
 
-  constructor(readonly imeFajla: string, private readonly sviBajtovi: Uint8Array, private readonly xmlDelovi: Unzipped) {
+  constructor(
+    readonly imeFajla: string,
+    private readonly sviBajtovi: Uint8Array,
+    private readonly xmlDelovi: Unzipped,
+    private readonly imena: ReadonlySet<string>,
+  ) {
     const tipovi = this.xml('[Content_Types].xml');
     const glavna = this.vezaTipa('', 'officeDocument');
     if (!tipovi || !glavna || glavna.spoljna) throw new GreskaUvoza(PORUKE_FAJLA.nijePptx);
@@ -179,6 +187,10 @@ class PptxPaket implements Paket {
     }
     return this.raspakovano.get(putanja) ?? null;
   }
+
+  postoji(putanja: string): boolean {
+    return this.imena.has(putanja);
+  }
 }
 
 /** Content type dela iz `[Content_Types].xml`: `Override` za putanju, inače `Default` po ekstenziji (OPC: bez obzira na slova). */
@@ -205,5 +217,7 @@ export function otvoriPaket(bajtovi: Uint8Array, imeFajla: string): Paket {
     throw new GreskaUvoza(sadrziUtf16le(bajtovi, 'EncryptedPackage') ? PORUKE_FAJLA.lozinka : PORUKE_FAJLA.ppt);
   }
   if (!pocinjeSa(bajtovi, POTPIS_ZIP)) throw ostecen();
-  return new PptxPaket(imeFajla, bajtovi, raspakujXml(bajtovi));
+  const imena = new Set<string>();
+  const xmlDelovi = raspakujXml(bajtovi, imena);
+  return new PptxPaket(imeFajla, bajtovi, xmlDelovi, imena);
 }

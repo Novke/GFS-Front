@@ -152,6 +152,12 @@ describe('zamena fontova', () => {
     ['Cambria Math', 'Caladea', "Font 'Cambria Math' zamenjen fontom Caladea."],
     ['Microsoft Sans Serif', 'Carlito', "Font 'Microsoft Sans Serif' zamenjen fontom Carlito."],
     ['Consolas', 'Cousine', "Font 'Consolas' zamenjen fontom Cousine."],
+    ['Lucida Console', 'Cousine', "Font 'Lucida Console' zamenjen fontom Cousine."],
+    ['Andale Mono', 'Cousine', "Font 'Andale Mono' zamenjen fontom Cousine."],
+    ['DejaVu Sans Mono', 'Cousine', "Font 'DejaVu Sans Mono' zamenjen fontom Cousine."],
+    // "Mono" samo kao zasebna reč: Monotype* nisu monospace.
+    ['Monotype Corsiva', 'Carlito', "Font 'Monotype Corsiva' zamenjen fontom Carlito."],
+    ['Monotype Sorts', 'Carlito', "Font 'Monotype Sorts' zamenjen fontom Carlito."],
   ];
 
   it.each(slucajevi)('%s -> %s', (ime, font, upozorenje) => {
