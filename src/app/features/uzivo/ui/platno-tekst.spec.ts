@@ -65,6 +65,7 @@ describe('oznakeListe', () => {
     expect(niz('MALA_SLOVA_ZAGRADA', 2)).toEqual(['a)', 'b)']);
     expect(niz('VELIKA_SLOVA_TACKA', 2)).toEqual(['A.', 'B.']);
     expect(niz('ARAPSKI_ZAGRADA', 2)).toEqual(['1)', '2)']);
+    expect(niz('ARAPSKI', 2)).toEqual(['1', '2']);
     expect(niz('MALA_SLOVA_ZAGRADA', 28).slice(25)).toEqual(['z)', 'aa)', 'bb)']);
   });
 

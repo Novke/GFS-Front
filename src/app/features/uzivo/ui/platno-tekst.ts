@@ -65,6 +65,7 @@ function formatiraj(n: number, format: FormatBroja): string {
   switch (format) {
     case 'ARAPSKI_TACKA': return `${n}.`;
     case 'ARAPSKI_ZAGRADA': return `${n})`;
+    case 'ARAPSKI': return String(n);
     case 'MALA_SLOVA_ZAGRADA': return `${slovo(n)})`;
     case 'VELIKA_SLOVA_TACKA': return `${slovo(n).toUpperCase()}.`;
     case 'RIMSKI_VELIKI_TACKA': return `${rimski(n)}.`;
