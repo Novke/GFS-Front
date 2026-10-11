@@ -8,10 +8,10 @@ const PLATNO_SLAJD = 52;
 
 const sloj = (page: Page, id: string) => page.locator(`.uz-ed-platno [data-sloj="${id}"]`);
 
-async function otvoriPlatnoSlajd(page: Page): Promise<void> {
+async function otvoriPlatnoSlajd(page: Page, vidljiv = 'naslov'): Promise<void> {
   await page.goto(`prezentacije/${PREZENTACIJA}`);
   await page.getByRole('button', { name: /^2\s/ }).click();
-  await expect(sloj(page, 'naslov')).toBeVisible();
+  await expect(sloj(page, vidljiv)).toBeVisible();
 }
 
 test.describe('uživo: editor sa PLATNO slajdom', () => {
@@ -57,6 +57,88 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     expect(telo.beleske).toBe('Nove beleške o nosaču');
     expect(telo.platno).toEqual(pre);
     await expect(sloj(page, 'crtez')).toBeVisible();
+  });
+
+  /*
+   * Regresija (Chromium): brzi "Korak napred" do koraka u kome sloj izlazi (IZLAZ) ostavljao je sadržaj tog sloja
+   * vidljiv (a ulazne slojeve skrivene) i posle kraja svih animacija: sloj je `hidden`, a njegov `.uz-pl-sadrzaj` je
+   * zadržao zastareo računski stil iz otkazane animacije. Raspored liči na demo slajd 2: k1 ULET + SA_PRETHODNIM,
+   * k2 PODELI, k3 BRISANJE + POSLE_PRETHODNOG, k4 IZLAZ sloja `slika`.
+   */
+  test('brzi koraci napred: posle svake serije vidi se tačno krajnje stanje (IZLAZ skriven, ULAZ vidljiv)', async ({ page, mock }) => {
+    test.setTimeout(120_000);
+    const a = (id: string, slojId: string, efekat: string, okidac: string, izmene: Record<string, unknown> = {}) => ({
+      id, slojId, pasus: null, vrsta: 'ULAZ', efekat, smer: null, okidac, trajanjeMs: 500, kasnjenjeMs: 0, ...izmene,
+    });
+    const slajd = mock.podaci.prezentacije[0].slajdovi[1];
+    (slajd.platno as { animacije: unknown[] }).animacije = [
+      a('b1', 'oblik', 'ULET', 'KLIK', { smer: 'LEVO' }),
+      a('b2', 'tabela', 'ULET', 'SA_PRETHODNIM', { smer: 'DOLE' }),
+      a('b3', 'formula', 'PODELI', 'KLIK', { smer: 'HORIZONTALNO' }),
+      a('b4', 'crtez', 'BRISANJE', 'KLIK', { smer: 'DESNO' }),
+      a('b5', 'naslov', 'ZUM', 'POSLE_PRETHODNOG'),
+      a('b6', 'slika', 'FADE', 'KLIK', { vrsta: 'IZLAZ' }),
+    ];
+    await otvoriPlatnoSlajd(page, 'slika');
+    const status = page.locator('.uz-ed-korak');
+    await expect(status).toHaveText('Korak 0 / 4');
+
+    /** Slojevi čiji sloj ili sadržaj ne odgovara očekivanom (računski stil, isto što vidi korisnik). */
+    const pogresni = (vidljivi: string[]) => page.evaluate((vidljivi) => {
+      const rezultat: string[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>('.uz-ed-platno .uz-pl-sloj')) {
+        const ocekivano = vidljivi.includes(el.dataset['sloj'] ?? '') ? 'visible' : 'hidden';
+        const sadrzaj = el.querySelector(':scope > .uz-pl-sadrzaj')!;
+        const stvarno = [getComputedStyle(el).visibility, getComputedStyle(sadrzaj).visibility];
+        if (stvarno.some((v) => v !== ocekivano)) {
+          rezultat.push(`${el.dataset['sloj']}: sloj ${stvarno[0]}, sadržaj ${stvarno[1]}, očekivano ${ocekivano}`);
+        }
+      }
+      return rezultat;
+    }, vidljivi);
+    const bezAnimacija = () => expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0);
+    /** Klikne dugme `naziv` `n` puta u stranici, sa `razmakMs` između klikova (brže nego što animacija traje). */
+    const serija = (naziv: string, n: number, razmakMs: number) => page.evaluate(async ({ naziv, n, razmakMs }) => {
+      const dugme = () => Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes(naziv))!;
+      for (let i = 0; i < n; i++) {
+        dugme().click();
+        await new Promise((r) => setTimeout(r, razmakMs));
+      }
+    }, { naziv, n, razmakMs });
+
+    const greske: string[] = [];
+    const RAZMACI = [20, 35, 50, 65, 80];
+    for (let i = 0; i < 25; i++) {
+      await serija('Korak napred', 4, RAZMACI[i % RAZMACI.length]);
+      await expect(status).toHaveText('Korak 4 / 4');
+      await bezAnimacija();
+      for (const g of await pogresni(['naslov', 'oblik', 'tabela', 'formula', 'crtez'])) {
+        greske.push(`ponavljanje ${i}, korak 4: ${g}`);
+      }
+      await serija('Korak nazad', 4, 20);
+      await expect(status).toHaveText('Korak 0 / 4');
+      await bezAnimacija();
+      for (const g of await pogresni(['slika'])) {
+        greske.push(`ponavljanje ${i}, korak 0: ${g}`);
+      }
+    }
+    expect(greske).toEqual([]);
+
+    // Sloj koji izlazi se vidi dok njegova animacija traje (sloj je već `hidden`, sadržaj ima inline `visible`).
+    await serija('Korak napred', 3, 20);
+    await expect(status).toHaveText('Korak 3 / 4');
+    await bezAnimacija();
+    const tokomIzlaza = await page.evaluate(async () => {
+      Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('Korak napred'))!.click();
+      const sadrzaj = document.querySelector('.uz-ed-platno [data-sloj="slika"] > .uz-pl-sadrzaj')!;
+      for (let i = 0; i < 10 && sadrzaj.getAnimations().length === 0; i++) {
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      return { animacija: sadrzaj.getAnimations().length, vidljivost: getComputedStyle(sadrzaj).visibility };
+    });
+    expect(tokomIzlaza).toEqual({ animacija: 1, vidljivost: 'visible' });
+    await bezAnimacija();
+    expect(await pogresni(['naslov', 'oblik', 'tabela', 'formula', 'crtez'])).toEqual([]);
   });
 
   test('izbor teme šalje PUT /prezentacije/{id} sa temom, a uzorak nosi --uz-tema-pozadina te teme', async ({ page, mock }) => {

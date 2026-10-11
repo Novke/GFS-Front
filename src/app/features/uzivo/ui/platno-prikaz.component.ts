@@ -2,7 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, untracked,
 } from '@angular/core';
-import { grupaZaKorak, stanjeSlojeva } from '../data-access/platno-koraci';
+import { KljucVidljivosti, grupaZaKorak, stanjeSlojeva } from '../data-access/platno-koraci';
 import {
   Animacija, Celija, FormulaSloj, Ivica, OblikSloj, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
@@ -194,8 +194,9 @@ function pomerajUleta(smer: Animacija['smer'], s: Sloj, pxPoJedinici: number): s
 
 /**
  * Ključni kadrovi jedne animacije (Web Animations API) za `.uz-pl-sadrzaj` sloja ili `<p>` pasusa. Kadrovi su za ULAZ
- * (od skrivenog ka krajnjem izgledu); IZLAZ ih obrće. Svaki kadar nosi `visibility: visible`, jer krajnje stanje koraka
- * (`stanjeSlojeva`) element već sakriva ili prikazuje, a animacija mora da se vidi dok traje.
+ * (od skrivenog ka krajnjem izgledu); IZLAZ ih obrće. Kadrovi ne nose `visibility`: dok grupa traje, cilj dobija inline
+ * `visibility: visible` (`PlatnoPrikazComponent.pusti`), jer krajnje stanje koraka (`stanjeSlojeva`) element već sakriva
+ * ili prikazuje, a animacija mora da se vidi dok traje.
  * `pxPoJedinici` = širina platna u px / 960 (ULET ide u px, ne kroz `var(--u)` u kadru).
  */
 export function kadroviAnimacije(a: Animacija, s: Sloj, pxPoJedinici: number): Keyframe[] {
@@ -224,7 +225,7 @@ export function kadroviAnimacije(a: Animacija, s: Sloj, pxPoJedinici: number): K
       od = { opacity: 0 };
       ka = { opacity: 1 };
   }
-  const kadrovi = [{ ...od, visibility: 'visible' }, { ...ka, visibility: 'visible' }];
+  const kadrovi = [od, ka];
   return a.vrsta === 'IZLAZ' ? kadrovi.reverse() : kadrovi;
 }
 
@@ -245,6 +246,12 @@ function smanjenoKretanje(): boolean {
  * krajnjeg stanja koraka. Animacije prethodne grupe se pre toga prekidaju (`cancel`: odmah krajnje stanje), a kad se
  * završe sve animacije grupe, i one se prekidaju, pa opet važi samo krajnje stanje iz `stanjeSlojeva`. Promena koraka
  * bez novog ključa (skok, nazad, ponovno povezivanje) samo prekida animaciju koja traje.
+ *
+ * Vidljivost cilja animacije: dok grupa traje, cilj ima inline `visibility: visible` (ne nasleđuje je od sloja), a
+ * posle prekida mu se inline vidljivost izričito vraća na krajnje stanje (`.uz-pl-sadrzaj` opet nasleđuje od sloja,
+ * pasus dobija vrednost iz `stanjeSlojeva`). Chromium inače ume da posle `cancel()` zadrži zastareo nasleđeni
+ * `visibility` cilja (sloj `hidden`, sadržaj vidljiv, ili obrnuto) kad se vidljivost sloja menja dok cilj ima
+ * animacije (brzi koraci napred); izmena inline stila cilja posle prekida primorava pun ponovni proračun stila.
  */
 @Component({
   selector: 'app-platno-prikaz',
@@ -366,6 +373,8 @@ export class PlatnoPrikazComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** Animacije grupe koja se trenutno pušta (prazno kad se crta samo krajnje stanje). */
   private tekuce: Animation[] = [];
+  /** Ciljevi tekuće grupe sa inline `visibility: visible`: ključ pasusa ili null za `.uz-pl-sadrzaj` sloja. */
+  private ciljevi = new Map<HTMLElement, KljucVidljivosti | null>();
   private poslednjiKljuc: number | null = null;
   private poslednjiKorak: number | null = null;
 
@@ -391,12 +400,30 @@ export class PlatnoPrikazComponent {
     inject(DestroyRef).onDestroy(() => this.prekini());
   }
 
-  /** Prekida animacije koje traju: element odmah dobija krajnje stanje koraka (inline `visibility` iz šablona). */
+  /** Prekida animacije koje traju: cilj odmah dobija krajnje stanje koraka (`vratiVidljivost`). */
   private prekini(): void {
     const tekuce = this.tekuce;
+    const ciljevi = this.ciljevi;
     this.tekuce = [];
+    this.ciljevi = new Map();
     for (const a of tekuce) {
       a.cancel();
+    }
+    this.vratiVidljivost(ciljevi);
+  }
+
+  /**
+   * Posle `cancel()`: `.uz-pl-sadrzaj` gubi inline `visibility` (opet nasleđuje od sloja), a pasus dobija vrednost
+   * krajnjeg stanja (isto što piše vezivanje u šablonu). Izmena inline stila je i ono što Chromium-u ne dozvoljava da
+   * zadrži zastareo stil iz otkazane animacije.
+   */
+  private vratiVidljivost(ciljevi: ReadonlyMap<HTMLElement, KljucVidljivosti | null>): void {
+    for (const [cilj, kljuc] of ciljevi) {
+      if (kljuc !== null && untracked(() => this.skriven(kljuc))) {
+        cilj.style.setProperty('visibility', 'hidden');
+      } else {
+        cilj.style.removeProperty('visibility');
+      }
     }
   }
 
@@ -412,6 +439,7 @@ export class PlatnoPrikazComponent {
     this.host.querySelectorAll<HTMLElement>(':scope > .uz-pl-sloj').forEach((el) => elementi.set(el.dataset['sloj'] ?? '', el));
     const zapoceti = new Set<string>();
     const lista: Animation[] = [];
+    const ciljevi = new Map<HTMLElement, KljucVidljivosti | null>();
     for (const z of zakazane) {
       const { slojId, pasus } = z.animacija;
       const sloj = slojevi.get(slojId);
@@ -422,6 +450,11 @@ export class PlatnoPrikazComponent {
       if (!sloj || !cilj) {
         continue;
       }
+      // Vidljiv dok grupa traje (i IZLAZ, čiji je sloj ili pasus u krajnjem stanju već skriven); kadrovi daju izgled.
+      if (!ciljevi.has(cilj)) {
+        ciljevi.set(cilj, pasus === null ? null : z.kljuc);
+        cilj.style.setProperty('visibility', 'visible');
+      }
       // Prva animacija ključa drži početni kadar i tokom kašnjenja (`both`); sledeće istog ključa nastavljaju od nje.
       const fill: FillMode = zapoceti.has(z.kljuc) ? 'forwards' : 'both';
       zapoceti.add(z.kljuc);
@@ -430,12 +463,14 @@ export class PlatnoPrikazComponent {
       }));
     }
     this.tekuce = lista;
+    this.ciljevi = ciljevi;
     // Kraj grupe: prekid svih vraća krajnje stanje. Prekinuta animacija odbija `finished` (AbortError), to nije greška.
     Promise.all(lista.map((a) => a.finished)).then(
       () => {
-        lista.forEach((a) => a.cancel());
         if (this.tekuce === lista) {
-          this.tekuce = [];
+          this.prekini();
+        } else {
+          lista.forEach((a) => a.cancel());
         }
       },
       () => undefined,

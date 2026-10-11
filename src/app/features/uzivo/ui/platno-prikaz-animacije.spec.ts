@@ -77,7 +77,7 @@ describe('PlatnoPrikazComponent: animacije koraka', () => {
     expect(opcije(0)).toEqual({ delay: 0, duration: 500, fill: 'both', easing: 'ease-out' });
     expect(opcije(1)).toEqual({ delay: 0, duration: 500, fill: 'both', easing: 'ease-out' });
     expect(opcije(2)).toEqual({ delay: 500, duration: 0, fill: 'both', easing: 'ease-out' });
-    expect(animate.mock.calls[0][0]).toEqual([{ opacity: 0, visibility: 'visible' }, { opacity: 1, visibility: 'visible' }]);
+    expect(animate.mock.calls[0][0]).toEqual([{ opacity: 0 }, { opacity: 1 }]);
   });
 
   it('(b) druga animacija istog ključa u grupi dobija fill forwards', async () => {
@@ -107,11 +107,69 @@ describe('PlatnoPrikazComponent: animacije koraka', () => {
 
     expect(dnevnik).toEqual(['animate 0', 'animate 1', 'animate 2', 'cancel 0', 'cancel 1', 'cancel 2', 'animate 3']);
     expect(animacije[3].cilj).toBe(sadrzaj(el, 'oblik'));
-    expect(animate.mock.calls[3][0]).toEqual([{ opacity: 1, visibility: 'visible' }, { opacity: 0, visibility: 'visible' }]);
+    expect(animate.mock.calls[3][0]).toEqual([{ opacity: 1 }, { opacity: 0 }]);
     // Krajnje stanje koraka 2: pasus i slika vidljivi, oblik sakriven (IZLAZ); animacija ga drži vidljivim dok traje.
     expect(sloj(el, 'tekst').querySelector<HTMLElement>('p[data-pasus="0"]')!.style.visibility).toBe('');
     expect(sloj(el, 'slika').style.visibility).toBe('');
     expect(sloj(el, 'oblik').style.visibility).toBe('hidden');
+  });
+
+  /*
+   * Chromium (brzi koraci napred): posle `cancel()` cilj ume da zadrži zastareo nasleđeni `visibility` (sloj `hidden`, a
+   * sadržaj vidljiv). Zato kadrovi ne nose `visibility`: cilj ima inline `visible` dok grupa traje, a posle prekida mu
+   * se inline vidljivost izričito vraća na krajnje stanje (izmena inline stila primorava ponovni proračun).
+   */
+  it('dok grupa traje cilj ima inline visibility visible (i IZLAZ, čiji je sloj već skriven)', async () => {
+    const { el, postavi } = await prikazi(platno(), 0);
+    const pasus0 = sloj(el, 'tekst').querySelector<HTMLElement>('p[data-pasus="0"]')!;
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(pasus0.style.visibility).toBe('visible');
+    expect(sadrzaj(el, 'slika').style.visibility).toBe('visible');
+    expect(sadrzaj(el, 'oblik').style.visibility).toBe('visible');
+    expect(sadrzaj(el, 'tabela').style.visibility).toBe('');
+
+    await postavi(2, { kljuc: 3, grupa: 2 });
+    expect(sloj(el, 'oblik').style.visibility).toBe('hidden');
+    expect(sadrzaj(el, 'oblik').style.visibility).toBe('visible');
+  });
+
+  it('brz drugi korak: prekinuti ciljevi gube inline visibility (sadržaj opet nasleđuje od sloja)', async () => {
+    const { el, postavi } = await prikazi(platno(), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    await postavi(2, { kljuc: 3, grupa: 2 });
+    expect(sloj(el, 'tekst').querySelector<HTMLElement>('p[data-pasus="0"]')!.style.visibility).toBe('');
+    expect(sadrzaj(el, 'slika').style.visibility).toBe('');
+    // oblik je cilj i nove grupe (IZLAZ): vidljiv dok ona traje
+    expect(sadrzaj(el, 'oblik').style.visibility).toBe('visible');
+
+    animacije[3].zavrsi();
+    await new Promise((r) => setTimeout(r));
+    expect(animacije[3].cancel).toHaveBeenCalledTimes(1);
+    expect(sadrzaj(el, 'oblik').style.visibility).toBe('');
+    expect(sloj(el, 'oblik').style.visibility).toBe('hidden');
+  });
+
+  it('pasus koji izlazi: posle prekida dobija hidden iz krajnjeg stanja (isto što vezivanje u šablonu)', async () => {
+    const p = platno();
+    p.animacije = [
+      animacija('a1', 'tekst', { pasus: 1, vrsta: 'IZLAZ' }),
+      animacija('a2', 'slika'),
+    ];
+    const { el, postavi } = await prikazi(p, 0);
+    const pasus1 = sloj(el, 'tekst').querySelector<HTMLElement>('p[data-pasus="1"]')!;
+    expect(pasus1.style.visibility).toBe('');
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(pasus1.style.visibility).toBe('visible');
+
+    // korak nazad usred animacije: pasus opet vidljiv (korak 0), bez inline ostatka
+    await postavi(0, null);
+    expect(pasus1.style.visibility).toBe('');
+
+    await postavi(1, { kljuc: 3, grupa: 1 });
+    expect(pasus1.style.visibility).toBe('visible');
+    await postavi(2, { kljuc: 4, grupa: 2 });
+    expect(pasus1.style.visibility).toBe('hidden');
+    expect(sadrzaj(el, 'slika').style.visibility).toBe('visible');
   });
 
   it('kraj grupe (sve animacije završene): cancel svih, važi krajnje stanje', async () => {
@@ -127,6 +185,9 @@ describe('PlatnoPrikazComponent: animacije koraka', () => {
     animacije[2].zavrsi();
     await new Promise((r) => setTimeout(r));
     expect(animacije.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
+    for (const a of animacije) {
+      expect((a.cilj as HTMLElement).style.visibility).toBe('');
+    }
   });
 
   it('(d) prefers-reduced-motion: reduce -> trajanje 0 (i POSLE_PRETHODNOG odmah)', async () => {
@@ -184,20 +245,20 @@ describe('PlatnoPrikazComponent: animacije koraka', () => {
     await postavi(1, { kljuc: 2, grupa: 1 });
     fixture.destroy();
     expect(animacije.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
+    expect(animacije.every((a) => (a.cilj as HTMLElement).style.visibility === '')).toBe(true);
   });
 });
 
 describe('kadroviAnimacije', () => {
   const s = { id: 's', x: 100, y: 50, sirina: 200, visina: 80, rotacija: 0 } as Sloj;
   const a = (deo: Partial<Animacija>) => animacija('a', 's', deo);
-  const v = { visibility: 'visible' };
 
   it('POJAVI, FADE i ZUM; IZLAZ obrće kadrove', () => {
-    expect(kadroviAnimacije(a({ efekat: 'POJAVI', trajanjeMs: 0 }), s, 1)).toEqual([{ opacity: 0, ...v }, { opacity: 1, ...v }]);
+    expect(kadroviAnimacije(a({ efekat: 'POJAVI', trajanjeMs: 0 }), s, 1)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
     expect(kadroviAnimacije(a({ efekat: 'ZUM' }), s, 1)).toEqual([
-      { transform: 'scale(0.3)', opacity: 0, ...v }, { transform: 'scale(1)', opacity: 1, ...v },
+      { transform: 'scale(0.3)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 },
     ]);
-    expect(kadroviAnimacije(a({ efekat: 'FADE', vrsta: 'IZLAZ' }), s, 1)).toEqual([{ opacity: 1, ...v }, { opacity: 0, ...v }]);
+    expect(kadroviAnimacije(a({ efekat: 'FADE', vrsta: 'IZLAZ' }), s, 1)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
   });
 
   it('ULET sa ivice platna u px (jedinica x širina platna / 960)', () => {
@@ -207,7 +268,7 @@ describe('kadroviAnimacije', () => {
     expect(ulet('GORE')).toBe('translate(0px, -260px)');
     expect(ulet('DOLE')).toBe('translate(0px, 980px)');
     expect(kadroviAnimacije(a({ efekat: 'ULET', smer: 'LEVO' }), s, 1)).toEqual([
-      { transform: 'translate(-300px, 0px)', opacity: 0, ...v }, { transform: 'translate(0px, 0px)', opacity: 1, ...v },
+      { transform: 'translate(-300px, 0px)', opacity: 0 }, { transform: 'translate(0px, 0px)', opacity: 1 },
     ]);
   });
 
@@ -227,6 +288,6 @@ describe('kadroviAnimacije', () => {
     expect(isecak({ efekat: 'BRISANJE', smer: 'DOLE' })).toEqual(['inset(100% -50% 0 -50%)', 'inset(-50%)']);
     expect(isecak({ efekat: 'ISCRTAJ', smer: 'LEVO' })).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
     expect(isecak({ efekat: 'BRISANJE', smer: 'LEVO', vrsta: 'IZLAZ' })).toEqual(['inset(-50%)', 'inset(-50% 100% -50% 0)']);
-    expect(kadroviAnimacije(a({ efekat: 'PODELI', smer: 'VERTIKALNO' }), s, 1)[0]).toEqual({ clipPath: 'inset(-50% 50% -50% 50%)', ...v });
+    expect(kadroviAnimacije(a({ efekat: 'PODELI', smer: 'VERTIKALNO' }), s, 1)[0]).toEqual({ clipPath: 'inset(-50% 50% -50% 50%)' });
   });
 });
