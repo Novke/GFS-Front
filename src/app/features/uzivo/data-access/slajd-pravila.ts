@@ -21,7 +21,7 @@ export const PODRAZUMEVANO_VREME = 20;
 
 const MAX_NASLOV = 300;
 const MAX_SADRZAJ = 20_000;
-const MAX_BELESKE = 5_000;
+const MAX_BELESKE = 20_000;
 const MAX_TEKST_PITANJA = 2_000;
 const MAX_TEKST_OPCIJE = 300;
 const MAX_JEDINICA = 30;
@@ -35,7 +35,8 @@ export const PORUKE = {
   tipSlajda: 'Tip slajda je obavezan.',
   naslov: 'Naslov može imati najviše 300 znakova.',
   sadrzaj: 'Tekst slajda može imati najviše 20000 znakova.',
-  beleske: 'Beleške mogu imati najviše 5000 znakova.',
+  beleske: 'Beleške mogu imati najviše 20000 znakova.',
+  bezPlatna: 'Platno slajd mora imati dokument platna.',
   infoPrazan: 'Info slajd mora imati naslov, tekst ili sliku.',
   bezPitanja: 'Slajd sa pitanjem mora imati pitanje.',
   tipPitanja: 'Tip pitanja je obavezan.',
@@ -168,6 +169,9 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (duzina(ociscen(cmd.naslov)) > MAX_NASLOV) greske.push(PORUKE.naslov);
   if (duzina(ociscen(cmd.sadrzaj)) > MAX_SADRZAJ) greske.push(PORUKE.sadrzaj);
   if (duzina(ociscen(cmd.beleske)) > MAX_BELESKE) greske.push(PORUKE.beleske);
+  if (cmd.tip === 'PLATNO') {
+    return cmd.platno ? greske : [...greske, PORUKE.bezPlatna];
+  }
   if (cmd.tip === 'INFO') {
     if (prazan(cmd.naslov) && prazan(cmd.sadrzaj) && prazan(cmd.slikaId)) {
       greske.push(PORUKE.infoPrazan);
@@ -296,6 +300,9 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
 
 /** Kratka oznaka slajda za listu: naslov ili početak teksta (bez Markdown znakova). */
 export function oznakaSlajda(s: SlajdDetails, max = 60): string {
+  if (s.tip === 'PLATNO') {
+    return platnoOznaka(s, max);
+  }
   const izvor = s.tip === 'PITANJE' ? s.pitanje?.tekst : s.naslov || s.sadrzaj;
   const tekst = (izvor ?? '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')            // slike
@@ -307,5 +314,16 @@ export function oznakaSlajda(s: SlajdDetails, max = 60): string {
   if (!tekst) {
     return s.tip === 'PITANJE' ? 'Novo pitanje' : s.slika ? 'Slika' : 'Nov slajd';
   }
+  return duzina(tekst) > max ? [...tekst].slice(0, max - 1).join('') + '…' : tekst;
+}
+
+/** Oznaka PLATNO slajda: prvi neprazan deo teksta prvog TEKST sloja, inače "Platno". */
+function platnoOznaka(s: SlajdDetails, max: number): string {
+  const sloj = s.platno?.slojevi.find(l => l.tip === 'TEKST');
+  const deo = sloj?.tip === 'TEKST'
+    ? sloj.pasusi.flatMap(p => p.delovi).find(d => d.tekst.trim() !== '')
+    : undefined;
+  const tekst = (deo?.tekst ?? '').replace(/\s+/g, ' ').trim();
+  if (!tekst) return 'Platno';
   return duzina(tekst) > max ? [...tekst].slice(0, max - 1).join('') + '…' : tekst;
 }

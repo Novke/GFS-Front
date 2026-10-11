@@ -1,5 +1,7 @@
 import { greskeSlajda, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja, slajdIzCmd, slajdUCmd } from './slajd-pravila';
 import { SlajdDetails } from './uzivo.models';
+import { platno as platnoFabrika } from './platno-podaci.testing';
+import { Platno } from './platno.models';
 
 describe('slajd-pravila', () => {
   it('novo pitanje izbora ima dve prazne opcije, bez tačne', () => {
@@ -58,5 +60,42 @@ describe('slajd-pravila', () => {
       slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
     expect(oznakaSlajda(s)).toBe('Sile i momenti GD-2025');
     expect(oznakaSlajda({ ...s, sadrzaj: null })).toBe('Nov slajd');
+  });
+
+  describe('PLATNO', () => {
+    const platnoSlajd = (platno: Platno | null = platnoFabrika()): SlajdDetails => ({
+      id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null, platno,
+    });
+
+    it('slajdUCmd daje isto platno po vrednosti, a slajdIzCmd ga vraća', () => {
+      const s = platnoSlajd();
+      expect(slajdUCmd(s).platno).toEqual(platnoFabrika());
+      expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
+    });
+
+    it('greške: samo beleške do 20000 znakova i postojanje platna', () => {
+      const cmd = slajdUCmd(platnoSlajd());
+      expect(greskeSlajda(cmd)).toEqual([]);
+      expect(greskeSlajda({ ...cmd, beleske: 'x'.repeat(20_000) })).toEqual([]);
+      expect(greskeSlajda({ ...cmd, beleske: 'x'.repeat(20_001) })).toEqual(['Beleške mogu imati najviše 20000 znakova.']);
+      expect(greskeSlajda({ ...cmd, platno: null })).toEqual(['Platno slajd mora imati dokument platna.']);
+    });
+
+    it('beleške INFO slajda imaju istu granicu kao server (20000)', () => {
+      expect(greskeSlajda({ ...noviSlajd('INFO'), naslov: 'N', beleske: 'x'.repeat(20_000) })).toEqual([]);
+    });
+
+    it('oznaka je tekst prvog TEKST sloja (prvi neprazan deo), inače "Platno"', () => {
+      expect(oznakaSlajda(platnoSlajd())).toBe('Prvi');
+      const p = platnoFabrika();
+      const tekst = p.slojevi.find(l => l.tip === 'TEKST')!;
+      if (tekst.tip === 'TEKST') {
+        tekst.pasusi[0].delovi[0].tekst = '';
+        tekst.pasusi[1].delovi[0].tekst = 'Drugi red';
+      }
+      expect(oznakaSlajda(platnoSlajd(p))).toBe('Drugi red');
+      expect(oznakaSlajda(platnoSlajd({ ...p, slojevi: p.slojevi.filter(l => l.tip !== 'TEKST') }))).toBe('Platno');
+      expect(oznakaSlajda(platnoSlajd(null))).toBe('Platno');
+    });
   });
 });
