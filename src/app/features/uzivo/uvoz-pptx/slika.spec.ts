@@ -42,7 +42,16 @@ describe('pretvoriSliku', () => {
 
   it('srcRect l=10000 r=20000 -> isecak.levo 0,1, desno 0,2; negativno -> 0', () => {
     expect(slika({ blipFill: '<a:srcRect l="10000" r="20000"/>' }).s!.isecak).toEqual({ levo: 0.1, gore: 0, desno: 0.2, dole: 0 });
-    expect(slika({ blipFill: '<a:srcRect t="-5000" b="12345"/>' }).s!.isecak).toEqual({ levo: 0, gore: 0, desno: 0, dole: 0.1235 });
+    expect(slika({ blipFill: '<a:srcRect t="-5000" b="12345"/>' }).s!.isecak).toEqual({ levo: 0, gore: 0, desno: 0, dole: 0.12 });
+  });
+
+  it('isečak se zaokružuje na 2 decimale (HALF_UP, kao server) pre provere zbira', () => {
+    expect(slika({ blipFill: '<a:srcRect l="12500" r="49499"/>' }).s!.isecak).toEqual({ levo: 0.13, gore: 0, desno: 0.49, dole: 0 });
+    for (const [a, b] of [['l', 'r'], ['t', 'b']]) {
+      const { s, z } = slika({ blipFill: `<a:srcRect ${a}="49500" ${b}="49550"/>` });
+      expect(s!.isecak).toEqual({ levo: 0, gore: 0, desno: 0, dole: 0 });
+      expect(z.upozorenja.map((u) => u.kod)).toEqual(['OBLIK_PRIBLIZAN']);
+    }
   });
 
   it('srcRect sa levo + desno >= 1 -> isečak poništen + OBLIK_PRIBLIZAN', () => {
@@ -54,6 +63,7 @@ describe('pretvoriSliku', () => {
 
   it('alphaModFix amt=50000 -> providnost 0,5', () => {
     expect(slika({ blip: '<a:alphaModFix amt="50000"/>' }).s!.providnost).toBe(0.5);
+    expect(slika({ blip: '<a:alphaModFix amt="33500"/>' }).s!.providnost).toBe(0.34);
   });
 
   it('slika bez dela -> null i OBJEKAT_PRESKOCEN', () => {

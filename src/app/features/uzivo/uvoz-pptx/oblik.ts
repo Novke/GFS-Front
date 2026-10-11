@@ -235,12 +235,14 @@ export function pretvoriOblik(el: Element, k: Kutija, ctx: KontekstSlajda, id: s
   const y = bar1(s.y, s.visina);
   const osnova = {
     id, tip: 'OBLIK' as const, naziv: nazivOblika(el), x: x.poz, y: y.poz, sirina: x.vel, visina: y.vel,
-    rotacija: rotacijaSloja(s.rotacija), providnost: 1, zakljucan: false, senka: senkaIz(spPr, ctx),
+    rotacija: rotacijaSloja(s.rotacija), providnost: 1, zakljucan: false,
   };
+  // Senka tek za oblik koji ostaje: odbačen oblik ne sme da prijavi `SENKA`.
+  const senka = () => senkaIz(spPr, ctx);
 
   const linija = vrsta === 'LINIJA' || BLOK_STRELICE.has(prst);
   if (!linija) {
-    return { ...osnova, oblik: vrsta, popuna: popunaIz(spPr, ctx, stil), ivica: ivicaIz(ln, ctx, stil), od: null, do: null };
+    return { ...osnova, senka: senka(), oblik: vrsta, popuna: popunaIz(spPr, ctx, stil), ivica: ivicaIz(ln, ctx, stil), od: null, do: null };
   }
 
   const w = Math.max(0, s.sirina);
@@ -272,5 +274,5 @@ export function pretvoriOblik(el: Element, k: Kutija, ctx: KontekstSlajda, id: s
     x: zaokruzi((flip.h ? w - t.x : t.x) + x.d) || 0,
     y: zaokruzi((flip.v ? h - t.y : t.y) + y.d) || 0,
   });
-  return { ...osnova, oblik, popuna: null, ivica: iv, od: tacka(od), do: tacka(ka) };
+  return { ...osnova, senka: senka(), oblik, popuna: null, ivica: iv, od: tacka(od), do: tacka(ka) };
 }

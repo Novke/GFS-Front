@@ -147,6 +147,13 @@ describe('pretvoriOblik: linije i strelice', () => {
     expect(pretvori(ctx, 6)).toBeNull();
   });
 
+  it('odbačena (nevidljiva) linija ne prijavljuje SENKA', () => {
+    const { ctx, z } = slajd(konektor(5, 1828800, 914400, 'straightConnector1',
+      '<a:ln w="12700"><a:noFill/></a:ln><a:effectLst><a:glow rad="63500"><a:srgbClr val="FF0000"/></a:glow></a:effectLst>'));
+    expect(pretvori(ctx, 5)).toBeNull();
+    expect(z.upozorenja).toEqual([]);
+  });
+
   it('linija sa lnRef stila: boja i debljina iz stila', () => {
     const style = '<p:style><a:lnRef idx="1"><a:schemeClr val="accent2"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef>'
       + '<a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef></p:style>';

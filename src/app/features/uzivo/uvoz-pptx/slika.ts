@@ -37,8 +37,15 @@ function medijIzBlipa(blip: Element | null, deo: string, ctx: KontekstSlajda): I
   return medijId ? { medijId } : { razlog: 'slika nije pronađena u fajlu' };
 }
 
-/** Udeo iz 1/1000 % (`val / 100000`), 4 decimale; negativno -> 0. */
-const udeo = (el: Element | null, ime: string) => Math.max(0, Math.round(brojAtr(el, ime, 0) / 10) / 10000);
+/**
+ * Udeo iz 1/1000 % (`val / 100000`) na 2 decimale kao na serveru (`PlatnoPP.r`: `BigDecimal` HALF_UP), u celim stotim
+ * delovima pa bez greške binarnog zapisa na `.5` (49500 -> 0,50; `Math.round(0.495 * 100)` bi dao 0,49). Negativno -> 0.
+ * Server zaokružuje pre provere `levo + desno < 1`, pa i klijent proverava zbir tek zaokruženih vrednosti.
+ */
+function udeo(el: Element | null, ime: string, podr = 0): number {
+  const v = brojAtr(el, ime, podr);
+  return v > 0 ? Math.floor(v / 1000 + 0.5) / 100 : 0;
+}
 
 /** Video ili zvuk u `p:nvPr` slike: PowerPoint ih čuva kao `p:pic` sa sličicom (poster). */
 function vrstaMedija(pic: Element): 'video' | 'zvuk' | null {
@@ -86,7 +93,7 @@ export function pretvoriSliku(pic: Element, k: Kutija, ctx: KontekstSlajda, id: 
   }
 
   const alfa = blip && dete(blip, NS.a, 'alphaModFix');
-  const providnost = Math.min(1, Math.max(0, Math.round(brojAtr(alfa, 'amt', 100000) / 10) / 10000));
+  const providnost = Math.min(1, udeo(alfa, 'amt', 100000));
 
   const flip = okrenut(pic);
   if (flip.h || flip.v) upozoriJednom(ctx, 'OBLIK_PRIBLIZAN', 'Okrenuta (preslikana) slika je prikazana neokrenuta.');
