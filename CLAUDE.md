@@ -120,7 +120,9 @@ this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
 own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
-shell, teacher API clients) to it. On the backend, anything mapped under `/public/**` is reachable from the internet
+shell, teacher API clients) to it. npm packages are free for public features except `ZABRANJENI_PAKETI_JAVNO` in the same
+file (heavy slide-builder editor/import libraries, today `fflate`; subpaths such as `fflate/esm` count too): the rule reports
+them as `zabranjenPaket`. On the backend, anything mapped under `/public/**` is reachable from the internet
 without auth.
 
 ## Uživo (`features/uzivo`)

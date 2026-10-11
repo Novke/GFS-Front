@@ -1,4 +1,4 @@
-import { strToU8 } from 'fflate';
+import { strToU8, zipSync } from 'fflate';
 import { GreskaUvoza, PORUKE_FAJLA, proveriImeFajla } from './ime-fajla';
 import { GRANICE_PAKETA, otvoriPaket } from './paket';
 import { napraviPptx, PNG_1X1, SlajdFabrike } from './pptx-fabrika.testing';
@@ -18,34 +18,32 @@ function greska(f: () => unknown): GreskaUvoza {
 const poruka = (f: () => unknown) => greska(f).message;
 
 /**
- * Prepravlja deklarisanu (neraspakovanu) veličinu dela u lokalnom i centralnom zaglavlju zip-a (zip bomba sa lažnim
- * veličinama). Lokalno zaglavlje: potpis 0x04034b50, veličina na +22, dužina imena +26, ime od +30; centralno:
- * potpis 0x02014b50, veličina na +24, dužina imena +28, ime od +46.
+ * Prepravlja zaglavlja jednog dela zip-a u lokalnom i centralnom direktorijumu. Lokalno zaglavlje: potpis 0x04034b50,
+ * metod kompresije +8, neraspakovana veličina +22, dužina imena +26, ime od +30; centralno: potpis 0x02014b50, metod +10,
+ * veličina +24, dužina imena +28, ime od +46.
  */
-function lazneVelicine(zip: Uint8Array, ime: string, velicina: number): Uint8Array {
+function prepravi(zip: Uint8Array, ime: string, polje: 'velicina' | 'metod', vrednost: number): Uint8Array {
   const b = zip.slice();
   const dv = new DataView(b.buffer);
   const dek = new TextDecoder();
   let izmena = 0;
   for (let i = 0; i + 46 <= b.length; i++) {
     const potpis = dv.getUint32(i, true);
-    if (potpis === 0x04034b50) {
-      const n = dv.getUint16(i + 26, true);
-      if (dek.decode(b.subarray(i + 30, i + 30 + n)) === ime) {
-        dv.setUint32(i + 22, velicina, true);
-        izmena++;
-      }
-    } else if (potpis === 0x02014b50) {
-      const n = dv.getUint16(i + 28, true);
-      if (dek.decode(b.subarray(i + 46, i + 46 + n)) === ime) {
-        dv.setUint32(i + 24, velicina, true);
-        izmena++;
-      }
-    }
+    const lokalno = potpis === 0x04034b50;
+    if (!lokalno && potpis !== 0x02014b50) continue;
+    const n = dv.getUint16(i + (lokalno ? 26 : 28), true);
+    const odImena = i + (lokalno ? 30 : 46);
+    if (dek.decode(b.subarray(odImena, odImena + n)) !== ime) continue;
+    if (polje === 'velicina') dv.setUint32(i + (lokalno ? 22 : 24), vrednost, true);
+    else dv.setUint16(i + (lokalno ? 8 : 10), vrednost, true);
+    izmena++;
   }
   expect(izmena).toBe(2);
   return b;
 }
+
+/** Zip bomba sa lažnim veličinama: deklarisana neraspakovana veličina dela. */
+const lazneVelicine = (zip: Uint8Array, ime: string, velicina: number) => prepravi(zip, ime, 'velicina', velicina);
 
 describe('otvoriPaket: ispravan fajl', () => {
   it('otvaraSintetickiPptx: slajdovi po p:sldIdLst, veličina i veze slajda', () => {
@@ -110,6 +108,38 @@ describe('otvoriPaket: ispravan fajl', () => {
     expect(p.bajtovi('ppt/media/nema.png')).toBeNull();
   });
 
+  it('bajtovi: deo koji ne može da se raspakuje (nepoznat metod kompresije) je null, ne izuzetak', () => {
+    const z = prepravi(napraviPptx({ slajdovi: [PRAZAN], delovi: { 'ppt/media/image1.png': PNG_1X1 } }), 'ppt/media/image1.png', 'metod', 99);
+    const p = otvoriPaket(z, 'a.pptx');
+    expect(p.bajtovi('ppt/media/image1.png')).toBeNull();
+  });
+
+  it('sldId sa neispravnom vezom zadržava svoj indeks: veze nema, deo ne postoji, pogrešan tip veze, spoljna veza', () => {
+    const SLIDE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide';
+    const veza = (id: string, tip: string, cilj: string, dodatak = '') =>
+      `<Relationship Id="${id}" Type="${tip}" Target="${cilj}"${dodatak}/>`;
+    const bajtovi = napraviPptx({
+      slajdovi: [PRAZAN, PRAZAN, PRAZAN, PRAZAN, PRAZAN],
+      delovi: {
+        'ppt/_rels/presentation.xml.rels': '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+          + veza('rIdM', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster', 'slideMasters/slideMaster1.xml')
+          // rIdS1 nema
+          + veza('rIdS2', SLIDE, 'slides/slide99.xml')
+          + veza('rIdS3', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout', 'slideLayouts/slideLayout1.xml')
+          + veza('rIdS4', SLIDE, 'https://example.com/slajd.xml', ' TargetMode="External"')
+          + veza('rIdS5', SLIDE, 'slides/slide5.xml')
+          + '</Relationships>',
+      },
+    });
+    const p = otvoriPaket(bajtovi, 'a.pptx');
+    expect(p.slajdovi).toHaveLength(5);
+    expect(p.slajdovi.slice(0, 4).map((s) => p.xml(s))).toEqual([null, null, null, null]);
+    expect(p.slajdovi.slice(0, 4).map((s) => p.veze(s))).toEqual([[], [], [], []]);
+    expect(p.slajdovi[1]).toBe('ppt/slides/slide99.xml');
+    expect(p.slajdovi[4]).toBe('ppt/slides/slide5.xml');
+    expect(p.xml(p.slajdovi[4])?.documentElement.localName).toBe('sld');
+  });
+
   it('prikaz (.ppsx) i šablon (.potx) se otvaraju', () => {
     const prikaz = 'application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml';
     const sablon = 'application/vnd.openxmlformats-officedocument.presentationml.template.main+xml';
@@ -133,6 +163,14 @@ describe('otvoriPaket: neispravan ili zlonameran fajl (Review Focus 1)', () => {
     const g = greska(() => otvoriPaket(z, 'a.pptx'));
     expect(g.message).toBe(PORUKE_FAJLA.ostecen);
     expect(String(g.cause)).toBe('XML deo preko granice: ppt/presentation.xml'); // filter, ne greška fflate-a
+  });
+
+  it('stored XML deo preko 50 MB sa lažno malim originalSize se odbija (fflate stored deo ne seče na originalSize)', () => {
+    const veliki = new Uint8Array(GRANICE_PAKETA.xml + 1).fill(0x20);
+    const z = lazneVelicine(zipSync({ 'ppt/velik.xml': [veliki, { level: 0 }] }), 'ppt/velik.xml', 100);
+    const g = greska(() => otvoriPaket(z, 'a.pptx'));
+    expect(g.message).toBe(PORUKE_FAJLA.ostecen);
+    expect(String(g.cause)).toBe('XML deo preko granice: ppt/velik.xml');
   });
 
   it('ukupna deklarisana veličina preko 500 MB se odbija (i kad je deo slika)', () => {
@@ -171,6 +209,13 @@ describe('otvoriPaket: neispravan ili zlonameran fajl (Review Focus 1)', () => {
     for (const deo of ['[Content_Types].xml', '_rels/.rels']) {
       expect(poruka(() => otvoriPaket(napraviPptx({ slajdovi: [PRAZAN], bezDelova: [deo] }), 'a.pptx'))).toBe(PORUKE_FAJLA.nijePptx);
     }
+  });
+
+  it('Strict OOXML (koren glavnog dela iz drugog imenskog prostora) -> nijePptx', () => {
+    const strict = '<p:presentation xmlns:p="http://purl.oclc.org/ooxml/presentationml/main" '
+      + 'xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships"><p:sldIdLst><p:sldId id="256" r:id="rIdS1"/></p:sldIdLst></p:presentation>';
+    const z = napraviPptx({ slajdovi: [PRAZAN], delovi: { 'ppt/presentation.xml': strict } });
+    expect(poruka(() => otvoriPaket(z, 'a.pptx'))).toBe(PORUKE_FAJLA.nijePptx);
   });
 
   it('bezSlajdova', () => {

@@ -14,7 +14,11 @@ export interface Veza { id: string; tip: string; cilj: string; spoljna: boolean;
 
 export interface Paket {
   readonly imeFajla: string;
-  /** Putanje delova slajdova po `p:sldIdLst`. */
+  /**
+   * Putanje delova slajdova po `p:sldIdLst`, jedna po `p:sldId` (indeks = PowerPointov redni broj - 1). Unos čija veza
+   * ne postoji, spoljna je ili nije tipa `slide` je `#slajd<n>` (`#` ne može biti u imenu dela): `xml()` daje `null`,
+   * `veze()` prazno, kao za slajd čiji deo ne postoji.
+   */
   readonly slajdovi: readonly string[];
   /** `p:sldSz` (EMU). */
   readonly velicina: { cx: number; cy: number };
@@ -54,7 +58,11 @@ function sadrziUtf16le(b: Uint8Array, niz: string): boolean {
   return false;
 }
 
-/** Raspakuje samo XML delove; granice se proveravaju u `filter`-u (deklarisane veličine, pre raspakivanja). */
+/**
+ * Raspakuje samo XML delove; granice se proveravaju u `filter`-u (deklarisane veličine, pre raspakivanja). Veličina dela je
+ * `max(size, originalSize)`: fflate 0.8.3 deo bez kompresije (stored) vraća u veličini `size` i ne gleda `originalSize`,
+ * pa lažno mali `originalSize` ne sme da ga provuče; deflate deo se raspakuje u bafer tačno veličine `originalSize`.
+ */
 function raspakujXml(bajtovi: Uint8Array): Unzipped {
   let delova = 0;
   let ukupno = 0;
@@ -62,10 +70,11 @@ function raspakujXml(bajtovi: Uint8Array): Unzipped {
     return unzipSync(bajtovi, {
       filter: (f) => {
         delova++;
-        ukupno += f.originalSize;
+        const velicina = Math.max(f.size, f.originalSize);
+        ukupno += velicina;
         if (delova > GRANICE_PAKETA.delova || ukupno > GRANICE_PAKETA.ukupno) throw ostecen(`granica paketa: ${f.name}`);
         if (!JE_XML.test(f.name)) return false;
-        if (f.originalSize > GRANICE_PAKETA.xml) throw ostecen(`XML deo preko granice: ${f.name}`);
+        if (velicina > GRANICE_PAKETA.xml) throw ostecen(`XML deo preko granice: ${f.name}`);
         return true;
       },
     });
@@ -113,10 +122,10 @@ class PptxPaket implements Paket {
     }
 
     const lista = dete(prezentacija, NS.p, 'sldIdLst');
-    this.slajdovi = (lista ? deca(lista, NS.p, 'sldId') : [])
-      .map((s) => this.veza(glavna.cilj, s.getAttributeNS(NS.r, 'id') ?? ''))
-      .filter((v): v is Veza => v !== null && !v.spoljna)
-      .map((v) => v.cilj);
+    this.slajdovi = (lista ? deca(lista, NS.p, 'sldId') : []).map((s, i) => {
+      const v = this.veza(glavna.cilj, s.getAttributeNS(NS.r, 'id') ?? '');
+      return v && !v.spoljna && v.tip === 'slide' ? v.cilj : `#slajd${i + 1}`;
+    });
     if (this.slajdovi.length === 0) throw new GreskaUvoza(PORUKE_FAJLA.bezSlajdova);
 
     const sldSz = dete(prezentacija, NS.p, 'sldSz');
@@ -160,7 +169,8 @@ class PptxPaket implements Paket {
     if (!this.raspakovano.has(putanja)) {
       let b: Uint8Array | null;
       try {
-        // Deklarisane veličine su već proverene pri otvaranju; fflate ne raspakuje preko deklarisane veličine.
+        // Granice su proverene pri otvaranju na max(size, originalSize) svakog dela (vidi raspakujXml), pa ni ovde
+        // raspakovan deo ne može biti veći od proverenog.
         b = unzipSync(this.sviBajtovi, { filter: (f) => f.name === putanja })[putanja] ?? null;
       } catch {
         b = null; // oštećen deo se ponaša kao deo kog nema (upozorenje daje pozivalac)

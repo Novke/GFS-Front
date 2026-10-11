@@ -7,7 +7,7 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { ESLint } = require('eslint');
 
-const { JAVNI_FEATURE, DOZVOLJENO_PO_FEATURE, dozvoljenoZa } = require('./javna-ruta-konfig');
+const { JAVNI_FEATURE, DOZVOLJENO_PO_FEATURE, ZABRANJENI_PAKETI_JAVNO, dozvoljenoZa } = require('./javna-ruta-konfig');
 
 const KORENI = path.resolve(__dirname, '..');
 const RULE_ID = 'gfs/javna-ruta-uvozi';
@@ -68,6 +68,16 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
         assert.deepEqual(await poruke(feature, `import { signal } from '@angular/core';\nexport const y = signal;\n`), []);
       });
 
+      for (const paket of ZABRANJENI_PAKETI_JAVNO) {
+        it(`obara zabranjen paket ${paket} i njegovu podputanju`, async () => {
+          for (const izvor of [paket, `${paket}/esm/browser.js`]) {
+            const m = await poruke(feature, `import * as X from '${izvor}';\nexport const y = X;\n`);
+            assert.equal(m.length, 1, JSON.stringify(m));
+            assert.equal(m[0].messageId, 'zabranjenPaket');
+          }
+        });
+      }
+
       it('ne dozvoljava drugi javni feature', async () => {
         const drugi = JAVNI_FEATURE.find(f => f !== feature);
         const m = await poruke(feature, `import { X } from '${gore}${drugi}/x.api';\nexport const y = X;\n`);
@@ -112,6 +122,13 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
         assert.equal(m.length, 1, JSON.stringify(m));
       });
     }
+  });
+
+  it('fflate je dozvoljen van javnih feature-a (uvoz PPTX-a)', async () => {
+    const [r] = await eslint.lintText(`import { unzipSync } from 'fflate';\nexport const y = unzipSync;\n`, {
+      filePath: path.join(KORENI, 'src/app/features/uzivo/uvoz-pptx/test-nejavni.ts'),
+    });
+    assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
   });
 
   it('ne primenjuje pravilo van javnih feature-a (obim glob-a)', async () => {
