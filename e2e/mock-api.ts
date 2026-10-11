@@ -49,6 +49,14 @@ interface Prijava {
   datumRodjenja: string | null; opstina: string | null; status: StatusPrijave; podneto: string; obradjeno: string | null;
   studentId: number | null; napomena: string | null;
 }
+interface UzivoSlajd {
+  id: number; rb: number; tip: string; naslov: string | null; sadrzaj: string | null; slika: unknown; beleske: string | null;
+  postepeno: boolean; pitanje: unknown; platno: unknown;
+}
+interface UzivoPrezentacija {
+  id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
+  telefonPrikaz: string; detaljiDozvoljeni: boolean; slajdovi: UzivoSlajd[]; [ostalo: string]: unknown;
+}
 interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
 interface KontrolnaTablaPodesavanje {
@@ -69,9 +77,14 @@ export interface Podaci {
   prijave: Prijava[];
   kontrolnaTabla: KontrolnaTablaPodesavanje;
   izvodjenja: UzivoIzvodjenje[];
+  /** Prezentacije nastavnika (editor); izmene `PUT` ostaju u stanju testa. */
+  prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
 }
+
+/** PNG 1 x 1, providan. */
+const PIKSEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 const FIKSTURE = join(__dirname, 'fixtures');
 const ucitaj = <T>(ime: string): T => JSON.parse(readFileSync(join(FIKSTURE, ime), 'utf8')) as T;
@@ -94,6 +107,7 @@ export function ucitajPodatke(): Podaci {
     prijave: onboarding.prijave,
     kontrolnaTabla: ucitaj('kontrolna-tabla.json'),
     izvodjenja: ucitaj<{ izvodjenja: UzivoIzvodjenje[] }>('uzivo.json').izvodjenja,
+    prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije,
     ucesnici: [],
   };
 }
@@ -214,6 +228,8 @@ export class MockApi {
     // okruženje (Dockerfile ga pravi u slici; lokalni dist ga nema): bez oznake STAGING
     await page.route('**/assets/env.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"env":"prod"}' }));
     await page.route('**/api/**', (route, request) => this.obradi(route, request));
+    // slike slojeva platna: jedan providan piksel za svaki medij (ruta je kasnije dodata, pa ima prednost pred `api/**`)
+    await page.route('**/api/public/mediji/*', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIKSEL_PNG }));
   }
 
   private async obradi(route: Route, request: Request): Promise<void> {
@@ -535,6 +551,7 @@ export class MockApi {
     const get = (s: string, h: Rukovalac) => r.push(napraviRutu('GET', s, h));
     const post = (s: string, h: Rukovalac) => r.push(napraviRutu('POST', s, h));
     const patch = (s: string, h: Rukovalac) => r.push(napraviRutu('PATCH', s, h));
+    const put = (s: string, h: Rukovalac) => r.push(napraviRutu('PUT', s, h));
     const del = (s: string, h: Rukovalac) => r.push(napraviRutu('DELETE', s, h));
     const ok = (telo: unknown): Odgovor => ({ telo });
     const nadji = <T extends { id: number }>(lista: T[], id: string, sta: string): T | Odgovor =>
@@ -736,6 +753,33 @@ export class MockApi {
       };
       d.prijave.push(prijava);
       return { status: 201, telo: { id: prijava.id } };
+    });
+
+    // uživo, nastavnik (editor prezentacije): čitanje, izmena podešavanja (tema...) i čuvanje slajda; nema aktivnih izvođenja
+    get('izvodjenja', () => ok([]));
+    get('prezentacije/:id', (_z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      return jeOdgovor(x) ? x : ok(x);
+    });
+    put('prezentacije/:id', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      Object.assign(x, z.telo);
+      return ok(x);
+    });
+    put('slajdovi/:id', (z, p) => {
+      for (const pr of d.prezentacije) {
+        const i = pr.slajdovi.findIndex(s => s.id === Number(p['id']));
+        if (i >= 0) {
+          const cmd = { ...(z.telo as UzivoSlajd & { slikaId?: string | null }) };
+          delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
+          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd };
+          return ok(pr.slajdovi[i]);
+        }
+      }
+      return greska(404, 'Slajd ne postoji.');
     });
 
     // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec
