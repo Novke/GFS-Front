@@ -1,8 +1,10 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { stanjeSlojeva } from '../data-access/platno-koraci';
 import {
-  Celija, FormulaSloj, Ivica, OblikSloj, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, untracked,
+} from '@angular/core';
+import { grupaZaKorak, stanjeSlojeva } from '../data-access/platno-koraci';
+import {
+  Animacija, Celija, FormulaSloj, Ivica, OblikSloj, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
 import { medijUrl } from '../data-access/uzivo.models';
 import { cssFonta } from './platno-fontovi';
@@ -169,6 +171,65 @@ function prikazSloja(s: Sloj, prefiks: string): PrikazSloja {
   return prikaz;
 }
 
+/** Širina i visina platna u jedinicama (1 jedinica = 1 pt PowerPointovog 16:9 slajda). */
+const SIRINA_PLATNA = 960;
+const VISINA_PLATNA = 540;
+
+const BRISANJE_OD: Record<string, string> = {
+  LEVO: 'inset(0 100% 0 0)', DESNO: 'inset(0 0 0 100%)', GORE: 'inset(0 0 100% 0)', DOLE: 'inset(100% 0 0 0)',
+};
+
+/** Pomeraj ULET-a u px: sa ivice platna u smeru `smer`, izražen u koordinatama sloja (sadržaj je unutar rotiranog sloja). */
+function pomerajUleta(smer: Animacija['smer'], s: Sloj, pxPoJedinici: number): string {
+  const dx = smer === 'LEVO' ? -(s.x + s.sirina) : smer === 'DESNO' ? SIRINA_PLATNA - s.x : 0;
+  const dy = smer === 'GORE' ? -(s.y + s.visina) : smer === 'LEVO' || smer === 'DESNO' ? 0 : VISINA_PLATNA - s.y;
+  const ugao = (-s.rotacija * Math.PI) / 180;
+  const x = (dx * Math.cos(ugao) - dy * Math.sin(ugao)) * pxPoJedinici;
+  const y = (dx * Math.sin(ugao) + dy * Math.cos(ugao)) * pxPoJedinici;
+  return `translate(${zaokruzi(x)}px, ${zaokruzi(y)}px)`;
+}
+
+/**
+ * Ključni kadrovi jedne animacije (Web Animations API) za `.uz-pl-sadrzaj` sloja ili `<p>` pasusa. Kadrovi su za ULAZ
+ * (od skrivenog ka krajnjem izgledu); IZLAZ ih obrće. Svaki kadar nosi `visibility: visible`, jer krajnje stanje koraka
+ * (`stanjeSlojeva`) element već sakriva ili prikazuje, a animacija mora da se vidi dok traje.
+ * `pxPoJedinici` = širina platna u px / 960 (ULET ide u px, ne kroz `var(--u)` u kadru).
+ */
+export function kadroviAnimacije(a: Animacija, s: Sloj, pxPoJedinici: number): Keyframe[] {
+  let od: Keyframe;
+  let ka: Keyframe;
+  switch (a.efekat) {
+    case 'ULET':
+      od = { transform: pomerajUleta(a.smer, s, pxPoJedinici), opacity: 0 };
+      ka = { transform: 'translate(0px, 0px)', opacity: 1 };
+      break;
+    case 'PODELI':
+      od = { clipPath: a.smer === 'HORIZONTALNO' ? 'inset(50% 0 50% 0)' : 'inset(0 50% 0 50%)' };
+      ka = { clipPath: 'inset(0)' };
+      break;
+    case 'BRISANJE':
+    case 'ISCRTAJ':
+      // ISCRTAJ se u fazama 1-4 crta kao BRISANJE (potez po potez tek u fazi 5).
+      od = { clipPath: BRISANJE_OD[a.smer ?? 'LEVO'] ?? BRISANJE_OD['LEVO'] };
+      ka = { clipPath: 'inset(0)' };
+      break;
+    case 'ZUM':
+      od = { transform: 'scale(0.3)', opacity: 0 };
+      ka = { transform: 'scale(1)', opacity: 1 };
+      break;
+    default: // POJAVI (trajanje 0) i FADE
+      od = { opacity: 0 };
+      ka = { opacity: 1 };
+  }
+  const kadrovi = [{ ...od, visibility: 'visible' }, { ...ka, visibility: 'visible' }];
+  return a.vrsta === 'IZLAZ' ? kadrovi.reverse() : kadrovi;
+}
+
+/** `prefers-reduced-motion: reduce`: animacije traju 0 ms (spec 4.4); bez `matchMedia` (stari pregledač) puno kretanje. */
+function smanjenoKretanje(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /**
  * Platno sa slojevima (slajd tipa PLATNO), 960 x 540 jedinica, u DOM-u. Domaćin popunjava `uz-platno` okvir 16:9
  * (`container-type: inline-size` je na `uz-okvir`), a `--u` = `100cqw / 960` je jedna jedinica (1 pt PowerPointa).
@@ -176,6 +237,11 @@ function prikazSloja(s: Sloj, prefiks: string): PrikazSloja {
  * unutrašnjim `.uz-pl-sadrzaj` (sadržaj; njega animira korak napred). Redosled u DOM-u = z-osa. Vidljivost slojeva i
  * pasusa posle koraka daje `stanjeSlojeva`; sakriven sloj zadržava mesto (`visibility: hidden`).
  * Ista komponenta služi projektoru, konzoli i pregledu u editoru; javne (studentske) strane je ne uvoze.
+ *
+ * Animacije: nov `animacija.kljuc` (sa `grupa` = `korak`) pušta `grupaZaKorak` preko `Element.animate`, posle crtanja
+ * krajnjeg stanja koraka. Animacije prethodne grupe se pre toga prekidaju (`cancel`: odmah krajnje stanje), a kad se
+ * završe sve animacije grupe, i one se prekidaju, pa opet važi samo krajnje stanje iz `stanjeSlojeva`. Promena koraka
+ * bez novog ključa (skok, nazad, ponovno povezivanje) samo prekida animaciju koja traje.
  */
 @Component({
   selector: 'app-platno-prikaz',
@@ -281,7 +347,10 @@ export class PlatnoPrikazComponent {
   readonly platno = input.required<Platno>();
   /** Korak izvođenja: odigrane su grupa 0 i grupe 1..korak (`stanjeSlojeva`). */
   readonly korak = input(0);
-  /** Animacija prelaza na `korak` (nov `kljuc` = pusti grupu `grupa`); logiku dodaje F4, do tada se crta krajnje stanje. */
+  /**
+   * Animacija prelaza na `korak`: nov `kljuc` pušta grupu `grupa` (mora biti jednaka `korak`, inače se crta samo krajnje
+   * stanje). Isti ključ se nikad ne pušta dvaput, pa ponovno crtanje zbog drugog ulaza ne ponavlja animaciju.
+   */
   readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 
   /** Id-jevi SVG markera moraju biti jedinstveni u dokumentu (konzola crta trenutni i sledeći slajd). */
@@ -290,6 +359,85 @@ export class PlatnoPrikazComponent {
   protected readonly url = medijUrl;
   protected readonly slojevi = computed(() => this.platno().slojevi.map((s) => prikazSloja(s, this.prefiks)));
   private readonly vidljivost = computed(() => stanjeSlojeva(this.platno(), this.korak()));
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  /** Animacije grupe koja se trenutno pušta (prazno kad se crta samo krajnje stanje). */
+  private tekuce: Animation[] = [];
+  private poslednjiKljuc: number | null = null;
+  private poslednjiKorak: number | null = null;
+
+  constructor() {
+    afterRenderEffect({
+      write: () => {
+        const animacija = this.animacija();
+        const korak = this.korak();
+        const korakPromenjen = this.poslednjiKorak !== null && korak !== this.poslednjiKorak;
+        this.poslednjiKorak = korak;
+        if (animacija && animacija.kljuc !== this.poslednjiKljuc) {
+          this.poslednjiKljuc = animacija.kljuc;
+          this.prekini();
+          if (animacija.grupa === korak) {
+            this.pusti(untracked(this.platno), korak);
+          }
+        } else if (korakPromenjen) {
+          // Novi snimak sa istim korakom (npr. prijava učesnika) ne prekida animaciju koja traje.
+          this.prekini();
+        }
+      },
+    });
+    inject(DestroyRef).onDestroy(() => this.prekini());
+  }
+
+  /** Prekida animacije koje traju: element odmah dobija krajnje stanje koraka (inline `visibility` iz šablona). */
+  private prekini(): void {
+    const tekuce = this.tekuce;
+    this.tekuce = [];
+    for (const a of tekuce) {
+      a.cancel();
+    }
+  }
+
+  private pusti(p: Platno, grupa: number): void {
+    const zakazane = grupaZaKorak(p, grupa, smanjenoKretanje());
+    if (zakazane.length === 0) {
+      return;
+    }
+    const pxPoJedinici = this.host.offsetWidth / SIRINA_PLATNA;
+    const slojevi = new Map(p.slojevi.map((s) => [s.id, s]));
+    // Id sloja ide kroz `dataset`, ne kroz selektor (id je podatak iz dokumenta).
+    const elementi = new Map<string, HTMLElement>();
+    this.host.querySelectorAll<HTMLElement>(':scope > .uz-pl-sloj').forEach((el) => elementi.set(el.dataset['sloj'] ?? '', el));
+    const zapoceti = new Set<string>();
+    const lista: Animation[] = [];
+    for (const z of zakazane) {
+      const { slojId, pasus } = z.animacija;
+      const sloj = slojevi.get(slojId);
+      const elSloja = elementi.get(slojId);
+      const cilj = pasus === null
+        ? elSloja?.querySelector<HTMLElement>(':scope > .uz-pl-sadrzaj')
+        : elSloja?.querySelector<HTMLElement>(`:scope > .uz-pl-tekst > p[data-pasus="${pasus}"]`);
+      if (!sloj || !cilj) {
+        continue;
+      }
+      // Prva animacija ključa drži početni kadar i tokom kašnjenja (`both`); sledeće istog ključa nastavljaju od nje.
+      const fill: FillMode = zapoceti.has(z.kljuc) ? 'forwards' : 'both';
+      zapoceti.add(z.kljuc);
+      lista.push(cilj.animate(kadroviAnimacije(z.animacija, sloj, pxPoJedinici), {
+        delay: z.pocetakMs, duration: z.trajanjeMs, fill, easing: 'ease-out',
+      }));
+    }
+    this.tekuce = lista;
+    // Kraj grupe: prekid svih vraća krajnje stanje. Prekinuta animacija odbija `finished` (AbortError), to nije greška.
+    Promise.all(lista.map((a) => a.finished)).then(
+      () => {
+        lista.forEach((a) => a.cancel());
+        if (this.tekuce === lista) {
+          this.tekuce = [];
+        }
+      },
+      () => undefined,
+    );
+  }
 
   protected skriven(kljuc: string): boolean {
     return this.vidljivost().get(kljuc) === false;
@@ -300,3 +448,4 @@ export class PlatnoPrikazComponent {
     return pasusi;
   }
 }
+

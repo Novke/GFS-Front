@@ -56,7 +56,7 @@ describe('PlatnoPrikazComponent', () => {
     expect(sloj(el, 'oblik').style.visibility).toBe('hidden');
   });
 
-  it('ulaz animacija postoji i sam ne menja prikaz (logika je F4)', async () => {
+  it('ključ animacije za praznu grupu ne menja prikaz (animacije: platno-prikaz-animacije.spec.ts)', async () => {
     const { fixture, el } = await prikazi(platno());
     fixture.componentRef.setInput('animacija', { kljuc: 1, grupa: 0 });
     fixture.detectChanges();
