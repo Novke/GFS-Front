@@ -16,7 +16,7 @@ const BELA = '#FFFFFF';
 type IshodMedija = { medijId: string } | { razlog: string };
 
 /** Deo paketa (slajd, layout ili master) iz kog je element, da bi se `r:embed` razrešio vezama tog dela. */
-function deoElementa(el: Element, ctx: KontekstSlajda): string {
+export function deoElementa(el: Element, ctx: KontekstSlajda): string {
   const doc = el.ownerDocument;
   if (ctx.layout && doc === ctx.layout.doc) return ctx.layout.putanja;
   if (ctx.master && doc === ctx.master.doc) return ctx.master.putanja;
