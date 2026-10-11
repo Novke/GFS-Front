@@ -26,7 +26,7 @@ const list = (router: Router) => lanac(router).at(-1)!;
 
 /**
  * Uživo rute posle redizajna: iste putanje kao pre (QR kodovi i linkovi su već podeljeni), ali nastavnički ekrani su u
- * ljusci, publika i konzola u projektorskom layoutu, studentske strane u javnom (bez ljuske, koja zove zaključan API).
+ * ljusci, publika, konzola i daljinski u projektorskom layoutu, studentske strane u javnom (bez ljuske, koja zove zaključan API).
  */
 describe('uživo rute', () => {
   let router: Router;
@@ -64,7 +64,7 @@ describe('uživo rute', () => {
     expect(list(router).paramMap.get('id')).toBe('7');
   });
 
-  it.each(['/izvodjenja/7/publika', '/izvodjenja/7/konzola', '/izvodjenja/7/konzola?telefon=1'])(
+  it.each(['/izvodjenja/7/publika', '/izvodjenja/7/konzola', '/izvodjenja/7/konzola?telefon=1', '/izvodjenja/7/daljinski'])(
     '%s je u projektorskom layoutu (cela strana), bez ljuske',
     async url => {
       expect(await idi(url)).toBe(url);
@@ -75,6 +75,15 @@ describe('uživo rute', () => {
       expect(list(router).paramMap.get('id')).toBe('7');
     },
   );
+
+  it('daljinski prati dan/noć (pratiRezim), konzola i publika su uvek svetle', async () => {
+    await idi('/izvodjenja/7/daljinski');
+    expect(lanac(router)[0].data['pratiRezim']).toBe(true);
+    await idi('/izvodjenja/7/konzola');
+    expect(lanac(router)[0].data['pratiRezim']).toBeUndefined();
+    await idi('/izvodjenja/7/publika');
+    expect(lanac(router)[0].data['pratiRezim']).toBeUndefined();
+  });
 
   it.each(['/uzivo', '/uzivo/123456'])('%s je u javnom layoutu (cela strana), bez ljuske', async url => {
     expect(await idi(url)).toBe(url);
@@ -98,7 +107,7 @@ describe('uživo rute', () => {
   });
 
   it.each(['/izvodjenja/abc/konzola', '/izvodjenja/7/konzola2', '/izvodjenja/0/publika', '/prezentacije/abc', '/uzivo-test',
-    '/izvodjenja/7/publika/visak', '/izvodjenja/7'])(
+    '/izvodjenja/7/publika/visak', '/izvodjenja/7', '/izvodjenja/abc/daljinski', '/izvodjenja/7/daljinski2'])(
     '%s -> 404 u ljusci, bez poziva API-ja',
     async url => {
       await idi(url);

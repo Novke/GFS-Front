@@ -15,10 +15,12 @@ function postavi(opcije: { odbij?: boolean } = {}) {
   let odbij = opcije.odbij ?? false;
   const resolveri: (() => void)[] = [];
   let rucno = false;
+  let pustenaPreVracanja = false;
   const request = vi.fn(async () => {
     if (rucno) await new Promise<void>(r => resolveri.push(r));
     if (odbij) throw new DOMException('nije dozvoljeno', 'NotAllowedError');
     const b = new LaznaBrava();
+    if (pustenaPreVracanja) b.released = true;
     brave.push(b);
     return b;
   });
@@ -29,6 +31,7 @@ function postavi(opcije: { odbij?: boolean } = {}) {
     be, doc, brave, request,
     postaviOdbij: (v: boolean) => (odbij = v),
     zadrzi: () => (rucno = true),
+    pustiPreVracanja: () => (pustenaPreVracanja = true),
     zavrsi: () => resolveri.splice(0).forEach(r => r()),
     vidljivo: (v: boolean) => {
       doc.visibilityState = v ? 'visible' : 'hidden';
@@ -114,5 +117,45 @@ describe('BudanEkran', () => {
     await isprazniMikrozadatke();
     expect(t.brave[0].released).toBe(true);
     expect(t.be.stanje()).toBe('iskljuceno');
+  });
+
+  it('povratak na stranicu dok zahtev traje: ne traži drugu bravu', async () => {
+    const t = postavi();
+    t.zadrzi();
+    t.be.ukljuci();
+    t.vidljivo(false);
+    t.vidljivo(true);
+    t.zavrsi();
+    await isprazniMikrozadatke();
+    expect(t.request).toHaveBeenCalledTimes(1);
+    expect(t.brave.length).toBe(1);
+    expect(t.be.stanje()).toBe('aktivno');
+  });
+
+  it('stranica skrivena dok zahtev traje: brava se pusti, nije aktivno, a povratak traži ponovo', async () => {
+    const t = postavi();
+    t.zadrzi();
+    t.be.ukljuci();
+    t.doc.visibilityState = 'hidden';
+    t.zavrsi();
+    await isprazniMikrozadatke();
+    expect(t.brave[0].released).toBe(true);
+    expect(t.be.stanje()).toBe('trazi');
+    t.vidljivo(true);
+    t.zavrsi();
+    await isprazniMikrozadatke();
+    expect(t.request).toHaveBeenCalledTimes(2);
+    expect(t.be.stanje()).toBe('aktivno');
+  });
+
+  it('brava već puštena kad zahtev stigne: nije aktivno, povratak traži ponovo', async () => {
+    const t = postavi();
+    t.pustiPreVracanja();
+    t.be.ukljuci();
+    await isprazniMikrozadatke();
+    expect(t.be.stanje()).toBe('trazi');
+    t.vidljivo(true);
+    await isprazniMikrozadatke();
+    expect(t.request).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,6 +1,6 @@
 export const RAZMAK_DODIRA_MS = 300;
 
-/** Drugi dodir istog dugmeta pre `razmak` ms se ignoriše (odskok prsta, "ghost click"). */
+/** Drugi dodir istog dugmeta pre `razmak` ms se ignoriše (odskok prsta, "ghost click"); vremena su monotona (`performance.now()`). */
 export function prihvatiDodir(poslednjiMs: number | undefined, sadaMs: number, razmak = RAZMAK_DODIRA_MS): boolean {
   return poslednjiMs === undefined || sadaMs - poslednjiMs >= razmak;
 }

@@ -63,6 +63,12 @@ export class BudanEkran {
           brava.release().catch(() => undefined);
           return;
         }
+        // Stranica je sakrivena dok je zahtev trajao (ili je pregledač bravu već pustio): nije aktivno; povratak traži ponovo.
+        if (brava.released || this.doc.visibilityState !== 'visible') {
+          if (!brava.released) brava.release().catch(() => undefined);
+          this._stanje.set('trazi');
+          return;
+        }
         this.brava = brava;
         this._stanje.set('aktivno');
         brava.addEventListener('release', () => {
