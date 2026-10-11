@@ -124,6 +124,15 @@ describe('ommlULatex: ostala pravila', () => {
     ['groupChr drugi znak dole', `<m:groupChr><m:groupChrPr><m:chr m:val="→"/></m:groupChrPr>${e('x')}</m:groupChr>`, '\\underset{→}{x}'],
     ['groupChr drugi znak gore', `<m:groupChr><m:groupChrPr><m:chr m:val="→"/><m:pos m:val="top"/></m:groupChrPr>${e('x')}</m:groupChr>`,
       '\\overset{→}{x}'],
+    ['zvezdica posle komande dobija razmak (MathLive)', `<m:d><m:dPr><m:begChr m:val="⌊"/><m:endChr m:val="⌋"/></m:dPr>${e('x')}</m:d>${r('*2')}`,
+      '\\left\\lfloor x\\right\\rfloor *2'],
+    ['zvezdica posle tilde', r('a~*b'), 'a\\sim *b'],
+    ['prazan sepChr nema separatora', `<m:d><m:dPr><m:sepChr m:val=""/></m:dPr>${e('a')}${e('b')}</m:d>`, '\\left(ab\\right)'],
+    ['eqArr: prvi & u redu je poravnanje, ostali se izbegavaju', `<m:eqArr>${e('a&amp;=b&amp;c')}<m:e>${r('x')}${r('&amp;=y')}</m:e></m:eqArr>`,
+      '\\begin{aligned}a&=b\\&c\\\\x&=y\\end{aligned}'],
+    ['eqArr: & ugnežđen u razlomku reda se izbegava', `<m:eqArr><m:e><m:f><m:num>${r('a&amp;b')}</m:num><m:den>${r('c')}</m:den></m:f>${r('&amp;=d')}</m:e></m:eqArr>`,
+      '\\begin{aligned}\\frac{a\\&b}{c}&=d\\end{aligned}'],
+    ['& van eqArr ostaje izbegnut', r('a&amp;b'), 'a\\&b'],
     ['box je samo sadržaj', `<m:box><m:boxPr/>${e('x')}</m:box>`, 'x'],
     ['prazan oMath', '', ''],
   ])('%s', (_ime, isecak, ocekivano) => {
@@ -161,6 +170,15 @@ describe('ommlULatex: zlonamerni ulaz', () => {
   it('ogroman izlaz se seče na \\text{formula}', () => {
     const rez = ommlULatex(oMath(r('x'.repeat(50_000))));
     expect(rez).toEqual({ latex: '\\text{formula}', zaProveru: true });
+  });
+
+  it.each([
+    ['m:d', `<m:d>${'<m:e/>'.repeat(100_000)}</m:d>`],
+    ['m:m', `<m:m>${'<m:mr/>'.repeat(100_000)}</m:m>`],
+    ['m:m sa praznim ćelijama', `<m:m><m:mr>${'<m:e/>'.repeat(100_000)}</m:mr></m:m>`],
+    ['m:eqArr', `<m:eqArr>${'<m:e/>'.repeat(100_000)}</m:eqArr>`],
+  ])('100 000 praznih argumenata u %s troši budžet', (_ime, isecak) => {
+    expect(ommlULatex(oMath(isecak))).toEqual({ latex: '\\text{formula}', zaProveru: true });
   });
 
   it('mnogo praznih elemenata se seče bez kvadratnog vremena', () => {

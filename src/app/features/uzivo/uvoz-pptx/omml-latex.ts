@@ -13,9 +13,13 @@ const CENA_ELEMENTA = 4;
 const MAX_LATEX_OKVIRA = 5000;
 const PREDUGO = '\\text{formula}';
 
-interface Stanje { zaProveru: boolean; budzet: number; prekid: boolean; }
+interface Stanje {
+  zaProveru: boolean; budzet: number; prekid: boolean;
+  /** Red `m:eqArr` koji se upravo pretvara: prvi `&` u `m:t` njegovih neposrednih `m:r` je oznaka poravnanja. */
+  poravnanje: { red: Element; iskoriscen: boolean } | null;
+}
 
-const novoStanje = (): Stanje => ({ zaProveru: false, budzet: MAX_BUDZETA, prekid: false });
+const novoStanje = (): Stanje => ({ zaProveru: false, budzet: MAX_BUDZETA, prekid: false, poravnanje: null });
 
 /** Troši budžet; `false` kad je potrošen (tada je obrada prekinuta). */
 function potrosi(s: Stanje, n: number): boolean {
@@ -46,13 +50,16 @@ function krajKomande(t: string): boolean {
   return kose % 2 === 1;
 }
 
-/** Spaja delove bez razmaka; posle kontrolne reči ispred slova ide jedan razmak (`\sim x`, ali `\sim(`). */
+/** Znak ispred kog kontrolna reč dobija razmak: slovo, i `*` (MathLive čita ime komande kao `[a-zA-Z*]+`). */
+const nastavljaIme = (c: number) => jeSlovo(c) || c === 42;
+
+/** Spaja delove bez razmaka; posle kontrolne reči ispred slova ili `*` ide jedan razmak (`\sim x`, `\sim *b`, ali `\sim(`). */
 function spoji(delovi: readonly string[]): string {
   const izlaz: string[] = [];
   let prethodni = '';
   for (const d of delovi) {
     if (!d) continue;
-    if (prethodni && jeSlovo(d.charCodeAt(0)) && krajKomande(prethodni)) izlaz.push(' ');
+    if (prethodni && nastavljaIme(d.charCodeAt(0)) && krajKomande(prethodni)) izlaz.push(' ');
     izlaz.push(d);
     prethodni = d;
   }
@@ -62,14 +69,25 @@ function spoji(delovi: readonly string[]): string {
 /** Nevidljivi operatori (U+2061-U+2064) i znaci nulte širine: u LaTeX-u nemaju značenje, a prikaz ih crta kao kvadratiće. */
 const NEVIDLJIVI = /[\u200B-\u200D\u2061-\u2064\uFEFF]/;
 
-/** Tekst u matematičkom režimu: posebni znaci LaTeX-a izbegnuti, razmak je `\ `, unikod simboli ostaju. */
-function matTekst(t: string, s: Stanje): string {
+/**
+ * Tekst u matematičkom režimu: posebni znaci LaTeX-a izbegnuti, razmak je `\ `, unikod simboli ostaju.
+ * `poravnanje`: u redu `m:eqArr` prvi `&` ostaje sirov (oznaka poravnanja u `aligned`), ostali se izbegavaju.
+ */
+function matTekst(t: string, s: Stanje, poravnanje: { iskoriscen: boolean } | null = null): string {
   const delovi: string[] = [];
   for (const z of t) {
     if (NEVIDLJIVI.test(z)) continue;
     switch (z) {
       case '\\': delovi.push('\\backslash'); break;
-      case '{': case '}': case '#': case '$': case '%': case '&': case '_': delovi.push('\\' + z); break;
+      case '&':
+        if (poravnanje && !poravnanje.iskoriscen) {
+          poravnanje.iskoriscen = true;
+          delovi.push('&');
+        } else {
+          delovi.push('\\&');
+        }
+        break;
+      case '{': case '}': case '#': case '$': case '%': case '_': delovi.push('\\' + z); break;
       case '^':
         delovi.push('\\hat{}');
         s.zaProveru = true;
@@ -158,7 +176,8 @@ const sadrzajnaDeca = (el: Element) => Array.from(el.children).filter((d) => d.n
 
 /** Sadržaj kontejnera: deca redom. */
 function sadrzaj(el: Element | null, d: number, s: Stanje): string {
-  if (!el) return '';
+  // Naplaćuje se i prazan kontejner: inače 100 000 praznih `m:e` u `m:d`/`m:m`/`m:eqArr` prolazi mimo budžeta.
+  if (!el || !potrosi(s, CENA_ELEMENTA)) return '';
   const delovi: string[] = [];
   for (const c of sadrzajnaDeca(el)) {
     if (s.prekid) break;
@@ -212,10 +231,19 @@ function cvor(el: Element, d: number, s: Stanje): string {
     case 'nary': return narni(el, d, s);
     case 'd': return zagrade(el, d, s);
     case 'm': {
-      const redovi = deca(el, NS.m, 'mr').map((r) => deca(r, NS.m, 'e').map((c) => sadrzaj(c, d + 1, s)).join('&'));
+      const redovi: string[] = [];
+      for (const r of deca(el, NS.m, 'mr')) {
+        if (!potrosi(s, CENA_ELEMENTA)) break;
+        const celije: string[] = [];
+        for (const c of deca(r, NS.m, 'e')) {
+          if (s.prekid) break;
+          celije.push(sadrzaj(c, d + 1, s));
+        }
+        redovi.push(celije.join('&'));
+      }
       return `\\begin{matrix}${redovi.join('\\\\')}\\end{matrix}`;
     }
-    case 'eqArr': return `\\begin{aligned}${deca(el, NS.m, 'e').map((c) => sadrzaj(c, d + 1, s)).join('\\\\')}\\end{aligned}`;
+    case 'eqArr': return nizJednacina(el, d, s);
     case 'acc': {
       const chr = znak(el, 'accPr', 'chr', '\u0302');
       const k = AKCENTI.get(chr);
@@ -238,13 +266,26 @@ function cvor(el: Element, d: number, s: Stanje): string {
   }
 }
 
+/** `m:eqArr`: redovi u `aligned`; u svakom redu prvi `&` iz neposrednog `m:r` je oznaka poravnanja (ugnežđeni se izbegavaju). */
+function nizJednacina(el: Element, d: number, s: Stanje): string {
+  const redovi: string[] = [];
+  const spoljno = s.poravnanje;
+  for (const c of deca(el, NS.m, 'e')) {
+    if (s.prekid) break;
+    s.poravnanje = { red: c, iskoriscen: false };
+    redovi.push(sadrzaj(c, d + 1, s));
+  }
+  s.poravnanje = spoljno;
+  return `\\begin{aligned}${redovi.join('\\\\')}\\end{aligned}`;
+}
+
 /** `m:r`: `m:t` sa stilom iz `m:rPr` (`nor` -> `\text`, inače pismo pa stil). Ostala deca (npr. `a:rPr`) se preskaču. */
 function deo(el: Element, s: Stanje): string {
   const t = deca(el, NS.m, 't').map((x) => x.textContent ?? '').join('');
   if (!potrosi(s, t.length) || t === '') return '';
   const rPr = dete(el, NS.m, 'rPr');
   if (rPr && ukljuceno(dete(rPr, NS.m, 'nor'))) return `\\text{${tekstTekst(t)}}`;
-  const mat = matTekst(t, s);
+  const mat = matTekst(t, s, s.poravnanje && el.parentElement === s.poravnanje.red ? s.poravnanje : null);
   if (!mat || !rPr) return mat;
   const omot = PISMA.get(val(dete(rPr, NS.m, 'scr')) ?? '') ?? STILOVI.get(val(dete(rPr, NS.m, 'sty')) ?? '');
   return omot ? `${omot}{${mat}}` : mat;
@@ -283,12 +324,14 @@ function zagrade(el: Element, d: number, s: Stanje): string {
   const beg = znak(el, 'dPr', 'begChr', '(');
   const end = znak(el, 'dPr', 'endChr', ')');
   const sep = znak(el, 'dPr', 'sepChr', '|');
-  const sepL = ZAGRADE.get(sep) ?? matTekst(sep, s);
+  // Prazan `sepChr` znači bez separatora (`''` u ZAGRADE je samo nevidljiva zagrada `.`).
+  const sepL = sep === '' ? '' : (ZAGRADE.get(sep) ?? matTekst(sep, s));
   const unutra: string[] = [];
-  deca(el, NS.m, 'e').forEach((c, i) => {
-    if (i > 0) unutra.push(sepL);
+  for (const c of deca(el, NS.m, 'e')) {
+    if (s.prekid) break;
+    if (unutra.length > 0) unutra.push(sepL);
     unutra.push(sadrzaj(c, d + 1, s));
-  });
+  }
   // Znak koji LaTeX ne prima kao graničnik: nevidljiva zagrada, a znak ide kao običan simbol pored nje.
   const levo = ZAGRADE.get(beg);
   const desno = ZAGRADE.get(end);
