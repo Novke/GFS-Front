@@ -153,6 +153,11 @@ export class DaljinskiPage {
       });
     });
 
+    // Završeno izvođenje ne menja se više: STOMP veza se zatvara, završni ekran koristi poslednje stanje.
+    effect(() => {
+      if (this.zavrseno()) untracked(() => this.store.zatvori());
+    });
+
     // Razlog neuspele komande u traci 6 s. Store ne menja `greska` kad ista komanda ponovo ne uspe, pa se prikaz
     // obnavlja i kad se red komandi isprazni (`salje` -> false) uz grešku; uspešna komanda grešku briše odmah.
     // Zato se greška vidi tek kad red stane: komanda koja još čeka iza neuspele odlaže prikaz (njen ishod ga i odredi).

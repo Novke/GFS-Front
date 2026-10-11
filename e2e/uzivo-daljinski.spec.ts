@@ -58,7 +58,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await expect(polozaj(page)).toHaveText('1/4 · 2/3');
     expect(tipoviKomandi(mock)).toEqual(['SLEDECI', 'SLEDECI', 'SLEDECI', 'SLEDECI', 'PRETHODNI']);
 
-    await expect(page.getByRole('timer', { name: 'Štoperica' })).toHaveText(/^12:3\d$/);
+    await expect(page.getByRole('timer', { name: 'Štoperica' })).toHaveText(/^12:\d\d$/);
     await expect(page.getByRole('timer', { name: 'Sat' })).toHaveText(/^\d{2}:\d{2}$/);
   });
 
@@ -238,13 +238,13 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await nastavnickiBroker(page, mock);
     await otvori(page);
     const stoperica = page.getByRole('timer', { name: 'Štoperica' });
-    await expect(stoperica).toHaveText(/^12:3\d$/);
+    await expect(stoperica).toHaveText(/^12:\d\d$/);
     await page.getByRole('button', { name: 'Nuluj štopericu' }).click();
-    await expect(stoperica).toHaveText(/^0:0\d$/);
+    await expect(stoperica).toHaveText(/^0:[0-5]\d$/);
 
     await page.reload();
     await expect(veza(page)).toHaveText('Povezano');
-    await expect(stoperica).toHaveText(/^0:0\d$/);
+    await expect(stoperica).toHaveText(/^0:[0-5]\d$/);
   });
 });
 

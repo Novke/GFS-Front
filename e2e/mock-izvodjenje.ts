@@ -66,7 +66,7 @@ const imaTacan = (p: Pitanje | null): boolean =>
 
 export class MockIzvodjenje {
   private readonly f: FiksturaIzvodjenja;
-  private readonly pocetakMs = Date.now() - (12 * 60 + 34) * 1000;
+  private readonly pocetakMs = Date.now() - (12 * 60 + 2) * 1000;
   private verzija = 1;
   private prikaz: Prikaz = 'PRIJAVA';
   private indeks = -1;

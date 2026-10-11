@@ -136,7 +136,8 @@ export const IzvodjenjeStore = signalStore(
       const t = store.stanje();
       if (t && s.verzija < t.verzija) return;
       store._sat.azuriraj(s.serverVremeMs);
-      patchState(store, { stanje: s });
+      // Prvi snimak (npr. STOMP posle neuspelog GET-a) briše zastarelu grešku učitavanja.
+      patchState(store, t ? { stanje: s } : { stanje: s, greska: null });
     }
 
     function prihvatiPoruku(telo: string): void {
@@ -235,6 +236,11 @@ export const IzvodjenjeStore = signalStore(
 
       sakrij(rundaId: number, kljuc: string, sakriven: boolean): void {
         posalji(() => api.sakrij(izvodjenjeId!, rundaId, kljuc, sakriven), 'Izmena nije uspela.');
+      },
+
+      /** Zatvara STOMP vezu (završeno izvođenje); poslednje stanje ostaje za završni ekran, komande i dalje rade. */
+      zatvori(): void {
+        zatvoriVezu();
       },
 
       /** Zatvara STOMP vezu i red komandi (zove se i iz `onDestroy`). */

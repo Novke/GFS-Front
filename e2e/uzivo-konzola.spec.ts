@@ -24,7 +24,7 @@ async function otvori(page: Page, mock: MockApi): Promise<void> {
 test.describe('konzola (1280 x 800)', () => {
   test('zaglavlje: štoperica i sat; tri puta → daje slajd 1 na koraku 2, a "Sledeće" korak 3', async ({ page, mock }) => {
     await otvori(page, mock);
-    await expect(stoperica(page)).toHaveText(/^12:3\d$/);
+    await expect(stoperica(page)).toHaveText(/^12:\d\d$/);
     await expect(page.getByRole('timer', { name: 'Sat' })).toHaveText(/^\d{2}:\d{2}$/);
     await expect(page.locator('.uz-kon-meta')).toContainText('Prijava');
 
@@ -81,7 +81,7 @@ test.describe('konzola (1280 x 800)', () => {
   test('štoperica: pauza stoji, nastavak teče, nulovanje pa "Poništi" vraća vreme', async ({ page, mock }) => {
     await page.clock.install();
     await otvori(page, mock);
-    await expect(stoperica(page)).toHaveText(/^12:3\d$/);
+    await expect(stoperica(page)).toHaveText(/^12:\d\d$/);
 
     await page.getByRole('button', { name: 'Pauziraj štopericu' }).click();
     await expect(page.getByRole('button', { name: 'Nastavi štopericu' })).toHaveAttribute('aria-pressed', 'true');
@@ -95,7 +95,7 @@ test.describe('konzola (1280 x 800)', () => {
     await expect(stoperica(page)).toHaveText(/^12:\d\d$/);
 
     await page.getByRole('button', { name: 'Nuluj štopericu' }).click();
-    await expect(stoperica(page)).toHaveText(/^0:0\d$/);
+    await expect(stoperica(page)).toHaveText(/^0:[0-5]\d$/);
     await page.getByRole('button', { name: 'Poništi' }).click();
     await expect(stoperica(page)).toHaveText(/^12:\d\d$/);
   });

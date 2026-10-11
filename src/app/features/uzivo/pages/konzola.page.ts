@@ -183,7 +183,7 @@ export class IzborEkranaDialog {
       </ng-template>
 
       <ng-template #beleskeTpl>
-        <section class="uz-kon-kartica" aria-label="Beleške">
+        <section class="uz-kon-kartica" aria-label="Beleške predavača">
           <h2 class="uz-kon-naslov">Beleške</h2>
           <app-beleske-panel [tekst]="s.trenutniSlajd?.beleske ?? null" [kljucSlajda]="s.trenutniSlajd?.id ?? null" />
         </section>

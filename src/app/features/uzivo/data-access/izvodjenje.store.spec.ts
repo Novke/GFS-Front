@@ -157,6 +157,22 @@ describe('IzvodjenjeStore', () => {
       expect(stomp.deactivate).toHaveBeenCalled();
     });
 
+    it('stanje iz STOMP-a posle neuspelog GET-a briše grešku učitavanja', () => {
+      store.init(5);
+      http.expectOne('api/izvodjenja/5/stanje').flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
+      expect(store.greska()).not.toBeNull();
+      stomp.posalji('/topic/izvodjenja/5/nastavnik', stanje({ verzija: 2 }));
+      expect(store.stanje()?.verzija).toBe(2);
+      expect(store.greska()).toBeNull();
+    });
+
+    it('zatvori deaktivira STOMP, a poslednje stanje ostaje', () => {
+      init(stanje({ verzija: 3 }));
+      store.zatvori();
+      expect(stomp.deactivate).toHaveBeenCalled();
+      expect(store.stanje()?.verzija).toBe(3);
+    });
+
     it('linkovi za studente i konzolu', () => {
       init();
       expect(store.joinLink()).toBe(new URL('uzivo/123456', document.baseURI).href);

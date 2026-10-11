@@ -40,6 +40,7 @@ describe('DaljinskiPage', () => {
     komanda: vi.fn(),
     osvezi: vi.fn(),
     posleVracanja: vi.fn(),
+    zatvori: vi.fn(),
   };
   let brave: LaznaBrava[];
   let request: ReturnType<typeof vi.fn>;
@@ -63,7 +64,7 @@ describe('DaljinskiPage', () => {
     postaviWakeLock({ request });
     vibrate = vi.fn(() => true);
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
-    for (const f of [lazniStore.init, lazniStore.komanda, lazniStore.osvezi, lazniStore.posleVracanja]) f.mockClear();
+    for (const f of [lazniStore.init, lazniStore.komanda, lazniStore.osvezi, lazniStore.posleVracanja, lazniStore.zatvori]) f.mockClear();
     lazniStore.greska.set(null);
     lazniStore.veza.set('povezan');
     lazniStore.salje.set(false);
@@ -228,6 +229,16 @@ describe('DaljinskiPage', () => {
     await osvezi(f);
     await pomeriSat(OSVEZI_BEZ_VEZE_MS);
     expect(lazniStore.osvezi).toHaveBeenCalledTimes(1);
+    await zavrsi(f);
+  }));
+
+  it('završeno izvođenje zatvara vezu (jednom); aktivno je ne dira', saLaznimSatom(async () => {
+    const f = await prikazi();
+    expect(lazniStore.zatvori).not.toHaveBeenCalled();
+    const s = naInfo();
+    stanjeS.set({ ...s, verzija: s.verzija + 1, izvodjenje: { ...s.izvodjenje, status: 'ZAVRSENO' } });
+    await osvezi(f);
+    expect(lazniStore.zatvori).toHaveBeenCalledTimes(1);
     await zavrsi(f);
   }));
 
