@@ -34,6 +34,11 @@ export interface KontekstSlajda {
   readonly t: Transformacija;
   /** `#RRGGBB` pozadine slajda (na početku `bg1`; F12 je prepisuje pravom pozadinom). */
   pozadina: string;
+  /**
+   * Popuna grupe koju deca sa `a:grpFill` preuzimaju (`#RRGGBB` ili `null`); F12 je postavlja dok obilazi decu
+   * `p:grpSp` i vraća prethodnu vrednost posle grupe. Nema je -> deca sa `grpFill` su bez popune.
+   */
+  popunaGrupe?: string | null;
   upozori(kod: KodUpozorenja, poruka: string): void;
   /** Registruje sliku paketa, vraća ključ medija (`pptx:<putanja>`); spoljna veza, nema veze ili dela -> `null`. */
   medijIzVeze(odDela: string, rId: string): string | null;
