@@ -38,14 +38,24 @@ describe('slajd-pravila', () => {
   it('SlajdDetails -> SlajdCmd -> lokalni SlajdDetails čuva sadržaj', () => {
     const s: SlajdDetails = {
       id: 4, rb: 2, tip: 'INFO', naslov: 'N', sadrzaj: 'S', slika: { id: 'u', naziv: 'x.png', mime: 'image/png', velicina: 1 },
-      beleske: 'B', postepeno: true, pitanje: null,
+      beleske: 'B', postepeno: true, pitanje: null, platno: null,
     };
     expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
   });
 
+  it('slajdUCmd vraća platno neizmenjeno (izmena beleški ne briše slojeve)', () => {
+    const platno = { verzija: 1, pozadina: { boja: '#FFFFFF', medijId: null }, slojevi: [], animacije: [] } as const;
+    const s: SlajdDetails = {
+      id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null,
+      platno: { ...platno, slojevi: [], animacije: [] },
+    };
+    expect(slajdUCmd(s).platno).toBe(s.platno);
+    expect(slajdUCmd({ ...s, tip: 'INFO', platno: null }).platno).toBeNull();
+  });
+
   it('oznaka slajda je tekst bez Markdown znakova', () => {
     const s: SlajdDetails = { id: 1, rb: 1, tip: 'INFO', naslov: null, sadrzaj: '## Sile i **momenti**\n- GD-2025',
-      slika: null, beleske: null, postepeno: false, pitanje: null };
+      slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
     expect(oznakaSlajda(s)).toBe('Sile i momenti GD-2025');
     expect(oznakaSlajda({ ...s, sadrzaj: null })).toBe('Nov slajd');
   });

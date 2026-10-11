@@ -219,7 +219,7 @@ export function novoPitanje(tip: TipPitanja, tekst = ''): PitanjeCmd {
 export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN'): SlajdCmd {
   return {
     tip, naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
-    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null,
+    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: null,
   };
 }
 
@@ -261,6 +261,8 @@ export function slajdUCmd(s: SlajdDetails): SlajdCmd {
   return {
     tip: s.tip, naslov: s.naslov, sadrzaj: s.sadrzaj, slikaId: s.slika?.id ?? null, beleske: s.beleske,
     postepeno: s.postepeno, pitanje: s.pitanje ? pitanjeUCmd(s.pitanje) : null,
+    // platno ide nazad neizmenjeno: PUT iz starog toka (beleške, naslov) ne sme da obriše slojeve PLATNO slajda
+    platno: s.platno,
   };
 }
 
@@ -288,6 +290,7 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
       jedinica: p.jedinica, tekstPrikaz: p.tekstPrikaz, prihvatljiviOdgovori: p.prihvatljiviOdgovori,
       skalaMinOznaka: p.skalaMinOznaka, skalaMaxOznaka: p.skalaMaxOznaka,
     } : null,
+    platno: cmd.tip === 'PLATNO' ? cmd.platno : null,
   };
 }
 

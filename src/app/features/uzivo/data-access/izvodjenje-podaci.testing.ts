@@ -8,11 +8,11 @@ export function pitanjeSlajd(tip: TipPitanja = 'JEDAN_TACAN', izmene: Partial<Pi
     brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
     prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null, ...izmene,
   };
-  return { id: 21, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: 'Pazi na vreme.', postepeno: false, pitanje };
+  return { id: 21, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: 'Pazi na vreme.', postepeno: false, pitanje, platno: null };
 }
 
 export function infoSlajd(izmene: Partial<SlajdDetails> = {}): SlajdDetails {
-  return { id: 20, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: '- a\n- b', slika: null, beleske: null, postepeno: false, pitanje: null, ...izmene };
+  return { id: 20, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: '- a\n- b', slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, ...izmene };
 }
 
 export function stanje(izmene: Partial<NastavnickoStanje> = {}): NastavnickoStanje {
@@ -24,7 +24,7 @@ export function stanje(izmene: Partial<NastavnickoStanje> = {}): NastavnickoStan
     verzija: 1, serverVremeMs: 1_000_000, prikaz: 'PRIJAVA', korak: 0, brojStavki: 0, indeks: -1, brojSlajdova: 3,
     trenutniSlajd: null, sledeciSlajd: infoSlajd(), faza: null, runda: null, rezultatiPrikazani: false,
     tacanPrikazan: false, rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: 'DUGMAD',
-    detaljiDozvoljeni: true, takmicenje: false, rezultat: null, brojOdgovora: 0, brojPovezanih: 2,
+    detaljiDozvoljeni: true, takmicenje: false, tema: 'NACRT', rezultat: null, brojOdgovora: 0, brojPovezanih: 2,
     ucesnici: [
       { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: false },
       { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: false },

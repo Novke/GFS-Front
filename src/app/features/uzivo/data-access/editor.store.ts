@@ -506,7 +506,7 @@ export const EditorStore = signalStore(
           return;
         }
         const staro: UpdatePrezentacijaCmd = {
-          naziv: p.naziv, opis: p.opis, takmicenje: p.takmicenje, telefonPrikaz: p.telefonPrikaz,
+          naziv: p.naziv, opis: p.opis, tema: p.tema, takmicenje: p.takmicenje, telefonPrikaz: p.telefonPrikaz,
           detaljiDozvoljeni: p.detaljiDozvoljeni,
         };
         const primeni = (v: Partial<PrezentacijaDetails>) => {
@@ -524,7 +524,7 @@ export const EditorStore = signalStore(
               ishod = null;
               if (gen !== generacija) return;
               primeni({
-                naziv: d.naziv, opis: d.opis, takmicenje: d.takmicenje, telefonPrikaz: d.telefonPrikaz,
+                naziv: d.naziv, opis: d.opis, tema: d.tema, takmicenje: d.takmicenje, telefonPrikaz: d.telefonPrikaz,
                 detaljiDozvoljeni: d.detaljiDozvoljeni, izmenjeno: d.izmenjeno,
               });
             },

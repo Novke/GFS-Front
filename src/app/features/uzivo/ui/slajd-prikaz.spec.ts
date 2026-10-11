@@ -3,7 +3,7 @@ import { PitanjeDetails, Rezultat, SlajdDetails } from '../data-access/uzivo.mod
 import { SlajdPrikazComponent } from './slajd-prikaz.component';
 
 const info = (sadrzaj: string): SlajdDetails => ({
-  id: 1, rb: 1, tip: 'INFO', naslov: 'Naslov', sadrzaj, slika: null, beleske: null, postepeno: true, pitanje: null,
+  id: 1, rb: 1, tip: 'INFO', naslov: 'Naslov', sadrzaj, slika: null, beleske: null, postepeno: true, pitanje: null, platno: null,
 });
 
 const pitanje: PitanjeDetails = {
@@ -17,7 +17,7 @@ const pitanje: PitanjeDetails = {
   prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
 };
 const slajdPitanje: SlajdDetails = {
-  id: 2, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje,
+  id: 2, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje, platno: null,
 };
 
 async function prikazi(ulazi: Record<string, unknown>) {

@@ -305,7 +305,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     const p = this.store.prezentacija();
     if (!p) return;
     this.store.izmeniPodesavanja({
-      naziv: p.naziv, opis: p.opis, takmicenje: p.takmicenje, telefonPrikaz: p.telefonPrikaz,
+      naziv: p.naziv, opis: p.opis, tema: p.tema, takmicenje: p.takmicenje, telefonPrikaz: p.telefonPrikaz,
       detaljiDozvoljeni: p.detaljiDozvoljeni, ...izmena,
     });
   }
