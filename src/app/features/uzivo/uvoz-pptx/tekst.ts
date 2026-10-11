@@ -9,7 +9,8 @@ import { brojAtr, dete, NS } from './xml';
 /**
  * Stil oblika (`p:style/a:fontRef`, stil tabele): slabiji od sopstvenog `rPr` dela (i `pPr/a:defRPr`), jači od
  * nasleđenih stilova nivoa (lstStyle, txStyles mastera, defaultTextStyle), kao u PowerPointu (beo tekst na plavom obliku
- * iako `defaultTextStyle` kaže `tx1`).
+ * iako `defaultTextStyle` kaže `tx1`). Ograničenje potpisa: `lstStyle` samog oblika stiže kroz `nivoi(n)` zajedno sa
+ * ostalim nasleđenim stilovima, pa je i on slabiji od ovih opcija (pozivaoci F5/F6 to treba da znaju).
  */
 export interface OpcijeTeksta { podrazumevanaBoja?: string; fontIzStila?: string; podebljanoIzStila?: boolean; }
 export interface RezultatTeksta { pasusi: Pasus[]; okvir: Okvir; senka: Senka | null | 'razlicite'; prazan: boolean; }
@@ -17,6 +18,8 @@ export interface RezultatTeksta { pasusi: Pasus[]; okvir: Okvir; senka: Senka | 
 /** Granice iz `PlatnoPP` (server odbija dokument van njih). */
 const MAX_TABULATORA = 32;
 const PODRAZUMEVANI_DEF_TAB = 457200;
+/** `defTabSz` ispod 1 pt (EMU) se zanemaruje: nema podrazumevanih stopova (zaštita od izmišljenog fajla). */
+const NAJMANJI_DEF_TAB = EMU_PO_PT;
 const PODRAZUMEVANA_VELICINA_PT = 18;
 
 const ogranici = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
@@ -81,6 +84,11 @@ function tx1(st: Stanje): string {
   return st.ctx.tema.boje[st.ctx.mapaBoja['tx1'] ?? 'dk1'] ?? '#000000';
 }
 
+/** Boja hiperveze: `hlink` teme preko mape boja. */
+function bojaVeze(st: Stanje): string {
+  return st.ctx.tema.boje[st.ctx.mapaBoja['hlink'] ?? 'hlink'] ?? '#0563C1';
+}
+
 /** Deo pre spajanja: deo platna, veličina u pt izvora (za prored u tačkama) i senka (za senku okvira). */
 interface SirovDeo { deo: Deo; velicinaPt: number; senka: Senka | null; }
 
@@ -94,14 +102,19 @@ function napraviDeo(tekst: string, rPr: Element | null, defRPr: Element | null, 
 
   const latin = svoj.latin ?? o.fontIzStila ?? r.latin;
   const podebljano = imaSvoj('b') ? svoj.b : o.podebljanoIzStila ?? r.b;
+  // Hiperveza (`a:hlinkClick` u rPr dela): PowerPoint je crta bojom `hlink` teme i podvučenu, osim kad deo ima svoju
+  // boju odnosno svoj `u`; to je jače i od stila oblika i od nasleđenih stilova.
+  const veza = !!rPr && dete(rPr, NS.a, 'hlinkClick') !== null;
+  const imaSvojuBoju = !!(svoj.boja || svoj.bezBoje);
 
   let boja: string;
-  const izvorBoje = svoj.boja || svoj.bezBoje ? svoj : o.podrazumevanaBoja ? null : r;
+  const izvorBoje = imaSvojuBoju ? svoj : veza || o.podrazumevanaBoja ? null : r;
   if (izvorBoje?.bezBoje) boja = ctx.pozadina;
   else {
     const b = izvorBoje?.boja ? bojaIz(izvorBoje.boja, st.kb) : null;
-    boja = b ? hex(b, st) : o.podrazumevanaBoja ?? tx1(st);
+    boja = b ? hex(b, st) : veza && !imaSvojuBoju ? bojaVeze(st) : o.podrazumevanaBoja ?? tx1(st);
   }
+  const podvuceno = veza && !imaSvoj('u') ? true : r.u;
 
   const velicinaPt = ogranici(r.sz !== null ? r.sz / 100 : PODRAZUMEVANA_VELICINA_PT, 0.01, 4000);
   let velicina = ogranici(velicinaPt * s, 1, 400);
@@ -117,7 +130,7 @@ function napraviDeo(tekst: string, rPr: Element | null, defRPr: Element | null, 
   return {
     deo: {
       tekst: t, font: font(st, latin), velicina: zaokruzi(velicina), boja,
-      podebljano, kurziv: r.i, podvuceno: r.u, precrtano: r.strike, polozaj,
+      podebljano, kurziv: r.i, podvuceno, precrtano: r.strike, polozaj,
     },
     velicinaPt,
     senka: r.senka ? senkaIzEfekta(r.senka, ctx) : null,
@@ -163,6 +176,8 @@ function znakListe(izvor: string, fontListe: string | null, st: Stanje): string 
   const f = (fontListe ?? '').trim().toLowerCase();
   const simbolski = f === 'symbol' || f.startsWith('wingdings') || f === 'webdings';
   if (!simbolski && !pua) return prvi;
+  // Pravi Unicode znak (iznad U+00FF, van PUA) u simbolskom fontu PowerPoint crta zamenskim fontom: ostaje kakav jeste.
+  if (!pua && kod > 0xff) return prvi;
   const znak = pua ? String.fromCodePoint(kod - 0xf000) : prvi;
   const tabela = f === 'wingdings' ? ZNACI_WINGDINGS : f === 'symbol' ? ZNACI_SYMBOL : null;
   const preslikan = tabela && Object.hasOwn(tabela, znak) ? tabela[znak] : null;
@@ -177,19 +192,31 @@ function tabulatori(pp: RazresenPPr, imaTab: boolean, sirinaOkvira: number, st: 
     const poravnanje = TABOVI[t.algn] ?? 'LEVO';
     return { poz: ogranici(uJed(t.poz, s), 0, 2880), poravnanje };
   });
-  if (stopovi.some((t) => t.poravnanje !== 'LEVO')) {
+  if (imaTab && stopovi.some((t) => t.poravnanje !== 'LEVO')) {
     upozoriJednom(st, 'TABULATORI', 'Tab-stopovi koji nisu levi su prikazani kao levi.');
   }
-  if (imaTab && pp.defTabSz > 0 && pp.defTabSz !== PODRAZUMEVANI_DEF_TAB) {
-    const d = pp.defTabSz / EMU_PO_PT * s;
+  if (imaTab && pp.defTabSz >= NAJMANJI_DEF_TAB && pp.defTabSz !== PODRAZUMEVANI_DEF_TAB) {
     const poslednji = stopovi.reduce((m, t) => Math.max(m, t.poz), 0);
-    const granica = Math.min(sirinaOkvira, 2880);
-    for (let k = 1; stopovi.length < MAX_TABULATORA && k * d <= granica + 1e-9; k++) {
-      const poz = zaokruzi(k * d);
-      if (poz > poslednji) stopovi.push({ poz, poravnanje: 'LEVO' });
-    }
+    const pozicije = podrazumevaniStopovi(pp.defTabSz / EMU_PO_PT * s, poslednji, Math.min(sirinaOkvira, 2880),
+      MAX_TABULATORA - stopovi.length);
+    for (const poz of pozicije) stopovi.push({ poz, poravnanje: 'LEVO' });
   }
   return stopovi;
+}
+
+/**
+ * Podrazumevani tab-stopovi `k * d` (jedinice) posle `poslednji` sopstvenog stopa, do `granica`, najviše `najvise`.
+ * Petlja počinje od prvog umnoška iza `poslednji`, pa ima najviše `najvise + 2` koraka bez obzira na `d` i `granica`
+ * (`d` ispod 0,01 bi se posle zaokruživanja na 2 decimale ponavljao, pa tada nema stopova).
+ */
+export function podrazumevaniStopovi(d: number, poslednji: number, granica: number, najvise: number): number[] {
+  const rezultat: number[] = [];
+  if (!(d >= 0.01) || najvise <= 0) return rezultat;
+  for (let k = Math.max(1, Math.floor(poslednji / d) + 1); rezultat.length < najvise && k * d <= granica + 1e-9; k++) {
+    const poz = zaokruzi(k * d);
+    if (poz > poslednji) rezultat.push(poz);
+  }
+  return rezultat;
 }
 
 function razmak(r: RazresenPPr['spcBef'], s: number, velicinaPrvog: number): number {

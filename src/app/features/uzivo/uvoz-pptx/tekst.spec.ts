@@ -1,7 +1,7 @@
 import { kontekstZaTest, oblikSaId } from './kontekst.testing';
 import { lanacPlaceholdera, placeholderOblika, stiloviNivoa, vrstaTeksta } from './nasledjivanje';
 import { oblik, type OpcijeFabrike } from './pptx-fabrika.testing';
-import { pretvoriTekst, senkaIzEfekta, type OpcijeTeksta, type RezultatTeksta } from './tekst';
+import { podrazumevaniStopovi, pretvoriTekst, senkaIzEfekta, type OpcijeTeksta, type RezultatTeksta } from './tekst';
 import type { KontekstSlajda } from './tipovi';
 import { dete, NS, potomak } from './xml';
 
@@ -115,11 +115,20 @@ describe('pretvoriTekst: delovi', () => {
   });
 
   it('opcije: stil oblika je slabiji od sopstvenog rPr, a jači od nasleđenih stilova', () => {
-    const opcije: OpcijeTeksta = { podrazumevanaBoja: '#FFFFFF', fontIzStila: '+mj-lt', podebljanoIzStila: true };
+    const opcije: OpcijeTeksta = { podrazumevanaBoja: '#FFFFFF', fontIzStila: 'Times New Roman', podebljanoIzStila: true };
     const { r } = tekstOkvir(p(run('a') + run('b', '<a:rPr b="0"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill><a:latin typeface="Arial"/></a:rPr>')),
       undefined, {}, opcije);
     expect(r.pasusi[0].delovi.map((d) => [d.tekst, d.boja, d.font, d.podebljano]))
-      .toEqual([['a', '#FFFFFF', 'Carlito', true], ['b', '#00FF00', 'Arimo', false]]);
+      .toEqual([['a', '#FFFFFF', 'Tinos', true], ['b', '#00FF00', 'Arimo', false]]);
+  });
+
+  it('hiperveza: boja hlink i podvučeno, osim kad deo ima svoju boju ili u', () => {
+    const veza = '<a:hlinkClick r:id="rId9"/>';
+    const { r } = tekstOkvir(p(run('a', `<a:rPr>${veza}</a:rPr>`)
+      + run('b', `<a:rPr u="none"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill>${veza}</a:rPr>`)
+      + run('c')), undefined, {}, { podrazumevanaBoja: '#FFFFFF' });
+    expect(r.pasusi[0].delovi.map((d) => [d.tekst, d.boja, d.podvuceno]))
+      .toEqual([['a', '#0563C1', true], ['b', '#00FF00', false], ['c', '#FFFFFF', false]]);
   });
 });
 
@@ -230,6 +239,13 @@ describe('pretvoriTekst: liste', () => {
     expect(obican.z.upozorenja).toEqual([]);
   });
 
+  it('pravi Unicode znak u simbolskom fontu ostaje, bez upozorenja', () => {
+    const { r, z } = lista('<a:buFont typeface="Wingdings"/><a:buChar char="•"/>');
+    expect(r.pasusi[0].lista?.znak).toBe('•');
+    expect(z.upozorenja).toEqual([]);
+    expect(lista('<a:buFont typeface="Symbol"/><a:buChar char="–"/>').r.pasusi[0].lista?.znak).toBe('–');
+  });
+
   it('znak razmak -> bez liste; buNone -> bez liste', () => {
     expect(lista('<a:buFont typeface="Arial"/><a:buChar char=" "/>').r.pasusi[0].lista).toBeNull();
     expect(lista('<a:buNone/>').r.pasusi[0].lista).toBeNull();
@@ -267,9 +283,34 @@ describe('pretvoriTekst: tab-stopovi', () => {
     expect(z.upozorenja.map((u) => u.kod)).toEqual(['TABULATORI']);
   });
 
-  it('desni i decimalni stop', () => {
-    const { r } = tekstOkvir(p(run('a'), '<a:pPr><a:tabLst><a:tab pos="127000" algn="r"/><a:tab pos="254000" algn="dec"/></a:tabLst></a:pPr>'));
+  it('desni i decimalni stop; bez \\t u pasusu nema TABULATORI', () => {
+    const { r, z } = tekstOkvir(p(run('a'), '<a:pPr><a:tabLst><a:tab pos="127000" algn="r"/><a:tab pos="254000" algn="dec"/></a:tabLst></a:pPr>'));
     expect(r.pasusi[0].tabulatori).toEqual([{ poz: 10, poravnanje: 'DESNO' }, { poz: 20, poravnanje: 'DECIMALNO' }]);
+    expect(z.upozorenja).toEqual([]);
+  });
+
+  it('defTabSz="1" i daleki sopstveni stop: bez podrazumevanih stopova, brzo', () => {
+    const okvir = (defTabSz: number) => kontekstZaTest({
+      slajdovi: [{ spTree: oblik.placeholder(3, '<p:ph idx="1"/>',
+        p(run('a\tb'), `<a:pPr defTabSz="${defTabSz}"><a:tabLst><a:tab pos="36563300"/></a:tabLst></a:pPr>`)) }],
+    }).ctx;
+    const ctx = okvir(1);
+    tekstOblika(ctx, 3, 2880);
+    const pocetak = performance.now();
+    const r = tekstOblika(ctx, 3, 2880);
+    // Stara petlja (od k = 1, korak 1/12700 pt) je ovde trajala oko 0,5 s po pasusu.
+    expect(performance.now() - pocetak).toBeLessThan(50);
+    expect(r.pasusi[0].tabulatori).toEqual([{ poz: 2879, poravnanje: 'LEVO' }]);
+    // 1 pt je najmanji dozvoljen: stop se dodaje samo iza poslednjeg sopstvenog.
+    expect(tekstOblika(okvir(12700), 3, 2880).pasusi[0].tabulatori).toEqual([{ poz: 2879, poravnanje: 'LEVO' }, { poz: 2880, poravnanje: 'LEVO' }]);
+  });
+
+  it('podrazumevaniStopovi: petlja počinje iza poslednjeg sopstvenog stopa', () => {
+    expect(podrazumevaniStopovi(72, 160, 400, 32)).toEqual([216, 288, 360]);
+    expect(podrazumevaniStopovi(0.01, 2879.5, 2880, 32)).toHaveLength(32);
+    expect(podrazumevaniStopovi(0.01, 2879.5, 2880, 32)[0]).toBe(2879.51);
+    expect(podrazumevaniStopovi(0.0001, 0, 2880, 3)).toEqual([]);
+    expect(podrazumevaniStopovi(0, 0, 2880, 32)).toEqual([]);
   });
 
   it('najviše 32 stopa', () => {
