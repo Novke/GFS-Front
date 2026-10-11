@@ -2,9 +2,9 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
-import { naPitanju, stanje } from '../data-access/izvodjenje-podaci.testing';
+import { infoSlajd, naPitanju, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
-import { NastavnickoStanje } from '../data-access/uzivo.models';
+import { NastavnickoStanje, medijUrl } from '../data-access/uzivo.models';
 import { PublikaPage, scenaPosle } from './publika.page';
 
 const zavrseno = (s: NastavnickoStanje): NastavnickoStanje =>
@@ -94,5 +94,64 @@ describe('PublikaPage', () => {
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('app-publika-scena')).toBeNull();
     expect(el.textContent).toContain('Izvođenje je završeno. Hvala!');
+  });
+
+  describe('fontovi i slike unapred', () => {
+    let load: ReturnType<typeof vi.fn>;
+    let razresi: () => void;
+
+    beforeEach(() => {
+      const cekanje = new Promise<void>((r) => { razresi = r; });
+      load = vi.fn(() => cekanje);
+      Object.defineProperty(document, 'fonts', { configurable: true, value: { load } });
+    });
+
+    afterEach(() => {
+      delete (document as Partial<Document> & { fonts?: unknown }).fonts;
+      vi.unstubAllGlobals();
+    });
+
+    it('prvi snimak: učitavanje dok fontovi trenutnog, sledećeg slajda i teme ne stignu, pa scena', async () => {
+      const p = platnoSlajd().platno!;
+      const tekst = p.slojevi.find((s) => s.tip === 'TEKST')!;
+      if (tekst.tip === 'TEKST') tekst.pasusi[0].delovi[0].font = 'Tinos';
+      lazniStore.stanje.set(stanje({
+        prikaz: 'SLAJD', indeks: 0, tema: 'PAPIR', trenutniSlajd: platnoSlajd({ platno: p }),
+        sledeciSlajd: platnoSlajd({ id: 31 }),
+      }));
+      TestBed.configureTestingModule({
+        providers: [{ provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+      });
+      TestBed.overrideComponent(PublikaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
+      const f = TestBed.createComponent(PublikaPage);
+      f.detectChanges();
+      const el = f.nativeElement as HTMLElement;
+      expect(el.querySelector('app-publika-scena')).toBeNull();
+      expect(el.textContent).toContain('Učitavanje…');
+      const trazeni = new Set(load.mock.calls.map((c) => String(c[0]).replace(/^\d+ 32px /, '')));
+      expect([...trazeni].sort()).toEqual(['"Caladea"', '"Carlito"', '"Tinos"']);
+
+      razresi();
+      await new Promise((r) => setTimeout(r));
+      await osvezi(f);
+      expect(el.querySelector('app-publika-scena .uz-pl-platno')).not.toBeNull();
+      expect(el.textContent).not.toContain('Učitavanje…');
+    });
+
+    it('posle svakog snimka unapred učitava slike sledećeg slajda', async () => {
+      const ucitane: string[] = [];
+      vi.stubGlobal('Image', class { set src(v: string) { ucitane.push(v); } });
+      const slika = { id: 'pub-sledeca', naziv: 's.png', mime: 'image/png', velicina: 1 };
+      lazniStore.stanje.set(stanje({ sledeciSlajd: infoSlajd({ slika }) }));
+      const f = await prikazi();
+      expect(ucitane).toContain(medijUrl('pub-sledeca'));
+
+      const p = platnoSlajd().platno!;
+      p.pozadina.medijId = 'pub-pozadina';
+      lazniStore.stanje.set(stanje({ verzija: 2, prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd({ slika }),
+        sledeciSlajd: platnoSlajd({ platno: p }) }));
+      await osvezi(f);
+      expect(ucitane).toContain(medijUrl('pub-pozadina'));
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, linkedSignal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute } from '@angular/router';
@@ -8,6 +8,7 @@ import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
+import { fontoviZaPrikaz, preducitajFontove, preducitajSlike, sacekajFontove, slikeSlajda } from '../ui/preducitavanje';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
@@ -31,6 +32,9 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
  * Vodi se tastaturom ili daljinskim (iste prečice kao konzola); komande koje u ovoj fazi ne važe se tiho preskaču, da
  * projektor ne prikazuje greške. Indikator veze u uglu samo dok veza nije uspostavljena (i samo kad ima stanja: za
  * nepostojeće izvođenje se veza i ne otvara).
+ * Prvi snimak se crta tek kad stignu fontovi trenutnog i sledećeg slajda i teme (najviše 3 s, do tada "Učitavanje…"),
+ * da prvi slajd ne "skoči"; posle svakog snimka se unapred učitavaju slike i fontovi sledećeg slajda. Animacije koraka
+ * PLATNO slajda pušta samo ovaj prozor (`animiraj`).
  */
 @Component({
   selector: 'app-publika',
@@ -45,9 +49,9 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     '(document:keyup)': 'tast.pusten($event)',
   },
   template: `
-    @if (store.stanje()) {
+    @if (store.stanje() && fontoviSpremni()) {
       @if (scena(); as sc) {
-        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" />
+        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" [animiraj]="true" />
       } @else {
         <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
@@ -77,10 +81,28 @@ export class PublikaPage {
     source: this.store.stanje,
     computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
   });
+  /** Fontovi prvog snimka su stigli (ili je prošlo 3 s). Pregledač bez `document.fonts` ne čeka. */
+  protected readonly fontoviSpremni = signal(typeof (document as { fonts?: { load?: unknown } }).fonts?.load !== 'function');
   private ponoviTajmer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     window.name = PROZOR_PUBLIKE;
+    let cekaPrvi = true;
+    effect(() => {
+      const s = this.store.stanje();
+      if (!s) return;
+      untracked(() => {
+        if (cekaPrvi) {
+          cekaPrvi = false;
+          if (!this.fontoviSpremni()) {
+            void sacekajFontove(fontoviZaPrikaz(s.tema, [s.trenutniSlajd, s.sledeciSlajd]))
+              .then(() => this.fontoviSpremni.set(true));
+          }
+        }
+        preducitajSlike(slikeSlajda(s.sledeciSlajd));
+        preducitajFontove(fontoviZaPrikaz(s.tema, [s.sledeciSlajd]));
+      });
+    });
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));

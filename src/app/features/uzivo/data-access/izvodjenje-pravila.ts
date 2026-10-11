@@ -71,6 +71,8 @@ export function oznakaDalje(s: NastavnickoStanje): string {
     if (faza === 'OTVORENO') return 'Zatvori pitanje';
   }
   if (sl?.tip === 'INFO' && s.korak < s.brojStavki) return 'Sledeća stavka';
+  // `brojStavki` je za PLATNO broj koraka (KLIK animacija).
+  if (sl?.tip === 'PLATNO' && s.korak < s.brojStavki) return 'Sledeći korak';
   return s.indeks + 1 >= s.brojSlajdova ? 'Na kraj' : 'Sledeći slajd';
 }
 

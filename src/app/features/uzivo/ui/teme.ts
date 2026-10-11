@@ -46,6 +46,20 @@ export const TEME: Record<Tema, TemaOpis> = {
   },
 };
 
+/** Tema iz snimka ili prezentacije; odsutna (stari server, e2e fixture-i) ili nepoznata je NACRT. */
+export function vazecaTema(t: Tema | null | undefined): Tema {
+  return t && Object.hasOwn(TEME, t) ? t : 'NACRT';
+}
+
+/**
+ * Tamna tema: beli tekst ima veći kontrast sa pozadinom od crnog. Sadržaj INFO/PITANJE slajda (pločice, rezultati,
+ * podnožje) tada dobija noćne tokene aplikacije (`rezim-noc`), da ostane čitljiv na tamnoj pozadini.
+ */
+export function tamnaTema(t: Tema): boolean {
+  const p = TEME[t].pozadina;
+  return kontrast(p, '#FFFFFF') > kontrast(p, '#000000');
+}
+
 /** CSS promenljive teme za korenski element slajda. */
 export function promenljiveTeme(t: Tema): Record<string, string> {
   const o = TEME[t];

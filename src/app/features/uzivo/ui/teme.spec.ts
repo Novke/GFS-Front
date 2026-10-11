@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kontrast, promenljiveTeme, TEME } from './teme';
+import { kontrast, promenljiveTeme, tamnaTema, TEME, vazecaTema } from './teme';
 import type { Tema } from '../data-access/platno.models';
 
 const SVE: Tema[] = ['NACRT', 'BELA', 'PAPIR', 'TAMNA', 'PONOC'];
@@ -32,5 +32,16 @@ describe('teme', () => {
     expect(p['--uz-tema-akcent-1']).toBe('#4472C4');
     expect(p['--uz-tema-akcent-6']).toBe('#70AD47');
     expect(promenljiveTeme('PAPIR')['--uz-tema-font-naslova']).toContain('Caladea');
+  });
+
+  it('tamne teme (za noćne tokene sadržaja slajda): TAMNA i PONOC', () => {
+    expect(SVE.filter(tamnaTema)).toEqual(['TAMNA', 'PONOC']);
+  });
+
+  it('važeća tema: odsutna ili nepoznata je NACRT', () => {
+    expect(vazecaTema('PAPIR')).toBe('PAPIR');
+    expect(vazecaTema(undefined)).toBe('NACRT');
+    expect(vazecaTema(null)).toBe('NACRT');
+    expect(vazecaTema('toString' as Tema)).toBe('NACRT');
   });
 });

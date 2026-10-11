@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { platnoSlajd } from '../data-access/izvodjenje-podaci.testing';
+import { animacija, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PitanjeDetails, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from './slajd-prikaz.component';
 
@@ -82,5 +84,105 @@ describe('SlajdPrikazComponent', () => {
       .toEqual(['1 · 33 %', '2 · 67 %', '0 · 0 %']);
     expect(el.querySelector('.uz-slajd-odgovori')?.textContent).toContain('3');
     expect(el.querySelector('.uz-kod-traka')?.textContent).toContain('gfs.trif.rs/gfs/uzivo · kod 123 456');
+  });
+});
+
+describe('SlajdPrikazComponent: PLATNO i teme', () => {
+  const koren = (el: HTMLElement) => el.querySelector<HTMLElement>('article.uz-platno')!;
+
+  it('PLATNO crta app-platno-prikaz, bez trake koda i bez podnožja (odluka 5)', async () => {
+    const { el } = await prikazi({ slajd: platnoSlajd(), kodTraka: { host: 'gfs.trif.rs', kod: '123456' } });
+    expect(el.querySelectorAll('app-platno-prikaz').length).toBe(1);
+    expect(el.querySelectorAll('.uz-pl-sloj').length).toBe(6);
+    expect(el.querySelector('.uz-kod-traka')).toBeNull();
+    expect(el.querySelector('.uz-slajd-podnozje')).toBeNull();
+    expect(el.querySelector('.uz-slajd-naslov, .uz-slajd-md')).toBeNull();
+  });
+
+  it('PLATNO: korak ide u platno (stanje slojeva posle koraka)', async () => {
+    const { fixture, el } = await prikazi({ slajd: platnoSlajd(), korak: 0 });
+    const vidljivost = () => el.querySelector<HTMLElement>('.uz-pl-sloj[data-sloj="slika"]')!.style.visibility;
+    expect(vidljivost()).toBe('hidden');
+    fixture.componentRef.setInput('korak', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(vidljivost()).toBe('');
+  });
+
+  it('INFO sa temom TAMNA: promenljive teme na korenu uz-platno i noćni tokeni za sadržaj', async () => {
+    const { fixture, el } = await prikazi({ slajd: info('- a'), tema: 'TAMNA' });
+    expect(koren(el).style.getPropertyValue('--uz-tema-pozadina')).toBe('#1E1F22');
+    expect(koren(el).style.getPropertyValue('--uz-tema-tekst')).toBe('#E8E8E8');
+    expect(koren(el).style.getPropertyValue('--uz-tema-font-naslova')).toContain('Atkinson Hyperlegible');
+    expect(koren(el).classList).toContain('rezim-noc');
+
+    fixture.componentRef.setInput('tema', 'PAPIR');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(koren(el).style.getPropertyValue('--uz-tema-pozadina')).toBe('#FAF7F2');
+    expect(koren(el).classList).not.toContain('rezim-noc');
+  });
+
+  it('bez teme (stari snimak) i podrazumevano: NACRT', async () => {
+    const { el } = await prikazi({ slajd: slajdPitanje });
+    expect(koren(el).style.getPropertyValue('--uz-tema-pozadina')).toBe('#FFFFFF');
+    const { el: bez } = await prikazi({ slajd: slajdPitanje, tema: undefined });
+    expect(koren(bez).style.getPropertyValue('--uz-tema-pozadina')).toBe('#FFFFFF');
+    expect(koren(bez).classList).not.toContain('rezim-noc');
+  });
+
+  describe('animacije: nova instanca platna po slajdu', () => {
+    let animate: ReturnType<typeof vi.fn>;
+    let cancel: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      cancel = vi.fn();
+      animate = vi.fn(() => ({ cancel, finished: new Promise(() => undefined) }));
+      Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+    });
+
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+
+    // Grupa 0 (pre prve KLIK) se pušta sama pri ulasku; isti id slojeva na oba slajda (uvezeni slajdovi ih ponavljaju).
+    const saGrupomNula = (id: number) => platnoSlajd({
+      id, platno: platnoSaAnimacijama([animacija('g0', 'tekst', { okidac: 'SA_PRETHODNIM' })], platno().slojevi),
+    });
+
+    it('animacija ide u platno: grupa 0 pri ulasku', async () => {
+      await prikazi({ slajd: saGrupomNula(31), korak: 0, animacija: { kljuc: 4, grupa: 0 } });
+      expect(animate).toHaveBeenCalledTimes(1);
+    });
+
+    it('skok sa slajda A (grupa 0 traje) na slajd C istog koraka: A se uništava, C crta krajnje stanje bez animate', async () => {
+      const { fixture, el } = await prikazi({ slajd: saGrupomNula(31), korak: 0, animacija: { kljuc: 4, grupa: 0 } });
+      expect(animate).toHaveBeenCalledTimes(1);
+      const instancaA = el.querySelector('app-platno-prikaz');
+
+      fixture.componentRef.setInput('slajd', saGrupomNula(33));
+      fixture.componentRef.setInput('animacija', null);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const instancaC = el.querySelector('app-platno-prikaz');
+      expect(instancaC).not.toBeNull();
+      expect(instancaC).not.toBe(instancaA);
+      expect(instancaA?.isConnected).toBe(false);
+      expect(cancel).toHaveBeenCalled();
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(instancaC!.querySelector<HTMLElement>('.uz-pl-sloj[data-sloj="tekst"]')!.style.visibility).toBe('');
+    });
+
+    it('nov snimak istog slajda zadržava instancu (animacija koja traje se ne prekida)', async () => {
+      const { fixture, el } = await prikazi({ slajd: saGrupomNula(31), korak: 0, animacija: { kljuc: 4, grupa: 0 } });
+      const instanca = el.querySelector('app-platno-prikaz');
+      fixture.componentRef.setInput('slajd', saGrupomNula(31));
+      fixture.componentRef.setInput('animacija', null);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(el.querySelector('app-platno-prikaz')).toBe(instanca);
+      expect(cancel).not.toHaveBeenCalled();
+    });
   });
 });

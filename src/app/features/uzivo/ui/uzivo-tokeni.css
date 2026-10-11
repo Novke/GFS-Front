@@ -42,6 +42,10 @@
 /*
  * Pažnja: <body class="mat-typography"> stilizuje h1-h6 i p specifičnošću (0,1,1) (font, margine). Pravila ovde koja
  * gađaju te elemente zato imaju bar (0,1,1) i dolaze posle Material teme (`src/styles.scss` ih `@use`-uje posle `styles/theme`).
+ *
+ * Tema prezentacije (INFO i PITANJE): `app-slajd-prikaz` postavlja `--uz-tema-*` (teme.ts) na koren `uz-platno`; ovde
+ * se čitaju sa dosadašnjim vrednostima kao rezervom, pa ostali ekrani na platnu (prijava, kraj, rang-lista, QR) ostaju
+ * isti. Pločice, rezultati i podnožje zadržavaju tokene aplikacije; kod tamne teme slajd dobija `rezim-noc` (noćni tokeni).
  */
 
 .uz-platno {
@@ -54,8 +58,9 @@
   flex-direction: column;
   gap: 1.8cqw;
   padding: 3.4cqw 4.2cqw 2.4cqw;
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--uz-tema-pozadina, var(--surface));
+  color: var(--uz-tema-tekst, var(--ink));
+  font-family: var(--uz-tema-font-tela, var(--font));
   font-size: 2.5cqw;
   line-height: 1.35;
 }
@@ -89,7 +94,7 @@
 }
 
 .uz-md li::marker {
-  color: var(--primary);
+  color: var(--uz-tema-akcent-1, var(--primary));
 }
 
 .uz-md :is(h1, h2, h3, h4, h5, h6) {
@@ -100,13 +105,18 @@
   letter-spacing: normal;
 }
 
+/* Na slajdu naslovi u Markdown-u nose boju teksta teme (globalni `h1-h3` inače postavlja --ink). */
+.uz-slajd .uz-md :is(h1, h2, h3, h4, h5, h6) {
+  color: inherit;
+}
+
 .uz-md h1 { font-size: 1.6em; }
 .uz-md h2 { font-size: 1.35em; }
 .uz-md h3 { font-size: 1.15em; }
 .uz-md :is(h4, h5, h6) { font-size: 1em; }
 
 .uz-md a {
-  color: var(--primary);
+  color: var(--uz-tema-akcent-1, var(--primary));
 }
 
 .uz-md code {
@@ -158,11 +168,11 @@
 /* ---------- Slajd: INFO ---------- */
 
 .uz-platno .uz-slajd-naslov {
-  font-family: inherit;
+  font-family: var(--uz-tema-font-naslova, var(--font));
   font-size: 4.4cqw;
   font-weight: 700;
   line-height: 1.15;
-  color: var(--ink);
+  color: var(--uz-tema-naslov, var(--ink));
 }
 
 .uz-slajd-telo {

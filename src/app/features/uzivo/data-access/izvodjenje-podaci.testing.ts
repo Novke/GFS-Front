@@ -1,3 +1,4 @@
+import { platno } from './platno-podaci.testing';
 import { NastavnickoStanje, PitanjeDetails, SlajdDetails, TipPitanja } from './uzivo.models';
 
 /** Zajednički podaci za testove izvođenja (nije spec, nema `describe`). */
@@ -13,6 +14,14 @@ export function pitanjeSlajd(tip: TipPitanja = 'JEDAN_TACAN', izmene: Partial<Pi
 
 export function infoSlajd(izmene: Partial<SlajdDetails> = {}): SlajdDetails {
   return { id: 20, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: '- a\n- b', slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, ...izmene };
+}
+
+/** PLATNO slajd sa fabričkim platnom (`platno()`: 4 animacije, 2 KLIK koraka). */
+export function platnoSlajd(izmene: Partial<SlajdDetails> = {}): SlajdDetails {
+  return {
+    id: 30, rb: 1, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(), ...izmene,
+  };
 }
 
 export function stanje(izmene: Partial<NastavnickoStanje> = {}): NastavnickoStanje {

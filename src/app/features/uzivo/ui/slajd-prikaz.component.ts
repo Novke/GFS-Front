@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, input, viewChild } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
-import { Faza, Rezultat, SlajdDetails, medijUrl } from '../data-access/uzivo.models';
+import { Faza, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
 import { renderMarkdown } from './markdown';
 import { PitanjePlociceComponent } from './pitanje-plocice.component';
+import { PlatnoPrikazComponent } from './platno-prikaz.component';
 import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
+import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
 export interface KodTraka { host: string; kod: string; }
@@ -15,14 +17,23 @@ export interface KodTraka { host: string; kod: string; }
  * `container-type: inline-size`, pa su sve veličine u `cqw` i slajd izgleda isto u svakoj širini; širinu daje roditelj.
  * INFO: naslov, Markdown, slika; uz `postepeno` su sakrivene stavke liste najvišeg nivoa sa indeksom ≥ `korak`.
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
+ * PLATNO: `app-platno-prikaz` preko celog okvira (slojevi posle koraka `korak`, animacija prelaza `animacija`), bez
+ * trake "host/uzivo · kod" (pokrila bi sadržaj uvezenog slajda; kasni studenti imaju QR).
+ * Tema prezentacije: CSS promenljive `--uz-tema-*` na korenu `uz-platno` (pozadina, tekst, naslov, fontovi INFO i
+ * PITANJE); kod tamne teme sadržaj dobija noćne tokene (`rezim-noc`), pa pločice i rezultati ostaju čitljivi.
  */
 @Component({
   selector: 'app-slajd-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PitanjePlociceComponent, RezultatPrikazComponent, TajmerComponent],
+  imports: [PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent],
   host: { class: 'uz-okvir' },
   template: `
-    <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'">
+    <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'" [class.rezim-noc]="tamna()"
+             [style]="promenljive()">
+      <!-- Nova instanca platna po slajdu (track id): animacija koja traje nikad ne prelazi na drugi slajd. -->
+      @for (sl of platnoNiz(); track sl.id) {
+        <app-platno-prikaz [platno]="sl.platno" [korak]="korak()" [animacija]="animacija()" />
+      }
       @if (slajd().tip === 'INFO') {
         @if (slajd().naslov) { <h1 class="uz-slajd-naslov">{{ slajd().naslov }}</h1> }
         <div class="uz-slajd-telo" [class.uz-slajd-telo--dve]="!!html() && !!slajd().slika">
@@ -46,9 +57,9 @@ export interface KodTraka { host: string; kod: string; }
           }
         </div>
       }
-      @if (kodTraka() || slajd().tip === 'PITANJE') {
+      @if (traka() || slajd().tip === 'PITANJE') {
         <footer class="uz-slajd-podnozje">
-          @if (kodTraka(); as t) {
+          @if (traka(); as t) {
             <span class="uz-kod-traka">{{ t.host }}/uzivo · kod <strong>{{ kod(t.kod) }}</strong></span>
           }
           <span class="uz-slajd-status">
@@ -72,10 +83,23 @@ export class SlajdPrikazComponent {
   readonly brojOdgovora = input<number | null>(null);
   readonly tajmer = input<TajmerUlaz | null>(null);
   readonly kodTraka = input<KodTraka | null>(null);
+  /** Tema prezentacije (snimak bez teme, npr. stari server, daje NACRT). */
+  readonly tema = input<Tema>('NACRT');
+  /** Animacija prelaza za PLATNO (vidi `app-platno-prikaz`); null crta krajnje stanje koraka. */
+  readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 
   private readonly sadrzaj = viewChild<ElementRef<HTMLElement>>('sadrzaj');
 
   protected readonly url = medijUrl;
+  private readonly vazeca = computed(() => vazecaTema(this.tema()));
+  protected readonly promenljive = computed(() => promenljiveTeme(this.vazeca()));
+  protected readonly tamna = computed(() => tamnaTema(this.vazeca()));
+  /** [slajd] za PLATNO sa dokumentom, inače prazno; `track id` u šablonu daje novu instancu platna po slajdu. */
+  protected readonly platnoNiz = computed(() => {
+    const s = this.slajd();
+    return s.tip === 'PLATNO' && s.platno ? [{ id: s.id, platno: s.platno }] : [];
+  });
+  protected readonly traka = computed(() => (this.slajd().tip === 'PLATNO' ? null : this.kodTraka()));
   protected readonly kod = kodSaRazmakom;
   protected readonly html = computed(() => (this.slajd().tip === 'INFO' ? renderMarkdown(this.slajd().sadrzaj) : ''));
   protected readonly pitanjeHtml = computed(() => renderMarkdown(this.slajd().pitanje?.tekst));
