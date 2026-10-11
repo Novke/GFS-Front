@@ -145,6 +145,22 @@ export const oblik = {
   grupa: (id: number, off: [number, number], ext: [number, number], chOff: [number, number], chExt: [number, number], deca: string) =>
     `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${id}" name="Grupa ${id}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="${off[0]}" y="${off[1]}"/><a:ext cx="${ext[0]}" cy="${ext[1]}"/>`
     + `<a:chOff x="${chOff[0]}" y="${chOff[1]}"/><a:chExt cx="${chExt[0]}" cy="${chExt[1]}"/></a:xfrm></p:grpSpPr>${deca}</p:grpSp>`,
+  /** Tabela (`p:graphicFrame`): `kolone` = `gridCol@w`, `redovi` iz `tabela.red`; okvir je zbir kolona i redova. */
+  tabela: (id: number, x: number, y: number, kolone: number[], redovi: { h: number; xml: string }[], tblPr = '<a:tblPr/>') =>
+    `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Tabela ${id}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>`
+    + `<p:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${kolone.reduce((a, b) => a + b, 0)}" cy="${redovi.reduce((a, r) => a + r.h, 0)}"/></p:xfrm>`
+    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">'
+    + `<a:tbl>${tblPr}<a:tblGrid>${kolone.map(w => `<a:gridCol w="${w}"/>`).join('')}</a:tblGrid>${redovi.map(r => r.xml).join('')}</a:tbl>`
+    + '</a:graphicData></a:graphic></p:graphicFrame>',
+};
+
+/** Delovi tabele za `oblik.tabela`: red visine `h` (EMU) i ćelija (`atributi` npr. `gridSpan="2"`, `hMerge="1"`). */
+export const tabela = {
+  red: (h: number, celije: string[]) => ({ h, xml: `<a:tr h="${h}">${celije.join('')}</a:tr>` }),
+  celija: (tekst: string, atributi = '', tcPr = '<a:tcPr/>') =>
+    `<a:tc${atributi ? ` ${atributi}` : ''}><a:txBody><a:bodyPr/><a:lstStyle/>`
+    + (tekst === '' ? '<a:p><a:endParaRPr lang="sr-Latn-RS"/></a:p>' : `<a:p><a:r><a:rPr lang="sr-Latn-RS"/><a:t>${tekst}</a:t></a:r></a:p>`)
+    + `</a:txBody>${tcPr}</a:tc>`,
 };
 export const pasus = (tekst: string, pPr = '', rPr = '<a:rPr lang="sr-Latn-RS"/>') => `<a:p>${pPr}<a:r>${rPr}<a:t>${tekst}</a:t></a:r></a:p>`;
 
