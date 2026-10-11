@@ -1,7 +1,8 @@
+import { platno } from './platno-podaci.testing';
 import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from './izvodjenje-podaci.testing';
 import {
   datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, mozePregled, odgovorili, opisVeze,
-  oznakaDalje, oznakaTajmera,
+  naslovSledeceg, oznakaDalje, oznakaPolozaja, oznakaPolozajaKratko, oznakaTajmera, sledeciKlik, SledeciKlik,
 } from './izvodjenje-pravila';
 
 describe('dozvoljeneKomande', () => {
@@ -196,4 +197,58 @@ describe('imaBrojeve i mozePregled', () => {
     expect(imaBrojeve({ cuvanje: true, status: 'ZAVRSENO' })).toBe(true);
     expect(mozePregled({ cuvanje: true, status: 'ZAVRSENO' })).toBe(true);
   });
+});
+
+describe('oznakaPolozaja i oznakaPolozajaKratko', () => {
+  it.each([
+    [stanje(), 'Prijava', 'Prijava'],
+    [stanje({ prikaz: 'KRAJ', indeks: 3 }), 'Kraj', 'Kraj'],
+    [naPitanju('CEKA'), 'Slajd 2/3', '2/3'],
+    [stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd({ postepeno: true }), korak: 0, brojStavki: 2 }), 'Slajd 1/3 · korak 0/2', '1/3 · 0/2'],
+    [stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd({ postepeno: true }), korak: 2, brojStavki: 2 }), 'Slajd 1/3 · korak 2/2', '1/3 · 2/2'],
+  ])('%#', (s, duga, kratka) => {
+    expect(oznakaPolozaja(s)).toBe(duga);
+    expect(oznakaPolozajaKratko(s)).toBe(kratka);
+  });
+});
+
+describe('sledeciKlik', () => {
+  const info = infoSlajd({ postepeno: true });
+  const sledeci = infoSlajd({ id: 30, rb: 3, naslov: 'Dalje' });
+  it('prijava -> prvi slajd na koraku 0', () => {
+    expect(sledeciKlik(stanje())).toEqual({ vrsta: 'SLAJD', slajd: infoSlajd(), indeks: 0 });
+  });
+  it('slajd sa preostalim koracima -> isti slajd, korak k+1', () => {
+    const s = stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: info, sledeciSlajd: sledeci, korak: 1, brojStavki: 3 });
+    expect(sledeciKlik(s)).toEqual({ vrsta: 'KORAK', slajd: info, indeks: 0, korak: 2, brojKoraka: 3 });
+  });
+  it('poslednji korak -> sledeći slajd na koraku 0', () => {
+    const s = stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: info, sledeciSlajd: sledeci, korak: 3, brojStavki: 3 });
+    expect(sledeciKlik(s)).toEqual({ vrsta: 'SLAJD', slajd: sledeci, indeks: 1 });
+  });
+  it('pitanje CEKA/OTVORENO -> radnja i slajd posle pitanja; ZATVORENO -> sledeći slajd', () => {
+    expect(sledeciKlik(naPitanju('CEKA', { sledeciSlajd: sledeci }))).toEqual({ vrsta: 'PITANJE', radnja: 'OTVARA', potom: sledeci, indeksPotom: 2 });
+    expect(sledeciKlik(naPitanju('OTVORENO', { sledeciSlajd: null }))).toEqual({ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 2 });
+    expect(sledeciKlik(naPitanju('ZATVORENO', { sledeciSlajd: sledeci }))).toEqual({ vrsta: 'SLAJD', slajd: sledeci, indeks: 2 });
+  });
+  it('poslednji slajd bez koraka -> KRAJ; prikaz KRAJ -> NISTA', () => {
+    expect(sledeciKlik(naPitanju('ZATVORENO', { indeks: 2, sledeciSlajd: null }))).toEqual({ vrsta: 'KRAJ' });
+    expect(sledeciKlik(stanje({ prikaz: 'KRAJ', indeks: 3, sledeciSlajd: null }))).toEqual({ vrsta: 'NISTA' });
+  });
+  it('PLATNO sa koracima se ponaša kao INFO postepeno (brojStavki = broj KLIK animacija)', () => {
+    const pl = { ...infoSlajd(), tip: 'PLATNO' as const, platno: platno() };
+    const s = stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: pl, korak: 0, brojStavki: 2 });
+    expect(sledeciKlik(s)).toMatchObject({ vrsta: 'KORAK', korak: 1, brojKoraka: 2 });
+  });
+});
+
+describe('naslovSledeceg', () => {
+  it.each<[SledeciKlik, string]>([
+    [{ vrsta: 'KORAK', slajd: infoSlajd(), indeks: 0, korak: 4, brojKoraka: 6 }, 'Sledeće · korak 4/6'],
+    [{ vrsta: 'SLAJD', slajd: infoSlajd(), indeks: 12 }, 'Sledeće · slajd 13/48'],
+    [{ vrsta: 'PITANJE', radnja: 'OTVARA', potom: null, indeksPotom: 5 }, 'Sledeći klik otvara pitanje'],
+    [{ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 5 }, 'Sledeći klik zatvara pitanje'],
+    [{ vrsta: 'KRAJ' }, 'Sledeće · kraj prezentacije'],
+    [{ vrsta: 'NISTA' }, 'Sledeće'],
+  ])('%#', (k, tekst) => expect(naslovSledeceg(k, 48)).toBe(tekst));
 });

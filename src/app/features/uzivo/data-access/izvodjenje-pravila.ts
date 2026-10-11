@@ -1,4 +1,4 @@
-import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, TipKomande } from './uzivo.models';
+import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, SlajdDetails, TipKomande } from './uzivo.models';
 
 const UVEK: readonly TipKomande[] = ['TELEFON_PRIKAZ', 'DETALJI', 'EKRAN_CRN', 'EKRAN_BEO', 'QR', 'ZAVRSI'];
 
@@ -89,11 +89,58 @@ export function oznakaTajmera(s: NastavnickoStanje): string {
   return 'Pokreni tajmer 30 s';
 }
 
-/** Gde je izvođenje: "Prijava", "Slajd 3/12" ili "Kraj". */
+/** Gde je izvođenje: "Prijava", "Kraj", "Slajd 12/48" ili "Slajd 12/48 · korak 3/6" (korak samo kad slajd ima korake). */
 export function oznakaPolozaja(s: NastavnickoStanje): string {
   if (s.prikaz === 'PRIJAVA') return 'Prijava';
   if (s.prikaz === 'KRAJ') return 'Kraj';
-  return `Slajd ${s.indeks + 1}/${s.brojSlajdova}`;
+  const osnova = `Slajd ${s.indeks + 1}/${s.brojSlajdova}`;
+  return s.brojStavki > 0 ? `${osnova} · korak ${s.korak}/${s.brojStavki}` : osnova;
+}
+
+/** Isto, kratko za telefon: "Prijava", "Kraj", "12/48" ili "12/48 · 3/6". */
+export function oznakaPolozajaKratko(s: NastavnickoStanje): string {
+  if (s.prikaz === 'PRIJAVA') return 'Prijava';
+  if (s.prikaz === 'KRAJ') return 'Kraj';
+  const osnova = `${s.indeks + 1}/${s.brojSlajdova}`;
+  return s.brojStavki > 0 ? `${osnova} · ${s.korak}/${s.brojStavki}` : osnova;
+}
+
+export type SledeciKlik =
+  | { vrsta: 'KORAK'; slajd: SlajdDetails; indeks: number; korak: number; brojKoraka: number }
+  | { vrsta: 'SLAJD'; slajd: SlajdDetails; indeks: number }
+  | { vrsta: 'PITANJE'; radnja: 'OTVARA' | 'ZATVARA'; potom: SlajdDetails | null; indeksPotom: number }
+  | { vrsta: 'KRAJ' }
+  | { vrsta: 'NISTA' };
+
+/** Šta pokazuje sledeći `SLEDECI`: isti slajd na koraku k+1, sledeći slajd na koraku 0, radnja pitanja ili kraj. */
+export function sledeciKlik(s: NastavnickoStanje): SledeciKlik {
+  if (s.prikaz === 'KRAJ') return { vrsta: 'NISTA' };
+  const posle = (): SledeciKlik =>
+    s.sledeciSlajd ? { vrsta: 'SLAJD', slajd: s.sledeciSlajd, indeks: s.indeks + 1 } : { vrsta: 'KRAJ' };
+  if (s.prikaz === 'PRIJAVA') return posle();
+  const sl = s.trenutniSlajd;
+  if (sl?.tip === 'PITANJE') {
+    const faza = s.faza ?? 'CEKA';
+    if (faza !== 'ZATVORENO') {
+      return { vrsta: 'PITANJE', radnja: faza === 'CEKA' ? 'OTVARA' : 'ZATVARA', potom: s.sledeciSlajd, indeksPotom: s.indeks + 1 };
+    }
+    return posle();
+  }
+  if (sl && s.korak < s.brojStavki) {
+    return { vrsta: 'KORAK', slajd: sl, indeks: s.indeks, korak: s.korak + 1, brojKoraka: s.brojStavki };
+  }
+  return posle();
+}
+
+/** Naslov panela "Sledeće" za dati klik. */
+export function naslovSledeceg(k: SledeciKlik, brojSlajdova: number): string {
+  switch (k.vrsta) {
+    case 'KORAK': return `Sledeće · korak ${k.korak}/${k.brojKoraka}`;
+    case 'SLAJD': return `Sledeće · slajd ${k.indeks + 1}/${brojSlajdova}`;
+    case 'PITANJE': return k.radnja === 'OTVARA' ? 'Sledeći klik otvara pitanje' : 'Sledeći klik zatvara pitanje';
+    case 'KRAJ': return 'Sledeće · kraj prezentacije';
+    default: return 'Sledeće';
+  }
 }
 
 /** "7.10.2026." iz ISO datuma ili datuma-vremena; nepoznat oblik se vraća nepromenjen. */
