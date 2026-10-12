@@ -18,7 +18,7 @@ export const IKONE = [
   'hide_image', 'image', 'keyboard', 'last_page', 'leaderboard', 'linear_scale', 'lock', 'lock_open', 'pause',
   'person_remove', 'pin', 'play_arrow', 'qr_code', 'quiz', 'radio_button_checked', 'remove', 'replay', 'rule', 'sensors',
   'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer', 'layers',
-  'restart_alt',
+  'restart_alt', 'upload_file',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

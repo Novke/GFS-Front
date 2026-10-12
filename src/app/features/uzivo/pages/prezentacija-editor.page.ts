@@ -1,5 +1,5 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ErrorHandler, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -10,7 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { distinctUntilChanged, map } from 'rxjs';
+import { distinctUntilChanged, from, map, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
@@ -25,6 +25,7 @@ import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
@@ -157,6 +158,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
+              <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
+                      [disabled]="radi()" (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
             </div>
           </nav>
 
@@ -228,6 +231,8 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly dialog = inject(MatDialog);
   private readonly obavestenja = inject(NotificationStore);
   private readonly mrvice = inject(BreadcrumbService);
+  private readonly otvaracUvoza = inject(UvozPptxOtvarac);
+  private readonly greske = inject(ErrorHandler);
 
   protected readonly rute = UzivoPutanje;
   protected readonly tipovi = TIPOVI_PITANJA;
@@ -252,7 +257,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly animacijaPregleda = signal<{ kljuc: number; grupa: number } | null>(null);
   private brojacAnimacije = 0;
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
-  /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje). */
+  /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje, uvoz). */
   protected readonly radi = signal(false);
   protected readonly izabraniNiz = computed(() => {
     const s = this.store.izabrani();
@@ -437,6 +442,33 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
         },
         error: e => this.neuspeh(e, 'Brisanje nije uspelo.'),
       });
+    });
+  }
+
+  /**
+   * Uvoz iz PowerPointa (spec 7.7): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan
+   * dijalog sa izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store.
+   */
+  protected uveziIzPowerPointa(): void {
+    const p = this.store.prezentacija();
+    if (!p || this.radi()) return;
+    this.radi.set(true);
+    this.store.sacuvajSve().pipe(
+      switchMap(() => {
+        const s = this.store.izabrani();
+        return from(this.otvaracUvoza.otvori(this.dialog, {
+          prezentacijaId: p.id, brojSlajdova: this.store.slajdovi().length, izabraniId: s?.id ?? null, izabraniRb: s?.rb ?? null,
+        }));
+      }),
+      switchMap(zatvaranje => zatvaranje),
+    ).subscribe({
+      next: rezultat => rezultat && this.store.primeniUvoz(rezultat),
+      error: e => {
+        // `sacuvajSve` greši samo sa `NijeSacuvano`; ostalo je neuspelo učitavanje lenjog chunk-a (konzola + poruka)
+        if (!(e instanceof NijeSacuvano)) this.greske.handleError(e);
+        this.neuspeh(e, 'Dijalog uvoza nije učitan. Osveži stranicu i pokušaj ponovo.', 'Uvoz nije pokrenut');
+      },
+      complete: () => this.radi.set(false),
     });
   }
 

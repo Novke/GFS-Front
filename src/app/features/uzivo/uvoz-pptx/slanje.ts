@@ -97,6 +97,13 @@ export function velicinaTela(slajdovi: readonly UvezenSlajd[], posle: number | n
 /** Megabajti sa jednom decimalom, zaokruženo naviše (telo preko granice nikad ne piše "10,0 MB"). */
 const megabajta = (b: number) => (Math.ceil((b / MB) * 10) / 10).toFixed(1).replace('.', ',');
 
+/** Poruka za telo uvoza preko 10 MB (dijalog onemogućava "Uvezi" sa njom), `null` kad telo staje. */
+export function porukaVelicineTela(telo: number): string | null {
+  return telo > MAX_TELO_UVOZA
+    ? `Izabrani slajdovi su preveliki za jedan uvoz (${megabajta(telo)} MB, najviše 10 MB). Izaberi manji opseg.`
+    : null;
+}
+
 const bezTacke = (s: string) => s.replace(/[.\s]+$/, '');
 
 const NEBEZBEDNA_VEZA = 'Pregledač ne dozvoljava proveru slika na nebezbednoj vezi (http). Otvori aplikaciju preko https i pokušaj ponovo.';
@@ -242,10 +249,8 @@ export function posaljiUvoz(
   return defer(() => {
     const izabrani = izaberiSlajdove(r, izbor);
     if (izabrani.length === 0) throw new GreskaSlanja('Izabrani opseg nema nijedan slajd.');
-    const telo = velicinaTela(izabrani, izbor.posle);
-    if (telo > MAX_TELO_UVOZA) {
-      throw new GreskaSlanja(`Izabrani slajdovi su preveliki za jedan uvoz (${megabajta(telo)} MB, najviše 10 MB). Izaberi manji opseg.`);
-    }
+    const prevelik = porukaVelicineTela(velicinaTela(izabrani, izbor.posle));
+    if (prevelik) throw new GreskaSlanja(prevelik);
     return from(pripremi(r, izabrani, z)).pipe(
       switchMap((p) => posaljiSlike(p.slike, z, napredak).pipe(
         switchMap((idPoHesu) => {

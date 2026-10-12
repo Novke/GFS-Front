@@ -225,6 +225,31 @@ describe('EditorStore', () => {
     vi.restoreAllMocks();
   });
 
+  it('primeniUvoz: slajdovi po rb, izabran prvi uvezen; kasnija izmena postojećeg i dalje ide PUT-om na njegov id', saLaznimSatom(async () => {
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush(prezentacija([slajd(1, 1, 'A'), slajd(2, 2, 'B')]));
+    store.izaberi(1);
+    // odgovor servera namerno nije poređan po rb
+    store.primeniUvoz(prezentacija([slajd(2, 4, 'B'), slajd(6, 3, 'U2'), slajd(1, 1, 'A'), slajd(5, 2, 'U1')]));
+    expect(ids()).toEqual([1, 5, 6, 2]);
+    expect(store.slajdovi().map(s => s.rb)).toEqual([1, 2, 3, 4]);
+    expect(store.izabraniId()).toBe(5);
+    expect(store.prezentacija()!.brojSlajdova).toBe(4);
+    store.izmeniSlajd(1, info('A izmenjen'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/1');
+    expect(put.request.method).toBe('PUT');
+    put.flush(slajd(1, 1, 'A izmenjen'));
+    expect(ids()).toEqual([1, 5, 6, 2]);
+  }));
+
+  it('primeniUvoz bez novih slajdova zadržava izbor', () => {
+    ucitaj();
+    store.izaberi(12);
+    store.primeniUvoz(prezentacija([slajd(11, 1), slajd(12, 2), slajd(13, 3)]));
+    expect(store.izabraniId()).toBe(12);
+  });
+
   describe('sacuvajSve', () => {
     it('završava se tek kad PUT stigne', saLaznimSatom(async () => {
       ucitaj();

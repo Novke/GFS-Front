@@ -1,14 +1,16 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ErrorHandler } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { Router, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { NotificationStore } from '../../../core/state/notification.store';
-import { EditorStore } from '../data-access/editor.store';
+import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import { brojKoraka } from '../data-access/platno-koraci';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
@@ -238,5 +240,104 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(zahtev.request.method).toBe('PUT');
     expect(zahtev.request.body.tema).toBe('PAPIR');
     zahtev.flush({ ...prezentacija, tema: 'PAPIR' });
+  });
+});
+
+describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let store: InstanceType<typeof EditorStore>;
+  let http: HttpTestingController;
+  let otvori: ReturnType<typeof vi.fn>;
+  let poruka: ReturnType<typeof vi.spyOn>;
+  const posleUvoza: PrezentacijaDetails = {
+    ...prezentacija, brojSlajdova: 3,
+    slajdovi: [slajd(11, 1, 'Uvod'), slajd(12, 2, 'Drugi'), { ...slajd(30, 3, ''), tip: 'PLATNO', naslov: null, platno: platno() }],
+  };
+
+  beforeEach(() => {
+    otvori = vi.fn().mockResolvedValue(of(posleUvoza));
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: UvozPptxOtvarac, useValue: { otvori } },
+        { provide: ErrorHandler, useValue: { handleError: vi.fn() } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    poruka = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [slajd(11, 1, 'Uvod'), slajd(12, 2, 'Drugi')] });
+    store.izaberi(12);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  const dugmeUvoza = () => [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')]
+    .find(b => b.getAttribute('aria-label') === 'Uvezi iz PowerPointa') as HTMLButtonElement;
+
+  it('dugme "PowerPoint" (ime Uvezi iz PowerPointa) čuva sve, otvara uvoz sa izabranim slajdom i primenjuje rezultat', async () => {
+    const dugme = dugmeUvoza();
+    expect(dugme).toBeDefined();
+    expect(dugme.textContent?.trim()).toBe('PowerPoint');
+    expect(dugme.closest('.uz-ed-dodaj')).not.toBeNull();
+    const sacuvajSve = vi.spyOn(store, 'sacuvajSve');
+    const primeniUvoz = vi.spyOn(store, 'primeniUvoz');
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(sacuvajSve).toHaveBeenCalledTimes(1);
+    expect(otvori).toHaveBeenCalledTimes(1);
+    expect(otvori.mock.calls[0][1]).toEqual({ prezentacijaId: 1, brojSlajdova: 2, izabraniId: 12, izabraniRb: 2 });
+    expect(primeniUvoz).toHaveBeenCalledWith(posleUvoza);
+    expect(store.izabraniId()).toBe(30);
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+  });
+
+  it('uvoz čeka PUT nesačuvane izmene pre otvaranja dijaloga', saLaznimSatom(async () => {
+    store.izmeniSlajd(12, info('Izmenjen'));
+    dugmeUvoza().click();
+    const put = http.expectOne('api/slajdovi/12');
+    await isprazniMikrozadatke();
+    expect(otvori).not.toHaveBeenCalled();
+    put.flush(slajd(12, 2, 'Izmenjen'));
+    await isprazniMikrozadatke();
+    expect(otvori).toHaveBeenCalledTimes(1);
+    await pomeriSat(800);
+  }));
+
+  it('sacuvajSve ne uspe -> poruka "Uvoz nije pokrenut: …" i dijalog se ne otvara', async () => {
+    vi.spyOn(store, 'sacuvajSve').mockReturnValue(throwError(() => new NijeSacuvano('Slajd 2 nije potpun.')));
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(poruka).toHaveBeenCalledWith('Uvoz nije pokrenut: Slajd 2 nije potpun.');
+    expect(otvori).not.toHaveBeenCalled();
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+  });
+
+  it('dijalog zatvoren bez uvoza -> ništa se ne primenjuje', async () => {
+    otvori.mockResolvedValue(of(undefined));
+    const primeniUvoz = vi.spyOn(store, 'primeniUvoz');
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(primeniUvoz).not.toHaveBeenCalled();
+    expect(store.izabraniId()).toBe(12);
+  });
+
+  it('lenji chunk uvoza se ne učita -> poruka, bez sirove greške', async () => {
+    otvori.mockRejectedValue(new TypeError('Failed to fetch dynamically imported module'));
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(poruka).toHaveBeenCalledTimes(1);
+    expect(poruka.mock.calls[0][0]).toMatch(/^Uvoz nije pokrenut: /);
+    expect(poruka.mock.calls[0][0]).not.toContain('TypeError');
+    expect(TestBed.inject(ErrorHandler).handleError).toHaveBeenCalledWith(expect.any(TypeError));
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
   });
 });

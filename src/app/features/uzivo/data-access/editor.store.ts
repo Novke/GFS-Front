@@ -535,6 +535,27 @@ export const EditorStore = signalStore(
           });
       },
 
+      /**
+       * Rezultat uvoza iz PowerPointa (cela prezentacija posle `POST slajdovi/uvoz`): slajdovi po `rb`, izabran prvi slajd
+       * čiji id ranije nije postojao. Id-jevi postojećih slajdova se ne menjaju, pa lokalno stanje čuvanja (izmene, nacrti
+       * zamenjeni pravim id-jem) i dalje važi; slajd sa izmenom koja još nije na serveru zadržava lokalni sadržaj. Uvoz
+       * kreće tek posle `sacuvajSve`, pa nacrta nema. Odgovor za drugu prezentaciju (u međuvremenu učitanu) se odbacuje.
+       */
+      primeniUvoz(p: PrezentacijaDetails): void {
+        const sada = store.prezentacija();
+        if (!sada || p.id !== prezentacijaId) return;
+        const lokalni = new Map(store.slajdovi().map(s => [s.id, s]));
+        const slajdovi = [...p.slajdovi]
+          .sort((a, b) => a.rb - b.rb)
+          .map((s, i) => {
+            const l = lokalni.get(s.id);
+            return { ...(l && naCekanju(s.id) ? l : s), rb: i + 1 };
+          });
+        patchState(store, { prezentacija: { ...p, slajdovi } });
+        const prvi = slajdovi.find(s => !lokalni.has(s.id));
+        if (prvi) izaberi(prvi.id);
+      },
+
       /** Stabilan ključ slajda (isti pre i posle zamene id-ja nacrta) za `track`. */
       kljuc(id: number): number {
         return poreklo.get(id) ?? id;
