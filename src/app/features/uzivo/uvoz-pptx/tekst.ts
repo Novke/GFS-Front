@@ -146,22 +146,33 @@ const istaSenka = (a: Senka | null, b: Senka | null) => a === b || (!!a && !!b &
 
 const prazanTekst = (t: string) => t.trim() === '';
 
+/**
+ * Šema `a:buAutoNum@type` -> format platna; nepoznata šema -> najbliži format iste vrste (`priblizan`, pozivalac upozorava).
+ * Deli je i okvir formule (F9), koji numeraciju pasusa piše kao tekst ispred LaTeX-a.
+ */
+export function formatBroja(sema: string): { format: FormatBroja; priblizan: boolean } {
+  const tacan = Object.hasOwn(SEME_BROJEVA, sema) ? SEME_BROJEVA[sema] : null;
+  if (tacan) return { format: tacan, priblizan: false };
+  const format: FormatBroja = sema.startsWith('alphaLc') ? 'MALA_SLOVA_ZAGRADA'
+    : sema.startsWith('alphaUc') ? 'VELIKA_SLOVA_TACKA'
+      : sema.startsWith('romanUc') ? 'RIMSKI_VELIKI_TACKA'
+        : sema.startsWith('romanLc') ? 'RIMSKI_MALI_TACKA'
+          : 'ARAPSKI_TACKA';
+  return { format, priblizan: true };
+}
+
+/** `startAt` liste u opsegu koji server prima (1..9999). */
+export const pocetakListe = (n: number) => ogranici(Math.trunc(n), 1, 9999);
+
 function lista(pp: RazresenPPr, st: Stanje): Lista | null {
   const bu = pp.bu;
   if (bu.vrsta === 'nema') return null;
   const b = bu.boja ? bojaIz(bu.boja, st.kb) : null;
   const boja = b ? hex(b, st) : null;
   if (bu.vrsta === 'broj') {
-    let format = SEME_BROJEVA[bu.sema];
-    if (!format) {
-      format = bu.sema.startsWith('alphaLc') ? 'MALA_SLOVA_ZAGRADA'
-        : bu.sema.startsWith('alphaUc') ? 'VELIKA_SLOVA_TACKA'
-          : bu.sema.startsWith('romanUc') ? 'RIMSKI_VELIKI_TACKA'
-            : bu.sema.startsWith('romanLc') ? 'RIMSKI_MALI_TACKA'
-              : 'ARAPSKI_TACKA';
-      upozoriJednom(st, 'TEKST_PRIBLIZAN', `Numeracija liste '${bu.sema}' je prikazana približno.`);
-    }
-    return { vrsta: 'BROJ', znak: null, boja, format, pocetak: ogranici(Math.trunc(bu.pocetak), 1, 9999) };
+    const { format, priblizan } = formatBroja(bu.sema);
+    if (priblizan) upozoriJednom(st, 'TEKST_PRIBLIZAN', `Numeracija liste '${bu.sema}' je prikazana približno.`);
+    return { vrsta: 'BROJ', znak: null, boja, format, pocetak: pocetakListe(bu.pocetak) };
   }
   const znak = znakListe(bu.znak, bu.font, st);
   return znak === null ? null : { vrsta: 'ZNAK', znak, boja, format: null, pocetak: null };

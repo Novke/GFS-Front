@@ -10,7 +10,7 @@ import { brojAtr, dete, NS } from './xml';
  * Formati koje pregledač ne ume da dekodira (pa ni `slike.ts` da pretvori u PNG/JPEG): vektorski Office formati i TIFF/
  * JPEG XR. Takva slika se preskače umesto da obori slanje celog uvoza.
  */
-const NEPODRZANI_FORMATI = /\.(emf|wmf|emz|wmz|tif|tiff|wdp|jxr)$/i;
+export const NEPODRZANI_FORMATI = /\.(emf|wmf|emz|wmz|tif|tiff|wdp|jxr)$/i;
 const BELA = '#FFFFFF';
 
 type IshodMedija = { medijId: string } | { razlog: string };
