@@ -877,3 +877,14 @@ span.uz-ed-napomena {
     gap: 2px;
   }
 }
+
+.uz-ed-dijalog .uz-ed-fajl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.uz-ed-fajl-ulaz {
+  display: none;
+}
