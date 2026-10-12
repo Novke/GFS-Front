@@ -5,7 +5,8 @@
 //    plus `latex` FORMULE;
 //  - tačke: po CRTEZ sloju, zbir `tacke.length / 2` preko poteza (parovi x, y);
 //  - bajtovi: UTF-8 dužina serijalizacije koju server pravi posle normalizacije (vidi `bajtovaPlatna`).
-import type { OblikSloj, Pasus, Platno, Sloj } from '../data-access/platno.models';
+import type { Animacija, Ivica, Lista, OblikSloj, Pasus, Platno, Sloj, Tacka } from '../data-access/platno.models';
+import { FONTOVI_PLATNA } from '../ui/platno-fontovi';
 import type { KodUpozorenja } from './izvestaj';
 import { zaokruziKaoServer } from './tipovi';
 
@@ -117,4 +118,227 @@ export function uklopiUGranice(p: Platno, upozori: (kod: KodUpozorenja, poruka: 
     if (bajtovaPlatna(dokument) > GRANICE.bajtova) return { greska: 'Slajd je prevelik (više od 1 MB).' };
   }
   return dokument;
+}
+
+// ---------------------------------------------------------------------------------------------- ogledalo PlatnoPP
+
+const FONTOVI_SERVERA: ReadonlySet<string> = new Set(FONTOVI_PLATNA.map((f) => f.naziv));
+const ID_SERVERA = /^[A-Za-z0-9_-]{1,12}$/;
+const BOJA_SERVERA = /^#[0-9A-F]{6}$/;
+const MAX_TABELA = 30;
+const MAX_TABULATORA = 32;
+const MAX_LATEX = 5000;
+const MAX_NAZIV = 60;
+
+/** Odbijanje kao na serveru (`SystemException` 400); poruka je ista kao serverova. */
+class Odbijeno extends Error {}
+function odbij(poruka: string): never {
+  throw new Odbijeno(poruka);
+}
+
+/** `PlatnoPP.r`: `null`/`undefined` ostaje, inače zaokruženo na 2 decimale kao server. */
+const r = (n: number | null | undefined) => (n == null ? n : zaokruziKaoServer(n));
+/** `min <= v <= max` posle zaokruživanja; `null`/NaN nisu u opsegu. */
+const u = (v: number | null | undefined, min: number, max: number) => {
+  const z = r(v);
+  return z != null && z >= min && z <= max;
+};
+/** `0 < v <= max` posle zaokruživanja. */
+const pozitivno = (v: number | null | undefined, max: number) => {
+  const z = r(v);
+  return z != null && z > 0 && z <= max;
+};
+
+function boja(b: string | null | undefined): void {
+  if (b == null || !BOJA_SERVERA.test(b.trim().toUpperCase())) odbij('Boja nije ispravna (#RRGGBB).');
+}
+const bojaMoze = (b: string | null | undefined) => b != null && boja(b);
+
+function ivica(i: Ivica | null | undefined): void {
+  if (i == null) return;
+  if (!u(i.debljina, 0.25, 20)) odbij('Debljina ivice mora biti od 0,25 do 20.');
+  boja(i.boja);
+}
+
+function proveriListu(l: Lista | null | undefined): void {
+  if (l == null) return;
+  const ispravna = l.vrsta === 'ZNAK'
+    ? l.znak != null && l.znak !== '' && codePointa(l.znak) <= 2
+    : l.vrsta === 'BROJ' && l.format != null && (l.pocetak ?? 1) >= 1 && (l.pocetak ?? 1) <= 9999;
+  if (!ispravna) odbij('Lista nije ispravna.');
+  bojaMoze(l.boja);
+}
+
+function pasusi(niz: readonly Pasus[] | null | undefined, znakova: { n: number }): void {
+  for (const p of niz ?? []) {
+    if (p == null || p.poravnanje == null || p.nivo == null || p.nivo < 0 || p.nivo > 8
+      || !u(p.proredProcenat ?? 100, 50, 300) || !u(p.razmakPre ?? 0, 0, 1000) || !u(p.razmakPosle ?? 0, 0, 1000)
+      || !u(p.uvlacenje?.levo ?? 0, -1000, 1000) || !u(p.uvlacenje?.prviRed ?? 0, -1000, 1000)
+      || (p.tabulatori ?? []).length > MAX_TABULATORA || p.delovi == null) {
+      odbij('Pasus nije ispravan.');
+    }
+    for (const t of p.tabulatori ?? []) {
+      if (t == null || t.poravnanje == null || !u(t.poz, 0, 2880)) odbij('Pasus nije ispravan.');
+    }
+    proveriListu(p.lista);
+    for (const d of p.delovi) {
+      if (d == null) odbij('Pasus nije ispravan.');
+      const font = d.font ?? 'Carlito';
+      if (!FONTOVI_SERVERA.has(font)) odbij(`Font nije podržan: ${font}.`);
+      if (!u(d.velicina ?? 18, 1, 400)) odbij('Veličina slova mora biti od 1 do 400.');
+      boja(d.boja ?? '#000000');
+      znakova.n += codePointa(d.tekst ?? '');
+    }
+  }
+}
+
+const jeLinija = (o: OblikSloj) => o.oblik === 'LINIJA' || o.oblik === 'STRELICA' || o.oblik === 'DVOSTRUKA_STRELICA';
+const tackaU = (t: Tacka | null | undefined) => t != null && u(t.x, -2880, 2880) && u(t.y, -2880, 2880);
+
+function sloj(s: Sloj, znakova: { n: number }): void {
+  if (s.naziv != null && codePointa(s.naziv) > MAX_NAZIV) odbij('Naziv sloja može imati najviše 60 znakova.');
+  if (!u(s.x, -960, 1920) || !u(s.y, -960, 1920) || !pozitivno(s.sirina, 2880) || !pozitivno(s.visina, 2880)) {
+    odbij('Položaj ili veličina sloja nije ispravna.');
+  }
+  if (!u(s.rotacija ?? 0, -360, 360) || !u(s.providnost ?? 1, 0, 1)) odbij('Rotacija ili providnost sloja nije ispravna.');
+  if (s.senka != null) {
+    const z = s.senka;
+    if (!u(z.pomerajX, -100, 100) || !u(z.pomerajY, -100, 100) || !u(z.zamucenje, 0, 100)) odbij('Senka nije ispravna.');
+    boja(z.boja);
+  }
+  switch (s.tip) {
+    case 'TEKST': {
+      const o = s.okvir;
+      if (o == null || !u(o.unutraLevo, 0, 200) || !u(o.unutraGore, 0, 200) || !u(o.unutraDesno, 0, 200)
+        || !u(o.unutraDole, 0, 200) || !u(o.skala, 0.25, 1) || !u(o.skalaProreda, 0.5, 1) || o.sidro == null || o.prelom == null) {
+        odbij('Okvir teksta nije ispravan.');
+      }
+      pasusi(s.pasusi, znakova);
+      bojaMoze(s.popuna);
+      ivica(s.ivica);
+      return;
+    }
+    case 'SLIKA': {
+      if (s.medijId == null || s.medijId.trim() === '') odbij('Sloj slike mora imati sliku.');
+      const c = s.isecak;
+      const [l, g, d, o] = [r(c?.levo ?? 0)!, r(c?.gore ?? 0)!, r(c?.desno ?? 0)!, r(c?.dole ?? 0)!];
+      if (!u(l, 0, 1) || !u(g, 0, 1) || !u(d, 0, 1) || !u(o, 0, 1) || l + d >= 1 || g + o >= 1) odbij('Isečak slike nije ispravan.');
+      return;
+    }
+    case 'OBLIK': {
+      if (s.oblik == null) odbij('Oblik sloja nije ispravan.');
+      bojaMoze(s.popuna);
+      ivica(s.ivica);
+      if (jeLinija(s)) {
+        const y = r(r(s.visina)! / 2);
+        const od = s.od ?? { x: 0, y: y! };
+        const ka = s.do ?? { x: r(s.sirina)!, y: y! };
+        if (!tackaU(od) || !tackaU(ka)) odbij('Linija mora imati početak i kraj.');
+      }
+      return;
+    }
+    case 'TABELA': {
+      const { kolone, redovi, celije } = s;
+      if (kolone == null || redovi == null || kolone.length === 0 || redovi.length === 0 || kolone.length > MAX_TABELA
+        || redovi.length > MAX_TABELA || !kolone.every((k) => pozitivno(k, 2880)) || !redovi.every((k) => pozitivno(k, 2880))
+        || celije == null || celije.length !== redovi.length) {
+        odbij('Tabela nije ispravna.');
+      }
+      celije.forEach((red, ri) => {
+        if (red == null || red.length !== kolone.length) odbij('Tabela nije ispravna.');
+        red.forEach((c, k) => {
+          if (c == null || c.spojDesno == null || c.spojDole == null || c.spojDesno < 0 || c.spojDole < 0
+            || c.spojDesno >= kolone.length - k || c.spojDole >= redovi.length - ri || c.sidro == null || c.pokrivena == null
+            || c.ivice == null) {
+            odbij('Tabela nije ispravna.');
+          }
+          pasusi(c.pasusi, znakova);
+          bojaMoze(c.popuna);
+          ivica(c.ivice.gore);
+          ivica(c.ivice.dole);
+          ivica(c.ivice.levo);
+          ivica(c.ivice.desno);
+        });
+      });
+      return;
+    }
+    case 'FORMULA': {
+      const n = s.latex == null ? 0 : codePointa(s.latex);
+      if (n === 0 || n > MAX_LATEX || !u(s.velicina, 1, 400)) odbij('Formula nije ispravna.');
+      boja(s.boja);
+      znakova.n += n;
+      return;
+    }
+    case 'CRTEZ': {
+      if (s.medijId == null || s.medijId.trim() === '') odbij('Sloj slike mora imati sliku.');
+      let tacaka = 0;
+      for (const z of s.potezi ?? []) {
+        if (z == null || z.tacke == null || z.tacke.length % 2 !== 0 || !u(z.debljina, 0.25, 20)) odbij('Crtež nije ispravan.');
+        if (!z.tacke.every((d) => d != null && Number.isFinite(d))) odbij('Crtež nije ispravan.');
+        tacaka += z.tacke.length / 2;
+        if (tacaka > GRANICE.tacakaPoCrtezu) odbij('Crtež nije ispravan.');
+        boja(z.boja);
+      }
+    }
+  }
+}
+
+function animacija(a: Animacija, slojevi: readonly Sloj[]): void {
+  const cilj = slojevi.find((s) => s.id === a.slojId);
+  if (!cilj) odbij('Animacija cilja sloj koji ne postoji.');
+  if (a.pasus != null && (cilj?.tip !== 'TEKST' || a.pasus < 0 || a.pasus >= (cilj.pasusi ?? []).length)) {
+    odbij('Animacija cilja pasus koji ne postoji.');
+  }
+  if (a.vrsta == null || a.efekat == null || a.okidac == null) odbij('Animacija nije ispravna.');
+  const trajanje = a.efekat === 'POJAVI' ? 0 : a.trajanjeMs ?? 500;
+  const kasnjenje = a.kasnjenjeMs ?? 0;
+  if (trajanje < 0 || trajanje > 10_000 || kasnjenje < 0 || kasnjenje > 10_000) odbij('Trajanje i kašnjenje animacije su od 0 do 10000 ms.');
+  // `normalizuj` daje podrazumevani smer usmerenim efektima, a ostalima ga briše.
+  const smer = a.smer ?? (a.efekat === 'ULET' ? 'DOLE' : a.efekat === 'PODELI' ? 'VERTIKALNO' : 'LEVO');
+  const ok = a.efekat === 'ULET' || a.efekat === 'BRISANJE' || a.efekat === 'ISCRTAJ'
+    ? smer === 'LEVO' || smer === 'DESNO' || smer === 'GORE' || smer === 'DOLE'
+    : a.efekat === 'PODELI' ? smer === 'HORIZONTALNO' || smer === 'VERTIKALNO' : true;
+  if (!ok) odbij('Smer animacije nije ispravan.');
+}
+
+/**
+ * Ogledalo serverske provere dokumenta (`PlatnoPP.proveri(normalizuj(p))` pa `proveriVelicinu`): poruka prvog prekršenog
+ * pravila, ista kao serverova, ili `null` kad bi server dokument primio. Brojevi se proveravaju posle zaokruživanja kao na
+ * serveru, boje posle prevođenja u velika slova, podrazumevane vrednosti `normalizuj` važe za polja koja nedostaju.
+ * Uvoz je poziva za svaki slajd pre slanja (`pretvoriPptx`): odbijen slajd je greška tog slajda, a ne 400 za ceo uvoz.
+ */
+export function proveriKaoServer(p: Platno): string | null {
+  try {
+    if (p == null) odbij('Platno slajd mora imati dokument platna.');
+    if (p.verzija !== 1) odbij('Nepodržana verzija platna.');
+    if (p.pozadina == null) odbij('Boja nije ispravna (#RRGGBB).');
+    boja(p.pozadina.boja);
+    const slojevi = p.slojevi ?? [];
+    const animacije = p.animacije ?? [];
+    if (slojevi.length > GRANICE.slojeva) odbij('Slajd može imati najviše 300 slojeva.');
+    if (animacije.length > GRANICE.animacija) odbij('Slajd može imati najviše 400 animacija.');
+    const idjevi = new Set<string>();
+    const id = (x: string | null | undefined) => {
+      if (x == null || !ID_SERVERA.test(x)) odbij('Id sloja ili animacije nije ispravan.');
+      if (idjevi.has(x!)) odbij('Id-jevi slojeva i animacija moraju biti jedinstveni.');
+      idjevi.add(x!);
+    };
+    const znakova = { n: 0 };
+    for (const s of slojevi) {
+      if (s == null) odbij('Id sloja ili animacije nije ispravan.');
+      id(s.id);
+      sloj(s, znakova);
+    }
+    for (const a of animacije) {
+      if (a == null) odbij('Id sloja ili animacije nije ispravan.');
+      id(a.id);
+    }
+    if (znakova.n > GRANICE.znakova) odbij('Slajd može imati najviše 50000 znakova teksta.');
+    for (const a of animacije) animacija(a, slojevi);
+    if (bajtovaPlatna(p) > GRANICE.bajtova) odbij('Dokument platna je prevelik (najviše 1 MB).');
+    return null;
+  } catch (e) {
+    if (e instanceof Odbijeno) return e.message;
+    throw e;
+  }
 }

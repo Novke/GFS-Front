@@ -1,5 +1,5 @@
 import type { Animacija, CrtezSloj, Deo, FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj } from '../data-access/platno.models';
-import { bajtovaPlatna, GRANICE, uklopiUGranice } from './granice';
+import { bajtovaPlatna, GRANICE, proveriKaoServer, uklopiUGranice } from './granice';
 import type { KodUpozorenja } from './izvestaj';
 import { zaokruziKaoServer } from './tipovi';
 
@@ -190,5 +190,63 @@ describe('bajtovaPlatna: oblik koji server vidi', () => {
     const preko = veliki(GRANICE.bajtova + 1);
     expect(bajtovaPlatna(preko)).toBe(GRANICE.bajtova + 1);
     expect(uklopi(preko).r).toEqual({ greska: 'Slajd je prevelik (više od 1 MB).' });
+  });
+});
+
+describe('proveriKaoServer (ogledalo PlatnoPP.proveri posle normalizuj)', () => {
+  const formula = (id: string, latex: string): FormulaSloj => ({
+    ...osnova(id), tip: 'FORMULA', latex, boja: '#000000', velicina: 18, poravnanje: 'LEVO', slikaIzvora: null,
+  });
+  const linija = (o: Partial<OblikSloj>): OblikSloj => ({
+    ...osnova('s1'), tip: 'OBLIK', oblik: 'LINIJA', popuna: null, ivica: null, od: null, do: null, ...o,
+  });
+  const tabela = (spojDesno: number): TabelaSloj => ({
+    ...osnova('s1'), tip: 'TABELA', kolone: [50, 50], redovi: [50],
+    celije: [[0, 1].map((k) => ({
+      pasusi: [], popuna: null, ivice: { gore: null, dole: null, levo: null, desno: null }, spojDesno: k === 0 ? spojDesno : 0,
+      spojDole: 0, pokrivena: k === 1 && spojDesno === 1, sidro: 'VRH' as const,
+    }))],
+  });
+  const animacija = (o: Partial<Animacija>): Animacija => ({ ...animacije(1)[0], slojId: 's0', ...o });
+
+  it('ispravan dokument prolazi (i boje malim slovima: server ih prevodi u velika)', () => {
+    expect(proveriKaoServer(platno([tekst('s0', 'a')], [animacija({ pasus: 0 })]))).toBeNull();
+    expect(proveriKaoServer({ ...platno([]), pozadina: { boja: '#ffffff', medijId: null } })).toBeNull();
+  });
+
+  it.each<[string, Platno, string]>([
+    ['id duži od 12 znakova', platno([tekst('s1234567890ab', 'a')]), 'Id sloja ili animacije nije ispravan.'],
+    ['id sa nedozvoljenim znakom', platno([tekst('s 1', 'a')]), 'Id sloja ili animacije nije ispravan.'],
+    ['isti id sloja i animacije', platno([tekst('a0', 'a')], [animacija({ slojId: 'a0' })]), 'Id-jevi slojeva i animacija moraju biti jedinstveni.'],
+    ['font van kataloga', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), delovi: [{ ...deo('a'), font: 'Calibri' }] }] }]), 'Font nije podržan: Calibri.'],
+    ['boja bez #', platno([{ ...tekst('s0', 'a'), popuna: 'FF0000' }]), 'Boja nije ispravna (#RRGGBB).'],
+    ['x 1920,005 se zaokružuje na 1920,01', platno([{ ...tekst('s0', 'a'), x: 1920.005 }]), 'Položaj ili veličina sloja nije ispravna.'],
+    ['visina 0,004 se zaokružuje na 0', platno([{ ...tekst('s0', 'a'), visina: 0.004 }]), 'Položaj ili veličina sloja nije ispravna.'],
+    ['širina preko 2880', platno([{ ...tekst('s0', 'a'), sirina: 2880.01 }]), 'Položaj ili veličina sloja nije ispravna.'],
+    ['animacija cilja nepostojeći sloj', platno([tekst('s0', 'a')], [animacija({ slojId: 's9' })]), 'Animacija cilja sloj koji ne postoji.'],
+    ['animacija cilja nepostojeći pasus', platno([tekst('s0', 'a')], [animacija({ pasus: 1 })]), 'Animacija cilja pasus koji ne postoji.'],
+    ['pasus na sloju koji nije TEKST', platno([formula('s0', 'x')], [animacija({ pasus: 0 })]), 'Animacija cilja pasus koji ne postoji.'],
+    ['smer koji efekat ne prima', platno([tekst('s0', 'a')], [animacija({ efekat: 'PODELI', smer: 'LEVO' })]), 'Smer animacije nije ispravan.'],
+    ['kašnjenje preko 10000 ms', platno([tekst('s0', 'a')], [animacija({ kasnjenjeMs: 10001 })]), 'Trajanje i kašnjenje animacije su od 0 do 10000 ms.'],
+    ['prazna formula', platno([formula('s0', '')]), 'Formula nije ispravna.'],
+    ['spajanje preko ivice tabele', platno([tabela(2)]), 'Tabela nije ispravna.'],
+    ['linija sa krajem van ±2880', platno([linija({ do: { x: 2881, y: 0 } })]), 'Linija mora imati početak i kraj.'],
+    ['crtež sa neparnim brojem koordinata', platno([{ ...crtez('s0', 1), potezi: [{ boja: '#000000', debljina: 1, tacke: [1, 2, 3] }] }]), 'Crtež nije ispravan.'],
+    ['isečak slike 0,5 + 0,5', platno([{ ...osnova('s0'), tip: 'SLIKA', medijId: 'm', isecak: { levo: 0.495, gore: 0, desno: 0.5, dole: 0 } }]), 'Isečak slike nije ispravan.'],
+  ])('%s', (_, p, poruka) => {
+    expect(proveriKaoServer(p)).toBe(poruka);
+  });
+
+  it('podrazumevani smer i trajanje POJAVI se ne odbijaju; tabela sa ispravnim spajanjem i linija bez krajeva prolaze', () => {
+    expect(proveriKaoServer(platno([tekst('s0', 'a')], [animacija({ efekat: 'ULET', smer: null }), { ...animacija({ efekat: 'POJAVI' }), id: 'a1', trajanjeMs: 99999 }]))).toBeNull();
+    expect(proveriKaoServer(platno([tabela(1)]))).toBeNull();
+    expect(proveriKaoServer(platno([linija({})]))).toBeNull();
+    expect(proveriKaoServer(platno([{ ...tekst('s0', 'a'), x: 1920.004, y: -960.004 }]))).toBeNull();   // zaokružuje se pre provere
+  });
+
+  it('dokument veći od 1 MB', () => {
+    const p = platno(Array.from({ length: 5 }, (_, i) => crtez(`s${i}`, 19_999)));
+    expect(bajtovaPlatna(p)).toBeGreaterThan(GRANICE.bajtova);
+    expect(proveriKaoServer(p)).toBe('Dokument platna je prevelik (najviše 1 MB).');
   });
 });
