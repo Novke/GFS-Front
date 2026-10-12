@@ -353,6 +353,28 @@ describe('posaljiUvoz', () => {
     }
   });
 
+  it('nepoznatIshod: samo kad server možda jeste upisao uvoz (veza, 5xx bez razloga, nepročitan 2xx)', async () => {
+    const slucajevi: [unknown, boolean][] = [
+      [greska(0), true],
+      [greska(502), true],
+      [greska(504), true],
+      [new HttpErrorResponse({ status: 201, error: { error: new SyntaxError('JSON'), text: '<html>' } }), true],
+      [greska(500, 'Sistemska greška.'), false],
+      [greska(400, 'Slajd 1: Font nije podržan: Y.'), false],
+      [greska(413), false],
+      [greska(429), false],
+      [new TypeError('x'), false],
+    ];
+    for (const [e, nepoznat] of slucajevi) {
+      const api = new LazniApi();
+      const { ishod } = pokreni(rezultat([slajd(1, [tekst('s1', 'a')])]), { od: 1, do: 1, posle: null }, zavisnosti(api).z);
+      await tik();
+      api.uvozi[0].odgovor.error(e);
+      expect(ishod.greska).toBeInstanceOf(GreskaSlanja);
+      expect((ishod.greska as GreskaSlanja).nepoznatIshod, String(e)).toBe(nepoznat);
+    }
+  });
+
   it('napredak: slike 0/2, 1/2, 2/2, pa slajdovi', async () => {
     const api = new LazniApi();
     const r = rezultat([slajd(1, [slika('s1', 'gen:1'), crtez('s2', 'gen:2')], ['gen:1', 'gen:2'])], { 'gen:1': razlicit(1), 'gen:2': razlicit(2) });

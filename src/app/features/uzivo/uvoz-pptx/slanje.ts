@@ -18,9 +18,17 @@ export const MAX_TELO_UVOZA = 10 * 1024 * 1024;
 /** Granica slike na serveru (`spring.servlet.multipart.max-file-size`). */
 export const MAX_SLIKA = 10 * 1024 * 1024;
 
-/** Greška slanja; poruka je za korisnika. */
+/**
+ * Greška slanja; poruka je za korisnika. `nepoznatIshod`: server je možda ipak upisao uvoz (veza prekinuta, 5xx bez
+ * razloga, nepročitan 2xx odgovor), pa se uvoz ne sme ponoviti ni prezentacija obrisati pre nego što se stanje pročita.
+ */
 export class GreskaSlanja extends Error {
   override readonly name = 'GreskaSlanja';
+  readonly nepoznatIshod: boolean;
+  constructor(poruka: string, opcije: { nepoznatIshod?: boolean } = {}) {
+    super(poruka);
+    this.nepoznatIshod = opcije.nepoznatIshod ?? false;
+  }
 }
 
 /** Deo `PrezentacijeApi` koji slanje koristi (u testovima lažan). */
@@ -222,14 +230,14 @@ const porukaStatusa = (e: unknown) => (e instanceof HttpErrorResponse ? `server 
  */
 function greskaUvoza(e: unknown, izabrani: readonly UvezenSlajd[]): GreskaSlanja {
   if (!(e instanceof HttpErrorResponse)) return e instanceof GreskaSlanja ? e : new GreskaSlanja('Slajdovi nisu uvezeni: neočekivana greška.');
-  if (e.status >= 200 && e.status < 300) return new GreskaSlanja(NEPROCITAN_ODGOVOR);
+  if (e.status >= 200 && e.status < 300) return new GreskaSlanja(NEPROCITAN_ODGOVOR, { nepoznatIshod: true });
   const reason = e.status === 0 ? '' : razlogGreske(e, '');
   const m = /^Slajd (\d+): ([\s\S]*)$/.exec(reason);
   const s = m ? izabrani[Number(m[1]) - 1] : undefined;
   if (m && s) return new GreskaSlanja(`PowerPoint slajd ${s.indeks}: ${m[2]}`);
   if (e.status === 413) return new GreskaSlanja(reason || PREVELIK_UVOZ);
   if (e.status === 429) return new GreskaSlanja(PREVISE_ZAHTEVA);
-  if (!reason && (e.status === 0 || e.status >= 500)) return new GreskaSlanja(PREKINUTA_VEZA);
+  if (!reason && (e.status === 0 || e.status >= 500)) return new GreskaSlanja(PREKINUTA_VEZA, { nepoznatIshod: true });
   if (e.status >= 500) return new GreskaSlanja(`Slajdovi nisu uvezeni: ${reason}`);
   return new GreskaSlanja(reason || `Slajdovi nisu uvezeni (greška ${e.status}).`);
 }

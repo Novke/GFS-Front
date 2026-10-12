@@ -24,6 +24,7 @@ import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { MAX_SLAJDOVA } from '../data-access/slajd-pravila';
 import type { PrezentacijaDetails } from '../data-access/uzivo.models';
 import { GreskaUvoza, proveriImeFajla } from './ime-fajla';
+import { GRANICE_PAKETA } from './paket';
 import { izvestajKaoTekst, praznaStatistika, saberi, type Statistika, type Upozorenje } from './izvestaj';
 import {
   GreskaSlanja, izaberiSlajdove, porukaVelicineTela, posaljiUvoz, velicinaTela, type IzborUvoza, type Napredak,
@@ -32,6 +33,14 @@ import { pretvoriPptx, type RezultatUvoza, type UvezenSlajd } from './uvoz';
 
 /** Host atribut `data-oznaka` dijaloga: niz ostaje u lenjom chunk-u (e2e proverava da ga glavni bundle nema). */
 export const OZNAKA_UVOZA = 'gfs-uvoz-pptx';
+
+/**
+ * Ishod zatvaranja kad je slanje imalo nepoznat ishod (server je možda upisao slajdove): pozivalac ponovo čita
+ * prezentaciju (editor) ili listu (nova prezentacija). Isti niz je u `pages/uvoz-pptx-otvarac.ts` (bez uvoza ovog fajla).
+ */
+export const OSVEZI_PREZENTACIJU = 'osvezi';
+/** Cela prezentacija posle uvoza, `OSVEZI_PREZENTACIJU`, ili `undefined` (otkazano, greška bez upisa). */
+export type IshodUvoza = PrezentacijaDetails | typeof OSVEZI_PREZENTACIJU | undefined;
 
 export interface UvozPptxPodaci {
   prezentacijaId: number;
@@ -47,12 +56,14 @@ export interface UvozPptxPodaci {
 }
 
 /**
- * Otvara dijalog uvoza; emituje celu prezentaciju posle uvoza ili `undefined` (otkazano, greška). Dijalog se ne zatvara
- * klikom van njega ni navigacijom pregledača: Escape i navigacija idu kroz isti put kao "Otkaži" (nova prezentacija se
- * briše), a tokom slanja ih dijalog ignoriše, pa se slanje nikad ne prekida usred `POST slajdovi/uvoz`.
+ * Otvara dijalog uvoza; emituje {@link IshodUvoza}. `disableClose` je uvek uključen (klik van dijaloga ne gubi analizu), a
+ * Escape ide kroz isti put kao dugmad stanja: pre slanja "Otkaži" (nova prezentacija se briše), tokom slanja ništa, u
+ * izveštaju i grešci "Zatvori". `closeOnNavigation` CDK čita samo pri otvaranju, pa je isključen; "nazad" u pregledaču
+ * (`popstate`) dijalog obrađuje sam kao Escape, a tokom slanja ga ignoriše, pa se slanje nikad ne prekida usred
+ * `POST slajdovi/uvoz`.
  */
-export function otvoriUvozPptx(dialog: MatDialog, podaci: UvozPptxPodaci): Observable<PrezentacijaDetails | undefined> {
-  return dialog.open<UvozPptxDialog, UvozPptxPodaci, PrezentacijaDetails>(UvozPptxDialog, {
+export function otvoriUvozPptx(dialog: MatDialog, podaci: UvozPptxPodaci): Observable<IshodUvoza> {
+  return dialog.open<UvozPptxDialog, UvozPptxPodaci, Exclude<IshodUvoza, undefined>>(UvozPptxDialog, {
     data: podaci, width: '640px', maxWidth: '95vw', disableClose: true, closeOnNavigation: false,
     autoFocus: 'first-tabbable',
   }).afterClosed();
@@ -66,6 +77,8 @@ const PRVIH = 20;
 const OTKAZANO = 'Uvoz je otkazan; nijedan slajd nije dodat.';
 const NEOCEKIVANO_CITANJE = 'Fajl nije pročitan zbog neočekivane greške. Proveri da li se otvara u PowerPointu i pokušaj ponovo.';
 const NEOCEKIVANO_SLANJE = 'Uvoz nije uspeo zbog neočekivane greške. Osveži prezentaciju pre novog pokušaja.';
+const PREVELIK_FAJL = 'Fajl je veći od 500 MB. U PowerPointu komprimuj medije (Datoteka > Informacije) ili ga podeli, pa uvezi ponovo.';
+const NEPOZNAT_ISHOD_NOVA = 'Server nije potvrdio uvoz. Slajdovi su možda ipak dodati u novu prezentaciju: proveri listu prezentacija pre novog pokušaja.';
 
 const slajdova = (n: number) => sRecju(n, 'slajd', 'slajda', 'slajdova');
 const animacija = (n: number) => sRecju(n, 'animacija', 'animacije', 'animacija');
@@ -101,7 +114,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
   host: { 'data-oznaka': OZNAKA_UVOZA, class: 'uz-uv' },
   template: `
     <h2 mat-dialog-title>Uvoz iz PowerPointa</h2>
-    <mat-dialog-content class="uz-uv-telo" [attr.aria-busy]="faza() === 'analiza' || faza() === 'slanje'">
+    <mat-dialog-content class="uz-uv-telo">
       @switch (faza()) {
         @case ('izbor') {
           <div class="uz-uv-izbor" data-faza="izbor">
@@ -133,7 +146,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
               }
               @if (stavkePregleda().length) {
                 <section class="uz-uv-odeljak" aria-labelledby="uz-uv-napomene">
-                  <h3 class="uz-uv-naslov" id="uz-uv-napomene">Greške i upozorenja ({{ stavkePregleda().length }})</h3>
+                  <h3 class="uz-uv-naslov" id="uz-uv-napomene">{{ naslovListe(stavkePregleda()) }}</h3>
                   <ul class="uz-uv-lista">
                     @for (s of stavkePregleda().slice(0, prvih); track s.kljuc) {
                       <li class="uz-uv-stavka" [class.uz-uv-stavka--greska]="s.greska">
@@ -157,12 +170,12 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
                   </mat-radio-group>
                   @if (!svi()) {
                     <div class="uz-uv-opseg">
-                      <mat-form-field>
+                      <mat-form-field subscriptSizing="dynamic">
                         <mat-label>Od</mat-label>
                         <input matInput type="number" aria-label="Od slajda" [min]="granice().od" [max]="granice().do" step="1"
                                [value]="od()" (input)="od.set(broj(poljeOd))" #poljeOd>
                       </mat-form-field>
-                      <mat-form-field>
+                      <mat-form-field subscriptSizing="dynamic">
                         <mat-label>Do</mat-label>
                         <input matInput type="number" aria-label="Do slajda" [min]="granice().od" [max]="granice().do" step="1"
                                [value]="do()" (input)="do.set(broj(poljeDo))" #poljeDo>
@@ -215,7 +228,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
               <p>Slojevi: {{ iz.slojevi }} · Animacije: {{ iz.animacije }} (koraci: {{ iz.koraci }}) · Beleške: {{ iz.beleske }}</p>
               @if (iz.stavke.length) {
                 <section class="uz-uv-odeljak" aria-labelledby="uz-uv-upozorenja">
-                  <h3 class="uz-uv-naslov" id="uz-uv-upozorenja">Upozorenja ({{ iz.stavke.length }})</h3>
+                  <h3 class="uz-uv-naslov" id="uz-uv-upozorenja">{{ naslovListe(iz.stavke) }}</h3>
                   <ul class="uz-uv-lista">
                     @for (s of iz.stavke; track s.kljuc) {
                       <li class="uz-uv-stavka" [class.uz-uv-stavka--greska]="s.greska">
@@ -241,7 +254,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
         @case ('greska') {
           @if (greska(); as g) {
             <div class="uz-uv-greska" data-faza="greska">
-              <p class="uz-uv-poruka" role="alert" tabindex="-1" data-fokus>
+              <p class="uz-uv-poruka" role="alert">
                 <mat-icon aria-hidden="true" svgIcon="error" />
                 <span>{{ g.poruka }}</span>
               </p>
@@ -268,12 +281,13 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
           <button mat-flat-button type="button" (click)="zatvori()">{{ data.nova ? 'Otvori prezentaciju' : 'Zatvori' }}</button>
         }
         @case ('greska') {
+          <!-- poruka je role="alert" (najavljuje se sama); fokus ide na prvu akciju -->
           @if (greska()?.ponovo === 'pregled') {
-            <button mat-button type="button" (click)="nazadNaPregled()">Pokušaj ponovo</button>
+            <button mat-button type="button" data-fokus (click)="nazadNaPregled()">Pokušaj ponovo</button>
           } @else if (greska()?.ponovo === 'izbor') {
-            <button mat-button type="button" (click)="faza.set('izbor')">Izaberi drugi fajl</button>
+            <button mat-button type="button" data-fokus (click)="faza.set('izbor')">Izaberi drugi fajl</button>
           }
-          <button mat-flat-button type="button" [disabled]="brisanje()" (click)="zatvori()">Zatvori</button>
+          <button mat-flat-button type="button" data-fokus [disabled]="brisanje()" disabledInteractive (click)="zatvori()">Zatvori</button>
         }
         @default {
           <button mat-button type="button" (click)="otkazi()">Otkaži</button>
@@ -284,7 +298,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
 })
 export class UvozPptxDialog {
   protected readonly data = inject<UvozPptxPodaci>(MAT_DIALOG_DATA);
-  private readonly ref = inject<MatDialogRef<UvozPptxDialog, PrezentacijaDetails>>(MatDialogRef);
+  private readonly ref = inject<MatDialogRef<UvozPptxDialog, Exclude<IshodUvoza, undefined>>>(MatDialogRef);
   private readonly api = inject(PrezentacijeApi);
   private readonly registar = inject(RegistarCuvanja);
   private readonly obavestenja = inject(NotificationStore);
@@ -312,6 +326,9 @@ export class UvozPptxDialog {
   private prekidAnalize: AbortController | null = null;
   private pretplataSlanja: Subscription | null = null;
   private obrisana = false;
+  /** Slanje je završeno sa nepoznatim ishodom: zatvaranje traži osvežavanje (`OSVEZI_PREZENTACIJU`). */
+  private nepoznatIshod = false;
+  private fokusPomeren = false;
 
   /** Redni brojevi uvezenih slajdova (PowerPoint): granice opsega "Od - do". */
   protected readonly granice = computed(() => {
@@ -382,19 +399,20 @@ export class UvozPptxDialog {
         e.preventDefault();
         this.izlaz();
       });
-    inject(Router).events.pipe(filter(e => e instanceof NavigationStart), takeUntilDestroyed()).subscribe(() => this.izlaz());
+    // samo "nazad/napred" u pregledaču: modal blokira klikove, a programska ili guard-om otkazana navigacija ne otkazuje uvoz
+    inject(Router).events.pipe(
+      filter((e): e is NavigationStart => e instanceof NavigationStart && e.navigationTrigger === 'popstate'),
+      takeUntilDestroyed(),
+    ).subscribe(() => this.izlaz());
     inject(DestroyRef).onDestroy(() => {
       this.prekidAnalize?.abort();
       this.pretplataSlanja?.unsubscribe();
     });
 
-    let prvi = true;
+    // fokus na glavni element novog stanja (dugme koje je imalo fokus nestaje); početni izbor fokusira sam MatDialog
     effect(() => {
-      this.faza();
-      if (prvi) {
-        prvi = false;
-        return;
-      }
+      if (this.faza() === 'izbor' && !this.fokusPomeren) return;
+      this.fokusPomeren = true;
       untracked(() => afterNextRender(() => this.fokusiraj(), { injector: this.injector }));
     });
 
@@ -416,6 +434,10 @@ export class UvozPptxDialog {
     const poruka = proveriImeFajla(f.name);
     if (poruka) {
       this.neuspeh(poruka, 'izbor');
+      return;
+    }
+    if (f.size > GRANICE_PAKETA.fajl) {
+      this.neuspeh(PREVELIK_FAJL, 'izbor');
       return;
     }
     this.analiza.set(null);
@@ -474,6 +496,13 @@ export class UvozPptxDialog {
       },
       error: (e: unknown) => {
         if (!(e instanceof GreskaSlanja)) this.greske.handleError(e);
+        if (e instanceof GreskaSlanja && e.nepoznatIshod) {
+          // slajdovi su možda upisani: bez ponovnog pokušaja i bez brisanja nove prezentacije; zatvaranje traži osvežavanje
+          this.nepoznatIshod = true;
+          this.faza.set('greska');
+          this.greska.set({ poruka: this.data.nova ? NEPOZNAT_ISHOD_NOVA : e.message, ponovo: null });
+          return;
+        }
         this.neuspeh(e instanceof GreskaSlanja ? e.message : NEOCEKIVANO_SLANJE, 'pregled');
       },
     });
@@ -502,7 +531,12 @@ export class UvozPptxDialog {
 
   protected zatvori(): void {
     if (this.brisanje()) return;
-    this.ref.close(this.faza() === 'izvestaj' ? this.ishod()?.prezentacija : undefined);
+    if (this.faza() === 'izvestaj') this.ref.close(this.ishod()?.prezentacija);
+    else this.ref.close(this.nepoznatIshod ? OSVEZI_PREZENTACIJU : undefined);
+  }
+
+  protected naslovListe(lista: readonly Stavka[]): string {
+    return `${lista.some(x => x.greska) ? 'Greške i upozorenja' : 'Upozorenja'} (${lista.length})`;
   }
 
   protected async kopiraj(): Promise<void> {

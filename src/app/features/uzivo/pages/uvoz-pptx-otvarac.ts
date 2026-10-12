@@ -1,8 +1,7 @@
 import { Injectable } from '@angular/core';
 import type { MatDialog } from '@angular/material/dialog';
 import type { Observable } from 'rxjs';
-import type { PrezentacijaDetails } from '../data-access/uzivo.models';
-import type { UvozPptxPodaci } from '../uvoz-pptx/uvoz-pptx.dialog';
+import type { IshodUvoza, UvozPptxPodaci } from '../uvoz-pptx/uvoz-pptx.dialog';
 
 /**
  * Otvara dijalog uvoza iz PowerPointa. Dijalog, moduli uvoza i `fflate` su u lenjom chunk-u: ovde je samo dinamički
@@ -11,7 +10,7 @@ import type { UvozPptxPodaci } from '../uvoz-pptx/uvoz-pptx.dialog';
  */
 @Injectable({ providedIn: 'root' })
 export class UvozPptxOtvarac {
-  async otvori(dialog: MatDialog, podaci: UvozPptxPodaci): Promise<Observable<PrezentacijaDetails | undefined>> {
+  async otvori(dialog: MatDialog, podaci: UvozPptxPodaci): Promise<Observable<IshodUvoza>> {
     const { otvoriUvozPptx } = await import('../uvoz-pptx/uvoz-pptx.dialog');
     return otvoriUvozPptx(dialog, podaci);
   }

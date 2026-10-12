@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { provideRouter } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
+import { provideRouter, Router } from '@angular/router';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,9 +11,10 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, PrezentacijaDetails, UvozSlajdovaCmd } from '../data-access/uzivo.models';
 import { PORUKE_FAJLA } from './ime-fajla';
+import { GRANICE_PAKETA } from './paket';
 import { kodirajPng } from './png';
 import { napraviPptx, oblik, pasus, PNG_1X1, timing, type EfekatFabrike } from './pptx-fabrika.testing';
-import { OZNAKA_UVOZA, otvoriUvozPptx, type UvozPptxPodaci } from './uvoz-pptx.dialog';
+import { OSVEZI_PREZENTACIJU, OZNAKA_UVOZA, otvoriUvozPptx, type IshodUvoza, type UvozPptxPodaci } from './uvoz-pptx.dialog';
 
 // --- fajlovi (sintetički, fabrika F1) -----------------------------------------------------------------------------
 
@@ -107,13 +108,13 @@ const uPregledu = () => doK(() => !!koren()?.querySelector('[data-faza="pregled"
 
 describe('UvozPptxDialog', () => {
   let api: LazniApi;
-  let rezultat: { vrednost: PrezentacijaDetails | undefined; zatvoren: boolean };
+  let rezultat: { vrednost: IshodUvoza; zatvoren: boolean };
 
   beforeEach(() => {
     api = new LazniApi();
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([]),
+        provideRouter([{ path: '**', children: [] }]),
         { provide: PrezentacijeApi, useValue: api },
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
       ],
@@ -136,7 +137,6 @@ describe('UvozPptxDialog', () => {
     TestBed.tick();
   }
 
-  const ref = () => TestBed.inject(MatDialog).openDialogs[0] as MatDialogRef<unknown>;
 
   it('analizaPokazujeBrojeve: posle izbora fajla broj slajdova, animacija, beleški i upozorenje o efektu', async () => {
     otvori();
@@ -211,6 +211,8 @@ describe('UvozPptxDialog', () => {
     expect(api.uvezi).not.toHaveBeenCalled();
     expect(api.obrisi).not.toHaveBeenCalled();
     expect(() => dugme('Pokušaj ponovo')).toThrow();
+    // poruka je role="alert" (najava), fokus ide na dugme akcije, ne na poruku
+    expect(document.activeElement).toBe(dugme('Izaberi drugi fajl'));
   });
 
   it('oštećen fajl -> poruka GreskaUvoza, ne sirova greška', async () => {
@@ -295,11 +297,12 @@ describe('UvozPptxDialog', () => {
     dugme('Uvezi').click();
     await doK(() => tekst().includes('Pravim slajdove'), 'faza slajdova');
     expect(nesacuvane.broj()).toBe(1);
-    expect(ref().disableClose).toBe(true);
     expect(dugme('Otkaži').disabled).toBe(true);
+    // Escape tokom slanja ne zatvara dijalog i ne prekida slanje
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     TestBed.tick();
     expect(rezultat.zatvoren).toBe(false);
+    expect(uvoz.observed).toBe(true);
     uvoz.next(DETALJI);
     uvoz.complete();
     await doK(() => tekst().includes('Uvezeno slajdova'), 'izveštaj');
@@ -338,5 +341,72 @@ describe('UvozPptxDialog', () => {
     expect(rezultat.vrednost).toBeUndefined();
     expect(api.upload).not.toHaveBeenCalled();
     expect(api.obrisi).not.toHaveBeenCalled();
+  });
+  it('nepoznat ishod (veza prekinuta): bez Pokušaj ponovo, zatvaranje traži osvežavanje editora', async () => {
+    api.uveziOdgovor = () => throwError(() => new HttpErrorResponse({ status: 0 }));
+    otvori({ fajl: fajl(dvaSlajda()) });
+    await uPregledu();
+    dugme('Uvezi').click();
+    await doK(() => !!koren()?.querySelector('[role=alert]'), 'greška');
+    expect(tekst()).toContain('možda ipak dodati');
+    expect(() => dugme('Pokušaj ponovo')).toThrow();
+    dugme('Zatvori').click();
+    await doK(() => rezultat.zatvoren, 'zatvaranje');
+    expect(rezultat.vrednost).toBe(OSVEZI_PREZENTACIJU);
+  });
+
+  it('nepoznat ishod (5xx bez razloga) i nova: prezentacija se NE briše, poruka upućuje na listu', async () => {
+    api.uveziOdgovor = () => throwError(() => new HttpErrorResponse({ status: 504, error: '<html>' }));
+    otvori({ fajl: fajl(dvaSlajda()), nova: true, brojSlajdova: 0, izabraniId: null, izabraniRb: null });
+    await uPregledu();
+    dugme('Uvezi').click();
+    await doK(() => !!koren()?.querySelector('[role=alert]'), 'greška');
+    expect(api.obrisi).not.toHaveBeenCalled();
+    expect(tekst()).toContain('proveri listu prezentacija');
+    expect(tekst()).not.toContain('obrisana');
+    expect(() => dugme('Pokušaj ponovo')).toThrow();
+    dugme('Zatvori').click();
+    await doK(() => rezultat.zatvoren, 'zatvaranje');
+    expect(rezultat.vrednost).toBe(OSVEZI_PREZENTACIJU);
+    expect(api.obrisi).not.toHaveBeenCalled();
+  });
+
+  it('fajl veći od 500 MB: poruka pre čitanja, nazad na izbor fajla', async () => {
+    const f = fajl(dvaSlajda());
+    Object.defineProperty(f, 'size', { value: GRANICE_PAKETA.fajl + 1 });
+    const citanje = vi.spyOn(f, 'arrayBuffer');
+    otvori({ fajl: f });
+    await doK(() => !!koren()?.querySelector('[role=alert]'), 'greška');
+    expect(koren()!.querySelector('[role=alert]')!.textContent).toContain('Fajl je veći od 500 MB.');
+    expect(citanje).not.toHaveBeenCalled();
+    dugme('Izaberi drugi fajl').click();
+    await doK(() => !!koren()?.querySelector('[data-faza="izbor"]'), 'izbor');
+  });
+
+  it('naslov liste: "Upozorenja (n)" kad nema grešaka slajdova', async () => {
+    otvori({ fajl: fajl(dvaSlajda()) });
+    await uPregledu();
+    expect(tekst()).toContain('Upozorenja (1)');
+    expect(tekst()).not.toContain('Greške i upozorenja');
+  });
+
+  it('naslov liste: "Greške i upozorenja (n)" kad slajd nije pročitan', async () => {
+    otvori({ fajl: fajl(napraviPptx({ slajdovi: [{ spTree: '' }, { spTree: '' }], bezDelova: ['ppt/slides/slide2.xml'] })) });
+    await uPregledu();
+    expect(tekst()).toContain('Greške i upozorenja (1)');
+  });
+
+  it('navigacija: programska ne zatvara dijalog, popstate (nazad u pregledaču) je kao Otkaži', async () => {
+    const router = TestBed.inject(Router);
+    otvori({ fajl: fajl(dvaSlajda()) });
+    await uPregledu();
+    await router.navigateByUrl('/x');
+    TestBed.tick();
+    expect(rezultat.zatvoren).toBe(false);
+    // isto što Router radi na `popstate` (Location -> navigateToSyncWithBrowser)
+    (router as unknown as { navigateToSyncWithBrowser(u: string, s: string, st: object, e: object): void })
+      .navigateToSyncWithBrowser('/y', 'popstate', {}, {});
+    await doK(() => rezultat.zatvoren, 'zatvaranje posle popstate');
+    expect(rezultat.vrednost).toBeUndefined();
   });
 });

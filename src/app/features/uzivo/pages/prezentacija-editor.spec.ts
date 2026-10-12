@@ -5,8 +5,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { Router, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
@@ -339,5 +340,63 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     expect(poruka.mock.calls[0][0]).not.toContain('TypeError');
     expect(TestBed.inject(ErrorHandler).handleError).toHaveBeenCalledWith(expect.any(TypeError));
     expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+  });
+  it('posle uvoza fokus je na prvom uvezenom slajdu u listi (ne na body)', async () => {
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    await new Promise(r => setTimeout(r));
+    fixture.detectChanges();
+    const aktivan = document.activeElement as HTMLElement;
+    expect(aktivan).not.toBe(document.body);
+    expect(aktivan.classList.contains('uz-ed-stavka-dugme')).toBe(true);
+    expect(aktivan.getAttribute('aria-current')).toBe('true');
+    expect(aktivan.textContent).toContain('3');
+  });
+
+  it('dok je dijalog otvoren dugme ostaje fokusabilno (aria-disabled), a drugi klik ne otvara ponovo', async () => {
+    const zatvaranje = new Subject<PrezentacijaDetails | undefined>();
+    otvori.mockResolvedValue(zatvaranje);
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const dugme = dugmeUvoza();
+    expect(dugme.disabled).toBe(false);
+    expect(dugme.getAttribute('aria-disabled')).toBe('true');
+    dugme.click();
+    await fixture.whenStable();
+    expect(otvori).toHaveBeenCalledTimes(1);
+    zatvaranje.next(undefined);
+    zatvaranje.complete();
+  });
+
+  it('ishod "osvezi" (nepoznat ishod slanja) ponovo učitava prezentaciju', async () => {
+    otvori.mockResolvedValue(of('osvezi'));
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    http.expectOne('api/prezentacije/1').flush(posleUvoza);
+    expect(store.slajdovi().map(s => s.id)).toEqual([11, 12, 30]);
+  });
+
+  it('dok uvoz šalje, napuštanje editora traži potvrdu sa tekstom o uvozu', () => {
+    const editor = fixture.componentInstance;
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+    const sesija = { kljuc: 'uvoz-1', uToku: 1, mirovanje: new Subject<void>(), nesacuvano: () => 1 };
+    TestBed.inject(RegistarCuvanja).prijavi(sesija);
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toContain('Uvoz iz PowerPointa');
+    TestBed.inject(RegistarCuvanja).odjavi(sesija);
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+  });
+
+  it('uništen editor se odjavljuje: kasniji ishod dijaloga ne dira store', async () => {
+    const zatvaranje = new Subject<PrezentacijaDetails | undefined>();
+    otvori.mockResolvedValue(zatvaranje);
+    const primeniUvoz = vi.spyOn(store, 'primeniUvoz');
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    fixture.destroy();
+    expect(zatvaranje.observed).toBe(false);
+    zatvaranje.next(posleUvoza);
+    expect(primeniUvoz).not.toHaveBeenCalled();
   });
 });

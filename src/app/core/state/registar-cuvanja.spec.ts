@@ -54,6 +54,19 @@ describe('RegistarCuvanja', () => {
     expect(gotovo).toHaveBeenCalledTimes(1);
   });
 
+  it('zauzet: samo dok prijavljena sesija tog ključa ima posao', () => {
+    const r = TestBed.inject(RegistarCuvanja);
+    const s = new Sesija('uvoz-7');
+    expect(r.zauzet('uvoz-7')).toBe(false);
+    r.prijavi(s);
+    expect(r.zauzet('uvoz-7')).toBe(false);
+    s.uToku = 1;
+    expect(r.zauzet('uvoz-7')).toBe(true);
+    expect(r.zauzet('uvoz-8')).toBe(false);
+    r.odjavi(s);
+    expect(r.zauzet('uvoz-7')).toBe(false);
+  });
+
   it('prijavljene sesije se vide u NesacuvaneIzmene; odjavljene ne', () => {
     const r = TestBed.inject(RegistarCuvanja);
     const s = new Sesija('predavanje-5');
