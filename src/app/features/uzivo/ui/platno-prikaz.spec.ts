@@ -263,6 +263,8 @@ describe('PlatnoPrikazComponent', () => {
     expect(bez.querySelector('.uz-pl-tab')).toBeNull();
     expect(bez.hasAttribute('data-meri-tabove')).toBe(false);
     expect(bez.textContent).toBe('a\tb');
+    // Nemereni pasus zadržava DOM faze 1: jedan tekstualni čvor po delu.
+    expect(Array.from(bez.querySelector('.uz-pl-deo')!.childNodes).map((n) => n.nodeType)).toEqual([Node.TEXT_NODE]);
     expect(sa_.querySelectorAll('.uz-pl-tab').length).toBe(2);
     expect(sa_.dataset['pasus']).toBe('1');
     expect(sa_.hasAttribute('data-meri-tabove')).toBe(true);
@@ -290,6 +292,18 @@ describe('PlatnoPrikazComponent', () => {
       fixture.detectChanges();
       await fixture.whenStable();
       expect(levo).not.toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+
+      // Pomeren sloj i druga z-osa (ključ merenja se menja, raspored ne): bez novog merenja, širina ostaje.
+      const pomeren = structuredClone(p);
+      pomeren.slojevi.reverse();
+      Object.assign(pomeren.slojevi.find((s) => s.id === 'tekst')!, { x: 300, y: 200, rotacija: 0 });
+      fixture.componentRef.setInput('platno', pomeren);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).not.toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+      expect(tab().closest('p')!.dataset['meriTabove']).toBe('5-0');
 
       fixture.componentRef.setInput('platno', sa<TekstSloj>('tekst', (s) => ({
         ...s, pasusi: [{ ...pasus('a\tb'), uvlacenje: { levo: 18, prviRed: -18 }, tabulatori: [{ poz: 10, poravnanje: 'LEVO' }] }],

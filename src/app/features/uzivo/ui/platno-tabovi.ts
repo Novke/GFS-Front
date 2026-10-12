@@ -133,16 +133,28 @@ function noveSirine(s: Stavka, pxPoJedinici: number): number[] {
   return nove;
 }
 
+/** `rezervno`: bar jedan pasus je meren iz `offsetLeft` (transformacija; tačnost ceo px). */
+export interface MerenjeTabova { rezervno: boolean; }
+
 /**
  * Poravnava tabove više pasusa zajedno: sve širine na 0, pa prolazi (svaki: sva čitanja za sve pasuse, pa sva pisanja,
  * tj. jedan proračun rasporeda po prolazu) dok se nijedna širina ne promeni za više od 0,05 jedinice, najviše 3 puta.
  * Zove se samo iz faze crtanja koja sme da čita i piše (`afterRenderEffect` `mixedReadWrite`), nikad po kadru.
  */
-export function poravnajSveTabove(pasusi: readonly { el: HTMLElement; pasus: Pasus }[], pxPoJedinici: number): void {
-  if (!(pxPoJedinici > 0)) return;
+export function poravnajSveTabove(pasusi: readonly { el: HTMLElement; pasus: Pasus }[], pxPoJedinici: number): MerenjeTabova {
+  if (!(pxPoJedinici > 0)) return { rezervno: false };
   const stavke: Stavka[] = pasusi.map(({ el, pasus }) => {
     const tabovi = Array.from(el.querySelectorAll<HTMLElement>('.uz-pl-tab'));
     return { tabovi, sirine: tabovi.map(() => 0), pasusEl: el, pasus, precizno: tabovi.length > 0 && bezTransformacije(el) };
+  });
+  // CENTAR i DESNO: širine se računaju na levo poravnatom redu, pa poravnanje pomera ceo red (bez toga red klizi
+  // za svaku promenu širine: DESNO ne konvergira, CENTAR polovi grešku po prolazu). Približenje (tab u centriranom
+  // ili desnom pasusu je redak), ali ograničeno i stabilno. OBOSTRANO se meri kako jeste (razvlače se samo razmaci).
+  const poravnanja = stavke.map((s) => {
+    if (s.tabovi.length === 0 || (s.pasus.poravnanje !== 'CENTAR' && s.pasus.poravnanje !== 'DESNO')) return null;
+    const staro = s.pasusEl.style.textAlign;
+    s.pasusEl.style.textAlign = 'left';
+    return staro;
   });
   for (const s of stavke) for (const t of s.tabovi) t.style.width = '0px';
   for (let prolaz = 0; prolaz < NAJVISE_PROLAZA; prolaz++) {
@@ -157,6 +169,11 @@ export function poravnajSveTabove(pasusi: readonly { el: HTMLElement; pasus: Pas
     }));
     if (!promena) break;
   }
+  stavke.forEach((s, i) => {
+    const staro = poravnanja[i];
+    if (staro !== null) s.pasusEl.style.textAlign = staro;
+  });
+  return { rezervno: stavke.some((s) => s.tabovi.length > 0 && !s.precizno) };
 }
 
 /** Poravnava tabove jednog pasusa (`<p>` sa `.uz-pl-tab`); `pxPoJedinici` = širina platna u px / 960. */
@@ -178,9 +195,13 @@ export function prefiksCelije(sloj: number, red: number, kolona: number): string
   return `${sloj}-${red}-${kolona}`;
 }
 
+/** Polja sloja koja ne menjaju raspored teksta u njemu (van potpisa merenja). */
+const SAMO_POMERAJ: ReadonlySet<string> = new Set(['x', 'y', 'rotacija', 'providnost', 'senka', 'naziv', 'zakljucan']);
+
 /**
- * Mereni pasusi platna po ključu i potpis sadržaja koji utiče na njihov raspored (ceo sloj sa bar jednim takvim
- * pasusom, sa indeksom). Isti potpis = isti DOM i iste širine, pa novo merenje nije potrebno.
+ * Mereni pasusi platna po ključu i potpis sadržaja koji utiče na njihov raspored (sloj sa bar jednim takvim pasusom,
+ * bez polja koja samo pomeraju sloj). Isti potpis = isti raspored teksta i iste širine, pa novo merenje nije potrebno.
+ * Ključevi zavise od indeksa sloja (z-osa), potpis ne: komponenta zato mapu ključeva čita uvek svežu.
  */
 export function pasusiZaMerenje(slojevi: readonly Sloj[]): { pasusi: Map<string, Pasus>; potpis: string } {
   const pasusi = new Map<string, Pasus>();
@@ -197,7 +218,12 @@ export function pasusiZaMerenje(slojevi: readonly Sloj[]): { pasusi: Map<string,
         if (!c.pokrivena) dodaj(prefiksCelije(i, r, k), c.pasusi);
       }));
     }
-    if (pasusi.size > pre) delovi.push(`${i}:${JSON.stringify(s)}`);
+    if (pasusi.size > pre) {
+      // Z-osa ne ulazi: delovi se sortiraju (indeks sloja je samo u ključu merenja).
+      delovi.push(JSON.stringify(s, function (this: unknown, kljuc: string, vrednost: unknown) {
+        return this === s && SAMO_POMERAJ.has(kljuc) ? undefined : vrednost;
+      }));
+    }
   });
-  return { pasusi, potpis: delovi.join('\n') };
+  return { pasusi, potpis: delovi.sort().join('\n') };
 }

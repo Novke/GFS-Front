@@ -91,7 +91,7 @@ describe('prikazPasusa: mereni tabovi', () => {
   it('pasus sa tabom i uvlačenjem dobija ključ merenja i delove razbijene na tabovima', () => {
     const [prvi, drugi] = prikazPasusa([pasus('x\ty'), meri], { slojId: 's', prefiksMerenja: '3' });
     expect(prvi.meriTabove).toBeNull();
-    expect(prvi.delovi[0].segmenti).toEqual(['x\ty']);
+    expect(prvi.delovi[0].segmenti).toBeNull();
     expect(prvi.delovi[0].tekst).toBe('x\ty');
     expect(drugi.meriTabove).toBe('3-1');
     expect(drugi.delovi[0].segmenti).toEqual(['a', 'b', 'c']);
@@ -100,7 +100,7 @@ describe('prikazPasusa: mereni tabovi', () => {
   it('bez prefiksa merenja (nepoznat okvir) tab ostaje u tekstu', () => {
     const [p0] = prikazPasusa([meri]);
     expect(p0.meriTabove).toBeNull();
-    expect(p0.delovi[0].segmenti).toEqual(['a\tb\tc']);
+    expect(p0.delovi[0].segmenti).toBeNull();
   });
 });
 

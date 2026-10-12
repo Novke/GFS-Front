@@ -134,6 +134,42 @@ describe('poravnajTabove', () => {
     expect(tabovi[1].style.width).toBe('calc(var(--u) * 34)');
   });
 
+  it.each([
+    // Lažni raspored poravnatog reda (linija 300 px, posle taba još 40 px teksta): tab se pomera sa svakom širinom.
+    ['DESNO', 'right', (w: number) => 300 - 40 - 2 * w - 10],
+    ['CENTAR', 'center', (w: number) => (300 - (10 + 2 * w + 40)) / 2 + 10],
+  ] as const)('%s: širine se računaju na levo poravnatom redu (stabilne), poravnanje se vraća', (poravnanje, css, poravnat) => {
+    const sirina = (t: HTMLElement) => parseFloat(t.style.width.replace(/^calc\(var\(--u\) \* /, '')) || 0;
+    const t: HTMLElement[] = [];
+    const poravnanja: string[] = [];
+    const { p, tabovi } = dom([{ levo: () => {
+      poravnanja.push(p.style.textAlign);
+      return p.style.textAlign === 'left' ? 18 : poravnat(sirina(t[0]));
+    } }]);
+    t.push(...tabovi);
+    p.style.textAlign = css;
+    const pasus = sa({ poravnanje, tabulatori: levi(36) });
+    poravnajTabove(p, pasus, 2);
+    expect(tabovi[0].style.width).toBe('calc(var(--u) * 27)');
+    expect(p.style.textAlign).toBe(css);
+    expect(new Set(poravnanja)).toEqual(new Set(['left']));
+    poravnajTabove(p, pasus, 2);
+    expect(tabovi[0].style.width).toBe('calc(var(--u) * 27)');
+  });
+
+  it('rezervno merenje se prijavljuje (transformacija), precizno ne', () => {
+    const a = dom([{ levo: () => 18 }]);
+    expect(poravnajSveTabove([{ el: a.p, pasus: sa({ tabulatori: levi(36) }) }], 2)).toEqual({ rezervno: false });
+    const platno = document.createElement('div');
+    platno.className = 'uz-pl-platno';
+    const sloj = document.createElement('div');
+    sloj.style.transform = 'scale(0.3)';
+    platno.append(sloj);
+    const b = dom([{ levo: () => 18 }]);
+    sloj.append(b.p);
+    expect(poravnajSveTabove([{ el: b.p, pasus: sa({ tabulatori: levi(36) }) }], 2)).toEqual({ rezervno: true });
+  });
+
   it('najviše 3 prolaza čak i kad se raspored ne smiruje', () => {
     let citanja = 0;
     const { p } = dom([{ levo: () => (citanja++ % 2 === 0 ? 18 : 60) }]);
@@ -180,6 +216,11 @@ describe('pasusiZaMerenje', () => {
     expect([...m.pasusi.keys()]).toEqual(['0-1', '2-0-1-1']);
     expect(m.pasusi.get('0-1')).toBe(meri);
     expect(pasusiZaMerenje(structuredClone(slojevi)).potpis).toBe(m.potpis);
+    // Pomeren, rotiran, providniji sloj i druga z-osa: isti raspored teksta, isti potpis.
+    const pomeren = structuredClone(slojevi).reverse();
+    Object.assign(pomeren[2], { x: 300, y: 40, rotacija: 15, providnost: 0.5, naziv: 'novi', zakljucan: true });
+    Object.assign(pomeren[0], { senka: { boja: '#000000', pomerajX: 1, pomerajY: 1, zamucenje: 2 } });
+    expect(pasusiZaMerenje(pomeren).potpis).toBe(m.potpis);
     const izmenjen = structuredClone(slojevi);
     (izmenjen[0] as TekstSloj).sirina = 120;
     expect(pasusiZaMerenje(izmenjen).potpis).not.toBe(m.potpis);

@@ -110,8 +110,8 @@ export function oznakeListe(pasusi: Pasus[]): (string | null)[] {
 export interface PrikazDela {
   tekst: string;
   stil: Stil;
-  /** Tekst za šablon: u merenom pasusu podeljen na `\t` (između dva segmenta ide `.uz-pl-tab`), inače `[tekst]`. */
-  segmenti: string[];
+  /** U merenom pasusu: tekst podeljen na `\t` (između dva segmenta šablon crta `.uz-pl-tab`); inače null. */
+  segmenti: string[] | null;
 }
 export interface PrikazOznake { tekst: string; stil: Stil; }
 export interface PrikazPasusa {
@@ -152,7 +152,7 @@ function delovi(p: Pasus, skala: number, prored: (font: string) => string, meri:
     const stil = prvi
       ? stilDela(prvi, skala)
       : { 'font-family': cssFonta(''), 'font-size': jedinice(PODRAZUMEVANA_VELICINA * skala) };
-    return [{ tekst: ZWSP, stil, segmenti: [ZWSP] }];
+    return [{ tekst: ZWSP, stil, segmenti: null }];
   }
   const proredPasusa = prored(p.delovi[0].font);
   const rezultat = p.delovi.filter((d) => d.tekst !== '').map((d): PrikazDela => {
@@ -162,15 +162,17 @@ function delovi(p: Pasus, skala: number, prored: (font: string) => string, meri:
     if (sopstveni !== proredPasusa) {
       stil['line-height'] = sopstveni;
     }
-    return { tekst: d.tekst, stil, segmenti: [] };
+    return { tekst: d.tekst, stil, segmenti: null };
   });
   const poslednji = rezultat[rezultat.length - 1];
   if (poslednji.tekst.endsWith('\n')) {
     // Prelom reda na kraju pasusa (`a:br`) u PowerPointu daje prazan red; u CSS-u ga bez sadržaja nema.
     poslednji.tekst += ZWSP;
   }
-  for (const d of rezultat) {
-    d.segmenti = meri ? d.tekst.split('\t') : [d.tekst];
+  if (meri) {
+    for (const d of rezultat) {
+      d.segmenti = d.tekst.split('\t');
+    }
   }
   return rezultat;
 }

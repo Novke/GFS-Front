@@ -365,7 +365,7 @@ function smanjenoKretanje(): boolean {
     <ng-template #pasusiT let-pasusi>
       @for (p of asPasusi(pasusi); track p.indeks) {
         <p class="uz-pl-pasus" [attr.data-pasus]="p.kljuc === null ? null : p.indeks" [attr.data-meri-tabove]="p.meriTabove"
-           [style]="p.stil" [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">@for (t of d.segmenti; track $index) {@if (!$first) {<span class="uz-pl-tab">{{ tab }}</span>}{{ t }}}</span>}</p>
+           [style]="p.stil" [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@if (p.meriTabove) {@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">@for (t of d.segmenti ?? [d.tekst]; track $index) {@if (!$first) {<span class="uz-pl-tab">{{ tab }}</span>}{{ t }}}</span>}} @else {@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">{{ d.tekst }}</span>}}</p>
       }
     </ng-template>
   `,
@@ -386,11 +386,16 @@ export class PlatnoPrikazComponent {
   protected readonly url = medijUrl;
   protected readonly slojevi = computed(() => this.platno().slojevi.map((s, i) => prikazSloja(s, this.prefiks, i)));
   private readonly vidljivost = computed(() => stanjeSlojeva(this.platno(), this.korak()));
-  /** Mereni pasusi; isti potpis sadržaja (npr. nov snimak istog slajda posle koraka) ne pokreće novo merenje. */
-  private readonly merenje = computed(() => pasusiZaMerenje(this.platno().slojevi), { equal: (a, b) => a.potpis === b.potpis });
-  /** Okidači novog merenja tabova: veličina platna se bitno promenila, učitani su fontovi. */
+  /** Mereni pasusi (ključevi zavise od z-ose, pa se čitaju sveži) i potpis njihovog rasporeda (okidač merenja). */
+  private readonly merenje = computed(() => pasusiZaMerenje(this.platno().slojevi));
+  /** Isti potpis (nov snimak istog slajda posle koraka, pomeren sloj) ne pokreće novo merenje. */
+  private readonly potpisMerenja = computed(() => this.merenje().potpis);
+  /** Okidači novog merenja tabova: veličina platna se bitno promenila, učitani su fontovi, kraj grupe animacija. */
   private readonly velicina = signal(0);
   private readonly fontovi = signal(0);
+  private readonly posleGrupe = signal(0);
+  /** Poslednje merenje je bilo rezervno (`offsetLeft`) dok je grupa animacija trajala: ponoviti ga na kraju grupe. */
+  private meriPosleGrupe = false;
   /** px po jedinici pri poslednjem merenju tabova (0 = još nije izmereno sa vidljivom veličinom). */
   private pxMeren = 0;
   private pracenje = false;
@@ -434,9 +439,11 @@ export class PlatnoPrikazComponent {
     // promeni sadržaj merenih pasusa, veličina platna (posle smirivanja) ili fontovi; nikad po kadru animacije.
     afterRenderEffect({
       mixedReadWrite: () => {
-        const { pasusi } = this.merenje();
+        this.potpisMerenja();
         this.velicina();
         this.fontovi();
+        this.posleGrupe();
+        const { pasusi } = untracked(this.merenje);
         if (pasusi.size === 0) {
           return;
         }
@@ -450,7 +457,9 @@ export class PlatnoPrikazComponent {
             stavke.push({ el, pasus });
           }
         });
-        poravnajSveTabove(stavke, px);
+        const { rezervno } = poravnajSveTabove(stavke, px);
+        // ULET/ZUM koji traje daje transformaciju, pa merenje ide iz rasporeda na ceo px; posle grupe se meri tačno.
+        this.meriPosleGrupe = rezervno && this.tekuce.length > 0;
       },
     });
     this.destroyRef.onDestroy(() => {
@@ -517,6 +526,10 @@ export class PlatnoPrikazComponent {
       a.cancel();
     }
     this.vratiVidljivost(ciljevi);
+    if (this.meriPosleGrupe) {
+      this.meriPosleGrupe = false;
+      this.posleGrupe.update((n) => n + 1);
+    }
   }
 
   /**
