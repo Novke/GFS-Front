@@ -1,13 +1,15 @@
 import { NgTemplateOutlet } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, untracked,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, signal, untracked,
 } from '@angular/core';
 import { KljucVidljivosti, grupaZaKorak, stanjeSlojeva } from '../data-access/platno-koraci';
 import {
-  Animacija, Celija, FormulaSloj, Ivica, OblikSloj, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
+  Animacija, Celija, FormulaSloj, Ivica, OblikSloj, Pasus, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
 import { medijUrl } from '../data-access/uzivo.models';
 import { cssFonta } from './platno-fontovi';
+import { METRIKA } from './platno-metrika';
+import { pasusiZaMerenje, poravnajSveTabove, prefiksCelije, prefiksSloja } from './platno-tabovi';
 import {
   CSS_CRTICE, PrikazPasusa, SIDRA_CELIJE, Stil, jedinice, prikazPasusa, stilOkvira, zaokruzi,
 } from './platno-tekst';
@@ -114,8 +116,15 @@ function ivicaCss(ivica: Ivica | null): string | null {
 
 const IVICE_CELIJE = { gore: 'border-top', dole: 'border-bottom', levo: 'border-left', desno: 'border-right' } as const;
 
-function prikazCelije(c: Celija): PrikazCelije {
-  const stil: Stil = { 'vertical-align': SIDRA_CELIJE[c.sidro] };
+function prikazCelije(c: Celija, prefiksMerenja: string): PrikazCelije {
+  const m = METRIKA.marginaCelije;
+  const stil: Stil = {
+    'vertical-align': SIDRA_CELIJE[c.sidro],
+    'padding-top': jedinice(m.gore),
+    'padding-right': jedinice(m.desno),
+    'padding-bottom': jedinice(m.dole),
+    'padding-left': jedinice(m.levo),
+  };
   if (c.popuna) {
     stil['background-color'] = c.popuna;
   }
@@ -125,25 +134,27 @@ function prikazCelije(c: Celija): PrikazCelije {
       stil[svojstvo] = css;
     }
   }
-  return { colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi) };
+  return { colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi, { prefiksMerenja }) };
 }
 
-function prikazTabele(s: TabelaSloj): PrikazTabele {
+function prikazTabele(s: TabelaSloj, indeks: number): PrikazTabele {
   return {
     stil: { width: jedinice(s.kolone.reduce((a, b) => a + b, 0)) },
     kolone: s.kolone.map((w) => ({ width: jedinice(w) })),
     redovi: s.redovi.map((h, i) => ({
       stil: { height: jedinice(h) },
-      celije: (s.celije[i] ?? []).filter((c) => !c.pokrivena).map(prikazCelije),
+      celije: (s.celije[i] ?? []).flatMap((c, k) => (c.pokrivena ? [] : [prikazCelije(c, prefiksCelije(indeks, i, k))])),
     })),
   };
 }
 
-function prikazTeksta(s: TekstSloj): PrikazTeksta {
+function prikazTeksta(s: TekstSloj, indeks: number): PrikazTeksta {
   return {
     prelom: s.okvir.prelom,
     okvir: stilOkvira(s.okvir, s.popuna, s.ivica),
-    pasusi: prikazPasusa(s.pasusi, s.okvir.skala, s.okvir.skalaProreda, s.id),
+    pasusi: prikazPasusa(s.pasusi, {
+      skala: s.okvir.skala, skalaProreda: s.okvir.skalaProreda, slojId: s.id, prefiksMerenja: prefiksSloja(indeks),
+    }),
   };
 }
 
@@ -156,15 +167,16 @@ function prikazFormule(s: FormulaSloj): PrikazFormule {
   };
 }
 
-function prikazSloja(s: Sloj, prefiks: string): PrikazSloja {
+/** `indeks` = položaj sloja u dokumentu (prefiks ključeva merenih tabova, `platno-tabovi.ts`). */
+function prikazSloja(s: Sloj, prefiks: string, indeks: number): PrikazSloja {
   const prikaz: PrikazSloja = {
     id: s.id, stil: stilSloja(s), tekst: null, slika: null, oblik: null, tabela: null, formula: null, crtez: null,
   };
   switch (s.tip) {
-    case 'TEKST': prikaz.tekst = prikazTeksta(s); break;
+    case 'TEKST': prikaz.tekst = prikazTeksta(s, indeks); break;
     case 'SLIKA': prikaz.slika = { src: medijUrl(s.medijId), alt: s.naziv ?? '', stil: stilIsecka(s.isecak) }; break;
     case 'OBLIK': prikaz.oblik = prikazOblika(s, prefiks); break;
-    case 'TABELA': prikaz.tabela = prikazTabele(s); break;
+    case 'TABELA': prikaz.tabela = prikazTabele(s, indeks); break;
     case 'FORMULA': prikaz.formula = prikazFormule(s); break;
     case 'CRTEZ': prikaz.crtez = { src: medijUrl(s.medijId), alt: s.naziv ?? 'Crtež', stil: {} }; break;
   }
@@ -257,7 +269,12 @@ function smanjenoKretanje(): boolean {
   selector: 'app-platno-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgTemplateOutlet],
-  host: { class: 'uz-pl-platno', '[style.background-color]': 'platno().pozadina.boja' },
+  host: {
+    class: 'uz-pl-platno',
+    '[style.background-color]': 'platno().pozadina.boja',
+    '[style.font-kerning]': 'kerning',
+    '[style.font-variant-ligatures]': 'ligature',
+  },
   template: `
     @if (platno().pozadina.medijId; as pozadina) { <img class="uz-pl-pozadina" [src]="url(pozadina)" alt=""> }
     @for (s of slojevi(); track s.id) {
@@ -347,8 +364,8 @@ function smanjenoKretanje(): boolean {
 
     <ng-template #pasusiT let-pasusi>
       @for (p of asPasusi(pasusi); track p.indeks) {
-        <p class="uz-pl-pasus" [attr.data-pasus]="p.kljuc === null ? null : p.indeks" [style]="p.stil"
-           [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">{{ d.tekst }}</span>}</p>
+        <p class="uz-pl-pasus" [attr.data-pasus]="p.kljuc === null ? null : p.indeks" [attr.data-meri-tabove]="p.meriTabove"
+           [style]="p.stil" [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">@for (t of d.segmenti; track $index) {@if (!$first) {<span class="uz-pl-tab">{{ tab }}</span>}{{ t }}}</span>}</p>
       }
     </ng-template>
   `,
@@ -367,8 +384,24 @@ export class PlatnoPrikazComponent {
   private readonly prefiks = `uz-pl-${++brojacInstanci}`;
 
   protected readonly url = medijUrl;
-  protected readonly slojevi = computed(() => this.platno().slojevi.map((s) => prikazSloja(s, this.prefiks)));
+  protected readonly slojevi = computed(() => this.platno().slojevi.map((s, i) => prikazSloja(s, this.prefiks, i)));
   private readonly vidljivost = computed(() => stanjeSlojeva(this.platno(), this.korak()));
+  /** Mereni pasusi; isti potpis sadržaja (npr. nov snimak istog slajda posle koraka) ne pokreće novo merenje. */
+  private readonly merenje = computed(() => pasusiZaMerenje(this.platno().slojevi), { equal: (a, b) => a.potpis === b.potpis });
+  /** Okidači novog merenja tabova: veličina platna se bitno promenila, učitani su fontovi. */
+  private readonly velicina = signal(0);
+  private readonly fontovi = signal(0);
+  /** px po jedinici pri poslednjem merenju tabova (0 = još nije izmereno sa vidljivom veličinom). */
+  private pxMeren = 0;
+  private pracenje = false;
+  private tajmerVelicine: ReturnType<typeof setTimeout> | undefined;
+
+  /** Tab u merenom pasusu (`.uz-pl-tab`): znak ostaje u tekstu, `tab-size: 0` ga ne crta, širinu daje merenje. */
+  protected readonly tab = '\t';
+  /** `'normal'` = ponašanje pregledača: svojstvo se ne postavlja (izgled faze 1). */
+  protected readonly kerning = METRIKA.kerning === 'none' ? 'none' : null;
+  protected readonly ligature = METRIKA.ligature === 'none' ? 'none' : null;
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** Animacije grupe koja se trenutno pušta (prazno kad se crta samo krajnje stanje). */
@@ -397,7 +430,81 @@ export class PlatnoPrikazComponent {
         }
       },
     });
-    inject(DestroyRef).onDestroy(() => this.prekini());
+    // Mereni tab-stopovi (`platno-tabovi.ts`): čitanje i pisanje rasporeda u istoj fazi, posle crtanja, samo kad se
+    // promeni sadržaj merenih pasusa, veličina platna (posle smirivanja) ili fontovi; nikad po kadru animacije.
+    afterRenderEffect({
+      mixedReadWrite: () => {
+        const { pasusi } = this.merenje();
+        this.velicina();
+        this.fontovi();
+        if (pasusi.size === 0) {
+          return;
+        }
+        this.pratiPromene();
+        const px = this.host.offsetWidth / SIRINA_PLATNA;
+        this.pxMeren = px;
+        const stavke: { el: HTMLElement; pasus: Pasus }[] = [];
+        this.host.querySelectorAll<HTMLElement>('p[data-meri-tabove]').forEach((el) => {
+          const pasus = pasusi.get(el.dataset['meriTabove'] ?? '');
+          if (pasus) {
+            stavke.push({ el, pasus });
+          }
+        });
+        poravnajSveTabove(stavke, px);
+      },
+    });
+    this.destroyRef.onDestroy(() => {
+      this.prekini();
+      clearTimeout(this.tajmerVelicine);
+    });
+  }
+
+  /**
+   * Prvi put kad platno ima merene pasuse: novo merenje posle učitavanja fontova (`document.fonts`) i posle promene
+   * veličine platna za više od 1% (`ResizeObserver`, smireno 150 ms; odmah ako do sada nije bilo vidljive veličine).
+   * Širine su u jedinicama, pa su do novog merenja približno tačne; novo merenje ispravlja nelinearnu širinu teksta
+   * (hinting) na drugoj veličini.
+   */
+  private pratiPromene(): void {
+    if (this.pracenje) {
+      return;
+    }
+    this.pracenje = true;
+    const fontovi = typeof document === 'undefined' ? undefined : document.fonts;
+    if (fontovi) {
+      let unisten = false;
+      const ucitani = () => {
+        if (!unisten) {
+          this.fontovi.update((n) => n + 1);
+        }
+      };
+      fontovi.ready.then(ucitani, () => undefined);
+      fontovi.addEventListener('loadingdone', ucitani);
+      this.destroyRef.onDestroy(() => {
+        unisten = true;
+        fontovi.removeEventListener('loadingdone', ucitani);
+      });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      const posmatrac = new ResizeObserver(([e]) => this.promenaVelicine(e.contentRect.width / SIRINA_PLATNA));
+      posmatrac.observe(this.host);
+      this.destroyRef.onDestroy(() => posmatrac.disconnect());
+    }
+  }
+
+  private promenaVelicine(px: number): void {
+    if (!(px > 0)) {
+      return;
+    }
+    clearTimeout(this.tajmerVelicine);
+    if (this.pxMeren > 0 && Math.abs(px - this.pxMeren) / this.pxMeren <= 0.01) {
+      return;
+    }
+    if (this.pxMeren > 0) {
+      this.tajmerVelicine = setTimeout(() => this.velicina.update((n) => n + 1), 150);
+    } else {
+      this.velicina.update((n) => n + 1);
+    }
   }
 
   /** Prekida animacije koje traju: cilj odmah dobija krajnje stanje koraka (`vratiVidljivost`). */

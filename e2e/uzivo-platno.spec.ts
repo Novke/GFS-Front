@@ -144,6 +144,41 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     expect(await pogresni(['naslov', 'oblik', 'tabela', 'formula', 'crtez'])).toEqual([]);
   });
 
+  test('mereni tabovi: tab se završava na visećoj stanici, sopstvenom stopu i podrazumevanom stopu (36) od margine okvira', async ({ page, mock }) => {
+    const deo = (tekst: string, font = 'Carlito') => ({
+      tekst, font, velicina: 20, boja: '#000000', podebljano: false, kurziv: false, podvuceno: false, precrtano: false, polozaj: 'OBICAN',
+    });
+    const pasus = (delovi: unknown[], izmene: Record<string, unknown>) => ({
+      poravnanje: 'LEVO', nivo: 0, lista: null, uvlacenje: { levo: 0, prviRed: 0 }, razmakPre: 0, razmakPosle: 0,
+      proredProcenat: 100, tabulatori: [], delovi, ...izmene,
+    });
+    const naslov = (mock.podaci.prezentacije[0].slajdovi[1].platno as { slojevi: { id: string; pasusi?: unknown[] }[] })
+      .slojevi.find((s) => s.id === 'naslov')!;
+    naslov.pasusi = [
+      pasus([deo('a)\tviseća stanica')], { uvlacenje: { levo: 36, prviRed: -36 } }),
+      pasus([deo('Ime'), deo('\tPrezime', 'Tinos'), deo('\tIndeks')], { tabulatori: [{ poz: 150, poravnanje: 'LEVO' }, { poz: 300, poravnanje: 'LEVO' }] }),
+      pasus([deo('Uvlačenje 18\ttab')], { uvlacenje: { levo: 18, prviRed: 0 } }),
+    ];
+    await otvoriPlatnoSlajd(page);
+    await page.evaluate(() => document.fonts.ready);
+    /** Desna ivica svakog `.uz-pl-tab` u jedinicama od leve ivice pasusa (= unutrašnja margina okvira). */
+    const krajevi = () => sloj(page, 'naslov').evaluate((s) => {
+      const px = s.closest<HTMLElement>('.uz-pl-platno')!.getBoundingClientRect().width / 960;
+      return Array.from(s.querySelectorAll<HTMLElement>('p[data-meri-tabove]')).map((p) => Array.from(
+        p.querySelectorAll('.uz-pl-tab'), (t) => (t.getBoundingClientRect().right - p.getBoundingClientRect().left) / px));
+    });
+    await expect.poll(async () => (await krajevi()).flat().length).toBe(4);
+    const [visece, kolone, uvlacenje] = await krajevi();
+    expect(visece[0]).toBeCloseTo(36, 0);
+    expect(kolone[0]).toBeCloseTo(150, 0);
+    expect(kolone[1]).toBeCloseTo(300, 0);
+    // "Uvlačenje 18" je širi od 36 jedinica: sledeći podrazumevani stop je umnožak 36 od margine, ne od uvlačenja.
+    expect(uvlacenje[0] % 36 < 0.5 || uvlacenje[0] % 36 > 35.5).toBe(true);
+    expect(uvlacenje[0]).toBeGreaterThan(36);
+    // Znak taba ostaje u tekstu (kopiranje, čitač ekrana), a ne crta se sam (`tab-size: 0`).
+    expect(await sloj(page, 'naslov').locator('p').first().evaluate((p) => p.textContent)).toBe('a)\tviseća stanica');
+  });
+
   test('izbor teme šalje PUT /prezentacije/{id} sa temom, a uzorak nosi --uz-tema-pozadina te teme', async ({ page, mock }) => {
     await otvoriPlatnoSlajd(page);
     await page.getByRole('button', { name: /Podešavanja/ }).click();

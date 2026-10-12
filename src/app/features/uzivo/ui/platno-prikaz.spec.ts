@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 import { celija, pasus, platno } from '../data-access/platno-podaci.testing';
 import {
   FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
@@ -251,6 +252,79 @@ describe('PlatnoPrikazComponent', () => {
     }));
     const { el } = await prikazi(p);
     expect(sloj(el, 'tekst').querySelector('.uz-pl-pasus')?.textContent).toBe('a\tb');
+  });
+
+  it('TEKST: pasus sa uvlačenjem i tabom ima .uz-pl-tab (mereni tab), pasus bez uvlačenja zadržava \\t', async () => {
+    const p = sa<TekstSloj>('tekst', (s) => ({
+      ...s, pasusi: [pasus('a\tb'), { ...pasus('c\td\te'), uvlacenje: { levo: 18, prviRed: -18 } }],
+    }));
+    const { el } = await prikazi(p);
+    const [bez, sa_] = Array.from(sloj(el, 'tekst').querySelectorAll<HTMLElement>('.uz-pl-pasus'));
+    expect(bez.querySelector('.uz-pl-tab')).toBeNull();
+    expect(bez.hasAttribute('data-meri-tabove')).toBe(false);
+    expect(bez.textContent).toBe('a\tb');
+    expect(sa_.querySelectorAll('.uz-pl-tab').length).toBe(2);
+    expect(sa_.dataset['pasus']).toBe('1');
+    expect(sa_.hasAttribute('data-meri-tabove')).toBe(true);
+    // Tab ostaje u tekstu (kopiranje, čitač ekrana); `tab-size: 0` u CSS-u ga ne crta, širinu daje merenje.
+    expect(sa_.textContent).toBe('c\td\te');
+    expect(sa_.querySelector('.uz-pl-deo > .uz-pl-tab')?.textContent).toBe('\t');
+  });
+
+  it('TEKST: mereni tab dobija širinu do sledećeg stopa; ponovo se meri samo kad se sadržaj promeni', async () => {
+    const levo = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    try {
+      const fixture = TestBed.createComponent(PlatnoPrikazComponent);
+      const host = fixture.nativeElement as HTMLElement;
+      Object.defineProperty(host, 'offsetWidth', { get: () => 1920 });
+      const p = sa<TekstSloj>('tekst', (s) => ({ ...s, pasusi: [{ ...pasus('a\tb'), uvlacenje: { levo: 18, prviRed: -18 } }] }));
+      fixture.componentRef.setInput('platno', p);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      // jsdom nema raspored: tab na poziciji 0, viseća stanica na 18.
+      const tab = () => sloj(host, 'tekst').querySelector<HTMLElement>('.uz-pl-tab')!;
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+
+      levo.mockClear();
+      fixture.componentRef.setInput('platno', structuredClone(p));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).not.toHaveBeenCalled();
+
+      fixture.componentRef.setInput('platno', sa<TekstSloj>('tekst', (s) => ({
+        ...s, pasusi: [{ ...pasus('a\tb'), uvlacenje: { levo: 18, prviRed: -18 }, tabulatori: [{ poz: 10, poravnanje: 'LEVO' }] }],
+      })));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 10)');
+    } finally {
+      levo.mockRestore();
+    }
+  });
+
+  it('TEKST: line-height za proredProcenat 100 je 1,2 kao u fazi 1; razmakPre prvog pasusa ostaje', async () => {
+    const p = sa<TekstSloj>('tekst', (s) => ({ ...s, pasusi: [{ ...pasus('a'), razmakPre: 6 }] }));
+    const { el } = await prikazi(p);
+    const pasusEl = sloj(el, 'tekst').querySelector<HTMLElement>('.uz-pl-pasus')!;
+    expect(pasusEl.style.lineHeight).toBe('1.2');
+    expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 6)');
+    expect(el.style.getPropertyValue('font-kerning')).toBe('');
+    expect(el.style.getPropertyValue('font-variant-ligatures')).toBe('');
+  });
+
+  it('TABELA: unutrašnje margine ćelije iz metrike (7,2 levo i desno, 3,6 gore i dole); tab u ćeliji sa stopom se meri', async () => {
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, celije: [[celija('A'), { ...celija('B'), pasusi: [{ ...pasus('x\ty'), tabulatori: [{ poz: 40, poravnanje: 'LEVO' }] }] }]],
+    }));
+    const { el } = await prikazi(p);
+    const tds = sloj(el, 'tabela').querySelectorAll<HTMLElement>('td');
+    expect([tds[0].style.paddingTop, tds[0].style.paddingRight, tds[0].style.paddingBottom, tds[0].style.paddingLeft])
+      .toEqual(['calc(var(--u) * 3.6)', 'calc(var(--u) * 7.2)', 'calc(var(--u) * 3.6)', 'calc(var(--u) * 7.2)']);
+    expect(tds[0].querySelector('[data-meri-tabove]')).toBeNull();
+    const mereni = tds[1].querySelector<HTMLElement>('.uz-pl-pasus[data-meri-tabove]')!;
+    expect(mereni.querySelector('.uz-pl-tab')).not.toBeNull();
+    expect(mereni.hasAttribute('data-pasus')).toBe(false);
   });
 
   it('TEKST: okvir bez preloma i sidro', async () => {

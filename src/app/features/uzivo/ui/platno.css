@@ -56,7 +56,8 @@
 .uz-pl-tabela {
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  /* Podrazumevani tab-stop PowerPointa je 36 pt; sopstveni tab-stopovi: faza 4 (editor). */
+  /* Podrazumevani tab-stop PowerPointa je 36 pt (od leve ivice pasusa bez uvlačenja). Pasusi sa uvlačenjem ili
+     sopstvenim stopovima imaju merene tabove (`.uz-pl-tab`, `platno-tabovi.ts`). */
   tab-size: calc(var(--u) * 36);
 }
 
@@ -71,6 +72,19 @@
   font-weight: 400;
   font-style: normal;
   letter-spacing: normal;
+}
+
+/* Mereni pasus je `offsetParent` svojih tabova: položaj taba se meri od leve ivice pasusa (unutrašnja margina okvira). */
+.uz-pl-platno .uz-pl-pasus[data-meri-tabove] {
+  position: relative;
+}
+
+/* Mereni tab: širinu do sledećeg tab-stopa postavlja merenje (inline, u jedinicama); sam znak `\t` ostaje u tekstu
+   (kopiranje, čitač ekrana), a `tab-size: 0` ga ne crta. */
+.uz-pl-tab {
+  display: inline-block;
+  tab-size: 0;
+  text-indent: 0;
 }
 
 /* Oznaka liste: viseća u `-prviRed` (min-width iz inline stila); `text-indent` pasusa se ne nasleđuje u nju. */
@@ -128,8 +142,8 @@
   table-layout: fixed;
 }
 
-/* Unutrašnje margine ćelije: PowerPointove podrazumevane (7,2 pt levo i desno, 3,6 pt gore i dole). */
+/* Unutrašnje margine ćelije stižu inline iz metrike (`METRIKA.marginaCelije`, PowerPointove 7,2 / 3,6 pt). */
 .uz-pl-platno .uz-pl-tabela td {
-  padding: calc(var(--u) * 3.6) calc(var(--u) * 7.2);
+  padding: 0;
   border: 0;
 }
