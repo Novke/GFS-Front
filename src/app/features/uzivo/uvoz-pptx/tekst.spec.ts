@@ -251,6 +251,19 @@ describe('pretvoriTekst: liste', () => {
     expect(lista('<a:buNone/>').r.pasusi[0].lista).toBeNull();
   });
 
+  it('znak razmak sa visećim uvlačenjem: prvi red počinje na marL (kao PowerPoint), ne levo od njega', () => {
+    const viseci = 'marL="91440" indent="-91440"';
+    const razmak = tekstOkvir(p(run('a'), `<a:pPr ${viseci}><a:buFont typeface="Arial"/><a:buChar char=" "/></a:pPr>`)).r.pasusi[0];
+    expect(razmak.lista).toBeNull();
+    expect(razmak.uvlacenje).toEqual({ levo: 7.2, prviRed: 0 });
+    // pravi znak liste zadržava viseće uvlačenje; pozitivno uvlačenje prvog reda ostaje i uz razmak
+    expect(tekstOkvir(p(run('a'), `<a:pPr ${viseci}><a:buChar char="•"/></a:pPr>`)).r.pasusi[0].uvlacenje).toEqual({ levo: 7.2, prviRed: -7.2 });
+    expect(tekstOkvir(p(run('a'), '<a:pPr marL="91440" indent="91440"><a:buChar char=" "/></a:pPr>')).r.pasusi[0].uvlacenje)
+      .toEqual({ levo: 7.2, prviRed: 7.2 });
+    // bez liste (buNone) uvlačenje ostaje kakvo je zapisano
+    expect(tekstOkvir(p(run('a'), `<a:pPr ${viseci}><a:buNone/></a:pPr>`)).r.pasusi[0].uvlacenje).toEqual({ levo: 7.2, prviRed: -7.2 });
+  });
+
   it('boja liste: buClr -> hex, buClrTx -> null', () => {
     expect(lista('<a:buClr><a:srgbClr val="00ff00"/></a:buClr><a:buChar char="•"/>').r.pasusi[0].lista?.boja).toBe('#00FF00');
     expect(lista('<a:buClrTx/><a:buChar char="•"/>').r.pasusi[0].lista?.boja).toBeNull();

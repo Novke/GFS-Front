@@ -278,11 +278,15 @@ function pasus(p: Element, nivoi: (nivo: number) => Element[], sirinaOkvira: num
     proredProcenat = 'pct' in pp.lnSpc ? pp.lnSpc.pct / 1000 : (pp.lnSpc.pts / 100) / (1.2 * najveciPt) * 100;
   }
   const imaTab = delovi.some((d) => d.tekst.includes('\t'));
+  const l = lista(pp, st);
+  let prviRed = ogranici(uJed(pp.indent, s), -1000, 1000);
+  // Znak liste je razmak (lista se izostavlja): PowerPoint crta "znak" u visećem delu, a tekst počinje na marL.
+  if (pp.bu.vrsta === 'znak' && l === null) prviRed = Math.max(prviRed, 0);
   return {
     poravnanje: PORAVNANJA[pp.algn ?? 'l'] ?? 'LEVO',
     nivo,
-    lista: lista(pp, st),
-    uvlacenje: { levo: ogranici(uJed(pp.marL, s), -1000, 1000), prviRed: ogranici(uJed(pp.indent, s), -1000, 1000) },
+    lista: l,
+    uvlacenje: { levo: ogranici(uJed(pp.marL, s), -1000, 1000), prviRed },
     razmakPre: razmak(pp.spcBef, s, prviVelicina),
     razmakPosle: razmak(pp.spcAft, s, prviVelicina),
     proredProcenat: zaokruzi(ogranici(proredProcenat, 50, 300)),

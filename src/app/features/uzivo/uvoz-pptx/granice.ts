@@ -149,8 +149,17 @@ const pozitivno = (v: number | null | undefined, max: number) => {
   return z != null && z > 0 && z <= max;
 };
 
+/**
+ * Beli znaci Java `Character.isWhitespace` (`String.strip`/`isBlank` na serveru): razmaci Unicode-a bez neprelomnih
+ * (U+00A0, U+2007, U+202F) i U+FEFF, plus `\t \n \v \f \r` i U+001C-U+001F. JS `trim()` skida i neprelomne i U+FEFF, a
+ * U+001C-U+001F ne, pa se ovde ne koristi.
+ */
+const JAVA_BELI = '\\t\\n\\u000B\\f\\r\\u001C-\\u001F \\u1680\\u2000-\\u2006\\u2008-\\u200A\\u2028\\u2029\\u205F\\u3000';
+const STRIP = new RegExp(`^[${JAVA_BELI}]+|[${JAVA_BELI}]+$`, 'g');
+const strip = (s: string) => s.replace(STRIP, '');
+
 function boja(b: string | null | undefined): void {
-  if (b == null || !BOJA_SERVERA.test(b.trim().toUpperCase())) odbij('Boja nije ispravna (#RRGGBB).');
+  if (b == null || !BOJA_SERVERA.test(strip(b).toUpperCase())) odbij('Boja nije ispravna (#RRGGBB).');
 }
 const bojaMoze = (b: string | null | undefined) => b != null && boja(b);
 
@@ -219,7 +228,7 @@ function sloj(s: Sloj, znakova: { n: number }): void {
       return;
     }
     case 'SLIKA': {
-      if (s.medijId == null || s.medijId.trim() === '') odbij('Sloj slike mora imati sliku.');
+      if (s.medijId == null || strip(s.medijId) === '') odbij('Sloj slike mora imati sliku.');
       const c = s.isecak;
       const [l, g, d, o] = [r(c?.levo ?? 0)!, r(c?.gore ?? 0)!, r(c?.desno ?? 0)!, r(c?.dole ?? 0)!];
       if (!u(l, 0, 1) || !u(g, 0, 1) || !u(d, 0, 1) || !u(o, 0, 1) || l + d >= 1 || g + o >= 1) odbij('Isečak slike nije ispravan.');
@@ -270,7 +279,7 @@ function sloj(s: Sloj, znakova: { n: number }): void {
       return;
     }
     case 'CRTEZ': {
-      if (s.medijId == null || s.medijId.trim() === '') odbij('Sloj slike mora imati sliku.');
+      if (s.medijId == null || strip(s.medijId) === '') odbij('Sloj slike mora imati sliku.');
       let tacaka = 0;
       for (const z of s.potezi ?? []) {
         if (z == null || z.tacke == null || z.tacke.length % 2 !== 0 || !u(z.debljina, 0.25, 20)) odbij('Crtež nije ispravan.');
@@ -301,15 +310,121 @@ function animacija(a: Animacija, slojevi: readonly Sloj[]): void {
   if (!ok) odbij('Smer animacije nije ispravan.');
 }
 
+// JSON sloj servera (`PlatnoJson.procitaj`, strogi Jackson): pre pravila `PlatnoPP`. `Integer` polja ne primaju broj sa
+// razlomkom (`ACCEPT_FLOAT_AS_INT` isključen), enum polja samo poznata imena; poruka je "pogrešan tip vrednosti" sa putanjom.
+const ENUMI = {
+  poravnanje: ['LEVO', 'CENTAR', 'DESNO', 'OBOSTRANO'],
+  sidro: ['VRH', 'SREDINA', 'DNO'],
+  crtica: ['PUNA', 'ISPREKIDANA', 'TACKASTA'],
+  polozaj: ['OBICAN', 'INDEKS', 'EKSPONENT'],
+  vrstaListe: ['ZNAK', 'BROJ'],
+  format: ['ARAPSKI_TACKA', 'ARAPSKI_ZAGRADA', 'ARAPSKI', 'MALA_SLOVA_ZAGRADA', 'VELIKA_SLOVA_TACKA', 'RIMSKI_VELIKI_TACKA', 'RIMSKI_MALI_TACKA'],
+  poravnanjeTaba: ['LEVO', 'CENTAR', 'DESNO', 'DECIMALNO'],
+  oblik: ['PRAVOUGAONIK', 'ZAOBLJENI_PRAVOUGAONIK', 'ELIPSA', 'TROUGAO', 'LINIJA', 'STRELICA', 'DVOSTRUKA_STRELICA'],
+  vrstaAnimacije: ['ULAZ', 'IZLAZ'],
+  efekat: ['POJAVI', 'FADE', 'ULET', 'PODELI', 'BRISANJE', 'ZUM', 'ISCRTAJ'],
+  smer: ['LEVO', 'DESNO', 'GORE', 'DOLE', 'HORIZONTALNO', 'VERTIKALNO'],
+  okidac: ['KLIK', 'SA_PRETHODNIM', 'POSLE_PRETHODNOG'],
+} as const satisfies Record<string, readonly string[]>;
+const TIPOVI_SLOJA: readonly string[] = ['TEKST', 'SLIKA', 'OBLIK', 'TABELA', 'FORMULA', 'CRTEZ'];
+const MAX_PORUKE_JSONA = 200;
+
+function odbijJson(opis: string, putanja: string): never {
+  const r = `${opis} (${putanja})`;
+  odbij(`Neispravan dokument platna: ${r.length > MAX_PORUKE_JSONA ? r.slice(0, MAX_PORUKE_JSONA) : r}.`);
+}
+function ceo(v: unknown, putanja: string): void {
+  if (v != null && !Number.isInteger(v)) odbijJson('pogrešan tip vrednosti', putanja);
+}
+function enumVrednost(v: unknown, dozvoljene: readonly string[], putanja: string): void {
+  if (v != null && !dozvoljene.includes(v as string)) odbijJson('pogrešan tip vrednosti', putanja);
+}
+
+function jsonIvice(i: Ivica | null | undefined, putanja: string): void {
+  if (i != null) enumVrednost(i.crtica, ENUMI.crtica, `${putanja}.crtica`);
+}
+
+function jsonPasusi(niz: readonly Pasus[] | null | undefined, putanja: string): void {
+  (niz ?? []).forEach((p, i) => {
+    if (p == null) return;
+    const pp = `${putanja}[${i}]`;
+    enumVrednost(p.poravnanje, ENUMI.poravnanje, `${pp}.poravnanje`);
+    ceo(p.nivo, `${pp}.nivo`);
+    if (p.lista != null) {
+      enumVrednost(p.lista.vrsta, ENUMI.vrstaListe, `${pp}.lista.vrsta`);
+      enumVrednost(p.lista.format, ENUMI.format, `${pp}.lista.format`);
+      ceo(p.lista.pocetak, `${pp}.lista.pocetak`);
+    }
+    (p.tabulatori ?? []).forEach((t, j) => {
+      if (t != null) enumVrednost(t.poravnanje, ENUMI.poravnanjeTaba, `${pp}.tabulatori[${j}].poravnanje`);
+    });
+    (p.delovi ?? []).forEach((d, j) => {
+      if (d != null) enumVrednost(d.polozaj, ENUMI.polozaj, `${pp}.delovi[${j}].polozaj`);
+    });
+  });
+}
+
+/** Provera tipova kao strogi Jackson servera (posle nje dolaze pravila `PlatnoPP`). */
+function jsonSloj(p: Platno): void {
+  ceo(p.verzija, 'verzija');
+  (p.slojevi ?? []).forEach((s, i) => {
+    if (s == null) return;
+    const ps = `slojevi[${i}]`;
+    if (!TIPOVI_SLOJA.includes(s.tip)) odbijJson('nepoznat tip sloja', ps);
+    switch (s.tip) {
+      case 'TEKST':
+        jsonPasusi(s.pasusi, `${ps}.pasusi`);
+        if (s.okvir != null) enumVrednost(s.okvir.sidro, ENUMI.sidro, `${ps}.okvir.sidro`);
+        jsonIvice(s.ivica, `${ps}.ivica`);
+        break;
+      case 'OBLIK':
+        enumVrednost(s.oblik, ENUMI.oblik, `${ps}.oblik`);
+        jsonIvice(s.ivica, `${ps}.ivica`);
+        break;
+      case 'TABELA':
+        (s.celije ?? []).forEach((red, r) => (red ?? []).forEach((c, k) => {
+          if (c == null) return;
+          const pc = `${ps}.celije[${r}][${k}]`;
+          jsonPasusi(c.pasusi, `${pc}.pasusi`);
+          ceo(c.spojDesno, `${pc}.spojDesno`);
+          ceo(c.spojDole, `${pc}.spojDole`);
+          enumVrednost(c.sidro, ENUMI.sidro, `${pc}.sidro`);
+          if (c.ivice != null) for (const strana of ['gore', 'dole', 'levo', 'desno'] as const) jsonIvice(c.ivice[strana], `${pc}.ivice.${strana}`);
+        }));
+        break;
+      case 'FORMULA':
+        enumVrednost(s.poravnanje, ENUMI.poravnanje, `${ps}.poravnanje`);
+        break;
+      default:
+        break;
+    }
+  });
+  (p.animacije ?? []).forEach((a, i) => {
+    if (a == null) return;
+    const pa = `animacije[${i}]`;
+    ceo(a.pasus, `${pa}.pasus`);
+    enumVrednost(a.vrsta, ENUMI.vrstaAnimacije, `${pa}.vrsta`);
+    enumVrednost(a.efekat, ENUMI.efekat, `${pa}.efekat`);
+    enumVrednost(a.smer, ENUMI.smer, `${pa}.smer`);
+    enumVrednost(a.okidac, ENUMI.okidac, `${pa}.okidac`);
+    ceo(a.trajanjeMs, `${pa}.trajanjeMs`);
+    ceo(a.kasnjenjeMs, `${pa}.kasnjenjeMs`);
+  });
+}
+
 /**
  * Ogledalo serverske provere dokumenta (`PlatnoPP.proveri(normalizuj(p))` pa `proveriVelicinu`): poruka prvog prekršenog
  * pravila, ista kao serverova, ili `null` kad bi server dokument primio. Brojevi se proveravaju posle zaokruživanja kao na
  * serveru, boje posle prevođenja u velika slova, podrazumevane vrednosti `normalizuj` važe za polja koja nedostaju.
+ * Pre pravila ide JSON sloj (`PlatnoJson`, strogi Jackson): `Integer` polja moraju biti celi brojevi, enum polja poznata
+ * imena (poruka `Neispravan dokument platna: pogrešan tip vrednosti (<putanja>).`). Nepoznata polja, tipovi vrednosti
+ * (string umesto broja, ...) i obavezna polja JSON-a se NE proveravaju: dokument prave tipizirani moduli uvoza.
  * Uvoz je poziva za svaki slajd pre slanja (`pretvoriPptx`): odbijen slajd je greška tog slajda, a ne 400 za ceo uvoz.
  */
 export function proveriKaoServer(p: Platno): string | null {
   try {
     if (p == null) odbij('Platno slajd mora imati dokument platna.');
+    jsonSloj(p);
     if (p.verzija !== 1) odbij('Nepodržana verzija platna.');
     if (p.pozadina == null) odbij('Boja nije ispravna (#RRGGBB).');
     boja(p.pozadina.boja);

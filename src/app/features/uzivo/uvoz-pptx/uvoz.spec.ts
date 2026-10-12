@@ -9,12 +9,40 @@ import {
 } from './pptx-fabrika.testing';
 import { pretvoriPptx, type RezultatUvoza } from './uvoz';
 
-/** Svi rezultati ovog fajla: poslednji test proverava svaki slajd kao server (`proveriKaoServer`). */
-const rezultati: RezultatUvoza[] = [];
+const FONTOVI = new Set(FONTOVI_PLATNA.map((f) => f.naziv));
+const BOJA = /^#[0-9A-F]{6}$/;
+
+/**
+ * Svaki slajd rezultata kao server (`proveriKaoServer`) i pravila iz spec-a 13: fontovi iz kataloga, boje `#RRGGBB`,
+ * animacije ciljaju postojeći sloj i pasus, mediji slajda su u rezultatu. `uvezi` je zove za svaki fixture ovog fajla.
+ */
+function proveriKaoServerSve(r: RezultatUvoza): void {
+  for (const s of r.slajdovi) {
+    const p = s.cmd.platno!;
+    expect(proveriKaoServer(p)).toBeNull();
+    const boje: string[] = [];
+    JSON.stringify(p, (_, v) => {
+      if (typeof v === 'string' && v.startsWith('#')) boje.push(v);
+      return v;
+    });
+    expect(boje.filter((b) => !BOJA.test(b))).toEqual([]);
+    for (const sl of p.slojevi) {
+      const pasusi = sl.tip === 'TEKST' ? sl.pasusi : sl.tip === 'TABELA' ? sl.celije.flat().flatMap((c) => c.pasusi) : [];
+      for (const d of pasusi.flatMap((ps) => ps.delovi)) expect(FONTOVI.has(d.font)).toBe(true);
+    }
+    for (const a of p.animacije) {
+      const cilj = p.slojevi.find((x) => x.id === a.slojId);
+      expect(cilj).toBeDefined();
+      const c = cilj!;
+      if (a.pasus !== null) expect(c.tip === 'TEKST' && a.pasus < c.pasusi.length).toBe(true);
+    }
+    for (const m of s.mediji) expect(r.mediji.has(m)).toBe(true);
+  }
+}
 
 async function uvezi(o: OpcijeFabrike): Promise<RezultatUvoza> {
   const r = await pretvoriPptx(napraviPptx(o), 'predavanje.pptx');
-  rezultati.push(r);
+  proveriKaoServerSve(r);
   return r;
 }
 const jedan = (s: SlajdFabrike, o: Partial<OpcijeFabrike> = {}) => uvezi({ slajdovi: [s], ...o });
@@ -303,6 +331,23 @@ describe('pretvoriPptx: grupe i animacije', () => {
     expect(sloj<OblikSloj>(r, 's6')).toMatchObject({ oblik: 'PRAVOUGAONIK', popuna: '#FF0000' });
   });
 
+  it('placeholder bez sopstvene popune i linije ih nasleđuje iz layouta; sopstvena popuna je jača; prazan placeholder se ne prikazuje', async () => {
+    const LAYOUT_PH = '<p:sp><p:nvSpPr><p:cNvPr id="9" name="Okvir"/><p:cNvSpPr/><p:nvPr><p:ph idx="5"/></p:nvPr></p:nvSpPr><p:spPr>'
+      + '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm><a:solidFill><a:srgbClr val="FFFF00"/></a:solidFill>'
+      + '<a:ln w="25400"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>';
+    const r = await uvezi({
+      slajdovi: [
+        { spTree: oblik.placeholder(5, '<p:ph idx="5"/>', pasus('U okviru')) },
+        { spTree: oblik.placeholder(5, '<p:ph idx="5"/>', pasus('Svoja'), '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>') },
+        { spTree: oblik.placeholder(5, '<p:ph idx="5"/>', '<a:p><a:endParaRPr/></a:p>') + okvir(6, 0, 0) },
+      ],
+      layoutDodatak: LAYOUT_PH,
+    });
+    expect(sloj<TekstSloj>(r, 's5')).toMatchObject({ x: 0, y: 0, popuna: '#FFFF00', ivica: { boja: '#00FF00', debljina: 2, crtica: 'PUNA' } });
+    expect(sloj<TekstSloj>(r, 's5', 1)).toMatchObject({ popuna: '#FF0000', ivica: { boja: '#00FF00' } });
+    expect(platno(r, 2).slojevi.map((s) => s.id)).toEqual(['s6']);
+  });
+
   it('nepodržana geometrija: samo tekst + OBJEKAT_PRESKOCEN', async () => {
     const tx = `<p:txBody><a:bodyPr/><a:lstStyle/>${pasus('Oblačić')}</p:txBody>`;
     const r = await jedan({ spTree: oblik.geometrija(5, 'wedgeRectCallout', 0, 0, 1270000, 635000, '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>', tx) });
@@ -432,6 +477,19 @@ describe('pretvoriPptx: neispravni delovi (Review Focus 1)', () => {
     expect(platno(r).slojevi.map((s) => s.id)).toEqual(['s6']);
   });
 
+  it('skriven objekat unutar mc:Choice (crtež, formula) se ne uvozi', async () => {
+    const skriven = (xml: string, ime: string) => xml.replace(`name="${ime}"`, `name="${ime}" hidden="1"`);
+    const crtez = await jedan(
+      { spTree: skriven(crtezAc, 'Rukopis 4') + okvir(5, 0, 0), veze: VEZE_CRTEZA },   // samo p14:cNvPr u Choice
+      { delovi: { 'ppt/media/image1.png': PNG_1X1, 'ppt/ink/ink1.xml': INK } },
+    );
+    expect(platno(crtez).slojevi.map((s) => s.id)).toEqual(['s5']);
+    const formula = await jedan({ spTree: skriven(formulaAc(6, mp(razlomak)), 'Formula 6') + okvir(5, 0, 0), veze: [SLIKA_FORMULE] },
+      { delovi: { 'ppt/media/formula1.png': PNG_1X1 } });
+    expect(platno(formula).slojevi.map((s) => s.id)).toEqual(['s5']);
+    expect(formula.mediji.size).toBe(0);
+  });
+
   it('grafikon bez slike -> OBJEKAT_PRESKOCEN; OLE sa slikom u Fallback-u -> SLIKA', async () => {
     const okvirGrafike = (id: number, uri: string, sadrzaj: string) =>
       `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Objekat ${id}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>`
@@ -489,36 +547,32 @@ describe('pretvoriPptx: napredak i prekid', () => {
   });
 });
 
-describe('pretvoriPptx: kao server (svi fixture-i ovog fajla)', () => {
-  it('nepoznatFontNikadNeProlazi: fontovi iz kataloga, boje #RRGGBB, animacije ciljaju postojeće slojeve i pasuse', () => {
-    expect(rezultati.length).toBeGreaterThan(20);
-    const fontovi = new Set(FONTOVI_PLATNA.map((f) => f.naziv));
-    const BOJA = /^#[0-9A-F]{6}$/;
-    let slajdova = 0;
-    for (const r of rezultati) {
-      for (const s of r.slajdovi) {
-        slajdova++;
-        const p = s.cmd.platno!;
-        expect(proveriKaoServer(p)).toBeNull();
-        const boje: string[] = [];
-        JSON.stringify(p, (k, v) => {
-          if (typeof v === 'string' && v.startsWith('#')) boje.push(v);
-          return v;
-        });
-        expect(boje.filter((b) => !BOJA.test(b))).toEqual([]);
-        for (const sl of p.slojevi) {
-          const pasusi = sl.tip === 'TEKST' ? [sl.pasusi] : sl.tip === 'TABELA' ? sl.celije.flat().map((c) => c.pasusi) : [];
-          for (const d of pasusi.flat().flatMap((ps) => ps.delovi)) expect(fontovi.has(d.font)).toBe(true);
-        }
-        for (const a of p.animacije) {
-          const cilj = p.slojevi.find((x) => x.id === a.slojId);
-          expect(cilj).toBeDefined();
-          const c = cilj!;
-          if (a.pasus !== null) expect(c.tip === 'TEKST' && a.pasus < c.pasusi.length).toBe(true);
-        }
-        for (const m of s.mediji) expect(r.mediji.has(m)).toBe(true);
-      }
-    }
-    expect(slajdova).toBeGreaterThan(20);
+describe('pretvoriPptx: kao server', () => {
+  it('nepoznatFontNikadNeProlazi: fontovi iz kataloga, boje #RRGGBB, animacije ciljaju postojeće slojeve i pasuse', async () => {
+    const font = (ime: string) => `<a:rPr lang="sr-Latn-RS"><a:latin typeface="${ime}"/></a:rPr>`;
+    const pasusi = pasus('a', '', font('Comic Sans MS')) + pasus('b', '', font('Cambria Math')) + pasus('c', '', font('+mj-lt'))
+      + pasus('d', '<a:pPr><a:buFont typeface="Wingdings"/><a:buChar char="&#61548;"/></a:pPr>', font('Nepostojeci Font 7'));
+    const boja = '<a:rPr lang="sr-Latn-RS"><a:solidFill><a:schemeClr val="accent6"><a:lumMod val="50000"/><a:alpha val="40000"/></a:schemeClr></a:solidFill></a:rPr>';
+    const K = 914400;
+    const r = await pretvoriPptx(napraviPptx({
+      slajdovi: [{
+        spTree: oblik.tekst(5, 0, 0, 2540000, 1270000, pasusi)
+          + oblik.tekst(6, 0, 1270000, 2540000, 635000, pasus('boja', '', boja))
+          + oblik.tabela(7, K, 3 * K, [K], [tabela.red(381000, [tabela.celija('x')])]).replace('<a:rPr lang="sr-Latn-RS"/>', font('Papyrus'))
+          + oblik.grupa(10, [0, 0], [K, K], [0, 0], [K, K], okvir(11, 0, 0) + okvir(12, 0, 0))
+          + formulaAc(8, mp(mr('x')) + mp(mr('y'))),
+        veze: [SLIKA_FORMULE],
+        timing: timing([fade(5, 'clickEffect', { pasus: 3 }), fade(10), fade(8, 'withEffect', { pasus: 1 }), fade(6, 'afterEffect'), fade(99)]),
+      }],
+      delovi: { 'ppt/media/formula1.png': slikaFormule([[2, 8], [16, 22]]) },
+    }), 'f.pptx');
+    expect(r.greske).toEqual([]);
+    proveriKaoServerSve(r);
+    const p = platno(r);
+    const fontovi = new Set(p.slojevi.flatMap((s) => (s.tip === 'TEKST' ? s.pasusi : s.tip === 'TABELA' ? s.celije.flat().flatMap((c) => c.pasusi) : []))
+      .flatMap((ps) => ps.delovi.map((d) => d.font)));
+    expect([...fontovi].every((f) => FONTOVI.has(f))).toBe(true);
+    expect(ima(r, 'FONT_ZAMENJEN').length).toBeGreaterThan(0);
+    expect(p.animacije.map(anim)).toEqual(['s5#3 FADE KLIK', 's11 FADE KLIK', 's12 FADE SA_PRETHODNIM', 's8p1 FADE SA_PRETHODNIM', 's6 FADE POSLE_PRETHODNOG']);
   });
 });

@@ -244,6 +244,33 @@ describe('proveriKaoServer (ogledalo PlatnoPP.proveri posle normalizuj)', () => 
     expect(proveriKaoServer(platno([{ ...tekst('s0', 'a'), x: 1920.004, y: -960.004 }]))).toBeNull();   // zaokružuje se pre provere
   });
 
+  it.each<[string, Platno, string]>([
+    ['nivo pasusa nije ceo broj', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), nivo: 1.5 }] }]), 'slojevi[0].pasusi[0].nivo'],
+    ['početak liste nije ceo broj', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), lista: { vrsta: 'BROJ', znak: null, boja: null, format: 'ARAPSKI', pocetak: 2.5 } }] }]), 'slojevi[0].pasusi[0].lista.pocetak'],
+    ['trajanje animacije nije ceo broj', platno([tekst('s0', 'a')], [animacija({ trajanjeMs: 500.5 })]), 'animacije[0].trajanjeMs'],
+    ['spajanje ćelije nije ceo broj', platno([{ ...tabela(0), celije: [[{ ...tabela(0).celije[0][0], spojDesno: 0.5 }, tabela(0).celije[0][1]]] }]), 'slojevi[0].celije[0][0].spojDesno'],
+    ['nepoznato poravnanje', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), poravnanje: 'SREDINA' as never }] }]), 'slojevi[0].pasusi[0].poravnanje'],
+    ['nepoznat položaj dela', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), delovi: [{ ...deo('a'), polozaj: 'GORE' as never }] }] }]), 'slojevi[0].pasusi[0].delovi[0].polozaj'],
+    ['nepoznat efekat', platno([tekst('s0', 'a')], [animacija({ efekat: 'TREPNI' as never })]), 'animacije[0].efekat'],
+    ['nepoznata vrsta oblika', platno([linija({ oblik: 'ZVEZDA' as never })]), 'slojevi[0].oblik'],
+  ])('JSON sloj servera: %s -> pogrešan tip vrednosti', (_, p, putanja) => {
+    expect(proveriKaoServer(p)).toBe(`Neispravan dokument platna: pogrešan tip vrednosti (${putanja}).`);
+  });
+
+  it('JSON sloj servera: nepoznat tip sloja', () => {
+    expect(proveriKaoServer(platno([{ ...tekst('s0', 'a'), tip: 'VIDEO' as never }]))).toBe('Neispravan dokument platna: nepoznat tip sloja (slojevi[0]).');
+  });
+
+  it('beli znaci kao Java strip()/isBlank(): NBSP i U+FEFF ostaju (odbijeno), U+001F i razmak se skidaju', () => {
+    const sa = (boja: string) => proveriKaoServer({ ...platno([]), pozadina: { boja, medijId: null } });
+    expect(sa('\u00A0#FF0000')).toBe('Boja nije ispravna (#RRGGBB).');
+    expect(sa('#FF0000\uFEFF')).toBe('Boja nije ispravna (#RRGGBB).');
+    expect(sa(' #ff0000\u001F')).toBeNull();
+    const slika = (medijId: string) => proveriKaoServer(platno([{ ...osnova('s0'), tip: 'SLIKA', medijId, isecak: { levo: 0, gore: 0, desno: 0, dole: 0 } }]));
+    expect(slika('\u00A0')).toBeNull();   // Java isBlank: NBSP nije beli znak
+    expect(slika(' \t')).toBe('Sloj slike mora imati sliku.');
+  });
+
   it('dokument veći od 1 MB', () => {
     const p = platno(Array.from({ length: 5 }, (_, i) => crtez(`s${i}`, 19_999)));
     expect(bajtovaPlatna(p)).toBeGreaterThan(GRANICE.bajtova);

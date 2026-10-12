@@ -15,7 +15,7 @@ import { napraviKontekst, transformacija, type ZajednickoUvoza } from './konteks
 import {
   kutijaIzLanca, lanacPlaceholdera, placeholderOblika, stiloviNivoa, vrstaTeksta,
 } from './nasledjivanje';
-import { GEOMETRIJE, ivicaIz, nazivOblika, popunaIz, pretvoriOblik, rotacijaSloja, senkaIz, upozoriJednom } from './oblik';
+import { elementPopune, GEOMETRIJE, ivicaIz, nazivOblika, popunaIz, pretvoriOblik, rotacijaSloja, senkaIz, upozoriJednom } from './oblik';
 import { otvoriPaket } from './paket';
 import { pozadinaSlajda, pretvoriSliku } from './slika';
 import { pretvoriTabelu } from './tabela';
@@ -296,7 +296,13 @@ class GraditeljSlajda {
     const k = kg(kutija);
     const id = `${prefiks}${idObjekta(sp)}`;
     const spPr = dete(sp, NS.p, 'spPr');
-    const stil = dete(sp, NS.p, 'style');
+    // Placeholder nasleđuje popunu, liniju, efekte i stil od placeholdera layouta pa mastera (prvi član lanca koji ih ima;
+    // `a:ln` se uzima ceo). Geometrija se ne nasleđuje (F19). Oblik koji nije placeholder ima lanac [sp].
+    const spPrLanca = lanac.map((el) => dete(el, NS.p, 'spPr')).filter((x): x is Element => x !== null);
+    const spPrPopune = spPrLanca.find((x) => elementPopune(x) !== null) ?? spPr;
+    const ln = spPrLanca.map((x) => dete(x, NS.a, 'ln')).find((x) => x !== null) ?? null;
+    const spPrEfekata = spPrLanca.find((x) => dete(x, NS.a, 'effectLst') !== null) ?? spPr;
+    const stil = lanac.map((el) => dete(el, NS.p, 'style')).find((x) => x !== null) ?? null;
     const prstGeom = spPr && dete(spPr, NS.a, 'prstGeom');
     const custGeom = spPr && dete(spPr, NS.a, 'custGeom');
     const prst = prstGeom?.getAttribute('prst')?.trim() ?? null;
@@ -311,28 +317,29 @@ class GraditeljSlajda {
       : null;
     const prazan = !tekst || tekst.prazan;
     const brojPasusa = tekst?.pasusi.length ?? 0;
+    // Prazan placeholder PowerPoint ne prikazuje u prikazu slajdova (ni njegovu popunu i ivicu).
+    if (ph && prazan) return undefined;
+    const popuna = popunaIz(spPrPopune, ctx, stil);
+    const ivica = ivicaIz(ln, ctx, stil);
 
     if (pravougaonik) {
-      const popuna = popunaIz(spPr, ctx, stil);
-      const ivica = ivicaIz(spPr && dete(spPr, NS.a, 'ln'), ctx, stil);
       if (prazan) {
         if (popuna === null && ivica === null) return undefined;
         const o = pretvoriOblik(sp, k, ctx, id) ?? this.pravougaonik(sp, k, id, popuna, ivica);
         this.dodaj(o);
         return undefined;
       }
-      const senka = this.senkaTeksta(tekst!, spPr, popuna !== null || ivica !== null);
+      const senka = this.senkaTeksta(tekst!, spPrEfekata, popuna !== null || ivica !== null);
       return GraditeljSlajda.pasusiTeksta(this.dodaj(this.tekstSloj(id, sp, k, tekst!, popuna, ivica, senka)), brojPasusa);
     }
 
     let saOblikom = false;
     if (podrzana) {
       const o = pretvoriOblik(sp, k, ctx, id);
-      if (o) this.dodaj(o);
+      // Placeholder sa sopstvenom geometrijom: popuna i ivica iz lanca (`pretvoriOblik` čita samo sopstveni `spPr`).
+      if (o) this.dodaj(lanac.length > 1 && o.od === null ? { ...o, popuna, ivica } : o);
       saOblikom = o !== null;
     } else {
-      const popuna = popunaIz(spPr, ctx, stil);
-      const ivica = ivicaIz(spPr && dete(spPr, NS.a, 'ln'), ctx, stil);
       if (!prazan || popuna !== null || ivica !== null) {
         const opis = `${opisObjekta(sp, 'Oblik')} (${custGeom ? 'slobodan oblik' : prst})`;
         ctx.upozori('OBJEKAT_PRESKOCEN', prazan ? `${opis} nije podržan i nije uvezen.` : `${opis} nije podržan: uvezen je samo njegov tekst.`);
@@ -344,7 +351,7 @@ class GraditeljSlajda {
     return GraditeljSlajda.pasusiTeksta(this.dodaj(this.tekstSloj(saOblikom ? `${id}t` : id, sp, k, tekst!, null, null, senka)), brojPasusa);
   }
 
-  /** Rezerva za pravougaonik koji `pretvoriOblik` ne vrati (placeholder bez geometrije). */
+  /** Rezerva za pravougaonik koji `pretvoriOblik` ne vrati (oblik bez `prstGeom`). */
   private pravougaonik(sp: Element, k: Kutija, id: string, popuna: string | null, ivica: Ivica | null): Sloj {
     const s = uSloj(k, this.ctx.t);
     return {
@@ -465,10 +472,13 @@ class GraditeljSlajda {
     const izbori = deca(ac, NS.mc, 'Choice');
     const fallback = dete(ac, NS.mc, 'Fallback');
     const prvo = (el: Element | null) => (el ? el.firstElementChild : null);
+    // `hidden` na objektu izabranog sadržaja (Choice) ili njegove zamene (Fallback): PowerPoint ga ne prikazuje.
+    const skriven = (...el: (Element | null)[]) => el.some((e) => e !== null && tacno(cNvPr(e)?.getAttribute('hidden')));
 
     const deoCrteza = izbori.map((c) => dete(c, NS.p, 'contentPart')).find((d) => d !== null) ?? null;
     if (deoCrteza) {
       const pic = fallback && dete(fallback, NS.p, 'pic');
+      if (skriven(deoCrteza, pic)) return { spid: null };
       const spid = idObjekta(deoCrteza) || (pic ? idObjekta(pic) : '');
       const c = pretvoriCrtez(ac, kg, ctx, `${prefiks}${spid}`);
       if (c) this.dodaj(c);
@@ -479,6 +489,7 @@ class GraditeljSlajda {
     const sp = prvo(izbor);
     if (sp?.namespaceURI === NS.p && sp.localName === 'sp' && sp.getElementsByTagNameNS(NS.a14, 'm').length > 0) {
       const spid = idObjekta(sp);
+      if (skriven(sp, prvo(fallback))) return { spid: null };
       if (placeholderOblika(sp) && PRESKOCENI_PLACEHOLDERI.has(placeholderOblika(sp)!.tip)) return { spid: null };
       const animirani = prefiks === 's' ? this.animiraniPasusi.get(spid) : undefined;
       const rez = pretvoriFormulu(ac, kg, ctx, `${prefiks}${spid}`, animirani ?? new Set());
@@ -496,6 +507,7 @@ class GraditeljSlajda {
     const gf = prvo(fallback);
     if (sp?.namespaceURI === NS.p && sp.localName === 'graphicFrame' && gf?.namespaceURI === NS.p && gf.localName === 'graphicFrame'
       && gf.getElementsByTagNameNS(NS.a, 'tbl').length > 0) {
+      if (skriven(sp, gf)) return { spid: null };
       const spid = idObjekta(gf);
       const kutija = kutijaIzLanca(lanacPlaceholdera(gf, ctx));
       if (!kutija) {
