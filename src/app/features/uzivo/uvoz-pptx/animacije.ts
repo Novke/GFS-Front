@@ -1,11 +1,16 @@
 // Animacije PowerPointa (`p:timing`, niz `mainSeq`) -> animacije platna (bez Angular-a i RxJS-a).
 //
-// Vreme: PowerPoint i platno (`platno-koraci.ts`, `grupaZaKorak`) računaju isto unutar grupe klika: SA_PRETHODNIM kreće
-// kad i prethodna (pre njenog kašnjenja), POSLE_PRETHODNOG na najkasnijem kraju svih prethodnih, pa kašnjenje efekta.
-// Zato se za svaki efekat prvo izračuna početak po PowerPointu (od klika, sa SVIM efektima grupe, i onima koji se
-// preskaču), a zadržana animacija dobija kašnjenje koje na platnu daje isti početak. Bez preskakanja to je baš kašnjenje
-// efekta; sa preskočenim efektom (putanja, naglašavanje, meta koja nije uvezena) sledeći efekti ne kreću ranije nego u
-// PowerPointu. Vreme se gubi samo na granici 0..10000 ms.
+// Vreme: za svaki efekat prvo se odredi početak u PowerPointu (od klika, za SVE efekte grupe, i one koji se preskaču), a
+// zadržana animacija dobija kašnjenje koje na platnu (`platno-koraci.ts`, `grupaZaKorak`) daje isti početak. Početak je
+// onaj koji je PowerPoint zapisao: zbir kašnjenja predaka efekta u grupi klika (unutrašnji `p:par` "posle prethodnog"
+// nosi već izračunat kraj prethodnih, uključujući `p:iterate` i ponavljanje). Samo kad zapis ne nosi početak
+// (nebrojčano kašnjenje, ili efekat posle/klik koji nije prvi u svom `p:par`-u) računa se po pravilima okidača: SA kreće
+// kad i prethodni (pre njegovog kašnjenja), POSLE na najkasnijem kraju svih prethodnih, pa kašnjenje efekta (isto kao
+// platno). Bez preskakanja kašnjenje animacije je baš kašnjenje efekta; sa preskočenim efektom (putanja, naglašavanje,
+// meta koja nije uvezena) sledeći efekti ne kreću ranije nego u PowerPointu. Vreme se gubi samo na granici 0..10000 ms.
+//
+// Pretpostavka (proverava se vizuelnim poređenjem u F19): IZLAZ BRISANJE i PODELI na platnu su obrnut ulaz
+// (`kadroviAnimacije`), pa izlaz sa istim podtipom/filterom kao ulaz nestaje obrnutim redom od pojavljivanja.
 import type { Animacija, Efekat, Okidac, Smer, VrstaAnimacije } from '../data-access/platno.models';
 import type { KodUpozorenja } from './izvestaj';
 import { NS, brojAtr, dete } from './xml';
@@ -47,6 +52,10 @@ interface EfekatPptx {
   trajanje: number;
   /** Trajanje sa ponavljanjem (`repeatCount`, `autoRev`): za početak sledećih efekata. */
   ukupno: number;
+  /** Efekat ili njegovo ponašanje se ponavlja (platno pušta jedan prolaz). */
+  ponavlja: boolean;
+  /** Početak od klika kako ga je PowerPoint zapisao, ili null (računa se po okidačima). */
+  zapisaniPocetak: number | null;
 }
 
 const ogranici = (ms: number) => Math.min(MAX_MS, Math.max(0, Math.round(ms)));
@@ -84,6 +93,46 @@ function ponavljanje(c: Element): number {
   return (n > 0 ? n : 1) * obrnuto;
 }
 
+/** Čvor ima `repeatCount` različit od jednog prolaza (i `indefinite`) ili `autoRev`. */
+function ponavljaSe(c: Element): boolean {
+  const rc = c.getAttribute('repeatCount');
+  return (rc !== null && Number(rc) !== 1000) || ['1', 'true'].includes(c.getAttribute('autoRev') ?? '');
+}
+
+/** Zapisano kašnjenje čvora (`p:stCondLst/p:cond@delay`, prvi uslov), ili null kad ga nema ili nije broj. */
+function zapisanoKasnjenje(c: Element): number | null {
+  const uslovi = dete(c, NS.p, 'stCondLst');
+  const v = (uslovi && dete(uslovi, NS.p, 'cond'))?.getAttribute('delay');
+  const n = v == null || v.trim() === '' ? Number.NaN : Number(v);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
+}
+
+/**
+ * Početak efekta od klika kako ga je PowerPoint zapisao: zbir kašnjenja svih `p:cTn` predaka (i samog efekta) ispod
+ * spoljnog `p:par` grupe klika. PowerPoint stavlja svaki efekat "posle prethodnog" na čelo novog unutrašnjeg `p:par`-a
+ * sa izračunatim kašnjenjem, a "sa prethodnim" u `p:par` svog čela; efekat posle/klik koji nije prvi u svom `p:par`-u
+ * (ručno pisan XML) zapis ne opisuje, pa je tada (i za nebrojčano kašnjenje) rezultat null.
+ */
+function zapisaniPocetak(c: Element, niz: Element): number | null {
+  const lista = c.parentElement?.parentElement;
+  if (!lista) return null;
+  const braca = Array.from(lista.children).map((p) => dete(p, NS.p, 'cTn')).filter((x): x is Element => !!x?.hasAttribute('presetClass'));
+  const k = braca.indexOf(c);
+  for (let i = 1; i <= k; i++) if (braca[i].getAttribute('nodeType') !== 'withEffect') return null;
+  const preci: Element[] = [];
+  let x: Element | null = c;
+  for (; x && x !== niz; x = x.parentElement) if (x.localName === 'cTn' && x.namespaceURI === NS.p) preci.push(x);
+  if (x !== niz || preci.length < 2) return null;
+  preci.pop();   // spoljni `p:cTn` grupe klika (`delay="indefinite"`, kreće na klik)
+  let t = 0;
+  for (const p of preci) {
+    const d = zapisanoKasnjenje(p);
+    if (d === null) return null;
+    t += d;
+  }
+  return t;
+}
+
 function opsegPasusa(pRg: Element): number[] | null {
   const st = brojAtr(pRg, 'st', -1);
   if (!Number.isInteger(st) || st < 0) return null;
@@ -103,13 +152,15 @@ function metaEfekta(efekat: Element): MetaEfekta | null {
   return { spid, pasusi, deo: pasusi === null && tgt.children.length > 0 };
 }
 
-function procitaj(c: Element): EfekatPptx {
+function procitaj(c: Element, niz: Element): EfekatPptx {
   const klasa = c.getAttribute('presetClass') ?? '';
   const preset = brojAtr(c, 'presetID', 0);
   const tip = c.getAttribute('nodeType');
   let trajanje = 0;
   let ukupno = 0;
+  let ponavlja = ponavljaSe(c);
   for (const d of cvorovi(c)) {
+    ponavlja ||= ponavljaSe(d);
     const dur = brojAtr(d, 'dur', Number.NaN);
     if (!Number.isFinite(dur) || dur < 0) continue;
     trajanje = Math.max(trajanje, kasnjenjeCvora(d) + dur);
@@ -127,6 +178,8 @@ function procitaj(c: Element): EfekatPptx {
     kasnjenje: kasnjenjeCvora(c),
     trajanje: pojavi ? 0 : trajanje,
     ukupno: pojavi ? 0 : ukupno * ponavljanje(c),
+    ponavlja,
+    zapisaniPocetak: zapisaniPocetak(c, niz),
   };
 }
 
@@ -146,6 +199,7 @@ function preslikaj(e: EfekatPptx, u: Zbirna): Preslikano {
     case 1: return { efekat: 'POJAVI', smer: null };
     case 10: return { efekat: 'FADE', smer: null };
     case 2: return { efekat: 'ULET', smer: smerIzPodtipa(e.podtip) };
+    // BRISANJE i PODELI kao IZLAZ: platno obrće ulaz (pretpostavka iz zaglavlja, proverava F19).
     case 22: return { efekat: 'BRISANJE', smer: smerIzPodtipa(e.podtip) };
     case 16: {
       const m = /barn\((in|out)?(vertical|horizontal)\)/i.exec(e.filter);
@@ -230,7 +284,7 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
   if (nizovi(timing, 'interactiveSeq').some((n) => efektiNiza(n).length > 0)) {
     u.dodaj('ANIMACIJA_PRESKOCENA', 'Preskočene su animacije koje pokreće klik na objekat: okidač klikom na objekat nije podržan.');
   }
-  const efekti = nizovi(timing, 'mainSeq').flatMap(efektiNiza).map(procitaj);
+  const efekti = nizovi(timing, 'mainSeq').flatMap((niz) => efektiNiza(niz).map((c) => procitaj(c, niz)));
   const grupe: EfekatPptx[][] = [[]];
   for (const e of efekti) {
     if (e.okidac === 'clickEffect') grupe.push([e]); else grupe[grupe.length - 1].push(e);
@@ -249,8 +303,8 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
     let trebaKlik = gi > 0;
     grupa.forEach((e, i) => {
       const okidanje = i === 0 ? 0 : e.okidac === 'afterEffect' ? krajPpt : okidanjePpt;
-      const pocetak = okidanje + e.kasnjenje;
-      okidanjePpt = okidanje;
+      const pocetak = e.zapisaniPocetak ?? okidanje + e.kasnjenje;
+      okidanjePpt = e.zapisaniPocetak === null ? okidanje : Math.max(0, pocetak - e.kasnjenje);
       krajPpt = Math.max(krajPpt, pocetak + e.ukupno);
 
       if (e.klasa !== 'entr' && e.klasa !== 'exit') {
@@ -262,6 +316,7 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
       if (cilj.length === 0) return;
       const { efekat, smer } = preslikaj(e, u);
       if (e.iterira) u.dodaj('TEKST_PRIBLIZAN', 'Animacija po rečima ili slovima prikazuje ceo tekst odjednom.');
+      if (e.ponavlja) u.dodaj('EFEKAT_PRIBLIZAN', 'Ponavljanje efekta se ne prenosi: efekat se pušta jednom.');
       const trajanjeMs = efekat === 'POJAVI' ? 0 : ogranici(e.trajanje);
       cilj.forEach((c, j) => {
         const okidac: Okidac = j > 0 ? 'SA_PRETHODNIM' : trebaKlik ? 'KLIK' : e.okidac === 'afterEffect' ? 'POSLE_PRETHODNOG' : 'SA_PRETHODNIM';

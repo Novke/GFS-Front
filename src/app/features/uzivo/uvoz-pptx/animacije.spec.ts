@@ -244,6 +244,62 @@ describe('pretvoriAnimacije: Review Focus 3', () => {
   });
 });
 
+/** Efekat Fade u zapisu kakav piše PowerPoint (sa jednim ponašanjem `animEffect`). */
+const fadeXml = (spid: number, okidac: string, o: { dur?: number; kasnjenje?: number; iterate?: string } = {}) =>
+  `<p:par><p:cTn id="9" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" nodeType="${okidac}">`
+  + `<p:stCondLst><p:cond delay="${o.kasnjenje ?? 0}"/></p:stCondLst>${o.iterate ?? ''}<p:childTnLst>`
+  + `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="9" dur="${o.dur ?? 500}"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>`
+  + '</p:childTnLst></p:cTn></p:par>';
+const parXml = (kasnjenje: string, deca: string[]) =>
+  `<p:par><p:cTn id="8" fill="hold"><p:stCondLst><p:cond delay="${kasnjenje}"/></p:stCondLst><p:childTnLst>${deca.join('')}</p:childTnLst></p:cTn></p:par>`;
+/** `p:timing` kao kod PowerPointa: grupa klika -> unutrašnji `p:par` sa zapisanim kašnjenjem -> efekti. */
+const kanonski = (grupe: [string, string[]][][]) => '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
+  + '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
+  + grupe.map((g) => parXml('indefinite', g.map(([d, e]) => parXml(d, e)))).join('')
+  + '</p:childTnLst></p:cTn></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
+const ITERATE = '<p:iterate type="lt"><p:tmPct val="10000"/></p:iterate>';
+
+describe('pretvoriAnimacije: zapisano vreme PowerPointa', () => {
+  it('p:iterate pa afterEffect: početak iz zapisanog p:par (950 ms), ne iz rekonstrukcije (500 ms)', () => {
+    // 10 slova, 10% razmaka: PowerPoint zapisuje kraj 500 + 9 x 50 = 950.
+    const r = pretvori(kanonski([[['0', [fadeXml(5, 'clickEffect', { iterate: ITERATE })]], ['950', [fadeXml(6, 'afterEffect')]]]]));
+    expect(r.animacije.map((a) => [a.slojId, a.okidac, a.kasnjenjeMs])).toEqual([['s5', 'KLIK', 0], ['s6', 'POSLE_PRETHODNOG', 450]]);
+    expect(r.kodovi).toEqual(['TEKST_PRIBLIZAN']);
+  });
+
+  it('nebrojčano kašnjenje p:par-a -> rekonstrukcija po okidačima', () => {
+    const r = pretvori(kanonski([[['0', [fadeXml(5, 'clickEffect')]], ['indefinite', [fadeXml(6, 'afterEffect', { kasnjenje: 100 })]]]]));
+    expect(r.animacije.map((a) => [a.slojId, a.okidac, a.kasnjenjeMs])).toEqual([['s5', 'KLIK', 0], ['s6', 'POSLE_PRETHODNOG', 100]]);
+  });
+
+  it('kanonski lanac (posle + sa u istom p:par-u) daje isto što i okidači', () => {
+    const r = pretvori(kanonski([[['0', [fadeXml(5, 'clickEffect')]], ['500', [fadeXml(6, 'afterEffect'), fadeXml(7, 'withEffect', { kasnjenje: 200 })]]]]));
+    expect(r.animacije.map((a) => [a.slojId, a.okidac, a.kasnjenjeMs])).toEqual([
+      ['s5', 'KLIK', 0], ['s6', 'POSLE_PRETHODNOG', 0], ['s7', 'SA_PRETHODNIM', 200],
+    ]);
+  });
+});
+
+describe('pretvoriAnimacije: ponavljanje', () => {
+  const sa1 = (xml: string, a: string, b: string) => xml.replace(a, b);
+  it.each([
+    ['repeatCount="3000"', (x: string) => sa1(x, 'nodeType="clickEffect">', 'nodeType="clickEffect" repeatCount="3000">'), 1000],
+    ['repeatCount="indefinite" (1 prolaz)', (x: string) => sa1(x, 'nodeType="clickEffect">', 'nodeType="clickEffect" repeatCount="indefinite">'), 0],
+    ['autoRev na ponašanju', (x: string) => sa1(x, 'dur="500"/>', 'dur="500" autoRev="1"/>'), 500],
+  ] as [string, (x: string) => string, number][])('%s: jedan prolaz na platnu, sledeći efekat čeka kao u PowerPointu, EFEKAT_PRIBLIZAN', (_, izmena, kasnjenje) => {
+    const r = pretvori(izmena(timing([klik(), posle({ spid: 6 })])));
+    expect(r.animacije.map((a) => [a.okidac, a.trajanjeMs, a.kasnjenjeMs])).toEqual([['KLIK', 500, 0], ['POSLE_PRETHODNOG', 500, kasnjenje]]);
+    expect(r.kodovi).toEqual(['EFEKAT_PRIBLIZAN']);
+  });
+
+  it('repeatCount="1000" je jedan prolaz bez upozorenja; dva ponavljanja na slajdu -> jedno upozorenje', () => {
+    const jedan = pretvori(timing([klik()]).replace('nodeType="clickEffect">', 'nodeType="clickEffect" repeatCount="1000">'));
+    expect(jedan.kodovi).toEqual([]);
+    const dva = pretvori(timing([klik(), klik({ spid: 6 })]).replaceAll('nodeType="clickEffect">', 'nodeType="clickEffect" repeatCount="2000">'));
+    expect(dva.upozorenja).toEqual([{ kod: 'EFEKAT_PRIBLIZAN', poruka: 'Ponavljanje efekta se ne prenosi: efekat se pušta jednom (2 puta).' }]);
+  });
+});
+
 describe('pasusiSaAnimacijom', () => {
   it('dva efekta na spid 5, pasusi 0 i 2 -> {5 -> {0, 2}}', () => {
     const m = pasusiSaAnimacijom(tm(timing([klik({ pasus: 0 }), klik({ pasus: 2 }), klik({ spid: 6 })])));
