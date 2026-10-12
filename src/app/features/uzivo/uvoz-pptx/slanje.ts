@@ -49,6 +49,8 @@ const ID_ZA_MERENJE = '0'.repeat(DUZINA_ID_MEDIJA);
 const ISTOVREMENO = 3;
 const PREKINUTA_VEZA = 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.';
 const PREVELIK_UVOZ = 'Uvoz je prevelik (najviše 10 MB). Izaberi manji opseg slajdova.';
+const NEPROCITAN_ODGOVOR = 'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.';
+const PREVISE_ZAHTEVA = 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.';
 
 /** Uvezeni slajdovi u opsegu izbora (skriveni i neuspeli ne postoje u rezultatu, pa ih opseg samo preskače). */
 export function izaberiSlajdove(r: RezultatUvoza, izbor: IzborUvoza): UvezenSlajd[] {
@@ -97,8 +99,13 @@ const megabajta = (b: number) => (Math.ceil((b / MB) * 10) / 10).toFixed(1).repl
 
 const bezTacke = (s: string) => s.replace(/[.\s]+$/, '');
 
+const NEBEZBEDNA_VEZA = 'Pregledač ne dozvoljava proveru slika na nebezbednoj vezi (http). Otvori aplikaciju preko https i pokušaj ponovo.';
+
+/** SHA-256, hex. `crypto.subtle` postoji samo u bezbednom kontekstu (https, localhost): bez njega -> `GreskaSlanja`. */
 async function sha256(b: Uint8Array): Promise<string> {
-  const h = await crypto.subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>);
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new GreskaSlanja(NEBEZBEDNA_VEZA);
+  const h = await subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>);
   return Array.from(new Uint8Array(h), (x) => x.toString(16).padStart(2, '0')).join('');
 }
 
@@ -117,7 +124,15 @@ interface Priprema { slike: SlikaZaSlanje[]; hesPoKljucu: Map<string, string>; u
  * (+ `SLIKA_SMANJENA`); heš gotovih bajtova; isti heš -> jedna slika. Ista izvorna slika se priprema jednom.
  */
 async function pripremi(r: RezultatUvoza, izabrani: readonly UvezenSlajd[], z: ZavisnostiSlanja): Promise<Priprema> {
-  const hes = z.hes ?? sha256;
+  const izracunaj = z.hes ?? sha256;
+  /** Heš sa porukom za korisnika: `GreskaSlanja` prolazi, ostalo -> slika nije mogla da se pripremi. */
+  const hes = async (b: Uint8Array, ime: string) => {
+    try {
+      return await izracunaj(b);
+    } catch (e) {
+      throw e instanceof GreskaSlanja ? e : new GreskaSlanja(`Slika ${ime} nije mogla da se pripremi.`);
+    }
+  };
   const smanji = z.smanji ?? smanjiSliku;
   const prviSlajd = new Map<string, number>();
   for (const s of izabrani) for (const k of s.mediji) if (!prviSlajd.has(k)) prviSlajd.set(k, s.indeks);
@@ -137,7 +152,7 @@ async function pripremi(r: RezultatUvoza, izabrani: readonly UvezenSlajd[], z: Z
     }
     if (!bajtovi) throw new GreskaSlanja(`Slika ${ime} nije pronađena u fajlu.`);
 
-    const hesIzvora = await hes(bajtovi);
+    const hesIzvora = await hes(bajtovi, ime);
     const poznat = izvorni.get(hesIzvora);
     if (poznat !== undefined) {
       hesPoKljucu.set(kljuc, poznat);
@@ -158,7 +173,7 @@ async function pripremi(r: RezultatUvoza, izabrani: readonly UvezenSlajd[], z: Z
       if (!mime || smanjena.bajtovi.length > MAX_SLIKA) throw new GreskaSlanja(`Slika ${ime} nije mogla da se pripremi.`);
       bajtovi = smanjena.bajtovi;
       imeFajla = smanjena.ime;
-      hesSlanja = await hes(bajtovi);
+      hesSlanja = await hes(bajtovi, ime);
       upozorenja.push({ slajd, kod: 'SLIKA_SMANJENA', poruka: `Slika ${ime} je ${razlog}: poslata je kao ${imeFajla} (${megabajta(bajtovi.length)} MB).` });
     }
     izvorni.set(hesIzvora, hesSlanja);
@@ -195,17 +210,18 @@ const porukaStatusa = (e: unknown) => (e instanceof HttpErrorResponse ? `server 
 
 /**
  * Greška `POST slajdovi/uvoz` za korisnika. Uvoz se nikad ne ponavlja sam (nije idempotentan): bez odgovora servera
- * (veza, 502/503/504 bez poruke) slajdovi su možda već dodati, pa poruka to kaže.
+ * (veza, 502/503/504 bez poruke) ili sa nepročitanim uspešnim odgovorom (2xx) slajdovi su možda već dodati, pa poruka
+ * to kaže. `Slajd N: …` se preslikava na redni broj u PPTX-u bez obzira na status.
  */
 function greskaUvoza(e: unknown, izabrani: readonly UvezenSlajd[]): GreskaSlanja {
   if (!(e instanceof HttpErrorResponse)) return e instanceof GreskaSlanja ? e : new GreskaSlanja('Slajdovi nisu uvezeni: neočekivana greška.');
+  if (e.status >= 200 && e.status < 300) return new GreskaSlanja(NEPROCITAN_ODGOVOR);
   const reason = e.status === 0 ? '' : razlogGreske(e, '');
-  if (e.status === 400) {
-    const m = /^Slajd (\d+): ([\s\S]*)$/.exec(reason);
-    const s = m ? izabrani[Number(m[1]) - 1] : undefined;
-    if (m && s) return new GreskaSlanja(`PowerPoint slajd ${s.indeks}: ${m[2]}`);
-  }
+  const m = /^Slajd (\d+): ([\s\S]*)$/.exec(reason);
+  const s = m ? izabrani[Number(m[1]) - 1] : undefined;
+  if (m && s) return new GreskaSlanja(`PowerPoint slajd ${s.indeks}: ${m[2]}`);
   if (e.status === 413) return new GreskaSlanja(reason || PREVELIK_UVOZ);
+  if (e.status === 429) return new GreskaSlanja(PREVISE_ZAHTEVA);
   if (!reason && (e.status === 0 || e.status >= 500)) return new GreskaSlanja(PREKINUTA_VEZA);
   if (e.status >= 500) return new GreskaSlanja(`Slajdovi nisu uvezeni: ${reason}`);
   return new GreskaSlanja(reason || `Slajdovi nisu uvezeni (greška ${e.status}).`);

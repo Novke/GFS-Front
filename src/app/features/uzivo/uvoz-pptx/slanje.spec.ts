@@ -235,6 +235,41 @@ describe('posaljiUvoz', () => {
     expect((r3.ishod.greska as Error).message).toBe('Slika b.png nije mogla da se pripremi.');
   });
 
+  it('heš koji baci -> GreskaSlanja "nije mogla da se pripremi", nijedan upload', async () => {
+    const api = new LazniApi();
+    const { z } = zavisnosti(api, { hes: async () => { throw new Error('digest'); } });
+    const { ishod } = pokreni(rezultat([slajd(1, [slika('s1', 'pptx:ppt/media/image1.png')], ['pptx:ppt/media/image1.png'])], { 'pptx:ppt/media/image1.png': png(1) }),
+      { od: 1, do: 1, posle: null }, z);
+    await tik();
+    expect(ishod.greska).toBeInstanceOf(GreskaSlanja);
+    expect((ishod.greska as Error).message).toBe('Slika image1.png nije mogla da se pripremi.');
+    expect(api.uploadi).toHaveLength(0);
+  });
+
+  it('podrazumevani heš bez crypto.subtle (http, nebezbedna veza) -> jasna GreskaSlanja', async () => {
+    vi.stubGlobal('crypto', {});
+    try {
+      const api = new LazniApi();
+      const { z } = zavisnosti(api, { hes: undefined });
+      const { ishod } = pokreni(rezultat([slajd(1, [slika('s1', 'gen:1')], ['gen:1'])], { 'gen:1': png(1) }), { od: 1, do: 1, posle: null }, z);
+      await tik();
+      expect(ishod.greska).toBeInstanceOf(GreskaSlanja);
+      expect((ishod.greska as Error).message)
+        .toBe('Pregledač ne dozvoljava proveru slika na nebezbednoj vezi (http). Otvori aplikaciju preko https i pokušaj ponovo.');
+      expect(api.uploadi).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('podrazumevani heš je SHA-256 (hex): iste slike -> jedan upload', async () => {
+    const api = new LazniApi();
+    const { z } = zavisnosti(api, { hes: undefined });
+    pokreni(rezultat([slajd(1, [slika('s1', 'gen:1'), slika('s2', 'gen:2'), slika('s3', 'gen:3')], ['gen:1', 'gen:2', 'gen:3'])],
+      { 'gen:1': png(1), 'gen:2': png(1), 'gen:3': png(2) }), { od: 1, do: 1, posle: null }, z);
+    await vi.waitFor(() => expect(api.uploadi).toHaveLength(2));
+  });
+
   it('slika bez bajtova u fajlu -> GreskaSlanja pre ijednog upload-a', async () => {
     const api = new LazniApi();
     const r = rezultat([slajd(1, [slika('s1', 'gen:1'), slika('s2', 'pptx:ppt/media/image9.png')], ['gen:1', 'pptx:ppt/media/image9.png'])],
@@ -298,6 +333,15 @@ describe('posaljiUvoz', () => {
       [greska(0), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
       [greska(504), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
       [greska(500, 'Sistemska greška.'), 'Slajdovi nisu uvezeni: Sistemska greška.'],
+      [greska(429), 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.'],
+      [greska(429, 'Previše zahteva.'), 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.'],
+      // 201 čiji odgovor nije pročitan (HttpClient: greška parsiranja sa statusom 2xx): uvoz je verovatno upisan
+      [new HttpErrorResponse({ status: 201, error: { error: new SyntaxError('JSON'), text: '<html>' } }),
+        'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
+      // "Slajd N:" se preslikava po poruci, bez obzira na status
+      [greska(422, 'Slajd 1: Font nije podržan: Y.'), 'PowerPoint slajd 1: Font nije podržan: Y.'],
+      // broj slajda van izbora: poruka servera ostaje
+      [greska(400, 'Slajd 9: Font nije podržan: Y.'), 'Slajd 9: Font nije podržan: Y.'],
     ];
     for (const [e, poruka] of slucajevi) {
       const api = new LazniApi();
@@ -321,16 +365,20 @@ describe('posaljiUvoz', () => {
     ]);
   });
 
-  it('otkazivanje: odjava posle prvog upload-a -> ostali se ne pozivaju, uvezi nije pozvan', async () => {
+  it('otkazivanje: 5 medija, 3 paralelno; odjava posle prvog odgovora -> broj započetih ne raste, uvezi nije pozvan', async () => {
     const api = new LazniApi();
-    const kljucevi = [1, 2, 3, 4].map((i) => `gen:${i}`);
+    const kljucevi = [1, 2, 3, 4, 5].map((i) => `gen:${i}`);
     const r = rezultat([slajd(1, kljucevi.map((k, i) => slika(`s${i}`, k)), kljucevi)], Object.fromEntries(kljucevi.map((k, i) => [k, razlicit(i)])));
     const { pretplata } = pokreni(r, { od: 1, do: 1, posle: null }, zavisnosti(api).z);
     await tik();
+    expect(api.uploadi).toHaveLength(3);
     api.odgovoriUpload(0, 'a');
     expect(api.uploadi).toHaveLength(4);
     pretplata.unsubscribe();
     expect(api.uploadi.slice(1).every((u) => !u.odgovor.observed)).toBe(true);
+    // odgovori koji stignu posle odjave ne pokreću 5. upload
+    api.odgovoriUpload(1, 'b');
+    api.odgovoriUpload(2, 'c');
     await tik();
     expect(api.uploadi).toHaveLength(4);
     expect(api.uvozi).toHaveLength(0);
