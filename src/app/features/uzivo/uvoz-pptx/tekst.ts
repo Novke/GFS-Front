@@ -3,7 +3,7 @@
 import type { Deo, FormatBroja, Lista, Okvir, Pasus, Polozaj, Poravnanje, Senka, Sidro, Tabulator } from '../data-access/platno.models';
 import { razresiBodyPr, razresiPPr, razresiRPr, type RazresenPPr, type RazresenRPr } from './nasledjivanje';
 import { bojaIz, pomesaj, zamenaFonta, type Boja, type KontekstBoja } from './tema';
-import { EMU_PO_PT, zaokruzi, type KontekstSlajda } from './tipovi';
+import { EMU_PO_PT, zaokruzi, zaokruziKaoServer, type KontekstSlajda } from './tipovi';
 import { brojAtr, dete, NS } from './xml';
 
 /**
@@ -26,7 +26,8 @@ const ogranici = (n: number, min: number, max: number) => Math.min(max, Math.max
 /** EMU -> jedinice platna (bez pomeraja), 2 decimale, bez `-0`. */
 const uJed = (emu: number, s: number) => zaokruzi(emu / EMU_PO_PT * s) || 0;
 
-const odnos = (n: number) => Math.round(n * 10000) / 10000;
+/** `skala` i `skalaProreda`: server ih čuva sa 2 decimale (`PlatnoPP.okvir`), pa i uvoz, da prikaz = sačuvano. */
+const odnos = zaokruziKaoServer;
 
 const PORAVNANJA: Readonly<Record<string, Poravnanje>> = {
   l: 'LEVO', ctr: 'CENTAR', r: 'DESNO', just: 'OBOSTRANO', dist: 'OBOSTRANO', justLow: 'OBOSTRANO', thaiDist: 'OBOSTRANO',

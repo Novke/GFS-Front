@@ -54,7 +54,8 @@ export function pretvoriBeleske(doc: Document | null): { tekst: string | null; s
   const txBody = sp ? dete(sp, NS.p, 'txBody') : null;
   if (!txBody) return { tekst: null, skraceno: false };
   const elementi = deca(txBody, NS.a, 'p');
-  const tekstovi = elementi.map(tekstPasusa);
+  // pasus samo od razmaka i prelomaka je prazan (kao `prazanUNull` na serveru): bez oznake liste i briše se sa kraja
+  const tekstovi = elementi.map(tekstPasusa).map((t) => (t.trim() === '' ? '' : t));
   const oznake = oznakeListe(elementi.map((p, i) => zaOznake(p, tekstovi[i])));
   const redovi = tekstovi.map((t, i) => (t === '' ? '' : `${oznake[i] ? `${oznake[i]} ` : ''}${t}`));
   while (redovi.length > 0 && redovi[redovi.length - 1] === '') redovi.pop();

@@ -54,6 +54,13 @@ describe('pretvoriBeleske', () => {
     expect(pretvoriBeleske(beleske('<a:p/><a:p/>'))).toEqual({ tekst: null, skraceno: false });
   });
 
+  it('pasus samo sa a:br ili razmacima je prazan: bez oznake liste i briše se sa kraja; razmaci u beleškama -> null', () => {
+    const pPr = num('arabicPeriod');
+    expect(pretvoriBeleske(beleske(p('a', pPr) + `<a:p>${pPr}<a:br/></a:p>` + p('b', pPr))).tekst).toBe('1. a\n\n2. b');
+    expect(pretvoriBeleske(beleske(p('a') + '<a:p><a:br/></a:p>' + p('   ') + '<a:p><a:r><a:t> </a:t></a:r><a:br/></a:p>')).tekst).toBe('a');
+    expect(pretvoriBeleske(beleske(p('   ') + '<a:p><a:br/></a:p>'))).toEqual({ tekst: null, skraceno: false });
+  });
+
   it('tačno 20 000 znakova prolazi, 20 001 se skraćuje na 20 000', () => {
     expect(pretvoriBeleske(beleske(p('x'.repeat(20_000))))).toEqual({ tekst: 'x'.repeat(20_000), skraceno: false });
     const r = pretvoriBeleske(beleske(p('x'.repeat(20_001))));

@@ -337,9 +337,9 @@ describe('pretvoriTekst: okvir', () => {
     expect(tekstOkvir(p(run('a')), '<a:bodyPr anchor="just"/>').r.okvir.sidro).toBe('VRH');
   });
 
-  it('autofit: fontScale 62,5 %, lnSpcReduction 20 % -> skala 0,625, skalaProreda 0,8', () => {
+  it('autofit: fontScale 62,5 %, lnSpcReduction 20 % -> skala 0,63 (server zaokružuje na 2 decimale), skalaProreda 0,8', () => {
     const { r } = tekstOkvir(p(run('a')), '<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>');
-    expect(r.okvir.skala).toBe(0.625);
+    expect(r.okvir.skala).toBe(0.63);
     expect(r.okvir.skalaProreda).toBe(0.8);
   });
 

@@ -5,9 +5,9 @@
 //    plus `latex` FORMULE;
 //  - tačke: po CRTEZ sloju, zbir `tacke.length / 2` preko poteza (parovi x, y);
 //  - bajtovi: UTF-8 dužina serijalizacije koju server pravi posle normalizacije (vidi `bajtovaPlatna`).
-import type { Platno, Pasus, Sloj } from '../data-access/platno.models';
+import type { OblikSloj, Pasus, Platno, Sloj } from '../data-access/platno.models';
 import type { KodUpozorenja } from './izvestaj';
-import { zaokruzi } from './tipovi';
+import { zaokruziKaoServer } from './tipovi';
 
 export const GRANICE = {
   slojeva: 300, animacija: 400, znakova: 50_000, tacakaPoCrtezu: 20_000, bajtova: 1_048_576, beleske: 20_000,
@@ -16,20 +16,50 @@ export const GRANICE = {
 /** Polja koja server drži kao `Integer` (ostali brojevi su `Double`: Jackson piše `100.0` za ceo broj). */
 const CELOBROJNA_POLJA: ReadonlySet<string> = new Set(['verzija', 'nivo', 'pocetak', 'spojDesno', 'spojDole', 'pasus', 'trajanjeMs', 'kasnjenjeMs']);
 
+/** Dužina `Double.toString` zapisa (Jackson piše `Double` kao Java) za |x| >= 1e7: `1.23456789E7`, `1.0E7`. */
+function javaNaucni(x: number): string {
+  const [mantisa, izlozilac] = Math.abs(x).toExponential().split('e');
+  return `${x < 0 ? '-' : ''}${mantisa.includes('.') ? mantisa : `${mantisa}.0`}E${Number(izlozilac)}`;
+}
+
+/** Oblik kakav server upisuje posle `PlatnoPP.normalizuj` za polja koja uvoz sme da ostavi praznim. */
+function kaoServer(p: Platno): Platno {
+  const linija = (o: OblikSloj) => o.oblik === 'LINIJA' || o.oblik === 'STRELICA' || o.oblik === 'DVOSTRUKA_STRELICA';
+  return {
+    ...p,
+    slojevi: p.slojevi.map((s) => {
+      if (s.tip !== 'OBLIK' || !linija(s)) return s;
+      const y = zaokruziKaoServer(zaokruziKaoServer(s.visina) / 2);
+      return { ...s, od: s.od ?? { x: 0, y }, do: s.do ?? { x: zaokruziKaoServer(s.sirina), y } };
+    }),
+    animacije: p.animacije.map((a) => ({
+      ...a,
+      smer: a.smer ?? (a.efekat === 'ULET' ? 'DOLE' : a.efekat === 'PODELI' ? 'VERTIKALNO' : a.efekat === 'BRISANJE' || a.efekat === 'ISCRTAJ' ? 'LEVO' : null),
+      trajanjeMs: a.efekat === 'POJAVI' ? 0 : a.trajanjeMs,
+    })),
+  };
+}
+
 /**
- * UTF-8 dužina dokumenta onako kako ga server serijalizuje (`PlatnoJson.velicinaBajtova`, provera `PlatnoPP.proveriVelicinu`):
- * server normalizuje (brojke `Double` zaokružuje HALF_UP na 2 decimale) i piše `Double` sa `.0` kad je ceo (`100` -> `100.0`),
- * pa se isto računa ovde: `JSON.stringify` posle zaokruživanja plus 2 bajta za svaki ceo broj u `Double` polju.
- * Redosled polja i razmaci ne utiču (server piše bez razmaka, kao `JSON.stringify`). Pretpostavlja potpun dokument (sva
- * polja postoje, `null` gde nema vrednosti), kakav pravi uvoz.
+ * UTF-8 dužina dokumenta onako kako ga server serijalizuje (`PlatnoJson.velicinaBajtova` posle `PlatnoPP.normalizuj`,
+ * provera `PlatnoPP.proveriVelicinu`).
+ * Meri se oblik koji server upisuje, ne ono što klijent pošalje:
+ *  - `Double` polja se zaokružuju kao server (`zaokruziKaoServer`) i pišu sa `.0` kad su ceo broj (`100` -> `100.0`: +2 bajta),
+ *    a `Integer` polja (`verzija`, `nivo`, `pocetak`, `spojDesno`, `spojDole`, `pasus`, `trajanjeMs`, `kasnjenjeMs`) ne;
+ *  - za |x| >= 1e7 Jackson piše naučni zapis (`1.23456789E7`); granica koordinata je 2880, pa import to ne daje, ali je izmereno;
+ *  - linije (LINIJA, STRELICA, DVOSTRUKA_STRELICA) bez `od`/`do` dobijaju krajeve (0, visina/2) i (širina, visina/2);
+ *  - `smer` koji nedostaje: ULET -> DOLE, PODELI -> VERTIKALNO, BRISANJE i ISCRTAJ -> LEVO; POJAVI ima trajanje 0;
+ *  - razmaci i redosled polja ne utiču (obe strane pišu bez razmaka, `null` se piše).
+ * Pretpostavlja ostala polja popunjena (model ih tako i tipizira).
  */
 export function bajtovaPlatna(p: Platno): number {
   let dodatak = 0;
-  const tekst = JSON.stringify(p, function (this: unknown, kljuc: string, vrednost: unknown) {
+  const tekst = JSON.stringify(kaoServer(p), function (this: unknown, kljuc: string, vrednost: unknown) {
     if (typeof vrednost !== 'number') return vrednost;
     if (!Array.isArray(this) && CELOBROJNA_POLJA.has(kljuc)) return vrednost;
-    const z = zaokruzi(vrednost);
-    if (Number.isInteger(z)) dodatak += 2;
+    const z = zaokruziKaoServer(vrednost);
+    if (Math.abs(z) >= 1e7) dodatak += javaNaucni(z).length - String(z).length;
+    else if (Number.isInteger(z)) dodatak += 2;
     return z;
   });
   return new TextEncoder().encode(tekst).length + dodatak;
