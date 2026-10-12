@@ -1,5 +1,5 @@
 import { zlibSync } from 'fflate';
-import { dekodirajPng, isecRedove, kodirajPng, pojaseviMastila, type Rgba } from './png';
+import { dekodirajPng, isecKolone, isecRedove, kodirajPng, pojaseviMastila, type Rgba } from './png';
 
 const POTPIS = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const u32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
@@ -76,6 +76,13 @@ describe('kodirajPng / dekodirajPng', () => {
     expect(drugiRed).toEqual(ocekivano);
   });
 
+  it('ogromne dimenzije iz zaglavlja (preko 4 M piksela) daju null pre ikakve alokacije', () => {
+    const t0 = performance.now();
+    expect(dekodirajPng(png(ihdr(70000, 70000, 8, 6), [idat([0, 0, 0, 0, 0])]))).toBeNull();
+    expect(dekodirajPng(png(ihdr(2049, 2048, 8, 0), [idat([0, 0])]))).toBeNull();
+    expect(performance.now() - t0).toBeLessThan(50);
+  });
+
   it('16-bitni IHDR, prepleteni PNG, nepoznat filter i pokvaren fajl daju null', () => {
     expect(dekodirajPng(png(ihdr(1, 1, 16, 0), [idat([0, 0, 0])]))).toBeNull();
     expect(dekodirajPng(png(ihdr(1, 1, 8, 0, 1), [idat([0, 0])]))).toBeNull();
@@ -121,14 +128,34 @@ describe('pojaseviMastila', () => {
   it('mastilo do poslednjeg reda: poslednji pojas se završava na visini slike', () => {
     expect(pojaseviMastila(slikaSaMastilom(10, [[0, 2], [8, 10]], 'providna'), 2)).toEqual([[0, 5], [5, 10]]);
   });
-  it('skoro beo ili skoro providan piksel nije mastilo', () => {
-    const r = slikaSaMastilom(10, [[1, 2], [6, 7]], 'providna');
+  it('na beloj pozadini skoro beo piksel nije mastilo', () => {
+    const r = slikaSaMastilom(10, [[1, 2], [6, 7]], 'bela');
     r.piksli.set([250, 250, 250, 255], (3 * 10) * 4);   // red 3: skoro beo
-    r.piksli.set([0, 0, 0, 20], (4 * 10) * 4);         // red 4: alfa 20
     expect(pojaseviMastila(r, 2)).toEqual([[0, 4], [4, 10]]);
+  });
+  it('na providnoj pozadini odlučuje samo alfa: belo mastilo se broji, alfa 20 ne', () => {
+    const r = slikaSaMastilom(30, [], 'providna');
+    for (const y of [2, 3, 4, 5, 12, 13, 14, 15]) r.piksli.set([255, 255, 255, 255], (y * 10 + 3) * 4);
+    r.piksli.set([0, 0, 0, 20], (20 * 10) * 4);
+    expect(pojaseviMastila(r, 2)).toEqual([[0, 9], [9, 30]]);
+  });
+  it('neverovatni pojasevi (razlomak: brojilac, crta, imenilac kao tri "pasusa") daju null', () => {
+    const r = slikaSaMastilom(40, [[0, 12], [16, 17], [21, 33]], 'providna');
+    expect(pojaseviMastila(r, 3)).toBeNull();
+    // spajanjem u dva niza crta pripada brojiocu, pa je podela verovatna
+    expect(pojaseviMastila(r, 2)).toEqual([[0, 19], [19, 40]]);
   });
   it('prazna slika (nema mastila) i broj 1 daje null', () => {
     expect(pojaseviMastila(slikaSaMastilom(30, [], 'providna'), 1)).toBeNull();
+  });
+});
+
+describe('isecKolone', () => {
+  it('vraca kolone [od, do) svih redova', () => {
+    const piksli = new Uint8Array(4 * 2 * 4).map((_, i) => i);
+    const r = isecKolone({ sirina: 4, visina: 2, piksli }, 1, 3);
+    expect([r.sirina, r.visina]).toEqual([2, 2]);
+    expect(Array.from(r.piksli)).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 20, 21, 22, 23, 24, 25, 26, 27]);
   });
 });
 

@@ -9,13 +9,18 @@ import { unzlibSync, zlibSync } from 'fflate';
 export interface Rgba { sirina: number; visina: number; piksli: Uint8Array; }
 
 const POTPIS = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-/** Najviše piksela koje dekoder prihvata (slika formule je mala; sprečava ogromnu alokaciju iz lažnog zaglavlja). */
-const MAX_PIKSELA = 8_388_608;
+/**
+ * Najviše piksela koje dekoder prihvata (4 M; najveća slika formule ili tabele u uzorku ima ~1,2 M). Proverava se iz
+ * zaglavlja pre ikakve alokacije; vrh memorije je tada ~4 x 4 MB za RGBA plus isto toliko za raspakovane redove.
+ */
+const MAX_PIKSELA = 4_194_304;
 /** Bajtova po pikselu po tipu boje (8 bita po kanalu). */
 const BAJTOVA_PO_PIKSELU: Readonly<Record<number, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
-/** Mastilo: alfa iznad ovoga i bar jedan kanal ispod `BELO`. */
+/** Mastilo: alfa iznad ovoga; na neprovidnoj pozadini još i bar jedan kanal ispod `BELO`. */
 const PRAG_ALFE = 20;
 const BELO = 245;
+/** Pojas čiji je niz mastila niži od ovog udela medijane nizova nije verovatan red formule (npr. crta razlomka). */
+const NAJMANJI_UDEO_MEDIJANE = 0.25;
 
 const CRC_TABELA = (() => {
   const t = new Uint32Array(256);
@@ -203,17 +208,38 @@ export function isecRedove(r: Rgba, od: number, doReda: number): Rgba {
   return { sirina: r.sirina, visina: doReda - od, piksli: r.piksli.slice(od * red, doReda * red) };
 }
 
+/** Kolone `[od, doKolone)` svih redova kao nova slika iste visine. */
+export function isecKolone(r: Rgba, od: number, doKolone: number): Rgba {
+  const sirina = doKolone - od;
+  const piksli = new Uint8Array(sirina * r.visina * 4);
+  for (let y = 0; y < r.visina; y++) {
+    piksli.set(r.piksli.subarray((y * r.sirina + od) * 4, (y * r.sirina + doKolone) * 4), y * sirina * 4);
+  }
+  return { sirina, visina: r.visina, piksli };
+}
+
+/** Slika ima bar jedan (skoro) providan piksel: pozadina je providna (slike formula iz PowerPointa su takve). */
+function providnaPozadina(r: Rgba): boolean {
+  for (let i = 3; i < r.piksli.length; i += 4) if (r.piksli[i] <= PRAG_ALFE) return true;
+  return false;
+}
+
 /**
  * Pojasevi redova `[od, do)` za `broj` pasusa: bez rupa, pokrivaju celu visinu, granica je na sredini razmaka između dva
- * niza redova mastila. Mastilo = piksel sa alfom > 20 koji nije (skoro) beo, pa radi i za providnu i za belu pozadinu.
- * Višak nizova se spaja po najmanjem razmaku (prvi par kod jednakih); manje nizova od `broj` (ili `broj` < 1) -> `null`.
+ * niza redova mastila. Mastilo: na providnoj pozadini (ima bar jedan piksel sa alfom <= 20) svaki piksel sa alfom > 20,
+ * i beo (belo slovo na providnom); na neprovidnoj pozadini piksel koji nije (skoro) beo. Višak nizova se spaja po
+ * najmanjem razmaku (prvi par kod jednakih). `null`: `broj` < 1, manje nizova od `broj`, ili neverovatna podela: posle
+ * spajanja neki niz je niži od 25 % medijane visina nizova (crta razlomka ili tačka kao zaseban "red" znači da se nizovi
+ * ne poklapaju sa pasusima). Niz nastao spajanjem je izuzet: njegovi delovi su već svedeni na isti pasus.
  */
 export function pojaseviMastila(r: Rgba, broj: number): [number, number][] | null {
   if (!(broj >= 1)) return null;
+  const samoAlfa = providnaPozadina(r);
   const imaMastila = (y: number) => {
     for (let x = 0; x < r.sirina; x++) {
       const i = (y * r.sirina + x) * 4;
-      if (r.piksli[i + 3] > PRAG_ALFE && !(r.piksli[i] > BELO && r.piksli[i + 1] > BELO && r.piksli[i + 2] > BELO)) return true;
+      if (r.piksli[i + 3] <= PRAG_ALFE) continue;
+      if (samoAlfa || !(r.piksli[i] > BELO && r.piksli[i + 1] > BELO && r.piksli[i + 2] > BELO)) return true;
     }
     return false;
   };
@@ -227,14 +253,21 @@ export function pojaseviMastila(r: Rgba, broj: number): [number, number][] | nul
       pocetak = -1;
     }
   }
+  const spojen = nizovi.map(() => false);
   while (nizovi.length > broj) {   // spoji dva susedna niza sa najmanjim razmakom
     let k = 0;
     for (let i = 1; i < nizovi.length - 1; i++) {
       if (nizovi[i + 1][0] - nizovi[i][1] < nizovi[k + 1][0] - nizovi[k][1]) k = i;
     }
     nizovi.splice(k, 2, [nizovi[k][0], nizovi[k + 1][1]]);
+    spojen.splice(k, 2, true);
   }
   if (nizovi.length !== broj) return null;
+  const visine = nizovi.map(([a, b]) => b - a);
+  const poredjane = [...visine].sort((a, b) => a - b);
+  const sredina = poredjane.length >> 1;
+  const medijana = poredjane.length % 2 ? poredjane[sredina] : (poredjane[sredina - 1] + poredjane[sredina]) / 2;
+  if (visine.some((v, i) => !spojen[i] && v < NAJMANJI_UDEO_MEDIJANE * medijana)) return null;
   return nizovi.map((n, i) => [
     i === 0 ? 0 : Math.floor((nizovi[i - 1][1] + n[0]) / 2),
     i === broj - 1 ? r.visina : Math.floor((n[1] + nizovi[i + 1][0]) / 2),

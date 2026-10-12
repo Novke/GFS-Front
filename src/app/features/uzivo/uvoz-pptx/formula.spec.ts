@@ -1,6 +1,6 @@
 import { kontekstZaTest } from './kontekst.testing';
 import { formuleCelija, pretvoriFormulu } from './formula';
-import { kodirajPng } from './png';
+import { dekodirajPng, kodirajPng } from './png';
 import { oblik, PNG_1X1, tabela, type OpcijeFabrike, type VezaFabrike } from './pptx-fabrika.testing';
 import { pretvoriTabelu } from './tabela';
 import { kutijaIzLanca } from './nasledjivanje';
@@ -171,6 +171,14 @@ describe('pretvoriFormulu: ceo okvir', () => {
     expect(s.latex).toBe('\\begin{gathered}\\text{1) x}\\\\\\text{y}\\\\\\text{1) z}\\end{gathered}');
   });
 
+  it('razmak na početku numerisanog pasusa se ne udvaja posle oznake', () => {
+    const num = '<a:pPr><a:buAutoNum type="arabicPeriod"/></a:pPr>';
+    const pasusi = `<a:p>${num}<a:r><a:t> x</a:t></a:r></a:p><a:p>${num}<a:r><a:t> </a:t></a:r><a14:m><m:oMath>${r('y')}</m:oMath></a14:m></a:p>`;
+    const { ctx, ac } = sa(formulaAc(pasusi));
+    const s = pretvoriFormulu(ac, identitet, ctx, 's5', new Set())!.slojevi[0];
+    expect(s.latex).toBe('\\begin{gathered}\\text{1. x}\\\\\\text{2. }y\\end{gathered}');
+  });
+
   it('znak liste (buChar) se ne dodaje, ali prekida brojanje kao u prikazu teksta', () => {
     const num = '<a:pPr><a:buAutoNum type="arabicPeriod"/></a:pPr>';
     const pasusi = `<a:p>${num}<a:r><a:t>a</a:t></a:r></a:p><a:p><a:pPr><a:buChar char="•"/></a:pPr><a:r><a:t>b</a:t></a:r></a:p>`
@@ -246,7 +254,7 @@ describe('pretvoriFormulu: po pasusu (PNG pojasevi)', () => {
   });
 
   it('pojas od jednog reda u visokoj slici ima visinu bar 0,01 (server traži > 0)', () => {
-    const { ctx, ac } = sa(formulaAc(mp(razlomak) + tekst('tekst')), slikaFormule([[0, 1], [2, 30000]], 30000));
+    const { ctx, ac } = sa(formulaAc(mp(razlomak) + tekst('tekst')), slikaFormule([[0, 1], [2, 3]], 30000));
     const rez = pretvoriFormulu(ac, identitet, ctx, 's5', new Set([1]))!;
     expect(rez.slojevi.map((s) => s.visina)).toEqual([0.01, 100]);
   });
@@ -284,5 +292,54 @@ describe('formuleCelija', () => {
       slikaIzvora: 'pptx:ppt/media/formula1.png',
     }]);
     expect(kodovi(z)).toEqual([]);
+  });
+
+  /** Slika cele tabele 40 x 20: R = 8x, G = 12y (svaki piksel se prepoznaje po boji). */
+  function slikaTabele(): Uint8Array {
+    const piksli = new Uint8Array(40 * 20 * 4);
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 40; x++) piksli.set([x * 6, y * 12, 0, 255], (y * 40 + x) * 4);
+    return kodirajPng({ sirina: 40, visina: 20, piksli });
+  }
+  /** Tabela 2 x 3 (kolone K, K, 2K); ćelije (1, 1) i (1, 2) dele istu sliku cele tabele, svaka bira svoj deo `fillRect`-om. */
+  function tabelaSaDeljenomSlikom(png: Uint8Array) {
+    const blip = (fr: string) => `<a:tcPr><a:blipFill><a:blip r:embed="rIdF"/><a:stretch><a:fillRect ${fr}/></a:stretch></a:blipFill></a:tcPr>`;
+    const mat = (t: string) => `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>${mp(r(t))}</a:txBody><a:tcPr/></a:tc>`;
+    const tbl = (c11: string, c12: string) => oblik.tabela(5, KOL, KOL, [KOL, KOL, KOL * 2], [
+      tabela.red(RED, [tabela.celija('a'), tabela.celija('b'), tabela.celija('c')]),
+      tabela.red(RED, [tabela.celija('d'), c11, c12]),
+    ], '<a:tblPr/>');
+    // (1, 1): slika počinje jednu širinu ćelije levo i jednu visinu gore, završava se 2 širine desno
+    // (1, 2): ćelija je duplo šira, slika počinje jednu njenu širinu levo i jednu visinu gore
+    const spTree = `<mc:AlternateContent><mc:Choice Requires="a14">${tbl(mat('x'), mat('y'))}</mc:Choice>`
+      + `<mc:Fallback>${tbl(tabela.celija('', '', blip('l="-100000" t="-100000" r="-200000"')),
+        tabela.celija('', '', blip('l="-100000" t="-100000"')))}</mc:Fallback></mc:AlternateContent>`;
+    const { ctx, z, ac } = sa(spTree, png);
+    const fallbackGf = ac.getElementsByTagNameNS(NS.mc, 'Fallback')[0].firstElementChild!;
+    const rt = pretvoriTabelu(fallbackGf, kutijaIzLanca([fallbackGf])!, ctx, 's5')!;
+    return { slojevi: formuleCelija(ac, rt, ctx, 's5'), z };
+  }
+
+  it('ćelije dele sliku cele tabele: svaka dobija isečak po svom fillRect-u, u kutiji ćelije', () => {
+    const { slojevi, z } = tabelaSaDeljenomSlikom(slikaTabele());
+    expect(slojevi.map((s) => [s.id, s.x, s.y, s.sirina, s.visina, s.latex, s.slikaIzvora])).toEqual([
+      ['s5c1x1', 144, 102, 72, 30, 'x', 'gen:1'],
+      ['s5c1x2', 216, 102, 144, 30, 'y', 'gen:2'],
+    ]);
+    expect([...z.mediji.keys()]).toEqual(['gen:1', 'gen:2']);   // cela slika tabele se ne šalje
+    const c11 = dekodirajPng(z.mediji.get('gen:1')!.bajtovi()!)!;
+    expect([c11.sirina, c11.visina]).toEqual([10, 10]);          // kolone 10..20, redovi 10..20
+    expect(Array.from(c11.piksli.slice(0, 4))).toEqual([60, 120, 0, 255]);
+    const c12 = dekodirajPng(z.mediji.get('gen:2')!.bajtovi()!)!;
+    expect([c12.sirina, c12.visina]).toEqual([20, 10]);          // kolone 20..40, redovi 10..20
+    expect(Array.from(c12.piksli.slice(0, 4))).toEqual([120, 120, 0, 255]);
+    expect(Array.from(c12.piksli.slice(-4))).toEqual([234, 228, 0, 255]);
+    expect(kodovi(z)).toEqual([]);
+  });
+
+  it('isečak ćelije ne uspeva (slika nije PNG): bez slike + FORMULA_ZA_PROVERU, nikad cela slika', () => {
+    const { slojevi, z } = tabelaSaDeljenomSlikom(Uint8Array.from([1, 2, 3]));
+    expect(slojevi.map((s) => s.slikaIzvora)).toEqual([null, null]);
+    expect(z.mediji.size).toBe(0);
+    expect(kodovi(z)).toEqual(['FORMULA_ZA_PROVERU', 'FORMULA_ZA_PROVERU']);
   });
 });

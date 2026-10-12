@@ -9,7 +9,7 @@ import {
 } from './nasledjivanje';
 import { bojaTx1, nazivOblika, rotacijaSloja } from './oblik';
 import { latexOkvira } from './omml-latex';
-import { dekodirajPng, isecRedove, kodirajPng, pojaseviMastila } from './png';
+import { dekodirajPng, isecKolone, isecRedove, kodirajPng, pojaseviMastila, type Rgba } from './png';
 import { deoElementa, NEPODRZANI_FORMATI } from './slika';
 import type { RezultatTabele } from './tabela';
 import { formatBroja, pocetakListe } from './tekst';
@@ -75,7 +75,8 @@ function oznakeBrojeva(t: TekstOkvira): (string | null)[] {
 
 /**
  * Pasusi za LaTeX: numerisani dobijaju oznaku kao tekst (`1. `) na početku (kopija pasusa, pa `latexOkvira` je spaja sa
- * tekstom iza nje u isti `\text{}`); ostali ostaju isti elementi. Tab posle broja je jedan razmak.
+ * tekstom iza nje u isti `\text{}`); ostali ostaju isti elementi. Tab posle broja je jedan razmak; beli znaci na početku
+ * prvog dela teksta se brišu (inače `\text{1.  x}`).
  */
 function pasusiZaLatex(t: TekstOkvira): Element[] {
   const oznake = oznakeBrojeva(t);
@@ -89,6 +90,9 @@ function pasusiZaLatex(t: TekstOkvira): Element[] {
     tekst.textContent = `${oznaka} `;
     r.appendChild(tekst);
     const pPr = dete(kopija, NS.a, 'pPr');
+    const prviSadrzaj = Array.from(kopija.children).find((c) => jeMatematika(c) || jeA(c, 'r') || jeA(c, 'fld') || jeA(c, 'br'));
+    const t = prviSadrzaj && (jeA(prviSadrzaj, 'r') || jeA(prviSadrzaj, 'fld')) ? dete(prviSadrzaj, NS.a, 't') : null;
+    if (t) t.textContent = (t.textContent ?? '').replace(/^\s+/, '');
     kopija.insertBefore(r, pPr ? pPr.nextSibling : kopija.firstChild);
     return kopija;
   });
@@ -134,7 +138,7 @@ function izgledPasusa(p: Element | undefined, t: TekstOkvira, ctx: KontekstSlajd
 }
 
 /** Slika izvora: ključ medija se registruje tek na zahtev (rasklopljena formula šalje isečke, ne original). */
-interface SlikaFormule { kljuc: () => string | null; bajtovi: () => Uint8Array | null; }
+interface SlikaFormule { cilj: string; kljuc: () => string | null; bajtovi: () => Uint8Array | null; }
 
 /**
  * `a:blip r:embed` -> slika formule. Nema je, spoljna je, deo ne postoji ili je format koji pregledač ne dekodira (EMF,
@@ -146,7 +150,7 @@ function slikaIz(blip: Element | null, ctx: KontekstSlajda): SlikaFormule | null
   const deo = deoElementa(blip, ctx);
   const veza = ctx.paket.veza(deo, rId);
   if (!veza || veza.spoljna || NEPODRZANI_FORMATI.test(veza.cilj) || !ctx.paket.postoji(veza.cilj)) return null;
-  return { kljuc: () => ctx.medijIzVeze(deo, rId), bajtovi: () => ctx.paket.bajtovi(veza.cilj) };
+  return { cilj: veza.cilj, kljuc: () => ctx.medijIzVeze(deo, rId), bajtovi: () => ctx.paket.bajtovi(veza.cilj) };
 }
 
 /** Udeli kutije `[x0, x1] x [y0, y1]` (0..1 = cela kutija; van toga slika izlazi iz oblika). */
@@ -190,11 +194,13 @@ function napraviSloj(id: string, naziv: string | null, k: Kutija, ctx: KontekstS
   };
 }
 
-/** `FORMULA_ZA_PROVERU` jednom po sloju: LaTeX je približan i/ili nema slike (prikazuje se LaTeX izvor). */
-function proveri(ctx: KontekstSlajda, id: string, zaProveru: boolean, bezSlike: boolean): void {
+const BEZ_SLIKE = 'nema slike iz PowerPointa, prikazuje se LaTeX izvor';
+
+/** `FORMULA_ZA_PROVERU` jednom po sloju: LaTeX je približan i/ili sloj nema sliku (`bezSlike` = razlog; prikazuje se LaTeX). */
+function proveri(ctx: KontekstSlajda, id: string, zaProveru: boolean, bezSlike: string | null): void {
   if (!zaProveru && !bezSlike) return;
   const razlozi = [
-    ...(bezSlike ? ['nema slike iz PowerPointa, prikazuje se LaTeX izvor'] : []),
+    ...(bezSlike ? [bezSlike] : []),
     ...(zaProveru ? ['LaTeX je približan'] : []),
   ];
   ctx.upozori('FORMULA_ZA_PROVERU', `Formula '${id}': ${razlozi.join('; ')}. Proveri je u editoru.`);
@@ -241,7 +247,7 @@ export function pretvoriFormulu(ac: Element, kutijaGrupe: (k: Kutija) => Kutija,
 
   const sloj = (id: string, d: Udeli, izPasusa: Element[], izgledOd: number | undefined, slikaIzvora: string | null) => {
     const l = latexOkvira(izPasusa);
-    proveri(ctx, id, l.zaProveru, slikaIzvora === null);
+    proveri(ctx, id, l.zaProveru, slikaIzvora === null ? BEZ_SLIKE : null);
     return napraviSloj(id, naziv, deoKutije(oblik, d), ctx, l.latex, izgled(izgledOd), slikaIzvora);
   };
   const celo = (): RezultatFormule => ({
@@ -261,7 +267,7 @@ export function pretvoriFormulu(ac: Element, kutijaGrupe: (k: Kutija) => Kutija,
   const pojasevi = png ? pojaseviMastila(png, indeksi.length) : null;
   if (!png || !pojasevi) {
     const razlog = !slika ? 'nema slike formule' : !png ? 'slika formule nije PNG koji uvoz čita'
-      : `${indeksi.length} pasusa, a redova formule u slici je manje`;
+      : `redovi formule u slici se ne mogu pouzdano dodeliti njenim pasusima (${indeksi.length})`;
     ctx.upozori('FORMULA_ODJEDNOM',
       `Formula '${idOsnova}' se prikazuje odjednom (${razlog}): animacije njenih pasusa su svedene na prvu.`);
     return celo();
@@ -281,14 +287,55 @@ export function pretvoriFormulu(ac: Element, kutijaGrupe: (k: Kutija) => Kutija,
 }
 
 /**
+ * Vidljivi deo slike ćelije. Popuna ćelije je odsečena ćelijom, a `fillRect` (`udeli`, u udelima ćelije) može da razvuče
+ * sliku daleko van nje: PowerPoint u fallback tabeli koristi jednu sliku cele tabele za sve ćelije sa formulom, a svaka
+ * ćelija bira svoj deo velikim negativnim `fillRect`-om. Vidljivi udeo slike je `u0 = -l / (1 - l - r)`,
+ * `u1 = (1 - l) / (1 - l - r)` (isto `t`/`b`), ograničen na [0, 1]; isečak (u celim pikselima) je nov medij, a kutija je
+ * njegov položaj u ćeliji. Slika cela unutar ćelije -> original bez dekodiranja. Isečak ne uspeva -> `null` (sloj
+ * prikazuje LaTeX; cela slika tabele se nikad ne stavlja u ćeliju).
+ */
+function vidljivoUCeliji(slika: SlikaFormule, u: Udeli, ctx: KontekstSlajda, dekodirane: Map<string, Rgba | null>):
+  { kljuc: string; udeli: Udeli } | null {
+  if (u.x0 >= 0 && u.y0 >= 0 && u.x1 <= 1 && u.y1 <= 1) {
+    const kljuc = slika.kljuc();
+    return kljuc ? { kljuc, udeli: u } : null;
+  }
+  if (!dekodirane.has(slika.cilj)) {
+    const b = slika.bajtovi();
+    dekodirane.set(slika.cilj, b ? dekodirajPng(b) : null);
+  }
+  const png = dekodirane.get(slika.cilj);
+  if (!png) return null;
+  const sirina = u.x1 - u.x0;
+  const visina = u.y1 - u.y0;
+  const uSliku = (v: number, od: number, raspon: number, n: number, zaokruzi: (x: number) => number) =>
+    Math.min(n, Math.max(0, zaokruzi(ogranici((v - od) / raspon, 0, 1) * n)));
+  const px0 = uSliku(0, u.x0, sirina, png.sirina, Math.floor);
+  const px1 = uSliku(1, u.x0, sirina, png.sirina, Math.ceil);
+  const py0 = uSliku(0, u.y0, visina, png.visina, Math.floor);
+  const py1 = uSliku(1, u.y0, visina, png.visina, Math.ceil);
+  if (px1 <= px0 || py1 <= py0) return null;
+  const isecak = isecKolone(isecRedove(png, py0, py1), px0, px1);
+  return {
+    kljuc: ctx.noviMedij('formula.png', kodirajPng(isecak)),
+    udeli: {
+      x0: u.x0 + (px0 / png.sirina) * sirina, x1: u.x0 + (px1 / png.sirina) * sirina,
+      y0: u.y0 + (py0 / png.visina) * visina, y1: u.y0 + (py1 / png.visina) * visina,
+    },
+  };
+}
+
+/**
  * Formule u ćelijama tabele (odluka 6): za svaku ćeliju iz `tabela.celijeSaSlikom` (Fallback tabela, `tcPr/blipFill`) sloj
- * `${idOsnova}c<red>x<kolona>` u kutiji ćelije; slika iz `blipFill` ćelije, LaTeX iz pasusa iste ćelije (isti red, isti
- * `a:tc` po redu = kolona mreže) u tabeli iz `mc:Choice`. `acTabele` je `mc:AlternateContent` tabele.
+ * `${idOsnova}c<red>x<kolona>` u kutiji ćelije; slika je deo slike iz `blipFill` ćelije koji se vidi u ćeliji (po
+ * `fillRect`, `vidljivoUCeliji`), LaTeX iz pasusa iste ćelije (isti red, isti `a:tc` po redu = kolona mreže) u tabeli iz
+ * `mc:Choice`. `acTabele` je `mc:AlternateContent` tabele.
  */
 export function formuleCelija(acTabele: Element, tabela: RezultatTabele, ctx: KontekstSlajda, idOsnova: string): FormulaSloj[] {
   const izvor = dete(acTabele, NS.mc, 'Choice') ?? acTabele;
   const tbl = izvor.getElementsByTagNameNS(NS.a, 'tbl')[0] ?? null;
   const redovi = tbl ? deca(tbl, NS.a, 'tr') : [];
+  const dekodirane = new Map<string, Rgba | null>();
   return tabela.celijeSaSlikom.map((c) => {
     const tc = redovi[c.red] ? deca(redovi[c.red], NS.a, 'tc')[c.kolona] ?? null : null;
     const txBody = tc && dete(tc, NS.a, 'txBody');
@@ -299,9 +346,13 @@ export function formuleCelija(acTabele: Element, tabela: RezultatTabele, ctx: Ko
     const l = latexOkvira(pasusiZaLatex(tekst));
     const id = `${idOsnova}c${c.red}x${c.kolona}`;
     const blipFill = dete(c.tcPr, NS.a, 'blipFill');
-    const slikaIzvora = slikaIz(blipFill && dete(blipFill, NS.a, 'blip'), ctx)?.kljuc() ?? null;
-    proveri(ctx, id, l.zaProveru, slikaIzvora === null);
+    const slika = slikaIz(blipFill && dete(blipFill, NS.a, 'blip'), ctx);
+    const udeli = udeliSlike(blipFill && dete(dete(blipFill, NS.a, 'stretch') ?? blipFill, NS.a, 'fillRect'));
+    const vidljivo = slika ? vidljivoUCeliji(slika, udeli, ctx, dekodirane) : null;
+    proveri(ctx, id, l.zaProveru,
+      vidljivo ? null : slika ? 'deo slike tabele za ovu ćeliju nije mogao da se iseče, prikazuje se LaTeX izvor' : BEZ_SLIKE);
     const prvi = tekst.pasusi.find(neprazan) ?? tekst.pasusi[0];
-    return napraviSloj(id, null, c.kutija, ctx, l.latex, izgledPasusa(prvi, tekst, ctx), slikaIzvora);
+    const kutija = vidljivo ? deoKutije(c.kutija, vidljivo.udeli) : c.kutija;
+    return napraviSloj(id, null, kutija, ctx, l.latex, izgledPasusa(prvi, tekst, ctx), vidljivo?.kljuc ?? null);
   });
 }
