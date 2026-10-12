@@ -60,6 +60,8 @@ interface UzivoPrezentacija {
   telefonPrikaz: string; detaljiDozvoljeni: boolean; slajdovi: UzivoSlajd[]; [ostalo: string]: unknown;
 }
 interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
+/** `MedijInfo` otpremljene slike (`POST mediji`). */
+export interface Medij { id: string; naziv: string; mime: string; velicina: number }
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
@@ -189,6 +191,8 @@ export class MockApi {
   readonly zahtevi: Zahtev[] = [];
   /** Zahtevi za koje mok nema rutu (test ih proverava u `afterEach`). */
   readonly nepoznati: string[] = [];
+  /** Slike otpremljene kroz `POST mediji`, redom (id-jevi su UUID-i iz brojača, isti u svakom pokretanju). */
+  readonly mediji: Medij[] = [];
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -759,8 +763,75 @@ export class MockApi {
       return { status: 201, telo: { id: prijava.id } };
     });
 
-    // uživo, nastavnik (editor prezentacije): čitanje, izmena podešavanja (tema...) i čuvanje slajda; nema aktivnih izvođenja
+    // uživo, nastavnik (lista i editor prezentacija): lista, nova, brisanje, čitanje, izmena podešavanja (tema...),
+    // čuvanje slajda, slike i uvoz slajdova (PowerPoint); nema aktivnih izvođenja
     get('izvodjenja', () => ok([]));
+    const info = (x: UzivoPrezentacija) => {
+      const { slajdovi, ...ostalo } = x;
+      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE').length };
+    };
+    get('prezentacije', z => {
+      const predmetId = z.query.get('predmetId');
+      return ok(d.prezentacije.filter(x => predmetId === null || x.predmet.id === Number(predmetId)).map(info));
+    });
+    post('prezentacije', z => {
+      const cmd = z.telo as { predmetId: number; naziv: string; opis?: string | null; tema?: string | null };
+      const predmet = this.predmet(cmd.predmetId);
+      if (!predmet) {
+        return greska(404, 'Predmet ne postoji.');
+      }
+      const x: UzivoPrezentacija = {
+        id: this.sledeciId++, naziv: cmd.naziv, opis: cmd.opis ?? null, predmet: { id: predmet.id, naziv: predmet.naziv },
+        brojSlajdova: 0, brojPitanja: 0, izmenjeno: lokalnoVreme(new Date()), tema: cmd.tema ?? 'NACRT', takmicenje: false,
+        telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false, brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [],
+      };
+      d.prezentacije.push(x);
+      return { status: 201, telo: x };
+    });
+    del('prezentacije/:id', (_z, p) => {
+      const i = d.prezentacije.findIndex(x => x.id === Number(p['id']));
+      if (i < 0) {
+        return greska(404, 'Prezentacija ne postoji.');
+      }
+      d.prezentacije.splice(i, 1);
+      return { status: 204 };
+    });
+    post('mediji', z => {
+      // multipart: mok ne raspakuje telo, samo ime fajla iz zaglavlja dela (`filename="..."`)
+      const telo = typeof z.telo === 'string' ? z.telo : '';
+      const m: Medij = {
+        id: `00000000-0000-4000-8000-${(this.mediji.length + 1).toString(16).padStart(12, '0')}`,
+        naziv: /filename="([^"]*)"/.exec(telo)?.[1] ?? 'slika', mime: /Content-Type: (image\/[a-z]+)/i.exec(telo)?.[1] ?? 'image/png',
+        velicina: telo.length,
+      };
+      this.mediji.push(m);
+      return { status: 201, telo: m };
+    });
+    post('prezentacije/:id/slajdovi/uvoz', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const cmd = z.telo as { posle: number | null; slajdovi: (UzivoSlajd & { slikaId?: string | null })[] };
+      if (!cmd.slajdovi?.length || cmd.slajdovi.length > 200) {
+        return greska(400, 'Uvoz mora imati od 1 do 200 slajdova.');
+      }
+      const posle = cmd.posle === null ? x.slajdovi.length - 1 : x.slajdovi.findIndex(s => s.id === cmd.posle);
+      if (cmd.posle !== null && posle < 0) {
+        return greska(400, 'Slajd posle kog se dodaje nije u ovoj prezentaciji.');
+      }
+      const mesto = posle + 1;
+      // kao backend: novi slajdovi dobijaju id, `slika` ostaje prazna (mok ne vodi medije), redni brojevi se prenumerišu
+      const novi = cmd.slajdovi.map(s => {
+        const slajd = { ...s, id: this.sledeciId++, rb: 0, slika: null };
+        delete slajd.slikaId;
+        return slajd as UzivoSlajd;
+      });
+      x.slajdovi.splice(mesto, 0, ...novi);
+      x.slajdovi.forEach((s, i) => (s.rb = i + 1));
+      x.brojSlajdova = x.slajdovi.length;
+      return { status: 201, telo: x };
+    });
     get('prezentacije/:id', (_z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
       return jeOdgovor(x) ? x : ok(x);

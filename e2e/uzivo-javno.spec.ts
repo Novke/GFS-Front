@@ -59,6 +59,11 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     // javna ruta ne vuče fontove platna (spec 13): ni jedan zahtev za carlito, caladea, arimo, tinos, cousine, atkinson
     expect(zahtevi.filter(p => /carlito|caladea|arimo|tinos|cousine|atkinson/i.test(p)), 'fontovi platna na javnoj ruti').toEqual([]);
     expect(javnaMreza.ws).toEqual(['/api/public/ws']);
+    // nijedan učitan JS (glavni bundle i lenji chunk-ovi stranica studenta) nema fflate ni kod uvoza PPTX-a
+    const skripte = await javnaMreza.skripte();
+    expect(skripte.putanje.some(p => /\/main-[^/]+\.js$/.test(p)), 'provera je pročitala glavni bundle').toBe(true);
+    expect(skripte.putanje.length, 'lenji chunk-ovi javne rute su provereni').toBeGreaterThan(1);
+    expect(skripte.saUvozom).toEqual([]);
     // samo odredišta koja backend dozvoljava studentu
     expect([...broker.pretplate].sort()).toEqual([
       `/app/izvodjenja/${IZVODJENJE}/pocetno`, `/topic/izvodjenja/${IZVODJENJE}/javno`, '/user/queue/greske', '/user/queue/licno',
