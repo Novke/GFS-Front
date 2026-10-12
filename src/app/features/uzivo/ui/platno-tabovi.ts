@@ -156,23 +156,27 @@ export function poravnajSveTabove(pasusi: readonly { el: HTMLElement; pasus: Pas
     s.pasusEl.style.textAlign = 'left';
     return staro;
   });
-  for (const s of stavke) for (const t of s.tabovi) t.style.width = '0px';
-  for (let prolaz = 0; prolaz < NAJVISE_PROLAZA; prolaz++) {
-    const nove = stavke.map((s) => noveSirine(s, pxPoJedinici));
-    let promena = false;
-    stavke.forEach((s, i) => s.tabovi.forEach((t, k) => {
-      if (Math.abs(nove[i][k] - s.sirine[k]) > TOLERANCIJA) {
-        promena = true;
-        s.sirine[k] = nove[i][k];
-        t.style.width = jedinice(nove[i][k]);
-      }
-    }));
-    if (!promena) break;
+  try {
+    for (const s of stavke) for (const t of s.tabovi) t.style.width = '0px';
+    for (let prolaz = 0; prolaz < NAJVISE_PROLAZA; prolaz++) {
+      const nove = stavke.map((s) => noveSirine(s, pxPoJedinici));
+      let promena = false;
+      stavke.forEach((s, i) => s.tabovi.forEach((t, k) => {
+        if (Math.abs(nove[i][k] - s.sirine[k]) > TOLERANCIJA) {
+          promena = true;
+          s.sirine[k] = nove[i][k];
+          t.style.width = jedinice(nove[i][k]);
+        }
+      }));
+      if (!promena) break;
+    }
+  } finally {
+    // Poravnanje se vraća i kad merenje baci izuzetak (inače bi `left` ostao do sledeće promene vezane vrednosti).
+    stavke.forEach((s, i) => {
+      const staro = poravnanja[i];
+      if (staro !== null) s.pasusEl.style.textAlign = staro;
+    });
   }
-  stavke.forEach((s, i) => {
-    const staro = poravnanja[i];
-    if (staro !== null) s.pasusEl.style.textAlign = staro;
-  });
   return { rezervno: stavke.some((s) => s.tabovi.length > 0 && !s.precizno) };
 }
 
