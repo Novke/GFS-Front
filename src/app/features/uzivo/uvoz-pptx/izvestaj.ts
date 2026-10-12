@@ -1,4 +1,4 @@
-// Izveštaj uvoza: upozorenja, greške slajdova i statistika (izvestajKaoTekst dolazi u F11).
+// Izveštaj uvoza: upozorenja, greške slajdova, statistika i tekst izveštaja.
 import type { Efekat, TipSloja } from '../data-access/platno.models';
 
 export type KodUpozorenja =
@@ -47,4 +47,52 @@ export function saberi(a: Statistika, b: Statistika): Statistika {
     klikoviPptx: a.klikoviPptx + b.klikoviPptx,
     koraci: a.koraci + b.koraci,
   };
+}
+
+/** Deo `RezultatUvoza` (uvoz.ts) koji izveštaj čita; strukturni tip da modul ne zavisi od uvoz.ts. */
+export interface UlazIzvestaja {
+  imeFajla: string;
+  ukupnoSlajdova: number;
+  slajdovi: readonly { indeks: number; statistika: Statistika }[];
+  greske: readonly GreskaSlajda[];
+  upozorenja: readonly Upozorenje[];
+}
+
+const sNN = (n: number) => `s${String(n).padStart(2, '0')}`;
+
+/** `a 3, b 1` iz mape, opadajuće po broju (jednaki: redosledom ključeva), samo vrednosti > 0. */
+function raspodela(m: Readonly<Record<string, number>>): string {
+  const stavke = Object.entries(m).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  return stavke.length === 0 ? '' : ` (${stavke.map(([k, n]) => `${k} ${n}`).join(', ')})`;
+}
+
+const zbir = (m: Readonly<Record<string, number>>) => Object.values(m).reduce((a, b) => a + b, 0);
+
+/**
+ * Tekst izveštaja za kopiranje. `izbor` (opseg slajdova PPTX-a, uključivo) ograničava slajdove, greške i upozorenja
+ * uvoza; `dodatna` su upozorenja slanja (ne filtriraju se). Upozorenja idu redom slajdova (stabilno: redom nastanka),
+ * ona bez slajda na kraju sa `—:`.
+ */
+export function izvestajKaoTekst(r: UlazIzvestaja, izbor?: { od: number; do: number }, dodatna: readonly Upozorenje[] = []): string {
+  const u = (n: number | null) => n === null || !izbor || (n >= izbor.od && n <= izbor.do);
+  const slajdovi = r.slajdovi.filter((s) => u(s.indeks));
+  const s = slajdovi.reduce((a, b) => saberi(a, b.statistika), praznaStatistika());
+  const indeksi = slajdovi.map((x) => x.indeks);
+  const opseg = indeksi.length > 0 ? ` (${sNN(Math.min(...indeksi))}-${sNN(Math.max(...indeksi))})` : '';
+  const greske = r.greske.filter((g) => u(g.slajd));
+  const upozorenja = [...r.upozorenja.filter((x) => u(x.slajd)), ...dodatna]
+    .map((x, i) => ({ x, i }))
+    .sort((a, b) => (a.x.slajd ?? Infinity) - (b.x.slajd ?? Infinity) || a.i - b.i)
+    .map((e) => e.x);
+  return [
+    `Uvoz: ${r.imeFajla}`,
+    `Slajdovi: ${slajdovi.length} od ${r.ukupnoSlajdova}${opseg}`,
+    `Slojevi: ${zbir(s.slojevi)}${raspodela(s.slojevi)}`,
+    `Animacije: ${zbir(s.animacije)}${raspodela(s.animacije)}; koraci: ${s.koraci} (PowerPoint klikova: ${s.klikoviPptx})`,
+    `Beleške: ${s.beleske}`,
+    `Greške: ${greske.length}`,
+    ...greske.map((g) => `${sNN(g.slajd)}: ${g.poruka}`),
+    `Upozorenja (${upozorenja.length}):`,
+    ...upozorenja.map((x) => `${x.slajd === null ? '—' : sNN(x.slajd)}: ${x.poruka}`),
+  ].join('\n');
 }
