@@ -43,7 +43,11 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       const mreza: JavnaMreza = {
         api: [], odgovori401: [], ws: [],
         skripte: async () => {
-          const procitane = await Promise.all(citanja);
+          // čeka i čitanja koja počnu dok se raniji odgovori čitaju (broj se ustali)
+          let procitane: { putanja: string; nizovi: string[] }[];
+          do {
+            procitane = await Promise.all([...citanja]);
+          } while (procitane.length < citanja.length);
           return {
             putanje: procitane.map(x => x.putanja),
             saUvozom: procitane.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`),

@@ -55,7 +55,7 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
   test('editor: pregled, uvoz posle izabranog slajda, izveštaj sa upozorenjem, kopiranje izveštaja', async ({ page, context, mock }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const d = await otvoriUvozUEditoru(page);
-    await expect(d).toContainText('2 slajda');
+    await expect(d).toContainText(/(^|\D)2 slajda/);
     await expect(d.getByRole('radio', { name: 'Posle slajda 1' })).toBeChecked();
 
     await d.getByRole('button', { name: 'Uvezi' }).click();
@@ -98,7 +98,7 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     const napravljena = mock.zahteviZa('prezentacije', 'POST');
     expect(napravljena).toHaveLength(1);
     expect(napravljena[0].telo).toMatchObject({ predmetId: 1, naziv: 'statika-uvod', tema: 'BELA' });
-    await expect(d).toContainText('2 slajda');
+    await expect(d).toContainText(/(^|\D)2 slajda/);
     await expect(d.getByRole('radio', { name: /^Posle slajda/ })).toHaveCount(0);
 
     await d.getByRole('button', { name: 'Uvezi' }).click();

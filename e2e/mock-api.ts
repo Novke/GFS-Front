@@ -816,8 +816,12 @@ export class MockApi {
       if (!cmd.slajdovi?.length || cmd.slajdovi.length > 200) {
         return greska(400, 'Uvoz mora imati od 1 do 200 slajdova.');
       }
-      const posle = cmd.posle === null ? x.slajdovi.length - 1 : x.slajdovi.findIndex(s => s.id === cmd.posle);
-      if (cmd.posle !== null && posle < 0) {
+      if (x.slajdovi.length + cmd.slajdovi.length > 200) {
+        return greska(400, `Prezentacija može imati najviše 200 slajdova (ima ${x.slajdovi.length}, uvozi se ${cmd.slajdovi.length}).`);
+      }
+      // kao backend: izostavljen `posle` je null (dodaje se na kraj)
+      const posle = cmd.posle == null ? x.slajdovi.length - 1 : x.slajdovi.findIndex(s => s.id === cmd.posle);
+      if (cmd.posle != null && posle < 0) {
         return greska(400, 'Slajd posle kog se dodaje nije u ovoj prezentaciji.');
       }
       const mesto = posle + 1;
