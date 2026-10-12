@@ -23,8 +23,32 @@ function javaNaucni(x: number): string {
   return `${x < 0 ? '-' : ''}${mantisa.includes('.') ? mantisa : `${mantisa}.0`}E${Number(izlozilac)}`;
 }
 
-/** Oblik kakav server upisuje posle `PlatnoPP.normalizuj` za polja koja uvoz sme da ostavi praznim. */
-function kaoServer(p: Platno): Platno {
+/** Dužina id-ja medija na serveru (UUID `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`). */
+export const DUZINA_ID_MEDIJA = 36;
+const ID_ZA_MERENJE = '0'.repeat(DUZINA_ID_MEDIJA);
+
+/**
+ * Kopija dokumenta sa preslikanim referencama medija: `pozadina.medijId`, `medijId` SLIKA i CRTEZ slojeva i
+ * `slikaIzvora` FORMULE (samo one koje nisu `null`). Ostalo se ne kopira (isti objekti).
+ */
+export function preslikajMedije(p: Platno, f: (kljuc: string) => string): Platno {
+  return {
+    ...p,
+    pozadina: p.pozadina.medijId == null ? p.pozadina : { ...p.pozadina, medijId: f(p.pozadina.medijId) },
+    slojevi: p.slojevi.map((s) => {
+      if ((s.tip === 'SLIKA' || s.tip === 'CRTEZ') && s.medijId != null) return { ...s, medijId: f(s.medijId) };
+      if (s.tip === 'FORMULA' && s.slikaIzvora != null) return { ...s, slikaIzvora: f(s.slikaIzvora) };
+      return s;
+    }),
+  };
+}
+
+/**
+ * Oblik kakav server upisuje posle `PlatnoPP.normalizuj` za polja koja uvoz sme da ostavi praznim. Ključevi medija
+ * uvoza (`gen:1`, `pptx:ppt/media/…`) stoje tamo gde će slanje upisati id servera od 36 znakova, pa se mere kao takav id.
+ */
+function kaoServer(dokument: Platno): Platno {
+  const p = preslikajMedije(dokument, () => ID_ZA_MERENJE);
   const linija = (o: OblikSloj) => o.oblik === 'LINIJA' || o.oblik === 'STRELICA' || o.oblik === 'DVOSTRUKA_STRELICA';
   return {
     ...p,
@@ -50,6 +74,7 @@ function kaoServer(p: Platno): Platno {
  *  - za |x| >= 1e7 Jackson piše naučni zapis (`1.23456789E7`); granica koordinata je 2880, pa import to ne daje, ali je izmereno;
  *  - linije (LINIJA, STRELICA, DVOSTRUKA_STRELICA) bez `od`/`do` dobijaju krajeve (0, visina/2) i (širina, visina/2);
  *  - `smer` koji nedostaje: ULET -> DOLE, PODELI -> VERTIKALNO, BRISANJE i ISCRTAJ -> LEVO; POJAVI ima trajanje 0;
+ *  - ključ medija (`gen:1`, `pptx:…`) se meri kao id servera od 36 znakova koji ga zamenjuje pri slanju;
  *  - razmaci i redosled polja ne utiču (obe strane pišu bez razmaka, `null` se piše).
  * Pretpostavlja ostala polja popunjena (model ih tako i tipizira).
  */

@@ -8,7 +8,7 @@ import { pretvoriAnimacije, pasusiSaAnimacijom, type MapaMeta, type MetaPasusa }
 import { pretvoriBeleske } from './beleske';
 import { pretvoriCrtez } from './crtez';
 import { formuleCelija, pretvoriFormulu } from './formula';
-import { proveriKaoServer, uklopiUGranice } from './granice';
+import { preslikajMedije, proveriKaoServer, uklopiUGranice } from './granice';
 import { GreskaUvoza } from './ime-fajla';
 import { praznaStatistika, type GreskaSlajda, type Statistika, type Upozorenje } from './izvestaj';
 import { napraviKontekst, transformacija, type ZajednickoUvoza } from './kontekst';
@@ -535,11 +535,10 @@ class GraditeljSlajda {
 /** Ključevi medija koje dokument koristi (pozadina, slike, crteži, slike formula), bez ponavljanja, redom. */
 function medijiDokumenta(p: Platno): string[] {
   const kljucevi = new Set<string>();
-  if (p.pozadina.medijId) kljucevi.add(p.pozadina.medijId);
-  for (const s of p.slojevi) {
-    if ((s.tip === 'SLIKA' || s.tip === 'CRTEZ') && s.medijId) kljucevi.add(s.medijId);
-    if (s.tip === 'FORMULA' && s.slikaIzvora) kljucevi.add(s.slikaIzvora);
-  }
+  preslikajMedije(p, (k) => {
+    if (k) kljucevi.add(k);
+    return k;
+  });
   return [...kljucevi];
 }
 

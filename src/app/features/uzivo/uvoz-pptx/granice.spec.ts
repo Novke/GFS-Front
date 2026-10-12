@@ -114,6 +114,40 @@ describe('bajtovaPlatna', () => {
     const kratka = platno([{ ...tekst('a', 'x'), sirina: 100.12 }]);
     expect(bajtovaPlatna(duga)).toBe(bajtovaPlatna(kratka));
   });
+
+  it('ključ medija (gen:1, pptx:…) meri kao UUID od 36 znakova koji ga zamenjuje pri slanju (sva četiri mesta)', () => {
+    const uuid = '0b1e5c2a-9d4f-4c55-8a6e-3f2d1c0b9a87';
+    const sa = (k: string): Platno => ({
+      verzija: 1, pozadina: { boja: '#FFFFFF', medijId: k },
+      slojevi: [
+        { ...osnova('a'), tip: 'SLIKA', medijId: k, isecak: { levo: 0, gore: 0, desno: 0, dole: 0 } },
+        { ...crtez('b', 1), medijId: k },
+        { ...osnova('c'), tip: 'FORMULA', latex: 'x', boja: '#000000', velicina: 20, poravnanje: 'LEVO', slikaIzvora: k } as FormulaSloj,
+      ],
+      animacije: [],
+    });
+    const meraUuid = bajtovaPlatna(sa(uuid));
+    expect(bajtovaPlatna(sa('gen:1'))).toBe(meraUuid);
+    expect(bajtovaPlatna(sa('pptx:ppt/media/image3.png'))).toBe(meraUuid);
+    expect(bajtovaPlatna(sa('pptx:ppt/media/vrlo-dugacko-ime-slike-iz-prezentacije.jpeg'))).toBe(meraUuid);
+  });
+
+  it('proveriKaoServer odbija slajd koji je ispod 1 MB samo dok nosi kratke ključeve medija', () => {
+    const uuid = '0b1e5c2a-9d4f-4c55-8a6e-3f2d1c0b9a87';
+    // 300 crteža; veličinu daju tačke poteza (svaka tačka "1.5,1.5," = 8 bajtova, najviše 20 000 po crtežu)
+    const sa = (k: string, tacaka: number): Platno => platno(Array.from({ length: 300 }, (_, i): Sloj => {
+      const n = Math.max(0, Math.min(GRANICE.tacakaPoCrtezu, tacaka - i * GRANICE.tacakaPoCrtezu));
+      return { ...crtez(`s${i}`, 0), medijId: k, potezi: [{ boja: '#FF0000', debljina: 2.5, tacke: new Array(n * 2).fill(1.5) }] };
+    }));
+    const osnovno = bajtovaPlatna(sa(uuid, 0));
+    const d = sa('gen:1', Math.ceil((GRANICE.bajtova + 4000 - osnovno) / 8));
+    const razlika = 300 * (36 - 'gen:1'.length);
+    const kaoServer = bajtovaPlatna(sa(uuid, Math.ceil((GRANICE.bajtova + 4000 - osnovno) / 8)));
+    expect(kaoServer).toBeGreaterThan(GRANICE.bajtova);
+    expect(kaoServer - razlika).toBeLessThanOrEqual(GRANICE.bajtova); // sa ključevima kakvi jesu, dokument bi prošao
+    expect(bajtovaPlatna(d)).toBe(kaoServer);
+    expect(proveriKaoServer(d)).toBe('Dokument platna je prevelik (najviše 1 MB).');
+  });
 });
 
 describe('zaokruziKaoServer (BigDecimal.valueOf(d).setScale(2, HALF_UP))', () => {

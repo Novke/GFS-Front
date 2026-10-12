@@ -5,7 +5,7 @@ import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
 import {
   CreatePrezentacijaCmd, GrupaKratko, MedijInfo, PredavanjeZaPokretanje, PredmetKratko, PrezentacijaDetails,
-  PrezentacijaInfo, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd,
+  PrezentacijaInfo, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, UvozSlajdovaCmd,
 } from './uzivo.models';
 
 /** REST za nastavnika (editor prezentacija). Sve putanje su relativne na `<base href>`.
@@ -47,6 +47,14 @@ export class PrezentacijeApi {
   dodajSlajd(prezentacijaId: number, cmd: SlajdCmd, posle?: number | null): Observable<SlajdDetails> {
     const params = posle != null ? new HttpParams().set('posle', posle) : undefined;
     return this.http.post<SlajdDetails>(`${this.api}/prezentacije/${prezentacijaId}/slajdovi`, cmd, { params, context: this.context });
+  }
+
+  /**
+   * Uvoz slajdova (PowerPoint) u jednoj transakciji; odgovor je cela prezentacija posle uvoza. Telo preko 10 MB -> 413
+   * (iznad ~11 MB nginx vraća HTML bez `reason`, pa pozivalac gleda status).
+   */
+  uvezi(prezentacijaId: number, cmd: UvozSlajdovaCmd): Observable<PrezentacijaDetails> {
+    return this.http.post<PrezentacijaDetails>(`${this.api}/prezentacije/${prezentacijaId}/slajdovi/uvoz`, cmd, { context: this.context });
   }
 
   izmeniSlajd(slajdId: number, cmd: SlajdCmd): Observable<SlajdDetails> {
