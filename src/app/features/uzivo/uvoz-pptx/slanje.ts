@@ -55,9 +55,9 @@ export interface ZavisnostiSlanja {
 const MB = 1024 * 1024;
 const ID_ZA_MERENJE = '0'.repeat(DUZINA_ID_MEDIJA);
 const ISTOVREMENO = 3;
-const PREKINUTA_VEZA = 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.';
+const PREKINUTA_VEZA = 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati; prezentacija se ponovo učitava kad zatvoriš ovaj prozor.';
 const PREVELIK_UVOZ = 'Uvoz je prevelik (najviše 10 MB). Izaberi manji opseg slajdova.';
-const NEPROCITAN_ODGOVOR = 'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.';
+const NEPROCITAN_ODGOVOR = 'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati; prezentacija se ponovo učitava kad zatvoriš ovaj prozor.';
 const PREVISE_ZAHTEVA = 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.';
 
 /** Uvezeni slajdovi u opsegu izbora (skriveni i neuspeli ne postoje u rezultatu, pa ih opseg samo preskače). */

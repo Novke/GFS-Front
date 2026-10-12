@@ -330,14 +330,14 @@ describe('posaljiUvoz', () => {
       [greska(400, 'Prezentacija može imati najviše 200 slajdova (ima 190, uvozi se 20).'), 'Prezentacija može imati najviše 200 slajdova (ima 190, uvozi se 20).'],
       [greska(413), 'Uvoz je prevelik (najviše 10 MB). Izaberi manji opseg slajdova.'],
       [greska(413, 'Uvoz je prevelik (najviše 10 MB). Uvezi deo po deo (opseg slajdova).'), 'Uvoz je prevelik (najviše 10 MB). Uvezi deo po deo (opseg slajdova).'],
-      [greska(0), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
-      [greska(504), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
+      [greska(0), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati; prezentacija se ponovo učitava kad zatvoriš ovaj prozor.'],
+      [greska(504), 'Server nije potvrdio uvoz (veza je prekinuta). Slajdovi su možda ipak dodati; prezentacija se ponovo učitava kad zatvoriš ovaj prozor.'],
       [greska(500, 'Sistemska greška.'), 'Slajdovi nisu uvezeni: Sistemska greška.'],
       [greska(429), 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.'],
       [greska(429, 'Previše zahteva.'), 'Server trenutno prima previše zahteva: pokušaj ponovo za trenutak.'],
       // 201 čiji odgovor nije pročitan (HttpClient: greška parsiranja sa statusom 2xx): uvoz je verovatno upisan
       [new HttpErrorResponse({ status: 201, error: { error: new SyntaxError('JSON'), text: '<html>' } }),
-        'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati: osveži prezentaciju pre novog pokušaja.'],
+        'Odgovor servera nije pročitan. Slajdovi su možda ipak dodati; prezentacija se ponovo učitava kad zatvoriš ovaj prozor.'],
       // "Slajd N:" se preslikava po poruci, bez obzira na status
       [greska(422, 'Slajd 1: Font nije podržan: Y.'), 'PowerPoint slajd 1: Font nije podržan: Y.'],
       // broj slajda van izbora: poruka servera ostaje
