@@ -1,5 +1,5 @@
 import type { Animacija, CrtezSloj, Deo, FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj } from './platno.models';
-import { bajtovaPlatna, GRANICE, proveriKaoServer, zaokruziKaoServer } from './platno-provera';
+import { bajtovaPlatna, GRANICE, greskePlatna, prekoGranica, proveriKaoServer, zaokruziKaoServer } from './platno-provera';
 
 const deo = (tekst: string): Deo => ({
   tekst, font: 'Carlito', velicina: 18, boja: '#000000', podebljano: false, kurziv: false, podvuceno: false, precrtano: false, polozaj: 'OBICAN',
@@ -310,5 +310,62 @@ describe('proveriKaoServer (ogledalo PlatnoPP.proveri posle normalizuj)', () => 
     const p = platno(Array.from({ length: 5 }, (_, i) => crtez(`s${i}`, 19_999)));
     expect(bajtovaPlatna(p)).toBeGreaterThan(GRANICE.bajtova);
     expect(proveriKaoServer(p)).toBe('Dokument platna je prevelik (najviše 1 MB).');
+  });
+});
+
+describe('prekoGranica (samo brojevi, za svaku radnju editora)', () => {
+  const formula = (id: string, latex: string): FormulaSloj => ({
+    ...osnova(id), tip: 'FORMULA', latex, boja: '#000000', velicina: 18, poravnanje: 'LEVO', slikaIzvora: null,
+  });
+
+  it('300 slojeva prolazi, 301 ne', () => {
+    expect(prekoGranica(platno(slojeviTeksta(300)))).toBeNull();
+    expect(prekoGranica(platno(slojeviTeksta(301)))).toBe('Slajd može imati najviše 300 slojeva.');
+  });
+
+  it('400 animacija prolazi, 401 ne', () => {
+    expect(prekoGranica(platno(slojeviTeksta(1), animacije(400)))).toBeNull();
+    expect(prekoGranica(platno(slojeviTeksta(1), animacije(401)))).toBe('Slajd može imati najviše 400 animacija.');
+  });
+
+  it('50 000 znakova prolazi, 50 001 ne (TEKST sloj sa jednim delom i latex formule)', () => {
+    expect(prekoGranica(platno([tekst('s0', 'x'.repeat(50_000))]))).toBeNull();
+    expect(prekoGranica(platno([tekst('s0', 'x'.repeat(50_001))]))).toBe('Slajd može imati najviše 50000 znakova teksta.');
+    expect(prekoGranica(platno([formula('s0', 'x'.repeat(50_001))]))).toBe('Slajd može imati najviše 50000 znakova teksta.');
+  });
+
+  it('ne serijalizuje dokument (JSON.stringify se ne zove)', () => {
+    const stringify = vi.spyOn(JSON, 'stringify');
+    try {
+      prekoGranica(platno(slojeviTeksta(10), animacije(3)));
+      expect(stringify).not.toHaveBeenCalled();
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+});
+
+describe('greskePlatna (proveriKaoServer sa kešom po objektu)', () => {
+  it('vraća isto što i proveriKaoServer', () => {
+    const ispravan = platno([tekst('s0', 'a')]);
+    const neispravan = { ...platno([]), pozadina: { boja: '#ggg', medijId: null } };
+    expect(greskePlatna(ispravan)).toBe(proveriKaoServer(ispravan));
+    expect(greskePlatna(ispravan)).toBeNull();
+    expect(greskePlatna(neispravan)).toBe(proveriKaoServer(neispravan));
+    expect(greskePlatna(neispravan)).toBe('Boja nije ispravna (#RRGGBB).');
+  });
+
+  it('za isti objekat drugi put ne proverava ponovo (jedna serijalizacija za dva poziva), za nov objekat proverava', () => {
+    const p = platno([tekst('s0', 'kes')]);
+    const stringify = vi.spyOn(JSON, 'stringify');
+    try {
+      expect(greskePlatna(p)).toBeNull();
+      expect(greskePlatna(p)).toBeNull();
+      expect(stringify).toHaveBeenCalledTimes(1);
+      greskePlatna({ ...p });
+      expect(stringify).toHaveBeenCalledTimes(2);
+    } finally {
+      stringify.mockRestore();
+    }
   });
 });

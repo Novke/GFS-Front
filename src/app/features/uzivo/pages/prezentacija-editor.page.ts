@@ -20,7 +20,7 @@ import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
-import { IzvodjenjeInfo, PokreniCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
+import { IzvodjenjeInfo, PokreniCmd, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
 import { brojKoraka } from '../data-access/platno-koraci';
 import type { Tema } from '../data-access/platno.models';
 import { kodSaRazmakom } from '../ui/format';
@@ -39,7 +39,7 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
- * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje"), u sredini
+ * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno"), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
  * 1200 px pregled ide ispod forme. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
@@ -158,11 +158,12 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               }
             </ol>
             @if (!store.slajdovi().length) {
-              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd ili pitanje.</p>
+              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd, pitanje ili platno.</p>
             }
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
+              <button mat-stroked-button type="button" (click)="store.dodaj('PLATNO')"><mat-icon svgIcon="layers" />Platno</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
             </div>
@@ -190,7 +191,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
             @for (s of izabraniNiz(); track store.kljuc(s.id)) {
-              <app-slajd-forma [slajd]="s" (izmena)="store.izmeniSlajd(s.id, $event)" />
+              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -350,11 +351,22 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     }
   }
 
+  /** Zatvaranje ili osvežavanje kartice: otvorena sesija editora platna prvo ide u dokument, pa se proverava šta je nesačuvano. */
   protected preIzlaska(e: BeforeUnloadEvent): void {
+    this.store.isprazni();
     if (this.store.imaNesacuvano()) {
       this.store.sacuvajOdmah();
       e.preventDefault();
     }
+  }
+
+  /**
+   * Izmena iz forme slajda. PLATNO: forma menja samo beleške, a dokument platna uvek ide iz store-a (forma pamti platno
+   * iz trenutka pravljenja, a editor platna ga menja nezavisno od nje).
+   */
+  protected izmenaForme(id: number, cmd: SlajdCmd): void {
+    const platno = cmd.tip === 'PLATNO' ? this.store.izabrani()?.platno ?? cmd.platno : cmd.platno;
+    this.store.izmeniSlajd(id, { ...cmd, platno });
   }
 
   protected ikona(s: SlajdDetails): NazivIkone {

@@ -10,8 +10,11 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { PrezentacijeApi } from './prezentacije.api';
 import { razlogGreske } from './razlog-greske';
 import {
-  MAX_SLAJDOVA, PORUKE, greskePrezentacije, greskeSlajda, noviSlajd, slajdIzCmd, slajdUCmd,
+  MAX_SLAJDOVA, PORUKE, greskePrezentacije, greskeSlajda, greskeSlajdaZaSlanje, noviSlajd, slajdIzCmd, slajdUCmd,
 } from './slajd-pravila';
+import { novoPlatno, type RasporedNovogPlatna } from './platno-novo';
+import type { Platno } from './platno.models';
+import { vazecaTema } from '../ui/teme';
 import {
   PrezentacijaDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda, UpdatePrezentacijaCmd,
 } from './uzivo.models';
@@ -52,6 +55,9 @@ const POCETNO: EditorState = { prezentacija: null, izabraniId: null, cuvanje: 'm
  *   ni prazne opcije); prva ispravna izmena ga šalje kao `POST` posle prethodnog sačuvanog slajda, i od tada ima pravi id.
  *   `kljuc(id)` ostaje isti kroz tu zamenu (za `track` u šablonu).
  * - `pomeri` je optimističan, pa `PUT redosled` sa id-jevima sačuvanih slajdova; neuspeh vraća stari redosled.
+ * - PLATNO: editor platna predaje ceo dokument (`izmeniPlatno`) posle svake zabeležene izmene, a otvorenu sesiju (tekst,
+ *   gest) upisuje funkcija iz `registrujPraznjenje`, koju store zove pre svakog čuvanja. Lista i forma proveravaju dokument
+ *   samo jeftino (`greskeSlajda`); puna provera kao na serveru (`greskeSlajdaZaSlanje`) ide samo pred slanje.
  */
 export const EditorStore = signalStore(
   withState<EditorState>(POCETNO),
@@ -90,6 +96,9 @@ export const EditorStore = signalStore(
     /** Broj izmene koji je upravo na putu (PUT), po id-ju: ista izmena se ne šalje dvaput (npr. iz grupe nacrta i pravog id-ja). */
     const uSlanju = new Map<number, number>();
     const obrisani = new Set<number>();
+    /** Editor platna: upis otvorene sesije teksta i gesta u dokument, i da li je nešto otvoreno (odluka 9c). */
+    let praznjenje: (() => void) | null = null;
+    let otvoreno: () => boolean = () => false;
 
     const razresi = (id: number) => zamene.get(id) ?? id;
     const naCekanju = (id: number) => (izmena.get(id) ?? 0) > (sacuvano.get(id) ?? 0);
@@ -235,7 +244,7 @@ export const EditorStore = signalStore(
       if (!cmd || obrisani.has(kljuc) || !naCekanju(kljuc)) {
         return EMPTY;
       }
-      const greske = greskeSlajda(cmd);
+      const greske = greskeSlajdaZaSlanje(cmd);
       if (greske.length) {
         neispravno(kljuc, greske[0]);
         return EMPTY;
@@ -321,7 +330,33 @@ export const EditorStore = signalStore(
       return [...izmena.keys()].filter(id => !obrisani.has(id) && naCekanju(id));
     }
 
+    /** Upis otvorenih izmena editora platna (ide kroz izmeniPlatno -> izmeniSlajd, pa ga sledeći korak čuvanja vidi). */
+    function isprazni(): void {
+      praznjenje?.();
+    }
+
+    function izmeniSlajd(id: number, cmd: SlajdCmd): void {
+      const kljuc = razresi(id);
+      if (obrisani.has(kljuc) || !store.slajdovi().some(s => s.id === kljuc)) return;
+      cmdovi.set(kljuc, cmd);
+      izmena.set(kljuc, (izmena.get(kljuc) ?? 0) + 1);
+      zameni(kljuc, s => slajdIzCmd(cmd, s));
+      cuvaj(kljuc);
+    }
+
+    /** Nov dokument platna uz poslednju lokalnu komandu slajda (beleške otkucane posle poslednjeg čuvanja ostaju). */
+    function izmeniPlatno(id: number, platno: Platno): void {
+      const kljuc = razresi(id);
+      const s = store.slajdovi().find(x => x.id === kljuc);
+      if (!s || s.tip !== 'PLATNO' || obrisani.has(kljuc)) return;
+      const cmd = cmdovi.get(kljuc) ?? slajdUCmd(s);
+      // isti dokument (pražnjenje bez otvorene izmene): nema nove izmene ni PUT-a
+      if (cmd.platno === platno) return;
+      izmeniSlajd(kljuc, { ...cmd, platno });
+    }
+
     function sacuvajOdmah(): void {
+      isprazni();
       for (const id of nesacuvani()) cuvaj(id);
       flush$.next(null);
     }
@@ -335,7 +370,7 @@ export const EditorStore = signalStore(
       if (brojGresaka > greskePre) return store.greska() ?? PORUKA_CUVANJE;
       const ostali = nesacuvani();
       for (const id of ostali) {
-        const greske = greskeSlajda(cmdovi.get(id)!);
+        const greske = greskeSlajdaZaSlanje(cmdovi.get(id)!);
         if (greske.length) {
           const rb = store.slajdovi().find(s => s.id === id)?.rb;
           return rb ? `Slajd ${rb} nije sačuvan: ${greske[0]}` : greske[0];
@@ -349,8 +384,9 @@ export const EditorStore = signalStore(
 
     /** Šalje sve ispravne nesačuvane izmene van rxMethod-a (preživi uništavanje store-a pri napuštanju editora). */
     function sacuvajPreIzlaska(): void {
+      isprazni();
       for (const [id, cmd] of cmdovi) {
-        if (obrisani.has(id) || !naCekanju(id) || greskeSlajda(cmd).length || nacrtiUSlanju.has(id)) continue;
+        if (obrisani.has(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length || nacrtiUSlanju.has(id)) continue;
         sacuvano.set(id, izmena.get(id)!);
         const zahtev = id > 0 ? api.izmeniSlajd(id, cmd) : api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle);
         // editor je možda već zatvoren: poruka ide kroz globalni snackbar (više neuspeha = jedna poruka)
@@ -399,14 +435,9 @@ export const EditorStore = signalStore(
 
       izaberi,
 
-      izmeniSlajd(id: number, cmd: SlajdCmd): void {
-        const kljuc = razresi(id);
-        if (obrisani.has(kljuc) || !store.slajdovi().some(s => s.id === kljuc)) return;
-        cmdovi.set(kljuc, cmd);
-        izmena.set(kljuc, (izmena.get(kljuc) ?? 0) + 1);
-        zameni(kljuc, s => slajdIzCmd(cmd, s));
-        cuvaj(kljuc);
-      },
+      izmeniSlajd,
+
+      izmeniPlatno,
 
       /** Ctrl+S: šalje sve nesačuvano odmah (i ponavlja neuspela čuvanja). */
       sacuvajOdmah,
@@ -418,6 +449,7 @@ export const EditorStore = signalStore(
        */
       sacuvajSve(): Observable<void> {
         return defer(() => {
+          isprazni();
           const greskePre = brojGresaka;
           sacuvajOdmah();
           return concat(of(undefined), zavrseno$).pipe(
@@ -429,12 +461,17 @@ export const EditorStore = signalStore(
         });
       },
 
-      /** Nov slajd posle izabranog (ili na kraj), kao lokalni nacrt; bira ga. */
-      dodaj(tip: TipSlajda, tipPitanja?: TipPitanja): void {
+      /**
+       * Nov slajd posle izabranog (ili na kraj), kao lokalni nacrt; bira ga. PLATNO dobija dokument iz teme prezentacije
+       * (`raspored`, podrazumevano prazan) i odmah je ispravan, pa se šalje odmah, kao kopija u `dupliraj`.
+       */
+      dodaj(tip: TipSlajda, tipPitanja?: TipPitanja, raspored: RasporedNovogPlatna = 'PRAZNO'): void {
         if (!imaMesta()) return;
         const lista = store.slajdovi();
         const i = lista.findIndex(s => s.id === store.izabraniId());
-        ubaciNacrt(noviSlajd(tip, tipPitanja), i < 0 ? lista.length - 1 : i);
+        const platno = tip === 'PLATNO' ? novoPlatno(vazecaTema(store.prezentacija()?.tema), raspored) : null;
+        const id = ubaciNacrt(noviSlajd(tip, tipPitanja, platno), i < 0 ? lista.length - 1 : i);
+        if (tip === 'PLATNO') posaljiOdmah(id);
       },
 
       obrisi(id: number): void {
@@ -570,9 +607,21 @@ export const EditorStore = signalStore(
         return poreklo.get(id) ?? id;
       },
 
-      /** Ima li izmena koje još nisu na serveru (uključujući neispravne nacrte). */
+      /**
+       * Editor platna predaje funkciju koja upisuje otvorenu sesiju teksta i gest, i proveru da li je nešto otvoreno;
+       * `null` = odjava (editor je uništen).
+       */
+      registrujPraznjenje(f: (() => void) | null, o: () => boolean = () => false): void {
+        praznjenje = f;
+        otvoreno = f ? o : () => false;
+      },
+
+      /** Zove registrovano pražnjenje (store ga zove sam pre čuvanja; stranica pri zatvaranju kartice). */
+      isprazni,
+
+      /** Ima li izmena koje još nisu na serveru (uključujući neispravne nacrte i otvorenu sesiju editora platna). */
       imaNesacuvano(): boolean {
-        return nesacuvani().length > 0 || nacrtiUSlanju.size > 0;
+        return otvoreno() || nesacuvani().length > 0 || nacrtiUSlanju.size > 0;
       },
 
       sacuvajPreIzlaska,

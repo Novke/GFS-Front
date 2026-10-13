@@ -470,3 +470,23 @@ export function proveriKaoServer(p: Platno): string | null {
     throw e;
   }
 }
+
+// ---------------------------------------------------------------------------------------------- editor
+
+const KES_GRESAKA = new WeakMap<Platno, string | null>();
+
+/** `proveriKaoServer` sa kešom po objektu: editor pravi nov objekt pri svakoj izmeni, a nepromenjeni slajdovi zadržavaju svoj. */
+export function greskePlatna(p: Platno): string | null {
+  if (KES_GRESAKA.has(p)) return KES_GRESAKA.get(p)!;
+  const g = proveriKaoServer(p);
+  KES_GRESAKA.set(p, g);
+  return g;
+}
+
+/** Brza provera brojeva (bez serijalizacije) za radnje editora; poruke iste kao server. */
+export function prekoGranica(p: Platno): string | null {
+  if (p.slojevi.length > GRANICE.slojeva) return 'Slajd može imati najviše 300 slojeva.';
+  if (p.animacije.length > GRANICE.animacija) return 'Slajd može imati najviše 400 animacija.';
+  if (p.slojevi.reduce((n, s) => n + znakovaSloja(s), 0) > GRANICE.znakova) return 'Slajd može imati najviše 50000 znakova teksta.';
+  return null;
+}

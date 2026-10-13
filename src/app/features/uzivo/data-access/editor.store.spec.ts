@@ -4,6 +4,9 @@ import { TestBed } from '@angular/core/testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore, NijeSacuvano } from './editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
+import { novoPlatno } from './platno-novo';
+import { platno as platnoFabrika } from './platno-podaci.testing';
+import type { Platno } from './platno.models';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 function slajd(id: number, rb: number, naslov = `Slajd ${id}`): SlajdDetails {
@@ -312,6 +315,155 @@ describe('EditorStore', () => {
       await pomeriSat(800);
     }));
   });
+});
+
+describe('EditorStore: PLATNO', () => {
+  let store: InstanceType<typeof EditorStore>;
+  let http: HttpTestingController;
+  const P0 = platnoFabrika();
+  const P1: Platno = { ...platnoFabrika(), pozadina: { boja: '#EEEEEE', medijId: null } };
+  const P2: Platno = { ...platnoFabrika(), pozadina: { boja: '#DDDDDD', medijId: null } };
+  const platnoSlajd = (beleske: string | null = null, p: Platno = P0): SlajdDetails => ({
+    id: 52, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske, postepeno: false, pitanje: null, platno: p,
+  });
+  const platnoCmd = (beleske: string | null, p: Platno): SlajdCmd => ({
+    tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske, postepeno: false, pitanje: null, platno: p,
+  });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [EditorStore, provideHttpClient(), provideHttpClientTesting()] });
+    store = TestBed.inject(EditorStore);
+    http = TestBed.inject(HttpTestingController);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija([slajd(51, 1), platnoSlajd()]), tema: 'PAPIR' });
+  });
+
+  afterEach(() => http.verify());
+
+  it('dodaj(PLATNO) pravi nacrt sa praznim platnom teme i šalje POST odmah (nacrt je ispravan)', saLaznimSatom(async () => {
+    store.izaberi(51);
+    store.dodaj('PLATNO');
+    const nacrt = store.izabrani()!;
+    expect(nacrt.id).toBeLessThan(0);
+    expect(nacrt.tip).toBe('PLATNO');
+    expect(nacrt.platno).toEqual(novoPlatno('PAPIR', 'PRAZNO'));
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.params.get('posle')).toBe('51');
+    expect(post.request.body.platno).toEqual(novoPlatno('PAPIR', 'PRAZNO'));
+    post.flush({ ...platnoSlajd(null, novoPlatno('PAPIR', 'PRAZNO')), id: 60 });
+    expect(store.izabraniId()).toBe(60);
+    await pomeriSat(800);
+  }));
+
+  it('dodaj(PLATNO, undefined, NASLOV_I_TEKST) pravi naslov i telo iz teme', saLaznimSatom(async () => {
+    store.dodaj('PLATNO', undefined, 'NASLOV_I_TEKST');
+    expect(store.izabrani()!.platno).toEqual(novoPlatno('PAPIR', 'NASLOV_I_TEKST'));
+    http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi').flush({ ...platnoSlajd(), id: 61, rb: 3 });
+    await pomeriSat(800);
+  }));
+
+  it('dodaj(INFO) ne šalje ništa (prazan info nije ispravan)', saLaznimSatom(async () => {
+    store.dodaj('INFO');
+    await pomeriSat(800);
+    http.expectNone(() => true);
+  }));
+
+  it('izmeniPlatno posle izmene beleški: PUT nosi i beleške i novo platno', saLaznimSatom(async () => {
+    store.izmeniSlajd(52, platnoCmd('B1', P0));
+    store.izmeniPlatno(52, P1);
+    expect(store.slajdovi()[1].platno).toBe(P1);
+    expect(store.slajdovi()[1].beleske).toBe('B1');
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/52');
+    expect(put.request.method).toBe('PUT');
+    expect(put.request.body.beleske).toBe('B1');
+    expect(put.request.body.platno).toBe(P1);
+    put.flush(platnoSlajd('B1', P1));
+  }));
+
+  it('izmeniPlatno bez ranije lokalne izmene polazi od sačuvanog slajda (beleške sa servera ostaju)', saLaznimSatom(async () => {
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija([slajd(51, 1), platnoSlajd('Sa servera')]), tema: 'PAPIR' });
+    store.izmeniPlatno(52, P1);
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/52');
+    expect(put.request.body).toMatchObject({ tip: 'PLATNO', beleske: 'Sa servera' });
+    expect(put.request.body.platno).toBe(P1);
+    put.flush(platnoSlajd('Sa servera', P1));
+  }));
+
+  it('izmeniPlatno za INFO slajd ne radi ništa', saLaznimSatom(async () => {
+    const pre = store.slajdovi()[0];
+    store.izmeniPlatno(51, P1);
+    expect(store.slajdovi()[0]).toBe(pre);
+    await pomeriSat(800);
+    http.expectNone(() => true);
+  }));
+
+  it('isto platno (isti objekat) ne pravi novu izmenu ni PUT', saLaznimSatom(async () => {
+    store.izmeniPlatno(52, P0);
+    await pomeriSat(800);
+    http.expectNone(() => true);
+    expect(store.imaNesacuvano()).toBe(false);
+  }));
+
+  it('pražnjenje: sacuvajSve prvo upisuje otvorenu izmenu editora, pa PUT nosi to platno', saLaznimSatom(async () => {
+    store.registrujPraznjenje(() => store.izmeniPlatno(52, P2), () => true);
+    let gotovo = false;
+    store.sacuvajSve().subscribe(() => (gotovo = true));
+    const put = http.expectOne('api/slajdovi/52');
+    expect(put.request.body.platno).toBe(P2);
+    put.flush(platnoSlajd(null, P2));
+    expect(gotovo).toBe(true);
+    await pomeriSat(800);
+  }));
+
+  it('sacuvajOdmah i sacuvajPreIzlaska zovu pražnjenje (jednom svaki)', saLaznimSatom(async () => {
+    const isprazni = vi.fn();
+    store.registrujPraznjenje(isprazni);
+    store.sacuvajOdmah();
+    expect(isprazni).toHaveBeenCalledTimes(1);
+    store.sacuvajPreIzlaska();
+    expect(isprazni).toHaveBeenCalledTimes(2);
+    store.isprazni();
+    expect(isprazni).toHaveBeenCalledTimes(3);
+    await pomeriSat(800);
+  }));
+
+  it('sacuvajPreIzlaska šalje platno upisano pražnjenjem', () => {
+    store.registrujPraznjenje(() => store.izmeniPlatno(52, P2), () => true);
+    store.sacuvajPreIzlaska();
+    const put = http.expectOne('api/slajdovi/52');
+    expect(put.request.body.platno).toBe(P2);
+    put.flush(platnoSlajd(null, P2));
+  });
+
+  it('imaNesacuvano je true dok je u editoru nešto otvoreno (i bez izmene), false posle odjave', () => {
+    let otvoreno = true;
+    store.registrujPraznjenje(() => undefined, () => otvoreno);
+    expect(store.imaNesacuvano()).toBe(true);
+    otvoreno = false;
+    expect(store.imaNesacuvano()).toBe(false);
+    otvoreno = true;
+    store.registrujPraznjenje(null);
+    expect(store.imaNesacuvano()).toBe(false);
+  });
+
+  it('dokument koji server ne bi primio (#ggg) se ne šalje; status kaže zašto', saLaznimSatom(async () => {
+    const los: Platno = { ...P0, pozadina: { boja: '#ggg', medijId: null } };
+    store.izmeniPlatno(52, los);
+    expect(store.neispravni().has(52)).toBe(false);   // lista proverava samo brojeve (odluka 10)
+    await pomeriSat(800);
+    http.expectNone('api/slajdovi/52');
+    expect(store.cuvanje()).toBe('greska');
+    expect(store.greska()).toBe('Slajd 2 nije sačuvan: Boja nije ispravna (#RRGGBB).');
+    let greska: unknown = null;
+    store.sacuvajSve().subscribe({ error: e => (greska = e) });
+    expect((greska as Error).message).toBe('Slajd 2 nije sačuvan: Boja nije ispravna (#RRGGBB).');
+    store.sacuvajPreIzlaska();
+    http.expectNone(() => true);
+  }));
 });
 
 function nacrtPitanje(s: SlajdDetails) {

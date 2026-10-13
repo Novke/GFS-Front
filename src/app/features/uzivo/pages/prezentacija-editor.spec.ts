@@ -233,6 +233,56 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     }
   });
 
+  it('beleške posle izmene platna: PUT nosi platno iz store-a (ne ono iz vremena pravljenja forme) i nove beleške', saLaznimSatom(async () => {
+    store.izaberi(12);
+    fixture.detectChanges();
+    const P1 = { ...platno(), pozadina: { boja: '#EEEEEE', medijId: null } };
+    store.izmeniPlatno(12, P1);
+    const beleske = (fixture.nativeElement as HTMLElement).querySelector('textarea[formcontrolname=beleske]') as HTMLTextAreaElement;
+    expect(beleske).not.toBeNull();
+    beleske.value = 'Nove beleške';
+    beleske.dispatchEvent(new Event('input'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/12');
+    expect(put.request.body.beleske).toBe('Nove beleške');
+    expect(put.request.body.platno).toBe(P1);
+    put.flush({ ...platnoSlajd, beleske: 'Nove beleške', platno: P1 });
+    await pomeriSat(800);
+  }));
+
+  it('dugme "Platno" dodaje PLATNO slajd, bira ga i šalje POST', saLaznimSatom(async () => {
+    const dodaj = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-dodaj button')]
+      .find(b => b.textContent?.trim() === 'Platno') as HTMLButtonElement;
+    expect(dodaj).toBeTruthy();
+    dodaj.click();
+    const nacrt = store.izabrani()!;
+    expect(nacrt.tip).toBe('PLATNO');
+    expect(nacrt.id).toBeLessThan(0);
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body.tip).toBe('PLATNO');
+    post.flush({ ...platnoSlajd, id: 30, rb: 3, platno: nacrt.platno });
+    expect(store.izabraniId()).toBe(30);
+    await pomeriSat(800);
+  }));
+
+  it('beforeunload prvo zove pražnjenje editora platna, pa traži potvrdu dok je nešto otvoreno', () => {
+    const isprazni = vi.fn();
+    let otvoreno = true;
+    store.registrujPraznjenje(isprazni, () => otvoreno);
+    const dogadjaj = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dogadjaj);
+    expect(isprazni).toHaveBeenCalled();
+    expect(dogadjaj.defaultPrevented).toBe(true);
+    otvoreno = false;
+    isprazni.mockClear();
+    const drugi = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(drugi);
+    expect(isprazni).toHaveBeenCalledTimes(1);
+    expect(drugi.defaultPrevented).toBe(false);
+    store.registrujPraznjenje(null);
+  });
+
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
     const radio = (fixture.nativeElement as HTMLElement).querySelector('input[type=radio][value=PAPIR]') as HTMLInputElement;
     expect(radio).not.toBeNull();

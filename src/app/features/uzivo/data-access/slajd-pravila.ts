@@ -2,6 +2,8 @@ import {
   MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda,
 } from './uzivo.models';
 import type { NazivIkone } from '../../../core/layout/icons';
+import type { Platno } from './platno.models';
+import { greskePlatna, prekoGranica } from './platno-provera';
 
 /**
  * Pravila editora slajdova: podrazumevane vrednosti, prevođenje SlajdDetails <-> SlajdCmd i klijentska validacija.
@@ -170,7 +172,10 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (duzina(ociscen(cmd.sadrzaj)) > MAX_SADRZAJ) greske.push(PORUKE.sadrzaj);
   if (duzina(ociscen(cmd.beleske)) > MAX_BELESKE) greske.push(PORUKE.beleske);
   if (cmd.tip === 'PLATNO') {
-    return cmd.platno ? greske : [...greske, PORUKE.bezPlatna];
+    // jeftino (lista slajdova je računa za svaki slajd pri svakoj izmeni): samo brojevi; puna provera je u greskeSlajdaZaSlanje
+    if (!cmd.platno) return [...greske, PORUKE.bezPlatna];
+    const g = prekoGranica(cmd.platno);
+    return g ? [...greske, g] : greske;
   }
   if (cmd.tip === 'INFO') {
     if (prazan(cmd.naslov) && prazan(cmd.sadrzaj) && prazan(cmd.slikaId)) {
@@ -182,6 +187,14 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
     return [...greske, PORUKE.bezPitanja];
   }
   return [...greske, ...greskePitanja(cmd.pitanje)];
+}
+
+/** Pred slanje (`EditorStore`): sve iz `greskeSlajda` i puna provera dokumenta platna kao na serveru (uključujući 1 MB). */
+export function greskeSlajdaZaSlanje(cmd: SlajdCmd): string[] {
+  const greske = greskeSlajda(cmd);
+  if (greske.length || cmd?.tip !== 'PLATNO' || !cmd.platno) return greske;
+  const g = greskePlatna(cmd.platno);
+  return g ? [g] : [];
 }
 
 /** Greške naziva i opisa prezentacije (isto kao `PrezentacijaService`). */
@@ -219,11 +232,14 @@ export function novoPitanje(tip: TipPitanja, tekst = ''): PitanjeCmd {
   };
 }
 
-/** Komanda za nov slajd (`dodaj`): INFO je prazan, PITANJE ima podrazumevano pitanje izabranog tipa. */
-export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN'): SlajdCmd {
+/**
+ * Komanda za nov slajd (`dodaj`): INFO je prazan, PITANJE ima podrazumevano pitanje izabranog tipa, PLATNO nosi dati
+ * dokument (`novoPlatno` iz teme prezentacije).
+ */
+export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN', platno: Platno | null = null): SlajdCmd {
   return {
     tip, naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
-    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: null,
+    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: tip === 'PLATNO' ? platno : null,
   };
 }
 
