@@ -23,7 +23,7 @@ import { sRecju } from '../../../shared/util/mnozina';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { MAX_SLAJDOVA } from '../data-access/slajd-pravila';
 import type { PrezentacijaDetails } from '../data-access/uzivo.models';
-import { GreskaUvoza, proveriImeFajla } from './ime-fajla';
+import { GreskaUvoza, PRIHVACENI_FAJLOVI, proveriImeFajla } from './ime-fajla';
 import { GRANICE_PAKETA } from './paket';
 import { izvestajKaoTekst, praznaStatistika, saberi, type Statistika, type Upozorenje } from './izvestaj';
 import {
@@ -119,7 +119,7 @@ const sledeciTask = () => new Promise<void>(r => setTimeout(r));
         @case ('izbor') {
           <div class="uz-uv-izbor" data-faza="izbor">
             <mat-icon class="uz-uv-izbor-ikona" aria-hidden="true" svgIcon="upload_file" />
-            <input #polje class="uz-uv-fajl" type="file" accept=".pptx,.ppsx,.potx" tabindex="-1" aria-hidden="true"
+            <input #polje class="uz-uv-fajl" type="file" [accept]="prihvaceniFajlovi" tabindex="-1" aria-hidden="true"
                    (change)="izabran(polje)">
             <button mat-flat-button type="button" data-fokus (click)="polje.click()">Izaberi .pptx fajl</button>
             <p class="uz-ed-napomena">Fajl se čita u tvom pregledaču; na server idu samo slike i gotovi slajdovi.</p>
@@ -308,6 +308,7 @@ export class UvozPptxDialog {
   private readonly injector = inject(Injector);
 
   protected readonly prvih = PRVIH;
+  protected readonly prihvaceniFajlovi = PRIHVACENI_FAJLOVI;
   protected readonly slajdova = slajdova;
   protected readonly faza = signal<Faza>('izbor');
   protected readonly imeFajla = signal('');

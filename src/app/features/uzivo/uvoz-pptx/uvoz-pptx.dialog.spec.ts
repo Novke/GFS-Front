@@ -10,7 +10,7 @@ import { NesacuvaneIzmene } from '../../../core/state/nesacuvane-izmene';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, PrezentacijaDetails, UvozSlajdovaCmd } from '../data-access/uzivo.models';
-import { PORUKE_FAJLA } from './ime-fajla';
+import { PORUKE_FAJLA, PRIHVACENI_FAJLOVI } from './ime-fajla';
 import { GRANICE_PAKETA } from './paket';
 import { kodirajPng } from './png';
 import { napraviPptx, oblik, pasus, PNG_1X1, timing, type EfekatFabrike } from './pptx-fabrika.testing';
@@ -143,7 +143,7 @@ describe('UvozPptxDialog', () => {
     expect(tekst()).toContain('Izaberi .pptx fajl');
     expect(tekst()).toContain('Fajl se čita u tvom pregledaču; na server idu samo slike i gotovi slajdovi.');
     const polje = koren()!.querySelector<HTMLInputElement>('input[type=file]')!;
-    expect(polje.accept).toBe('.pptx,.ppsx,.potx');
+    expect(polje.accept).toBe(PRIHVACENI_FAJLOVI);
     Object.defineProperty(polje, 'files', { value: [fajl(dvaSlajda())] });
     polje.dispatchEvent(new Event('change'));
     await uPregledu();

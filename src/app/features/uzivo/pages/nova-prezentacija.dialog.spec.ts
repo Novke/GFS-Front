@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
+import { PRIHVACENI_FAJLOVI } from '../uvoz-pptx/ime-fajla';
 import { NovaPrezentacijaDialog } from './nova-prezentacija.dialog';
 
 describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
@@ -56,6 +57,14 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     expect(el(f).textContent).toContain('Izabrano: Predavanje 3.pptx');
     izaberi(f, 'Predavanje 4.pptx');
     expect(naziv(f).value).toBe('Predavanje 4');
+  });
+
+  it('izbor fajla prima iste formate kao dijalog uvoza (.pptx, .ppsx, .potx)', async () => {
+    const f = otvori();
+    await pptx(f);
+    const accept = el(f).querySelector<HTMLInputElement>('input[type="file"]')!.accept;
+    expect(accept).toBe(PRIHVACENI_FAJLOVI);
+    expect(accept.split(',')).toEqual(expect.arrayContaining(['.pptx', '.ppsx', '.potx']));
   });
 
   it('ručno upisan naziv se ne menja pri izboru drugog fajla', async () => {

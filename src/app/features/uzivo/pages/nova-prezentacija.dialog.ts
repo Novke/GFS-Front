@@ -10,7 +10,7 @@ import { Observable } from 'rxjs';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { PORUKE, greskePrezentacije } from '../data-access/slajd-pravila';
-import { proveriImeFajla } from '../uvoz-pptx/ime-fajla';
+import { PRIHVACENI_FAJLOVI, proveriImeFajla } from '../uvoz-pptx/ime-fajla';
 import { PredmetKratko, PrezentacijaDetails } from '../data-access/uzivo.models';
 
 export interface NovaPrezentacijaPodaci { predmeti: PredmetKratko[]; predmetId: number | null; }
@@ -50,7 +50,7 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
         @if (pocetak() === 'pptx') {
           <div class="uz-ed-fajl">
             <input #ulaz type="file" class="uz-ed-fajl-ulaz" tabindex="-1" aria-hidden="true"
-              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              [accept]="prihvaceniFajlovi"
               (change)="izaberiFajl(ulaz)">
             <button mat-stroked-button type="button" (click)="ulaz.click()" aria-describedby="uz-nova-fajl-ime">Izaberi .pptx fajl</button>
             <span id="uz-nova-fajl-ime" class="uz-ed-napomena" aria-live="polite">
@@ -87,6 +87,7 @@ export class NovaPrezentacijaDialog {
   private readonly api = inject(PrezentacijeApi);
 
   protected readonly porukaNaziv = PORUKE.naziv;
+  protected readonly prihvaceniFajlovi = PRIHVACENI_FAJLOVI;
   protected readonly salje = signal(false);
   protected readonly greska = signal<string | null>(null);
   protected readonly pocetak = signal<'prazna' | 'pptx'>('prazna');

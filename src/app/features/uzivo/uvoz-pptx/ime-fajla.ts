@@ -19,6 +19,14 @@ export class GreskaUvoza extends Error {
 const STARI = new Set(['ppt', 'pps', 'pot']);
 const MAKRO = new Set(['pptm', 'ppsm', 'potm']);
 const PPTX = new Set(['pptx', 'ppsx', 'potx']);
+/** MIME tipovi istih formata (birač fajla na telefonu filtrira po njima). */
+const MIME_PPTX = ['presentation', 'slideshow', 'template'].map((t) => `application/vnd.openxmlformats-officedocument.presentationml.${t}`);
+
+/**
+ * `accept` polja za izbor fajla, isti u dijalogu uvoza i u "Nova prezentacija": ekstenzije koje `proveriImeFajla` prima
+ * (.pptx, .ppsx, .potx) i njihovi MIME tipovi.
+ */
+export const PRIHVACENI_FAJLOVI = [...[...PPTX].map((e) => `.${e}`), ...MIME_PPTX].join(',');
 
 /** Poruka za korisnika kad se fajl ovog imena ne uvozi, inače `null`. */
 export function proveriImeFajla(ime: string): string | null {
