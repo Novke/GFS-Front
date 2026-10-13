@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
-import type { OblikSloj, Platno, SlikaSloj, TekstSloj } from '../data-access/platno.models';
+import type { OblikSloj, Platno, SlikaSloj, TabelaSloj, TekstSloj } from '../data-access/platno.models';
 import { TEME } from '../ui/teme';
 import { novaSlika, novoPlatno } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
@@ -159,6 +159,33 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     const puno = { ...novoPlatno('NACRT', 'PRAZNO'), slojevi: Array.from({ length: 300 }, (_, i) => novaSlika(`s${i + 1}`, 'x', 10, 10)) };
     store.inicijalizuj(puno);
     await ubaciOblik('Elipsa');
+    expect(store.platno().slojevi).toHaveLength(300);
+    expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
+    expect(document.activeElement).toBe(okvir());
+  });
+
+  async function ubaciTabelu() {
+    dugme(el(), 'Tabela')!.click();
+    await fixture.whenStable();
+    dugme(document.querySelector<HTMLElement>('.uz-ep-ubaci-tabelu')!, 'Ubaci')!.click();
+    await fixture.whenStable();
+  }
+
+  it('"Tabela" > Ubaci: TABELA 3 x 3 iz teme na slobodnom mestu, izabrana, fokus na okviru platna', async () => {
+    await ubaciTabelu();
+    const t = poslednji() as TabelaSloj;
+    expect(t).toMatchObject({ tip: 'TABELA', sirina: 640, visina: 120, x: 160, y: 210 });
+    expect(t.celije[0][0].popuna).toBe(TEME.NACRT.tabelaZaglavlje);
+    expect(store.izbor()).toEqual([t.id]);
+    expect(document.activeElement).toBe(okvir());
+    await ubaciTabelu();
+    expect(poslednji().x).toBe(172);
+  });
+
+  it('"Tabela" odbijena (300 slojeva): poruka, fokus na okviru platna (ne na body)', async () => {
+    const puno = { ...novoPlatno('NACRT', 'PRAZNO'), slojevi: Array.from({ length: 300 }, (_, i) => novaSlika(`s${i + 1}`, 'x', 10, 10)) };
+    store.inicijalizuj(puno);
+    await ubaciTabelu();
     expect(store.platno().slojevi).toHaveLength(300);
     expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
     expect(document.activeElement).toBe(okvir());

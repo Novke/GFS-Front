@@ -14,7 +14,8 @@ import type { Tema } from '../data-access/platno.models';
 import { TEME } from '../ui/teme';
 
 const HEKS = /^#[0-9A-Fa-f]{6}$/;
-const POLOZAJI: ConnectedPosition[] = [
+/** Položaji CDK popovera ispod (ili iznad) dugmeta; deli ih i "Tabela" (F14). */
+export const POLOZAJI: ConnectedPosition[] = [
   { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
   { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
   { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },

@@ -1,9 +1,9 @@
 import { EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { NotificationStore } from '../../../core/state/notification.store';
-import type { OblikSloj, Platno, Sloj } from '../data-access/platno.models';
+import type { OblikSloj, Platno, Sloj, TabelaSloj } from '../data-access/platno.models';
 import { animacija, pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
-import { noviOblik, noviTekst } from '../data-access/platno-novo';
+import { novaTabela, noviOblik, noviTekst } from '../data-access/platno-novo';
 import type { KomandeTeksta, RezultatTeksta } from './tekst/tekst-uredjivac.component';
 import type { StanjeSelekcije } from './tekst/stil-teksta';
 import { izmeniSlojeve, medjuspremnik, pomeriSlojeve } from './komande';
@@ -770,5 +770,91 @@ describe('PlatnoEditorStore', () => {
     expect(() => store.primeni((p) => pomeriSlojeve(p, new Set(['s1']), 5, 5))).not.toThrow();
     store.ubaci((id) => oblik(id));
     expect(izlaz).not.toHaveBeenCalled();
+  });
+  describe('tabele (F14)', () => {
+    const PRAZNO: StanjeSelekcije = {
+      font: null, velicina: null, boja: null, podebljano: null, kurziv: null, podvuceno: null, precrtano: null, polozaj: null,
+      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null,
+    };
+    /** Tabela T 2 x 3 sa spajanjem (0,0)-(0,1). */
+    function tabela(): TabelaSloj {
+      const t = novaTabela('T', 'NACRT', 2, 3);
+      return {
+        ...t, celije: t.celije.map((red, r) => red.map((c, k) => (r === 0 && k === 0 ? { ...c, spojDesno: 1 }
+          : r === 0 && k === 1 ? { ...c, pokrivena: true, pasusi: [] } : c))),
+      };
+    }
+    const tabelaU = (p: Platno) => p.slojevi.find((s) => s.id === 'T') as TabelaSloj;
+    const tekstCelije = (p: Platno, r: number, k: number) => tabelaU(p).celije[r][k].pasusi.map((x) => x.delovi[0].tekst);
+    function lazni(...red: (RezultatTeksta | null)[]): KomandeTeksta {
+      return {
+        presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(), postaviStil: vi.fn(), prebaciStil: vi.fn(),
+        postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
+      };
+    }
+
+    it('izaberiCeliju: pokriveno polje -> vlasnik i ceo njegov raspon; Shift širi od sidra izbora', () => {
+      pocni(dok([tabela(), oblik('s1')]));
+      store.izaberi(['T']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+      expect(store.opsegCelijaIzbora()).toEqual({ r1: 0, k1: 0, r2: 0, k2: 1 });
+      store.izaberiCeliju({ r: 1, k: 2 }, true);
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+      expect(store.opsegCelijaIzbora()).toEqual({ r1: 0, k1: 0, r2: 1, k2: 2 });
+      store.postaviOpsegCelija({ r1: 1, k1: 1, r2: 1, k2: 2 });
+      expect(store.opsegCelijaIzbora()).toEqual({ r1: 1, k1: 1, r2: 1, k2: 2 });
+    });
+
+    it('izbor ćelija važi samo dok je izabrana ista jedna tabela', () => {
+      pocni(dok([tabela(), oblik('s1')]));
+      store.izaberi(['T']);
+      store.izaberiCeliju({ r: 1, k: 1 });
+      store.izaberi(['T']);
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 1 });
+      store.prebaciIzbor('s1');
+      expect(store.izabranaCelija()).toBeNull();
+      expect(store.opsegCelijaIzbora()).toBeNull();
+      store.izaberi(['s1']);
+      store.izaberiCeliju({ r: 0, k: 0 });
+      expect(store.izabranaCelija()).toBeNull();
+    });
+
+    it('uređivanje ćelije: tabela ostaje u prikazu, Esc upisuje tekst u celije[r][k] kao jedan korak', () => {
+      const p = pocni(dok([tabela()]));
+      expect(store.pocniUredjivanje('T', { r: 1, k: 2 })).toBe(true);
+      expect(store.uredjivanje()).toEqual({ slojId: 'T', celija: { r: 1, k: 2 } });
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 2 });
+      expect(store.zaPrikaz().slojevi.map((s) => s.id)).toEqual(['T']);
+      store.registrujUredjivac(lazni({ pasusi: [pasus('x'), pasus('y')], mapa: [] }));
+      expect(store.zavrsiUredjivanje()).toBe(true);
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(tekstCelije(store.platno(), 1, 2)).toEqual(['x', 'y']);
+      expect(tabelaU(store.platno()).celije[1][1]).toBe(tabelaU(p).celije[1][1]);
+      store.ponisti();
+      expect(store.platno()).toBe(p);
+    });
+
+    it('pokriveno polje se uređuje kao njegov vlasnik', () => {
+      pocni(dok([tabela()]));
+      expect(store.pocniUredjivanje('T', { r: 0, k: 1 })).toBe(true);
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 0 });
+      expect(store.pocniUredjivanje('T', { r: 5, k: 0 })).toBe(false);
+    });
+
+    it('predjiNaCeliju (Tab): tekst je korak, nova sesija u sledećoj ćeliji (preskače pokrivene); na kraju ostaje', () => {
+      pocni(dok([tabela()]));
+      store.pocniUredjivanje('T', { r: 0, k: 0 });
+      store.registrujUredjivac(lazni({ pasusi: [pasus('a')], mapa: [] }));
+      store.predjiNaCeliju(1);
+      expect(tekstCelije(store.platno(), 0, 0)).toEqual(['a']);
+      expect(store.uredjivanje()).toEqual({ slojId: 'T', celija: { r: 0, k: 2 } });
+      store.predjiNaCeliju(-1);
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 0 });
+      store.pocniUredjivanje('T', { r: 1, k: 2 });
+      const s = store.uredjivanje();
+      store.predjiNaCeliju(1);
+      expect(store.uredjivanje()).toBe(s);
+    });
   });
 });

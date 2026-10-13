@@ -2,7 +2,8 @@
 // sloja u uređivanju, sa istim klasama i funkcijama stila kao prikaz (`stilOkvira`, `prikazPasusa` kroz dodatak pasusa,
 // `stilDela` kroz mark), pa su raspored, prelom i fontovi isti kao na projektoru. Registruje se u `PlatnoEditorStore` kao
 // aktivni uređivač: store kroz `presek()` uzima tekst (pražnjenje pre čuvanja, kraj sesije, uništavanje), a rezultat se
-// računa iz poslednjeg dokumenta, pa radi i kad je `EditorView` već uništen (promena slajda).
+// računa iz poslednjeg dokumenta, pa radi i kad je `EditorView` već uništen (promena slajda). Ćelija tabele (F14) koristi
+// isti uređivač: editor mu daje TEKST sloj sastavljen od pasusa, sidra i popune ćelije, uz `celija` (Tab prelazi ćelije).
 import {
   type AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, type OnDestroy, type OnInit, type Signal, ViewEncapsulation,
   afterNextRender, computed, inject, input, signal, untracked, viewChild,
@@ -18,6 +19,7 @@ import { stilOkvira } from '../../ui/platno-tekst';
 import { FokusPlatna } from '../fokus-platna';
 import { nazivSloja } from '../komande';
 import { PlatnoEditorStore } from '../platno-editor.store';
+import type { Polje } from '../tabela';
 import { dodeliKljuceve, kljuceviPasusa, mapaPoKljucevima } from './kljucevi-pasusa';
 import { atributiDela, dokUPasuse, pasusiUDok } from './pm-konverzija';
 import { dodaciUredjivaca } from './pm-dodaci';
@@ -84,6 +86,8 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   readonly sloj = input.required<TekstSloj>();
   /** Tema prezentacije: stil teksta kad sloj nema nijedan deo. */
   readonly tema = input.required<Tema>();
+  /** Ćelija tabele (F14): `sloj` je tada sastavljen od ćelije; null = TEKST sloj. */
+  readonly celija = input<Polje | null>(null);
 
   private readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
@@ -133,7 +137,9 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     const s = untracked(this.sloj);
     const prvi = s.pasusi[0]?.delovi[0];
     this.podrazumevano = prvi ? atributiDela(prvi) : atributiDela(deoTeme(untracked(this.tema), 'telo', 24));
-    const ostalo = this.store.platno().slojevi.reduce((n, x) => (x.id === s.id ? n : n + znakovaSloja(x)), 0);
+    // znaci ostatka slajda: sve minus tekst koji se uređuje (sloj ili samo ta ćelija)
+    const ostalo = this.store.platno().slojevi.reduce((n, x) => n + znakovaSloja(x), 0) - znakovaSloja(s);
+    const celija = untracked(this.celija);
     const doc = pasusiUDok(s.pasusi, napraviSemu(s.okvir.skala));
     this.pocetak = EditorState.create({
       doc,
@@ -146,6 +152,10 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
           if (this.store.zavrsiUredjivanje()) this.fokusPlatna.fokus();
           return true;
         },
+        naTab: celija ? (smer) => {
+          this.store.predjiNaCeliju(smer);
+          return true;
+        } : undefined,
       }),
     });
     this.dok = this.dokPreseka = doc;
@@ -156,10 +166,12 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
 
   ngAfterViewInit(): void {
     const s = untracked(this.sloj);
+    const c = untracked(this.celija);
     this.view = new EditorView({ mount: this.koren().nativeElement }, {
       state: this.pocetak,
       attributes: {
-        role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Tekst sloja ' + nazivSloja(this.store.platno(), s),
+        role: 'textbox', 'aria-multiline': 'true',
+        'aria-label': c ? `Tekst ćelije ${c.r + 1}, ${c.k + 1}` : 'Tekst sloja ' + nazivSloja(this.store.platno(), s),
         'aria-describedby': ID_POMOCI_TEKSTA,
       },
       dispatchTransaction: (tr) => this.primeni(tr),

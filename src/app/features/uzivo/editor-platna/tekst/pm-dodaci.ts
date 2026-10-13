@@ -198,6 +198,8 @@ export interface OpcijeUredjivaca {
   prekoracenje: () => void;
   /** Esc: kraj uređivanja (true = taster obrađen). */
   naEsc: () => boolean;
+  /** Tab / Shift+Tab u ćeliji tabele (F14): sledeća / prethodna ćelija; bez njega Tab je znak ili nivo liste. */
+  naTab?: (smer: 1 | -1) => boolean;
 }
 
 /** Svi dodaci uređivača, redom: granica, istorija, tasteri, stil, prikaz pasusa. */
@@ -205,7 +207,7 @@ export function dodaciUredjivaca(o: OpcijeUredjivaca): Plugin[] {
   return [
     dodatakGranice(o.ostalo, o.prekoracenje),
     history(),
-    ...tasteriUredjivaca(o.naEsc),
+    ...tasteriUredjivaca(o.naEsc, o.naTab),
     dodatakStila(o.podrazumevano),
     dodatakPasusa({ skala: o.skala, skalaProreda: o.skalaProreda }),
   ];

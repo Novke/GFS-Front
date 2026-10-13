@@ -6,6 +6,7 @@
 // - bez uređivanja (izabran jedan ili više TEKST slojeva) vrednosti su stanje celih slojeva (`stanjeDelova`), a komande
 //   menjaju sve njihove pasuse kroz `primeni` (ključ po polju i izboru: isto polje u roku od 1 s je jedan korak).
 // Okvir (sidro, margine, prelom, skala) je svojstvo sloja: menja se kroz `primeni` i dok se kuca (tekst se prvo upiše).
+// Izabrana tabela (F14): isto, nad pasusima vlasnika u opsegu ćelija (bez izbora ćelija: cela tabela), bez odeljka okvira.
 // Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24).
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,13 +14,14 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import type { Okvir, Pasus, Poravnanje, Sidro, Tema, TekstSloj } from '../data-access/platno.models';
+import type { Celija, Okvir, Pasus, Poravnanje, Sidro, Tema, TekstSloj } from '../data-access/platno.models';
 import { zaokruziKaoServer as z } from '../data-access/platno-provera';
 import { BrojcanoPoljeComponent } from './brojcano-polje';
 import { IzborBojeComponent } from './izbor-boje.component';
 import { IzborFontaComponent } from './izbor-fonta.component';
 import { izmeniSlojeve } from './komande';
 import { PlatnoEditorStore } from './platno-editor.store';
+import { izmeniCelije } from './tabela';
 import type { PoljeStila } from './tekst/pm-komande';
 import type { AtributiDela } from './tekst/pm-sema';
 import {
@@ -174,8 +176,17 @@ export class SvojstvaTekstaComponent {
   /** Aktivni uređivač teksta (samo dok traje sesija); null bez uređivanja. */
   private readonly uredjivac = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac() : null));
   private readonly tekstSlojevi = computed(() => this.store.izabraniSlojevi().filter((s): s is TekstSloj => s.tip === 'TEKST'));
+  /** Izabrana tabela bez uređivanja (F14): opseg ćelija (ili cela tabela) i vlasnici u njemu, redom. */
+  private readonly celije = computed(() => {
+    const s = this.store.jedan();
+    if (this.store.uredjivanje() || s?.tip !== 'TABELA') return null;
+    const o = this.store.opsegCelijaIzbora() ?? { r1: 0, k1: 0, r2: s.redovi.length - 1, k2: s.kolone.length - 1 };
+    const vlasnici = s.celije.slice(o.r1, o.r2 + 1).flatMap((red) => red.slice(o.k1, o.k2 + 1)).filter((c) => !c.pokrivena);
+    return { id: s.id, o, vlasnici };
+  });
   protected readonly stanje = computed<StanjeSelekcije>(
-    () => this.uredjivac()?.stanje() ?? stanjeDelova(this.tekstSlojevi().flatMap((s) => s.pasusi)),
+    () => this.uredjivac()?.stanje()
+      ?? stanjeDelova((this.celije()?.vlasnici ?? this.tekstSlojevi()).flatMap((s) => s.pasusi)),
   );
   /** Zaključan sloj se ne uređuje (ni tekst ni okvir); uređivanje zaključanog sloja ni ne počinje. */
   protected readonly zakljucano = computed(() => !this.store.uredjivanje() && this.store.izabraniSlojevi().some((s) => s.zakljucan));
@@ -216,6 +227,11 @@ export class SvojstvaTekstaComponent {
    */
   private slojevima(f: (pasusi: readonly Pasus[]) => Pasus[], polje?: string): void {
     if (this.store.uredjivanje() || this.store.zakljucanUIzboru()) return;
+    const t = this.celije();
+    if (t) {
+      this.celijama(t, f, polje);
+      return;
+    }
     const slojevi = this.tekstSlojevi();
     const svi = slojevi.flatMap((s) => s.pasusi);
     const novi = f(svi);
@@ -229,6 +245,26 @@ export class SvojstvaTekstaComponent {
     }
     this.store.primeni(
       (p) => izmeniSlojeve(p, new Set(poSloju.keys()), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: poSloju.get(s.id)! } : s)),
+      polje ? this.kljuc(polje) : undefined,
+    );
+  }
+
+  /** Isto nad pasusima vlasnika opsega tabele (spojeni redom, pa nazad po ćelijama; nepromenjena ćelija ostaje ista). */
+  private celijama(t: { id: string; o: { r1: number; k1: number; r2: number; k2: number }; vlasnici: Celija[] },
+                   f: (pasusi: readonly Pasus[]) => Pasus[], polje?: string): void {
+    const svi = t.vlasnici.flatMap((c) => c.pasusi);
+    const novi = f(svi);
+    if (novi === svi) return;
+    const poCeliji = new Map<Celija, Pasus[]>();
+    let i = 0;
+    for (const c of t.vlasnici) {
+      const deo = novi.slice(i, i + c.pasusi.length);
+      i += c.pasusi.length;
+      if (deo.some((p, j) => p !== c.pasusi[j])) poCeliji.set(c, deo);
+    }
+    this.store.primeni(
+      (p) => izmeniSlojeve(p, new Set([t.id]), (s) => (s.tip !== 'TABELA' ? s
+        : izmeniCelije(s, t.o, (c) => (poCeliji.has(c) ? { ...c, pasusi: poCeliji.get(c)! } : c)))),
       polje ? this.kljuc(polje) : undefined,
     );
   }

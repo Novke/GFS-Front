@@ -25,7 +25,8 @@ interface PrikazOblika {
   /** Vrhovi strelica (`points` trouglova, popunjeni bojom poteza). */
   vrhovi: string[];
 }
-interface PrikazCelije { colspan: number; rowspan: number; stil: Stil; pasusi: PrikazPasusa[]; }
+/** `polje` = "r-k" (`data-celija`, kuka editora za izbor ćelije, F14). */
+interface PrikazCelije { polje: string; colspan: number; rowspan: number; stil: Stil; pasusi: PrikazPasusa[]; }
 interface PrikazTabele { stil: Stil; kolone: Stil[]; redovi: { stil: Stil; celije: PrikazCelije[] }[]; }
 interface PrikazFormule { slika: string | null; latex: string; stil: Stil; }
 
@@ -164,7 +165,7 @@ const IVICE_CELIJE = { gore: 'border-top', dole: 'border-bottom', levo: 'border-
 /** Debljine ivica ćelije posle `border-collapse` (šira od dve susedne ivice), po strani. */
 type DebljineIvica = Record<keyof IviceCelije, number>;
 
-function prikazCelije(c: Celija, prefiksMerenja: string, debljine: DebljineIvica): PrikazCelije {
+function prikazCelije(c: Celija, polje: string, prefiksMerenja: string, debljine: DebljineIvica): PrikazCelije {
   const m = METRIKA.marginaCelije;
   // PowerPoint crta ivicu ćelije na liniji mreže, a margine meri od nje: ivica ne povećava red. U `border-collapse` pola
   // razrešene ivice ulazi u ćeliju, pa se oduzima od margine (red sa tekstom višim od `tr@h` je tada 1,2 * veličina + margine).
@@ -185,7 +186,7 @@ function prikazCelije(c: Celija, prefiksMerenja: string, debljine: DebljineIvica
       stil[svojstvo] = css;
     }
   }
-  return { colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi, { prefiksMerenja }) };
+  return { polje, colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi, { prefiksMerenja }) };
 }
 
 /** Ćelija koja crta polje (r, k): ona sama, ili sidro spajanja koje ga pokriva; van tabele -> null. */
@@ -217,7 +218,7 @@ function prikazTabele(s: TabelaSloj, indeks: number): PrikazTabele {
     redovi: s.redovi.map((h, i) => ({
       stil: { height: jedinice(h) },
       celije: (s.celije[i] ?? []).flatMap((c, k) => (c.pokrivena ? []
-        : [prikazCelije(c, prefiksCelije(indeks, i, k), debljineIvica(s, c, i, k))])),
+        : [prikazCelije(c, `${i}-${k}`, prefiksCelije(indeks, i, k), debljineIvica(s, c, i, k))])),
     })),
   };
 }
@@ -394,7 +395,7 @@ function smanjenoKretanje(): boolean {
                 @for (red of tb.redovi; track $index) {
                   <tr [style]="red.stil">
                     @for (c of red.celije; track $index) {
-                      <td [attr.colspan]="c.colspan" [attr.rowspan]="c.rowspan" [style]="c.stil">
+                      <td [attr.data-celija]="c.polje" [attr.colspan]="c.colspan" [attr.rowspan]="c.rowspan" [style]="c.stil">
                         <div class="uz-pl-celija">
                           <ng-container [ngTemplateOutlet]="pasusiT" [ngTemplateOutletContext]="{ $implicit: c.pasusi }" />
                         </div>

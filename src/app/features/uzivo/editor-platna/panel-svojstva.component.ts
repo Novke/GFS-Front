@@ -1,7 +1,7 @@
 // Panel "Svojstva" editora platna (F6): bez izbora svojstva slajda; za izbor zajednička polja (položaj, veličina,
 // providnost, senka) i, za tačno jedan sloj, polja njegove vrste (OBLIK i okvir TEKSTA, SLIKA); svojstva teksta (F13) za
-// jedan ili više izabranih TEKST slojeva. CRTEZ, TABELA i FORMULA u 4a imaju samo zajednička polja (F14, F16 dodaju
-// svoja). Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24). Tokom uređivanja teksta
+// jedan ili više izabranih TEKST slojeva. TABELA (F14): panel tabele i ispod svojstva teksta opsega ćelija. CRTEZ i
+// FORMULA imaju samo zajednička polja (F16 dodaje formulu). Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24). Tokom uređivanja teksta
 // (F12) panel pokazuje samo svojstva teksta (F13, komande idu uređivaču) i dugme "Završi uređivanje (Esc)"; tabovi
 // Slojevi i Animacije su tada onemogućeni (napomena ovde).
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
@@ -13,6 +13,7 @@ import { SvojstvaOblikaComponent } from './svojstva-oblika.component';
 import { SvojstvaSlajdaComponent } from './svojstva-slajda.component';
 import { SvojstvaSlikeComponent } from './svojstva-slike.component';
 import { SvojstvaSlojaComponent } from './svojstva-sloja.component';
+import { SvojstvaTabeleComponent } from './svojstva-tabele.component';
 import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
 
 @Component({
@@ -20,7 +21,7 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatButtonModule, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent,
-    SvojstvaTekstaComponent,
+    SvojstvaTabeleComponent, SvojstvaTekstaComponent,
   ],
   template: `
     @if (store.uredjivanje()) {
@@ -39,6 +40,9 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
           <app-svojstva-oblika [sloj]="s" [tema]="tema()" />
         } @else if (s.tip === 'SLIKA') {
           <app-svojstva-slike [sloj]="s" />
+        } @else if (s.tip === 'TABELA') {
+          <app-svojstva-tabele [sloj]="s" [tema]="tema()" />
+          <app-svojstva-teksta [tema]="tema()" />
         }
       }
     }

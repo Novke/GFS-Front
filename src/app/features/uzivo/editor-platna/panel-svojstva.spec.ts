@@ -36,18 +36,20 @@ describe('PanelSvojstvaComponent', () => {
     [['oblik'], ['app-svojstva-oblika', 'app-svojstva-sloja']],
     [['tekst'], ['app-svojstva-oblika', 'app-svojstva-sloja', 'app-svojstva-teksta']],
     [['slika'], ['app-svojstva-slike', 'app-svojstva-sloja']],
-    [['tabela'], ['app-svojstva-sloja']],
+    [['tabela'], ['app-svojstva-sloja', 'app-svojstva-tabele', 'app-svojstva-teksta']],
     [['formula'], ['app-svojstva-sloja']],
     [['crtez'], ['app-svojstva-sloja']],
     [['oblik', 'slika'], ['app-svojstva-sloja']],
   ])('izbor %j -> %j', async (izbor, delovi) => {
     store.izaberi(izbor);
     await fixture.whenStable();
-    const svi = ['app-svojstva-slajda', 'app-svojstva-sloja', 'app-svojstva-oblika', 'app-svojstva-slike', 'app-svojstva-teksta'];
+    const svi = [
+      'app-svojstva-slajda', 'app-svojstva-sloja', 'app-svojstva-oblika', 'app-svojstva-slike', 'app-svojstva-teksta', 'app-svojstva-tabele',
+    ];
     expect(svi.filter(ima)).toEqual(svi.filter((s) => delovi.includes(s)));
   });
 
-  it('CRTEZ, TABELA i FORMULA u 4a: samo zajednička polja', async () => {
+  it('CRTEZ i FORMULA: samo zajednička polja (TABELA ima svoj panel, F14)', async () => {
     store.izaberi(['formula']);
     await fixture.whenStable();
     expect(oznakePolja(el())).toEqual(['X', 'Y', 'Širina', 'Visina', 'Rotacija', 'Providnost']);

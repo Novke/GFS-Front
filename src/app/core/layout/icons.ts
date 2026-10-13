@@ -26,6 +26,8 @@ export const IKONE = [
   'format_align_left', 'format_align_center', 'format_align_right', 'format_align_justify', 'format_list_bulleted',
   'format_list_numbered', 'format_indent_increase', 'format_indent_decrease', 'vertical_align_top',
   'vertical_align_center', 'vertical_align_bottom',
+  // Tabele (F14).
+  'table', 'cell_merge', 'border_all',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

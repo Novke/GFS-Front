@@ -3,18 +3,20 @@
 // komande (F3) ne proveravaju su ovde: zaključan sloj (odluka 14) i granice broja slojeva, animacija i znakova (odluka 10),
 // sa porukom kroz `NotificationStore`. Gest mišem (F5) menja dokument bez istorije dok traje i beleži se kao jedan korak
 // na kraju. Sesija teksta (F12) je takođe jedan korak: aktivni uređivač (`KomandeTeksta`) predaje presek teksta pri
-// izlasku, pre svake druge izmene (`primeni`) i pri pražnjenju. F14 (ćelije), F17 (animacije) i F18 (pregled) dodaju svoje
-// metode u isti store.
+// izlasku, pre svake druge izmene (`primeni`) i pri pražnjenju; ćelija tabele (F14) koristi isti uređivač, a njen presek
+// menja samo tu ćeliju. Izbor ćelija (F14) važi dok je izabrana ista jedna tabela. F17 (animacije) i F18 (pregled) dodaju
+// svoje metode u isti store.
 import { computed, inject, signal } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { NotificationStore } from '../../../core/state/notification.store';
-import type { Platno, Sloj } from '../data-access/platno.models';
+import type { Platno, Sloj, TabelaSloj } from '../data-access/platno.models';
 import { prekoGranica } from '../data-access/platno-provera';
 import {
   POMAK_KOPIJE, type SmerZ, dodajSloj, izmeniSlojeve, kopijeSlojeva, medjuspremnik, noviId, obrisiSlojeve, pomeriSlojeve,
   premestiSloj as premestiSlojKomanda, zOsa,
 } from './komande';
 import { Istorija, SAT_ISTORIJE } from './istorija';
+import { type Opseg, type Polje, izmeniCelije, prosiriOpseg, sledecaCelija, vlasnik } from './tabela';
 import { preslikajAnimacije } from './tekst/kljucevi-pasusa';
 import type { KomandeTeksta, RezultatTeksta } from './tekst/tekst-uredjivac.component';
 
@@ -66,6 +68,14 @@ export const PlatnoEditorStore = signalStore(
       return { ...p, animacije: [], slojevi: bez.size ? p.slojevi.filter((s) => !bez.has(s.id)) : p.slojevi };
     }),
   })),
+  withComputed(({ jedan, opsegCelija }) => ({
+    /** Opseg izabranih ćelija jedine izabrane tabele, u granicama i proširen na spojena polja (null bez izbora ćelija). */
+    opsegCelijaIzbora: computed<Opseg | null>(() => {
+      const s = jedan();
+      const o = opsegCelija();
+      return s?.tip === 'TABELA' && o ? prosiriOpseg(s, o) : null;
+    }),
+  })),
   withProps(() => ({
     /**
      * Izlaz ka `EditorStore.izmeniPlatno` i poslednji predat dokument: `isprazni` predaje samo ako se dokument promenio
@@ -88,17 +98,25 @@ export const PlatnoEditorStore = signalStore(
       patchState(store, { uredjivanje: null });
       store._uredjivac.set(null);
     };
+    /** Izbor slojeva; izbor ćelija (F14) ostaje samo kad je i dalje izabrana ista jedna tabela. */
+    const postaviIzbor = (izbor: readonly string[]) => {
+      const pre = store.izbor();
+      const ista = izbor.length === 1 && pre.length === 1 && izbor[0] === pre[0];
+      patchState(store, ista ? { izbor } : { izbor, izabranaCelija: null, opsegCelija: null });
+    };
+    /** Jedina izabrana tabela (izbor ćelija); null inače. */
+    const jedinaTabela = (): TabelaSloj | null => {
+      const s = store.jedan();
+      return s?.tip === 'TABELA' ? s : null;
+    };
     /**
      * Nov dokument; izbor i skriveni bez slojeva kojih više nema (nov sloj sa istim id-jem ne nasleđuje skrivenost); sesija
      * teksta sloja koga više nema se zatvara.
      */
     const postavi = (p: Platno) => {
       const postoje = new Set(p.slojevi.map((s) => s.id));
-      patchState(store, {
-        platno: p,
-        izbor: store.izbor().filter((id) => postoje.has(id)),
-        skriveni: store.skriveni().filter((id) => postoje.has(id)),
-      });
+      patchState(store, { platno: p, skriveni: store.skriveni().filter((id) => postoje.has(id)) });
+      postaviIzbor(store.izbor().filter((id) => postoje.has(id)));
       const u = store.uredjivanje();
       if (u && !postoje.has(u.slojId)) zatvoriSesiju();
     };
@@ -140,19 +158,23 @@ export const PlatnoEditorStore = signalStore(
     function zabeleziTekst(): boolean {
       const u = store.uredjivanje();
       const uredjivac = store._uredjivac();
-      if (!u || u.celija || !uredjivac) return true; // ćelije tabele: F14
+      if (!u || !uredjivac) return true;
       // usred gesta izmena ne bi prošla: presek se ne uzima (tekst ostaje u uređivaču do sledećeg preseka)
       if (store.gest()) return false;
       const r: RezultatTeksta | null = uredjivac.presek();
       if (!r) return true;
       let uklonjeno = 0;
-      const ok = primeniBezTeksta((p) => {
-        const sa = izmeniSlojeve(p, new Set([u.slojId]), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: r.pasusi } : s));
-        if (sa === p) return p;
-        const a = preslikajAnimacije(sa, u.slojId, r.mapa);
-        uklonjeno = a.uklonjeno;
-        return a.platno;
-      });
+      const c = u.celija;
+      // ćelija tabele (F14): samo pasusi te ćelije; ćelije nemaju animacije pasusa
+      const ok = c ? primeniBezTeksta((p) => izmeniSlojeve(p, new Set([u.slojId]), (s) => (s.tip !== 'TABELA' ? s
+        : izmeniCelije(s, { r1: c.r, k1: c.k, r2: c.r, k2: c.k }, (x) => ({ ...x, pasusi: r.pasusi })))))
+        : primeniBezTeksta((p) => {
+          const sa = izmeniSlojeve(p, new Set([u.slojId]), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: r.pasusi } : s));
+          if (sa === p) return p;
+          const a = preslikajAnimacije(sa, u.slojId, r.mapa);
+          uklonjeno = a.uklonjeno;
+          return a.platno;
+        });
       // odbijena izmena (granice, poruka) ne sme da pomeri osnovu preseka: tekst nije u dokumentu, pa ga sledeći presek daje
       if (!ok) {
         uredjivac.odbaciPresek();
@@ -210,7 +232,7 @@ export const PlatnoEditorStore = signalStore(
         nove = r.ids;
         return r.platno;
       });
-      if (ok) patchState(store, { izbor: nove });
+      if (ok) postaviIzbor(nove);
     }
 
     /** Kraj gesta mišem (pointerup, pražnjenje): ceo gest je jedan korak istorije i jedna predaja (odluka 8). */
@@ -233,12 +255,41 @@ export const PlatnoEditorStore = signalStore(
       predaj(store.platno());
     }
 
+    /**
+     * Uređivanje teksta sloja (F12; ćelija tabele: F14): dvoklik, Enter/F2, dugme "Tekst". Zaključan sloj -> poruka i
+     * false; ne-TEKST (bez ćelije), nepostojeći sloj ili gest u toku -> false. Prethodna sesija se završava; sloj postaje
+     * jedini izabran, a panel prelazi na Svojstva (Slojevi i Animacije su zaključani dok traje uređivanje).
+     */
+    function pocniUredjivanje(slojId: string, celija?: Polje): boolean {
+      if (store.gest() || store.rezim() !== 'UREDJIVANJE') return false;
+      const s = store.platno().slojevi.find((x) => x.id === slojId);
+      if (!s || (celija ? s.tip !== 'TABELA' : s.tip !== 'TEKST')) return false;
+      // ćelija: polje u tabeli, uređuje se njegov vlasnik (pokriveno polje nema svoj tekst)
+      const c = celija && s.tip === 'TABELA' && s.celije[celija.r]?.[celija.k] ? vlasnik(s, celija.r, celija.k) : null;
+      if (celija && !c) return false;
+      if (s.zakljucan) {
+        obavestenja.greska('Sloj je zaključan.');
+        return false;
+      }
+      const u = store.uredjivanje();
+      if (u && u.slojId === slojId && u.celija?.r === c?.r && u.celija?.k === c?.k) return true;
+      if (!zavrsiUredjivanje()) return false;
+      postaviIzbor([slojId]);
+      patchState(store, { uredjivanje: { slojId, celija: c }, tab: 'SVOJSTVA' });
+      if (c && s.tip === 'TABELA') {
+        patchState(store, { izabranaCelija: c, opsegCelija: prosiriOpseg(s, { r1: c.r, k1: c.k, r2: c.r, k2: c.k }) });
+      }
+      return true;
+    }
+
     return {
       /** Nov dokument (ovaj slajd): prazan izbor i istorija; izlaz se ne zove. */
       inicijalizuj(p: Platno): void {
         store._istorija.resetuj();
         store._izlaz.predato = p;
-        patchState(store, { platno: p, izbor: [], mozeNazad: false, mozeNapred: false, gest: null });
+        patchState(store, {
+          platno: p, izbor: [], izabranaCelija: null, opsegCelija: null, mozeNazad: false, mozeNapred: false, gest: null,
+        });
         zatvoriSesiju();
       },
       postaviIzlaz(f: (p: Platno) => void): void {
@@ -252,23 +303,38 @@ export const PlatnoEditorStore = signalStore(
         vrati((sada) => store._istorija.ponovi(sada));
       },
       izaberi(ids: readonly string[]): void {
-        patchState(store, { izbor: postojeci(ids) });
+        postaviIzbor(postojeci(ids));
       },
       /** Shift+klik: dodaje ili uklanja sloj iz izbora. */
       prebaciIzbor(id: string): void {
         const izbor = store.izbor();
-        if (izbor.includes(id)) patchState(store, { izbor: izbor.filter((x) => x !== id) });
-        else patchState(store, { izbor: [...izbor, ...postojeci([id])] });
+        postaviIzbor(izbor.includes(id) ? izbor.filter((x) => x !== id) : [...izbor, ...postojeci([id])]);
       },
       ponistiIzbor(): void {
-        patchState(store, { izbor: [] });
+        postaviIzbor([]);
+      },
+      /**
+       * Ćelija jedine izabrane tabele (klik): vlasnik polja i ceo njegov raspon; `siri` (Shift+klik) širi opseg od sidra
+       * izbora do tog polja. Bez izabrane tabele ništa.
+       */
+      izaberiCeliju(p: Polje, siri = false): void {
+        const t = jedinaTabela();
+        if (!t) return;
+        const v = vlasnik(t, p.r, p.k);
+        const a = (siri && store.izabranaCelija()) || v;
+        patchState(store, { izabranaCelija: { ...a }, opsegCelija: prosiriOpseg(t, { r1: a.r, k1: a.k, r2: v.r, k2: v.k }) });
+      },
+      /** Opseg ćelija iz panela (put tastaturom); sidro izbora je njegov gornji levi vlasnik. */
+      postaviOpsegCelija(o: Opseg): void {
+        const t = jedinaTabela();
+        if (!t) return;
+        const g = prosiriOpseg(t, o);
+        patchState(store, { izabranaCelija: vlasnik(t, g.r1, g.k1), opsegCelija: g });
       },
       /** Ctrl+A: vidljivi i otključani slojevi (zaključan, npr. pozadina, bira se klikom ili u panelu). */
       izaberiSve(): void {
         const skriveni = new Set(store.skriveni());
-        patchState(store, {
-          izbor: store.platno().slojevi.filter((s) => !s.zakljucan && !skriveni.has(s.id)).map((s) => s.id),
-        });
+        postaviIzbor(store.platno().slojevi.filter((s) => !s.zakljucan && !skriveni.has(s.id)).map((s) => s.id));
       },
       obrisiIzabrane(): void {
         if (!store.izbor().length || imaZakljucan()) return;
@@ -312,7 +378,8 @@ export const PlatnoEditorStore = signalStore(
         const skriveni = store.skriveni();
         if (skriveni.includes(id)) patchState(store, { skriveni: skriveni.filter((x) => x !== id) });
         else if (postojeci([id]).length) {
-          patchState(store, { skriveni: [...skriveni, id], izbor: store.izbor().filter((x) => x !== id) });
+          patchState(store, { skriveni: [...skriveni, id] });
+          postaviIzbor(store.izbor().filter((x) => x !== id));
         }
       },
       postaviTab(tab: TabPanela): void {
@@ -330,7 +397,7 @@ export const PlatnoEditorStore = signalStore(
           return dodajSloj(p, napravi(id, p));
         });
         if (!ok) return null;
-        patchState(store, { izbor: [id] });
+        postaviIzbor([id]);
         return id;
       },
       /** Početak gesta mišem (pomeranje, ručka, rotacija, kraj linije); drugi poziv usred gesta ne pomera početak. */
@@ -358,24 +425,17 @@ export const PlatnoEditorStore = signalStore(
       zakljucanUIzboru(): boolean {
         return imaZakljucan();
       },
+      pocniUredjivanje,
       /**
-       * Uređivanje teksta sloja (F12; ćelija tabele: F14): dvoklik, Enter/F2, dugme "Tekst". Zaključan sloj -> poruka i
-       * false; ne-TEKST (bez ćelije), nepostojeći sloj ili gest u toku -> false. Prethodna sesija se završava; sloj postaje
-       * jedini izabran, a panel prelazi na Svojstva (Slojevi i Animacije su zaključani dok traje uređivanje).
+       * Tab / Shift+Tab u ćeliji: sledeća / prethodna ćelija (vlasnik) redom čitanja; tekst ove ćelije je korak. Poslednja
+       * (prva) ćelija ostaje u uređivanju.
        */
-      pocniUredjivanje(slojId: string, celija?: { r: number; k: number }): boolean {
-        if (store.gest() || store.rezim() !== 'UREDJIVANJE') return false;
-        const s = store.platno().slojevi.find((x) => x.id === slojId);
-        if (!s || (celija ? s.tip !== 'TABELA' : s.tip !== 'TEKST')) return false;
-        if (s.zakljucan) {
-          obavestenja.greska('Sloj je zaključan.');
-          return false;
-        }
+      predjiNaCeliju(smer: 1 | -1): void {
         const u = store.uredjivanje();
-        if (u && u.slojId === slojId && u.celija?.r === celija?.r && u.celija?.k === celija?.k) return true;
-        if (!zavrsiUredjivanje()) return false;
-        patchState(store, { uredjivanje: { slojId, celija: celija ? { ...celija } : null }, izbor: [slojId], tab: 'SVOJSTVA' });
-        return true;
+        const t = store.platno().slojevi.find((s) => s.id === u?.slojId);
+        if (!u?.celija || t?.tip !== 'TABELA') return;
+        const n = sledecaCelija(t, u.celija, smer);
+        if (n) pocniUredjivanje(t.id, n);
       },
       /** Aktivni uređivač (komponenta ga registruje pri pravljenju); store ga sam briše na kraju sesije. */
       registrujUredjivac(k: KomandeTeksta | null): void {

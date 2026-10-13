@@ -1,6 +1,7 @@
 // Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F14 tabela, F16
 // formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na okvir
-// platna (odluka 12), i kad je ubacivanje odbijeno (meni sam ne vraća fokus, inače bi pao na body). "Tekst" (F12) ubacuje
+// platna (odluka 12), i kad je ubacivanje odbijeno (meni sam ne vraća fokus, inače bi pao na body). "Tabela" (F14) je
+// CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Tekst" (F12) ubacuje
 // tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
 // (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
@@ -8,11 +9,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import type { Crtica, Platno, Sloj, Tema, VrstaOblika } from '../data-access/platno.models';
-import { noviKrug, noviOblik, noviTekst, uSredini } from '../data-access/platno-novo';
+import { novaTabela, noviKrug, noviOblik, noviTekst, uSredini } from '../data-access/platno-novo';
 import { slobodnoMesto } from './komande';
 import { FokusPlatna } from './fokus-platna';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PRIHVACENE_SLIKE, SlikeEditora } from './slike-editora';
+import { UbaciTabeluComponent, type VelicinaTabele } from './ubaci-tabelu.component';
 
 interface StavkaOblika { naziv: string; vrsta: VrstaOblika | 'KRUG'; crtica: Crtica; }
 /** Meni "Oblik", redom (odluka plana F7): isprekidana linija i strelica su LINIJA/STRELICA sa crticom ISPREKIDANA. */
@@ -32,7 +34,7 @@ const OBLICI: readonly StavkaOblika[] = [
 @Component({
   selector: 'app-traka-alata',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, UbaciTabeluComponent],
   template: `
     <div class="uz-ep-traka" role="group" aria-label="Alati platna">
       <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
@@ -51,6 +53,7 @@ const OBLICI: readonly StavkaOblika[] = [
       </mat-menu>
       <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
               [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
+      <app-ubaci-tabelu (ubaci)="ubaciTabelu($event)" />
       <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
       <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
       <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
@@ -99,6 +102,15 @@ export class TrakaAlataComponent {
       return { ...s, ...slobodnoMesto(p, s.sirina, s.visina) };
     });
     if (id !== null) this.store.pocniUredjivanje(id);
+  }
+
+  /** "Tabela": nova tabela iz teme (`novaTabela`), na slobodnom mestu; fokus na okvir platna (i kad je odbijena). */
+  protected ubaciTabelu(v: VelicinaTabele): void {
+    const tema = this.tema();
+    this.ubaci((id, p) => {
+      const t = novaTabela(id, tema, v.redova, v.kolona);
+      return { ...t, ...slobodnoMesto(p, t.sirina, t.visina) };
+    });
   }
 
   /** Dugme je `disabledInteractive` (zadržava fokus), pa klik dok otpremanje traje ovde ne otvara birač fajlova. */

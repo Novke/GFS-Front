@@ -268,14 +268,17 @@ export function izaberiSav(state: EditorState, dispatch?: Dispatch): boolean {
   return true;
 }
 
-/** Tasteri uređivača (pre `baseKeymap`): Enter, Shift+Enter, Tab, poništi/ponovi, B/I/U, Ctrl+A i Esc. */
-export function tasteriUredjivaca(naEsc: () => boolean): Plugin[] {
+/**
+ * Tasteri uređivača (pre `baseKeymap`): Enter, Shift+Enter, Tab, poništi/ponovi, B/I/U, Ctrl+A i Esc. `naTab` (ćelija
+ * tabele, F14) zamenjuje Tab / Shift+Tab: prelaz na sledeću / prethodnu ćeliju.
+ */
+export function tasteriUredjivaca(naEsc: () => boolean, naTab?: (smer: 1 | -1) => boolean): Plugin[] {
   return [
     keymap({
       Enter: podeliPasus,
       'Shift-Enter': umetniPrelom,
-      Tab: tabIliNivo(1),
-      'Shift-Tab': tabIliNivo(-1),
+      Tab: naTab ? () => naTab(1) : tabIliNivo(1),
+      'Shift-Tab': naTab ? () => naTab(-1) : tabIliNivo(-1),
       'Mod-z': undo,
       'Mod-y': redo,
       'Shift-Mod-z': redo,

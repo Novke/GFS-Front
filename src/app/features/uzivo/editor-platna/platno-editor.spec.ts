@@ -6,7 +6,8 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { Subject } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
-import type { Platno, TekstSloj } from '../data-access/platno.models';
+import { By } from '@angular/platform-browser';
+import type { Platno, TabelaSloj, TekstSloj } from '../data-access/platno.models';
 import { pasus, platno } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
@@ -14,6 +15,7 @@ import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { DIMENZIJE_SLIKE } from './slike-editora';
+import { TekstUredjivacComponent } from './tekst/tekst-uredjivac.component';
 
 function platnoSlajd(): SlajdDetails {
   return {
@@ -686,6 +688,63 @@ describe('PlatnoEditorComponent', () => {
       fixture.destroy();
       expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
       expect(lazni.izmeniPlatno.mock.invocationCallOrder[0]).toBeLessThan(odjava.mock.invocationCallOrder[0]);
+    });
+  });
+
+  describe('tabele (F14)', () => {
+    const uredjivac = () => el().querySelector<HTMLElement>('.uz-ep-uredjivanje [contenteditable]');
+    const tabela = () => store.platno().slojevi.find((s) => s.id === 'tabela') as TabelaSloj;
+    const tekstCelije = (r: number, k: number) => tabela().celije[r][k].pasusi.map((p) => p.delovi.map((d) => d.tekst).join(''));
+    /** Kucanje na kraju teksta pravog uređivača (ProseMirror transakcija, kao unos). */
+    function kucaj(tekst: string) {
+      const v = fixture.debugElement.query(By.directive(TekstUredjivacComponent)).componentInstance.pogled()!;
+      v.dispatch(v.state.tr.insertText(tekst, v.state.doc.content.size - 1));
+    }
+
+    it('Enter na izabranoj ćeliji: uređivač preko ćelije; unos + Esc -> tekst u celije[r][k] (jedan korak)', async () => {
+      const pocetak = store.platno();
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      lazni.izmeniPlatno.mockClear();
+      expect(taster(okvir(), 'Enter').defaultPrevented).toBe(true);
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toEqual({ slojId: 'tabela', celija: { r: 0, k: 1 } });
+      expect(uredjivac()!.getAttribute('aria-label')).toBe('Tekst ćelije 1, 2');
+      // tabela ostaje u prikazu; uređivač je u pravougaoniku ćelije (mere modela kad DOM nije izmeren) sa pozadinom slajda
+      expect(el().querySelector('app-platno-prikaz [data-sloj="tabela"]')).not.toBeNull();
+      const celija = el().querySelector<HTMLElement>('.uz-ep-uredjivanje .uz-ep-celija')!;
+      expect(celija.style.left).toBe('calc(var(--u) * 100)');
+      expect(celija.style.width).toBe('calc(var(--u) * 100)');
+      expect(celija.querySelector<HTMLElement>('.uz-pl-tekst')!.style.backgroundColor).toBe('rgb(255, 255, 255)');
+      kucaj('X');
+      taster(uredjivac()!, 'Escape');
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(tekstCelije(0, 1)).toEqual(['AX']);
+      expect(tekstCelije(0, 0)).toEqual(['A']);
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(okvir());
+      store.ponisti();
+      expect(store.platno()).toBe(pocetak);
+    });
+
+    it('Tab u ćeliji prelazi na sledeću (tekst je korak), Shift+Tab nazad; poslednja + Tab ostaje', async () => {
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 0 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      kucaj('1');
+      taster(uredjivac()!, 'Tab');
+      await fixture.whenStable();
+      expect(tekstCelije(0, 0)).toEqual(['A1']);
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 1 });
+      expect(uredjivac()!.getAttribute('aria-label')).toBe('Tekst ćelije 1, 2');
+      taster(uredjivac()!, 'Tab');
+      await fixture.whenStable();
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 1 });
+      taster(uredjivac()!, 'Tab', { shiftKey: true });
+      await fixture.whenStable();
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 0 });
     });
   });
 });

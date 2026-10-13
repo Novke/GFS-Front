@@ -93,7 +93,7 @@ for (const rezim of ['dan', 'noc'] as const) {
     });
 
     // editor platna (lenji chunk) nad PLATNO slajdom 52: panel Svojstva sa izabranim oblikom i slikom, otvorena paleta
-    // boja (CDK popover) i panel Slojevi
+    // boja (CDK popover), tekst, tabela (F14: popover "Tabela", panel tabele, uređivanje ćelije) i panel Slojevi
     test('editor platna (svojstva oblika i slike, paleta boja, slojevi): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('prezentacije/5');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
@@ -140,6 +140,23 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(editor.getByRole('textbox', { name: /^Tekst sloja/ })).toBeFocused();
       await expect(editor.getByText('Uređuje se tekst.')).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta tokom uređivanja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
+      // F14: "Tabela" (CDK popover sa poljima), panel tabele, pa uređivanje ćelije
+      await editor.getByRole('button', { name: 'Tabela', exact: true }).click();
+      const ubaci = page.getByRole('dialog', { name: 'Ubaci tabelu' });
+      await expect(ubaci.getByLabel('Redova')).toBeFocused();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, ubacivanje tabele (${rezim})`).toEqual([]);
+      await ubaci.getByRole('button', { name: 'Ubaci' }).click();
+      await expect(ubaci).toBeHidden();
+      await expect(editor.getByRole('group', { name: 'Ćelije' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva tabele (${rezim})`).toEqual([]);
+      const td = editor.locator('.uz-ep-platno td[data-celija="1-1"]').last();
+      await td.scrollIntoViewIfNeeded();
+      const c = (await td.boundingBox())!;
+      await page.mouse.dblclick(c.x + c.width / 2, c.y + c.height / 2);
+      await expect(editor.getByRole('textbox', { name: 'Tekst ćelije 2, 2' })).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
 

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OblikSloj, Platno, Sloj, TekstSloj } from '../data-access/platno.models';
-import { noviOblik } from '../data-access/platno-novo';
+import { novaTabela, noviOblik } from '../data-access/platno-novo';
 import { pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { FokusPlatna } from './fokus-platna';
@@ -650,6 +650,65 @@ describe('PlatnoOverlayComponent', () => {
       store.pocniUredjivanje('P');
       await fixture.whenStable();
       expect(el().querySelectorAll('.uz-ep-prazan')).toHaveLength(0);
+    });
+  });
+
+  describe('ćelije tabele (F14)', () => {
+    /** Tabela T (100, 100) 2 x 2, kolone 100, redovi 40 (model). */
+    const tabela = () => ({ ...novaTabela('T', 'NACRT', 2, 2), x: 100, y: 100, kolone: [100, 100], sirina: 200, redovi: [40, 40], visina: 80 });
+    /**
+     * Lažni nacrtani `td[data-celija]` sloja T: red 0 je u DOM-u visok 60 (tekst ga je raširio), red 1 od 60 do 80. Klik na
+     * lokalnu tačku (50, 50) je po DOM-u ćelija (0, 0), a po modelu bi bila (1, 0).
+     */
+    function lazniTd() {
+      const sloj = document.createElement('div');
+      sloj.dataset['sloj'] = 'T';
+      const tabelaEl = document.createElement('table');
+      const mere: [string, number, number, number, number][] = [
+        ['0-0', 0, 0, 100, 60], ['0-1', 100, 0, 100, 60], ['1-0', 0, 60, 100, 20], ['1-1', 100, 60, 100, 20],
+      ];
+      for (const [polje, x, y, w, h] of mere) {
+        const td = document.createElement('td');
+        td.dataset['celija'] = polje;
+        for (const [k, v] of [['offsetLeft', x], ['offsetTop', y], ['offsetWidth', w], ['offsetHeight', h]] as const) {
+          Object.defineProperty(td, k, { value: v });
+        }
+        tabelaEl.appendChild(td);
+      }
+      sloj.appendChild(tabelaEl);
+      el().querySelector('.uz-platno')!.prepend(sloj);
+    }
+
+    beforeEach(async () => {
+      await pocni(platnoSaAnimacijama([], [tabela()]));
+      lazniTd();
+    });
+
+    it('klik u tabelu bira nju i ćeliju po nacrtanim pravougaonicima; Shift+klik širi opseg', async () => {
+      klik(150, 150);
+      expect(store.izbor()).toEqual(['T']);
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+      klik(250, 175);
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 1 });
+      klik(150, 110, true);
+      expect(store.izbor()).toEqual(['T']);
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 1 });
+      expect(store.opsegCelijaIzbora()).toEqual({ r1: 0, k1: 0, r2: 1, k2: 1 });
+      await fixture.whenStable();
+      const opseg = el().querySelector<HTMLElement>('.uz-ep-celije > div')!;
+      expect(opseg.style.height).toBe('calc(var(--u) * 80)');
+    });
+
+    it('prevlačenje izabrane tabele je i dalje pomeranje (ne bira ćeliju)', () => {
+      klik(150, 150);
+      prevuci(150, 150, 170, 150);
+      expect((store.platno().slojevi[0] as { x: number }).x).toBe(120);
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+    });
+
+    it('dvoklik u ćeliju počinje uređivanje te ćelije', () => {
+      overlay().dispatchEvent(new MouseEvent('dblclick', { clientX: 250, clientY: 175, bubbles: true }));
+      expect(store.uredjivanje()).toEqual({ slojId: 'T', celija: { r: 1, k: 1 } });
     });
   });
 });
