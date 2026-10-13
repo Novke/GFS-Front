@@ -377,6 +377,33 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     expect(store.slajdovi().map(s => s.id)).toEqual([11, 12, 30]);
   });
 
+  it('ishod "osvezi": editor se ne ruši dok se prezentacija čita ponovo, fokus ostaje na dugmetu "PowerPoint"', async () => {
+    otvori.mockResolvedValue(of('osvezi'));
+    const dugme = dugmeUvoza();
+    dugme.focus();
+    dugme.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(dugmeUvoza()).toBe(dugme);                 // ista komponenta, nije ponovo napravljena
+    expect(document.activeElement).toBe(dugme);
+    http.expectOne('api/prezentacije/1').flush(posleUvoza);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.slajdovi().map(s => s.id)).toEqual([11, 12, 30]);
+    expect(store.izabraniId()).toBe(12);              // izabran slajd ostaje kad ga nova lista ima
+    expect(document.activeElement).toBe(dugme);
+  });
+
+  it('ishod "osvezi" pa neuspelo čitanje -> poruka greške kao pri prvom učitavanju', async () => {
+    otvori.mockResolvedValue(of('osvezi'));
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    http.expectOne('api/prezentacije/1').flush({ reason: 'Nema veze.' }, { status: 500, statusText: 'Greška' });
+    fixture.detectChanges();
+    expect(store.prezentacija()).toBeNull();
+    expect(store.greska()).not.toBeNull();
+  });
+
   it('dok uvoz šalje, napuštanje editora traži potvrdu sa tekstom o uvozu', () => {
     const editor = fixture.componentInstance;
     expect(editor.imaNesacuvanihIzmena()).toBe(false);
@@ -384,6 +411,9 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     TestBed.inject(RegistarCuvanja).prijavi(sesija);
     expect(editor.imaNesacuvanihIzmena()).toBe(true);
     expect(editor.tekstNapustanja()).toContain('Uvoz iz PowerPointa');
+    // dijalog uvoza ima closeOnNavigation: false: ostaje otvoren i posle napuštanja editora, pa se izveštaj vidi
+    expect(editor.tekstNapustanja()).toContain('Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
+    expect(editor.tekstNapustanja()).not.toContain('nećeš videti');
     TestBed.inject(RegistarCuvanja).odjavi(sesija);
     expect(editor.imaNesacuvanihIzmena()).toBe(false);
   });

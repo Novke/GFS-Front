@@ -365,10 +365,17 @@ export const EditorStore = signalStore(
     }
 
     return {
+      /**
+       * Čita prezentaciju sa servera. Ponovno čitanje iste, već prikazane prezentacije (nepoznat ishod uvoza) ostavlja
+       * prikazanu dok ne stigne nova, pa se editor ne ruši (fokus ostaje gde je bio) i izabran slajd ostaje kad ga nova
+       * lista ima; neuspelo ponovno čitanje je greška kao pri prvom.
+       */
       ucitaj(id: number): void {
         if (prezentacijaId && prezentacijaId !== id) {
           sacuvajPreIzlaska();
         }
+        const ponovo = prezentacijaId === id && store.prezentacija()?.id === id;
+        const izabranPre = ponovo ? store.izabraniId() : null;
         generacija++;
         const gen = generacija;
         prezentacijaId = id;
@@ -377,14 +384,16 @@ export const EditorStore = signalStore(
         nacrtiUSlanju.clear();
         uSlanju.clear();
         obrisani.clear();
-        patchState(store, POCETNO);
+        patchState(store, ponovo ? { cuvanje: POCETNO.cuvanje, greska: null } : POCETNO);
         api.detalji(id).subscribe({
           next: p => {
             if (gen !== generacija) return;
             const slajdovi = [...p.slajdovi].sort((a, b) => a.rb - b.rb);
-            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: slajdovi[0]?.id ?? null });
+            const izabran = slajdovi.some(s => s.id === izabranPre) ? izabranPre : slajdovi[0]?.id ?? null;
+            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: izabran });
           },
-          error: e => gen === generacija && patchState(store, { greska: razlogGreske(e, 'Prezentacija nije učitana.') }),
+          error: e => gen === generacija
+            && patchState(store, { prezentacija: null, izabraniId: null, greska: razlogGreske(e, 'Prezentacija nije učitana.') }),
         });
       },
 

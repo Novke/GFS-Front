@@ -334,7 +334,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   tekstNapustanja(): string {
     const delovi: string[] = [];
     if (this.uvozUToku()) {
-      delovi.push('Uvoz iz PowerPointa još traje. Završiće se i ako napustiš editor, ali izveštaj o uvozu nećeš videti.');
+      delovi.push('Uvoz iz PowerPointa još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
     }
     if (this.nesacuvaniSlajdovi() > 0) {
       delovi.push(`Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
@@ -488,7 +488,8 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     ).subscribe({
       next: rezultat => {
         if (rezultat === 'osvezi') {
-          // nepoznat ishod slanja: slajdovi su možda upisani, lista se čita ponovo sa servera
+          // nepoznat ishod slanja: slajdovi su možda upisani, lista se čita ponovo sa servera (prikazana prezentacija
+          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu "PowerPoint" ostaju)
           this.store.ucitaj(p.id);
         } else if (rezultat) {
           this.store.primeniUvoz(rezultat);
