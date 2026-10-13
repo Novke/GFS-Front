@@ -116,20 +116,23 @@ describe('geometrija: promeniVelicinu', () => {
     kaoKutija(promeniVelicinu({ ...K, rotacija: 90 }, 'I', { x: 200, y: 300 }), { x: 75, y: 125, sirina: 250, visina: 100, rotacija: 90 });
   });
 
-  const UGAONE: Rucka[] = ['SZ', 'SI', 'JI', 'JZ'];
-  const SMER: Record<string, { sx: number; sy: number }> = {
-    SZ: { sx: -1, sy: -1 }, SI: { sx: 1, sy: -1 }, JI: { sx: 1, sy: 1 }, JZ: { sx: -1, sy: 1 },
+  const RUCKE: Rucka[] = ['SZ', 'S', 'SI', 'I', 'JI', 'J', 'JZ', 'Z'];
+  const SMER: Record<Rucka, { sx: number; sy: number }> = {
+    SZ: { sx: -1, sy: -1 }, S: { sx: 0, sy: -1 }, SI: { sx: 1, sy: -1 }, I: { sx: 1, sy: 0 },
+    JI: { sx: 1, sy: 1 }, J: { sx: 0, sy: 1 }, JZ: { sx: -1, sy: 1 }, Z: { sx: -1, sy: 0 },
   };
+  /** Sidro: suprotni ugao (ugaona ručka) ili sredina suprotne ivice (ivična ručka), na platnu. */
   const sidroKutije = (k: Kutija, r: Rucka) => uSvetske(k, { x: -SMER[r].sx * k.sirina / 2, y: -SMER[r].sy * k.visina / 2 });
-  const SLUCAJEVI = [0, 30, 90, 135, 270].flatMap((rotacija) => UGAONE.map((r) => [rotacija, r] as const));
+  /** Pomeraj iz lokalnih osa sloja u ose platna (samo rotacija). */
+  const uOsePlatna = (k: Kutija, l: Tacka) => uSvetske({ ...k, x: -k.sirina / 2, y: -k.visina / 2 }, l);
+  const SLUCAJEVI = [0, 30, 90, 135, 270].flatMap((rotacija) => RUCKE.map((r) => [rotacija, r] as const));
   const ugao37 = 37 * Math.PI / 180;
 
   // Pokazivač se udaljava od sidra u smeru ručke (u osama sloja), pa okvir ostaje sa iste strane sidra.
   it.each(SLUCAJEVI)('suprotna ivica ostaje na mestu (rotacija %s, ručka %s)', (rotacija, rucka) => {
     const k = { ...K, rotacija };
     const sidro = sidroKutije(k, rucka);
-    const smer = uSvetske({ ...k, x: -k.sirina / 2, y: -k.visina / 2 },
-      { x: SMER[rucka].sx * 300 * Math.cos(ugao37), y: SMER[rucka].sy * 300 * Math.sin(ugao37) }); // samo rotacija
+    const smer = uOsePlatna(k, { x: SMER[rucka].sx * 300 * Math.cos(ugao37), y: SMER[rucka].sy * 300 * Math.sin(ugao37) });
     const nova = promeniVelicinu(k, rucka, { x: sidro.x + smer.x, y: sidro.y + smer.y });
     const posle = sidroKutije(nova, rucka);
     expect(Math.abs(posle.x - sidro.x)).toBeLessThan(0.02);
@@ -138,16 +141,72 @@ describe('geometrija: promeniVelicinu', () => {
     sveDveDecimale(nova);
   });
 
-  // Pokazivač pod 37° na platnu: za neke rotacije prelazi preko sidra, pa sidro postaje drugi ugao novog okvira
-  // (model nema preslikavanje), ali tačka sidra na platnu i dalje ostaje na mestu.
-  it.each(SLUCAJEVI)('i preko sidra tačka sidra ostaje ugao okvira (rotacija %s, ručka %s)', (rotacija, rucka) => {
+  // Pokazivač pod 37° na platnu: za neke rotacije prelazi preko sidra, pa sidro postaje drugi ugao (ili sredina druge
+  // ivice) novog okvira (model nema preslikavanje), ali tačka sidra na platnu i dalje ostaje na mestu.
+  it.each(SLUCAJEVI)('i preko sidra tačka sidra ostaje na okviru (rotacija %s, ručka %s)', (rotacija, rucka) => {
     const k = { ...K, rotacija };
     const sidro = sidroKutije(k, rucka);
     const nova = promeniVelicinu(k, rucka, { x: sidro.x + 300 * Math.cos(ugao37), y: sidro.y + 300 * Math.sin(ugao37) });
-    const najblizi = Math.min(...uglovi(nova).map((t) => Math.max(Math.abs(t.x - sidro.x), Math.abs(t.y - sidro.y))));
+    const tacke = RUCKE.map((r) => sidroKutije(nova, r));
+    const najblizi = Math.min(...tacke.map((t) => Math.max(Math.abs(t.x - sidro.x), Math.abs(t.y - sidro.y))));
     expect(najblizi).toBeLessThan(0.02);
     expect(nova.rotacija).toBe(rotacija);
     sveDveDecimale(nova);
+  });
+
+  /** Rezultat je u granicama servera (x, y u [-960, 1920], širina i visina u [1, 2880]) i ima najviše 2 decimale. */
+  function uGranicama(k: Kutija): void {
+    for (const v of [k.x, k.y]) {
+      expect(v).toBeGreaterThanOrEqual(MIN_XY);
+      expect(v).toBeLessThanOrEqual(MAX_XY);
+    }
+    for (const v of [k.sirina, k.visina]) {
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(MAX_VELICINA);
+    }
+    sveDveDecimale(k);
+  }
+
+  // Review Focus 4: kad bi stezanje x/y (ili širine i visine) proradilo, sloj se smanjuje umesto da klizi, pa sidro
+  // (kod `odCentra` centar) ostaje na mestu.
+  it.each<[string, Kutija, Rucka, Tacka, { odnos?: boolean; odCentra?: boolean }]>([
+    ['JI + odCentra, x = 1500', K, 'JI', { x: 1500, y: 250 }, { odCentra: true }],
+    ['JI + odCentra, x = 1800', K, 'JI', { x: 1800, y: 250 }, { odCentra: true }],
+    ['JI + odCentra + odnos, x = 1800', K, 'JI', { x: 1800, y: 250 }, { odCentra: true, odnos: true }],
+    ['SZ, x = -1000', K, 'SZ', { x: -1000, y: 50 }, {}],
+    ['SZ, x = -1500', K, 'SZ', { x: -1500, y: 50 }, {}],
+    ['SZ + odnos, x = -1500', K, 'SZ', { x: -1500, y: 50 }, { odnos: true }],
+    ['SZ daleko gore-levo', K, 'SZ', { x: -4000, y: -4000 }, {}],
+    ['Z, x = -1500', K, 'Z', { x: -1500, y: 999 }, {}],
+    ['S, y = -1500', K, 'S', { x: -999, y: -1500 }, {}],
+    ['rotacija 90, I do y = 2600', { ...K, rotacija: 90 }, 'I', { x: 200, y: 2600 }, {}],
+    ['rotacija 90, I do y = 3000', { ...K, rotacija: 90 }, 'I', { x: 200, y: 3000 }, {}],
+    ['rotacija 90, JI daleko', { ...K, rotacija: 90 }, 'JI', { x: -3000, y: 3000 }, {}],
+    ['rotacija 135, JI daleko', { ...K, rotacija: 135 }, 'JI', { x: -3000, y: 3000 }, {}],
+    ['rotacija 135, JI + odnos daleko', { ...K, rotacija: 135 }, 'JI', { x: -3000, y: 3000 }, { odnos: true }],
+    ['rotacija 30, J + odCentra daleko', { ...K, rotacija: 30 }, 'J', { x: 200, y: 4000 }, { odCentra: true }],
+  ])('na granici platna sidro ostaje: %s', (_, k, rucka, pokazivac, o) => {
+    const pre = o.odCentra ? centar(k) : sidroKutije(k, rucka);
+    const nova = promeniVelicinu(k, rucka, pokazivac, o);
+    const posle = o.odCentra ? centar(nova) : sidroKutije(nova, rucka);
+    expect(Math.abs(posle.x - pre.x), 'sidro x').toBeLessThan(0.02);
+    expect(Math.abs(posle.y - pre.y), 'sidro y').toBeLessThan(0.02);
+    expect(nova.rotacija).toBe(k.rotacija);
+    uGranicama(nova);
+    if (o.odnos) expect(Math.abs(nova.sirina / nova.visina - k.sirina / k.visina)).toBeLessThan(0.01);
+  });
+
+  // Isto svojstvo za sve rotacije i ručke: pokazivač 4000 jedinica od sidra u smeru ručke (u osama sloja) uvek
+  // stegne širinu ili visinu na 2880, a većinom i položaj.
+  it.each(SLUCAJEVI)('daleko van platna sidro ostaje (rotacija %s, ručka %s)', (rotacija, rucka) => {
+    const k = { ...K, rotacija };
+    const sidro = sidroKutije(k, rucka);
+    const smer = uOsePlatna(k, { x: SMER[rucka].sx * 4000, y: SMER[rucka].sy * 4000 });
+    const nova = promeniVelicinu(k, rucka, { x: sidro.x + smer.x, y: sidro.y + smer.y });
+    const posle = sidroKutije(nova, rucka);
+    expect(Math.abs(posle.x - sidro.x)).toBeLessThan(0.02);
+    expect(Math.abs(posle.y - sidro.y)).toBeLessThan(0.02);
+    uGranicama(nova);
   });
 });
 
@@ -204,6 +263,9 @@ describe('geometrija: pogađanje i izbor', () => {
     const p: Obuhvat = { x: 0, y: 0, sirina: 100, visina: 100 };
     expect(uPravougaoniku(slojevi, p, new Set(['preskocen']))).toEqual(['unutra', 'rotiran']);
     expect(uPravougaoniku(slojevi, { x: 10, y: 10, sirina: 50, visina: 50 })).toEqual(['unutra', 'rotiran', 'preskocen']);
+    // Pravougaonik prevučen nagore i ulevo (negativna širina i visina) bira isto kao uspravan.
+    expect(uPravougaoniku(slojevi, { x: 100, y: 100, sirina: -100, visina: -100 })).toEqual(['unutra', 'rotiran', 'preskocen']);
+    expect(uPravougaoniku(slojevi, { x: 100, y: 0, sirina: -100, visina: 100 }, new Set(['preskocen']))).toEqual(['unutra', 'rotiran']);
   });
 });
 

@@ -99,10 +99,44 @@ const SMER: Record<Rucka, { sx: -1 | 0 | 1; sy: -1 | 0 | 1 }> = {
 };
 
 /**
+ * Položaj novog okvira je linearan po širini i visini: x = x0 + ax * w + bx * h, y = y0 + ay * w + by * h (sidro, odnosno
+ * centar kod `odCentra`, je fiksno, a strana sidra na kojoj je okvir je zadata).
+ */
+interface LinearanPolozaj { x0: number; ax: number; bx: number; y0: number; ay: number; by: number; }
+
+/** Najmanja rezerva pri poređenju sa granicom (šum pokretnog zareza; `ogranici` posle steže ostatak). */
+const SUM = 1e-9;
+
+/**
+ * Najveće t u [od, 1] za koje su x i y okvira (w + t * dw, h + t * dh) u [-960, 1920]; null ako takvog t nema.
+ * Svaki uslov je linearan po t, pa je dozvoljeni skup interval.
+ */
+function najveceT(p: LinearanPolozaj, w: number, h: number, dw: number, dh: number, od: number): number | null {
+  let lo = od;
+  let hi = 1;
+  const uslovi: [number, number][] = [
+    [p.x0 + p.ax * w + p.bx * h, p.ax * dw + p.bx * dh],
+    [p.y0 + p.ay * w + p.by * h, p.ay * dw + p.by * dh],
+  ];
+  for (const [v0, v1] of uslovi) {
+    if (Math.abs(v1) < 1e-12) {
+      if (v0 < MIN_XY - SUM || v0 > MAX_XY + SUM) return null;
+      continue;
+    }
+    const a = (MIN_XY - v0) / v1;
+    const b = (MAX_XY - v0) / v1;
+    lo = Math.max(lo, Math.min(a, b));
+    hi = Math.min(hi, Math.max(a, b));
+  }
+  return lo <= hi + SUM ? Math.max(lo, hi) : null;
+}
+
+/**
  * Nova kutija kad se ručka `rucka` prevuče na `pokazivac` (tačka platna). Suprotna tačka (sidro) ostaje na istom mestu
  * na platnu i kad je sloj rotiran; prevlačenje preko sidra ne okreće sloj (model nema preslikavanje), nego ga stavlja sa
  * druge strane sidra. `odnos` (Shift, samo ugaone ručke) čuva odnos strana, `odCentra` (Ctrl) menja veličinu oko centra.
- * Širina i visina su u [1, 2880] (sa `odnos` se odnos čuva i na granicama kad god je to moguće).
+ * Širina i visina su u [1, 2880] (sa `odnos` se odnos čuva i na granicama kad god je to moguće). Kad bi okvir prešao
+ * granice položaja servera (x, y u [-960, 1920]), sloj se smanjuje (ne klizi), pa sidro, odnosno centar, ostaje na mestu.
  */
 export function promeniVelicinu(k: Kutija, rucka: Rucka, pokazivac: Tacka, o: { odnos?: boolean; odCentra?: boolean } = {}): Kutija {
   const { sx, sy } = SMER[rucka];
@@ -111,7 +145,8 @@ export function promeniVelicinu(k: Kutija, rucka: Rucka, pokazivac: Tacka, o: { 
   const puta = o.odCentra ? 2 : 1;
   let w = sx === 0 ? k.sirina : Math.abs(l.x - sidro.x) * puta;
   let h = sy === 0 ? k.visina : Math.abs(l.y - sidro.y) * puta;
-  if (o.odnos && sx !== 0 && sy !== 0 && k.sirina > 0 && k.visina > 0) {
+  const saOdnosom = !!o.odnos && sx !== 0 && sy !== 0 && k.sirina > 0 && k.visina > 0;
+  if (saOdnosom) {
     const najmanje = Math.max(MIN_VELICINA / k.sirina, MIN_VELICINA / k.visina);
     const najvise = Math.min(MAX_VELICINA / k.sirina, MAX_VELICINA / k.visina);
     const f = ogr(Math.max(w / k.sirina, h / k.visina), najmanje, Math.max(najmanje, najvise));
@@ -123,10 +158,34 @@ export function promeniVelicinu(k: Kutija, rucka: Rucka, pokazivac: Tacka, o: { 
   // Strana sidra na kojoj je pokazivač (0 = tačno na sidru: zadrži prvobitnu stranu).
   const px = sx === 0 ? 0 : (Math.sign(l.x - sidro.x) || sx);
   const py = sy === 0 ? 0 : (Math.sign(l.y - sidro.y) || sy);
-  const cLok = o.odCentra
-    ? { x: 0, y: 0 }
-    : { x: sx === 0 ? 0 : sidro.x + px * w / 2, y: sy === 0 ? 0 : sidro.y + py * h / 2 };
-  const c = uSvetske(k, cLok);
+  // Centar u lokalnim osama je sidro + (px * w / 2, py * h / 2) (kod `odCentra` 0), pa je na platnu
+  // c = A + R(px * w / 2, py * h / 2), a x = c.x - w / 2, y = c.y - h / 2.
+  const A = uSvetske(k, sidro);
+  const cos = Math.cos(k.rotacija * RAD);
+  const sin = Math.sin(k.rotacija * RAD);
+  const p: LinearanPolozaj = o.odCentra
+    ? { x0: A.x, ax: -0.5, bx: 0, y0: A.y, ay: 0, by: -0.5 }
+    : { x0: A.x, ax: (cos * px - 1) / 2, bx: -sin * py / 2, y0: A.y, ay: sin * px / 2, by: (cos * py - 1) / 2 };
+  const menjaW = sx !== 0;
+  const menjaH = sy !== 0;
+  // Prvo se promenljive strane smanjuju zajedno ka najmanjem okviru uz sidro: sa `odnos` ka (0, 0) (t * w, t * h, odnos
+  // ostaje, t >= 1 / strana zbog minimuma 1), inače ka (1, 1), pa strana koja je već 1 ostaje 1 ...
+  const baza = saOdnosom ? 0 : MIN_VELICINA;
+  const w0 = menjaW ? baza : w;
+  const h0 = menjaH ? baza : h;
+  const t = najveceT(p, w0, h0, w - w0, h - h0, saOdnosom ? Math.max(MIN_VELICINA / w, MIN_VELICINA / h) : 0);
+  if (t !== null && t < 1) {
+    const zeljeno = { w, h };
+    w = w0 + t * (w - w0);
+    h = h0 + t * (h - h0);
+    // ... pa se bez `odnos` svaka strana vraća ka željenoj koliko granice dozvoljavaju (bez rotacije: svaka posebno).
+    if (!saOdnosom && menjaW && menjaH) {
+      w += (najveceT(p, w, h, zeljeno.w - w, 0, 0) ?? 0) * (zeljeno.w - w);
+      h += (najveceT(p, w, h, 0, zeljeno.h - h, 0) ?? 0) * (zeljeno.h - h);
+    }
+  }
+  // t === null: ni najmanji okvir uz sidro nije u granicama (sidro je daleko van [-960, 1920]); tada `ogranici` steže položaj.
+  const c = { x: p.x0 + (p.ax + 0.5) * w + p.bx * h, y: p.y0 + p.ay * w + (p.by + 0.5) * h };
   return ogranici({ x: c.x - w / 2, y: c.y - h / 2, sirina: w, visina: h, rotacija: k.rotacija });
 }
 
