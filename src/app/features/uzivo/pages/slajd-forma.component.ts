@@ -47,9 +47,8 @@ const nn = { nonNullable: true } as const;
         </mat-form-field>
         <app-slika-polje [slikaId]="forma.controls.slikaId.value" oznaka="Slika na slajdu" (promena)="postaviSliku($event)" />
         <mat-checkbox formControlName="postepeno">Otkrivaj stavke liste jednu po jednu (tasterom →)</mat-checkbox>
-      } @else if (tip === 'PLATNO') {
-        <p class="uz-ed-napomena">Slojevi i animacije ovog slajda se za sada ne uređuju ovde; menjaju se beleške.</p>
-      } @else {
+      } @else if (tip !== 'PLATNO') {
+        <!-- PLATNO: slojeve uređuje editor platna iznad forme; ovde ostaju samo beleške -->
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
       }
       <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">

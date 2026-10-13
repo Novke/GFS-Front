@@ -1,9 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ErrorHandler } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -15,6 +16,9 @@ import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import { brojKoraka } from '../data-access/platno-koraci';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
+import { noviOblik } from '../data-access/platno-novo';
+import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
+import { PlatnoEditorStore } from '../editor-platna/platno-editor.store';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 
@@ -291,6 +295,119 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(zahtev.request.method).toBe('PUT');
     expect(zahtev.request.body.tema).toBe('PAPIR');
     zahtev.flush({ ...prezentacija, tema: 'PAPIR' });
+  });
+});
+
+describe('PrezentacijaEditorPage: lenji editor platna', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
+    id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(),
+  });
+  const el = () => fixture.nativeElement as HTMLElement;
+  const editor = () => fixture.debugElement.query(By.directive(PlatnoEditorComponent));
+  const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1')
+      .flush({ ...prezentacija, brojSlajdova: 3, slajdovi: [slajd(11, 1, 'Uvod'), platnoSlajd(12, 2), platnoSlajd(13, 3)] });
+    await fixture.whenStable();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  it('PLATNO slajd ima editor platna i raspored strane za platno; INFO nema', async () => {
+    expect(editor()).toBeNull();
+    store.izaberi(12);
+    await fixture.whenStable();
+    expect(el().querySelector('app-platno-editor')).not.toBeNull();
+    expect(el().querySelector('.uz-ed-telo')!.classList).toContain('uz-ed-telo--platno');
+    expect(el().textContent).not.toContain('se za sada ne uređuju ovde');
+    store.izaberi(11);
+    await fixture.whenStable();
+    expect(el().querySelector('app-platno-editor')).toBeNull();
+    expect(el().querySelector('.uz-ed-telo')!.classList).not.toContain('uz-ed-telo--platno');
+  });
+
+  it('izmena u editoru (Delete) ide u store.izmeniPlatno sa id-jem slajda', async () => {
+    store.izaberi(12);
+    await fixture.whenStable();
+    const izmeni = vi.spyOn(store, 'izmeniPlatno');
+    editor().injector.get(PlatnoEditorStore).izaberi(['oblik']);
+    okvir().dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    expect(izmeni).toHaveBeenCalledTimes(1);
+    expect(izmeni.mock.calls[0][0]).toBe(12);
+    expect(izmeni.mock.calls[0][1].slojevi.map(s => s.id)).not.toContain('oblik');
+    expect(store.izabrani()!.platno!.slojevi.map(s => s.id)).not.toContain('oblik');
+    store.sacuvajOdmah();
+    const put = http.expectOne('api/slajdovi/12');
+    expect(put.request.body.platno.slojevi.map((s: { id: string }) => s.id)).not.toContain('oblik');
+    put.flush({ ...platnoSlajd(12, 2), platno: put.request.body.platno });
+  });
+
+  it('promena izabranog slajda pravi novu instancu editora (prazna istorija), a pražnjenje je registrovala nova', async () => {
+    store.izaberi(12);
+    await fixture.whenStable();
+    const prvi = editor().componentInstance;
+    const prviStore = editor().injector.get(PlatnoEditorStore);
+    prviStore.izaberi(['oblik']);
+    prviStore.obrisiIzabrane();
+    expect(prviStore.mozeNazad()).toBe(true);
+    store.izaberi(13);
+    http.expectOne('api/slajdovi/12').flush({ ...platnoSlajd(12, 2), platno: prviStore.platno() });
+    await fixture.whenStable();
+    expect(editor().componentInstance).not.toBe(prvi);
+    const drugiStore = editor().injector.get(PlatnoEditorStore);
+    expect(drugiStore.mozeNazad()).toBe(false);
+    expect(drugiStore.platno().slojevi.map(s => s.id)).toContain('oblik');
+    const isprazni = vi.spyOn(drugiStore, 'isprazni');
+    store.isprazni();
+    expect(isprazni).toHaveBeenCalledTimes(1);
+  });
+
+  it('Review Focus 3 (nacrt): + Platno, izmena, odgovor na POST -> ista instanca, mozeNazad true, sledeća izmena je PUT pravog id-ja', async () => {
+    const dodaj = [...el().querySelectorAll<HTMLButtonElement>('.uz-ed-dodaj button')].find(b => b.textContent?.trim() === 'Platno')!;
+    dodaj.click();
+    const nacrt = store.izabrani()!;
+    expect(nacrt.id).toBeLessThan(0);
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    await fixture.whenStable();
+    const komponenta = editor().componentInstance;
+    const ps = editor().injector.get(PlatnoEditorStore);
+    expect(ps.ubaci(id => noviOblik(id, 'NACRT', 'PRAVOUGAONIK'))).not.toBeNull();
+    expect(ps.mozeNazad()).toBe(true);
+
+    post.flush({ ...platnoSlajd(30, 4), platno: nacrt.platno });
+    await fixture.whenStable();
+    expect(store.izabraniId()).toBe(30);
+    expect(editor().componentInstance).toBe(komponenta);
+    expect(ps.mozeNazad()).toBe(true);
+
+    ps.pomeriIzabrane(5, 0);
+    store.sacuvajOdmah();
+    const putevi = http.match('api/slajdovi/30');
+    expect(putevi.length).toBeGreaterThan(0);
+    expect(putevi.every(r => r.request.method === 'PUT')).toBe(true);
+    expect(putevi.at(-1)!.request.body.platno).toBe(ps.platno());
+    for (const r of putevi) r.flush({ ...platnoSlajd(30, 4), platno: r.request.body.platno });
+    http.expectNone(r => r.url.startsWith('api/slajdovi/-'));
   });
 });
 

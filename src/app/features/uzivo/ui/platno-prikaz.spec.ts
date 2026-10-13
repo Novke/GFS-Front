@@ -418,3 +418,62 @@ describe('PlatnoPrikazComponent', () => {
     expect(bez.el.querySelector('.uz-pl-pozadina')).toBeNull();
   });
 });
+
+describe('PlatnoPrikazComponent: keš pripremljenog prikaza sloja (odluka 33)', () => {
+  interface Pripremljen { id: string }
+  const pripremljeni = (fixture: Awaited<ReturnType<typeof prikazi>>['fixture']) =>
+    (fixture.componentInstance as unknown as { slojevi: () => Pripremljen[] }).slojevi();
+  const postavi = async (fixture: Awaited<ReturnType<typeof prikazi>>['fixture'], p: Platno) => {
+    fixture.componentRef.setInput('platno', p);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  };
+  /** Stil (deklaracije bez obzira na redosled upisa) i sadržaj svakog `[data-sloj]`: izgled koji keš ne sme da promeni. */
+  const izgled = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll<HTMLElement>('[data-sloj]')).map((s) => [
+      s.dataset['sloj'], Array.from(s.style).map((k) => `${k}: ${s.style.getPropertyValue(k)}`).sort(), s.innerHTML,
+    ]);
+
+  it('isti objekat sloja na istom indeksu daje isti objekat prikaza (nov dokument, isti slojevi)', async () => {
+    const p = platno();
+    const { fixture } = await prikazi(p);
+    const pre = pripremljeni(fixture);
+    await postavi(fixture, { ...p, pozadina: { boja: '#EEEEEE', medijId: null } });
+    const posle = pripremljeni(fixture);
+    expect(posle).toHaveLength(pre.length);
+    posle.forEach((x, i) => expect(x).toBe(pre[i]));
+  });
+
+  it('promena jednog sloja pravi samo njegov prikaz; ostali ostaju isti objekti', async () => {
+    const p = platno();
+    const { fixture } = await prikazi(p);
+    const pre = pripremljeni(fixture);
+    await postavi(fixture, { ...p, slojevi: p.slojevi.map((s) => (s.id === 'oblik' ? { ...s, x: 300 } : s)) });
+    const posle = pripremljeni(fixture);
+    posle.forEach((x, i) => (x.id === 'oblik' ? expect(x).not.toBe(pre[i]) : expect(x).toBe(pre[i])));
+  });
+
+  it('sloj na drugom indeksu dobija nov prikaz (ključ merenja tabova zavisi od indeksa)', async () => {
+    const p = platno();
+    const { fixture } = await prikazi(p);
+    const pre = pripremljeni(fixture);
+    const [tekst, slika, ...ostali] = p.slojevi;
+    await postavi(fixture, { ...p, slojevi: [slika, tekst, ...ostali] });
+    const posle = pripremljeni(fixture);
+    expect(posle.map((x) => x.id)).toEqual(['slika', 'tekst', 'oblik', 'tabela', 'formula', 'crtez']);
+    expect(posle[0]).not.toBe(pre[1]);
+    expect(posle[1]).not.toBe(pre[0]);
+    for (let i = 2; i < posle.length; i++) expect(posle[i]).toBe(pre[i]);
+  });
+
+  it('izgled posle niza izmena je isti kao kod svežeg prikaza istog dokumenta', async () => {
+    const p = platno();
+    const { fixture, el } = await prikazi(p);
+    const [tekst, slika, ...ostali] = p.slojevi;
+    await postavi(fixture, { ...p, slojevi: [slika, tekst, ...ostali] });
+    const kraj: Platno = { ...p, slojevi: [slika, { ...tekst, rotacija: 30 } as Sloj, ...ostali.map((s) => (s.id === 'oblik' ? { ...s, y: 40 } : s))] };
+    await postavi(fixture, kraj);
+    const svez = await prikazi(kraj);
+    expect(izgled(el)).toEqual(izgled(svez.el));
+  });
+});

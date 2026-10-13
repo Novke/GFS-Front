@@ -28,6 +28,7 @@ import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -41,7 +42,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 /**
  * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno"), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
- * 1200 px pregled ide ispod forme. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
+ * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), a pregled je uvek ispod. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
  */
 @Component({
@@ -51,6 +52,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
   imports: [
     CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatExpansionModule, MatIconModule, MatMenuModule,
     MatProgressBarModule, MatRadioModule, MatSlideToggleModule, SlajdFormaComponent, SlajdPrikazComponent,
+    // samo u @defer bloku: kompajler pravi dinamički uvoz, editor platna je zaseban (lenj) chunk
+    PlatnoEditorComponent,
   ],
   host: {
     '(document:keydown)': 'tastatura($event)',
@@ -136,7 +139,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </div>
         </mat-expansion-panel>
 
-        <div class="uz-ed-telo">
+        <div class="uz-ed-telo" [class.uz-ed-telo--platno]="store.izabrani()?.tip === 'PLATNO'">
           <nav class="uz-ed-lista" aria-label="Slajdovi">
             <ol class="uz-ed-slajdovi" cdkDropList (cdkDropListDropped)="spusteno($event)">
               @for (s of store.slajdovi(); track store.kljuc(s.id); let i = $index) {
@@ -191,6 +194,16 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
             @for (s of izabraniNiz(); track store.kljuc(s.id)) {
+              <!-- jedna instanca editora po slajdu (track kljuc: ista i kad nacrt dobije pravi id); lenj chunk -->
+              @if (s.tip === 'PLATNO' && s.platno) {
+                @defer (on immediate) {
+                  <app-platno-editor [slajd]="s" [tema]="vazeca(p.tema)" />
+                } @loading (after 150ms; minimum 300ms) {
+                  <mat-progress-bar mode="indeterminate" aria-label="Učitavanje editora platna" />
+                } @error {
+                  <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
+                }
+              }
               <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>

@@ -27,11 +27,11 @@ describe('SlajdFormaComponent: PLATNO', () => {
     fixture.detectChanges();
   });
 
-  it('prikazuje samo beleške i napomenu o slojevima', () => {
+  it('prikazuje samo beleške (slojeve uređuje editor platna iznad forme, bez stare napomene)', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelectorAll('textarea').length).toBe(1);
     expect(el.querySelector('input')).toBeNull();
-    expect(el.textContent).toContain('Slojevi i animacije ovog slajda se za sada ne uređuju ovde; menjaju se beleške.');
+    expect(el.textContent).not.toContain('se za sada ne uređuju ovde');
   });
 
   it('izmena beleški emituje PLATNO komandu sa istim platnom i novim beleškama', () => {

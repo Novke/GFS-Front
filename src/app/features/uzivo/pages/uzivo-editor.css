@@ -294,6 +294,30 @@ span.uz-ed-napomena {
   }
 }
 
+/* PLATNO slajd: editor platna u sredini, pregled ispod njega (≥ 900 px), ispod 900 px jedna kolona */
+.uz-ed-telo.uz-ed-telo--platno {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "lista" "sredina" "pregled";
+}
+
+.uz-ed-telo--platno .uz-ed-lista,
+.uz-ed-telo--platno .uz-ed-pregled {
+  position: static;
+  max-height: none;
+}
+
+@media (min-width: 900px) {
+  .uz-ed-telo.uz-ed-telo--platno {
+    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-areas: "lista sredina" "lista pregled";
+  }
+
+  .uz-ed-telo--platno .uz-ed-lista {
+    position: sticky;
+    max-height: calc(100vh - 16px);
+  }
+}
+
 .uz-ed-platno {
   width: 100%;
   border: 1px solid var(--line);
