@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OblikSloj, Platno, Sloj, TekstSloj } from '../data-access/platno.models';
 import { noviOblik } from '../data-access/platno-novo';
 import { pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { FokusPlatna } from './fokus-platna';
 import { krajeviLinije, ugaoIDuzina } from './geometrija';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -52,23 +53,27 @@ function lazniKadrovi() {
   };
 }
 
-interface Tasteri { shift?: boolean; alt?: boolean; ctrl?: boolean; }
+interface Tasteri { shift?: boolean; alt?: boolean; ctrl?: boolean; pointerId?: number; }
 
 describe('PlatnoOverlayComponent', () => {
   let fixture: ComponentFixture<DomacinComponent>;
   let store: InstanceType<typeof PlatnoEditorStore>;
   let izlaz: ReturnType<typeof vi.fn<(p: Platno) => void>>;
   let kadrovi: ReturnType<typeof lazniKadrovi>;
+  let obavestenja: { greska: ReturnType<typeof vi.fn>; uspeh: ReturnType<typeof vi.fn>; info: ReturnType<typeof vi.fn> };
   const el = () => fixture.nativeElement as HTMLElement;
   const overlay = () => el().querySelector<HTMLElement>('app-platno-overlay')!;
   const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
   const rucka = (ime: string) => el().querySelector<HTMLElement>(`[data-rucka="${ime}"]`);
   const dogadjaj = (cilj: HTMLElement, tip: string, x: number, y: number, t: Tasteri | boolean = {}) => {
-    const { shift = false, alt = false, ctrl = false } = typeof t === 'boolean' ? { shift: t } : t;
-    cilj.dispatchEvent(new MouseEvent(tip, {
+    const { shift = false, alt = false, ctrl = false, pointerId } = typeof t === 'boolean' ? { shift: t } : t;
+    const e = new MouseEvent(tip, {
       clientX: x, clientY: y, button: 0, buttons: tip === 'pointerup' ? 0 : 1, shiftKey: shift, altKey: alt, ctrlKey: ctrl,
       bubbles: true,
-    }));
+    });
+    // jsdom nema PointerEvent: `pointerId` se dodaje ručno (bez njega overlay ne zove setPointerCapture)
+    if (pointerId !== undefined) Object.defineProperty(e, 'pointerId', { value: pointerId });
+    cilj.dispatchEvent(e);
   };
   const pokazivac = (tip: string, x: number, y: number, t: Tasteri | boolean = {}) => dogadjaj(overlay(), tip, x, y, t);
   const klik = (x: number, y: number, shift = false) => {
@@ -92,8 +97,12 @@ describe('PlatnoOverlayComponent', () => {
 
   beforeEach(async () => {
     kadrovi = lazniKadrovi();
+    obavestenja = { greska: vi.fn(), uspeh: vi.fn(), info: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [provideZonelessChangeDetection(), { provide: RASPORED_KADRA, useValue: kadrovi }],
+      providers: [
+        provideZonelessChangeDetection(), { provide: RASPORED_KADRA, useValue: kadrovi },
+        { provide: NotificationStore, useValue: obavestenja },
+      ],
     });
     fixture = TestBed.createComponent(DomacinComponent);
     await fixture.whenStable();
@@ -426,16 +435,153 @@ describe('PlatnoOverlayComponent', () => {
       expect(izlaz).toHaveBeenCalledTimes(1);
     });
 
-    it('zaključan sloj: pointerdown ga bira, prevlačenje ga ne pomera; nema ručki, ima katanac', async () => {
+    it('zaključan sloj: klik ga bira; prevlačenje sa njega crta pravougaonik izbora i ne pomera ga; nema ručki, ima katanac', async () => {
       await pocni(platnoSaAnimacijama([], [{ ...oblik('A', 10, 10, 200, 100), zakljucan: true }]));
-      prevuci(60, 60, 160, 110);
+      klik(60, 60);
       expect(store.izbor()).toEqual(['A']);
-      expect(sloj('A').x).toBe(10);
-      expect(store.gest()).toBeNull();
-      expect(izlaz).not.toHaveBeenCalled();
       await fixture.whenStable();
       expect(el().querySelector('[data-rucka]')).toBeNull();
       expect(el().querySelector('.uz-ep-katanac')).not.toBeNull();
+      vuci(60, 60, 160, 110);
+      await fixture.whenStable();
+      expect(el().querySelector('.uz-ep-pravougaonik')).not.toBeNull();
+      expect(store.gest()).toBeNull();
+      pokazivac('pointerup', 160, 110);
+      expect(sloj('A').x).toBe(10);
+      expect(store.izbor()).toEqual([]);   // pravougaonik (60, 60)-(160, 110) ne obuhvata ceo A
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(obavestenja.greska).not.toHaveBeenCalled();
+    });
+
+    describe('zaključana pozadina preko celog platna', () => {
+      /** Z (0, 0, 960 x 540, zaključan, na dnu), A (10, 10, 200, 100), B (300, 50, 100, 100). */
+      const saPozadinom = () => platnoSaAnimacijama([], [
+        { ...oblik('Z', 0, 0, 960, 540), zakljucan: true }, oblik('A', 10, 10, 200, 100), oblik('B', 300, 50, 100, 100),
+      ] as Sloj[]);
+
+      it('prevlačenje sa nje bira slojeve unutar pravougaonika, dokument se ne menja (i kad je ona sama izabrana)', async () => {
+        await pocni(saPozadinom());
+        const pre = store.platno();
+        prevuci(5, 5, 450, 200);
+        expect(store.izbor()).toEqual(['A', 'B']);
+        klik(900, 500);
+        expect(store.izbor()).toEqual(['Z']);
+        prevuci(900, 500, 250, 20);
+        expect(store.izbor()).toEqual(['B']);
+        expect(store.platno()).toBe(pre);
+        expect(izlaz).not.toHaveBeenCalled();
+        expect(store.mozeNazad()).toBe(false);
+        expect(obavestenja.greska).not.toHaveBeenCalled();
+      });
+
+      it('mešan izbor (A + zaključana Z): prevlačenje ne pomera ništa, poruka tačno jednom po pritisku, bez koraka', async () => {
+        await pocni(saPozadinom());
+        klik(60, 60);
+        klik(900, 500, true);
+        expect(store.izbor()).toEqual(['A', 'Z']);
+        const pre = store.platno();
+        vuci(60, 60, 200, 150, {}, 8);
+        kadrovi.kadar();
+        pokazivac('pointerup', 200, 150);
+        expect(obavestenja.greska).toHaveBeenCalledTimes(1);
+        expect(obavestenja.greska).toHaveBeenCalledWith('Sloj je zaključan.');
+        // pritisak na zaključanu Z koja je u izboru uz otključan A: isto pravilo (b), nov pritisak = nova poruka
+        prevuci(900, 500, 800, 400);
+        expect(obavestenja.greska).toHaveBeenCalledTimes(2);
+        expect(store.platno()).toBe(pre);
+        expect(store.gest()).toBeNull();
+        expect(izlaz).not.toHaveBeenCalled();
+        expect(store.mozeNazad()).toBe(false);
+        expect(store.izbor()).toEqual(['A', 'Z']);
+        expect(el().querySelector('.uz-ep-pravougaonik')).toBeNull();
+      });
+    });
+
+    it('ručka sloja koji se zaključa posle pritiska: poruka jednom, bez gesta (sloj se čita na pragu)', async () => {
+      klik(60, 60);
+      await fixture.whenStable();
+      const ji = rucka('JI')!;
+      dogadjaj(ji, 'pointerdown', 210, 110);
+      store.zakljucaj('A', true);
+      const posleZakljucavanja = store.platno();
+      for (let i = 1; i <= 5; i++) pokazivac('pointermove', 210 + 10 * i, 110 + 10 * i);
+      kadrovi.kadar();
+      pokazivac('pointerup', 260, 160);
+      expect(obavestenja.greska).toHaveBeenCalledTimes(1);
+      expect(store.platno()).toBe(posleZakljucavanja);
+      expect(sloj('A')).toMatchObject({ sirina: 200, visina: 100 });
+    });
+
+    it('ručka: sloj se uzima iz dokumenta na pragu, ne sa pritiska (Minor 3)', async () => {
+      klik(60, 60);
+      await fixture.whenStable();
+      const ji = rucka('JI')!;
+      dogadjaj(ji, 'pointerdown', 210, 110);
+      store.pomeriIzabrane(5, 0);   // dokument se menja pre praga (A: x = 15)
+      for (let i = 1; i <= 5; i++) pokazivac('pointermove', 210 + 10 * i, 110 + 10 * i);
+      pokazivac('pointerup', 260, 160);
+      expect(sloj('A')).toMatchObject({ x: 15, y: 10, sirina: 250, visina: 150 });
+    });
+
+    it('miš i strelice daju isti rezultat i sa skrivenim izabranim slojem (Minor 2)', async () => {
+      store.prebaciSkriven('B');
+      store.izaberi(['A', 'B']);
+      await fixture.whenStable();
+      expect(el().querySelector('[data-rucka]')).toBeNull();   // izabrana su dva sloja (jedan skriven)
+      prevuci(60, 60, 70, 70);
+      const mis = store.platno();
+      store.ponisti();
+      store.pomeriIzabrane(10, 0);
+      store.pomeriIzabrane(0, 10);
+      expect(store.platno().slojevi.map((s) => [s.x, s.y])).toEqual(mis.slojevi.map((s) => [s.x, s.y]));
+      expect(sloj('B')).toMatchObject({ x: 310, y: 60 });
+    });
+
+    it('skriven zaključan sloj u izboru: miš ne pomera ništa i javlja poruku, kao strelice', async () => {
+      await pocni(platnoSaAnimacijama([], [oblik('A', 10, 10, 200, 100), { ...oblik('B', 300, 50, 100, 100), zakljucan: true }]));
+      store.prebaciSkriven('B');
+      store.izaberi(['A', 'B']);
+      const pre = store.platno();
+      prevuci(60, 60, 160, 110);
+      expect(store.platno()).toBe(pre);
+      expect(obavestenja.greska).toHaveBeenCalledTimes(1);
+      store.pomeriIzabrane(1, 0);
+      expect(obavestenja.greska).toHaveBeenCalledTimes(2);
+      expect(store.platno()).toBe(pre);
+    });
+
+    it('drugi pokazivač usred gesta ne prekida i ne počinje gest; njegovi pokreti se ignorišu (Minor 1)', () => {
+      vuci(60, 60, 110, 60, { pointerId: 1 });
+      dogadjaj(overlay(), 'pointerdown', 850, 450, { pointerId: 2 });
+      expect(store.izbor()).toEqual(['A']);
+      expect(store.gest()).not.toBeNull();
+      pokazivac('pointermove', 900, 500, { pointerId: 2 });
+      pokazivac('pointerup', 900, 500, { pointerId: 2 });
+      pokazivac('pointercancel', 900, 500, { pointerId: 2 });
+      overlay().dispatchEvent(Object.defineProperty(new MouseEvent('lostpointercapture'), 'pointerId', { value: 2 }));
+      expect(store.gest()).not.toBeNull();
+      pokazivac('pointermove', 160, 110, { pointerId: 1 });
+      pokazivac('pointerup', 160, 110, { pointerId: 1 });
+      expect(store.gest()).toBeNull();
+      expect(sloj('A')).toMatchObject({ x: 110, y: 60 });
+      expect(sloj('C')).toMatchObject({ x: 800, y: 400 });
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(store.izbor()).toEqual(['A']);
+    });
+
+    it('lostpointercapture bez pointerup prekida gest kao pointercancel (Minor 6)', () => {
+      const pre = store.platno();
+      vuci(60, 60, 160, 110, { pointerId: 1 });
+      kadrovi.kadar();
+      expect(sloj('A').x).toBe(110);
+      overlay().dispatchEvent(Object.defineProperty(new MouseEvent('lostpointercapture'), 'pointerId', { value: 1 }));
+      expect(store.platno()).toBe(pre);
+      expect(store.gest()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      pokazivac('pointerup', 160, 110, { pointerId: 1 });
+      expect(store.platno()).toBe(pre);
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(store.mozeNazad()).toBe(false);
     });
 
     it('300 slojeva (odluka 33): 60 pokreta bez kadra -> 0 izmena; kadar -> 1; pointerup odmah -> tačan kraj, jedan korak', async () => {

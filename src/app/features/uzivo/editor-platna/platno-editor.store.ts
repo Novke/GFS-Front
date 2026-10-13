@@ -270,6 +270,13 @@ export const PlatnoEditorStore = signalStore(
         const pocetak = store.gest();
         if (pocetak) patchState(store, { platno: pocetak, gest: null });
       },
+      /**
+       * True i poruka "Sloj je zaključan." kad je u izboru zaključan sloj: isto pravilo i ista poruka kao za strelice,
+       * brisanje i dupliranje (overlay ga zove jednom po pritisku, kad prevlačenje pređe prag).
+       */
+      zakljucanUIzboru(): boolean {
+        return imaZakljucan();
+      },
       /** Da li je nešto otvoreno (gest F5, sesija teksta F12): `EditorStore.imaNesacuvano` ga uključuje. */
       imaOtvoreno(): boolean {
         return store.gest() !== null || store.uredjivanje() !== null;

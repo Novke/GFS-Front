@@ -367,6 +367,16 @@ describe('PlatnoEditorStore', () => {
     expect(store.platno()).toBe(p1);
     expect(store.platno()).not.toBe(p);
   });
+  it('zakljucanUIzboru: true i poruka samo kad je u izboru zaključan sloj', () => {
+    pocni(dok([oblik('s1'), oblik('s2', 100, 100, { zakljucan: true })]));
+    store.izaberi(['s1']);
+    expect(store.zakljucanUIzboru()).toBe(false);
+    expect(obavestenja.greska).not.toHaveBeenCalled();
+    store.izaberi(['s1', 's2']);
+    expect(store.zakljucanUIzboru()).toBe(true);
+    expect(obavestenja.greska).toHaveBeenCalledExactlyOnceWith('Sloj je zaključan.');
+  });
+
   describe('gest mišem (F5)', () => {
     const pomeri = (dx: number) => (p: Platno) => pomeriSlojeve(p, new Set(['s1']), dx, 0);
 

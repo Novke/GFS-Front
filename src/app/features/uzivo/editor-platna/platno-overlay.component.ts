@@ -46,7 +46,16 @@ type Gest =
   | { vrsta: 'ROTACIJA'; sloj: Sloj; tacka0: Tacka }
   | { vrsta: 'KRAJ'; sloj: OblikSloj; kraj: 0 | 1; krajevi: [Tacka, Tacka] };
 
+/**
+ * Šta prevlačenje ovog pritiska radi kad pređe prag: POMERANJE izbora (pritisak na izabran sloj ili nov otključan
+ * pogodak), RUCKA (ručka jedinog izabranog sloja; sloj se čita iz dokumenta tek na pragu) ili PRAVOUGAONIK izbora (prazno
+ * i zaključan sloj van mešanog izbora: zaključana pozadina preko celog platna ne sme da onemogući pravougaonik).
+ */
+type Nacin = { vrsta: 'POMERANJE' } | { vrsta: 'RUCKA'; slojId: string; ime: string } | { vrsta: 'PRAVOUGAONIK' };
+
 interface Pritisak {
+  /** Pokazivač ovog pritiska; null kad ga događaj nema (jsdom). Događaji drugih pokazivača se ignorišu. */
+  id: number | null;
   /** Pokazivač na pritisku (px klijenta) i tačka platna. */
   x: number; y: number; tacka: Tacka;
   /** Px po jedinici iz merenja na pritisku (važi za ceo gest). */
@@ -54,11 +63,10 @@ interface Pritisak {
   shift: boolean;
   /** Gornji sloj na tački (klik ga bira); null na praznom i na ručki. */
   pogodak: Sloj | null;
-  /** Pritisak je pao na već izabran sloj: klik bez pomeraja menja izbor tek na `pointerup` (F4b pravila). */
-  naIzabranom: boolean;
-  /** Pritisak na ručku: klik bez pomeraja ne menja izbor. */
-  naRucki: boolean;
-  /** Šta prevlačenje radi; null = pravougaonik izbora (prazno) ili ništa (zaključan sloj). */
+  /** Izbor je promenjen već na pritisku (nov otključan pogodak): klik bez pomeraja posle toga ne menja ništa. */
+  izabranoNaDole: boolean;
+  nacin: Nacin;
+  /** Gest postavljen na pragu; null pre praga i kad je odbijen (zaključan sloj, sloj nestao). */
   gest: Gest | null;
   vuce: boolean;
   /** Gest je počeo u store-u (`pocniGest`). */
@@ -95,7 +103,8 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     '(pointerdown)': 'dole($event)',
     '(pointermove)': 'pomeraj($event)',
     '(pointerup)': 'gore($event)',
-    '(pointercancel)': 'prekid()',
+    '(pointercancel)': 'prekid($event)',
+    '(lostpointercapture)': 'prekid($event)',
   },
   template: `
     @for (p of prazni(); track p.id) {
@@ -220,9 +229,14 @@ export class PlatnoOverlayComponent {
     return o ? stilObuhvata(o) : null;
   });
   /** Jedan izabran, vidljiv i otključan sloj: ručke ili krajevi linije. */
+  /**
+   * Tačno jedan izabran sloj (isti skup kao strelice: `izabraniSlojevi`, i skriveni), vidljiv i otključan: ručke ili
+   * krajevi linije.
+   */
   private readonly jedanZaRucke = computed(() => {
-    const izabrani = this.vidljiviIzabrani();
-    return izabrani.length === 1 && !izabrani[0].zakljucan ? izabrani[0] : null;
+    const izabrani = this.store.izabraniSlojevi();
+    if (izabrani.length !== 1 || izabrani[0].zakljucan || this.store.skriveni().includes(izabrani[0].id)) return null;
+    return izabrani[0];
   });
   protected readonly rucke = computed(() => {
     const s = this.jedanZaRucke();
@@ -266,73 +280,69 @@ export class PlatnoOverlayComponent {
     return { tacka: { x: (e.clientX - rect.left) / px, y: (e.clientY - rect.top) / px }, px };
   }
 
+  /** Događaj pokazivača koji nije pokazivač ovog pritiska (drugi prst, olovka) se ignoriše. */
+  private tudji(p: Pritisak, e: Event): boolean {
+    const id = (e as Partial<PointerEvent>).pointerId;
+    return p.id !== null && typeof id === 'number' && id !== p.id;
+  }
+
   protected dole(e: PointerEvent): void {
     // odluka 24: pritisak na platno fokusira okvir, pa prečice odmah rade
     this.fokusPlatna.fokus();
     if (e.button !== 0) return;
     e.preventDefault();
-    // nov pritisak dok stari traje (drugi prst, izgubljen pointerup): stari se završava kao da je pušten
-    if (this.pritisak) this.zavrsi();
     const pointerId = (e as Partial<PointerEvent>).pointerId;
-    if (typeof pointerId === 'number') {
+    const id = typeof pointerId === 'number' ? pointerId : null;
+    if (this.pritisak) {
+      // drugi pokazivač usred pritiska ne prekida i ne počinje gest; isti pokazivač (izgubljen pointerup) završava stari
+      if (this.tudji(this.pritisak, e)) return;
+      this.zavrsi();
+    }
+    if (id !== null && typeof this.host.setPointerCapture === 'function') {
       try {
-        this.host.setPointerCapture(pointerId);
+        this.host.setPointerCapture(id);
       } catch {
         // pokazivač već pušten (npr. dodir prekinut): događaji i dalje stižu domaćinu dok je iznad njega
       }
     }
     const { tacka, px } = this.tacka(e);
     const osnova = {
-      x: e.clientX, y: e.clientY, tacka, px, shift: e.shiftKey, vuce: false, aktivan: false, obuhvat0: null, ostali: [],
+      id, x: e.clientX, y: e.clientY, tacka, px, shift: e.shiftKey, gest: null, vuce: false, aktivan: false,
+      obuhvat0: null, ostali: [],
     };
-    const rucka = this.gestRucke(e.target, px);
-    if (rucka) {
-      this.pritisak = { ...osnova, pogodak: null, naIzabranom: false, naRucki: true, gest: rucka };
+    const ime = e.target instanceof Element ? e.target.closest('[data-rucka]')?.getAttribute('data-rucka') : null;
+    const jedan = this.jedanZaRucke();
+    if (ime && jedan) {
+      this.pritisak = { ...osnova, pogodak: null, izabranoNaDole: false, nacin: { vrsta: 'RUCKA', slojId: jedan.id, ime } };
       return;
     }
     const vidljivi = this.store.zaPrikaz().slojevi;
     const tolerancija = TOLERANCIJA_PX / px;
     const pogodak = slojNaTacki(vidljivi, tacka, tolerancija);
-    const izbor = new Set(this.store.izbor());
-    // pritisak na izabran sloj vuče ceo izbor, i kad ga na toj tački pokriva neizabran sloj
-    const naIzabranom = !!slojNaTacki(vidljivi.filter((s) => izbor.has(s.id)), tacka, tolerancija);
-    if (pogodak && !naIzabranom) {
+    const izabrani = this.store.izabraniSlojevi();
+    const izbor = new Set(izabrani.map((s) => s.id));
+    // pritisak na izabran sloj (i kad ga na toj tački pokriva neizabran) vuče ceo izbor, ako u izboru ima otključanih
+    // (sa zaključanim u izboru prevlačenje javlja poruku); izbor samo od zaključanih se ne vuče
+    const naIzabranom = izabrani.some((s) => !s.zakljucan)
+      && !!slojNaTacki(vidljivi.filter((s) => izbor.has(s.id)), tacka, tolerancija);
+    let izabranoNaDole = false;
+    let nacin: Nacin = { vrsta: 'PRAVOUGAONIK' };
+    if (naIzabranom) {
+      nacin = { vrsta: 'POMERANJE' };
+    } else if (pogodak && !pogodak.zakljucan) {
       // izbor odmah (prevlačenje ga odmah pomera); klik bez pomeraja posle toga ne menja ništa
       if (e.shiftKey) this.store.prebaciIzbor(pogodak.id);
       else this.store.izaberi([pogodak.id]);
+      izabranoNaDole = true;
+      nacin = { vrsta: 'POMERANJE' };
     }
-    const gest = pogodak || naIzabranom ? this.gestPomeranja() : null;
-    this.pritisak = { ...osnova, pogodak, naIzabranom, naRucki: false, gest };
-  }
-
-  /** Gest ručke jedinog izabranog sloja (`data-rucka` na meti pritiska), u koordinatama početnog dokumenta. */
-  private gestRucke(meta: EventTarget | null, px: number): Gest | null {
-    const ime = meta instanceof Element ? meta.closest('[data-rucka]')?.getAttribute('data-rucka') : null;
-    const s = this.jedanZaRucke();
-    if (!ime || !s) return null;
-    const k = kutijaSloja(s);
-    if (jeLinija(s)) {
-      if (ime !== 'KRAJ_A' && ime !== 'KRAJ_B') return null;
-      return { vrsta: 'KRAJ', sloj: s, kraj: ime === 'KRAJ_A' ? 0 : 1, krajevi: krajeviLinije(s) };
-    }
-    if (ime === 'ROTACIJA') {
-      return { vrsta: 'ROTACIJA', sloj: s, tacka0: uSvetske(k, { x: 0, y: -s.visina / 2 - ROTACIJA_PX / px }) };
-    }
-    const r = RUCKE.find((x) => x.ime === ime);
-    if (!r) return null;
-    return { vrsta: 'RUCKA', sloj: s, rucka: r.ime, tacka0: uSvetske(k, { x: (r.sx * s.sirina) / 2, y: (r.sy * s.visina) / 2 }) };
-  }
-
-  /** Pomeranje izabranih vidljivih slojeva; null kad je neki zaključan (ne pomera se ništa, odluka 14). */
-  private gestPomeranja(): Gest | null {
-    const izabrani = this.vidljiviIzabrani();
-    if (!izabrani.length || izabrani.some((s) => s.zakljucan)) return null;
-    return { vrsta: 'POMERANJE', ids: new Set(izabrani.map((s) => s.id)) };
+    // zaključan pogodak van mešanog izbora: prevlačenje je pravougaonik, klik ga bira na pointerup
+    this.pritisak = { ...osnova, pogodak, izabranoNaDole, nacin };
   }
 
   protected pomeraj(e: PointerEvent): void {
     const p = this.pritisak;
-    if (!p) return;
+    if (!p || this.tudji(p, e)) return;
     if (p.aktivan && !this.store.gest()) {
       // pražnjenje (Ctrl+S, "Pokreni", ...) je usred gesta upisalo gest: ovaj pritisak je gotov
       this.ocisti();
@@ -346,8 +356,7 @@ export class PlatnoOverlayComponent {
       this.kadar.dodaj({ x: e.clientX, y: e.clientY, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey });
       return;
     }
-    // prevlačenje zaključanog sloja ne radi ništa; po praznom se crta pravougaonik izbora
-    if (p.pogodak || p.naIzabranom || p.naRucki) return;
+    if (p.nacin.vrsta !== 'PRAVOUGAONIK') return;   // odbijen gest (zaključan sloj): ništa
     const { tacka } = this.tacka(e);
     this.vucenje.set({
       x: Math.min(p.tacka.x, tacka.x), y: Math.min(p.tacka.y, tacka.y),
@@ -355,19 +364,51 @@ export class PlatnoOverlayComponent {
     });
   }
 
-  /** Prag je pređen: gest počinje u store-u, a Esc se sluša dok prevlačenje traje. */
+  /**
+   * Prag je pređen: gest se postavlja iz TRENUTNOG dokumenta (ne iz snimka sa pritiska) i počinje u store-u; sa
+   * zaključanim slojem u izboru gesta nema i ide poruka (jednom po pritisku, kao strelice). Esc se sluša dok traje gest
+   * ili pravougaonik.
+   */
   private pocni(p: Pritisak): void {
     p.vuce = true;
-    this.dokument.addEventListener('keydown', this.naEsc, true);
+    if (p.nacin.vrsta === 'PRAVOUGAONIK') {
+      this.dokument.addEventListener('keydown', this.naEsc, true);
+      return;
+    }
+    p.gest = this.store.zakljucanUIzboru() ? null : this.napraviGest(p);
     if (!p.gest) return;
     this.store.pocniGest();
     p.aktivan = true;
+    this.dokument.addEventListener('keydown', this.naEsc, true);
     if (p.gest.vrsta === 'POMERANJE') {
       const ids = p.gest.ids;
       const slojevi = this.store.zaPrikaz().slojevi;
       p.obuhvat0 = obuhvatSvih(slojevi.filter((s) => ids.has(s.id)).map(kutijaSloja));
       p.ostali = slojevi.filter((s) => !ids.has(s.id)).map((s) => obuhvat(kutijaSloja(s)));
     }
+  }
+
+  /** Gest iz trenutnog dokumenta: pomeranje celog izbora (isti skup kao strelice) ili ručka jedinog izabranog sloja. */
+  private napraviGest(p: Pritisak): Gest | null {
+    if (p.nacin.vrsta === 'POMERANJE') {
+      const ids = this.store.izbor();
+      return ids.length ? { vrsta: 'POMERANJE', ids: new Set(ids) } : null;
+    }
+    if (p.nacin.vrsta !== 'RUCKA') return null;
+    const { slojId, ime } = p.nacin;
+    const s = this.store.platno().slojevi.find((x) => x.id === slojId);
+    if (!s) return null;
+    const k = kutijaSloja(s);
+    if (jeLinija(s)) {
+      if (ime !== 'KRAJ_A' && ime !== 'KRAJ_B') return null;
+      return { vrsta: 'KRAJ', sloj: s, kraj: ime === 'KRAJ_A' ? 0 : 1, krajevi: krajeviLinije(s) };
+    }
+    if (ime === 'ROTACIJA') {
+      return { vrsta: 'ROTACIJA', sloj: s, tacka0: uSvetske(k, { x: 0, y: -s.visina / 2 - ROTACIJA_PX / p.px }) };
+    }
+    const r = RUCKE.find((x) => x.ime === ime);
+    if (!r) return null;
+    return { vrsta: 'RUCKA', sloj: s, rucka: r.ime, tacka0: uSvetske(k, { x: (r.sx * s.sirina) / 2, y: (r.sy * s.visina) / 2 }) };
   }
 
   /** Jedna obrada po kadru: nov dokument iz POČETKA gesta i pomeraja pokazivača od pritiska. */
@@ -433,7 +474,8 @@ export class PlatnoOverlayComponent {
   }
 
   protected gore(e: PointerEvent): void {
-    if (!this.pritisak) return;
+    const p = this.pritisak;
+    if (!p || this.tudji(p, e)) return;
     this.pomeraj(e);
     this.zavrsi();
   }
@@ -456,18 +498,20 @@ export class PlatnoOverlayComponent {
       this.store.izaberi(p.shift ? [...this.store.izbor(), ...ids] : ids);
       return;
     }
-    if (p.naRucki) return;
-    if (p.naIzabranom && p.pogodak) {
+    if (p.nacin.vrsta === 'RUCKA' || p.izabranoNaDole) return;
+    if (p.pogodak) {
       if (p.shift) this.store.prebaciIzbor(p.pogodak.id);
       else this.store.izaberi([p.pogodak.id]);
-    } else if (!p.pogodak && !p.naIzabranom && !p.shift) {
+    } else if (!p.shift) {
       this.store.ponistiIzbor();
     }
   }
 
-  /** Esc, `pointercancel`: gest se poništava (dokument kao pre, bez koraka), izbor ostaje. */
-  protected prekid(): void {
-    if (this.pritisak?.aktivan) {
+  /** Esc, `pointercancel`, `lostpointercapture` bez `pointerup`: gest se poništava (dokument kao pre, bez koraka), izbor ostaje. */
+  protected prekid(e?: Event): void {
+    const p = this.pritisak;
+    if (!p || (e && this.tudji(p, e))) return;
+    if (p.aktivan) {
       this.kadar.prekini();
       this.store.prekiniGest();
     }
