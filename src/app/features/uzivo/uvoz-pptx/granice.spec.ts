@@ -150,6 +150,78 @@ describe('bajtovaPlatna', () => {
   });
 });
 
+describe('bajtovaPlatna: tačan broj bajtova servera', () => {
+  // Izmišljen dokument sa svim tipovima slojeva, zaokruživanjem (12,345 -> 12,35; 1,005 -> 1,01), celim Double poljima,
+  // linijom bez krajeva, podrazumevanim smerom, POJAVI sa trajanjem i ključevima medija uvoza (gen:, pptx:).
+  const DOKUMENT = {
+  "verzija": 1,
+  "pozadina": { "boja": "#FFFFFF", "medijId": "gen:1" },
+  "slojevi": [
+    {
+      "id": "s1", "tip": "TEKST", "naziv": "Naslov čćž 😀", "x": 12.345, "y": 100, "sirina": 200.5, "visina": 50.125,
+      "rotacija": 0, "providnost": 0.5, "zakljucan": false,
+      "senka": { "boja": "#000000", "pomerajX": 1.005, "pomerajY": -2, "zamucenje": 4.4449 },
+      "pasusi": [{
+        "poravnanje": "LEVO", "nivo": 1,
+        "lista": { "vrsta": "BROJ", "znak": null, "boja": "#1F4E79", "format": "ARAPSKI_TACKA", "pocetak": 3 },
+        "uvlacenje": { "levo": 27, "prviRed": -13.5 }, "razmakPre": 0, "razmakPosle": 6.005, "proredProcenat": 90,
+        "tabulatori": [{ "poz": 36, "poravnanje": "LEVO" }],
+        "delovi": [
+          { "tekst": "Izmišljen tekst ž 😀", "font": "Carlito", "velicina": 18, "boja": "#000000", "podebljano": true, "kurziv": false, "podvuceno": false, "precrtano": false, "polozaj": "OBICAN" },
+          { "tekst": "2", "font": "Carlito", "velicina": 10.8, "boja": "#C00000", "podebljano": false, "kurziv": false, "podvuceno": false, "precrtano": false, "polozaj": "EKSPONENT" }
+        ]
+      }],
+      "okvir": { "unutraLevo": 7.2, "unutraGore": 3.6, "unutraDesno": 7.2, "unutraDole": 3.6, "sidro": "VRH", "prelom": true, "skala": 1, "skalaProreda": 1 },
+      "popuna": null, "ivica": { "boja": "#4472C4", "debljina": 0.75, "crtica": "PUNA" }
+    },
+    {
+      "id": "s2", "tip": "OBLIK", "naziv": null, "x": 10, "y": 20, "sirina": 100, "visina": 3,
+      "rotacija": 0, "providnost": 1, "zakljucan": false, "senka": null,
+      "oblik": "STRELICA", "popuna": null, "ivica": { "boja": "#000000", "debljina": 2, "crtica": "ISPREKIDANA" }, "od": null, "do": null
+    },
+    {
+      "id": "s3", "tip": "SLIKA", "naziv": "Slika 3", "x": 300, "y": 200, "sirina": 144, "visina": 72,
+      "rotacija": 15.5, "providnost": 1, "zakljucan": false, "senka": null,
+      "medijId": "pptx:ppt/media/image1.png", "isecak": { "levo": 0.1, "gore": 0, "desno": 0.25, "dole": 0 }
+    },
+    {
+      "id": "s4", "tip": "FORMULA", "naziv": null, "x": 100, "y": 50, "sirina": 220, "visina": 100,
+      "rotacija": 0, "providnost": 1, "zakljucan": false, "senka": null,
+      "latex": "\\frac{a}{b}", "boja": "#000000", "velicina": 28, "poravnanje": "CENTAR", "slikaIzvora": "gen:2"
+    },
+    {
+      "id": "s5", "tip": "TABELA", "naziv": "Tabela 5", "x": 50, "y": 300, "sirina": 200, "visina": 40,
+      "rotacija": 0, "providnost": 1, "zakljucan": false, "senka": null,
+      "kolone": [100, 100], "redovi": [40],
+      "celije": [[
+        { "pasusi": [], "popuna": "#E7E6E6", "ivice": { "gore": { "boja": "#FFFFFF", "debljina": 1, "crtica": "PUNA" }, "dole": null, "levo": null, "desno": null },
+          "spojDesno": 1, "spojDole": 0, "pokrivena": false, "sidro": "SREDINA" },
+        { "pasusi": [], "popuna": null, "ivice": { "gore": null, "dole": null, "levo": null, "desno": null },
+          "spojDesno": 0, "spojDole": 0, "pokrivena": true, "sidro": "VRH" }
+      ]]
+    },
+    {
+      "id": "s6", "tip": "CRTEZ", "naziv": null, "x": 400, "y": 100, "sirina": 80, "visina": 40,
+      "rotacija": 0, "providnost": 0.5, "zakljucan": false, "senka": null,
+      "medijId": "gen:3", "potezi": [{ "boja": "#FF0000", "debljina": 2.5, "tacke": [0.1, 1, 2.25, 3, 10, 12.5] }]
+    }
+  ],
+  "animacije": [
+    { "id": "a1", "slojId": "s1", "pasus": 0, "vrsta": "ULAZ", "efekat": "ULET", "smer": null, "okidac": "KLIK", "trajanjeMs": 500, "kasnjenjeMs": 0 },
+    { "id": "a2", "slojId": "s3", "pasus": null, "vrsta": "ULAZ", "efekat": "POJAVI", "smer": null, "okidac": "SA_PRETHODNIM", "trajanjeMs": 500, "kasnjenjeMs": 250 },
+    { "id": "a3", "slojId": "s4", "pasus": null, "vrsta": "IZLAZ", "efekat": "PODELI", "smer": null, "okidac": "POSLE_PRETHODNOG", "trajanjeMs": 750, "kasnjenjeMs": 0 },
+    { "id": "a4", "slojId": "s6", "pasus": null, "vrsta": "ULAZ", "efekat": "FADE", "smer": null, "okidac": "KLIK", "trajanjeMs": 10000, "kasnjenjeMs": 10000 }
+  ]
+} as Platno;
+
+  it('3421 bajt, kao server', () => {
+    // Broj je iz serverove serijalizacije: isti dokument (ključevi medija zamenjeni UUID-ima od 36 znakova) kroz
+    // `PlatnoJson.procitaj` -> `PlatnoPP.normalizuj` -> `PlatnoPP.proveri` -> `PlatnoJson.velicinaBajtova` u GFSSystem-u.
+    expect(proveriKaoServer(DOKUMENT)).toBeNull();
+    expect(bajtovaPlatna(DOKUMENT)).toBe(3421);
+  });
+});
+
 describe('zaokruziKaoServer (BigDecimal.valueOf(d).setScale(2, HALF_UP))', () => {
   it.each([
     [1.005, 1.01], [-0.125, -0.13], [2.675, 2.68], [0.995, 1], [1.115, 1.12], [-1.005, -1.01], [0.125, 0.13],
@@ -267,8 +339,25 @@ describe('proveriKaoServer (ogledalo PlatnoPP.proveri posle normalizuj)', () => 
     ['linija sa krajem van ±2880', platno([linija({ do: { x: 2881, y: 0 } })]), 'Linija mora imati početak i kraj.'],
     ['crtež sa neparnim brojem koordinata', platno([{ ...crtez('s0', 1), potezi: [{ boja: '#000000', debljina: 1, tacke: [1, 2, 3] }] }]), 'Crtež nije ispravan.'],
     ['isečak slike 0,5 + 0,5', platno([{ ...osnova('s0'), tip: 'SLIKA', medijId: 'm', isecak: { levo: 0.495, gore: 0, desno: 0.5, dole: 0 } }]), 'Isečak slike nije ispravan.'],
+    ['naziv sloja duži od 60 znakova (code point-i)', platno([{ ...tekst('s0', 'a'), naziv: '\u{1F600}'.repeat(61) }]), 'Naziv sloja može imati najviše 60 znakova.'],
+    ['senka sa zamućenjem preko 100', platno([{ ...tekst('s0', 'a'), senka: { boja: '#000000', pomerajX: 2, pomerajY: 2, zamucenje: 100.01 } }]), 'Senka nije ispravna.'],
+    ['okvir teksta sa skalom ispod 0,25', platno([{ ...tekst('s0', 'a'), okvir: { ...tekst('s0', 'a').okvir, skala: 0.24 } }]), 'Okvir teksta nije ispravan.'],
+    ['pasus sa proredom ispod 50%', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), proredProcenat: 49.99 }] }]), 'Pasus nije ispravan.'],
+    ['lista ZNAK bez znaka', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), lista: { vrsta: 'ZNAK', znak: '', boja: null, format: null, pocetak: null } }] }]), 'Lista nije ispravna.'],
+    ['ivica tanja od 0,25', platno([{ ...tekst('s0', 'a'), ivica: { boja: '#000000', debljina: 0.24, crtica: 'PUNA' } }]), 'Debljina ivice mora biti od 0,25 do 20.'],
+    ['providnost preko 1', platno([{ ...tekst('s0', 'a'), providnost: 1.01 }]), 'Rotacija ili providnost sloja nije ispravna.'],
+    ['rotacija preko 360', platno([{ ...tekst('s0', 'a'), rotacija: 360.01 }]), 'Rotacija ili providnost sloja nije ispravna.'],
+    ['veličina slova preko 400', platno([{ ...tekst('s0', 'a'), pasusi: [{ ...pasus('a'), delovi: [{ ...deo('a'), velicina: 400.01 }] }] }]), 'Veličina slova mora biti od 1 do 400.'],
+    ['oblik bez vrste', platno([linija({ oblik: null as never })]), 'Oblik sloja nije ispravan.'],
+    ['latex formule duži od 5000 znakova', platno([formula('s0', 'x'.repeat(5001))]), 'Formula nije ispravna.'],
   ])('%s', (_, p, poruka) => {
     expect(proveriKaoServer(p)).toBe(poruka);
+  });
+
+  it('granice ovih pravila prolaze: naziv od 60 znakova, latex od 5000, skala 0,25, ivica 0,25, providnost 1, rotacija -360', () => {
+    expect(proveriKaoServer(platno([{ ...tekst('s0', 'a'), naziv: '\u{1F600}'.repeat(60), providnost: 1, rotacija: -360,
+      ivica: { boja: '#000000', debljina: 0.25, crtica: 'PUNA' }, okvir: { ...tekst('s0', 'a').okvir, skala: 0.25 } }]))).toBeNull();
+    expect(proveriKaoServer(platno([formula('s0', 'x'.repeat(5000))]))).toBeNull();
   });
 
   it('podrazumevani smer i trajanje POJAVI se ne odbijaju; tabela sa ispravnim spajanjem i linija bez krajeva prolaze', () => {
