@@ -101,7 +101,8 @@ pattern; keep it when touching any of them:
 - Leaving the screen or loading another id **closes** the session, never cancels it: pending debounces are flushed,
   queued and in-flight saves finish, stale responses never touch the new entity's state.
 - Loading entity N waits until every session for N (any store instance) has drained: `core/state/registar-cuvanja.ts`
-  (`RegistarCuvanja`, keys `test-N`, `domaci-N`, `predavanje-N`).
+  (`RegistarCuvanja`, keys `test-N`, `domaci-N`, `predavanje-N`; the uživo editor's `EditorStore` uses `prezentacija-N`
+  with its own request counter, see "Slide editor, part 4a").
 - Every queue job is wrapped in `bezPrekidaReda`: an exception thrown inside an error handler goes to `ErrorHandler`
   and does not kill the queue or stall the registry wait.
 - `core/state/nesacuvane-izmene.ts` (`NesacuvaneIzmene`) shows the browser's native "leave site?" prompt on close or
@@ -206,6 +207,38 @@ over STOMP; teacher commands are REST.
   **`javno/` imports nothing from `uvoz-pptx/`** (`gfs/javna-ruta-uvozi` also forbids `fflate` there). Local check on real decks (outside `ng test` and CI,
   `*.uzorci.ts` read files with `node:fs`): `PPTX_UZORCI=<dir> npx vitest run --config vitest.uzorci.config.mts`; the
   samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
+- **Slide editor, part 4a (phase 4: layers, shapes, images, properties, undo):** `editor-platna/` is the canvas editor
+  of a PLATNO slide. The editor page renders it only inside `@defer (on immediate)` (one instance per slide, `@for ... track
+  kljuc`), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
+  `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
+  (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
+  (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
+  the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 785 000 B; the editor page
+  file (contains `uz-ed-zaglavlje`) <= 215 000 B; the editor's own closure (its closure minus initial and page closure)
+  <= 160 000 B. Public routes load none of it (`e2e/javna-mreza.ts` also checks every JS body for those strings).
+  `PlatnoEditorStore` (per editor instance) holds the document, selection, hidden-in-editor layers, the active panel and
+  the undo history (`Istorija`, 100 steps, same-key edits within 1 s merge; the history dies with the instance, so it is
+  per slide and survives a draft getting its real id). A mouse gesture changes the document at most once per frame
+  (`PoKadru`) and is one step on `pointerup`; Esc cancels it. After every recorded change the store calls its output
+  **synchronously** (`postaviIzlaz` -> `EditorStore.izmeniPlatno(id, platno)`, which keeps the notes of the slide's last
+  local command); the open gesture is flushed into the document through `EditorStore.registrujPraznjenje` before every
+  save (`sacuvajOdmah`, `sacuvajSve`, `sacuvajPreIzlaska`, page `beforeunload`) and on destroy. The PLATNO slide form only
+  edits notes: the page always takes `platno` from the store (`izmenaForme`), never from the form. A new PLATNO slide is a
+  front-end document (`data-access/platno-novo.ts`: empty, or title and body from the theme) and is sent at once.
+  `data-access/platno-provera.ts` mirrors the server's `PlatnoPP` (limits, rounding, 1 MB): `greskeSlajda` checks only
+  the cheap counts (the slide list runs it on every change), `greskeSlajdaZaSlanje` is the full check, called only right
+  before a request. `EditorStore` registers in `RegistarCuvanja` as `prezentacija-<id>` with its **own** request counter
+  (decremented unconditionally in `finalize`); writes after leaving the editor (including a draft edit that arrived while
+  its POST was running) go through the closed session, and a failure off screen is a global message with group
+  `'uzivo-cuvanje-pri-izlasku'`. Shortcuts (`tastatura-platna.ts`) work only while focus is on the canvas frame
+  `.uz-ep-platno` (`role="group"`), never in inputs, tabs, menus or overlays; Ctrl+S is handled before that check and still
+  reaches the page; letters come from `key`, `[`/`]` from `code`. Inserting a layer focuses the frame. The keyboard path:
+  select in the "Slojevi" panel, Shift+Tab to the frame, arrows; exact values in the "Svojstva" number fields. Locked layers
+  can be selected and reordered but not moved, resized or deleted; hiding is editor-only (not saved). `platno-prikaz`
+  caches the prepared view per (layer object, index) in a `WeakMap`, so moving one layer rebuilds only that layer. Slide
+  list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (no
+  version check on the backend). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
+  instance, last `PUT` carries both canvas and notes), editor panels and the colour popover in `pristupacnost.spec.ts`.
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

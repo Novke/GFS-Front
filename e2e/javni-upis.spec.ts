@@ -31,10 +31,11 @@ test.describe('javni upis (telefon studenta, bez basic-auth-a)', () => {
     expect(mock.podaci.prijave.at(-1)).toMatchObject({ indeks: 'GD11', status: 'NA_CEKANJU' });
 
     expect(javnaMreza.api).toEqual([`GET /api/public/upis/${TOKEN}`, `POST /api/public/upis/${TOKEN}`]);
-    // nijedan učitan JS (glavni bundle i lenji chunk-ovi upisa) nema fflate ni kod uvoza PPTX-a
+    // nijedan učitan JS (glavni bundle i lenji chunk-ovi upisa) nema fflate, kod uvoza PPTX-a ni kod editora platna
     const skripte = await javnaMreza.skripte();
     expect(skripte.putanje.some(p => /\/main-[^/]+\.js$/.test(p)), 'provera je pročitala glavni bundle').toBe(true);
     expect(skripte.saUvozom).toEqual([]);
+    expect(skripte.saEditorom).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
