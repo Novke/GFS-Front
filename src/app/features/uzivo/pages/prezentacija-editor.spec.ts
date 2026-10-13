@@ -645,7 +645,7 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
     fixture = TestBed.createComponent(PrezentacijaEditorPage);
     fixture.debugElement.injector.get(EditorStore).ucitaj(1);
     http.expectOne('api/prezentacije/1')
-      .flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [slajd(11, 1, 'Uvod'), platnoSlajd(12, 2)] });
+      .flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [{ ...slajd(11, 1, 'Uvod'), sadrzaj: 'Materijal: https://example.com' }, platnoSlajd(12, 2)] });
     await fixture.whenStable();
   });
 
@@ -670,9 +670,22 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
     for (const b of blokovi) await b.render(DeferBlockState.Complete);
     await fixture.whenStable();
     const dugme = el().querySelectorAll<HTMLElement>('.uz-ed-stavka-dugme')[1];
+    // Ime iz sadržaja bez `aria-hidden` potomaka: delovi redom (jsdom nema raspored, pa nema razmaka između flex stavki).
     const ime = dugme.cloneNode(true) as HTMLElement;
     ime.querySelectorAll('[aria-hidden="true"]').forEach(n => n.remove());
-    expect(ime.textContent!.trim()).toMatch(/^2/);
+    expect([...ime.querySelectorAll('.uz-ed-rb, .uz-ed-oznaka')].map(n => n.textContent!.trim())).toEqual(['2', 'Prvi']);
+    expect(ime.textContent!.trim()).toBe('2Prvi');
     expect(dugme.querySelectorAll('.uz-ed-slicica button, .uz-ed-slicica a, .uz-ed-slicica [tabindex]').length).toBe(0);
+  });
+
+  it('sličica INFO slajda sa linkom je inert: link u njoj ne dobija fokus (Tab ga preskače)', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const slicica = el().querySelector<HTMLElement>('.uz-ed-slicica')!;
+    const link = slicica.querySelector('a[href]');
+    expect(link).not.toBeNull();
+    expect(slicica.hasAttribute('inert')).toBe(true);
+    expect(link!.closest('[inert]')).toBe(slicica);
   });
 });

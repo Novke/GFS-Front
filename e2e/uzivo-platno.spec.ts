@@ -14,6 +14,22 @@ async function otvoriPlatnoSlajd(page: Page, vidljiv = 'naslov'): Promise<void> 
   await expect(sloj(page, vidljiv)).toBeVisible();
 }
 
+test.describe('uživo: lista slajdova sa sličicama', () => {
+  for (const sirina of [390, 1280]) {
+    test(`${sirina} px: oznaka slajda ostaje čitljiva, a Tab preskače link u sličici`, async ({ page }) => {
+      await page.setViewportSize({ width: sirina, height: 800 });
+      await page.goto(`prezentacije/${PREZENTACIJA}`);
+      const stavka = page.locator('.uz-ed-stavka-dugme').first();
+      await expect(stavka.locator('a')).toHaveCount(1);
+      await expect(stavka.locator('.uz-ed-oznaka')).toBeVisible();
+      expect((await stavka.locator('.uz-ed-oznaka').boundingBox())!.width).toBeGreaterThan(60);
+      await stavka.focus();
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(() => document.activeElement?.closest('.uz-ed-slicica') !== null)).toBe(false);
+    });
+  }
+});
+
 test.describe('uživo: editor sa PLATNO slajdom', () => {
   test('pregled prikazuje slojeve, korak napred ih otkriva redom, korak nazad ih vraća', async ({ page }) => {
     await otvoriPlatnoSlajd(page);

@@ -148,7 +148,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <mat-icon class="uz-ed-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
                   <button class="uz-ed-stavka-dugme" type="button" (click)="store.izaberi(s.id)"
                           [attr.aria-current]="s.id === store.izabraniId() ? 'true' : null">
-                    <span class="uz-ed-slicica rezim-dan uz-dan" aria-hidden="true">
+                    <span class="uz-ed-slicica rezim-dan uz-dan" aria-hidden="true" inert>
                       @defer (on viewport) {
                         <app-slajd-prikaz [slajd]="slicica(s)" [tema]="vazeca(p.tema)" [korak]="0" />
                       } @placeholder {

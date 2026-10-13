@@ -364,6 +364,7 @@ span.uz-ed-napomena {
   display: flex;
   flex: 1;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
   padding: 8px 4px;
@@ -385,6 +386,8 @@ span.uz-ed-napomena {
   display: block;
   flex: none;
   width: 112px;
+  /* Svoj red iznad broja i oznake (dugme je `flex-wrap`; margina od 100% ne ostavlja mesta drugima u redu). */
+  margin-right: 100%;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 3px;
