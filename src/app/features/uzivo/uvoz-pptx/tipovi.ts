@@ -7,24 +7,7 @@ import type { TemaFajla } from './tema';
 /** 1 pt = 12 700 EMU. */
 export const EMU_PO_PT = 12700;
 
-/**
- * Zaokruživanje na 2 decimale kao server (`PlatnoPP.r`: `BigDecimal.valueOf(d).setScale(2, RoundingMode.HALF_UP)`):
- * `BigDecimal.valueOf` polazi od najkraćeg decimalnog zapisa broja (`Double.toString`), pa se zaokružuje taj zapis, na
- * dalje od nule kad je treća decimala >= 5 (1,005 -> 1,01; -0,125 -> -0,13; 2,675 -> 2,68), a ne binarna vrednost
- * (`Math.round(1.005 * 100)` daje 100). Nikad `-0`.
- */
-export function zaokruziKaoServer(n: number): number {
-  if (!Number.isFinite(n)) return n;
-  const zapis = String(n);
-  if (/e/i.test(zapis)) return Math.abs(n) < 1 ? 0 : n; // |n| < 1e-6 je 0,00; >= 1e21 je ceo broj
-  const negativan = zapis.startsWith('-');
-  const [celi, razlomak = ''] = (negativan ? zapis.slice(1) : zapis).split('.');
-  if (razlomak.length <= 2) return n === 0 ? 0 : n;
-  let stotinke = Number(celi + razlomak.slice(0, 2));
-  if (razlomak.charCodeAt(2) >= 53) stotinke += 1; // '5'
-  const rezultat = stotinke / 100;
-  return rezultat === 0 ? 0 : negativan ? -rezultat : rezultat;
-}
+export { zaokruziKaoServer } from '../data-access/platno-provera';
 
 /** Zaokruživanje izlaza na 2 decimale (Math.round; za vrednosti koje server ne proverava zbirno, v. `zaokruziKaoServer`). */
 export function zaokruzi(n: number): number {
