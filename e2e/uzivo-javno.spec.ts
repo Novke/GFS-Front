@@ -58,6 +58,8 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
   test('kod pa ime: samo api/public/uzivo i api/public/ws, nijedan 401; posle prijave "Čekamo početak"', async ({ page, mock, javnaMreza }) => {
     const pretplate: string[] = [];
     let ime = '';
+    const zahtevi: string[] = [];
+    page.on('request', r => zahtevi.push(new URL(r.url()).pathname));
     await page.routeWebSocket('**/api/public/ws', ws => {
       javnaMreza.ws.push(new URL(ws.url()).pathname);
       laznaVeza(ws, pretplate, () => ime);
@@ -87,6 +89,8 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
       `GET /api/public/uzivo/${KOD}/ja`,
       `POST /api/public/uzivo/${KOD}/prijava`,
     ]);
+    // javna ruta ne vuče fontove platna (spec 13): ni jedan zahtev za carlito, caladea, arimo, tinos, cousine, atkinson
+    expect(zahtevi.filter(p => /carlito|caladea|arimo|tinos|cousine|atkinson/i.test(p)), 'fontovi platna na javnoj ruti').toEqual([]);
     expect(javnaMreza.ws).toEqual(['/api/public/ws']);
     // samo odredišta koja backend dozvoljava studentu
     expect([...pretplate].sort()).toEqual([

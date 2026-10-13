@@ -640,3 +640,53 @@ span.uz-ed-napomena {
 .uz-pr-podnozje .uz-ed-napomena {
   margin-left: 12px;
 }
+
+.uz-ed-koraci {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.uz-ed-korak {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Uzorak teme: boje dolaze iz CSS promenljivih `--uz-tema-*` (podaci teme), postavljenih na samom uzorku. */
+.uz-ed-uzorak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--uz-tema-pozadina);
+  vertical-align: middle;
+}
+
+.uz-ed-uzorak-tekst,
+.uz-ed-uzorak-naslov,
+.uz-ed-uzorak-akcent {
+  display: inline-block;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.uz-ed-uzorak-tekst {
+  width: 10px;
+  background: var(--uz-tema-tekst);
+}
+
+.uz-ed-uzorak-naslov {
+  width: 18px;
+  background: var(--uz-tema-naslov);
+}
+
+.uz-ed-uzorak-akcent {
+  width: 10px;
+  background: var(--uz-tema-akcent-1);
+}

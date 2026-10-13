@@ -15,11 +15,13 @@ import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { TipKomande } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { kodSaRazmakom } from '../ui/format';
+import { preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
 import { EkranOpis, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
+import { vazecaTema } from '../ui/teme';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
@@ -210,7 +212,7 @@ export class IzborEkranaDialog {
             <section class="uz-kon-kartica uz-kon-sledeci" aria-label="Sledeće">
               <h2 class="uz-kon-naslov">Sledeće</h2>
               @if (s.sledeciSlajd; as sl) {
-                <div class="rezim-dan uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" /></div>
+                <div class="rezim-dan uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" [tema]="tema()" /></div>
               } @else {
                 <p class="uz-prazno">{{ s.prikaz === 'KRAJ' ? 'Ovo je kraj. Završi izvođenje dugmetom „Završi“.' : 'Kraj prezentacije.' }}</p>
               }
@@ -252,6 +254,7 @@ export class KonzolaPage {
   protected readonly usko = toSignal(
     inject(BreakpointObserver).observe('(max-width: 599.98px)').pipe(map(r => r.matches)), { initialValue: false });
   protected readonly kod = computed(() => kodSaRazmakom(this.store.stanje()?.izvodjenje.kod ?? ''));
+  protected readonly tema = computed(() => vazecaTema(this.store.stanje()?.tema));
   protected readonly polozaj = computed(() => {
     const s = this.store.stanje();
     return s ? oznakaPolozaja(s) : '';
@@ -280,6 +283,9 @@ export class KonzolaPage {
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));
     inject(DestroyRef).onDestroy(() => this.tast.unisti());
+
+    // Slike sledećeg slajda unapred (i u "Sledeće" i na umanjenom projektoru prelaz ne čeka mrežu).
+    effect(() => preducitajSlike(slikeSlajda(this.store.stanje()?.sledeciSlajd ?? null)));
 
     // Završeno (ovom konzolom, drugim prozorom ili automatski posle 12 h): pregled ako se čuva, inače editor.
     effect(() => {

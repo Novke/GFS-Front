@@ -9,21 +9,23 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
+import { brojKoraka } from '../data-access/platno-koraci';
+import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 
 function slajd(id: number, rb: number, naslov: string): SlajdDetails {
-  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null };
+  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
 }
 
 function info(naslov: string): SlajdCmd {
-  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null };
+  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: null };
 }
 
 const prezentacija: PrezentacijaDetails = {
   id: 1, naziv: 'Statika', opis: null, predmet: { id: 7, naziv: 'Mehanika' }, brojSlajdova: 1, brojPitanja: 0,
-  izmenjeno: '2026-10-07T10:00:00', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: true,
+  izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: true,
   brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [slajd(11, 1, 'Uvod')],
 };
 
@@ -81,7 +83,7 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     store.dodaj('PITANJE', 'TACNO_NETACNO');
     const nacrt = store.izabrani()!;
     store.izmeniSlajd(nacrt.id, {
-      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
+      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, platno: null,
       pitanje: {
         tip: 'TACNO_NETACNO', tekst: 'Zemlja je okrugla.', slikaId: null, vremeSekunde: null,
         opcije: [{ tekst: 'Tačno', tacna: true }, { tekst: 'Netačno', tacna: false }], brojTacno: null,
@@ -137,5 +139,104 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     store.dodaj('INFO');
     expect(editor.imaNesacuvanihIzmena()).toBe(true);
     expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+  });
+});
+
+describe('PrezentacijaEditorPage: PLATNO i tema', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  const platnoSlajd: SlajdDetails = {
+    id: 12, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(),
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, slajdovi: [slajd(11, 1, 'Uvod'), platnoSlajd] });
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  const dugme = (tekst: string) =>
+    [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(b => b.textContent?.includes(tekst)) as HTMLButtonElement;
+
+  it('PLATNO u listi ima ikonu layers i naziv Platno', () => {
+    const ikone = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-stavka mat-icon.uz-ed-ikona')];
+    expect(ikone.map(i => i.getAttribute('aria-label'))).toEqual(['Info slajd', 'Platno']);
+    expect(ikone[1].getAttribute('data-mat-icon-name')).toBe('layers');
+  });
+
+  it('Korak napred povećava korak do brojKoraka pa je onemogućen; promena slajda vraća na 0', () => {
+    const n = brojKoraka(platno());
+    expect(n).toBeGreaterThan(1);
+    store.izaberi(12);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain(`Korak 0 / ${n}`);
+    expect(dugme('Korak nazad').disabled).toBe(true);
+    for (let i = 1; i <= n; i++) {
+      dugme('Korak napred').click();
+      fixture.detectChanges();
+      expect(el.textContent).toContain(`Korak ${i} / ${n}`);
+    }
+    expect(dugme('Korak napred').disabled).toBe(true);
+    dugme('Korak nazad').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Korak ${n - 1} / ${n}`);
+    store.izaberi(11);
+    fixture.detectChanges();
+    store.izaberi(12);
+    fixture.detectChanges();
+    expect(el.textContent).toContain(`Korak 0 / ${n}`);
+  });
+
+  it('Korak napred pušta animacije grupe (Element.animate), Korak nazad ne', () => {
+    const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise<void>(() => undefined) }));
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+    try {
+      store.izaberi(12);
+      fixture.detectChanges();
+      let ukupno = 0;
+      for (let i = 1; i <= brojKoraka(platno()); i++) {
+        dugme('Korak napred').click();
+        fixture.detectChanges();
+        TestBed.tick();
+        ukupno = animate.mock.calls.length;
+        if (ukupno > 0) break;
+      }
+      expect(ukupno).toBeGreaterThan(0);
+      animate.mockClear();
+      dugme('Korak nazad').click();
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(animate).not.toHaveBeenCalled();
+    } finally {
+      delete (Element.prototype as Partial<Element>).animate;
+    }
+  });
+
+  it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
+    const radio = (fixture.nativeElement as HTMLElement).querySelector('input[type=radio][value=PAPIR]') as HTMLInputElement;
+    expect(radio).not.toBeNull();
+    radio.click();
+    const zahtev = http.expectOne('api/prezentacije/1');
+    expect(zahtev.request.method).toBe('PUT');
+    expect(zahtev.request.body.tema).toBe('PAPIR');
+    zahtev.flush({ ...prezentacija, tema: 'PAPIR' });
   });
 });

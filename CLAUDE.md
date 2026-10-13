@@ -145,6 +145,26 @@ over STOMP; teacher commands are REST.
   `pages/` or `core/state`. After touching `javno/` or the routes, check that `uzivo/<kod>` makes no `/api/` call outside
   `/api/public/` (`e2e/uzivo-javno.spec.ts` checks it with a fake STOMP broker; the wrapper's `staging/e2e/uzivo_e2e.py`
   against a real backend).
+- **PLATNO slide (phase 1 of the slide builder):** a slide of type `PLATNO` carries a layer document `platno`
+  (`data-access/platno.models.ts`, mirrors the backend; fonts from the same catalogue as `PlatnoPP.FONTOVI`).
+  `data-access/platno-koraci.ts` holds the pure step logic: `stanjeSlojeva` (visibility of every layer at step k),
+  `grupaZaKorak`, `animacijaPrelaza` (which animations play for a transition; only `k-1 -> k` on the same slide and
+  entering forward, group 0; anything else draws the exact state without animation). `ui/platno-prikaz.component.ts`
+  is a DOM renderer (`data-sloj`/`data-pasus` attributes, `platno.css`, text through `ui/platno-tekst.ts`), animations
+  through the Web Animations API; a new instance per slide, and a fast second click cancels the running animations and
+  jumps the previous group to its end state, so no layer stays hidden or transparent. Keyframes never animate `visibility`:
+  each target gets inline `visibility: visible` while its group runs and has it reset explicitly after `cancel()` (Chromium
+  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 5 themes; an
+  unknown or missing `tema` means NACRT; the NACRT title is ink, and `teme.spec.ts` checks WCAG AA contrast of every
+  theme. Fonts of the canvas: `ui/platno-fontovi.ts` plus `src/styles/_fontovi-platna.scss` (fontsource, OFL: Carlito,
+  Caladea, Arimo, Tinos, Cousine, IBM Plex Sans/Mono, Atkinson Hyperlegible; `font-display: block`). `ui/preducitavanje.ts`
+  waits for the fonts of the first snapshot (3 s at most) and preloads the images of the next slide (failed loads are
+  not cached). `publika-scena` counts reconnect epochs: no animation right after a reconnect or a late-opened window; it records every
+  snapshot as "previous" (PRIJAVA and KRAJ too, through an effect), so → from PRIJAVA to the first slide plays group 0.
+  Editor: a PLATNO slide shows the preview with steps, the form edits only notes and the theme (radio).
+  **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (`slajdUCmd` and the form do it; omitting
+  it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
+  phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
   `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the

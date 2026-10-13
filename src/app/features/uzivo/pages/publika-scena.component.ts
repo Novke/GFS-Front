@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, linkedSignal } from '@angular/core';
+import { StanjePrelaza, animacijaPrelaza } from '../data-access/platno-koraci';
 import { ServerskiSat } from '../data-access/sat';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
@@ -7,6 +8,7 @@ import { PrijavaEkranComponent } from '../ui/prijava-ekran.component';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { KodTraka, SlajdPrikazComponent, TajmerUlaz } from '../ui/slajd-prikaz.component';
+import { vazecaTema } from '../ui/teme';
 
 /** `<host><base>` bez protokola i kose crte na kraju (za traku "host/uzivo · kod"). */
 export function hostAplikacije(base: string = document.baseURI): string {
@@ -19,6 +21,9 @@ export function hostAplikacije(base: string = document.baseURI): string {
  * "trenutni" prikaz u konzoli, pa nastavnik vidi tačno ono što vidi sala. Rezultat i rang-lista (i postolje) su javne
  * projekcije sa servera (`javniRezultat`, `javnaRangLista`: isto što telefoni dobijaju u `JavnoStanje`, bez sakrivenih
  * tekstova, tačnosti i poena trenutne runde pre `C`); nastavnički `rezultat` i `rangLista` se ovde nikad ne prikazuju.
+ * Animacija PLATNO slajda (`animiraj`, samo prozor publike): scena pamti prethodni snimak i pita `animacijaPrelaza`;
+ * prvi snimak (kasno otvoren prozor, ponovo učitana stranica), skok i korak nazad crtaju krajnje stanje bez animacije.
+ * Prethodni snimak se pamti za svaki prikaz (i prijavu i kraj), ne samo dok je na ekranu slajd.
  */
 @Component({
   selector: 'app-publika-scena',
@@ -35,7 +40,8 @@ export function hostAplikacije(base: string = document.baseURI): string {
         @if (s.trenutniSlajd; as sl) {
           <app-slajd-prikaz [slajd]="sl" [korak]="s.korak" [postepeno]="sl.postepeno" [faza]="s.faza"
                             [rezultat]="rezultat()" [prikaziRezultat]="s.rezultatiPrikazani" [tacanPrikazan]="s.tacanPrikazan"
-                            [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" [kodTraka]="kodTraka()" />
+                            [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" [kodTraka]="kodTraka()"
+                            [tema]="tema()" [animacija]="animacija()" />
         } @else {
           <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
         }
@@ -87,6 +93,42 @@ export class PublikaScenaComponent {
   readonly sat = input<ServerskiSat | null>(null);
   /** Umanjen prikaz u konzoli: crn/beo ekran dobija natpis da se zna šta je na projektoru. */
   readonly umanjeno = input<boolean>(false);
+  /** Pušta animacije koraka PLATNO slajda (prozor publike); umanjeni prikaz u konzoli crta samo krajnje stanje. */
+  readonly animiraj = input<boolean>(false);
+  /**
+   * Broj prekida veze (raste kad veza padne). Snimak posle ponovnog povezivanja se ne poredi sa snimkom pre prekida:
+   * korak ili slajd napred tokom prekida crta se kao krajnje stanje, bez animacije (spec 5).
+   */
+  readonly epohaVeze = input<number>(0);
+
+  private readonly izvor = computed(() => ({ stanje: this.stanje(), epoha: this.epohaVeze() }));
+  /**
+   * Poslednji snimak (kao `StanjePrelaza`), epoha veze u kojoj je stigao i grupa za animaciju prelaza sa prethodnog
+   * snimka na njega (ključ je `verzija`). Promena same epohe (veza pala, snimak isti) ne menja zapamćeni snimak ni
+   * njegovu epohu, pa se prvi snimak posle ponovnog povezivanja ne poredi sa onim pre prekida.
+   */
+  private readonly prelaz = linkedSignal<
+    { stanje: NastavnickoStanje; epoha: number },
+    { stanje: StanjePrelaza; epoha: number; grupa: number | null }
+  >({
+    source: this.izvor,
+    computation: ({ stanje: s, epoha }, prethodni) => {
+      if (prethodni && prethodni.source.stanje === s) {
+        return { ...prethodni.value, grupa: null };
+      }
+      const sada: StanjePrelaza = {
+        verzija: s.verzija, prikaz: s.prikaz, indeks: s.indeks, slajdId: s.trenutniSlajd?.id ?? null,
+        tip: s.trenutniSlajd?.tip ?? null, korak: s.korak,
+      };
+      const pre = prethodni && prethodni.value.epoha === epoha ? prethodni.value.stanje : null;
+      return { stanje: sada, epoha, grupa: animacijaPrelaza(pre, sada) };
+    },
+  });
+  protected readonly animacija = computed(() => {
+    const p = this.prelaz();
+    return this.animiraj() && p.grupa !== null ? { kljuc: p.stanje.verzija, grupa: p.grupa } : null;
+  });
+  protected readonly tema = computed(() => vazecaTema(this.stanje().tema));
 
   protected readonly host = computed(() => hostAplikacije());
   protected readonly kod = computed(() => kodSaRazmakom(this.stanje().izvodjenje.kod));
@@ -102,4 +144,13 @@ export class PublikaScenaComponent {
     const sat = this.sat();
     return s.faza === 'OTVORENO' && s.runda && sat ? { rokMs: s.runda.rokMs, preostaloMs: s.runda.preostaloMs, sat } : null;
   });
+
+  constructor() {
+    // `prelaz` je lenj (`linkedSignal`), a šablon ga čita samo u grani SLAJD: bez ovog čitanja snimak prijave ili kraja
+    // nikad ne bi postao "prethodni", pa → sa prijave na prvi slajd ne bi pustio grupu 0. Efekat ga čita pri svakom
+    // novom snimku ili epohi, bez obzira na prikaz.
+    effect(() => {
+      this.prelaz();
+    });
+  }
 }

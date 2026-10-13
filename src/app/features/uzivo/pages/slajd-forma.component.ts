@@ -47,6 +47,8 @@ const nn = { nonNullable: true } as const;
         </mat-form-field>
         <app-slika-polje [slikaId]="forma.controls.slikaId.value" oznaka="Slika na slajdu" (promena)="postaviSliku($event)" />
         <mat-checkbox formControlName="postepeno">Otkrivaj stavke liste jednu po jednu (tasterom →)</mat-checkbox>
+      } @else if (tip === 'PLATNO') {
+        <p class="uz-ed-napomena">Slojevi i animacije ovog slajda se za sada ne uređuju ovde; menjaju se beleške.</p>
       } @else {
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
       }
@@ -75,11 +77,14 @@ export class SlajdFormaComponent implements OnInit {
 
   protected forma!: SlajdForma;
   protected tip: TipSlajda = 'INFO';
+  /** Dokument platna se ne menja formom: vraća se neizmenjen (izmena beleški ne sme da obriše slojeve). */
+  private platno: SlajdCmd['platno'] = null;
   protected readonly greske = signal<string[]>([]);
 
   ngOnInit(): void {
     const cmd = slajdUCmd(this.slajd());
     this.tip = cmd.tip;
+    this.platno = cmd.platno;
     this.forma = new FormGroup({
       naslov: new FormControl(cmd.naslov ?? '', nn),
       sadrzaj: new FormControl(cmd.sadrzaj ?? '', nn),
@@ -110,6 +115,7 @@ export class SlajdFormaComponent implements OnInit {
       beleske: v.beleske || null,
       postepeno: v.postepeno,
       pitanje: this.tip === 'PITANJE' ? pitanjeIzForme(this.forma.controls.pitanje) : null,
+      platno: this.platno,
     };
   }
 }

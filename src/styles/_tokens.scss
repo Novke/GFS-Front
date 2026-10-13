@@ -122,6 +122,13 @@
   @include noc;
 }
 
+// `.rezim-noc` forsira noćne tokene za podstablo: INFO/PITANJE slajd sa tamnom temom prezentacije (TAMNA, PONOC) na
+// uvek dnevnom projektoru, da pločice, rezultati i podnožje ostanu čitljivi na tamnoj pozadini. Material komponente se
+// na slajdu ne koriste, pa se --mat-sys-* ovde ne ponavljaju (za razliku od `.rezim-dan` u _theme.scss).
+.rezim-noc {
+  @include noc;
+}
+
 // Bez data-mode (JS isključen ili pre inline skripte): prati sistem.
 @media (prefers-color-scheme: dark) {
   :root:not([data-mode]) {

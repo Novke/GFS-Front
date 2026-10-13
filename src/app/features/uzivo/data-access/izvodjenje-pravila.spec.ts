@@ -1,4 +1,4 @@
-import { infoSlajd, naPitanju, pitanjeSlajd, stanje } from './izvodjenje-podaci.testing';
+import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from './izvodjenje-podaci.testing';
 import {
   datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, mozePregled, odgovorili, opisVeze,
   oznakaDalje, oznakaTajmera,
@@ -134,6 +134,15 @@ describe('oznake', () => {
     expect(oznakaDalje(naPitanju('ZATVORENO'))).toBe('Sledeći slajd');
     expect(oznakaDalje(naPitanju('ZATVORENO', { indeks: 2 }))).toBe('Na kraj');
     expect(oznakaDalje(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), korak: 0, brojStavki: 2 }))).toBe('Sledeća stavka');
+  });
+
+  it('dalje na PLATNO slajdu: koraci, pa sledeći slajd', () => {
+    const naPlatnu = (korak: number, indeks = 0) =>
+      stanje({ prikaz: 'SLAJD', indeks, trenutniSlajd: platnoSlajd(), korak, brojStavki: 2 });
+    expect(oznakaDalje(naPlatnu(0))).toBe('Sledeći korak');
+    expect(oznakaDalje(naPlatnu(1))).toBe('Sledeći korak');
+    expect(oznakaDalje(naPlatnu(2))).toBe('Sledeći slajd');
+    expect(oznakaDalje(naPlatnu(2, 2))).toBe('Na kraj');
   });
 
   it('tajmer', () => {

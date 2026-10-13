@@ -82,7 +82,7 @@ export class NovaPrezentacijaDialog {
     }
     this.salje.set(true);
     this.greska.set(null);
-    this.api.kreiraj({ predmetId, naziv: naziv.trim(), opis: opis.trim() || null }).subscribe({
+    this.api.kreiraj({ predmetId, naziv: naziv.trim(), opis: opis.trim() || null, tema: null }).subscribe({
       next: p => this.ref.close(p),
       error: e => {
         this.salje.set(false);

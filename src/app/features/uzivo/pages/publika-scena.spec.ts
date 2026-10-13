@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { naPitanju, pitanjeSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
+import { By } from '@angular/platform-browser';
+import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
+import { animacija, platno } from '../data-access/platno-podaci.testing';
 import { NastavnickoStanje, Rezultat } from '../data-access/uzivo.models';
+import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { PublikaScenaComponent } from './publika-scena.component';
 
 async function prikazi(s: NastavnickoStanje) {
@@ -88,5 +91,164 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
     const postolje = tekst(el.querySelector('app-postolje'));
     expect(postolje).toContain('Ana');
     expect(postolje).not.toContain('Nastavnički');
+  });
+});
+
+/**
+ * Animacija prelaza (Review Focus 2): scena pamti prethodni snimak i pita `animacijaPrelaza`; ključ je `verzija`.
+ * Prvi snimak (kasno otvoren prozor, ponovo učitana stranica) nikad ne animira; umanjeni prikaz konzole (`animiraj`
+ * false) nikad ne animira.
+ */
+describe('PublikaScenaComponent (animacija prelaza i tema)', () => {
+  let animate: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise(() => undefined) }));
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+  });
+
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).animate;
+  });
+
+  const naPlatnu = (korak: number, verzija: number, izmene: Partial<NastavnickoStanje> = {}) => stanje({
+    prikaz: 'SLAJD', indeks: 0, trenutniSlajd: platnoSlajd(), korak, brojStavki: 2, verzija, ...izmene,
+  });
+
+  async function scena(prvi: NastavnickoStanje, animiraj: boolean) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', prvi);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('animiraj', animiraj);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const slajd = () => fixture.debugElement.query(By.directive(SlajdPrikazComponent))?.componentInstance as SlajdPrikazComponent | undefined;
+    const posalji = async (s: NastavnickoStanje) => {
+      fixture.componentRef.setInput('stanje', s);
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+    return { fixture, slajd, posalji };
+  }
+
+  it('korak 0 -> 1 na istom slajdu (verzija 5 -> 6): animacija {kljuc: 6, grupa: 1}; prvi snimak null', async () => {
+    const { slajd, posalji } = await scena(naPlatnu(0, 5), true);
+    expect(slajd()!.animacija()).toBeNull();
+
+    await posalji(naPlatnu(1, 6));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 6, grupa: 1 });
+    expect(animate).toHaveBeenCalled();
+
+    // sledeći snimak bez promene koraka (npr. prijava učesnika): bez nove animacije
+    await posalji(naPlatnu(1, 7));
+    expect(slajd()!.animacija()).toBeNull();
+  });
+
+  it('ponovno povezivanje (nova epoha veze): korak koji se desio tokom prekida se ne animira', async () => {
+    const { fixture, slajd, posalji } = await scena(naPlatnu(0, 5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(slajd()!.animacija()).toBeNull();
+
+    await posalji(naPlatnu(1, 6));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+
+    // posle ponovnog povezivanja sledeći korak se opet animira
+    await posalji(naPlatnu(2, 7));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 7, grupa: 2 });
+  });
+
+  it('epoha i snimak stignu zajedno (isti ciklus): bez animacije', async () => {
+    const { fixture, slajd } = await scena(naPlatnu(0, 5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.componentRef.setInput('stanje', naPlatnu(1, 6));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('animiraj false (umanjen prikaz u konzoli): animacija je uvek null', async () => {
+    const { slajd, posalji } = await scena(naPlatnu(0, 5), false);
+    await posalji(naPlatnu(1, 6));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('kasno otvoren prozor usred koraka: crta se krajnje stanje koraka, bez animate', async () => {
+    const { fixture, slajd } = await scena(naPlatnu(2, 9), true);
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+    const el = fixture.nativeElement as HTMLElement;
+    // posle koraka 2 oblik je izašao (IZLAZ), slika je ušla u koraku 1
+    expect(el.querySelector<HTMLElement>('.uz-pl-sloj[data-sloj="oblik"]')!.style.visibility).toBe('hidden');
+    expect(el.querySelector<HTMLElement>('.uz-pl-sloj[data-sloj="slika"]')!.style.visibility).toBe('');
+  });
+
+  it('skok na slajd usred koraka (preskočen slajd): bez animacije', async () => {
+    const { slajd, posalji } = await scena(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), verzija: 3 }), true);
+    await posalji(naPlatnu(0, 4, { indeks: 2 }));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Prethodni snimak se pamti za svaki prikaz, ne samo dok je na ekranu slajd: snimak prijave (ili kraja) mora da
+   * postane "prethodni", inače se prvi slajd poredi sa svežim prozorom ili sa slajdom od pre prijave.
+   */
+  const saGrupom0 = (id = 30) => platnoSlajd({
+    id, platno: { ...platno(), animacije: [animacija('a0', 'tabela', { okidac: 'SA_PRETHODNIM' }), ...platno().animacije] },
+  });
+  const prijava = (verzija: number) => stanje({ prikaz: 'PRIJAVA', indeks: -1, trenutniSlajd: null, verzija });
+  const kraj = (verzija: number) => stanje({ prikaz: 'KRAJ', indeks: 3, trenutniSlajd: null, verzija });
+  const prviSlajd = (verzija: number, korak = 0) =>
+    stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: saGrupom0(), korak, brojStavki: 2, verzija });
+
+  it('PRIJAVA (v5) -> prvi slajd korak 0 (v6): pušta grupu 0', async () => {
+    const { slajd, posalji } = await scena(prijava(5), true);
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 6, grupa: 0 });
+    expect(animate).toHaveBeenCalledTimes(1);
+  });
+
+  it('slajd 1 korak 2 -> Home (PRIJAVA) -> prvi slajd korak 0: pušta grupu 0 (ne poredi sa korakom pre prijave)', async () => {
+    const { slajd, posalji } = await scena(prviSlajd(4, 2), true);
+    await posalji(prijava(5));
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toEqual({ kljuc: 6, grupa: 0 });
+  });
+
+  it('PRIJAVA kao prvi snimak, pa prekid veze: prvi slajd posle ponovnog povezivanja se ne animira', async () => {
+    const { fixture, slajd, posalji } = await scena(prijava(5), true);
+    fixture.componentRef.setInput('epohaVeze', 1);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await posalji(prviSlajd(6));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('KRAJ -> slajd: nikad animacija (ni sledeći slajd posle skoka sa kraja, ni nazad na poslednji)', async () => {
+    const { slajd, posalji } = await scena(prviSlajd(5), true);
+    await posalji(kraj(6));
+    // skok sa kraja na drugi slajd: bez kraja kao "prethodnog" ovo bi izgledalo kao korak napred sa slajda 1
+    await posalji(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: saGrupom0(31), korak: 0, brojStavki: 2, verzija: 7 }));
+    expect(slajd()!.animacija()).toBeNull();
+
+    await posalji(kraj(8));
+    await posalji(stanje({ prikaz: 'SLAJD', indeks: 2, trenutniSlajd: saGrupom0(32), korak: 2, brojStavki: 2, verzija: 9 }));
+    expect(slajd()!.animacija()).toBeNull();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
+  it('tema prezentacije ide u slajd; snimak bez teme (stari server) je NACRT', async () => {
+    const { slajd, posalji } = await scena(naPitanju('CEKA', { tema: 'PONOC' }), false);
+    expect(slajd()!.tema()).toBe('PONOC');
+    const bezTeme = naPitanju('CEKA', { verzija: 2 }) as Partial<NastavnickoStanje>;
+    delete bezTeme.tema;
+    await posalji(bezTeme as NastavnickoStanje);
+    expect(slajd()!.tema()).toBe('NACRT');
   });
 });

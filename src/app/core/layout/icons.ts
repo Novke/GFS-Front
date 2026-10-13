@@ -17,7 +17,7 @@ export const IKONE = [
   'slideshow', 'arrow_downward', 'arrow_upward', 'brightness_2', 'brightness_7', 'cancel', 'check_box', 'drag_indicator',
   'hide_image', 'image', 'keyboard', 'last_page', 'leaderboard', 'linear_scale', 'lock', 'lock_open', 'pause',
   'person_remove', 'pin', 'play_arrow', 'qr_code', 'quiz', 'radio_button_checked', 'remove', 'replay', 'rule', 'sensors',
-  'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer',
+  'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer', 'layers',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

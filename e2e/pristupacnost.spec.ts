@@ -7,13 +7,19 @@ import { expect, test } from './fixture';
 const TOKEN = 'e2eTokenZaUpis_0123456789abcdefg';
 
 /** Stranice iz brief-a i element koji znači da je sadržaj učitan (ne skeleton). */
-const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['locator']> }[] = [
+const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['locator']>; pripremi?: (page: Page) => Promise<void> }[] = [
   { putanja: '', spremno: p => p.getByRole('heading', { name: 'Čeka na tebe' }) },
   { putanja: 'predavanja', spremno: p => p.getByRole('region', { name: 'Lista predavanja' }).locator('tbody tr').first() },
   { putanja: 'predavanja/1', spremno: p => p.locator('app-studentska-plocica').first() },
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
+  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; pregled je uvek dnevnih boja)
+  {
+    putanja: 'prezentacije/5',
+    spremno: p => p.locator('.uz-ed-platno [data-sloj="naslov"]'),
+    pripremi: async p => { await p.getByRole('button', { name: /^2\s/ }).click(); },
+  },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
 ];
 
@@ -28,6 +34,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       test(`/${s.putanja}: bez serious/critical kršenja`, async ({ page }) => {
         await page.goto(s.putanja || './');
         await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+        await s.pripremi?.(page);
         await expect(s.spremno(page)).toBeVisible();
         await page.waitForLoadState('networkidle');
 

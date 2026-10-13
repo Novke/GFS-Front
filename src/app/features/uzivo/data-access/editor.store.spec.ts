@@ -7,19 +7,19 @@ import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 function slajd(id: number, rb: number, naslov = `Slajd ${id}`): SlajdDetails {
-  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null };
+  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
 }
 
 function prezentacija(slajdovi: SlajdDetails[]): PrezentacijaDetails {
   return {
     id: 1, naziv: 'Statika', opis: null, predmet: { id: 7, naziv: 'Mehanika' }, brojSlajdova: slajdovi.length,
-    brojPitanja: 0, izmenjeno: '2026-10-07T10:00:00', takmicenje: false, telefonPrikaz: 'DUGMAD',
+    brojPitanja: 0, izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD',
     detaljiDozvoljeni: true, brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi,
   };
 }
 
 function info(naslov: string): SlajdCmd {
-  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null };
+  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: null };
 }
 
 describe('EditorStore', () => {
@@ -129,7 +129,7 @@ describe('EditorStore', () => {
   it('odgovor servera zamenjuje lokalni slajd (novi id-jevi opcija)', saLaznimSatom(async () => {
     ucitaj();
     const cmd: SlajdCmd = {
-      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
+      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, platno: null,
       pitanje: {
         tip: 'JEDAN_TACAN', tekst: 'Pitanje?', slikaId: null, vremeSekunde: null,
         opcije: [{ tekst: 'a', tacna: true }, { tekst: 'b', tacna: false }], brojTacno: null, brojOdstupanje: null,
@@ -163,7 +163,7 @@ describe('EditorStore', () => {
     expect(nacrt.pitanje?.opcije.map(op => [op.tekst, op.tacna])).toEqual([['Tačno', true], ['Netačno', false]]);
 
     const cmd: SlajdCmd = {
-      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
+      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, platno: null,
       pitanje: { ...nacrtPitanje(nacrt), tekst: 'Zemlja je okrugla.' },
     };
     store.izmeniSlajd(nacrt.id, cmd);

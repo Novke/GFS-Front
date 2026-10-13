@@ -1,4 +1,7 @@
-export type TipSlajda = 'INFO' | 'PITANJE';
+import type { Platno, Tema } from './platno.models';
+
+export type { Tema } from './platno.models';
+export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO';
 export type TipPitanja = 'JEDAN_TACAN' | 'VISE_TACNIH' | 'ANKETA' | 'TACNO_NETACNO' | 'KRATAK_TEKST' | 'BROJ' | 'SKALA';
 export type TelefonPrikaz = 'DUGMAD' | 'PITANJE';
 export type OdstupanjeTip = 'APSOLUTNO' | 'PROCENAT';
@@ -23,23 +26,23 @@ export interface PitanjeDetails {
 }
 export interface SlajdDetails {
   id: number; rb: number; tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slika: MedijInfo | null;
-  beleske: string | null; postepeno: boolean; pitanje: PitanjeDetails | null;
+  beleske: string | null; postepeno: boolean; pitanje: PitanjeDetails | null; platno: Platno | null;
 }
 export interface PrezentacijaInfo {
   id: number; naziv: string; opis: string | null; predmet: PredmetKratko; brojSlajdova: number; brojPitanja: number;
-  izmenjeno: string; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
+  izmenjeno: string; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
   brojIzvodjenja: number; aktivnoIzvodjenjeId: number | null;
 }
 export interface PrezentacijaDetails extends PrezentacijaInfo { slajdovi: SlajdDetails[]; }
-export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; }
-export interface UpdatePrezentacijaCmd { naziv: string; opis: string | null; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean; }
+export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; }
+export interface UpdatePrezentacijaCmd { naziv: string; opis: string | null; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean; }
 export interface OpcijaCmd { tekst: string; tacna: boolean; }
 export interface PitanjeCmd {
   tip: TipPitanja; tekst: string; slikaId: string | null; vremeSekunde: number | null; opcije: OpcijaCmd[];
   brojTacno: number | null; brojOdstupanje: number | null; odstupanjeTip: OdstupanjeTip | null; jedinica: string | null;
   tekstPrikaz: TekstPrikaz | null; prihvatljiviOdgovori: string[]; skalaMinOznaka: string | null; skalaMaxOznaka: string | null;
 }
-export interface SlajdCmd { tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean; pitanje: PitanjeCmd | null; }
+export interface SlajdCmd { tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean; pitanje: PitanjeCmd | null; platno: Platno | null; }
 export interface PredavanjeZaPokretanje { id: number; rb: number; datum: string; tema: string | null; zavrseno: boolean | null; grupa: GrupaKratko | null; }
 export interface PokreniCmd { cuvanje: boolean; grupaId: number | null; predavanjeId: number | null; }
 export interface PredavanjeKratko { id: number; rb: number; datum: string; tema: string | null; }
@@ -71,7 +74,7 @@ export interface NastavnickoStanje {
   indeks: number; brojSlajdova: number; trenutniSlajd: SlajdDetails | null; sledeciSlajd: SlajdDetails | null;
   faza: Faza | null; runda: RundaInfo | null; rezultatiPrikazani: boolean; tacanPrikazan: boolean;
   rangListaPrikazana: boolean; ekran: Ekran; qrPrikazan: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
-  takmicenje: boolean; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
+  takmicenje: boolean; tema: Tema; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
   ucesnici: UcesnikStanje[]; rangLista: RangStavka[]; javniRezultat: Rezultat | null; javnaRangLista: RangStavka[] | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
