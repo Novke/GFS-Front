@@ -8,7 +8,7 @@ import { pretvoriAnimacije, pasusiSaAnimacijom, type MapaMeta, type MetaPasusa }
 import { pretvoriBeleske } from './beleske';
 import { pretvoriCrtez } from './crtez';
 import { formuleCelija, pretvoriFormulu } from './formula';
-import { preslikajMedije, proveriKaoServer, uklopiUGranice } from './granice';
+import { GRANICE, preslikajMedije, proveriKaoServer, uklopiUGranice } from './granice';
 import { GreskaUvoza } from './ime-fajla';
 import { praznaStatistika, type GreskaSlajda, type Statistika, type Upozorenje } from './izvestaj';
 import { napraviKontekst, transformacija, type ZajednickoUvoza } from './kontekst';
@@ -168,6 +168,7 @@ class GraditeljSlajda {
    * van slajda se preskače uz jedno upozorenje po objektu.
    */
   private element(el: Element, kg: KutijaGrupe, prefiks: Prefiks): void {
+    if (this.preko) return;
     if (el.namespaceURI !== NS.p && el.namespaceURI !== NS.mc) return;
     if (tacno(cNvPr(el)?.getAttribute('hidden'))) return;
     const pre = this.slojevi.length;
@@ -233,10 +234,20 @@ class GraditeljSlajda {
   }
 
   /**
+   * Slajd već ima više slojeva nego što server prima: dalji hod (i pretvaranje) se preskače, a `uklopiUGranice` od
+   * `GRANICE.slojeva + 1` slojeva pravi grešku slajda (grupa od hiljada oblika ne pravi hiljade slojeva).
+   */
+  private get preko(): boolean {
+    return this.slojevi.length > GRANICE.slojeva;
+  }
+
+  /**
    * Dodaje sloj (sa konačnim id-jem) kad je u granicama servera (x/y u -960..1920, širina/visina u (0, 2880] posle
-   * zaokruživanja kao na serveru); inače ga preskače (upozorenje daje `element`). Vraća konačan id ili `null`.
+   * zaokruživanja kao na serveru); inače ga preskače (upozorenje daje `element`). Vraća konačan id ili `null`; posle
+   * `GRANICE.slojeva + 1` slojeva više ne dodaje ništa (slajd je ionako greška).
    */
   private dodaj(s: Sloj): string | null {
+    if (this.preko) return null;
     const z = zaokruziKaoServer;
     const uOpsegu = (v: number) => z(v) >= MIN_POLOZAJ && z(v) <= MAX_POLOZAJ;
     const mera = (v: number) => z(v) > 0 && z(v) <= MAX_MERA;

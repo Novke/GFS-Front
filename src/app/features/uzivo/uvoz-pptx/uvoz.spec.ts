@@ -455,6 +455,48 @@ describe('pretvoriPptx: neispravni delovi (Review Focus 1)', () => {
     expect(r.upozorenja.filter((u) => u.slajd === 1)).toEqual([]);
   });
 
+  describe('neprijateljski mali fajl: granice se proveravaju tokom gradnje', () => {
+    const elipsa = (id: number) => oblik.geometrija(id, 'ellipse', 0, 0, 127000, 127000, '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>');
+    const grupaOd = (n: number) => oblik.grupa(10, [0, 0], [1270000, 1270000], [0, 0], [1270000, 1270000],
+      Array.from({ length: n }, (_, i) => elipsa(100 + i)).join(''));
+    const efektiNaGrupu = (n: number) => timing([fade(10), ...Array.from({ length: n - 1 }, () => fade(10, 'withEffect'))]);
+    // Granica vremena meri ceo uvoz, sa parsiranjem XML-a u jsdom-u (~1,5 s za ovaj slajd); pre ispravke je bilo 30-36 s.
+    // Stroga granica (< 2 s, bez parsiranja) je u animacije.spec.ts.
+    const GRANICA_MS = 10_000;
+
+    it('grupa od 300 oblika x 2000 efekata -> greška tog slajda (više od 400 animacija), ostali slajdovi se uvoze, bez eksplozije vremena', async () => {
+      const bajtovi = napraviPptx({ slajdovi: [{ spTree: grupaOd(300), timing: efektiNaGrupu(2000) }, { spTree: okvir(5, 0, 0) }] });
+      const pocetak = performance.now();
+      const r = await pretvoriPptx(bajtovi, 'a.pptx');
+      expect(performance.now() - pocetak).toBeLessThan(GRANICA_MS);
+      expect(r.greske).toEqual([{ slajd: 1, poruka: 'Slajd nije pročitan: Slajd ima više od 400 animacija.' }]);
+      expect(r.slajdovi.map((s) => s.indeks)).toEqual([2]);
+      expect(r.upozorenja.filter((u) => u.slajd === 1)).toEqual([]);
+    }, 60_000);
+
+    it('grupa od 5000 oblika x 2000 efekata -> greška tog slajda (više od 300 objekata), bez eksplozije vremena', async () => {
+      const bajtovi = napraviPptx({ slajdovi: [{ spTree: grupaOd(5000), timing: efektiNaGrupu(2000) }, { spTree: okvir(5, 0, 0) }] });
+      const pocetak = performance.now();
+      const r = await pretvoriPptx(bajtovi, 'a.pptx');
+      expect(performance.now() - pocetak).toBeLessThan(GRANICA_MS);
+      expect(r.greske).toEqual([{ slajd: 1, poruka: 'Slajd nije pročitan: Slajd ima više od 300 objekata.' }]);
+      expect(r.slajdovi.map((s) => s.indeks)).toEqual([2]);
+    }, 60_000);
+
+    it('posle 301. sloja hod staje: formula iza granice se ne pretvara (ne troši isečke gen: sledećeg slajda)', async () => {
+      const formula = {
+        spTree: formulaAc(5, mp(mr('x')) + mp(mr('y'))), veze: [SLIKA_FORMULE],
+        timing: timing([fade(5, 'clickEffect', { pasus: 0 }), fade(5, 'clickEffect', { pasus: 1 })]),
+      };
+      const r = await pretvoriPptx(napraviPptx({
+        slajdovi: [{ ...formula, spTree: grupaOd(301) + formula.spTree }, formula],
+        delovi: { 'ppt/media/formula1.png': slikaFormule([[2, 8], [16, 22]]) },
+      }), 'a.pptx');
+      expect(r.greske).toEqual([{ slajd: 1, poruka: 'Slajd nije pročitan: Slajd ima više od 300 objekata.' }]);
+      expect(r.slajdovi[0].mediji).toEqual(['gen:1', 'gen:2']);
+    });
+  });
+
   it('objekat van slajda ili širi od 2880 se preskače (OBJEKAT_PRESKOCEN), njegova slika se ne šalje', async () => {
     const r = await jedan({
       spTree: okvir(5, 30000000, 0) + okvir(6, 0, 0, 'Širok', 40000000, 635000)

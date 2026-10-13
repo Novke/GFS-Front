@@ -12,6 +12,7 @@
 // Pretpostavka (proverava se vizuelnim poređenjem u F19): IZLAZ BRISANJE i PODELI na platnu su obrnut ulaz
 // (`kadroviAnimacije`), pa izlaz sa istim podtipom/filterom kao ulaz nestaje obrnutim redom od pojavljivanja.
 import type { Animacija, Efekat, Okidac, Smer, VrstaAnimacije } from '../data-access/platno.models';
+import { GRANICE } from './granice';
 import type { KodUpozorenja } from './izvestaj';
 import { NS, brojAtr, dete } from './xml';
 
@@ -107,18 +108,40 @@ function zapisanoKasnjenje(c: Element): number | null {
   return Number.isFinite(n) ? Math.max(0, n) : null;
 }
 
+/** Efekti jedne liste dece (`p:childTnLst`): indeks svakog efekta i prvi indeks >= 1 koji nije "sa prethodnim". */
+interface Braca { indeks: Map<Element, number>; prviNeSa: number; }
+/** Keš po listi dece: bez njega se lista gradi i pretražuje za svaki efekat (kvadratno; neprijateljski fajl visi). */
+type KesBrace = Map<Element, Braca>;
+
+function bracaEfekta(lista: Element, kes: KesBrace): Braca {
+  let b = kes.get(lista);
+  if (b) return b;
+  const indeks = new Map<Element, number>();
+  let prviNeSa = Number.POSITIVE_INFINITY;
+  for (const p of Array.from(lista.children)) {
+    const x = dete(p, NS.p, 'cTn');
+    if (!x?.hasAttribute('presetClass')) continue;
+    const i = indeks.size;
+    indeks.set(x, i);
+    if (i >= 1 && prviNeSa === Number.POSITIVE_INFINITY && x.getAttribute('nodeType') !== 'withEffect') prviNeSa = i;
+  }
+  b = { indeks, prviNeSa };
+  kes.set(lista, b);
+  return b;
+}
+
 /**
  * Početak efekta od klika kako ga je PowerPoint zapisao: zbir kašnjenja svih `p:cTn` predaka (i samog efekta) ispod
  * spoljnog `p:par` grupe klika. PowerPoint stavlja svaki efekat "posle prethodnog" na čelo novog unutrašnjeg `p:par`-a
  * sa izračunatim kašnjenjem, a "sa prethodnim" u `p:par` svog čela; efekat posle/klik koji nije prvi u svom `p:par`-u
  * (ručno pisan XML) zapis ne opisuje, pa je tada (i za nebrojčano kašnjenje) rezultat null.
  */
-function zapisaniPocetak(c: Element, niz: Element): number | null {
+function zapisaniPocetak(c: Element, niz: Element, kes: KesBrace): number | null {
   const lista = c.parentElement?.parentElement;
   if (!lista) return null;
-  const braca = Array.from(lista.children).map((p) => dete(p, NS.p, 'cTn')).filter((x): x is Element => !!x?.hasAttribute('presetClass'));
-  const k = braca.indexOf(c);
-  for (let i = 1; i <= k; i++) if (braca[i].getAttribute('nodeType') !== 'withEffect') return null;
+  const braca = bracaEfekta(lista, kes);
+  const k = braca.indeks.get(c) ?? -1;
+  if (braca.prviNeSa <= k) return null;
   const preci: Element[] = [];
   let x: Element | null = c;
   for (; x && x !== niz; x = x.parentElement) if (x.localName === 'cTn' && x.namespaceURI === NS.p) preci.push(x);
@@ -152,7 +175,7 @@ function metaEfekta(efekat: Element): MetaEfekta | null {
   return { spid, pasusi, deo: pasusi === null && tgt.children.length > 0 };
 }
 
-function procitaj(c: Element, niz: Element): EfekatPptx {
+function procitaj(c: Element, niz: Element, kes: KesBrace): EfekatPptx {
   const klasa = c.getAttribute('presetClass') ?? '';
   const preset = brojAtr(c, 'presetID', 0);
   const tip = c.getAttribute('nodeType');
@@ -179,7 +202,7 @@ function procitaj(c: Element, niz: Element): EfekatPptx {
     trajanje: pojavi ? 0 : trajanje,
     ukupno: pojavi ? 0 : ukupno * ponavljanje(c),
     ponavlja,
-    zapisaniPocetak: zapisaniPocetak(c, niz),
+    zapisaniPocetak: zapisaniPocetak(c, niz, kes),
   };
 }
 
@@ -254,6 +277,7 @@ function ciljevi(e: EfekatPptx, vrsta: VrstaAnimacije, mete: MapaMeta, spojeni: 
     return slojevi.map((slojId) => ({ slojId, pasus: null }));
   }
   const rez: Cilj[] = [];
+  const vec = new Set<string>();
   let uvezenih = 0;
   for (const i of meta.pasusi) {
     const mp = mete.pasus(meta.spid, i);
@@ -266,7 +290,11 @@ function ciljevi(e: EfekatPptx, vrsta: VrstaAnimacije, mete: MapaMeta, spojeni: 
       spojeni.add(kljuc);
     }
     const pasus = mp.spojeno ? null : mp.pasus;
-    if (!rez.some((c) => c.slojId === mp.slojId && c.pasus === pasus)) rez.push({ slojId: mp.slojId, pasus });
+    const kljuc = `${mp.slojId}|${pasus}`;
+    if (!vec.has(kljuc)) {
+      vec.add(kljuc);
+      rez.push({ slojId: mp.slojId, pasus });
+    }
   }
   if (uvezenih === 0) u.dodaj('ANIMACIJA_PRESKOCENA', 'Animacija cilja pasus koji nije uvezen i preskočena je.');
   return rez;
@@ -276,7 +304,9 @@ function ciljevi(e: EfekatPptx, vrsta: VrstaAnimacije, mete: MapaMeta, spojeni: 
  * Animacije slajda iz `p:timing`. Efekti `interactiveSeq` (okidač klikom na objekat) se preskaču uz jedno upozorenje.
  * Grupa klika PowerPointa počinje na `clickEffect`; ako se njen KLIK efekat preskoči, prvi zadržan efekat iste grupe
  * postaje KLIK, a bez njega slajd ima korak manje (`KLIK_IZGUBLJEN`). Kopije za više slojeva: prva nosi okidač, ostale
- * su SA_PRETHODNIM sa istim kašnjenjem. Granicu od 400 animacija proverava `uklopiUGranice` (F11).
+ * su SA_PRETHODNIM sa istim kašnjenjem. Granicu od 400 animacija proverava `uklopiUGranice` (F11); gradnja staje čim
+ * animacija ima više od granice (grupa od hiljada slojeva puta hiljade efekata bi inače pravila milione objekata), pa
+ * rezultat sa `GRANICE.animacija + 1` animacija postaje greška slajda sa istom porukom.
  */
 export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
                                   upozori: (kod: KodUpozorenja, poruka: string) => void): RezultatAnimacija {
@@ -284,7 +314,8 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
   if (nizovi(timing, 'interactiveSeq').some((n) => efektiNiza(n).length > 0)) {
     u.dodaj('ANIMACIJA_PRESKOCENA', 'Preskočene su animacije koje pokreće klik na objekat: okidač klikom na objekat nije podržan.');
   }
-  const efekti = nizovi(timing, 'mainSeq').flatMap((niz) => efektiNiza(niz).map((c) => procitaj(c, niz)));
+  const kes: KesBrace = new Map();
+  const efekti = nizovi(timing, 'mainSeq').flatMap((niz) => efektiNiza(niz).map((c) => procitaj(c, niz, kes)));
   const grupe: EfekatPptx[][] = [[]];
   for (const e of efekti) {
     if (e.okidac === 'clickEffect') grupe.push([e]); else grupe[grupe.length - 1].push(e);
@@ -292,7 +323,9 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
 
   const animacije: Animacija[] = [];
   const spojeni = new Set<string>();
-  grupe.forEach((grupa, gi) => {
+  const preko = () => animacije.length > GRANICE.animacija;
+  for (let gi = 0; gi < grupe.length && !preko(); gi++) {
+    const grupa = grupe[gi];
     // PowerPoint: okidanje prethodnog efekta i najkasniji kraj svih prethodnih (od klika).
     let okidanjePpt = 0;
     let krajPpt = 0;
@@ -301,7 +334,8 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
     let krajPl = 0;
     let prva = true;
     let trebaKlik = gi > 0;
-    grupa.forEach((e, i) => {
+    for (let i = 0; i < grupa.length && !preko(); i++) {
+      const e = grupa[i];
       const okidanje = i === 0 ? 0 : e.okidac === 'afterEffect' ? krajPpt : okidanjePpt;
       const pocetak = e.zapisaniPocetak ?? okidanje + e.kasnjenje;
       okidanjePpt = e.zapisaniPocetak === null ? okidanje : Math.max(0, pocetak - e.kasnjenje);
@@ -309,16 +343,17 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
 
       if (e.klasa !== 'entr' && e.klasa !== 'exit') {
         u.dodaj('ANIMACIJA_PRESKOCENA', PRESKOCENA_KLASA[e.klasa] ?? `Animacija vrste "${e.klasa}" nije podržana i preskočena je.`);
-        return;
+        continue;
       }
       const vrsta: VrstaAnimacije = e.klasa === 'entr' ? 'ULAZ' : 'IZLAZ';
       const cilj = ciljevi(e, vrsta, mete, spojeni, u);
-      if (cilj.length === 0) return;
+      if (cilj.length === 0) continue;
       const { efekat, smer } = preslikaj(e, u);
       if (e.iterira) u.dodaj('TEKST_PRIBLIZAN', 'Animacija po rečima ili slovima prikazuje ceo tekst odjednom.');
       if (e.ponavlja) u.dodaj('EFEKAT_PRIBLIZAN', 'Ponavljanje efekta se ne prenosi: efekat se pušta jednom.');
       const trajanjeMs = efekat === 'POJAVI' ? 0 : ogranici(e.trajanje);
-      cilj.forEach((c, j) => {
+      for (let j = 0; j < cilj.length && !preko(); j++) {
+        const c = cilj[j];
         const okidac: Okidac = j > 0 ? 'SA_PRETHODNIM' : trebaKlik ? 'KLIK' : e.okidac === 'afterEffect' ? 'POSLE_PRETHODNOG' : 'SA_PRETHODNIM';
         const okidanjeAn = prva ? 0 : okidac === 'POSLE_PRETHODNOG' ? krajPl : okidanjePl;
         const kasnjenjeMs = ogranici(pocetak - okidanjeAn);
@@ -329,12 +364,12 @@ export function pretvoriAnimacije(timing: Element | null, mete: MapaMeta,
         animacije.push({
           id: `a${animacije.length + 1}`, slojId: c.slojId, pasus: c.pasus, vrsta, efekat, smer, okidac, trajanjeMs, kasnjenjeMs,
         });
-      });
-    });
-    if (trebaKlik) {
+      }
+    }
+    if (trebaKlik && !preko()) {
       u.dodaj('KLIK_IZGUBLJEN', `Klik ${gi} pokreće samo animacije koje nisu uvezene: slajd ima korak manje nego u PowerPointu.`);
     }
-  });
+  }
   u.posalji(upozori);
   return {
     animacije,
