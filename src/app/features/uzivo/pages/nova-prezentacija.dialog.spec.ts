@@ -1,7 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { PRIHVACENI_FAJLOVI } from '../uvoz-pptx/ime-fajla';
@@ -16,7 +15,7 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     zatvori = vi.fn();
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(), provideNoopAnimations(),
+        provideHttpClient(),
         { provide: PrezentacijeApi, useValue: { kreiraj } },
         { provide: MAT_DIALOG_DATA, useValue: { predmeti: [{ id: 7, naziv: 'Statika' }], predmetId: 7 } },
         { provide: MatDialogRef, useValue: { close: zatvori } },
