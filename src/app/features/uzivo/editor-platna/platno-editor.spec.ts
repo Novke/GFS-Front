@@ -85,7 +85,9 @@ describe('PlatnoEditorComponent', () => {
     expect(o.getAttribute('tabindex')).toBe('0');
     expect(o.getAttribute('role')).toBe('group');
     expect(o.getAttribute('aria-label')).toBe('Platno slajda');
-    expect(el().querySelector('#' + o.getAttribute('aria-describedby'))!.textContent).toContain('Delete briše');
+    const opis = el().querySelector('#' + o.getAttribute('aria-describedby'))!.textContent;
+    expect(opis).toContain('Delete briše');
+    expect(opis).toContain('Ctrl+Z i Ctrl+Y rade i iz panela');
   });
 
   it('okvir platna prati režim editora (fokus prsten u tokenima režima), a samo platno je uvek dnevno', () => {
@@ -199,6 +201,61 @@ describe('PlatnoEditorComponent', () => {
       const e = taster(izbornik, 'z', { ctrlKey: true });
       expect(e.defaultPrevented).toBe(true);
       expect(store.platno()).toBe(pre);
+    });
+
+    // Zatvoren mat-select pušta Shift (+Ctrl/Meta) u typeahead: "Z" iz Ctrl+Shift+Z bi posle debounce-a (200 ms)
+    // izabrao "Zaobljeni pravougaonik". Koren zato undo/redo nad zatvorenim izbornikom obrađuje u capture fazi.
+    const sacekaj = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    async function nizNaIzborniku(izbornik: HTMLElement, mod: 'ctrlKey' | 'metaKey') {
+      const pre = store.platno();
+      store.pomeriIzabrane(5, 0);
+      await fixture.whenStable();
+      const posle = store.platno();
+      const dogadjaji = [
+        taster(izbornik, 'z', { [mod]: true }),
+        taster(izbornik, 'Z', { [mod]: true, shiftKey: true }),
+        taster(izbornik, 'z', { [mod]: true }),
+      ];
+      expect(dogadjaji.map((e) => e.defaultPrevented)).toEqual([true, true, true]);
+      await sacekaj(350);   // duže od typeahead debounce-a mat-select-a
+      await fixture.whenStable();
+      return { pre, posle };
+    }
+
+    it('zatvoren "Vrsta": Ctrl+Z, Ctrl+Shift+Z, Ctrl+Z ne puštaju "Z" u typeahead (oblik ostaje Elipsa)', async () => {
+      await izaberiOblik();
+      const izbornik = el().querySelector<HTMLElement>('app-svojstva-oblika mat-select')!;
+      const { pre } = await nizNaIzborniku(izbornik, 'ctrlKey');
+      expect(store.platno()).toBe(pre);
+      expect((oblikSloj() as { oblik: string }).oblik).toBe('ELIPSA');
+      expect([store.mozeNazad(), store.mozeNapred()]).toEqual([false, true]);
+    });
+
+    it('zatvoren "Vrsta" i Cmd (Meta)+Shift+Z: redo bez izbora opcije', async () => {
+      await izaberiOblik();
+      const izbornik = el().querySelector<HTMLElement>('app-svojstva-oblika mat-select')!;
+      const { posle } = await nizNaIzborniku(izbornik, 'metaKey');
+      taster(izbornik, 'Z', { metaKey: true, shiftKey: true });
+      await sacekaj(350);
+      await fixture.whenStable();
+      expect(store.platno()).toBe(posle);
+      expect((oblikSloj() as { oblik: string }).oblik).toBe('ELIPSA');
+      expect(store.mozeNapred()).toBe(false);
+    });
+
+    it('zatvoren "Crtica" (ivica postoji): isti put, crtica i dokument tačni', async () => {
+      const p = store.platno();
+      store.inicijalizuj({
+        ...p,
+        slojevi: p.slojevi.map((s) => (s.id === 'oblik' ? { ...s, ivica: { boja: '#000000', debljina: 1, crtica: 'PUNA' } } : s)),
+      } as typeof p);
+      await izaberiOblik();
+      const izbornici = el().querySelectorAll<HTMLElement>('app-svojstva-oblika mat-select');
+      const crtica = izbornici[izbornici.length - 1];
+      expect(crtica.getAttribute('aria-disabled')).toBe('false');
+      const { pre } = await nizNaIzborniku(crtica, 'ctrlKey');
+      expect(store.platno()).toBe(pre);
+      expect((oblikSloj() as { ivica: { crtica: string } }).ivica.crtica).toBe('PUNA');
     });
 
     it('Ctrl+Z u polju za unos panela ne menja dokument (polje zadržava svoje poništavanje)', async () => {

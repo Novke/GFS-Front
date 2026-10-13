@@ -233,8 +233,10 @@ over STOMP; teacher commands are REST.
   `'uzivo-cuvanje-pri-izlasku'`. Shortcuts (`tastatura-platna.ts`) work only while focus is on the canvas frame
   `.uz-ep-platno` (`role="group"`), never in inputs, tabs, menus or overlays; the exception is undo/redo (Ctrl+Z,
   Ctrl+Shift+Z, Ctrl+Y): the editor root (`app-platno-editor` host `keydown`) handles them anywhere in the editor (panels,
-  toolbar, after a colour or switch change) with the same `uPoljuZaUnos` filter plus a closed `mat-select` as the only
-  exception (`zatvorenIzbornik`), and the frame leaves them to the root (no double undo). Ctrl+S is handled before that
+  toolbar, after a colour or switch change) with the same `uPoljuZaUnos` filter, and the frame leaves them to the root (no double undo); the only
+  exception is a closed `mat-select` (`zatvorenIzbornik`): the root takes undo/redo there in the **capture** phase and
+  stops propagation, because a closed select sends Shift+letter (also with Ctrl/Meta) to its typeahead, so Ctrl+Shift+Z
+  would pick an option starting with "Z". Ctrl+S is handled before that
   check and still reaches the page; letters come from `key`, `[`/`]` from `code`. Inserting a layer focuses the frame. The
   keyboard path: select in the "Slojevi" panel, Shift+Tab to the frame, arrows; exact values in the "Svojstva" number
   fields. Row buttons of "Slojevi" keep fixed labels with `aria-pressed` and get the layer name through

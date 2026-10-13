@@ -47,7 +47,7 @@ export function komandaTastature(e: Taster): KomandaTastature | null {
 }
 
 /** Poništi ili ponovi (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y): jedine prečice koje rade i van okvira platna. */
-export function jePonistavanje(k: KomandaTastature): boolean {
+export function jePonistavanje(k: KomandaTastature): k is { tip: 'PONISTI' | 'PONOVI' } {
   return k.tip === 'PONISTI' || k.tip === 'PONOVI';
 }
 
@@ -62,8 +62,9 @@ export function uPoljuZaUnos(cilj: EventTarget | null): boolean {
 }
 
 /**
- * Zatvoren `mat-select` (dugme izbornika, `role="combobox"`): Ctrl+Z/Y mu ništa ne znače, pa ih koren editora sme da
- * obradi (posle izbora vrste ili crtice fokus ostaje na njemu). Otvoren izbornik i ostale kontrole zadržavaju svoje tastere.
+ * Zatvoren `mat-select` (dugme izbornika, `role="combobox"`): koren editora mu undo/redo oduzima u capture fazi (posle
+ * izbora vrste ili crtice fokus ostaje na njemu; Shift+Z bi inače otišlo u njegov typeahead). Otvoren izbornik i ostale
+ * kontrole zadržavaju svoje tastere.
  */
 export function zatvorenIzbornik(cilj: EventTarget | null): boolean {
   const el = cilj instanceof Element ? cilj : null;

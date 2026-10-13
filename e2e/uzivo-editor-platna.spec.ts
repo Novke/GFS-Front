@@ -219,6 +219,9 @@ test.describe('uživo: editor platna (4a)', () => {
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Tab');
     await expect(sirina).not.toBeFocused();
+    // nema vidljivog ishoda koji bi se čekao: pogrešno poništavanje dokumenta bi poslalo PUT tek posle debounce-a
+    // (800 ms), pa se odsustvo proverava posle 1,2 s (kao u testu istorije po instanci)
+    await page.waitForTimeout(1_200);
     expect(putovi(mock, id).length).toBe(broj);
     expect(saSenkom() ?? null).not.toBeNull();
   });

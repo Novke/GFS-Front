@@ -328,7 +328,7 @@ span.uz-ed-napomena {
 @container uz-ep (min-width: 760px) {
   .uz-ep-paneli .mat-mdc-tab-header {
     position: sticky;
-    top: 64px; /* kao platno: ispod lepljive gornje trake ljuske (56 px) */
+    top: 64px; /* kao platno: min-height lepljive gornje trake ljuske (56 px, top-bar.scss) + 8 px */
     z-index: 2;
     border-radius: var(--radius-sm);
     background: var(--surface);

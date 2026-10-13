@@ -3,7 +3,8 @@
 // pri promeni slajda, a ne nestaje kad nacrt dobije pravi id (odluka 8). Svaku zabeleženu izmenu sam predaje
 // `EditorStore.izmeniPlatno` (izlaz store-a), a otvorenu sesiju (gest F5, tekst F12) registruje za pražnjenje pre čuvanja.
 import {
-  ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input, viewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input,
+  viewChild,
 } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -54,7 +55,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
         </div>
         <p id="uz-ep-precice" class="cdk-visually-hidden">
           Strelice pomeraju izabrano (Shift: 10), Delete briše, Ctrl+Z poništava, Ctrl+Y ponavlja, Ctrl+D duplira,
-          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor.
+          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor. Ctrl+Z i Ctrl+Y rade i iz panela.
         </p>
         <p class="cdk-visually-hidden" aria-live="polite">{{ najava() }}</p>
       </div>
@@ -72,7 +73,8 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
      * Paneli desno od platna od editora širokog 760 px (prozor 1366 px sa bočnom navigacijom: editor 822 px, platno
      * 526 px); ispod praga idu ispod platna. Platno je lepljivo, a zaglavlje tabova takođe (globalni deo u
      * uzivo-editor.css): dok se stranica skroluje kroz dugačak panel, platno i tabovi ostaju na ekranu. 64 px = lepljiva
-     * gornja traka ljuske (56 px, top-bar.scss) + 8 px.
+     * gornja traka ljuske (njen min-height 56 px, top-bar.scss) + 8 px;
+     * ako se traka promeni, promeni i ovo (i zaglavlje tabova u uzivo-editor.css).
      */
     @container uz-ep (min-width: 760px) {
       .uz-ep-telo { grid-template-columns: minmax(0, 1fr) 280px; }
@@ -116,6 +118,11 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
 
   constructor() {
     afterNextRender(() => this.fokusPlatna.postavi(this.okvir().nativeElement));
+    // capture na hostu: zatvoren mat-select ne sme da vidi Ctrl/Cmd+Shift+Z (typeahead bi posle 200 ms izabrao opciju na "Z")
+    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    const uhvati = (e: KeyboardEvent) => this.izbornikPreSelecta(e);
+    host.addEventListener('keydown', uhvati, { capture: true });
+    inject(DestroyRef).onDestroy(() => host.removeEventListener('keydown', uhvati, { capture: true }));
   }
 
   ngOnInit(): void {
@@ -160,16 +167,34 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Poništi/ponovi na korenu editora: posle izmene u panelu (boja, prekidač, zatvoren izbornik) fokus je tamo, a ne na
-   * okviru. Isti filter kao okvir (polja za unos i kontrole sa sopstvenim tasterima zadržavaju svoje ponašanje); zatvoren
-   * `mat-select` je jedini izuzetak (Ctrl+Z/Y mu ništa ne znače). Okvir ove prečice ne obrađuje, pa nema duplog izvršavanja.
+   * Poništi/ponovi na korenu editora (bubble): posle izmene u panelu (boja, prekidač) fokus je tamo, a ne na okviru. Isti
+   * filter kao okvir (polja za unos i kontrole sa sopstvenim tasterima zadržavaju svoje ponašanje). Okvir ove prečice ne
+   * obrađuje, pa nema duplog izvršavanja; zatvoren izbornik obrađuje `izbornikPreSelecta` u capture fazi.
    */
   protected tastaturaKorena(e: KeyboardEvent): void {
     const k = komandaTastature(e);
     if (!k || !jePonistavanje(k) || e.defaultPrevented) return;
-    if (uPoljuZaUnos(e.target) && !zatvorenIzbornik(e.target)) return;
+    if (uPoljuZaUnos(e.target)) return;
     e.preventDefault();
-    if (k.tip === 'PONISTI') this.store.ponisti();
+    this.ponistiIliPonovi(k.tip);
+  }
+
+  /**
+   * Zatvoren `mat-select` (posle izbora vrste ili crtice fokus ostaje na njemu) je jedini izuzetak filtera: undo/redo se
+   * obrađuje PRE njega i ne stiže do njega (`stopPropagation`), jer zatvoren select Shift+slovo (i uz Ctrl/Meta) šalje u
+   * typeahead i bira opciju. Otvoren izbornik, polja i okvir se ne diraju.
+   */
+  private izbornikPreSelecta(e: KeyboardEvent): void {
+    if (!zatvorenIzbornik(e.target)) return;
+    const k = komandaTastature(e);
+    if (!k || !jePonistavanje(k)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.ponistiIliPonovi(k.tip);
+  }
+
+  private ponistiIliPonovi(tip: 'PONISTI' | 'PONOVI'): void {
+    if (tip === 'PONISTI') this.store.ponisti();
     else this.store.ponovi();
   }
 
