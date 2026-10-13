@@ -4,7 +4,7 @@ import type { CrtezSloj, Potez } from '../data-access/platno.models';
 import { kutijaIzLanca } from './nasledjivanje';
 import { nazivOblika, upozoriJednom } from './oblik';
 import { deoElementa, pretvoriSliku } from './slika';
-import { EMU_PO_PT, type KontekstSlajda, type Kutija } from './tipovi';
+import { EMU_PO_PT, zaokruziKaoServer, type KontekstSlajda, type Kutija } from './tipovi';
 import { brojAtr, deca, dete, NS } from './xml';
 
 /** Najviše tačaka po CRTEZ sloju, isto kao `PlatnoPP.MAX_TACAKA` (server broji parove x, y svih poteza sloja). */
@@ -184,20 +184,6 @@ export function uprosti(tacke: readonly number[], tolerancija: number, najvise =
     if (zadrzi[i]) rezultat.push(naDesetinu(tacke[2 * i]), naDesetinu(tacke[2 * i + 1]));
   }
   return rezultat;
-}
-
-/**
- * Kao `PlatnoPP.r` na serveru (`BigDecimal.valueOf(d).setScale(2, HALF_UP)`): najkraći decimalni zapis broja (isti u JS-u i
- * u Javi 19+), pa HALF_UP na 2 decimale u celim stotim delovima (2,835 -> 2,84; `Math.round(2.835 * 100)` daje 283).
- */
-function zaokruziKaoServer(n: number): number {
-  if (!Number.isFinite(n)) return n;
-  const s = Math.abs(n).toString();
-  if (s.includes('e')) return Math.abs(n) < 1 ? 0 : n;
-  const [ceo, razlomak = ''] = s.split('.');
-  let stotih = Number(ceo) * 100 + Number(`${razlomak}00`.slice(0, 2));
-  if ((razlomak[2] ?? '0') >= '5') stotih += 1;
-  return (Math.sign(n) * stotih) / 100 || 0;
 }
 
 // ------------------------------------------------------------------ InkML
