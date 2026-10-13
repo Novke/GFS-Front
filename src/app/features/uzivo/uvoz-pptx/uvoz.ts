@@ -601,12 +601,16 @@ function pretvoriSlajd(z: ZajednickoUvoza, putanja: string, indeks: number): Uve
   };
 }
 
-/** Poruka greške slajda za korisnika (neispravan deo -> putanja dela iz `cause`). */
+/** Slajd koji je oborio neočekivan izuzetak (npr. prekoračen stek): sirova poruka JS-a ne ide korisniku. */
+const NEOCEKIVANA_GRESKA = 'Slajd nije pročitan (neočekivana struktura fajla).';
+const nijeProcitan = (poruka: string) => `Slajd nije pročitan: ${sKrajem(poruka)}`;
+
+/** Poruka greške slajda za korisnika: `GreskaUvoza` (neispravan deo -> putanja dela iz `cause`), inače opšta poruka. */
 function porukaGreske(e: unknown): string {
   if (e instanceof GreskaUvoza) {
-    return typeof e.cause === 'string' ? `deo ${e.cause} je oštećen` : e.message;
+    return nijeProcitan(typeof e.cause === 'string' ? `deo ${e.cause} je oštećen` : e.message);
   }
-  return e instanceof Error && e.message ? e.message : String(e);
+  return NEOCEKIVANA_GRESKA;
 }
 
 const odnosNije169 = (v: { cx: number; cy: number }) => Math.abs((v.cx / v.cy) / (16 / 9) - 1) > TOLERANCIJA_FORMATA;
@@ -644,15 +648,15 @@ export async function pretvoriPptx(bajtovi: Uint8Array, imeFajla: string, o: Opc
     const indeks = i + 1;
     const putanja = paket.slajdovi[i];
     const pre = z.upozorenja.length;
-    /** Slajd koji nije uvezen ne zadržava svoja upozorenja (ona za ceo fajl ostaju). */
+    /** Slajd koji nije uvezen ne zadržava svoja upozorenja (ona za ceo fajl ostaju); `poruka` je cela poruka greške. */
     const neuspeh = (poruka: string) => {
       const dodata = z.upozorenja.splice(pre);
       z.upozorenja.push(...dodata.filter((u) => u.slajd === null));
-      greske.push({ slajd: indeks, poruka: `Slajd nije pročitan: ${sKrajem(poruka)}` });
+      greske.push({ slajd: indeks, poruka });
     };
     try {
       const doc = paket.xml(putanja);
-      if (!doc) throw new Error('deo slajda ne postoji u fajlu');
+      if (!doc) throw new GreskaUvoza('deo slajda ne postoji u fajlu');
       const koren = doc.documentElement;
       if (['0', 'false'].includes(koren.getAttribute('show') ?? '')) {
         z.upozorenja.push({ slajd: indeks, kod: 'SKRIVEN_SLAJD', poruka: 'Skriven slajd nije uvezen (PowerPoint ga ne prikazuje).' });
@@ -662,7 +666,7 @@ export async function pretvoriPptx(bajtovi: Uint8Array, imeFajla: string, o: Opc
           z.upozorenja.push({ slajd: null, kod: 'PRELAZ_SLAJDA', poruka: 'Prelazi između slajdova se ne prenose.' });
         }
         const rez = pretvoriSlajd(z, putanja, indeks);
-        if ('greska' in rez) neuspeh(rez.greska);
+        if ('greska' in rez) neuspeh(nijeProcitan(rez.greska));
         else slajdovi.push(rez);
       }
     } catch (e) {

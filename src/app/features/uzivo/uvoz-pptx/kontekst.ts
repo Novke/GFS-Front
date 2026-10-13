@@ -1,5 +1,6 @@
 // Graditelj konteksta slajda: slajd -> layout -> master -> tema po vezama, mapa boja, stilovi prezentacije, mediji i
 // upozorenja. Jedini graditelj konteksta (uvoz.ts u F12 i specovi F3-F11). Bez Angular-a.
+import { GreskaUvoza } from './ime-fajla';
 import type { Upozorenje } from './izvestaj';
 import type { Paket } from './paket';
 import { mapaBoja, PODRAZUMEVANA_TEMA, procitajTemu } from './tema';
@@ -43,7 +44,7 @@ function deoPoVezi(paket: Paket, odDela: string, tip: string): { putanja: string
 export function napraviKontekst(z: ZajednickoUvoza, putanjaSlajda: string, indeks: number): KontekstSlajda {
   const { paket } = z;
   const slajdDoc = paket.xml(putanjaSlajda);
-  if (!slajdDoc) throw new Error('deo slajda ne postoji u fajlu');
+  if (!slajdDoc) throw new GreskaUvoza('deo slajda ne postoji u fajlu');
 
   const layout = deoPoVezi(paket, putanjaSlajda, 'slideLayout');
   const master = layout ? deoPoVezi(paket, layout.putanja, 'slideMaster') : null;

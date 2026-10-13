@@ -1,4 +1,6 @@
 // Integracioni testovi uvoza: ceo `pretvoriPptx` nad sintetičkim PPTX-ovima iz fabrike (sve izmišljeno).
+import { vi } from 'vitest';
+
 import type { Animacija, CrtezSloj, FormulaSloj, OblikSloj, Platno, Sloj, SlikaSloj, TabelaSloj, TekstSloj } from '../data-access/platno.models';
 import { FONTOVI_PLATNA } from '../ui/platno-fontovi';
 import { proveriKaoServer } from './granice';
@@ -457,6 +459,28 @@ describe('pretvoriPptx: neispravni delovi (Review Focus 1)', () => {
     expect(r.slajdovi.map((s) => s.indeks)).toEqual([1]);
     expect(r.greske.map((g) => g.slajd)).toEqual([2, 3]);
     expect(r.greske.every((g) => g.poruka.startsWith('Slajd nije pročitan: '))).toBe(true);
+  });
+
+  it('neočekivan izuzetak (npr. prekoračen stek) -> opšta srpska poruka, bez sirove poruke JS-a; ostali slajdovi se uvoze', async () => {
+    // Pravi prekoračen stek traži grupe ugnežđene ~2000 puta, a jsdom takav XML parsira desetinama sekundi: izuzetak se
+    // ubacuje na prvom efektu animacije (samo slajd 1 ima `p:timing`).
+    const izvorno = Element.prototype.hasAttribute;
+    const spijun = vi.spyOn(Element.prototype, 'hasAttribute').mockImplementation(function (this: Element, ime: string) {
+      if (ime === 'presetClass') throw new RangeError('Maximum call stack size exceeded');
+      return izvorno.call(this, ime);
+    });
+    try {
+      const r = await uvezi({ slajdovi: [{ spTree: okvir(5, 0, 0), timing: timing([fade(5)]) }, { spTree: okvir(5, 0, 0) }] });
+      expect(r.greske).toEqual([{ slajd: 1, poruka: 'Slajd nije pročitan (neočekivana struktura fajla).' }]);
+      expect(r.slajdovi.map((s) => s.indeks)).toEqual([2]);
+    } finally {
+      spijun.mockRestore();
+    }
+  });
+
+  it('slajd bez dela: poruka ostaje konkretna (deo slajda ne postoji u fajlu)', async () => {
+    const r = await uvezi({ slajdovi: [{ spTree: okvir(5, 0, 0) }, { spTree: okvir(5, 0, 0) }], bezDelova: ['ppt/slides/slide2.xml'] });
+    expect(r.greske).toEqual([{ slajd: 2, poruka: 'Slajd nije pročitan: deo slajda ne postoji u fajlu.' }]);
   });
 
   it('greška granica (više od 300 objekata) je greška slajda, bez njegovih upozorenja', async () => {
