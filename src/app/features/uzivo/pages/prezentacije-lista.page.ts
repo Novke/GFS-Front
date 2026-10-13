@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ErrorHandler, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -8,12 +8,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { catchError, distinctUntilChanged, map, of, switchMap, tap } from 'rxjs';
+import { catchError, distinctUntilChanged, from, map, of, startWith, Subject, switchMap, tap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { PredmetKratko, PrezentacijaInfo } from '../data-access/uzivo.models';
-import { otvoriNovuPrezentaciju } from './nova-prezentacija.dialog';
+import { NovaPrezentacijaIshod, otvoriNovuPrezentaciju } from './nova-prezentacija.dialog';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 
 function predmetIzUpita(v: string | null): number | null {
   return v !== null && /^\d+$/.test(v) && Number(v) > 0 ? Number(v) : null;
@@ -100,6 +101,9 @@ export class PrezentacijeListaPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
+  private readonly greske = inject(ErrorHandler);
+  private readonly otvarac = inject(UvozPptxOtvarac);
+  private readonly osvezi$ = new Subject<void>();
 
   protected readonly rute = UzivoPutanje;
   protected readonly predmetId = toSignal(
@@ -117,6 +121,7 @@ export class PrezentacijeListaPage {
     this.route.queryParamMap.pipe(
       map(q => predmetIzUpita(q.get('predmet'))),
       distinctUntilChanged(),
+      switchMap(id => this.osvezi$.pipe(startWith(undefined), map(() => id))),
       tap(() => this.lista.set(null)),
       switchMap(id => this.api.lista(id).pipe(catchError(e => {
         this.greska.set(razlogGreske(e, 'Prezentacije nisu učitane.'));
@@ -139,6 +144,32 @@ export class PrezentacijeListaPage {
       return;
     }
     otvoriNovuPrezentaciju(this.dialog, { predmeti: this.predmeti(), predmetId: this.predmetId() })
-      .subscribe(p => p && this.router.navigate(['/' + UzivoPutanje.prezentacija(p.id)]));
+      .subscribe(ishod => this.posleDijaloga(ishod));
+  }
+
+  /**
+   * Prazna prezentacija ide pravo u editor. Sa fajlom se otvara dijalog uvoza (lenjo); `'osvezi'` i `undefined` ostaju
+   * na listi i ponovo je čitaju (nova prezentacija je napravljena ili obrisana u dijalogu, ovde se nikad ne briše).
+   */
+  private posleDijaloga(ishod: NovaPrezentacijaIshod | undefined): void {
+    if (!ishod) return;
+    const { prezentacija, fajl } = ishod;
+    if (!fajl) {
+      this.router.navigate(['/' + UzivoPutanje.prezentacija(prezentacija.id)]);
+      return;
+    }
+    from(this.otvarac.otvori(this.dialog, {
+      prezentacijaId: prezentacija.id, brojSlajdova: 0, izabraniId: null, izabraniRb: null, fajl, nova: true,
+    })).pipe(switchMap(zatvaranje => zatvaranje)).subscribe({
+      next: p => {
+        if (p && p !== 'osvezi') this.router.navigate(['/' + UzivoPutanje.prezentacija(p.id)]);
+        else this.osvezi$.next();
+      },
+      error: e => {
+        this.greske.handleError(e);
+        this.greska.set('Dijalog uvoza nije učitan. Osveži stranicu i pokušaj ponovo; prezentacija je napravljena i vidi se u listi.');
+        this.osvezi$.next();
+      },
+    });
   }
 }

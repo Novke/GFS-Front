@@ -1,13 +1,15 @@
 import { NgTemplateOutlet } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, untracked,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, input, signal, untracked,
 } from '@angular/core';
 import { KljucVidljivosti, grupaZaKorak, stanjeSlojeva } from '../data-access/platno-koraci';
 import {
-  Animacija, Celija, FormulaSloj, Ivica, OblikSloj, Platno, SlikaSloj, Sloj, TabelaSloj, TekstSloj,
+  Animacija, Celija, FormulaSloj, Ivica, IviceCelije, OblikSloj, Pasus, Platno, SlikaSloj, Sloj, TabelaSloj, Tacka, TekstSloj,
 } from '../data-access/platno.models';
 import { medijUrl } from '../data-access/uzivo.models';
 import { cssFonta } from './platno-fontovi';
+import { METRIKA } from './platno-metrika';
+import { pasusiZaMerenje, poravnajSveTabove, prefiksCelije, prefiksSloja } from './platno-tabovi';
 import {
   CSS_CRTICE, PrikazPasusa, SIDRA_CELIJE, Stil, jedinice, prikazPasusa, stilOkvira, zaokruzi,
 } from './platno-tekst';
@@ -20,7 +22,8 @@ interface PrikazOblika {
   sirina: number; visina: number; rx: number; tacke: string;
   x1: number; y1: number; x2: number; y2: number;
   popuna: string; potez: string; debljina: number; crtica: string | null; zavrsetak: string | null;
-  markerPocetak: string | null; markerKraj: string | null;
+  /** Vrhovi strelica (`points` trouglova, popunjeni bojom poteza). */
+  vrhovi: string[];
 }
 interface PrikazCelije { colspan: number; rowspan: number; stil: Stil; pasusi: PrikazPasusa[]; }
 interface PrikazTabele { stil: Stil; kolone: Stil[]; redovi: { stil: Stil; celije: PrikazCelije[] }[]; }
@@ -37,8 +40,6 @@ interface PrikazSloja {
   formula: PrikazFormule | null;
   crtez: PrikazSlike | null;
 }
-
-let brojacInstanci = 0;
 
 function stilSloja(s: Sloj): Stil {
   const stil: Stil = {
@@ -81,12 +82,57 @@ function stilIsecka(isecak: SlikaSloj['isecak']): Stil {
 
 const LINIJSKI = new Set(['LINIJA', 'STRELICA', 'DVOSTRUKA_STRELICA']);
 
-function prikazOblika(s: OblikSloj, prefiks: string): PrikazOblika {
+/**
+ * Vrh strelice (`triangle`, `med` x `med`): dužina i širina = 3 x osnova, osnova = max(debljina, 0,7 mm). Izvor je
+ * LibreOffice oox (`lineproperties.cxx`: sm/med/lg = 2/3/5, `max(nLineWidth, 70)` u 1/100 mm), nije mereno prema
+ * PowerPointu (uzorak nema strelica). Model nema veličinu vrha, pa je uvek srednja.
+ */
+const VRH_STRELICE = 3;
+/** 0,7 mm u jedinicama platna (pt). */
+const NAJMANJA_OSNOVA_VRHA = 0.7 / 25.4 * 72;
+
+/**
+ * Vrh strelice u `vrh` (pravac `od` -> `vrh`) kao trougao dužine `duzina`, i tačka osnove do koje ide linija. Linija sa
+ * markerom bi išla do samog šiljka, pa bi njen tupi kraj (širine debljine) virio iz uskog dela trougla.
+ */
+function vrhStrelice(od: Tacka, vrh: Tacka, duzina: number, sirina: number): { tacke: string; osnova: Tacka } {
+  const dx = vrh.x - od.x;
+  const dy = vrh.y - od.y;
+  const l = Math.hypot(dx, dy) || 1;
+  const ux = dx / l;
+  const uy = dy / l;
+  const osnova = { x: vrh.x - ux * duzina, y: vrh.y - uy * duzina };
+  const pola = sirina / 2;
+  const t = (x: number, y: number) => `${zaokruzi(x)},${zaokruzi(y)}`;
+  return {
+    tacke: `${t(vrh.x, vrh.y)} ${t(osnova.x - uy * pola, osnova.y + ux * pola)} ${t(osnova.x + uy * pola, osnova.y - ux * pola)}`,
+    osnova,
+  };
+}
+
+function prikazOblika(s: OblikSloj): PrikazOblika {
   const { sirina, visina, ivica } = s;
   const linijski = LINIJSKI.has(s.oblik);
-  const od = s.od ?? { x: 0, y: visina / 2 };
-  const doTacke = s.do ?? { x: sirina, y: visina / 2 };
+  let od = s.od ?? { x: 0, y: visina / 2 };
+  let doTacke = s.do ?? { x: sirina, y: visina / 2 };
   const d = ivica?.debljina ?? 0;
+  const vrhovi: string[] = [];
+  const kraj = s.oblik === 'STRELICA' || s.oblik === 'DVOSTRUKA_STRELICA';
+  const pocetak = s.oblik === 'DVOSTRUKA_STRELICA';
+  if (kraj && ivica && d > 0) {
+    // Vrh nije duži od linije (dvostruka: od polovine), širina ostaje puna.
+    const osnovaVrha = VRH_STRELICE * Math.max(d, NAJMANJA_OSNOVA_VRHA);
+    const duzina = Math.min(osnovaVrha, Math.hypot(doTacke.x - od.x, doTacke.y - od.y) / (pocetak ? 2 : 1));
+    const [a, b] = [od, doTacke];
+    const k = vrhStrelice(a, b, duzina, osnovaVrha);
+    vrhovi.push(k.tacke);
+    doTacke = k.osnova;
+    if (pocetak) {
+      const p = vrhStrelice(b, a, duzina, osnovaVrha);
+      vrhovi.push(p.tacke);
+      od = p.osnova;
+    }
+  }
   const crtica = ivica?.crtica === 'ISPREKIDANA' ? `${zaokruzi(4 * d)} ${zaokruzi(3 * d)}`
     : ivica?.crtica === 'TACKASTA' ? `${zaokruzi(d)} ${zaokruzi(2 * d)}` : null;
   const vrsta = linijski ? 'linija'
@@ -95,16 +141,16 @@ function prikazOblika(s: OblikSloj, prefiks: string): PrikazOblika {
     viewBox: `0 0 ${sirina} ${visina}`,
     vrsta,
     sirina, visina,
-    rx: s.oblik === 'ZAOBLJENI_PRAVOUGAONIK' ? zaokruzi(Math.min(sirina, visina) * 0.1) : 0,
+    // PowerPointov roundRect: poluprečnik = adj (podrazumevano 16 667 / 100 000) * kraća strana.
+    rx: s.oblik === 'ZAOBLJENI_PRAVOUGAONIK' ? zaokruzi(Math.min(sirina, visina) * 0.16667) : 0,
     tacke: `${zaokruzi(sirina / 2)},0 ${sirina},${visina} 0,${visina}`,
-    x1: od.x, y1: od.y, x2: doTacke.x, y2: doTacke.y,
+    x1: zaokruzi(od.x), y1: zaokruzi(od.y), x2: zaokruzi(doTacke.x), y2: zaokruzi(doTacke.y),
     popuna: linijski ? 'none' : (s.popuna ?? 'none'),
     potez: ivica?.boja ?? 'none',
     debljina: d,
     crtica,
     zavrsetak: ivica?.crtica === 'TACKASTA' ? 'round' : null,
-    markerPocetak: s.oblik === 'DVOSTRUKA_STRELICA' ? `${prefiks}-${s.id}-p` : null,
-    markerKraj: s.oblik === 'STRELICA' || s.oblik === 'DVOSTRUKA_STRELICA' ? `${prefiks}-${s.id}-k` : null,
+    vrhovi,
   };
 }
 
@@ -114,8 +160,21 @@ function ivicaCss(ivica: Ivica | null): string | null {
 
 const IVICE_CELIJE = { gore: 'border-top', dole: 'border-bottom', levo: 'border-left', desno: 'border-right' } as const;
 
-function prikazCelije(c: Celija): PrikazCelije {
-  const stil: Stil = { 'vertical-align': SIDRA_CELIJE[c.sidro] };
+/** Debljine ivica ćelije posle `border-collapse` (šira od dve susedne ivice), po strani. */
+type DebljineIvica = Record<keyof IviceCelije, number>;
+
+function prikazCelije(c: Celija, prefiksMerenja: string, debljine: DebljineIvica): PrikazCelije {
+  const m = METRIKA.marginaCelije;
+  // PowerPoint crta ivicu ćelije na liniji mreže, a margine meri od nje: ivica ne povećava red. U `border-collapse` pola
+  // razrešene ivice ulazi u ćeliju, pa se oduzima od margine (red sa tekstom višim od `tr@h` je tada 1,2 * veličina + margine).
+  const unutra = (n: number, debljina: number) => jedinice(Math.max(0, n - debljina / 2));
+  const stil: Stil = {
+    'vertical-align': SIDRA_CELIJE[c.sidro],
+    'padding-top': unutra(m.gore, debljine.gore),
+    'padding-right': unutra(m.desno, debljine.desno),
+    'padding-bottom': unutra(m.dole, debljine.dole),
+    'padding-left': unutra(m.levo, debljine.levo),
+  };
   if (c.popuna) {
     stil['background-color'] = c.popuna;
   }
@@ -125,25 +184,50 @@ function prikazCelije(c: Celija): PrikazCelije {
       stil[svojstvo] = css;
     }
   }
-  return { colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi) };
+  return { colspan: 1 + c.spojDesno, rowspan: 1 + c.spojDole, stil, pasusi: prikazPasusa(c.pasusi, { prefiksMerenja }) };
 }
 
-function prikazTabele(s: TabelaSloj): PrikazTabele {
+/** Ćelija koja crta polje (r, k): ona sama, ili sidro spajanja koje ga pokriva; van tabele -> null. */
+function vlasnikPolja(s: TabelaSloj, r: number, k: number): Celija | null {
+  for (let i = r; i >= 0; i--) {
+    for (let j = k; j >= 0; j--) {
+      const c = s.celije[i]?.[j];
+      if (c && !c.pokrivena && i + c.spojDole >= r && j + c.spojDesno >= k) return c;
+    }
+  }
+  return null;
+}
+
+/** Razrešene debljine ivica ćelije (i, k): šira od sopstvene i ivice susednog polja na toj strani (kao `border-collapse`). */
+function debljineIvica(s: TabelaSloj, c: Celija, i: number, k: number): DebljineIvica {
+  const d = (iv: Ivica | null | undefined) => iv?.debljina ?? 0;
+  return {
+    gore: Math.max(d(c.ivice.gore), d(vlasnikPolja(s, i - 1, k)?.ivice.dole)),
+    dole: Math.max(d(c.ivice.dole), d(vlasnikPolja(s, i + 1 + c.spojDole, k)?.ivice.gore)),
+    levo: Math.max(d(c.ivice.levo), d(vlasnikPolja(s, i, k - 1)?.ivice.desno)),
+    desno: Math.max(d(c.ivice.desno), d(vlasnikPolja(s, i, k + 1 + c.spojDesno)?.ivice.levo)),
+  };
+}
+
+function prikazTabele(s: TabelaSloj, indeks: number): PrikazTabele {
   return {
     stil: { width: jedinice(s.kolone.reduce((a, b) => a + b, 0)) },
     kolone: s.kolone.map((w) => ({ width: jedinice(w) })),
     redovi: s.redovi.map((h, i) => ({
       stil: { height: jedinice(h) },
-      celije: (s.celije[i] ?? []).filter((c) => !c.pokrivena).map(prikazCelije),
+      celije: (s.celije[i] ?? []).flatMap((c, k) => (c.pokrivena ? []
+        : [prikazCelije(c, prefiksCelije(indeks, i, k), debljineIvica(s, c, i, k))])),
     })),
   };
 }
 
-function prikazTeksta(s: TekstSloj): PrikazTeksta {
+function prikazTeksta(s: TekstSloj, indeks: number): PrikazTeksta {
   return {
     prelom: s.okvir.prelom,
     okvir: stilOkvira(s.okvir, s.popuna, s.ivica),
-    pasusi: prikazPasusa(s.pasusi, s.okvir.skala, s.okvir.skalaProreda, s.id),
+    pasusi: prikazPasusa(s.pasusi, {
+      skala: s.okvir.skala, skalaProreda: s.okvir.skalaProreda, slojId: s.id, prefiksMerenja: prefiksSloja(indeks),
+    }),
   };
 }
 
@@ -156,15 +240,16 @@ function prikazFormule(s: FormulaSloj): PrikazFormule {
   };
 }
 
-function prikazSloja(s: Sloj, prefiks: string): PrikazSloja {
+/** `indeks` = položaj sloja u dokumentu (prefiks ključeva merenih tabova, `platno-tabovi.ts`). */
+function prikazSloja(s: Sloj, indeks: number): PrikazSloja {
   const prikaz: PrikazSloja = {
     id: s.id, stil: stilSloja(s), tekst: null, slika: null, oblik: null, tabela: null, formula: null, crtez: null,
   };
   switch (s.tip) {
-    case 'TEKST': prikaz.tekst = prikazTeksta(s); break;
+    case 'TEKST': prikaz.tekst = prikazTeksta(s, indeks); break;
     case 'SLIKA': prikaz.slika = { src: medijUrl(s.medijId), alt: s.naziv ?? '', stil: stilIsecka(s.isecak) }; break;
-    case 'OBLIK': prikaz.oblik = prikazOblika(s, prefiks); break;
-    case 'TABELA': prikaz.tabela = prikazTabele(s); break;
+    case 'OBLIK': prikaz.oblik = prikazOblika(s); break;
+    case 'TABELA': prikaz.tabela = prikazTabele(s, indeks); break;
     case 'FORMULA': prikaz.formula = prikazFormule(s); break;
     case 'CRTEZ': prikaz.crtez = { src: medijUrl(s.medijId), alt: s.naziv ?? 'Crtež', stil: {} }; break;
   }
@@ -257,7 +342,12 @@ function smanjenoKretanje(): boolean {
   selector: 'app-platno-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [NgTemplateOutlet],
-  host: { class: 'uz-pl-platno', '[style.background-color]': 'platno().pozadina.boja' },
+  host: {
+    class: 'uz-pl-platno',
+    '[style.background-color]': 'platno().pozadina.boja',
+    '[style.font-kerning]': 'kerning',
+    '[style.font-variant-ligatures]': 'ligature',
+  },
   template: `
     @if (platno().pozadina.medijId; as pozadina) { <img class="uz-pl-pozadina" [src]="url(pozadina)" alt=""> }
     @for (s of slojevi(); track s.id) {
@@ -271,29 +361,12 @@ function smanjenoKretanje(): boolean {
         } @else if (s.oblik; as o) {
           <div class="uz-pl-sadrzaj uz-pl-oblik">
             <svg [attr.viewBox]="o.viewBox" preserveAspectRatio="none" aria-hidden="true">
-              @if (o.markerKraj || o.markerPocetak) {
-                <svg:defs>
-                  @if (o.markerKraj; as id) {
-                    <svg:marker [attr.id]="id" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="3" markerHeight="3"
-                                markerUnits="strokeWidth" orient="auto">
-                      <svg:path d="M0,0 L10,5 L0,10 z" [attr.fill]="o.potez" />
-                    </svg:marker>
-                  }
-                  @if (o.markerPocetak; as id) {
-                    <svg:marker [attr.id]="id" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="3" markerHeight="3"
-                                markerUnits="strokeWidth" orient="auto">
-                      <svg:path d="M10,0 L0,5 L10,10 z" [attr.fill]="o.potez" />
-                    </svg:marker>
-                  }
-                </svg:defs>
-              }
               @switch (o.vrsta) {
                 @case ('linija') {
                   <svg:line [attr.x1]="o.x1" [attr.y1]="o.y1" [attr.x2]="o.x2" [attr.y2]="o.y2" fill="none"
                             [attr.stroke]="o.potez" [attr.stroke-width]="o.debljina" [attr.stroke-dasharray]="o.crtica"
-                            [attr.stroke-linecap]="o.zavrsetak"
-                            [attr.marker-start]="o.markerPocetak ? 'url(#' + o.markerPocetak + ')' : null"
-                            [attr.marker-end]="o.markerKraj ? 'url(#' + o.markerKraj + ')' : null" />
+                            [attr.stroke-linecap]="o.zavrsetak" />
+                  @for (v of o.vrhovi; track $index) { <svg:polygon [attr.points]="v" [attr.fill]="o.potez" /> }
                 }
                 @case ('elipsa') {
                   <svg:ellipse [attr.cx]="o.sirina / 2" [attr.cy]="o.visina / 2" [attr.rx]="o.sirina / 2" [attr.ry]="o.visina / 2"
@@ -347,8 +420,8 @@ function smanjenoKretanje(): boolean {
 
     <ng-template #pasusiT let-pasusi>
       @for (p of asPasusi(pasusi); track p.indeks) {
-        <p class="uz-pl-pasus" [attr.data-pasus]="p.kljuc === null ? null : p.indeks" [style]="p.stil"
-           [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">{{ d.tekst }}</span>}</p>
+        <p class="uz-pl-pasus" [attr.data-pasus]="p.kljuc === null ? null : p.indeks" [attr.data-meri-tabove]="p.meriTabove"
+           [style]="p.stil" [style.visibility]="p.kljuc !== null && skriven(p.kljuc) ? 'hidden' : null">@if (p.oznaka; as o) {<span class="uz-pl-oznaka" [style]="o.stil">{{ o.tekst }}</span>}@if (p.meriTabove) {@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">@for (t of d.segmenti ?? [d.tekst]; track $index) {@if (!$first) {<span class="uz-pl-tab">{{ tab }}</span>}{{ t }}}</span>}} @else {@for (d of p.delovi; track $index) {<span class="uz-pl-deo" [style]="d.stil">{{ d.tekst }}</span>}}</p>
       }
     </ng-template>
   `,
@@ -363,12 +436,30 @@ export class PlatnoPrikazComponent {
    */
   readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 
-  /** Id-jevi SVG markera moraju biti jedinstveni u dokumentu (konzola crta trenutni i sledeći slajd). */
-  private readonly prefiks = `uz-pl-${++brojacInstanci}`;
-
   protected readonly url = medijUrl;
-  protected readonly slojevi = computed(() => this.platno().slojevi.map((s) => prikazSloja(s, this.prefiks)));
+  protected readonly slojevi = computed(() => this.platno().slojevi.map((s, i) => prikazSloja(s, i)));
   private readonly vidljivost = computed(() => stanjeSlojeva(this.platno(), this.korak()));
+  /** Mereni pasusi (ključevi zavise od z-ose, pa se čitaju sveži) i potpis njihovog rasporeda (okidač merenja). */
+  private readonly merenje = computed(() => pasusiZaMerenje(this.platno().slojevi));
+  /** Isti potpis (nov snimak istog slajda posle koraka, pomeren sloj) ne pokreće novo merenje. */
+  private readonly potpisMerenja = computed(() => this.merenje().potpis);
+  /** Okidači novog merenja tabova: veličina platna se bitno promenila, učitani su fontovi, kraj grupe animacija. */
+  private readonly velicina = signal(0);
+  private readonly fontovi = signal(0);
+  private readonly posleGrupe = signal(0);
+  /** Poslednje merenje je bilo rezervno (`offsetLeft`) dok je grupa animacija trajala: ponoviti ga na kraju grupe. */
+  private meriPosleGrupe = false;
+  /** px po jedinici pri poslednjem merenju tabova (0 = još nije izmereno sa vidljivom veličinom). */
+  private pxMeren = 0;
+  private pracenje = false;
+  private tajmerVelicine: ReturnType<typeof setTimeout> | undefined;
+
+  /** Tab u merenom pasusu (`.uz-pl-tab`): znak ostaje u tekstu, `tab-size: 0` ga ne crta, širinu daje merenje. */
+  protected readonly tab = '\t';
+  /** `'normal'` = ponašanje pregledača: svojstvo se ne postavlja (izgled faze 1). */
+  protected readonly kerning = METRIKA.kerning === 'none' ? 'none' : null;
+  protected readonly ligature = METRIKA.ligature === 'none' ? 'none' : null;
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** Animacije grupe koja se trenutno pušta (prazno kad se crta samo krajnje stanje). */
@@ -397,7 +488,85 @@ export class PlatnoPrikazComponent {
         }
       },
     });
-    inject(DestroyRef).onDestroy(() => this.prekini());
+    // Mereni tab-stopovi (`platno-tabovi.ts`): čitanje i pisanje rasporeda u istoj fazi, posle crtanja, samo kad se
+    // promeni sadržaj merenih pasusa, veličina platna (posle smirivanja) ili fontovi; nikad po kadru animacije.
+    afterRenderEffect({
+      mixedReadWrite: () => {
+        this.potpisMerenja();
+        this.velicina();
+        this.fontovi();
+        this.posleGrupe();
+        const { pasusi } = untracked(this.merenje);
+        if (pasusi.size === 0) {
+          return;
+        }
+        this.pratiPromene();
+        const px = this.host.offsetWidth / SIRINA_PLATNA;
+        this.pxMeren = px;
+        const stavke: { el: HTMLElement; pasus: Pasus }[] = [];
+        this.host.querySelectorAll<HTMLElement>('p[data-meri-tabove]').forEach((el) => {
+          const pasus = pasusi.get(el.dataset['meriTabove'] ?? '');
+          if (pasus) {
+            stavke.push({ el, pasus });
+          }
+        });
+        const { rezervno } = poravnajSveTabove(stavke, px);
+        // ULET/ZUM koji traje daje transformaciju, pa merenje ide iz rasporeda na ceo px; posle grupe se meri tačno.
+        this.meriPosleGrupe = rezervno && this.tekuce.length > 0;
+      },
+    });
+    this.destroyRef.onDestroy(() => {
+      this.prekini();
+      clearTimeout(this.tajmerVelicine);
+    });
+  }
+
+  /**
+   * Prvi put kad platno ima merene pasuse: novo merenje posle učitavanja fontova (`document.fonts`) i posle promene
+   * veličine platna za više od 1% (`ResizeObserver`, smireno 150 ms; odmah ako do sada nije bilo vidljive veličine).
+   * Širine su u jedinicama, pa su do novog merenja približno tačne; novo merenje ispravlja nelinearnu širinu teksta
+   * (hinting) na drugoj veličini.
+   */
+  private pratiPromene(): void {
+    if (this.pracenje) {
+      return;
+    }
+    this.pracenje = true;
+    const fontovi = typeof document === 'undefined' ? undefined : document.fonts;
+    if (fontovi) {
+      let unisten = false;
+      const ucitani = () => {
+        if (!unisten) {
+          this.fontovi.update((n) => n + 1);
+        }
+      };
+      fontovi.ready.then(ucitani, () => undefined);
+      fontovi.addEventListener('loadingdone', ucitani);
+      this.destroyRef.onDestroy(() => {
+        unisten = true;
+        fontovi.removeEventListener('loadingdone', ucitani);
+      });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      const posmatrac = new ResizeObserver(([e]) => this.promenaVelicine(e.contentRect.width / SIRINA_PLATNA));
+      posmatrac.observe(this.host);
+      this.destroyRef.onDestroy(() => posmatrac.disconnect());
+    }
+  }
+
+  private promenaVelicine(px: number): void {
+    if (!(px > 0)) {
+      return;
+    }
+    clearTimeout(this.tajmerVelicine);
+    if (this.pxMeren > 0 && Math.abs(px - this.pxMeren) / this.pxMeren <= 0.01) {
+      return;
+    }
+    if (this.pxMeren > 0) {
+      this.tajmerVelicine = setTimeout(() => this.velicina.update((n) => n + 1), 150);
+    } else {
+      this.velicina.update((n) => n + 1);
+    }
   }
 
   /** Prekida animacije koje traju: cilj odmah dobija krajnje stanje koraka (`vratiVidljivost`). */
@@ -410,6 +579,10 @@ export class PlatnoPrikazComponent {
       a.cancel();
     }
     this.vratiVidljivost(ciljevi);
+    if (this.meriPosleGrupe) {
+      this.meriPosleGrupe = false;
+      this.posleGrupe.update((n) => n + 1);
+    }
   }
 
   /**

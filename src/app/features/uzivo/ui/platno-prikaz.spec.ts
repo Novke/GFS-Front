@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 import { celija, pasus, platno } from '../data-access/platno-podaci.testing';
 import {
   FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
@@ -140,7 +141,7 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.getAttribute('alt')).toBe('Crtež');
   });
 
-  it('OBLIK: SVG u jedinicama sloja; strelica ima marker-end, dvostruka i marker-start', async () => {
+  it('OBLIK: SVG u jedinicama sloja; vrh strelice je trougao (3 x 3 debljine), linija staje na osnovi vrha', async () => {
     const strelica = sa<OblikSloj>('oblik', (s) => ({
       ...s, oblik: 'STRELICA', popuna: null, ivica: { boja: '#FF0000', debljina: 2, crtica: 'ISPREKIDANA' },
       od: { x: 0, y: 50 }, do: { x: 200, y: 50 },
@@ -150,42 +151,50 @@ describe('PlatnoPrikazComponent', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 200 100');
     expect(svg.getAttribute('preserveAspectRatio')).toBe('none');
     const linija = svg.querySelector('line')!;
-    expect(linija.getAttribute('x2')).toBe('200');
+    // linija se skraćuje do osnove vrha (dužina vrha 3 * 2), pa njen tupi kraj ne viri iz šiljka
+    expect([linija.getAttribute('x1'), linija.getAttribute('x2')]).toEqual(['0', '194']);
     expect(linija.getAttribute('stroke-dasharray')).toBe('8 6');
-    const kraj = linija.getAttribute('marker-end')!;
-    expect(kraj).toMatch(/^url\(#.+\)$/);
-    expect(svg.querySelector(`marker[id="${kraj.slice(5, -1)}"]`)).not.toBeNull();
-    expect(linija.getAttribute('marker-start')).toBeNull();
+    expect(linija.getAttribute('marker-end')).toBeNull();
+    expect(svg.querySelector('marker')).toBeNull();
+    const vrhovi = Array.from(svg.querySelectorAll('polygon'));
+    expect(vrhovi.map((v) => v.getAttribute('points'))).toEqual(['200,50 194,53 194,47']);
+    expect(vrhovi[0].getAttribute('fill')).toBe('#FF0000');
 
     const dvostruka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'DVOSTRUKA_STRELICA', ivica: { boja: '#FF0000', debljina: 2, crtica: 'TACKASTA' }, od: null, do: null }));
     const d = await prikazi(dvostruka);
     const l2 = sloj(d.el, 'oblik').querySelector('line')!;
-    expect(l2.getAttribute('marker-start')).toMatch(/^url\(#.+\)$/);
-    expect(l2.getAttribute('marker-end')).toMatch(/^url\(#.+\)$/);
-    expect(l2.getAttribute('y1')).toBe('50');
+    expect([l2.getAttribute('x1'), l2.getAttribute('y1'), l2.getAttribute('x2')]).toEqual(['6', '50', '194']);
+    expect(Array.from(sloj(d.el, 'oblik').querySelectorAll('polygon')).map((v) => v.getAttribute('points')))
+      .toEqual(['200,50 194,53 194,47', '0,50 6,47 6,53']);
     expect(l2.getAttribute('stroke-dasharray')).toBe('2 4');
     expect(l2.getAttribute('stroke-linecap')).toBe('round');
+
+    // kratka strelica: vrh nije duži od linije (dvostruka: od polovine)
+    const kratka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'DVOSTRUKA_STRELICA', ivica: { boja: '#000000', debljina: 10, crtica: 'PUNA' },
+      od: { x: 0, y: 0 }, do: { x: 0, y: 40 } }));
+    const k = await prikazi(kratka);
+    expect(Array.from(sloj(k.el, 'oblik').querySelectorAll('polygon')).map((v) => v.getAttribute('points')))
+      .toEqual(['0,40 -15,20 15,20', '0,0 15,20 -15,20']);
+
+    // tanka linija: osnova vrha je najmanje 0,7 mm (1,98 jed.), kao u LibreOffice oox (max(debljina, 70/100 mm))
+    const tanka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'STRELICA', ivica: { boja: '#000000', debljina: 1, crtica: 'PUNA' },
+      od: { x: 0, y: 50 }, do: { x: 200, y: 50 } }));
+    const t = await prikazi(tanka);
+    expect(sloj(t.el, 'oblik').querySelector('polygon')!.getAttribute('points')).toBe('200,50 194.0472,52.9764 194.0472,47.0236');
+    expect(sloj(t.el, 'oblik').querySelector('line')!.getAttribute('x2')).toBe('194.0472');
   });
 
-  it('OBLIK: elipsa, zaobljeni pravougaonik (rx 10% kraće strane), trougao', async () => {
+  it('OBLIK: elipsa, zaobljeni pravougaonik (rx 16,667% kraće strane, PowerPointov roundRect adj), trougao', async () => {
     const elipsa = await prikazi(platno());
     const e = sloj(elipsa.el, 'oblik').querySelector('ellipse')!;
     expect([e.getAttribute('cx'), e.getAttribute('cy'), e.getAttribute('rx'), e.getAttribute('ry')]).toEqual(['100', '50', '100', '50']);
     expect(e.getAttribute('fill')).toBe('#FFCC00');
 
     const zaobljen = await prikazi(sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'ZAOBLJENI_PRAVOUGAONIK' })));
-    expect(sloj(zaobljen.el, 'oblik').querySelector('rect')!.getAttribute('rx')).toBe('10');
+    expect(sloj(zaobljen.el, 'oblik').querySelector('rect')!.getAttribute('rx')).toBe('16.667');
 
     const trougao = await prikazi(sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'TROUGAO' })));
     expect(sloj(trougao.el, 'oblik').querySelector('polygon')!.getAttribute('points')).toBe('100,0 200,100 0,100');
-  });
-
-  it('dve instance ne dele id-jeve markera', async () => {
-    const p = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'STRELICA', ivica: { boja: '#000000', debljina: 1, crtica: 'PUNA' } }));
-    const a = await prikazi(p);
-    const b = await prikazi(p);
-    const id = (el: HTMLElement) => el.querySelector('marker')!.id;
-    expect(id(a.el)).not.toBe(id(b.el));
   });
 
   it('TEKST: nepoznat font se prikazuje kao Carlito, poznat kroz katalog', async () => {
@@ -253,6 +262,125 @@ describe('PlatnoPrikazComponent', () => {
     expect(sloj(el, 'tekst').querySelector('.uz-pl-pasus')?.textContent).toBe('a\tb');
   });
 
+  it('TEKST: pasus sa tabom ima .uz-pl-tab (mereni tab, i bez uvlačenja), pasus bez taba zadržava DOM faze 1', async () => {
+    const p = sa<TekstSloj>('tekst', (s) => ({
+      ...s, pasusi: [pasus('ab'), { ...pasus('c\td\te'), uvlacenje: { levo: 18, prviRed: -18 } }, pasus('f\tg')],
+    }));
+    const { el } = await prikazi(p);
+    const [bez, sa_, bezUvlacenja] = Array.from(sloj(el, 'tekst').querySelectorAll<HTMLElement>('.uz-pl-pasus'));
+    expect(bez.querySelector('.uz-pl-tab')).toBeNull();
+    expect(bez.hasAttribute('data-meri-tabove')).toBe(false);
+    // Pasus bez taba zadržava DOM faze 1: jedan tekstualni čvor po delu.
+    expect(Array.from(bez.querySelector('.uz-pl-deo')!.childNodes).map((n) => n.nodeType)).toEqual([Node.TEXT_NODE]);
+    // CSS `tab-size` preskače stop bliži od 0,5ch (PowerPoint ne), pa se meri i tab bez uvlačenja i stopova.
+    expect(bezUvlacenja.querySelectorAll('.uz-pl-tab').length).toBe(1);
+    expect(bezUvlacenja.hasAttribute('data-meri-tabove')).toBe(true);
+    expect(sa_.querySelectorAll('.uz-pl-tab').length).toBe(2);
+    expect(sa_.dataset['pasus']).toBe('1');
+    expect(sa_.hasAttribute('data-meri-tabove')).toBe(true);
+    // Tab ostaje u tekstu (kopiranje, čitač ekrana); `tab-size: 0` u CSS-u ga ne crta, širinu daje merenje.
+    expect(sa_.textContent).toBe('c\td\te');
+    expect(sa_.querySelector('.uz-pl-deo > .uz-pl-tab')?.textContent).toBe('\t');
+  });
+
+  it('TEKST: mereni tab dobija širinu do sledećeg stopa; ponovo se meri samo kad se sadržaj promeni', async () => {
+    const levo = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    try {
+      const fixture = TestBed.createComponent(PlatnoPrikazComponent);
+      const host = fixture.nativeElement as HTMLElement;
+      Object.defineProperty(host, 'offsetWidth', { get: () => 1920 });
+      const p = sa<TekstSloj>('tekst', (s) => ({ ...s, pasusi: [{ ...pasus('a\tb'), uvlacenje: { levo: 18, prviRed: -18 } }] }));
+      fixture.componentRef.setInput('platno', p);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      // jsdom nema raspored: tab na poziciji 0, viseća stanica na 18.
+      const tab = () => sloj(host, 'tekst').querySelector<HTMLElement>('.uz-pl-tab')!;
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+
+      levo.mockClear();
+      fixture.componentRef.setInput('platno', structuredClone(p));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).not.toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+
+      // Pomeren sloj i druga z-osa (ključ merenja se menja, raspored ne): bez novog merenja, širina ostaje.
+      const pomeren = structuredClone(p);
+      pomeren.slojevi.reverse();
+      Object.assign(pomeren.slojevi.find((s) => s.id === 'tekst')!, { x: 300, y: 200, rotacija: 0 });
+      fixture.componentRef.setInput('platno', pomeren);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).not.toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 18)');
+      expect(tab().closest('p')!.dataset['meriTabove']).toBe('5-0');
+
+      fixture.componentRef.setInput('platno', sa<TekstSloj>('tekst', (s) => ({
+        ...s, pasusi: [{ ...pasus('a\tb'), uvlacenje: { levo: 18, prviRed: -18 }, tabulatori: [{ poz: 10, poravnanje: 'LEVO' }] }],
+      })));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).toHaveBeenCalled();
+      expect(tab().style.width).toBe('calc(var(--u) * 10)');
+    } finally {
+      levo.mockRestore();
+    }
+  });
+
+  it('TEKST: line-height za proredProcenat 100 je 1,2 kao u fazi 1; razmakPre prvog pasusa se ne primenjuje (PowerPoint)', async () => {
+    const p = sa<TekstSloj>('tekst', (s) => ({ ...s, pasusi: [{ ...pasus('a'), razmakPre: 6 }] }));
+    const { el } = await prikazi(p);
+    const pasusEl = sloj(el, 'tekst').querySelector<HTMLElement>('.uz-pl-pasus')!;
+    expect(pasusEl.style.lineHeight).toBe('1.2');
+    expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 0)');
+    expect(pasusEl.style.top).toBe('');
+    expect(el.style.getPropertyValue('font-kerning')).toBe('');
+    expect(el.style.getPropertyValue('font-variant-ligatures')).toBe('');
+  });
+
+  it('TABELA: unutrašnje margine ćelije iz metrike (7,2 levo i desno, 3,6 gore i dole); tab u ćeliji sa stopom se meri', async () => {
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, celije: [[celija('A'), { ...celija('B'), pasusi: [{ ...pasus('x\ty'), tabulatori: [{ poz: 40, poravnanje: 'LEVO' }] }] }]],
+    }));
+    const { el } = await prikazi(p);
+    const tds = sloj(el, 'tabela').querySelectorAll<HTMLElement>('td');
+    expect([tds[0].style.paddingTop, tds[0].style.paddingRight, tds[0].style.paddingBottom, tds[0].style.paddingLeft])
+      .toEqual(['calc(var(--u) * 3.6)', 'calc(var(--u) * 7.2)', 'calc(var(--u) * 3.6)', 'calc(var(--u) * 7.2)']);
+    expect(tds[0].querySelector('[data-meri-tabove]')).toBeNull();
+    const mereni = tds[1].querySelector<HTMLElement>('.uz-pl-pasus[data-meri-tabove]')!;
+    expect(mereni.querySelector('.uz-pl-tab')).not.toBeNull();
+    expect(mereni.hasAttribute('data-pasus')).toBe(false);
+  });
+
+  it('TABELA: ivica ćelije ne povećava red (kao u PowerPointu): margina se meri od linije mreže, minus pola ivice', async () => {
+    const ivica = (debljina: number) => ({ boja: '#FFFFFF', debljina, crtica: 'PUNA' as const });
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, celije: [[{ ...celija('A'), ivice: { gore: ivica(2), dole: ivica(1), levo: ivica(1), desno: null } }, celija('B')]],
+    }));
+    const { el } = await prikazi(p);
+    const td = sloj(el, 'tabela').querySelector<HTMLElement>('td')!;
+    expect([td.style.paddingTop, td.style.paddingRight, td.style.paddingBottom, td.style.paddingLeft])
+      .toEqual(['calc(var(--u) * 2.6)', 'calc(var(--u) * 7.2)', 'calc(var(--u) * 3.1)', 'calc(var(--u) * 6.7)']);
+  });
+
+  it('TABELA: pola ivice ide od šire od dve susedne (border-collapse): red ispod debele ivice zaglavlja nije viši', async () => {
+    const ivica = (debljina: number) => ({ boja: '#FFFFFF', debljina, crtica: 'PUNA' as const });
+    const sve = (debljina: number) => ({ gore: ivica(debljina), dole: ivica(debljina), levo: ivica(debljina), desno: ivica(debljina) });
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, kolone: [50, 50], redovi: [30, 30],
+      celije: [
+        [{ ...celija('A'), spojDesno: 1, ivice: { ...sve(1), dole: ivica(3) } }, { ...celija(''), pokrivena: true, ivice: sve(1) }],
+        [{ ...celija('B'), ivice: sve(1) }, { ...celija('C'), ivice: { ...sve(1), levo: null } }],
+      ],
+    }));
+    const { el } = await prikazi(p);
+    const [, b, c] = Array.from(sloj(el, 'tabela').querySelectorAll<HTMLElement>('td'));
+    // gore: ivica 3 iznad (dole spojene ćelije A) -> 3,6 - 1,5; levo kod C: ivica 1 od B
+    expect([b.style.paddingTop, b.style.paddingRight, b.style.paddingBottom, b.style.paddingLeft])
+      .toEqual(['calc(var(--u) * 2.1)', 'calc(var(--u) * 6.7)', 'calc(var(--u) * 3.1)', 'calc(var(--u) * 6.7)']);
+    expect([c.style.paddingTop, c.style.paddingLeft]).toEqual(['calc(var(--u) * 2.1)', 'calc(var(--u) * 6.7)']);
+  });
+
   it('TEKST: okvir bez preloma i sidro', async () => {
     const p = sa<TekstSloj>('tekst', (s) => ({ ...s, okvir: { ...s.okvir, prelom: false, sidro: 'DNO' }, popuna: '#EEEEEE' }));
     const { el } = await prikazi(p);
@@ -265,12 +393,14 @@ describe('PlatnoPrikazComponent', () => {
   it('TEKST: skala fonta i proreda iz okvira, prored i razmaci pasusa, ivica centrirana na ivici sloja', async () => {
     const p = sa<TekstSloj>('tekst', (s) => ({
       ...s, okvir: { ...s.okvir, skala: 0.5, skalaProreda: 0.9 }, ivica: { boja: '#000000', debljina: 2, crtica: 'PUNA' },
-      pasusi: [{ ...pasus('a'), proredProcenat: 150, razmakPre: 6, razmakPosle: 12 }],
+      pasusi: [pasus('x'), { ...pasus('a'), proredProcenat: 150, razmakPre: 6, razmakPosle: 12 }],
     }));
     const { el } = await prikazi(p);
     const okvir = sloj(el, 'tekst').querySelector<HTMLElement>('.uz-pl-sadrzaj')!;
-    const pasusEl = okvir.querySelector<HTMLElement>('.uz-pl-pasus')!;
+    const pasusEl = okvir.querySelectorAll<HTMLElement>('.uz-pl-pasus')[1];
     expect(pasusEl.style.lineHeight).toBe('1.62');
+    // razlika proreda iznad bazne linije: (1,62 - 1,2) / 2 * 9 (veličina 18 * skala 0,5)
+    expect(pasusEl.style.top).toBe('calc(var(--u) * 1.89)');
     expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 6)');
     expect(pasusEl.style.marginBottom).toBe('calc(var(--u) * 12)');
     expect(pasusEl.querySelector<HTMLElement>('.uz-pl-deo')!.style.fontSize).toBe('calc(var(--u) * 9)');

@@ -265,7 +265,13 @@ test.describe('daljinski: vrlo duge beleške na 360 x 740', () => {
     await expect(polozaj(page)).toHaveText('1/4 · 0/3');
 
     const vece = page.getByRole('button', { name: 'Veća slova beležaka' });
-    for (let i = 0; i < 10 && await vece.isEnabled(); i++) await vece.click();
+    // posle svakog klika sačekati novu veličinu: inače `isEnabled` pročita stanje pre renderovanja, a klik na dugme
+    // koje je u međuvremenu onemogućeno čeka do isteka testa
+    for (let i = 0; i < 10 && await vece.isEnabled(); i++) {
+      const pre = await beleske(page).evaluate(el => getComputedStyle(el).fontSize);
+      await vece.click();
+      await expect(beleske(page)).not.toHaveCSS('font-size', pre);
+    }
     await expect(vece).toBeDisabled();
     await expect(beleske(page)).toHaveCSS('font-size', '40px');
 

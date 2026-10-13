@@ -38,6 +38,12 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { a } from '../../ui/rang-lista.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from 'src/app/features/uzivo/ui/tajmer.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from '../../uzivo-putanje';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    // paketi van spiska zabranjenih su slobodni; granica imena paketa je '/', ne prefiks
+    { code: "import { marked } from 'marked';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from 'fflatex';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    { code: "import { a } from '@tiptapx/core';", filename: uzivo, options: [{ feature: 'features/uzivo/javno', zabranjeniPaketi: ['@tiptap/*'] }] },
+    // eksplicitno prazan spisak gasi zabranu (podrazumevani spisak važi samo kad opcije nema)
+    { code: "import { unzipSync } from 'fflate';", filename: uzivo, options: [{ feature: 'features/uzivo/javno', zabranjeniPaketi: [] }] },
   ],
   invalid: [
     // fail-closed: dinamički izvor, šablon sa izrazom, van src/app, apsolutna putanja
@@ -72,6 +78,15 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { a } from '../../data-access/izvodjenje.store';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
     { code: "import { a } from '../../pages/konzola.page';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
     { code: "const m = () => import('../../ui/slajd-prikaz.component');", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjen' }] },
+    // zabranjeni paketi (ZABRANJENI_PAKETI_JAVNO): i podputanje, dinamički uvoz, require, re-eksport; podrazumevani spisak bez opcije
+    { code: "import { unzipSync } from 'fflate';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "import { unzipSync } from 'fflate';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "import { unzipSync } from 'fflate/esm/browser.js';", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "const m = () => import('fflate');", filename: uzivo, options: opcije('features/uzivo/javno'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "const f = require('fflate');", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "export * from 'fflate';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "import { unzipSync } from 'fflate';", filename: uzivo, options: [{ feature: 'features/uzivo/javno' }], errors: [{ messageId: 'zabranjenPaket' }] },
+    { code: "import { E } from '@tiptap/core';", filename: uzivo, options: [{ feature: 'features/uzivo/javno', zabranjeniPaketi: ['@tiptap/*'] }], errors: [{ messageId: 'zabranjenPaket' }] },
     // dodatak uživa ne važi za upis
     { code: "import { a } from '../../uzivo/data-access/uzivo.models';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
   ],

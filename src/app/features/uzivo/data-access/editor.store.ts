@@ -365,10 +365,17 @@ export const EditorStore = signalStore(
     }
 
     return {
+      /**
+       * Čita prezentaciju sa servera. Ponovno čitanje iste, već prikazane prezentacije (nepoznat ishod uvoza) ostavlja
+       * prikazanu dok ne stigne nova, pa se editor ne ruši (fokus ostaje gde je bio) i izabran slajd ostaje kad ga nova
+       * lista ima; neuspelo ponovno čitanje je greška kao pri prvom.
+       */
       ucitaj(id: number): void {
         if (prezentacijaId && prezentacijaId !== id) {
           sacuvajPreIzlaska();
         }
+        const ponovo = prezentacijaId === id && store.prezentacija()?.id === id;
+        const izabranPre = ponovo ? store.izabraniId() : null;
         generacija++;
         const gen = generacija;
         prezentacijaId = id;
@@ -377,14 +384,16 @@ export const EditorStore = signalStore(
         nacrtiUSlanju.clear();
         uSlanju.clear();
         obrisani.clear();
-        patchState(store, POCETNO);
+        patchState(store, ponovo ? { cuvanje: POCETNO.cuvanje, greska: null } : POCETNO);
         api.detalji(id).subscribe({
           next: p => {
             if (gen !== generacija) return;
             const slajdovi = [...p.slajdovi].sort((a, b) => a.rb - b.rb);
-            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: slajdovi[0]?.id ?? null });
+            const izabran = slajdovi.some(s => s.id === izabranPre) ? izabranPre : slajdovi[0]?.id ?? null;
+            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: izabran });
           },
-          error: e => gen === generacija && patchState(store, { greska: razlogGreske(e, 'Prezentacija nije učitana.') }),
+          error: e => gen === generacija
+            && patchState(store, { prezentacija: null, izabraniId: null, greska: razlogGreske(e, 'Prezentacija nije učitana.') }),
         });
       },
 
@@ -533,6 +542,27 @@ export const EditorStore = signalStore(
               if (gen === generacija) primeni(staro);
             },
           });
+      },
+
+      /**
+       * Rezultat uvoza iz PowerPointa (cela prezentacija posle `POST slajdovi/uvoz`): slajdovi po `rb`, izabran prvi slajd
+       * čiji id ranije nije postojao. Id-jevi postojećih slajdova se ne menjaju, pa lokalno stanje čuvanja (izmene, nacrti
+       * zamenjeni pravim id-jem) i dalje važi; slajd sa izmenom koja još nije na serveru zadržava lokalni sadržaj. Uvoz
+       * kreće tek posle `sacuvajSve`, pa nacrta nema. Odgovor za drugu prezentaciju (u međuvremenu učitanu) se odbacuje.
+       */
+      primeniUvoz(p: PrezentacijaDetails): void {
+        const sada = store.prezentacija();
+        if (!sada || p.id !== prezentacijaId) return;
+        const lokalni = new Map(store.slajdovi().map(s => [s.id, s]));
+        const slajdovi = [...p.slajdovi]
+          .sort((a, b) => a.rb - b.rb)
+          .map((s, i) => {
+            const l = lokalni.get(s.id);
+            return { ...(l && naCekanju(s.id) ? l : s), rb: i + 1 };
+          });
+        patchState(store, { prezentacija: { ...p, slajdovi } });
+        const prvi = slajdovi.find(s => !lokalni.has(s.id));
+        if (prvi) izaberi(prvi.id);
       },
 
       /** Stabilan ključ slajda (isti pre i posle zamene id-ja nacrta) za `track`. */

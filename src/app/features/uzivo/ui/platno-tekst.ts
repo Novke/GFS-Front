@@ -1,6 +1,8 @@
 import type { Crtica, Deo, FormatBroja, Okvir, Pasus, Poravnanje, Sidro } from '../data-access/platno.models';
 import { kljucPasusa } from '../data-access/platno-koraci';
 import { cssFonta } from './platno-fontovi';
+import { METRIKA, Metrika, pomerajPrveLinije, pomerajProreda, visinaReda } from './platno-metrika';
+import { kljucMerenja, trebaMerenjeTabova } from './platno-tabovi';
 
 /**
  * Čiste funkcije za tekst platna (TEKST slojevi i ćelije tabela). Sve mere su u jedinicama platna: 1 jedinica = 1 pt
@@ -24,8 +26,6 @@ const PORAVNANJA: Record<Poravnanje, string> = { LEVO: 'left', CENTAR: 'center',
 const SIDRA_FLEKS: Record<Sidro, string> = { VRH: 'flex-start', SREDINA: 'center', DNO: 'flex-end' };
 export const SIDRA_CELIJE: Record<Sidro, string> = { VRH: 'top', SREDINA: 'middle', DNO: 'bottom' };
 
-/** PowerPointov jednostruki prored je 1,2 x veličina fonta (kalibracija prema PDF referenci: faza 2). */
-const OSNOVNI_PRORED = 1.2;
 /** Veličina indeksa i eksponenta u odnosu na osnovni tekst. */
 const SKALA_POLOZAJA = 0.65;
 /** Prazan pasus bez delova ima visinu reda od 18 pt (odluka 9). */
@@ -65,6 +65,7 @@ function formatiraj(n: number, format: FormatBroja): string {
   switch (format) {
     case 'ARAPSKI_TACKA': return `${n}.`;
     case 'ARAPSKI_ZAGRADA': return `${n})`;
+    case 'ARAPSKI': return String(n);
     case 'MALA_SLOVA_ZAGRADA': return `${slovo(n)})`;
     case 'VELIKA_SLOVA_TACKA': return `${slovo(n).toUpperCase()}.`;
     case 'RIMSKI_VELIKI_TACKA': return `${rimski(n)}.`;
@@ -106,7 +107,12 @@ export function oznakeListe(pasusi: Pasus[]): (string | null)[] {
   });
 }
 
-export interface PrikazDela { tekst: string; stil: Stil; }
+export interface PrikazDela {
+  tekst: string;
+  stil: Stil;
+  /** U merenom pasusu: tekst podeljen na `\t` (između dva segmenta šablon crta `.uz-pl-tab`); inače null. */
+  segmenti: string[] | null;
+}
 export interface PrikazOznake { tekst: string; stil: Stil; }
 export interface PrikazPasusa {
   indeks: number;
@@ -115,6 +121,8 @@ export interface PrikazPasusa {
   stil: Stil;
   oznaka: PrikazOznake | null;
   delovi: PrikazDela[];
+  /** Ključ merenih tabova (`data-meri-tabove`, `platno-tabovi.ts`) ili null kad pasus ne traži merenje. */
+  meriTabove: string | null;
 }
 
 function velicinaDela(deo: Pick<Deo, 'velicina' | 'polozaj'>, skala: number): number {
@@ -137,49 +145,107 @@ export function stilDela(deo: Deo, skala: number): Stil {
   return stil;
 }
 
-function delovi(p: Pasus, skala: number): PrikazDela[] {
+function delovi(p: Pasus, skala: number, prored: (font: string) => string, meri: boolean): PrikazDela[] {
   if (prazan(p)) {
     // Prazan red mora imati visinu: zero-width space nosi veličinu prvog dela ili 18 pt (odluka 9).
     const prvi = p.delovi[0];
     const stil = prvi
       ? stilDela(prvi, skala)
       : { 'font-family': cssFonta(''), 'font-size': jedinice(PODRAZUMEVANA_VELICINA * skala) };
-    return [{ tekst: ZWSP, stil }];
+    return [{ tekst: ZWSP, stil, segmenti: null }];
   }
-  const rezultat = p.delovi.filter((d) => d.tekst !== '').map((d) => ({ tekst: d.tekst, stil: stilDela(d, skala) }));
+  const proredPasusa = prored(p.delovi[0].font);
+  const rezultat = p.delovi.filter((d) => d.tekst !== '').map((d): PrikazDela => {
+    const stil = stilDela(d, skala);
+    // Pasus nosi prored fonta prvog dela; deo drugog fonta sa drugačijim prostim proredom (metrika) dobija svoj.
+    const sopstveni = prored(d.font);
+    if (sopstveni !== proredPasusa) {
+      stil['line-height'] = sopstveni;
+    }
+    return { tekst: d.tekst, stil, segmenti: null };
+  });
   const poslednji = rezultat[rezultat.length - 1];
   if (poslednji.tekst.endsWith('\n')) {
     // Prelom reda na kraju pasusa (`a:br`) u PowerPointu daje prazan red; u CSS-u ga bez sadržaja nema.
     poslednji.tekst += ZWSP;
   }
+  if (meri) {
+    for (const d of rezultat) {
+      d.segmenti = d.tekst.split('\t');
+    }
+  }
   return rezultat;
+}
+
+/** Najmanja veličina slova nepraznih delova pasusa (sa skalom okvira; indeks i eksponent umanjeni); prazan -> prvi deo. */
+function najmanjaVelicina(p: Pasus, skala: number): number {
+  const delovi = p.delovi.filter((d) => d.tekst !== '');
+  if (delovi.length === 0) return (p.delovi[0]?.velicina ?? PODRAZUMEVANA_VELICINA) * skala;
+  return Math.min(...delovi.map((d) => velicinaDela(d, skala)));
+}
+
+export interface OpcijePasusa {
+  /** Skala fonta i skala proreda okvira (`normAutofit`). */
+  skala?: number;
+  skalaProreda?: number;
+  /** Id TEKST sloja (ključ vidljivosti pasusa); null u ćelijama tabele. */
+  slojId?: string | null;
+  /** Prefiks okvira za ključ merenih tabova (`prefiksSloja`/`prefiksCelije`); null = bez merenja. */
+  prefiksMerenja?: string | null;
+  metrika?: Metrika;
+}
+
+/** `margin-top` prvog pasusa okvira: `razmakPre` (ako ga metrika primenjuje) + pomeraj prve linije (em prvog dela). */
+function razmakPrvog(p: Pasus, m: Metrika, skala: number): string {
+  const razmak = m.razmakPrePrvogPasusa ? p.razmakPre : 0;
+  const prvi = p.delovi[0];
+  return jedinice(razmak + pomerajPrveLinije(prvi?.font ?? '', m) * (prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala);
 }
 
 /**
  * Prikaz pasusa: `<p>` nosi poravnanje, razmake (zbirno, jer su pasusi u fleks koloni pa se margine ne skupljaju,
  * kao u PowerPointu), uvlačenje (`levo` = marL, `prviRed` = indent; viseća oznaka liste stoji u `-prviRed`), prored i
- * font prvog dela (od njega zavise visina praznog reda i oznaka liste).
- * Sopstveni tab-stopovi: faza 4 (editor). Do tada `\t` ide na podrazumevani razmak 36 pt (`tab-size` u `platno.css`),
- * a `tabulatori` se ne čitaju.
+ * font prvog dela, a veličinu najmanjeg dela (strut ne sme da poveća red samo sa manjim slovima); oznaka liste nosi font
+ * i veličinu prvog dela. Prored, pomeraj proreda, prva linija i razmak pre prvog pasusa dolaze iz metrike
+ * (`platno-metrika.ts`).
+ * Tabovi: svaki pasus sa tabom (`trebaMerenjeTabova`) dobija ključ `meriTabove` (kad pozivalac da prefiks merenja), a
+ * njegovi delovi `segmenti`; komponenta posle crtanja meri i postavlja širine tabova (`platno-tabovi.ts`). Bez prefiksa
+ * merenja `\t` ostaje sa podrazumevanim razmakom 36 pt (`tab-size` u `platno.css`).
  */
-export function prikazPasusa(pasusi: Pasus[], skala = 1, skalaProreda = 1, slojId: string | null = null): PrikazPasusa[] {
+export function prikazPasusa(pasusi: Pasus[], o: OpcijePasusa = {}): PrikazPasusa[] {
+  const { skala = 1, skalaProreda = 1, slojId = null, prefiksMerenja = null, metrika = METRIKA } = o;
   const oznake = oznakeListe(pasusi);
   return pasusi.map((p, indeks) => {
     const prvi = p.delovi[0];
+    const proredDela = (font: string) => String(visinaReda(font, p.proredProcenat, skalaProreda, metrika));
+    const meriTabove = prefiksMerenja !== null && trebaMerenjeTabova(p) ? kljucMerenja(prefiksMerenja, indeks) : null;
     const stil: Stil = {
       'text-align': PORAVNANJA[p.poravnanje],
-      'margin-top': jedinice(p.razmakPre),
+      'margin-top': indeks === 0 ? razmakPrvog(p, metrika, skala) : jedinice(p.razmakPre),
       'margin-bottom': jedinice(p.razmakPosle),
       'padding-left': jedinice(p.uvlacenje.levo),
       'text-indent': jedinice(p.uvlacenje.prviRed),
-      'line-height': String(zaokruzi(OSNOVNI_PRORED * (p.proredProcenat / 100) * skalaProreda)),
+      'line-height': proredDela(prvi?.font ?? ''),
       'font-family': cssFonta(prvi?.font ?? ''),
-      'font-size': jedinice((prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala),
+      // Najmanja veličina dela: "strut" pasusa ne sme da poveća red u kome su samo manja slova (`a:br` posle velikog
+      // dela, pa manji tekst); PowerPoint red meri po najvećem slovu u tom redu.
+      'font-size': jedinice(najmanjaVelicina(p, skala)),
     };
+    // Razlika proreda iznad bazne linije (PowerPoint): ceo pasus se pomeri bez promene rasporeda (relativni položaj).
+    const pomeraj = zaokruzi(pomerajProreda(prvi?.font ?? '', p.proredProcenat, skalaProreda, metrika)
+      * (prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala);
+    if (pomeraj !== 0) {
+      stil['position'] = 'relative';
+      stil['top'] = jedinice(pomeraj);
+    }
     const tekstOznake = oznake[indeks];
     let oznaka: PrikazOznake | null = null;
     if (tekstOznake !== null) {
-      const stilOznake: Stil = {};
+      // Oznaka nosi font i veličinu prvog dela (ne nasleđuje najmanju veličinu pasusa).
+      const stilOznake: Stil = {
+        'font-family': cssFonta(prvi?.font ?? ''),
+        'font-size': jedinice((prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala),
+      };
       const boja = p.lista?.boja ?? prvi?.boja;
       if (boja) {
         stilOznake['color'] = boja;
@@ -194,7 +260,8 @@ export function prikazPasusa(pasusi: Pasus[], skala = 1, skalaProreda = 1, slojI
       kljuc: slojId === null ? null : kljucPasusa(slojId, indeks),
       stil,
       oznaka,
-      delovi: delovi(p, skala),
+      delovi: delovi(p, skala, proredDela, meriTabove !== null),
+      meriTabove,
     };
   });
 }

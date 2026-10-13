@@ -8,10 +8,12 @@
 //
 // Lista je dozvoljenih (fail-closed): novi modul na javnoj ruti mora svesno da se doda u `javna-ruta-konfig.js`. Provera
 // važi samo za DIREKTNE uvoze fajla. Izvor uvoza mora biti string (ili šablon bez izraza); sve što se razrešava van
-// `src/app` (osim paketa iz node_modules) je greška, osim ako je na listi.
+// `src/app` (osim paketa iz node_modules) je greška, osim ako je na listi. Paketi su dozvoljeni, osim spiska
+// `zabranjeniPaketi` (podrazumevano `ZABRANJENI_PAKETI_JAVNO` iz konfiga: teške nastavničke biblioteke, npr. fflate).
 'use strict';
 
 const path = require('node:path');
+const { ZABRANJENI_PAKETI_JAVNO } = require('./javna-ruta-konfig');
 
 const KORENI_PROJEKTA = path.resolve(__dirname, '..');
 const APP = path.join(KORENI_PROJEKTA, 'src', 'app');
@@ -19,6 +21,11 @@ const APP = path.join(KORENI_PROJEKTA, 'src', 'app');
 /** Paket iz node_modules (`@angular/core`, `rxjs`): jedino što sme van `src/app` bez dozvole. */
 function jePaket(izvor) {
   return !izvor.startsWith('.') && !izvor.startsWith('/') && izvor !== 'src' && !izvor.startsWith('src/');
+}
+
+/** Da li je paket (ili njegova podputanja) na spisku; `@scope/*` pokriva ceo scope. */
+function jeZabranjenPaket(izvor, zabranjeni) {
+  return zabranjeni.some(z => (z.endsWith('/*') ? izvor.startsWith(z.slice(0, -1)) : izvor === z || izvor.startsWith(`${z}/`)));
 }
 
 function razresi(izvor, fajl) {
@@ -58,6 +65,7 @@ module.exports = {
         properties: {
           feature: { type: 'string' },
           dozvoljeno: { type: 'array', items: { type: 'string' } },
+          zabranjeniPaketi: { type: 'array', items: { type: 'string' } },
         },
         required: ['feature'],
         additionalProperties: false,
@@ -70,10 +78,13 @@ module.exports = {
       zabranjen:
         'Javna ruta ({{feature}}) ne sme da uvozi "{{izvor}}": zaključan /api/* studentu na telefonu otvara dijalog za ' +
         'lozinku. Dozvoljeni su samo sopstveni feature i spisak u eslint-rules/javna-ruta-konfig.js.',
+      zabranjenPaket:
+        'Javna ruta ({{feature}}) ne sme da uvozi paket "{{izvor}}": biblioteke editora i uvoza graditelja slajdova ne ' +
+        'smeju u javni chunk studenta (ZABRANJENI_PAKETI_JAVNO u eslint-rules/javna-ruta-konfig.js).',
     },
   },
   create(context) {
-    const { feature, dozvoljeno = [] } = context.options[0];
+    const { feature, dozvoljeno = [], zabranjeniPaketi = ZABRANJENI_PAKETI_JAVNO } = context.options[0];
     const fajl = context.filename;
 
     function proveri(cvor, izvor) {
@@ -82,6 +93,9 @@ module.exports = {
         return;
       }
       if (jePaket(izvor)) {
+        if (jeZabranjenPaket(izvor, zabranjeniPaketi)) {
+          context.report({ node: cvor, messageId: 'zabranjenPaket', data: { feature, izvor } });
+        }
         return;
       }
       const rel = relativnoUApp(razresi(izvor, fajl));

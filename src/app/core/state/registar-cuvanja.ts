@@ -40,6 +40,11 @@ export class RegistarCuvanja {
     this.nesacuvane.proveri();
   }
 
+  /** Da li neka prijavljena sesija ključa `kljuc` upravo ima posao (npr. uvoz u toku, za zaštitu napuštanja ekrana). */
+  zauzet(kljuc: string): boolean {
+    return [...this.sesije].some(s => s.kljuc === kljuc && s.uToku > 0);
+  }
+
   /** Emituje jednom kad nijedna prijavljena sesija ključa `kljuc` nema posao u redu ni u izvršenju; odmah ako ih nema. */
   sacekaj(kljuc: string): Observable<unknown> {
     return defer(() => {

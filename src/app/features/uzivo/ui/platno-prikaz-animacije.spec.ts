@@ -58,6 +58,50 @@ const sloj = (el: HTMLElement, id: string) => el.querySelector<HTMLElement>(`.uz
 const sadrzaj = (el: HTMLElement, id: string) => sloj(el, id).querySelector<HTMLElement>(':scope > .uz-pl-sadrzaj')!;
 const opcije = (i: number) => animate.mock.calls[i][1] as KeyframeAnimationOptions;
 
+describe('PlatnoPrikazComponent: mereni tabovi i animacije', () => {
+  it('rezervno merenje (transformacija) dok grupa traje se ponavlja kad se grupa završi, samo jednom', async () => {
+    const p = platno();
+    const tekst = p.slojevi.find((s) => s.id === 'tekst')! as Extract<Sloj, { tip: 'TEKST' }>;
+    // Rotacija sloja vodi u rezervno merenje i u jsdom-u (izračunat stil ima transformaciju), kao ULET/ZUM koji traje.
+    tekst.rotacija = 12;
+    tekst.pasusi = [{ ...tekst.pasusi[0], uvlacenje: { levo: 18, prviRed: -18 },
+      delovi: [{ ...tekst.pasusi[0].delovi[0], tekst: 'a\tb' }] }, tekst.pasusi[1]];
+    const levo = vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get');
+    try {
+      const fixture = TestBed.createComponent(PlatnoPrikazComponent);
+      Object.defineProperty(fixture.nativeElement, 'offsetWidth', { get: () => 1920 });
+      fixture.componentRef.setInput('platno', p);
+      fixture.componentRef.setInput('korak', 1);
+      fixture.componentRef.setInput('animacija', { kljuc: 1, grupa: 1 });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(animacije.length).toBeGreaterThan(0);
+      expect(levo).toHaveBeenCalled();
+
+      levo.mockClear();
+      animacije.forEach((a) => a.zavrsi());
+      await new Promise((r) => setTimeout(r));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).toHaveBeenCalled();
+
+      // Novo merenje je bilo bez grupe koja traje: sledeći kraj grupe ga ne ponavlja.
+      levo.mockClear();
+      fixture.componentRef.setInput('korak', 2);
+      fixture.componentRef.setInput('animacija', { kljuc: 2, grupa: 2 });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      animacije.forEach((a) => a.zavrsi());
+      await new Promise((r) => setTimeout(r));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(levo).not.toHaveBeenCalled();
+    } finally {
+      levo.mockRestore();
+    }
+  });
+});
+
 describe('PlatnoPrikazComponent: animacije koraka', () => {
   it('(a) prvi render bez animacije ne zove animate', async () => {
     await prikazi(platno(), 1);

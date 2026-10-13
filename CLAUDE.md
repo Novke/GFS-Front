@@ -120,7 +120,9 @@ this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
 own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
-shell, teacher API clients) to it. On the backend, anything mapped under `/public/**` is reachable from the internet
+shell, teacher API clients) to it. npm packages are free for public features except `ZABRANJENI_PAKETI_JAVNO` in the same
+file (heavy slide-builder editor/import libraries, today `fflate`; subpaths such as `fflate/esm` count too): the rule reports
+them as `zabranjenPaket`. On the backend, anything mapped under `/public/**` is reachable from the internet
 without auth.
 
 ## Uživo (`features/uzivo`)
@@ -189,6 +191,30 @@ over STOMP; teacher commands are REST.
   `GET stanje` and `POST komande` in `MockApi`), `e2e/lazni-stomp.ts` (fake STOMP broker over `page.routeWebSocket`, also
   used by `uzivo-javno`), `e2e/uzivo-nastavnik.ts` (teacher broker, Wake Lock stub), specs `uzivo-konzola` and
   `uzivo-daljinski` (360 x 740 long notes, double tap, 409/410/aborted command, sleep and wake).
+- **PowerPoint import (phase 2):** `uvoz-pptx/` holds the import as pure TS functions without Angular (`paket`, `xml`, `tema`,
+  `preset-boje`, `tipovi`, `kontekst`, `nasledjivanje`, `tekst`, `oblik`, `slika`, `tabela`/`tabela-stilovi`, `crtez`,
+  `formula`/`omml-latex`, `png`, `animacije`, `beleske`, `granice`, `ime-fajla`, `format-slike`, `slike`, `slanje`,
+  `izvestaj`, `uvoz`; `slike` uses browser canvas APIs and is not loaded by the Node sample check, `format-slike` is its
+  browser-free part; synthetic PPTX files for specs come from `pptx-fabrika.testing.ts`). The only
+  entry from the rest of the app is `pages/uvoz-pptx-otvarac.ts` (`UvozPptxOtvarac`): a dynamic `import()` of
+  `uvoz-pptx.dialog`, so the dialog, the modules and `fflate` (used only here) live in a lazy chunk and the main bundle and
+  the editor carry none of it (`e2e/lenji-uvoz.spec.ts` checks it). The dialog analyses the file in the browser, shows the
+  report, then sends slides and images through `slanje.ts`; `editor.store.primeniUvoz(prezentacija)` merges the result
+  into the open editor (ids of existing slides stay, the first new slide is selected). A small hostile file must not hang
+  the tab: building a slide stops past 300 layers or 400 animations (the slide then fails with the usual limit message), and
+  a picture whose bytes are neither a server format nor BMP (`format-slike`) is skipped at conversion, never at send time.
+  **`javno/` imports nothing from `uvoz-pptx/`** (`gfs/javna-ruta-uvozi` also forbids `fflate` there). Local check on real decks (outside `ng test` and CI,
+  `*.uzorci.ts` read files with `node:fs`): `PPTX_UZORCI=<dir> npx vitest run --config vitest.uzorci.config.mts`; the
+  samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
+- **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
+  Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
+  only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and
+  puts the whole extra line spacing above the baseline (`razlikaProredaIznad: 1`; measured for 85-100%, spacing above 100% is
+  extrapolated); `platno.css` sets `text-rendering: geometricPrecision` on the whole canvas (exact glyph widths, otherwise
+  lines wrap differently than in the PDF); `roundRect` radius is 16.667% of the shorter side; the arrowhead size comes from
+  LibreOffice oox (`VRH_STRELICE` in `platno-prikaz.component.ts`), not measured; a highlighter drawing (`rasterOp` `maskPen`,
+  `uvoz-pptx/crtez.ts`) gets 50% opacity like PowerPoint's PDF export. `ui/platno-tabovi.ts` measures every paragraph with a
+  tab after drawing (tab stops as in PowerPoint; CSS `tab-size` differs), so tab paragraphs use `uz-pl-tab` spans.
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
   `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the

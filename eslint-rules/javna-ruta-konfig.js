@@ -35,9 +35,17 @@ const DOZVOLJENO_PO_FEATURE = {
   ],
 };
 
+// npm paketi koje javni feature ne sme da uvozi (ni podputanje, npr. `fflate/esm`; "@scope/*" = ceo scope). Paketi su
+// inače slobodni (nemaju pristup `/api/*`), ali biblioteke editora i uvoza graditelja slajdova (uvoz PPTX-a, kasnije
+// mathlive, @tiptap/*, moveable, pdfjs-dist) su teške i nastavničke: idu ovde da nikad ne uđu u javni chunk studenta.
+// Pravilo uzima ovaj spisak i kad mu se ne prosledi opcija (fail-closed).
+const ZABRANJENI_PAKETI_JAVNO = [
+  'fflate', // uvoz PPTX-a (features/uzivo/uvoz-pptx), samo dinamički iz nastavničkog dijaloga
+];
+
 /** Ukupan spisak dozvoljenog za javni feature: zajednički plus njegov dodatak. */
 function dozvoljenoZa(feature) {
   return [...JAVNO_DOZVOLJENO, ...(DOZVOLJENO_PO_FEATURE[feature] ?? [])];
 }
 
-module.exports = { JAVNI_FEATURE, JAVNO_DOZVOLJENO, DOZVOLJENO_PO_FEATURE, dozvoljenoZa };
+module.exports = { JAVNI_FEATURE, JAVNO_DOZVOLJENO, DOZVOLJENO_PO_FEATURE, ZABRANJENI_PAKETI_JAVNO, dozvoljenoZa };

@@ -690,3 +690,201 @@ span.uz-ed-napomena {
   width: 10px;
   background: var(--uz-tema-akcent-1);
 }
+
+/* ---------- Uvoz iz PowerPointa (dijalog, lenji chunk; stilovi su ovde jer su globalni) ---------- */
+
+.uz-uv-telo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uz-uv [tabindex='-1']:focus {
+  outline: none;
+}
+
+.uz-uv-izbor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.uz-uv-izbor-ikona {
+  width: 40px;
+  height: 40px;
+  color: var(--muted);
+}
+
+/* skriven, ali dostupan za `click()` i `setInputFiles` (dugme ispred njega je pristupačan ulaz) */
+.uz-uv-fajl {
+  display: none;
+}
+
+.uz-uv-fajl-ime {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.uz-uv-napredak {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uz-uv-status {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-uv-pregled,
+.uz-uv-izvestaj {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.uz-uv-pregled > p,
+.uz-uv-izvestaj > p {
+  margin: 0;
+}
+
+.uz-uv-zbir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.uz-uv-zbir--uspeh mat-icon {
+  color: var(--ok);
+}
+
+.uz-uv-odeljak {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uz-uv-naslov {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.uz-uv-lista {
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.uz-uv-stavka {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-left: 3px solid var(--warn);
+}
+
+.uz-uv-stavka + .uz-uv-stavka {
+  border-top: 1px solid var(--line);
+}
+
+.uz-uv-stavka--greska {
+  border-left-color: var(--danger);
+}
+
+.uz-uv-slajd {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.uz-uv-opseg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: 40px;
+}
+
+.uz-uv-opseg .mat-mdc-form-field {
+  width: 7em;
+}
+
+.uz-uv-prepreka {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--ink);
+  border-left: 3px solid var(--warn);
+}
+
+.uz-uv-poruka {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--ink);
+}
+
+.uz-uv-poruka mat-icon {
+  flex: none;
+  color: var(--danger);
+}
+
+.uz-uv-greska {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uz-uv-tekst {
+  width: 100%;
+}
+
+.uz-uv-tekst textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .uz-uv-opseg {
+    margin-left: 0;
+  }
+
+  .uz-uv-stavka {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+.uz-ed-dijalog .uz-ed-fajl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.uz-ed-fajl-ulaz {
+  display: none;
+}

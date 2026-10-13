@@ -1,5 +1,8 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, ErrorHandler, Injector, afterNextRender, computed, effect, inject, signal,
+  untracked,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -10,7 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { distinctUntilChanged, map } from 'rxjs';
+import { distinctUntilChanged, from, map, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
@@ -25,8 +28,10 @@ import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
@@ -70,13 +75,14 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </span>
           <div class="uz-ed-akcije">
             <a mat-button [routerLink]="'/' + rute.prezentacijaIzvodjenja(p.id)"><mat-icon svgIcon="history" />Izvođenja</a>
-            <button mat-button type="button" [disabled]="radi()" (click)="duplirajPrezentaciju()">
+            <!-- disabledInteractive: dugme ostaje fokusabilno, pa CDK posle zatvaranja dijaloga vraća fokus na njega (ne na body) -->
+            <button mat-button type="button" [disabled]="radi()" disabledInteractive (click)="duplirajPrezentaciju()">
               <mat-icon svgIcon="content_copy" />Dupliraj prezentaciju
             </button>
-            <button mat-button type="button" [disabled]="radi()" (click)="obrisiPrezentaciju()">
+            <button mat-button type="button" [disabled]="radi()" disabledInteractive (click)="obrisiPrezentaciju()">
               <mat-icon svgIcon="delete" />Obriši
             </button>
-            <button mat-flat-button type="button" [disabled]="radi()" (click)="pokreni()">
+            <button mat-flat-button type="button" [disabled]="radi()" disabledInteractive (click)="pokreni()">
               <mat-icon svgIcon="play_arrow" />Pokreni
             </button>
           </div>
@@ -157,6 +163,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
+              <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
+                      [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
             </div>
           </nav>
 
@@ -228,6 +236,12 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly dialog = inject(MatDialog);
   private readonly obavestenja = inject(NotificationStore);
   private readonly mrvice = inject(BreadcrumbService);
+  private readonly otvaracUvoza = inject(UvozPptxOtvarac);
+  private readonly greske = inject(ErrorHandler);
+  private readonly registar = inject(RegistarCuvanja);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly rute = UzivoPutanje;
   protected readonly tipovi = TIPOVI_PITANJA;
@@ -252,7 +266,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly animacijaPregleda = signal<{ kljuc: number; grupa: number } | null>(null);
   private brojacAnimacije = 0;
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
-  /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje). */
+  /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje, uvoz). */
   protected readonly radi = signal(false);
   protected readonly izabraniNiz = computed(() => {
     const s = this.store.izabrani();
@@ -306,14 +320,27 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     return this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id)).length;
   }
 
+  /** Dijalog uvoza upravo šalje slike ili slajdove (sesija `uvoz-<id>` u `RegistarCuvanja`). */
+  private uvozUToku(): boolean {
+    const p = this.store.prezentacija();
+    return !!p && this.registar.zauzet(`uvoz-${p.id}`);
+  }
+
   /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
   imaNesacuvanihIzmena(): boolean {
-    return this.nesacuvaniSlajdovi() > 0;
+    return this.nesacuvaniSlajdovi() > 0 || this.uvozUToku();
   }
 
   tekstNapustanja(): string {
-    return `Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
-      + 'Ako napustiš editor, odbacuju se.';
+    const delovi: string[] = [];
+    if (this.uvozUToku()) {
+      delovi.push('Uvoz iz PowerPointa još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
+    }
+    if (this.nesacuvaniSlajdovi() > 0) {
+      delovi.push(`Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
+        + 'Ako napustiš editor, odbacuju se.');
+    }
+    return delovi.join(' ');
   }
 
   protected tastatura(e: KeyboardEvent): void {
@@ -437,6 +464,45 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
         },
         error: e => this.neuspeh(e, 'Brisanje nije uspelo.'),
       });
+    });
+  }
+
+  /**
+   * Uvoz iz PowerPointa (spec 7.7): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan
+   * dijalog sa izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store i fokus na prvi uvezen slajd, a
+   * nepoznat ishod slanja (`'osvezi'`) ponovo učitava prezentaciju, pa lista nikad ne ostaje zastarela.
+   */
+  protected uveziIzPowerPointa(): void {
+    const p = this.store.prezentacija();
+    if (!p || this.radi()) return;
+    this.radi.set(true);
+    this.store.sacuvajSve().pipe(
+      switchMap(() => {
+        const s = this.store.izabrani();
+        return from(this.otvaracUvoza.otvori(this.dialog, {
+          prezentacijaId: p.id, brojSlajdova: this.store.slajdovi().length, izabraniId: s?.id ?? null, izabraniRb: s?.rb ?? null,
+        }));
+      }),
+      switchMap(zatvaranje => zatvaranje),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe({
+      next: rezultat => {
+        if (rezultat === 'osvezi') {
+          // nepoznat ishod slanja: slajdovi su možda upisani, lista se čita ponovo sa servera (prikazana prezentacija
+          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu "PowerPoint" ostaju)
+          this.store.ucitaj(p.id);
+        } else if (rezultat) {
+          this.store.primeniUvoz(rezultat);
+          afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>('.uz-ed-stavka-dugme[aria-current="true"]')?.focus(),
+            { injector: this.injector });
+        }
+      },
+      error: e => {
+        // `sacuvajSve` greši samo sa `NijeSacuvano`; ostalo je neuspelo učitavanje lenjog chunk-a (konzola + poruka)
+        if (!(e instanceof NijeSacuvano)) this.greske.handleError(e);
+        this.neuspeh(e, 'Dijalog uvoza nije učitan. Osveži stranicu i pokušaj ponovo.', 'Uvoz nije pokrenut');
+      },
+      complete: () => this.radi.set(false),
     });
   }
 

@@ -43,6 +43,8 @@ export interface PitanjeCmd {
   tekstPrikaz: TekstPrikaz | null; prihvatljiviOdgovori: string[]; skalaMinOznaka: string | null; skalaMaxOznaka: string | null;
 }
 export interface SlajdCmd { tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean; pitanje: PitanjeCmd | null; platno: Platno | null; }
+/** Uvoz više slajdova odjednom (PowerPoint): `posle` = id slajda posle kog se ubacuju, `null` = na kraj. */
+export interface UvozSlajdovaCmd { posle: number | null; slajdovi: SlajdCmd[]; }
 export interface PredavanjeZaPokretanje { id: number; rb: number; datum: string; tema: string | null; zavrseno: boolean | null; grupa: GrupaKratko | null; }
 export interface PokreniCmd { cuvanje: boolean; grupaId: number | null; predavanjeId: number | null; }
 export interface PredavanjeKratko { id: number; rb: number; datum: string; tema: string | null; }

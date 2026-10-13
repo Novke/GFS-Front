@@ -1,6 +1,7 @@
 import { pasus } from '../data-access/platno-podaci.testing';
 import { FormatBroja, Lista, Pasus } from '../data-access/platno.models';
-import { oznakeListe, rimski } from './platno-tekst';
+import { METRIKA, Metrika } from './platno-metrika';
+import { oznakeListe, prikazPasusa, rimski } from './platno-tekst';
 
 const broj = (format: FormatBroja | null = 'ARAPSKI_TACKA', pocetak: number | null = 1): Lista =>
   ({ vrsta: 'BROJ', znak: null, boja: null, format, pocetak });
@@ -65,7 +66,13 @@ describe('oznakeListe', () => {
     expect(niz('MALA_SLOVA_ZAGRADA', 2)).toEqual(['a)', 'b)']);
     expect(niz('VELIKA_SLOVA_TACKA', 2)).toEqual(['A.', 'B.']);
     expect(niz('ARAPSKI_ZAGRADA', 2)).toEqual(['1)', '2)']);
+    expect(niz('ARAPSKI', 2)).toEqual(['1', '2']);
     expect(niz('MALA_SLOVA_ZAGRADA', 28).slice(25)).toEqual(['z)', 'aa)', 'bb)']);
+  });
+
+  it('ARAPSKI: 1 2 3 bez interpunkcije (PowerPointov arabicPlain)', () => {
+    expect(oznakeListe([p('a', broj('ARAPSKI')), p('b', broj('ARAPSKI')), p('c', broj('ARAPSKI'))])).toEqual(['1', '2', '3']);
+    expect(oznakeListe([p('a', broj('ARAPSKI', 7)), p('b', broj('ARAPSKI', 7))])).toEqual(['7', '8']);
   });
 
   it('BROJ bez formata i početka: 1.', () => {
@@ -75,5 +82,87 @@ describe('oznakeListe', () => {
   it('znak liste; bez znaka podrazumevani •', () => {
     const znak = (z: string | null): Lista => ({ vrsta: 'ZNAK', znak: z, boja: null, format: null, pocetak: null });
     expect(oznakeListe([p('a', znak('–')), p('b', znak(null)), p('c', null)])).toEqual(['–', '•', null]);
+  });
+});
+
+describe('prikazPasusa: mereni tabovi', () => {
+  const meri: Pasus = { ...pasus('a\tb\tc'), uvlacenje: { levo: 18, prviRed: -18 } };
+
+  it('pasus sa tabom (i bez uvlačenja) dobija ključ merenja i delove razbijene na tabovima; bez taba ne', () => {
+    const [prvi, drugi, treci] = prikazPasusa([pasus('x\ty'), meri, pasus('xy')], { slojId: 's', prefiksMerenja: '3' });
+    expect(prvi.meriTabove).toBe('3-0');
+    expect(prvi.delovi[0].segmenti).toEqual(['x', 'y']);
+    expect(treci.meriTabove).toBeNull();
+    expect(treci.delovi[0].segmenti).toBeNull();
+    expect(drugi.meriTabove).toBe('3-1');
+    expect(drugi.delovi[0].segmenti).toEqual(['a', 'b', 'c']);
+  });
+
+  it('bez prefiksa merenja (nepoznat okvir) tab ostaje u tekstu', () => {
+    const [p0] = prikazPasusa([meri]);
+    expect(p0.meriTabove).toBeNull();
+    expect(p0.delovi[0].segmenti).toBeNull();
+  });
+});
+
+describe('prikazPasusa: metrika teksta', () => {
+  const dva = (): Pasus[] => [{ ...pasus('a'), razmakPre: 6 }, { ...pasus('b'), razmakPre: 6 }];
+  const sa = (izmena: Partial<Metrika>): Metrika => ({ ...METRIKA, ...izmena });
+
+  it('podrazumevana metrika (PowerPoint, F19): bez razmakPre prvog pasusa, prored 1,2, bez pomeraja pri 100%', () => {
+    const [a, b] = prikazPasusa(dva());
+    expect(a.stil['margin-top']).toBe('calc(var(--u) * 0)');
+    expect(b.stil['margin-top']).toBe('calc(var(--u) * 6)');
+    expect(a.stil['line-height']).toBe('1.2');
+    expect(a.stil['top']).toBeUndefined();
+    expect(a.delovi[0].stil['line-height']).toBeUndefined();
+  });
+
+  it('razmakPrePrvogPasusa true (CSS): i prvi pasus dobija razmak pre', () => {
+    const [a, b] = prikazPasusa(dva(), { metrika: sa({ razmakPrePrvogPasusa: true }) });
+    expect(a.stil['margin-top']).toBe('calc(var(--u) * 6)');
+    expect(b.stil['margin-top']).toBe('calc(var(--u) * 6)');
+  });
+
+  it('pomeraj prve linije u em fonta prvog dela (u jedinicama), samo na prvom pasusu', () => {
+    const metrika = sa({ pomerajPrveLinijeEm: { Carlito: -0.05 }, razmakPrePrvogPasusa: true });
+    const [a, b] = prikazPasusa(dva(), { metrika });
+    expect(a.stil['margin-top']).toBe('calc(var(--u) * 5.1)');
+    expect(b.stil['margin-top']).toBe('calc(var(--u) * 6)');
+  });
+
+  it('razlika proreda iznad bazne linije: pasus se pomeri za (visina reda - 1,2) / 2 * veličina, bez promene rasporeda', () => {
+    const p90: Pasus = { ...pasus('a'), proredProcenat: 90 };
+    p90.delovi = [{ ...p90.delovi[0], velicina: 40 }];
+    const [a] = prikazPasusa([p90]);
+    // 1,08 - 1,2 = -0,12 em, pola ide iznad u CSS-u, celo u PowerPointu -> -0,06 * 40 = -2,4 (naviše)
+    expect(a.stil['position']).toBe('relative');
+    expect(a.stil['top']).toBe('calc(var(--u) * -2.4)');
+    // skala fonta (normAutofit) i skala proreda ulaze u pomeraj; 150% ide naniže
+    const [b] = prikazPasusa([{ ...p90, proredProcenat: 150 }], { skala: 0.5, skalaProreda: 0.9 });
+    expect(b.stil['top']).toBe('calc(var(--u) * 4.2)');
+    // CSS ponašanje (udeo 0,5): bez pomeraja
+    expect(prikazPasusa([p90], { metrika: sa({ razlikaProredaIznad: 0.5 }) })[0].stil['top']).toBeUndefined();
+  });
+
+  it('delovi različite veličine: <p> nosi najmanju (red samo sa manjim slovima nije visok kao prvi deo), oznaka prvi deo', () => {
+    const mesan: Pasus = { ...pasus('a'), lista: { vrsta: 'ZNAK', znak: '•', boja: null, format: null, pocetak: null } };
+    mesan.delovi = [{ ...mesan.delovi[0], velicina: 40, tekst: 'A\n' }, { ...mesan.delovi[0], velicina: 28, font: 'Arimo', tekst: 'b' }];
+    const [a] = prikazPasusa([mesan], { skala: 0.5 });
+    expect(a.stil['font-size']).toBe('calc(var(--u) * 14)');
+    expect(a.stil['font-family']).toContain('Carlito');
+    expect(a.oznaka!.stil['font-size']).toBe('calc(var(--u) * 20)');
+    expect(a.oznaka!.stil['font-family']).toContain('Carlito');
+    expect(a.delovi.map((d) => d.stil['font-size'])).toEqual(['calc(var(--u) * 20)', 'calc(var(--u) * 14)']);
+  });
+
+  it('prosti prored po fontu: pasus po prvom delu, deo drugog fonta dobija svoj', () => {
+    const metrika = sa({ prostiProred: { '*': 1.2, Tinos: 1.15 } });
+    const p: Pasus = { ...pasus('a'), proredProcenat: 90 };
+    p.delovi = [...p.delovi, { ...p.delovi[0], tekst: 'b', font: 'Tinos' }];
+    const [a] = prikazPasusa([p], { metrika });
+    expect(a.stil['line-height']).toBe('1.08');
+    expect(a.delovi[0].stil['line-height']).toBeUndefined();
+    expect(a.delovi[1].stil['line-height']).toBe('1.035');
   });
 });

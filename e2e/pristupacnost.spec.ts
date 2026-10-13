@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
+import { uzorakPptx } from './pptx-uzorak';
 import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
 /** Token otvorene sesije iz `fixtures/onboarding.json` (izmišljen). */
@@ -26,9 +27,10 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 
-/** axe nad celom stranicom: samo serious/critical kršenja (sa prvih 5 elemenata za poruku). */
-async function ozbiljnaKrsenja(page: Page) {
-  const rezultat = await new AxeBuilder({ page }).withTags(OZNAKE).analyze();
+/** Serious/critical kršenja axe-a (cela stranica ili samo `ukljuci`), sa prvih 5 elemenata svakog. */
+async function ozbiljnaKrsenja(page: Page, ukljuci?: string) {
+  const axe = new AxeBuilder({ page }).withTags(OZNAKE);
+  const rezultat = await (ukljuci ? axe.include(ukljuci) : axe).analyze();
   return rezultat.violations
     .filter(v => v.impact === 'serious' || v.impact === 'critical')
     .map(v => ({ pravilo: v.id, uticaj: v.impact, opis: v.help, elementi: v.nodes.map(n => n.target.join(' ')).slice(0, 5) }));
@@ -83,6 +85,25 @@ for (const rezim of ['dan', 'noc'] as const) {
         await expect(page.getByRole('group', { name: 'Pitanje' }).getByText('Odgovorili 0/2')).toBeVisible();
         expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/daljinski, pitanje (${rezim})`).toEqual([]);
       });
+    });
+
+    // dijalog uvoza iz PowerPointa (lenji chunk) u stanju pregleda i izveštaja, nad editorom prezentacije
+    test('dijalog uvoza iz PowerPointa (pregled, izveštaj): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: 'Uvezi iz PowerPointa' }).click();
+      const dijalog = page.locator('mat-dialog-container');
+      await expect(dijalog.getByRole('heading', { name: 'Uvoz iz PowerPointa' })).toBeVisible();
+      await dijalog.locator('input[type=file]').setInputFiles(uzorakPptx());
+
+      await expect(dijalog.locator('[data-faza="pregled"]')).toBeVisible();
+      await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog uvoza, pregled (${rezim})`).toEqual([]);
+
+      await dijalog.getByRole('button', { name: 'Uvezi' }).click();
+      await expect(dijalog.locator('[data-faza="izvestaj"]')).toBeVisible();
+      await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog uvoza, izveštaj (${rezim})`).toEqual([]);
     });
   });
 }
