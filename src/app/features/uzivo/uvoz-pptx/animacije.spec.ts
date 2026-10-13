@@ -313,14 +313,15 @@ describe('pasusiSaAnimacijom', () => {
 });
 
 describe('pretvoriAnimacije: neprijateljski fajl (granice pre gradnje)', () => {
-  // Granica vremena je labava (CI), ali kvadratni hod (4000 efekata ~ desetine sekundi) je daleko iznad nje.
+  // Granica vremena je labava (opterećen CI ili mašina sa više agenata: ~2,5 s izmereno), a kvadratni hod
+  // (4000 efekata ~ 98 s izmereno) je i dalje daleko iznad nje.
   const mnogo = (n: number, o: Partial<EfekatFabrike> = {}) => [klik(o), ...Array.from({ length: n - 1 }, () => sa(o))];
 
-  it('4000 efekata u jednoj grupi klika (meta nije uvezena) se obrađuje linearno: < 2 s', () => {
+  it('4000 efekata u jednoj grupi klika (meta nije uvezena) se obrađuje linearno: < 10 s', () => {
     const t = tm(timing(mnogo(4000, { spid: 99 })));
     const pocetak = performance.now();
     const r = pretvoriAnimacije(t, SVE, () => undefined);
-    expect(performance.now() - pocetak).toBeLessThan(2000);
+    expect(performance.now() - pocetak).toBeLessThan(10_000);
     expect(r.efekataPptx).toBe(4000);
     expect(r.animacije).toEqual([]);
   });
@@ -331,12 +332,12 @@ describe('pretvoriAnimacije: neprijateljski fajl (granice pre gradnje)', () => {
     expect(r.efekataPptx).toBe(4000);
   });
 
-  it('grupa od 5000 slojeva x 2000 efekata ne pravi 10 miliona animacija: staje na 401, < 2 s', () => {
+  it('grupa od 5000 slojeva x 2000 efekata ne pravi 10 miliona animacija: staje na 401, < 10 s', () => {
     const grupa = mete({ '5': Array.from({ length: 5000 }, (_, i) => `g${i}`) });
     const t = tm(timing(mnogo(2000)));
     const pocetak = performance.now();
     const r = pretvoriAnimacije(t, grupa, () => undefined);
-    expect(performance.now() - pocetak).toBeLessThan(2000);
+    expect(performance.now() - pocetak).toBeLessThan(10_000);
     expect(r.animacije).toHaveLength(GRANICE.animacija + 1);
   });
 });
