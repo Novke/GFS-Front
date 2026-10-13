@@ -121,6 +121,21 @@ describe('komande: pomeriSlojeve', () => {
     expect(pomeriSlojeve(p, new Set(['s1']), 50, 0)).toBe(p);
   });
 
+  it('više slojeva na granici: zajednički pomeraj se steže, pa raspored ostaje (nijedan ne izlazi iz [-960, 1920])', () => {
+    const p = dok([oblik('s1', 1900, -950), oblik('s2', 1000, 100), oblik('s3', 0, 0)]);
+    const posle = pomeriSlojeve(p, new Set(['s1', 's2']), 50, -30);
+    expect(posle.slojevi.map((s) => [s.x, s.y])).toEqual([[1920, -960], [1020, 90], [0, 0]]);
+    expect(posle.slojevi[2]).toBe(p.slojevi[2]);
+    prolazi(posle);
+  });
+
+  it('jedan izabran sloj već na granici: ceo pomeraj na toj osi je 0 i za ostale izabrane', () => {
+    const p = dok([oblik('s1', 1920, 100), oblik('s2', 500, 100)]);
+    expect(pomeriSlojeve(p, new Set(['s1', 's2']), 10, 0)).toBe(p);
+    const posle = pomeriSlojeve(p, new Set(['s1', 's2']), 10, 5);
+    expect(posle.slojevi.map((s) => [s.x, s.y])).toEqual([[1920, 105], [500, 105]]);
+  });
+
   it('zaokružuje kao server (2 decimale)', () => {
     const p = dok([oblik('s1', 0.1, 0.2)]);
     const s = pomeriSlojeve(p, new Set(['s1']), 0.2, 0.1).slojevi[0];
@@ -187,6 +202,13 @@ describe('komande: premestiSloj', () => {
 });
 
 describe('komande: postaviKutiju', () => {
+  it('nepromenjena kutija sloja sa rotacijom -90 (ogranici daje 270) vraća isti objekat: nema fantomskog koraka', () => {
+    const s = oblik('s1', 100, 100, { rotacija: -90 });
+    const p = dok([s]);
+    expect(postaviKutiju(p, 's1', kutijaSloja(s))).toBe(p);
+    expect(postaviKutiju(p, 's1', { ...kutijaSloja(s), rotacija: 270 })).toBe(p);
+  });
+
   it('linija 240 x 24 na 480 x 48: krajevi se skaliraju', () => {
     const linija = { ...noviOblik('s1', 'NACRT', 'LINIJA'), x: 100, y: 100 };
     const posle = postaviKutiju(dok([linija]), 's1', { x: 100, y: 100, sirina: 480, visina: 48, rotacija: 0 });

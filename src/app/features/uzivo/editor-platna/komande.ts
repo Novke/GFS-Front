@@ -6,7 +6,7 @@ import { moveItemInArray } from '@angular/cdk/drag-drop';
 import type { Platno, Sloj, Tacka, VrstaOblika } from '../data-access/platno.models';
 import { zaokruziKaoServer as z } from '../data-access/platno-provera';
 import { uSredini } from '../data-access/platno-novo';
-import { type Kutija, kutijaSloja, ogranici, pomeriKutiju } from './geometrija';
+import { type Kutija, MAX_XY, MIN_XY, kutijaSloja, ogranici, pomeriKutiju } from './geometrija';
 
 export type SmerZ = 'NAPRED' | 'NAZAD' | 'NA_VRH' | 'NA_DNO';
 /** Pomeraj kopije (lepljenje, dupliranje) i svakog sledećeg ubačenog sloja na istom mestu (odluke 12, 15). */
@@ -110,16 +110,32 @@ function skalirajSadrzaj(novi: Sloj, stari: Sloj): Sloj {
  */
 export function postaviKutiju(p: Platno, id: string, k: Kutija): Platno {
   const nova = ogranici(k);
-  return izmeniSlojeve(p, new Set([id]), (s) => (ista(nova, kutijaSloja(s)) ? s : skalirajSadrzaj({ ...s, ...nova }, s)));
+  // poređenje sa OGRANIČENOM kutijom sloja: sloj sa npr. `rotacija: -90` (ogranici daje 270) i nepromenjenom kutijom
+  // ostaje isti objekat (bez fantomskog koraka istorije i PUT-a)
+  return izmeniSlojeve(p, new Set([id]), (s) => (ista(nova, ogranici(kutijaSloja(s))) ? s : skalirajSadrzaj({ ...s, ...nova }, s)));
+}
+
+/** Pomeraj `d` stegnut tako da nijedna od koordinata `poz` ne izađe iz [-960, 1920] (0 je uvek dozvoljen). */
+function zajednickiPomeraj(poz: readonly number[], d: number): number {
+  const od = Math.min(0, Math.max(...poz.map((v) => MIN_XY - v)));
+  const doK = Math.max(0, Math.min(...poz.map((v) => MAX_XY - v)));
+  return Math.min(Math.max(d, od), doK);
 }
 
 /**
- * Pomera izabrane slojeve za (dx, dy) (u [-960, 1920], 2 decimale). Menja samo x i y: veličina, rotacija i krajevi
+ * Pomera izabrane slojeve za ZAJEDNIČKI (dx, dy), stegnut tako da nijedan pomereni sloj ne izađe iz [-960, 1920]
+ * (pa se raspored više izabranih slojeva na granici ne kvari), 2 decimale. Menja samo x i y: veličina, rotacija i krajevi
  * linije (relativni u okviru) ostaju. Sloj koji se ne pomeri (granica, pomeraj 0) ostaje isti objekat.
  */
 export function pomeriSlojeve(p: Platno, ids: ReadonlySet<string>, dx: number, dy: number): Platno {
+  const izabrani = p.slojevi.filter((s) => ids.has(s.id));
+  if (izabrani.length === 0) return p;
+  const zdx = zajednickiPomeraj(izabrani.map((s) => s.x), dx);
+  const zdy = zajednickiPomeraj(izabrani.map((s) => s.y), dy);
+  if (zdx === 0 && zdy === 0) return p;
   return izmeniSlojeve(p, ids, (s) => {
-    const { x, y } = pomeriKutiju(kutijaSloja(s), dx, dy);
+    // `pomeriKutiju` (ogranici) i dalje steže: važi samo za sloj koji je već bio van granica (star dokument)
+    const { x, y } = pomeriKutiju(kutijaSloja(s), zdx, zdy);
     return x === s.x && y === s.y ? s : { ...s, x, y };
   });
 }

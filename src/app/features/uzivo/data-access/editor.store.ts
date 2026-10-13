@@ -97,8 +97,7 @@ export const EditorStore = signalStore(
     const uSlanju = new Map<number, number>();
     const obrisani = new Set<number>();
     /** Editor platna: upis otvorene sesije teksta i gesta u dokument, i da li je nešto otvoreno (odluka 9c). */
-    let praznjenje: (() => void) | null = null;
-    let otvoreno: () => boolean = () => false;
+    let praznjenje: { isprazni: () => void; otvoreno: () => boolean } | null = null;
 
     const razresi = (id: number) => zamene.get(id) ?? id;
     const naCekanju = (id: number) => (izmena.get(id) ?? 0) > (sacuvano.get(id) ?? 0);
@@ -332,7 +331,7 @@ export const EditorStore = signalStore(
 
     /** Upis otvorenih izmena editora platna (ide kroz izmeniPlatno -> izmeniSlajd, pa ga sledeći korak čuvanja vidi). */
     function isprazni(): void {
-      praznjenje?.();
+      praznjenje?.isprazni();
     }
 
     function izmeniSlajd(id: number, cmd: SlajdCmd): void {
@@ -608,12 +607,20 @@ export const EditorStore = signalStore(
       },
 
       /**
-       * Editor platna predaje funkciju koja upisuje otvorenu sesiju teksta i gest, i proveru da li je nešto otvoreno;
-       * `null` = odjava (editor je uništen).
+       * Editor platna predaje funkciju koja upisuje otvorenu sesiju teksta i gest, i proveru da li je nešto otvoreno.
+       * Vraća odjavu koja briše SAMO ovu registraciju (stara instanca editora koja se uništava posle pravljenja nove ne
+       * briše registraciju nove). `null` briše bilo koju registraciju (stari oblik odjave).
        */
-      registrujPraznjenje(f: (() => void) | null, o: () => boolean = () => false): void {
-        praznjenje = f;
-        otvoreno = f ? o : () => false;
+      registrujPraznjenje(f: (() => void) | null, o: () => boolean = () => false): () => void {
+        if (!f) {
+          praznjenje = null;
+          return () => undefined;
+        }
+        const ova = { isprazni: f, otvoreno: o };
+        praznjenje = ova;
+        return () => {
+          if (praznjenje === ova) praznjenje = null;
+        };
       },
 
       /** Zove registrovano pražnjenje (store ga zove sam pre čuvanja; stranica pri zatvaranju kartice). */
@@ -621,7 +628,7 @@ export const EditorStore = signalStore(
 
       /** Ima li izmena koje još nisu na serveru (uključujući neispravne nacrte i otvorenu sesiju editora platna). */
       imaNesacuvano(): boolean {
-        return otvoreno() || nesacuvani().length > 0 || nacrtiUSlanju.size > 0;
+        return !!praznjenje?.otvoreno() || nesacuvani().length > 0 || nacrtiUSlanju.size > 0;
       },
 
       sacuvajPreIzlaska,

@@ -450,6 +450,31 @@ describe('EditorStore: PLATNO', () => {
     expect(store.imaNesacuvano()).toBe(false);
   });
 
+  it('registrujPraznjenje vraća odjavu koja briše samo svoju registraciju (stara instanca editora ne briše novu)', () => {
+    const stara = vi.fn();
+    const nova = vi.fn();
+    const odjaviStaru = store.registrujPraznjenje(stara, () => true);
+    const odjaviNovu = store.registrujPraznjenje(nova, () => true);
+    odjaviStaru();
+    store.isprazni();
+    expect(stara).not.toHaveBeenCalled();
+    expect(nova).toHaveBeenCalledTimes(1);
+    expect(store.imaNesacuvano()).toBe(true);
+    odjaviNovu();
+    store.isprazni();
+    expect(nova).toHaveBeenCalledTimes(1);
+    expect(store.imaNesacuvano()).toBe(false);
+    odjaviNovu();   // ponovljena odjava ne smeta
+    const treca = vi.fn();
+    store.registrujPraznjenje(treca);
+    odjaviStaru();
+    store.isprazni();
+    expect(treca).toHaveBeenCalledTimes(1);
+    store.registrujPraznjenje(null);   // stara odjava (null) i dalje briše sve
+    store.isprazni();
+    expect(treca).toHaveBeenCalledTimes(1);
+  });
+
   it('dokument koji server ne bi primio (#ggg) se ne šalje; status kaže zašto', saLaznimSatom(async () => {
     const los: Platno = { ...P0, pozadina: { boja: '#ggg', medijId: null } };
     store.izmeniPlatno(52, los);
