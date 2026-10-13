@@ -6,6 +6,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { EditorStore } from '../data-access/editor.store';
 import type { Platno } from '../data-access/platno.models';
 import { platno } from '../data-access/platno-podaci.testing';
+import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { SlajdDetails } from '../data-access/uzivo.models';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
@@ -45,6 +46,7 @@ describe('PlatnoEditorComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: EditorStore, useValue: lazni },
+        { provide: PrezentacijeApi, useValue: {} },
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
       ],
     });
@@ -187,10 +189,14 @@ describe('PlatnoEditorComponent', () => {
     expect(najava()).toBe('Izabrano slojeva: 2');
   });
 
-  it('tabovi Svojstva i Slojevi prate store; Svojstva u 4a samo upućuje na izbor', async () => {
+  it('tabovi Svojstva i Slojevi prate store; Svojstva bez izbora pokazuje svojstva slajda, sa izborom svojstva sloja', async () => {
     const tabovi = Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).map((t) => t.textContent!.trim());
     expect(tabovi).toEqual(['Svojstva', 'Slojevi']);
-    expect(el().textContent).toContain('Izaberi sloj na platnu ili u panelu Slojevi.');
+    expect(el().querySelector('app-panel-svojstva app-svojstva-slajda')).not.toBeNull();
+    store.izaberi(['oblik']);
+    await fixture.whenStable();
+    expect(el().querySelector('app-panel-svojstva app-svojstva-oblika')).not.toBeNull();
+    store.ponistiIzbor();
     store.postaviTab('SLOJEVI');
     await fixture.whenStable();
     expect(el().querySelector('app-panel-slojevi')).not.toBeNull();

@@ -14,6 +14,7 @@ import { FokusPlatna } from './fokus-platna';
 import { nazivSloja } from './komande';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PanelSlojeviComponent } from './panel-slojevi.component';
+import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore, type TabPanela } from './platno-editor.store';
 import { PlatnoOverlayComponent } from './platno-overlay.component';
 import { komandaTastature, jeSnimanje, uPoljuZaUnos } from './tastatura-platna';
@@ -26,7 +27,10 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
   selector: 'app-platno-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [PlatnoEditorStore, FokusPlatna],
-  imports: [MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, TrakaAlataComponent],
+  imports: [
+    MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
+    TrakaAlataComponent,
+  ],
   host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep' },
   template: `
     <app-traka-alata />
@@ -48,9 +52,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
       </div>
       <mat-tab-group class="uz-ep-paneli" mat-stretch-tabs="false" [selectedIndex]="indeksTaba()"
                      (selectedIndexChange)="promenaTaba($event)">
-        <mat-tab label="Svojstva">
-          <p class="uz-ep-napomena">Izaberi sloj na platnu ili u panelu Slojevi.</p>
-        </mat-tab>
+        <mat-tab label="Svojstva"><app-panel-svojstva [tema]="tema()" /></mat-tab>
         <mat-tab label="Slojevi"><app-panel-slojevi /></mat-tab>
       </mat-tab-group>
     </div>
@@ -72,7 +74,6 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
     }
     .uz-ep-platno:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
     .uz-ep-paneli { min-width: 0; }
-    .uz-ep-napomena { margin: 12px 4px; color: var(--ink-2); }
   `,
 })
 export class PlatnoEditorComponent implements OnInit, OnDestroy {

@@ -21,6 +21,8 @@ export interface PreferencesState {
   filteri: Record<string, Params>;
   nedavno: NedavnoStavka[];
   velicinaBeleski: number;
+  /** Poslednje korišćene boje palete editora platna (`#RRGGBB`, najnovija prva, najviše `MAX_BOJA`). */
+  poslednjeBoje: string[];
 }
 
 /** Stanje store-a: filteri su privatni (`_filteri`), a čitaju se metodom `filteri(kljuc)`. */
@@ -29,6 +31,7 @@ interface PreferencesStoreState {
   _filteri: Record<string, Params>;
   nedavno: NedavnoStavka[];
   velicinaBeleski: number;
+  poslednjeBoje: string[];
 }
 
 /**
@@ -37,6 +40,10 @@ interface PreferencesStoreState {
  */
 export const PREFS_KLJUC = 'gfs.prefs.v1';
 export const MAX_NEDAVNO = 8;
+/** Najviše poslednjih boja u paleti editora platna. */
+export const MAX_BOJA = 8;
+const BOJA = /^#[0-9A-F]{6}$/;
+const jeBoja = (v: unknown): v is string => typeof v === 'string' && BOJA.test(v);
 
 /** Koraci veličine slova beležaka (px) u konzoli i na daljinskom. */
 export const VELICINE_BELESKI = [14, 16, 18, 20, 22, 24, 28, 32, 36, 40] as const;
@@ -58,7 +65,9 @@ const REZIMI: readonly Rezim[] = ['sistem', 'dan', 'noc'];
 const NEDAVNO_TIPOVI: readonly NedavnoTip[] = ['predavanje', 'test', 'domaci', 'grupa', 'student', 'predmet'];
 const TAMNA_SEMA = '(prefers-color-scheme: dark)';
 
-const podrazumevano = (): PreferencesState => ({ rezim: 'sistem', filteri: {}, nedavno: [], velicinaBeleski: PODRAZUMEVANA_VELICINA_BELESKI });
+const podrazumevano = (): PreferencesState => ({
+  rezim: 'sistem', filteri: {}, nedavno: [], velicinaBeleski: PODRAZUMEVANA_VELICINA_BELESKI, poslednjeBoje: [],
+});
 
 function jeObjekat(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -99,6 +108,10 @@ export function ucitajPreference(storage: Storage | null): PreferencesState {
   if (jeVelicinaBeleski(sirovo['velicinaBeleski'])) {
     stanje.velicinaBeleski = sirovo['velicinaBeleski'];
   }
+  const boje = sirovo['poslednjeBoje'];
+  if (Array.isArray(boje)) {
+    stanje.poslednjeBoje = [...new Set(boje.filter(jeBoja))].slice(0, MAX_BOJA);
+  }
   return stanje;
 }
 
@@ -111,15 +124,16 @@ function bezbedanStorage(): Storage | null {
 }
 
 /**
- * Korisničke postavke: režim dan/noć, zapamćeni filteri po listi i nedavno otvorene stavke.
+ * Korisničke postavke: režim dan/noć, zapamćeni filteri po listi, nedavno otvorene stavke, veličina beleški i poslednje
+ * boje palete editora platna.
  * Stanje se čuva u localStorage (`gfs.prefs.v1`), a efektivni režim se primenjuje na `<html>`
  * kao `data-mode` + `color-scheme` (tokeni u `src/styles/_tokens.scss` i M3 tema prate ga).
  */
 export const PreferencesStore = signalStore(
   { providedIn: 'root' },
   withState<PreferencesStoreState>(() => {
-    const { rezim, filteri, nedavno, velicinaBeleski } = ucitajPreference(bezbedanStorage());
-    return { rezim, _filteri: filteri, nedavno, velicinaBeleski };
+    const { rezim, filteri, nedavno, velicinaBeleski, poslednjeBoje } = ucitajPreference(bezbedanStorage());
+    return { rezim, _filteri: filteri, nedavno, velicinaBeleski, poslednjeBoje };
   }),
   withProps(() => {
     const mql = typeof matchMedia === 'function' ? matchMedia(TAMNA_SEMA) : null;
@@ -163,13 +177,21 @@ export const PreferencesStore = signalStore(
         nedavno: [stavka, ...s.nedavno.filter(n => n.tip !== stavka.tip || n.id !== stavka.id)].slice(0, MAX_NEDAVNO),
       }));
     },
+    /** Boja izabrana u paleti: velikim slovima na početak, bez duplikata, najviše `MAX_BOJA`; neispravna se ne pamti. */
+    zapamtiBoju(boja: string): void {
+      const b = boja.trim().toUpperCase();
+      if (!jeBoja(b)) {
+        return;
+      }
+      patchState(store, s => ({ poslednjeBoje: [b, ...s.poslednjeBoje.filter(x => x !== b)].slice(0, MAX_BOJA) }));
+    },
   })),
   withHooks({
     onInit(store) {
       store._mql?.addEventListener('change', store._naPromenuSistema);
 
-      watchState(store, ({ rezim, _filteri, nedavno, velicinaBeleski }) => {
-        const zaUpis: PreferencesState = { rezim, filteri: _filteri, nedavno, velicinaBeleski };
+      watchState(store, ({ rezim, _filteri, nedavno, velicinaBeleski, poslednjeBoje }) => {
+        const zaUpis: PreferencesState = { rezim, filteri: _filteri, nedavno, velicinaBeleski, poslednjeBoje };
         try {
           store._storage?.setItem(PREFS_KLJUC, JSON.stringify(zaUpis));
         } catch {
