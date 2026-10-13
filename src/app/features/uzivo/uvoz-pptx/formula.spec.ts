@@ -168,11 +168,11 @@ describe('pretvoriFormulu: ceo okvir', () => {
 
   it('automatska numeracija pasusa ostaje kao tekst: 1. 2. (prazan pasus ne troši broj)', () => {
     const num = '<a:pPr marL="342900" indent="-342900"><a:buFont typeface="+mj-lt"/><a:buAutoNum type="arabicPeriod"/></a:pPr>';
-    const pasusi = `<a:p>${num}<a14:m><m:oMath>${r('NOT')}</m:oMath></a14:m></a:p>${prazanPasus}`
-      + `<a:p>${num}<a14:m><m:oMath>${r('AND')}</m:oMath></a14:m></a:p>`;
+    const pasusi = `<a:p>${num}<a14:m><m:oMath>${r('MAGLA')}</m:oMath></a14:m></a:p>${prazanPasus}`
+      + `<a:p>${num}<a14:m><m:oMath>${r('BREG')}</m:oMath></a14:m></a:p>`;
     const { ctx, ac } = sa(formulaAc(pasusi));
     const s = pretvoriFormulu(ac, identitet, ctx, 's5', new Set())!.slojevi[0];
-    expect(s.latex).toBe('\\begin{gathered}\\text{1. }NOT\\\\\\text{2. }AND\\end{gathered}');
+    expect(s.latex).toBe('\\begin{gathered}\\text{1. }MAGLA\\\\\\text{2. }BREG\\end{gathered}');
   });
 
   it('numeracija: format i početak (startAt, alphaLcParenR), dublji nivo ne prekida plići', () => {
@@ -287,10 +287,10 @@ describe('pretvoriFormulu: po pasusu (PNG pojasevi)', () => {
 
   it('numeracija se prenosi i u sloj pasusa (broj računat u celom okviru)', () => {
     const num = '<a:pPr><a:buAutoNum type="arabicPeriod"/></a:pPr>';
-    const pasusi = `<a:p>${num}<a:r><a:t>NOT</a:t></a:r></a:p><a:p>${num}<a:r><a:t>AND</a:t></a:r></a:p>`;
+    const pasusi = `<a:p>${num}<a:r><a:t>MAGLA</a:t></a:r></a:p><a:p>${num}<a:r><a:t>BREG</a:t></a:r></a:p>`;
     const { ctx, ac } = sa(formulaAc(pasusi), slikaFormule([[2, 6], [22, 26]]));
     const rez = pretvoriFormulu(ac, identitet, ctx, 's5', new Set([1]))!;
-    expect(rez.slojevi.map((s) => s.latex)).toEqual(['\\text{1. NOT}', '\\text{2. AND}']);
+    expect(rez.slojevi.map((s) => s.latex)).toEqual(['\\text{1. MAGLA}', '\\text{2. BREG}']);
   });
 });
 
