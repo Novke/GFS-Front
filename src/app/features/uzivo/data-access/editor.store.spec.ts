@@ -1,7 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { createEnvironmentInjector, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { NesacuvaneIzmene } from '../../../core/state/nesacuvane-izmene';
 import { NotificationStore } from '../../../core/state/notification.store';
+import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { EditorStore, NijeSacuvano } from './editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from './uzivo.models';
 import { novoPlatno } from './platno-novo';
@@ -488,6 +491,186 @@ describe('EditorStore: PLATNO', () => {
     expect((greska as Error).message).toBe('Slajd 2 nije sačuvan: Boja nije ispravna (#RRGGBB).');
     store.sacuvajPreIzlaska();
     http.expectNone(() => true);
+  }));
+});
+
+describe('EditorStore: RegistarCuvanja (sesija prezentacija-<id>)', () => {
+  let http: HttpTestingController;
+  let registar: RegistarCuvanja;
+  let nesacuvane: NesacuvaneIzmene;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    http = TestBed.inject(HttpTestingController);
+    registar = TestBed.inject(RegistarCuvanja);
+    nesacuvane = TestBed.inject(NesacuvaneIzmene);
+  });
+
+  afterEach(() => http.verify());
+
+  /** Store u svom injektoru (kao stranica editora), da test može da ga uništi (napušten editor). */
+  function napravi(): { store: InstanceType<typeof EditorStore>; unisti: () => void } {
+    const injektor = createEnvironmentInjector([EditorStore], TestBed.inject(EnvironmentInjector));
+    return { store: injektor.get(EditorStore), unisti: () => injektor.destroy() };
+  }
+
+  function prez(id: number, slajdovi: SlajdDetails[]): PrezentacijaDetails {
+    return { ...prezentacija(slajdovi), id };
+  }
+
+  function ucitajU(store: InstanceType<typeof EditorStore>, id = 1, slajdovi = [slajd(11, 1), slajd(12, 2)]): void {
+    store.ucitaj(id);
+    http.expectOne(`api/prezentacije/${id}`).flush(prez(id, slajdovi));
+  }
+
+  it('napušten editor (PUT iz sacuvajPreIzlaska na putu): drugi store čita prezentaciju tek posle odgovora na PUT', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    a.store.izmeniSlajd(11, info('Pre izlaska'));
+    a.unisti();
+    const put = http.expectOne('api/slajdovi/11');
+    expect(put.request.method).toBe('PUT');
+    const b = napravi();
+    b.store.ucitaj(1);
+    http.expectNone('api/prezentacije/1');
+    put.flush(slajd(11, 1, 'Pre izlaska'));
+    http.expectOne('api/prezentacije/1').flush(prez(1, [slajd(11, 1, 'Pre izlaska'), slajd(12, 2)]));
+    http.expectNone('api/prezentacije/1');
+    expect(b.store.slajdovi()[0].naslov).toBe('Pre izlaska');
+    b.unisti();
+  }));
+
+  it('napušten editor, PUT padne (500): drugi store čita prezentaciju posle neuspeha', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    a.store.izmeniSlajd(11, info('Pre izlaska'));
+    a.unisti();
+    const put = http.expectOne('api/slajdovi/11');
+    const b = napravi();
+    b.store.ucitaj(1);
+    http.expectNone('api/prezentacije/1');
+    put.flush({ reason: 'Greška.' }, { status: 500, statusText: 'Server Error' });
+    http.expectOne('api/prezentacije/1').flush(prez(1, [slajd(11, 1), slajd(12, 2)]));
+    expect(b.store.prezentacija()?.id).toBe(1);
+    b.unisti();
+  }));
+
+  it('brojač sesije preživi ponovno učitavanje: PUT započet pre ucitaj iste prezentacije i dalje drži sesiju', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    a.store.izmeniSlajd(11, info('X'));
+    a.store.sacuvajOdmah();
+    const put = http.expectOne('api/slajdovi/11');
+    // ponovno čitanje iste prezentacije: generacija se menja, brojač store-a ide na 0
+    a.store.ucitaj(1);
+    expect(registar.zauzet('prezentacija-1')).toBe(true);
+    let mir = false;
+    registar.sacekaj('prezentacija-1').subscribe(() => (mir = true));
+    const b = napravi();
+    b.store.ucitaj(1);
+    http.expectNone('api/prezentacije/1');
+    expect(mir).toBe(false);
+    put.flush(slajd(11, 1, 'X'));
+    expect(registar.zauzet('prezentacija-1')).toBe(false);
+    expect(mir).toBe(true);
+    const citanja = http.match('api/prezentacije/1');
+    expect(citanja.length).toBe(2);
+    for (const c of citanja) c.flush(prez(1, [slajd(11, 1, 'X'), slajd(12, 2)]));
+    expect(b.store.slajdovi()[0].naslov).toBe('X');
+    a.unisti();
+    b.unisti();
+  }));
+
+  it('ucitaj druge prezentacije ne čeka upis prve', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    a.store.izmeniSlajd(11, info('Pre izlaska'));
+    a.unisti();
+    const put = http.expectOne('api/slajdovi/11');
+    const b = napravi();
+    b.store.ucitaj(2);
+    http.expectOne('api/prezentacije/2').flush(prez(2, [slajd(21, 1)]));
+    expect(b.store.prezentacija()?.id).toBe(2);
+    put.flush(slajd(11, 1, 'Pre izlaska'));
+    b.unisti();
+  }));
+
+  it('NesacuvaneIzmene: izmena na čekanju i njen PUT se broje jednom; otvoreno() u editoru platna broji se i bez izmene', saLaznimSatom(async () => {
+    const slusalac = vi.spyOn(window, 'addEventListener');
+    const a = napravi();
+    ucitajU(a.store);
+    expect(nesacuvane.broj()).toBe(0);
+    a.store.izmeniSlajd(11, info('A'));
+    expect(nesacuvane.broj()).toBe(1);
+    // registar.promena(): upozorenje pre zatvaranja kartice je uključeno odmah, pre debounce-a
+    expect(slusalac).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/11');
+    expect(nesacuvane.broj()).toBe(1);
+    put.flush(slajd(11, 1, 'A'));
+    expect(nesacuvane.broj()).toBe(0);
+    let otvoreno = true;
+    const odjavi = a.store.registrujPraznjenje(() => undefined, () => otvoreno);
+    expect(nesacuvane.broj()).toBe(1);
+    otvoreno = false;
+    expect(nesacuvane.broj()).toBe(0);
+    odjavi();
+    a.unisti();
+    expect(nesacuvane.broj()).toBe(0);
+    vi.restoreAllMocks();
+  }));
+
+  it('prelaz 5 -> 6: PUT iz sacuvajPreIzlaska je u sesiji prezentacija-5, a ucitaj(5) u drugom store-u ga čeka', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store, 5, [slajd(51, 1), slajd(52, 2)]);
+    a.store.izmeniSlajd(51, info('U petici'));
+    a.store.ucitaj(6);
+    const put = http.expectOne('api/slajdovi/51');
+    http.expectOne('api/prezentacije/6').flush(prez(6, [slajd(61, 1), slajd(62, 2)]));
+    expect(registar.zauzet('prezentacija-5')).toBe(true);
+    expect(registar.zauzet('prezentacija-6')).toBe(false);
+    // zatvorena sesija 5 broji samo svoj PUT, ne izmene prezentacije 6 (te su u sesiji 6)
+    a.store.izmeniSlajd(61, info('a'));
+    a.store.izmeniSlajd(62, info('b'));
+    expect(nesacuvane.broj()).toBe(3);
+    const b = napravi();
+    b.store.ucitaj(5);
+    http.expectNone('api/prezentacije/5');
+    put.flush(slajd(51, 1, 'U petici'));
+    expect(registar.zauzet('prezentacija-5')).toBe(false);
+    http.expectOne('api/prezentacije/5').flush(prez(5, [slajd(51, 1, 'U petici'), slajd(52, 2)]));
+    expect(b.store.slajdovi()[0].naslov).toBe('U petici');
+    expect(nesacuvane.broj()).toBe(2);
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/61').flush(slajd(61, 1, 'a'));
+    http.expectOne('api/slajdovi/62').flush(slajd(62, 2, 'b'));
+    expect(nesacuvane.broj()).toBe(0);
+    a.unisti();
+    b.unisti();
+  }));
+
+  it('zahtev koji odgovor na POST nacrta pokrene posle napuštanja editora (DELETE obrisanog nacrta) se i dalje čeka', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    a.store.izaberi(12);
+    a.store.dodaj('INFO');
+    const nacrt = a.store.izabraniId()!;
+    a.store.izmeniSlajd(nacrt, info('Nov'));
+    a.store.sacuvajOdmah();
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    a.store.obrisi(nacrt);
+    a.unisti();
+    const b = napravi();
+    b.store.ucitaj(1);
+    http.expectNone('api/prezentacije/1');
+    post.flush(slajd(30, 3, 'Nov'));
+    const del = http.expectOne('api/slajdovi/30');
+    expect(del.request.method).toBe('DELETE');
+    http.expectNone('api/prezentacije/1');
+    del.flush(null);
+    http.expectOne('api/prezentacije/1').flush(prez(1, [slajd(11, 1), slajd(12, 2)]));
+    expect(registar.zauzet('prezentacija-1')).toBe(false);
+    b.unisti();
   }));
 });
 
