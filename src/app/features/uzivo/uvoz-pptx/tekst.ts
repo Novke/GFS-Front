@@ -14,6 +14,22 @@ import { brojAtr, dete, NS } from './xml';
  * ostalim nasleđenim stilovima, pa je i on slabiji od ovih opcija (pozivaoci F5/F6 to treba da znaju).
  */
 export interface OpcijeTeksta { podrazumevanaBoja?: string; fontIzStila?: string; podebljanoIzStila?: boolean; }
+/**
+ * Stil teksta iz `p:style/a:fontRef` oblika (boja i font teme), slabiji od sopstvenog `rPr`. Isti stil dobijaju TEKST
+ * sloj oblika i formula u obliku (samo boja).
+ */
+export function opcijeStilaOblika(sp: Element, ctx: KontekstSlajda): OpcijeTeksta {
+  const stil = dete(sp, NS.p, 'style');
+  const fontRef = stil && dete(stil, NS.a, 'fontRef');
+  if (!fontRef) return {};
+  const o: OpcijeTeksta = {};
+  const b = bojaIz(fontRef, { tema: ctx.tema, mapaBoja: ctx.mapaBoja });
+  if (b) o.podrazumevanaBoja = pomesaj(b, ctx.pozadina);
+  const idx = fontRef.getAttribute('idx');
+  if (idx === 'minor' || idx === 'major') o.fontIzStila = idx === 'minor' ? '+mn-lt' : '+mj-lt';
+  return o;
+}
+
 export interface RezultatTeksta { pasusi: Pasus[]; okvir: Okvir; senka: Senka | null | 'razlicite'; prazan: boolean; }
 
 /** Granice iz `PlatnoPP` (server odbija dokument van njih). */

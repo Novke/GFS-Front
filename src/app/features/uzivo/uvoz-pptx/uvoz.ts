@@ -19,8 +19,7 @@ import { elementPopune, GEOMETRIJE, ivicaIz, nazivOblika, popunaIz, pretvoriObli
 import { otvoriPaket } from './paket';
 import { pozadinaSlajda, pretvoriSliku } from './slika';
 import { pretvoriTabelu } from './tabela';
-import { pretvoriTekst, type OpcijeTeksta, type RezultatTeksta } from './tekst';
-import { bojaIz, pomesaj } from './tema';
+import { opcijeStilaOblika, pretvoriTekst, type RezultatTeksta } from './tekst';
 import { EMU_PO_PT, uSloj, zaokruziKaoServer, type KontekstSlajda, type Kutija, type MedijUvoza } from './tipovi';
 import { brojAtr, deca, dete, NS } from './xml';
 
@@ -262,19 +261,6 @@ class GraditeljSlajda {
 
   // ------------------------------------------------------------------------------------------- p:sp
 
-  /** Stil teksta iz `p:style/a:fontRef` oblika (boja i font teme), slabiji od sopstvenog `rPr`. */
-  private opcijeStila(sp: Element): OpcijeTeksta {
-    const stil = dete(sp, NS.p, 'style');
-    const fontRef = stil && dete(stil, NS.a, 'fontRef');
-    if (!fontRef) return {};
-    const o: OpcijeTeksta = {};
-    const b = bojaIz(fontRef, { tema: this.ctx.tema, mapaBoja: this.ctx.mapaBoja });
-    if (b) o.podrazumevanaBoja = pomesaj(b, this.ctx.pozadina);
-    const idx = fontRef.getAttribute('idx');
-    if (idx === 'minor' || idx === 'major') o.fontIzStila = idx === 'minor' ? '+mn-lt' : '+mj-lt';
-    return o;
-  }
-
   private tekstSloj(id: string, el: Element, k: Kutija, rez: RezultatTeksta, popuna: string | null, ivica: Ivica | null, senka: Senka | null): TekstSloj {
     const s = uSloj(k, this.ctx.t);
     return {
@@ -324,7 +310,7 @@ class GraditeljSlajda {
     const sirina = uSloj(k, ctx.t).sirina;
     const vrsta = vrstaTeksta(ph);
     const tekst = txBody
-      ? pretvoriTekst(txBody, (n) => stiloviNivoa(lanac, vrsta, ctx, n), lanac, ctx, sirina, this.opcijeStila(sp))
+      ? pretvoriTekst(txBody, (n) => stiloviNivoa(lanac, vrsta, ctx, n), lanac, ctx, sirina, opcijeStilaOblika(sp, ctx))
       : null;
     const prazan = !tekst || tekst.prazan;
     const brojPasusa = tekst?.pasusi.length ?? 0;

@@ -13,7 +13,7 @@ import { latexOkvira } from './omml-latex';
 import { dekodirajPng, isecKolone, isecRedove, kodirajPng, pojaseviMastila, type Rgba } from './png';
 import { deoElementa, NEPODRZANI_FORMATI } from './slika';
 import type { RezultatTabele } from './tabela';
-import { formatBroja, pocetakListe } from './tekst';
+import { formatBroja, opcijeStilaOblika, pocetakListe } from './tekst';
 import { bojaIz, pomesaj } from './tema';
 import { uSloj, zaokruzi, type KontekstSlajda, type Kutija } from './tipovi';
 import { brojAtr, deca, dete, NS } from './xml';
@@ -38,8 +38,11 @@ const jeA = (el: Element, ime: string) => el.namespaceURI === NS.a && el.localNa
 const jeMatematika = (el: Element) => el.namespaceURI === NS.a14 && el.localName === 'm';
 const tekstDela = (el: Element) => dete(el, NS.a, 't')?.textContent ?? '';
 
-/** Pasusi okvira ili ćelije i stilovi njihovih nivoa (isti lanac kao za TEKST sloj, `stiloviNivoa`). */
-interface TekstOkvira { pasusi: Element[]; nivoi: (nivo: number) => Element[]; }
+/**
+ * Pasusi okvira ili ćelije i stilovi njihovih nivoa (isti lanac kao za TEKST sloj, `stiloviNivoa`); `bojaStila` je boja
+ * iz `p:style/a:fontRef` oblika (`opcijeStilaOblika`), kao za TEKST sloj.
+ */
+interface TekstOkvira { pasusi: Element[]; nivoi: (nivo: number) => Element[]; bojaStila?: string; }
 
 /** Ima "mastila": formulu (`a14:m`) ili `a:r`/`a:fld` sa vidljivim tekstom (samo razmak nema mastila, odluka 5). */
 function neprazan(p: Element): boolean {
@@ -114,16 +117,21 @@ function rPrPrvogDela(p: Element): Element | null {
 }
 
 /**
- * Boja i veličina iz prvog dela (sopstveni `rPr` -> `pPr/a:defRPr` -> stilovi nivoa, kao tekst), poravnanje iz pasusa:
- * prikazna formula (`m:oMathPara`) po `m:jc` (podrazumevano centrirano), inače `algn` pasusa.
+ * Boja i veličina iz prvog dela, poravnanje iz pasusa: prikazna formula (`m:oMathPara`) po `m:jc` (podrazumevano
+ * centrirano), inače `algn` pasusa. Boja kao TEKST (`tekst.ts`): sopstveni `rPr` (+ `pPr/a:defRPr`) -> boja stila oblika
+ * (`p:style/a:fontRef`, `t.bojaStila`) -> stilovi nivoa -> tx1.
  */
 function izgledPasusa(p: Element | undefined, t: TekstOkvira, ctx: KontekstSlajda): Izgled {
-  if (!p) return { boja: bojaTx1(ctx), velicina: zaokruzi(PODRAZUMEVANA_VELICINA_PT * ctx.t.s) || 1, poravnanje: 'LEVO' };
+  if (!p) return { boja: t.bojaStila ?? bojaTx1(ctx), velicina: zaokruzi(PODRAZUMEVANA_VELICINA_PT * ctx.t.s) || 1, poravnanje: 'LEVO' };
   const pPr = dete(p, NS.a, 'pPr');
   const stilovi = t.nivoi(nivoPasusa(pPr));
-  const r = razresiRPr(rPrPrvogDela(p), pPr && dete(pPr, NS.a, 'defRPr'), stilovi);
-  const b = r.boja ? bojaIz(r.boja, { tema: ctx.tema, mapaBoja: ctx.mapaBoja }) : null;
-  const boja = r.bezBoje ? ctx.pozadina : b ? pomesaj(b, ctx.pozadina) : bojaTx1(ctx);
+  const rPr = rPrPrvogDela(p);
+  const defRPr = pPr && dete(pPr, NS.a, 'defRPr');
+  const svoj = razresiRPr(rPr, defRPr, []);
+  const r = razresiRPr(rPr, defRPr, stilovi);
+  const izvor = svoj.boja || svoj.bezBoje ? svoj : t.bojaStila ? null : r;
+  const b = izvor?.boja ? bojaIz(izvor.boja, { tema: ctx.tema, mapaBoja: ctx.mapaBoja }) : null;
+  const boja = izvor?.bezBoje ? ctx.pozadina : b ? pomesaj(b, ctx.pozadina) : t.bojaStila ?? bojaTx1(ctx);
   const pt = r.sz !== null ? r.sz / 100 : PODRAZUMEVANA_VELICINA_PT;
 
   let poravnanje: Poravnanje;
@@ -244,6 +252,7 @@ export function pretvoriFormulu(ac: Element, kutijaGrupe: (k: Kutija) => Kutija,
   const tekst: TekstOkvira = {
     pasusi: txBody ? deca(txBody, NS.a, 'p') : [],
     nivoi: (n) => stiloviNivoa(lanac, vrsta, ctx, n),
+    bojaStila: sp ? opcijeStilaOblika(sp, ctx).podrazumevanaBoja : undefined,
   };
   const pasusi = pasusiZaLatex(tekst);
   const indeksi = tekst.pasusi.flatMap((p, i) => (neprazan(p) ? [i] : []));

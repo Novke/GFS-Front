@@ -29,11 +29,11 @@ function slikaFormule(nizovi: [number, number][], visina = 30): Uint8Array {
  * `mc:AlternateContent` formule: `p:sp` (id 5) u Choice, fallback `p:sp` sa slikom (ili bez nje kad je `rId` null).
  * `lstStyle` je sadržaj `a:lstStyle` oblika, `kutija` njegov `a:xfrm`.
  */
-function formulaAc(pasusi: string, fillRect = '', rId: string | null = 'rIdF', o: { lstStyle?: string; kutija?: string } = {}): string {
+function formulaAc(pasusi: string, fillRect = '', rId: string | null = 'rIdF', o: { lstStyle?: string; kutija?: string; stil?: string } = {}): string {
   const nv = '<p:nvSpPr><p:cNvPr id="5" name="Formula 5"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>';
   const k = o.kutija ?? KUTIJA;
   const blip = rId ? `<a:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect ${fillRect}/></a:stretch></a:blipFill>` : '';
-  return `<mc:AlternateContent><mc:Choice Requires="a14"><p:sp>${nv}<p:spPr>${k}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle>${o.lstStyle ?? ''}</a:lstStyle>${pasusi}</p:txBody></p:sp></mc:Choice>`
+  return `<mc:AlternateContent><mc:Choice Requires="a14"><p:sp>${nv}<p:spPr>${k}</p:spPr>${o.stil ?? ''}<p:txBody><a:bodyPr/><a:lstStyle>${o.lstStyle ?? ''}</a:lstStyle>${pasusi}</p:txBody></p:sp></mc:Choice>`
     + `<mc:Fallback><p:sp>${nv}<p:spPr>${k}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${blip}</p:spPr></p:sp></mc:Fallback></mc:AlternateContent>`;
 }
 
@@ -70,6 +70,21 @@ describe('pretvoriFormulu: ceo okvir', () => {
     const { ctx, ac } = sa(formulaAc(p));
     const s = pretvoriFormulu(ac, identitet, ctx, 's5', new Set())!.slojevi[0];
     expect(s).toMatchObject({ boja: '#FF0000', velicina: 24, poravnanje: 'DESNO', latex: '\\text{x}' });
+  });
+
+  it('boja iz p:style/a:fontRef oblika (kao TEKST): jača od nasleđenih nivoa, slabija od sopstvene boje dela', () => {
+    const stil = '<p:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef>'
+      + '<a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="accent2"/></a:fontRef></p:style>';
+    const lstStyle = '<a:lvl1pPr><a:defRPr><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:defRPr></a:lvl1pPr>';
+    const izStila = sa(formulaAc(mp(razlomak), '', 'rIdF', { stil, lstStyle }));
+    expect(pretvoriFormulu(izStila.ac, identitet, izStila.ctx, 's5', new Set())!.slojevi[0].boja).toBe('#ED7D31');
+
+    const rPr = '<a:rPr lang="en-US"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr>';
+    const svoja = sa(formulaAc(`<a:p><a14:m><m:oMath><m:r>${rPr}<m:t>x</m:t></m:r></m:oMath></a14:m></a:p>`, '', 'rIdF', { stil }));
+    expect(pretvoriFormulu(svoja.ac, identitet, svoja.ctx, 's5', new Set())!.slojevi[0].boja).toBe('#FF0000');
+
+    const bezPasusa = sa(formulaAc('', '', 'rIdF', { stil }));
+    expect(pretvoriFormulu(bezPasusa.ac, identitet, bezPasusa.ctx, 's5', new Set())!.slojevi[0].boja).toBe('#ED7D31');
   });
 
   it('boja i veličina iz a:rPr matematičkog dela (m:r), boja sa alfom pomešana sa pozadinom', () => {
