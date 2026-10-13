@@ -34,6 +34,8 @@ export interface RezultatTeksta { pasusi: Pasus[]; mapa: (number | null)[]; }
 export interface KomandeTeksta {
   /** Od početka sesije (ili poslednjeg preseka); null bez izmena; radi i posle uništenja view-a. */
   presek(): RezultatTeksta | null;
+  /** Poslednji presek nije primljen (store ga je odbio): osnova se vraća, pa sledeći presek opet daje isti tekst. */
+  odbaciPresek(): void;
   postaviStil(izmena: Partial<AtributiDela>): void;
   prebaciStil(polje: PoljeStila): void;
   postaviPasus(izmena: Partial<Omit<Pasus, 'delovi'>>): void;
@@ -100,12 +102,15 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   private dok!: PmCvor;
   private dokPreseka!: PmCvor;
   private kljuceviPreseka: (string | null)[] = [];
+  /** Osnova pre poslednjeg preseka (za `odbaciPresek`); null kad nema šta da se vrati. */
+  private prethodnaOsnova: { dok: PmCvor; kljucevi: (string | null)[] } | null = null;
   private podrazumevano!: AtributiDela;
   private readonly brojac = { n: 0 };
   private readonly stanje = signal<StanjeSelekcije>(PRAZNO_STANJE);
 
   readonly komande: KomandeTeksta = {
     presek: () => this.presek(),
+    odbaciPresek: () => this.odbaciPresek(),
     postaviStil: (izmena) => this.izvrsi(postaviStil(izmena)),
     prebaciStil: (polje) => this.izvrsi(prebaciStil(polje)),
     postaviPasus: (izmena) => this.izvrsi(postaviPasus(izmena)),
@@ -192,8 +197,17 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   private presek(): RezultatTeksta | null {
     if (this.dok.eq(this.dokPreseka)) return null;
     const rezultat = { pasusi: dokUPasuse(this.dok, this.podrazumevano), mapa: mapaPoKljucevima(this.kljuceviPreseka, this.dok) };
+    this.prethodnaOsnova = { dok: this.dokPreseka, kljucevi: this.kljuceviPreseka };
     this.dokPreseka = this.dok;
     this.kljuceviPreseka = kljuceviPasusa(this.dok);
     return rezultat;
+  }
+
+  private odbaciPresek(): void {
+    const o = this.prethodnaOsnova;
+    if (!o) return;
+    this.dokPreseka = o.dok;
+    this.kljuceviPreseka = o.kljucevi;
+    this.prethodnaOsnova = null;
   }
 }

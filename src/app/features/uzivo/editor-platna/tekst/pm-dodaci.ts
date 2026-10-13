@@ -44,7 +44,8 @@ function stilPraznog(
 
 /**
  * Svaki tekst i prelom bez marka `stil` dobija stil (prazanDeo pasusa, pa prethodni stil u dokumentu, pa `podrazumevano`);
- * pasus koji postane prazan pamti stil u `prazanDeo`, neprazan ga briše. Tako tekst bez marka (lepljenje, prevlačenje,
+ * pasus koji postane prazan pamti stil u `prazanDeo`, neprazan ga briše. Prazan pasus koji transakcija nije dirala (npr.
+ * `delovi: []` iz modela, crta se 18 pt) ostaje kakav jeste. Tako tekst bez marka (lepljenje, prevlačenje,
  * kucanje u prazan pasus) nikad tiho ne nestane iz modela, a prazan red zadržava font i veličinu (odluka 9 faze 1).
  */
 export function dodatakStila(podrazumevano: AtributiDela): Plugin {
@@ -54,6 +55,13 @@ export function dodatakStila(podrazumevano: AtributiDela): Plugin {
       const nazad = new Mapping();
       transakcije.forEach((t) => nazad.appendMapping(t.mapping));
       const unazad = nazad.invert();
+      // opsezi novog dokumenta koje su transakcije dirale (pasus van njih je netaknut i ostaje bajt-isti)
+      const dirano: [number, number][] = [];
+      nazad.maps.forEach((m, i) => {
+        const ostatak = nazad.slice(i + 1);
+        m.forEach((_so, _sd, od, doPoz) => dirano.push([ostatak.map(od, -1), ostatak.map(doPoz, 1)]));
+      });
+      const dira = (od: number, doPoz: number) => dirano.some(([a, b]) => a <= doPoz && b >= od);
       const tip = novi.schema.marks['stil'];
       let tr: Transaction | null = null;
       let prethodni: AtributiDela | null = null;
@@ -73,7 +81,7 @@ export function dodatakStila(podrazumevano: AtributiDela): Plugin {
         });
         if (pasus.content.size > 0) {
           if (a.prazanDeo) (tr ??= novi.tr).setNodeMarkup(pos, undefined, { ...a, prazanDeo: null });
-        } else if (!a.prazanDeo) {
+        } else if (!a.prazanDeo && dira(pos, pos + pasus.nodeSize)) {
           const prazanDeo = { ...stilPraznog(novi, stari, unazad, pos, prethodni, podrazumevano) };
           (tr ??= novi.tr).setNodeMarkup(pos, undefined, { ...a, prazanDeo });
         }

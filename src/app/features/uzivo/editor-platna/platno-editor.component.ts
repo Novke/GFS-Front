@@ -245,7 +245,9 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
       case 'UREDI': {
         // tekst (F12); ćelija (F14) i formula (F16) dodaju svoje
         const s = this.store.jedan();
-        if (s?.tip === 'TEKST') this.store.pocniUredjivanje(s.id);
+        // već otvorena sesija istog sloja: pocniUredjivanje vraća true bez promene, pa fokus nazad u tekst (nov uređivač
+        // se sam fokusira posle crtanja, a do tada aktivnog nema)
+        if (s?.tip === 'TEKST' && this.store.pocniUredjivanje(s.id)) this.store.aktivniUredjivac()?.fokus();
         break;
       }
     }

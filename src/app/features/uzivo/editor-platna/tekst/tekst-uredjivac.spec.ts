@@ -122,6 +122,33 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
     expect(komande().stanje().velicina).toBe(40);
   });
 
+  it('Fix 1/3: odbaciPresek vraća osnovu preseka (sledeći presek opet daje isti tekst i mapu)', () => {
+    view().dispatch(view().state.tr.insertText('X', 1));
+    const prvi = komande().presek()!;
+    komande().odbaciPresek();
+    expect(komande().presek()).toEqual(prvi);
+    expect(komande().presek()).toBeNull();
+  });
+
+  it('Fix 1/2: netaknut prazan pasus bez delova ostaje bajt-isti posle preseka (ne raste na stil suseda)', async () => {
+    const naslov = { ...pasus('Naslov'), delovi: [{ ...pasus('Naslov').delovi[0], velicina: 40 }] };
+    const prazan = { ...pasus(''), delovi: [] };
+    const kraj = { ...pasus('kraj'), delovi: [{ ...pasus('kraj').delovi[0], font: 'Tinos', velicina: 30 }] };
+    const s3: TekstSloj = { ...sloj(), pasusi: [naslov, prazan, kraj] };
+    store.inicijalizuj(platnoSaAnimacijama([], [s3]));
+    store.pocniUredjivanje('t');
+    fixture.destroy();
+    fixture = TestBed.createComponent(TekstUredjivacComponent);
+    fixture.componentRef.setInput('sloj', s3);
+    fixture.componentRef.setInput('tema', 'NACRT');
+    await fixture.whenStable();
+    view().dispatch(view().state.tr.insertText('!', 7));
+    const r = komande().presek()!;
+    expect(r.pasusi[0].delovi[0].tekst).toBe('Naslov!');
+    expect(r.pasusi[1]).toStrictEqual(prazan);
+    expect(r.pasusi[2]).toStrictEqual(kraj);
+  });
+
   it('preko 50 000 znakova na slajdu: unos odbijen porukom', async () => {
     const pun: TekstSloj = { ...sloj(), id: 'pun', pasusi: [pasus('x'.repeat(49_990))] };
     store.inicijalizuj(platnoSaAnimacijama([], [pun, sloj()]));

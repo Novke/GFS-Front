@@ -501,10 +501,12 @@ describe('PlatnoEditorStore', () => {
     const tekst = (id = 't1') => ({ ...noviTekst(id, 'NACRT', { x: 0, y: 0, sirina: 200, visina: 100 }), pasusi: [pasus('A'), pasus('B')] });
     const sa = () => dok([tekst(), oblik('s1')], [animacija('a1', 't1', { pasus: 1 }), animacija('a2', 't1')]);
     /** Lažni uređivač: svaki presek vraća sledeći rezultat iz reda (pa null). */
-    function lazni(...red: (RezultatTeksta | null)[]): KomandeTeksta & { presek: ReturnType<typeof vi.fn> } {
+    function lazni(...red: (RezultatTeksta | null)[]): KomandeTeksta & {
+      presek: ReturnType<typeof vi.fn>; odbaciPresek: ReturnType<typeof vi.fn>;
+    } {
       return {
-        presek: vi.fn(() => red.shift() ?? null), postaviStil: vi.fn(), prebaciStil: vi.fn(), postaviPasus: vi.fn(),
-        prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
+        presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(() => undefined), postaviStil: vi.fn(), prebaciStil: vi.fn(),
+        postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
       };
     }
     const rezultat = (tekstovi: string[], mapa: (number | null)[]): RezultatTeksta => ({ pasusi: tekstovi.map((t) => pasus(t)), mapa });
@@ -651,6 +653,54 @@ describe('PlatnoEditorStore', () => {
       store.inicijalizuj(dok([oblik('s1')]));
       expect(store.uredjivanje()).toBeNull();
       expect(store.aktivniUredjivac()).toBeNull();
+    });
+
+    it('Fix 1/1: ubaci tokom sesije završava uređivanje (tekst je korak), pa ubacuje; nov sloj izabran, sesija zatvorena', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AX', 'B'], [0, 1])));
+      const id = store.ubaci((novi) => oblik(novi, 600, 300));
+      expect(id).not.toBeNull();
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.aktivniUredjivac()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      expect(store.izbor()).toEqual([id]);
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+    });
+
+    it('Fix 1/3: odbijena izmena teksta (preko granice) ne troši presek: odbaciPresek, bez izlaza i bez koraka', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      const k = lazni(rezultat(['x'.repeat(50_001), 'B'], [0, 1]));
+      store.registrujUredjivac(k);
+      store.zabeleziTekst();
+      expect(obavestenja.greska).toHaveBeenCalledWith('Slajd može imati najviše 50000 znakova teksta.');
+      expect(k.odbaciPresek).toHaveBeenCalledTimes(1);
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(store.mozeNazad()).toBe(false);
+      expect(store.uredjivanje()).not.toBeNull();
+    });
+
+    it('Fix 1/3: usred gesta zabeleziTekst ne uzima presek (sesija čeka kraj gesta)', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      const k = lazni(rezultat(['AX', 'B'], [0, 1]));
+      store.registrujUredjivac(k);
+      store.pocniGest();
+      store.zabeleziTekst();
+      expect(k.presek).not.toHaveBeenCalled();
+      store.zavrsiGest();
+      store.zabeleziTekst();
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+    });
+
+    it('uspešan presek ne zove odbaciPresek', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      const k = lazni(rezultat(['AX', 'B'], [0, 1]));
+      store.registrujUredjivac(k);
+      store.zabeleziTekst();
+      expect(k.odbaciPresek).not.toHaveBeenCalled();
     });
 
     it('pocniUredjivanje usred gesta -> false', () => {

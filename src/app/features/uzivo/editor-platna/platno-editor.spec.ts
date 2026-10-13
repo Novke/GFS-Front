@@ -609,6 +609,36 @@ describe('PlatnoEditorComponent', () => {
       expect(document.activeElement).toBe(okvir());
     });
 
+    it('Fix 1/4: Enter (i F2) na okviru dok je sesija istog sloja otvorena vraća fokus u tekst', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      okvir().focus();
+      expect(document.activeElement).toBe(okvir());
+      taster(okvir(), 'Enter');
+      expect(document.activeElement).toBe(uredjivac());
+      okvir().focus();
+      taster(okvir(), 'F2');
+      expect(document.activeElement).toBe(uredjivac());
+      expect(store.uredjivanje()?.slojId).toBe('tekst');
+    });
+
+    it('Fix 1/1: oblik iz trake tokom sesije zatvara uređivanje (panel, tab Slojevi, imaOtvoreno)', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Oblik')!.click();
+      await fixture.whenStable();
+      Array.from(document.body.querySelectorAll<HTMLElement>('.mat-mdc-menu-item')).find((x) => x.textContent!.trim() === 'Elipsa')!.click();
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(uredjivac()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      expect(tab('Slojevi').getAttribute('aria-disabled')).not.toBe('true');
+      expect(el().querySelector('app-panel-svojstva')!.textContent).not.toContain('Uređuje se tekst');
+      expect(document.activeElement).toBe(okvir());
+    });
+
     it('tokom uređivanja: tab Slojevi je onemogućen, Svojstva ima "Završi uređivanje (Esc)" i napomenu', async () => {
       store.postaviTab('SLOJEVI');
       await samoTekst();

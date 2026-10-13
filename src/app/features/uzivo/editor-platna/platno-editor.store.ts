@@ -140,6 +140,8 @@ export const PlatnoEditorStore = signalStore(
       const u = store.uredjivanje();
       const uredjivac = store._uredjivac();
       if (!u || u.celija || !uredjivac) return; // ćelije tabele: F14
+      // usred gesta izmena ne bi prošla: presek se ne uzima (tekst ostaje u uređivaču do sledećeg preseka)
+      if (store.gest()) return;
       const r: RezultatTeksta | null = uredjivac.presek();
       if (!r) return;
       let uklonjeno = 0;
@@ -150,7 +152,9 @@ export const PlatnoEditorStore = signalStore(
         uklonjeno = a.uklonjeno;
         return a.platno;
       });
-      if (ok && uklonjeno > 0) obavestenja.info(`Uklonjene animacije pasusa koji više ne postoje: ${uklonjeno}.`);
+      // odbijena izmena (granice, poruka) ne sme da pomeri osnovu preseka: tekst nije u dokumentu, pa ga sledeći presek daje
+      if (!ok) uredjivac.odbaciPresek();
+      else if (uklonjeno > 0) obavestenja.info(`Uklonjene animacije pasusa koji više ne postoje: ${uklonjeno}.`);
     }
 
     /** Kraj sesije teksta: presek je jedan korak (prazan rezultat: bez koraka), pa `uredjivanje` null. */
@@ -304,8 +308,12 @@ export const PlatnoEditorStore = signalStore(
       postaviTab(tab: TabPanela): void {
         patchState(store, { tab });
       },
-      /** Nov sloj na vrh sa novim `s<n>`, izabran; null kad bi prešao granice (poruka). */
+      /**
+       * Nov sloj na vrh sa novim `s<n>`, izabran; null kad bi prešao granice (poruka). Otvorena sesija teksta se prvo
+       * završava (tekst je korak), kao u PowerPointu: ubacivanje iz trake, menija ili prevlačenjem izlazi iz teksta.
+       */
       ubaci(napravi: (id: string, p: Platno) => Sloj): string | null {
+        zavrsiUredjivanje();
         let id = '';
         const ok = primeni((p) => {
           id = noviId(p, 's');
