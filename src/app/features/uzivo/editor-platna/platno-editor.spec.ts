@@ -6,7 +6,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { Subject } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
-import type { Platno } from '../data-access/platno.models';
+import type { Platno, TekstSloj } from '../data-access/platno.models';
 import { pasus, platno } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
@@ -579,6 +579,27 @@ describe('PlatnoEditorComponent', () => {
       expect(e.defaultPrevented).toBe(false);
       expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
       expect(store.uredjivanje()).not.toBeNull();
+    });
+
+    it('F13: panel teksta tokom uređivanja: Ctrl+A, pa B iz panela (fokus ostaje u tekstu), pa Esc -> tekst podebljan', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      taster(uredjivac()!, 'a', { ctrlKey: true });
+      const b = Array.from(el().querySelectorAll<HTMLButtonElement>('app-svojstva-teksta button'))
+        .find((x) => x.getAttribute('aria-label') === 'Podebljano')!;
+      expect(b.getAttribute('aria-pressed')).toBe('false');
+      const pritisak = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      b.dispatchEvent(pritisak);
+      expect(pritisak.defaultPrevented).toBe(true);
+      b.click();
+      await fixture.whenStable();
+      expect(b.getAttribute('aria-pressed')).toBe('true');
+      expect(document.activeElement).toBe(uredjivac());
+      taster(uredjivac()!, 'Escape');
+      await fixture.whenStable();
+      const t = store.platno().slojevi.find((s) => s.id === 'tekst') as TekstSloj;
+      expect(t.pasusi.flatMap((p) => p.delovi).every((d) => d.podebljano)).toBe(true);
     });
 
     it('klik van sloja završava uređivanje (izlaz jednom), fokus je na okviru platna', async () => {

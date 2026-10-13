@@ -335,6 +335,14 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     odjavi();
   });
 
+  it('ispod izbora teme stoji napomena: tema ne prebojava postojeće slojeve platna (odluka 23)', () => {
+    const grupa = (fixture.nativeElement as HTMLElement).querySelector('mat-radio-group[aria-labelledby="uz-ed-tema"]')!;
+    const id = grupa.getAttribute('aria-describedby')!;
+    const napomena = (fixture.nativeElement as HTMLElement).querySelector(`[id="${id}"]`)!;
+    expect(napomena.textContent!.trim()).toBe('Tema menja izgled Info i Pitanje slajdova i podrazumevane boje i fontove novih '
+      + 'slojeva platna; postojeći slojevi zadržavaju svoje boje i fontove.');
+  });
+
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
     const radio = (fixture.nativeElement as HTMLElement).querySelector('input[type=radio][value=PAPIR]') as HTMLInputElement;
     expect(radio).not.toBeNull();

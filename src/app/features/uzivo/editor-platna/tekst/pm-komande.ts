@@ -6,10 +6,10 @@ import { redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import type { Mark, Node as PmCvor, ResolvedPos } from 'prosemirror-model';
 import { type Command, type EditorState, type Plugin, TextSelection, type Transaction } from 'prosemirror-state';
-import type { Lista, Pasus } from '../../data-access/platno.models';
+import type { Pasus } from '../../data-access/platno.models';
 import { PODRAZUMEVANI_STIL } from './pm-konverzija';
 import type { AtributiDela, AtributiPasusa } from './pm-sema';
-import { MAX_NIVO, type StanjeSelekcije, uvlacenjeListe } from './stil-teksta';
+import { MAX_NIVO, type StanjeSelekcije, novaLista, uvlacenjeListe } from './stil-teksta';
 
 type Dispatch = (tr: Transaction) => void;
 export type PoljeStila = 'podebljano' | 'kurziv' | 'podvuceno' | 'precrtano';
@@ -185,12 +185,6 @@ export function postaviPasus(izmena: Partial<Omit<Pasus, 'delovi'>>): Command {
     }
     return true;
   };
-}
-
-function novaLista(vrsta: 'ZNAK' | 'BROJ'): Lista {
-  return vrsta === 'ZNAK'
-    ? { vrsta, znak: '•', boja: null, format: null, pocetak: null }
-    : { vrsta, znak: null, boja: null, format: 'ARAPSKI_TACKA', pocetak: 1 };
 }
 
 /**

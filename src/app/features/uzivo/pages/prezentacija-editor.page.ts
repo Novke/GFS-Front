@@ -122,7 +122,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             </mat-slide-toggle>
             <div class="uz-ed-grupa">
               <span class="uz-ed-oznaka-grupe" id="uz-ed-tema">Tema</span>
-              <mat-radio-group aria-labelledby="uz-ed-tema" [value]="vazeca(p.tema)" (change)="podesi({ tema: $event.value })">
+              <mat-radio-group aria-labelledby="uz-ed-tema" aria-describedby="uz-ed-tema-napomena" [value]="vazeca(p.tema)"
+                               (change)="podesi({ tema: $event.value })">
                 @for (t of teme; track t.tema) {
                   <mat-radio-button [value]="t.tema">
                     <span class="uz-ed-tema-naziv">{{ t.naziv }}</span>
@@ -135,6 +136,9 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 }
               </mat-radio-group>
             </div>
+            <!-- odluka 23: model nosi eksplicitne boje i fontove, pa tema ne prebojava postojeće slojeve -->
+            <p class="uz-ed-napomena" id="uz-ed-tema-napomena">Tema menja izgled Info i Pitanje slajdova i podrazumevane
+              boje i fontove novih slojeva platna; postojeći slojevi zadržavaju svoje boje i fontove.</p>
             <p class="uz-ed-napomena">Režim telefona i „Detalji“ menjaju se i uživo (tasteri M i D).</p>
           </div>
         </mat-expansion-panel>

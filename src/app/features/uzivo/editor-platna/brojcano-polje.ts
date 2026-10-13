@@ -11,12 +11,16 @@ import { jeSnimanje } from './tastatura-platna';
 /** Decimalni broj sa zarezom ili tačkom (bez eksponenta, razmaka u sredini i hiljadarki). */
 const BROJ = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)$/;
 
-/** Vrednost polja posle Enter/blur: broj u [min, max] sa 2 decimale, ili null (polje se vraća na staru vrednost). */
-export function procitajBroj(tekst: string, min: number, max: number): number | null {
+/**
+ * Vrednost polja posle Enter/blur: broj u [min, max] sa 2 decimale, ili null (polje se vraća na staru vrednost). Bez
+ * stezanja (`stegni` false, npr. veličina slova) broj van granica je neispravan unos (null), a ne granica.
+ */
+export function procitajBroj(tekst: string, min: number, max: number, stegni = true): number | null {
   const t = tekst.trim();
   if (!BROJ.test(t)) return null;
   const n = Number(t.replace(',', '.'));
   if (!Number.isFinite(n)) return null;
+  if (!stegni && (n < min || n > max)) return null;
   return z(Math.min(max, Math.max(min, n)));
 }
 
@@ -51,6 +55,8 @@ export class BrojcanoPoljeComponent {
   readonly onemoguceno = input(false);
   /** Jedinica iza broja (`°`, `%`); prazno = bez nje. */
   readonly jedinica = input('');
+  /** false: unos van [min, max] se odbija (polje vraća staru vrednost) umesto da se stegne u granice (F13, veličina slova). */
+  readonly stegni = input(true);
   /** Nova vrednost (već stegnuta i zaokružena); ne emituje se kad je ista kao prikazana. */
   readonly promena = output<number>();
 
@@ -60,7 +66,7 @@ export class BrojcanoPoljeComponent {
   protected readonly prikaz = computed(() => this.tekst() ?? formatBroja(this.vrednost()));
   private readonly neispravno = computed(() => {
     const t = this.tekst();
-    return t !== null && procitajBroj(t, this.min(), this.max()) === null;
+    return t !== null && procitajBroj(t, this.min(), this.max(), this.stegni()) === null;
   });
   /** `aria-invalid` i crvena ivica polja: MatInput bez forme ne računa grešku sam, pa je stanje naše. */
   protected readonly greska: ErrorStateMatcher = { isErrorState: () => this.neispravno() };
@@ -80,7 +86,7 @@ export class BrojcanoPoljeComponent {
     if (t === null) return;
     this.tekst.set(null);
     this.polje().updateErrorState();
-    const v = procitajBroj(t, this.min(), this.max());
+    const v = procitajBroj(t, this.min(), this.max(), this.stegni());
     if (v !== null && v !== this.vrednost()) this.promena.emit(v);
   }
 

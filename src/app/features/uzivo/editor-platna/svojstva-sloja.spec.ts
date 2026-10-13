@@ -27,6 +27,12 @@ describe('procitajBroj', () => {
   ])('%j u [%d, %d] -> %j', (tekst, min, max, ocekivano) => {
     expect(procitajBroj(tekst, min, max)).toBe(ocekivano);
   });
+
+  it.each([
+    ['401', null], ['0', null], ['0,5', null], ['400', 400], ['1', 1], ['12,345', 12.35],
+  ])('bez stezanja (veličina slova, F13): %j u [1, 400] -> %j', (tekst, ocekivano) => {
+    expect(procitajBroj(tekst, 1, 400, false)).toBe(ocekivano);
+  });
 });
 
 @Component({

@@ -131,6 +131,18 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(editor.getByRole('heading', { name: 'Isečak' })).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva slike (${rezim})`).toEqual([]);
 
+      // F13: svojstva teksta (radiogroup poravnanja i sidra, aria-pressed), pa isto tokom uređivanja teksta
+      await izaberi('naslov');
+      await expect(editor.getByRole('radiogroup', { name: 'Poravnanje' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta (${rezim})`).toEqual([]);
+      const b = (await sloj('naslov').boundingBox())!;
+      await page.mouse.dblclick(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(editor.getByRole('textbox', { name: /^Tekst sloja/ })).toBeFocused();
+      await expect(editor.getByText('Uređuje se tekst.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta tokom uređivanja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
       await editor.getByRole('tab', { name: 'Slojevi' }).click();
       await expect(editor.locator('[data-sloj-panel="oblik"]')).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, slojevi (${rezim})`).toEqual([]);

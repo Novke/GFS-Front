@@ -1,9 +1,10 @@
 // Panel "Svojstva" editora platna (F6): bez izbora svojstva slajda; za izbor zajednička polja (položaj, veličina,
-// providnost, senka) i, za tačno jedan sloj, polja njegove vrste (OBLIK i okvir TEKSTA, SLIKA). CRTEZ, TABELA i FORMULA
-// u 4a imaju samo zajednička polja (F13, F14, F16 dodaju svoja). Panel je van okvira platna, pa prečice platna u njegovim
-// poljima ne rade (odluka 24). Tokom uređivanja teksta (F12) panel pokazuje samo svojstva teksta (F13) i dugme
-// "Završi uređivanje (Esc)"; tabovi Slojevi i Animacije su tada onemogućeni (napomena ovde).
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+// providnost, senka) i, za tačno jedan sloj, polja njegove vrste (OBLIK i okvir TEKSTA, SLIKA); svojstva teksta (F13) za
+// jedan ili više izabranih TEKST slojeva. CRTEZ, TABELA i FORMULA u 4a imaju samo zajednička polja (F14, F16 dodaju
+// svoja). Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24). Tokom uređivanja teksta
+// (F12) panel pokazuje samo svojstva teksta (F13, komande idu uređivaču) i dugme "Završi uređivanje (Esc)"; tabovi
+// Slojevi i Animacije su tada onemogućeni (napomena ovde).
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import type { Tema } from '../data-access/platno.models';
 import { FokusPlatna } from './fokus-platna';
@@ -12,19 +13,27 @@ import { SvojstvaOblikaComponent } from './svojstva-oblika.component';
 import { SvojstvaSlajdaComponent } from './svojstva-slajda.component';
 import { SvojstvaSlikeComponent } from './svojstva-slike.component';
 import { SvojstvaSlojaComponent } from './svojstva-sloja.component';
+import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
 
 @Component({
   selector: 'app-panel-svojstva',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent],
+  imports: [
+    MatButtonModule, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent,
+    SvojstvaTekstaComponent,
+  ],
   template: `
     @if (store.uredjivanje()) {
       <p class="uz-ep-napomena">Uređuje se tekst. Slojevi i animacije: Završi uređivanje teksta (Esc).</p>
       <button mat-stroked-button type="button" (click)="zavrsi()">Završi uređivanje (Esc)</button>
+      <app-svojstva-teksta [tema]="tema()" />
     } @else if (store.izbor().length === 0) {
       <app-svojstva-slajda [tema]="tema()" />
     } @else {
       <app-svojstva-sloja [tema]="tema()" />
+      @if (samoTekst()) {
+        <app-svojstva-teksta [tema]="tema()" />
+      }
       @if (store.jedan(); as s) {
         @if (s.tip === 'OBLIK' || s.tip === 'TEKST') {
           <app-svojstva-oblika [sloj]="s" [tema]="tema()" />
@@ -44,6 +53,8 @@ export class PanelSvojstvaComponent {
   readonly tema = input.required<Tema>();
   protected readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna, { optional: true });
+  /** Svi izabrani slojevi su TEKST (mešan izbor nema zajednička svojstva teksta). */
+  protected readonly samoTekst = computed(() => this.store.izabraniSlojevi().every((s) => s.tip === 'TEKST'));
 
   /** Kraj uređivanja teksta iz panela: tekst u dokument, fokus na okvir platna (kao Esc). */
   protected zavrsi(): void {
