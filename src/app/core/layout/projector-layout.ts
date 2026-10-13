@@ -4,14 +4,15 @@ import { RouterOutlet } from '@angular/router';
 import { Okruzenje } from './okruzenje';
 
 /**
- * Projektorski layout (`/predavanja/:id/projektor`, `/grupe/:id/onboarding/:sid/qr`, `/izvodjenja/:id/publika|konzola`): bez ljuske, uvek svetao
- * (`.rezim-dan`), ceo ekran. Dugme "Pun ekran" i Esc su na samim stranicama.
+ * Projektorski layout (`/predavanja/:id/projektor`, `/grupe/:id/onboarding/:sid/qr`, `/izvodjenja/:id/publika|konzola|daljinski`):
+ * bez ljuske, ceo ekran, uvek svetao (`.rezim-dan`), osim kad ruta traži `pratiRezim` (daljinski: telefon u zamračenoj
+ * sali prati dan/noć aplikacije). Dugme "Pun ekran" i Esc su na samim stranicama.
  */
 @Component({
   selector: 'app-projector-layout',
   imports: [RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'rezim-dan' },
+  host: { '[class.rezim-dan]': '!pratiRezim()' },
   template: `
     @if (okruzenje.jeStaging()) {
       <div class="traka-okruzenja">STAGING — test podaci</div>
@@ -33,4 +34,6 @@ export class ProjectorLayout {
    * strane koje same crtaju ceo ekran (uživo). Bez tog podatka binding upisuje `undefined` (-> false).
    */
   readonly celaStrana = input(false, { transform: booleanAttribute });
+  /** Iz `data: { pratiRezim: true }`: bez `.rezim-dan`, pa važi režim aplikacije (dan/noć/sistem). */
+  readonly pratiRezim = input(false, { transform: booleanAttribute });
 }

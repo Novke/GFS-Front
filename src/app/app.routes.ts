@@ -171,7 +171,7 @@ export const routes: Routes = [
     ],
   },
 
-  // Izvođenje uživo na projektoru i konzola (desktop i telefon): bez ljuske, uvek svetlo, ceo ekran.
+  // Izvođenje uživo na projektoru, konzola (desktop i telefon) i daljinski: bez ljuske, ceo ekran; uvek svetlo osim daljinskog.
   {
     matcher: putanjaSaId('izvodjenja/:id/publika'),
     component: ProjectorLayout,
@@ -186,6 +186,14 @@ export const routes: Routes = [
     data: { celaStrana: true },
     children: [
       { path: '', title: 'Konzola', loadComponent: () => import('./features/uzivo/pages/konzola.page').then(x => x.KonzolaPage) },
+    ],
+  },
+  {
+    matcher: putanjaSaId('izvodjenja/:id/daljinski'),
+    component: ProjectorLayout,
+    data: { celaStrana: true, pratiRezim: true },
+    children: [
+      { path: '', title: 'Daljinski', loadComponent: () => import('./features/uzivo/pages/daljinski.page').then(x => x.DaljinskiPage) },
     ],
   },
 

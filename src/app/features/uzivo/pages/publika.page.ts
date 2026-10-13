@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute } from '@angular/router';
 import { distinctUntilChanged, filter, map } from 'rxjs';
+import { pratiPovratak } from '../data-access/povratak';
 import { ispravanIndeks } from '../data-access/izvodjenje-pravila';
 import { IzvodjenjeStore, Veza } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
@@ -112,7 +113,10 @@ export class PublikaPage {
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));
-    inject(DestroyRef).onDestroy(() => {
+    const destroyRef = inject(DestroyRef);
+    // Projektor koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
+    destroyRef.onDestroy(pratiPovratak(document, window, ms => this.store.posleVracanja(ms)));
+    destroyRef.onDestroy(() => {
       this.tast.unisti();
       clearTimeout(this.ponoviTajmer);
     });

@@ -1,6 +1,6 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -10,6 +10,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, filter, firstValueFrom, map } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
+import { pratiPovratak } from '../data-access/povratak';
 import { odgovorili, oznakaDalje, oznakaOtvoriZatvori, oznakaPolozaja } from '../data-access/izvodjenje-pravila';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { TipKomande } from '../data-access/uzivo.models';
@@ -19,31 +20,43 @@ import { preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
 import { EkranOpis, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
-import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
-import { vazecaTema } from '../ui/teme';
+import { BeleskePanelComponent } from './beleske-panel.component';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
+import { SledecePanelComponent } from './sledece-panel.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
+import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
-/** QR do konzole: telefon postaje daljinski (spec 1.7). */
+export interface TelefonLinkovi {
+  daljinski: string;
+  konzola: string;
+}
+
+/** QR za telefon: daljinski (podrazumevano) ili cela konzola (spec 1.7). */
 @Component({
   selector: 'app-telefon-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, QrKodComponent],
   template: `
-    <h2 mat-dialog-title>Konzola na telefonu</h2>
+    <h2 mat-dialog-title>Telefon</h2>
     <mat-dialog-content class="uz-kon-telefon">
-      <p>Skeniraj QR kod telefonom: konzola se otvara na telefonu i radi kao daljinski (Dalje, Otvori/Zatvori, Rezultati).</p>
-      <app-qr-kod class="uz-kon-telefon-qr" [tekst]="link" [velicina]="480" />
-      <p class="uz-kon-telefon-link">{{ link }}</p>
+      <div class="uz-kon-telefon-izbor" role="group" aria-label="Šta se otvara na telefonu">
+        <button mat-stroked-button type="button" [attr.aria-pressed]="izbor() === 'daljinski'" (click)="izbor.set('daljinski')">Daljinski</button>
+        <button mat-stroked-button type="button" [attr.aria-pressed]="izbor() === 'konzola'" (click)="izbor.set('konzola')">Cela konzola</button>
+      </div>
+      <p>{{ izbor() === 'daljinski' ? 'Skeniraj QR kod: telefon postaje daljinski (Nazad, Napred, beleške; ekran se ne gasi).'
+                                    : 'Skeniraj QR kod: cela konzola na telefonu (rezultati, učesnici, sve komande).' }}</p>
+      <app-qr-kod class="uz-kon-telefon-qr" [tekst]="link()" [velicina]="480" />
+      <p class="uz-kon-telefon-link">{{ link() }}</p>
+      <p class="uz-kon-telefon-napomena">Telefon jednom traži korisničko ime i lozinku sajta (kao laptop).</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-flat-button type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
@@ -51,7 +64,9 @@ const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu 
   `,
 })
 export class TelefonDialog {
-  protected readonly link = inject<string>(MAT_DIALOG_DATA);
+  private readonly linkovi = inject<TelefonLinkovi>(MAT_DIALOG_DATA);
+  protected readonly izbor = signal<'daljinski' | 'konzola'>('daljinski');
+  protected readonly link = computed(() => this.linkovi[this.izbor()]);
 }
 
 /** Izbor ekrana za prikaz publike (Window Management API, više ekrana). */
@@ -91,8 +106,8 @@ export class IzborEkranaDialog {
   providers: [IzvodjenjeStore],
   imports: [
     NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTabsModule, KonzolaKontroleComponent,
-    PublikaScenaComponent, RezultatPrikazComponent, SlajdPrikazComponent, TajmerComponent, TekstoviPanelComponent,
-    UcesniciPanelComponent,
+    PublikaScenaComponent, RezultatPrikazComponent, SledecePanelComponent, TajmerComponent, TekstoviPanelComponent,
+    UcesniciPanelComponent, BeleskePanelComponent, VremeIzvodjenjaComponent,
   ],
   host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)', '(document:keyup)': 'tast.pusten($event)' },
   template: `
@@ -107,6 +122,8 @@ export class IzborEkranaDialog {
             <span class="uz-kon-veza" [class.uz-kon-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
           </p>
         </div>
+        <app-vreme-izvodjenja class="uz-kon-vreme" [izvodjenjeId]="s.izvodjenje.id" [pocetakMs]="s.pocetakMs" [sat]="store.sat()"
+                              [kompaktno]="usko()" />
         @if (usko()) {
           <button mat-icon-button type="button" [matMenuTriggerFor]="meni" aria-label="Još radnji"><mat-icon svgIcon="more_vert" /></button>
           <mat-menu #meni="matMenu">
@@ -166,10 +183,9 @@ export class IzborEkranaDialog {
       </ng-template>
 
       <ng-template #beleskeTpl>
-        <section class="uz-kon-kartica" aria-label="Beleške">
+        <section class="uz-kon-kartica" aria-label="Beleške predavača">
           <h2 class="uz-kon-naslov">Beleške</h2>
-          @if (s.trenutniSlajd?.beleske; as b) { <p class="uz-kon-beleske">{{ b }}</p> }
-          @else { <p class="uz-prazno">Nema beležaka za ovaj slajd.</p> }
+          <app-beleske-panel [tekst]="s.trenutniSlajd?.beleske ?? null" [kljucSlajda]="s.trenutniSlajd?.id ?? null" />
         </section>
       </ng-template>
 
@@ -209,14 +225,7 @@ export class IzborEkranaDialog {
         <div class="uz-kon-telo">
           <div class="uz-kon-kolona">
             <ng-container [ngTemplateOutlet]="trenutniTpl" />
-            <section class="uz-kon-kartica uz-kon-sledeci" aria-label="Sledeće">
-              <h2 class="uz-kon-naslov">Sledeće</h2>
-              @if (s.sledeciSlajd; as sl) {
-                <div class="rezim-dan uz-dan"><app-slajd-prikaz [slajd]="sl" [postepeno]="false" [tema]="tema()" /></div>
-              } @else {
-                <p class="uz-prazno">{{ s.prikaz === 'KRAJ' ? 'Ovo je kraj. Završi izvođenje dugmetom „Završi“.' : 'Kraj prezentacije.' }}</p>
-              }
-            </section>
+            <app-sledece-panel [stanje]="s" />
           </div>
           <div class="uz-kon-kolona uz-kon-kolona--srednja">
             <ng-container [ngTemplateOutlet]="tajmerTpl" />
@@ -254,7 +263,6 @@ export class KonzolaPage {
   protected readonly usko = toSignal(
     inject(BreakpointObserver).observe('(max-width: 599.98px)').pipe(map(r => r.matches)), { initialValue: false });
   protected readonly kod = computed(() => kodSaRazmakom(this.store.stanje()?.izvodjenje.kod ?? ''));
-  protected readonly tema = computed(() => vazecaTema(this.store.stanje()?.tema));
   protected readonly polozaj = computed(() => {
     const s = this.store.stanje();
     return s ? oznakaPolozaja(s) : '';
@@ -282,7 +290,10 @@ export class KonzolaPage {
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));
-    inject(DestroyRef).onDestroy(() => this.tast.unisti());
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => this.tast.unisti());
+    // Laptop koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
+    destroyRef.onDestroy(pratiPovratak(document, window, (ms) => this.store.posleVracanja(ms)));
 
     // Slike sledećeg slajda unapred (i u "Sledeće" i na umanjenom projektoru prelaz ne čeka mrežu).
     effect(() => preducitajSlike(slikeSlajda(this.store.stanje()?.sledeciSlajd ?? null)));
@@ -371,7 +382,7 @@ export class KonzolaPage {
   }
 
   protected telefon(): void {
-    this.dialog.open(TelefonDialog, { data: this.store.konzolaLink(), width: '420px', maxWidth: '95vw' });
+    this.dialog.open(TelefonDialog, { data: { daljinski: this.store.daljinskiLink(), konzola: this.store.konzolaLink() } satisfies TelefonLinkovi, width: '420px', maxWidth: '95vw' });
   }
 
   protected zavrsi(): void {

@@ -76,6 +76,8 @@ export interface NastavnickoStanje {
   rangListaPrikazana: boolean; ekran: Ekran; qrPrikazan: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
   takmicenje: boolean; tema: Tema; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
   ucesnici: UcesnikStanje[]; rangLista: RangStavka[]; javniRezultat: Rezultat | null; javnaRangLista: RangStavka[] | null;
+  /** Početak izvođenja, epoch ms (server računa iz `izvodjenje.pocetak` u svojoj zoni); osnova štoperice. */
+  pocetakMs: number;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

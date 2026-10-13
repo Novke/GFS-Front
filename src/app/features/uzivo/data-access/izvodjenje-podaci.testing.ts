@@ -41,6 +41,7 @@ export function stanje(izmene: Partial<NastavnickoStanje> = {}): NastavnickoStan
     rangLista: [],
     javniRezultat: null,
     javnaRangLista: null,
+    pocetakMs: 400_000,
     ...izmene,
   };
 }

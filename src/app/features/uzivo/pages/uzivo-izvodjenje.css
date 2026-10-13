@@ -1,7 +1,7 @@
 /*
- * Uživo: prikaz za publiku (`uz-pub-`), scena projektora (`uz-scena-`) i konzola (`uz-kon-`). Globalno uključeno iz
+ * Uživo: prikaz za publiku (`uz-pub-`), scena projektora (`uz-scena-`), konzola (`uz-kon-`) i daljinski (`uz-dalj-`). Globalno uključeno iz
  * src/styles.scss (posle uzivo-tokeni.css), da stilovi komponenti ostanu ispod budžeta `anyComponentStyle`.
- * Boje kroz tokene redizajna (projektor i konzola su uvek dnevni, `rezim-dan`); crni i beli ekran (taster B/W)
+ * Boje kroz tokene redizajna (projektor i konzola su uvek dnevni, `rezim-dan`; daljinski prati dan/noć); crni i beli ekran (taster B/W)
  * su namerno čisto crni i beli.
  */
 
@@ -287,13 +287,6 @@
 
 .uz-kon-sledeci .uz-okvir {
   max-width: 70%;
-}
-
-.uz-kon .uz-kon-beleske {
-  margin: 0;
-  white-space: pre-wrap;
-  font-size: 16px;
-  line-height: 1.5;
 }
 
 .uz-kon .uz-kon-odgovorili {
@@ -605,4 +598,344 @@
   .uz-kon-traka button {
     transition: none;
   }
+}
+
+.uz-beleske {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.uz-beleske-alati {
+  display: flex;
+  gap: 8px;
+}
+
+.uz-beleske-dugme {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.uz-beleske-dugme:disabled {
+  opacity: 0.45;
+}
+
+.uz-beleske-telo {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink);
+}
+
+.uz-beleske-tekst {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.uz-vreme {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uz-vreme--kompaktno {
+  gap: 0;
+}
+
+.uz-vreme--kompaktno .mat-mdc-icon-button.mat-mdc-button-base {
+  --mat-icon-button-state-layer-size: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+}
+
+.uz-kon-vreme {
+  margin-inline-start: auto;
+}
+
+.uz-sled-radnja {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.uz-sled-zatim {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.uz-kon-telefon-izbor {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Izabrana opcija: tokeni dugmeta (Material ih čita posle ovog fajla) plus veća specifičnost od `.mat-mdc-outlined-button:not(:disabled)`. */
+.uz-kon-telefon-izbor .mat-mdc-outlined-button.mat-mdc-button-base[aria-pressed='true'] {
+  --mat-button-outlined-label-text-color: var(--primary-ink);
+  --mat-button-outlined-outline-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+/* Uska konzola: naslovi i dugme "više" u prvom redu, štoperica i sat u svom redu. */
+.uz-kon--usko .uz-kon-vreme {
+  order: 3;
+  flex-basis: 100%;
+  margin-inline-start: 0;
+}
+
+.uz-kon-telefon-napomena {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.uz-vreme-stoperica,
+.uz-vreme-sat {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.uz-vreme-stoperica {
+  font-weight: 600;
+}
+
+.uz-vreme-sat {
+  margin-inline-start: 8px;
+  color: var(--muted);
+}
+
+/* ---------- Daljinski (telefon nastavnika, uspravno; prati dan/noć) ---------- */
+
+/* Layout bez skrola stranice: traka STAGING (kad postoji) plus daljinski tačno ispunjavaju ekran. Bez `:has` važi 100dvh. */
+app-projector-layout:has(> .projektor-sadrzaj > .uz-dalj) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.projektor-sadrzaj:has(> .uz-dalj) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.uz-dalj {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.uz-dalj-traka {
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.uz-dalj-polozaj {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.uz-dalj-veza {
+  margin-inline-start: auto;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.uz-dalj-veza--ok {
+  color: var(--ok);
+}
+
+/* Redovi su eksplicitni: prazna upozorenja (ili bez reda pitanja) ne pomeraju beleške i dugmad u drugi red mreže. */
+.uz-dalj-upozorenja {
+  grid-row: 2;
+}
+
+.uz-dalj-upozorenja:empty {
+  display: none;
+}
+
+.uz-dalj-greska,
+.uz-dalj-budnost {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.uz-dalj-greska {
+  background: var(--danger-soft);
+  color: var(--ink);
+  border-bottom: 2px solid var(--danger);
+  font-weight: 600;
+}
+
+.uz-dalj-budnost {
+  background: var(--warn-soft);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+.uz-dalj-ponovo {
+  display: block;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1.2 var(--font);
+  touch-action: manipulation;
+}
+
+.uz-dalj-beleske {
+  grid-row: 3;
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.uz-dalj-beleske .uz-beleske-telo {
+  flex: 1 1 auto;
+}
+
+.uz-dalj-pitanje {
+  grid-row: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.uz-dalj-pitanje button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 16px/1.2 var(--font);
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.uz-dalj-pitanje button[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-soft-ink);
+}
+
+.uz-dalj-odgovorili {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.uz-dalj-dugmad {
+  grid-row: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: max(25dvh, 96px);
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.uz-dalj-dugmad button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: max(25dvh, 96px);
+  padding: 8px;
+  border-radius: 14px;
+  font: 600 24px/1.2 var(--font);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.uz-dalj-nazad {
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.uz-dalj-napred {
+  border: 2px solid var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.uz-dalj-oznaka {
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.uz-dalj-dugmad button:active:not(:disabled),
+.uz-dalj-pitanje button:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.uz-dalj-dugmad button:disabled,
+.uz-dalj-pitanje button:disabled {
+  opacity: 0.45;
+}
+
+.uz-dalj-dugmad button:focus-visible,
+.uz-dalj-pitanje button:focus-visible,
+.uz-dalj-ponovo:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.uz-dalj-kraj {
+  display: grid;
+  grid-row: 1 / -1;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
 }

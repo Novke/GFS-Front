@@ -12,6 +12,7 @@ import { razlogGreske } from './razlog-greske';
 import { ServerskiSat } from './sat';
 import { STOMP_FABRIKA } from './stomp';
 import { NastavnickoStanje, TipKomande } from './uzivo.models';
+import { UzivoPutanje } from '../uzivo-putanje';
 
 export type Veza = 'povezivanje' | 'povezan' | 'prekinut';
 
@@ -28,6 +29,11 @@ export const KOMANDA_TIMEOUT_MS = 15_000;
 /** Grupa poruka komandi u `NotificationStore`: nova poruka sklanja prethodnu. */
 export const GRUPA_PORUKA = 'uzivo-komanda';
 const PORUKA_TIMEOUT = 'Server ne odgovara. Pokušaj ponovo.';
+/**
+ * Stranica skrivena bar ovoliko (telefon ili laptop je spavao): posle povratka se socket prekida i otvara iznova, jer
+ * polumrtva veza posle spavanja inače čeka heartbeat (do ~20 s) pre nego što rx-stomp primeti da je pala.
+ */
+export const PONOVO_POVEZI_POSLE_MS = 5_000;
 
 interface Posao { zahtev: () => Observable<NastavnickoStanje>; greska: string; }
 
@@ -45,9 +51,17 @@ const link = (putanja: string) => new URL(putanja, document.baseURI).href;
  *   `destroy` ga otkazuju.
  * - `prihvati`: server je jedini izvor istine; snimak sa manjom verzijom od trenutne se odbacuje, a jednaka verzija se
  *   prihvata (posle odgovora studenata server šalje svežije rezultate bez promene verzije). Usklađuje `ServerskiSat`.
+ *   Zato dva `GET stanje` pri buđenju (`visibilitychange` i `online`) mogu nakratko da pokažu malo starije brojeve
+ *   odgovora iste verzije, do sledećeg snimka kroz STOMP; to je prihvaćeno.
  * - `komanda`, `preimenuj`, `izbaci`, `sakrij`: jedan red (`concatMap`), pa brzo `→ → →` stiže na server redom i nijedna
  *   komanda se ne gubi dok prethodna čeka. Odgovor (novo stanje) ide kroz `prihvati`; greška (409, 400, ...) postavlja
  *   `greska` iz `reason` i prikazuje se 3 s; 410 (izvođenje završeno) još i ponovo učita stanje.
+ * - `osvezi`: `GET stanje` kroz `prihvati` (greška tiho; stanje ionako stiže i kroz STOMP). `ponovoPovezi`: odbacuje
+ *   socket (`forceDisconnect`, uz `discardWebsocketOnCommFailure` iz `napraviStomp` odmah, i kad je socket tiho mrtav),
+ *   rx-stomp se sam ponovo poveže i dobije početni snimak; `veza` pri tome prolazi `povezan -> prekinut -> povezan`, pa
+ *   publika prvi snimak posle toga ne animira. Posle `destroy` ni `osvezi` ni `posleVracanja` ne rade ništa.
+ * - `posleVracanja(skrivenoMs)` (uz `pratiPovratak`): stranica je ponovo vidljiva ili je mreža ponovo tu; uvek `osvezi`, a
+ *   posle `PONOVO_POVEZI_POSLE_MS` i više (ili `Infinity` za `online`) još i `ponovoPovezi`.
  */
 export const IzvodjenjeStore = signalStore(
   withState<IzvodjenjeState>(POCETNO),
@@ -70,6 +84,10 @@ export const IzvodjenjeStore = signalStore(
     publikaLink: computed(() => {
       const id = stanje()?.izvodjenje.id;
       return id ? link(`izvodjenja/${id}/publika`) : '';
+    }),
+    daljinskiLink: computed(() => {
+      const id = stanje()?.izvodjenje.id;
+      return id ? link(UzivoPutanje.izvodjenjeDaljinski(id)) : '';
     }),
     /** Pun krug tajmera: vreme pitanja, a bez ograničenja prvo preostalo vreme viđeno u toj rundi. */
     ukupnoMs: computed(() => {
@@ -118,7 +136,8 @@ export const IzvodjenjeStore = signalStore(
       const t = store.stanje();
       if (t && s.verzija < t.verzija) return;
       store._sat.azuriraj(s.serverVremeMs);
-      patchState(store, { stanje: s });
+      // Prvi snimak (npr. STOMP posle neuspelog GET-a) briše zastarelu grešku učitavanja.
+      patchState(store, t ? { stanje: s } : { stanje: s, greska: null });
     }
 
     function prihvatiPoruku(telo: string): void {
@@ -140,6 +159,14 @@ export const IzvodjenjeStore = signalStore(
     function osvezi(): void {
       if (izvodjenjeId === null) return;
       veza.add(api.stanje(izvodjenjeId).subscribe({ next: prihvati, error: () => undefined }));
+    }
+
+    function ponovoPovezi(): void {
+      try {
+        stomp?.stompClient.forceDisconnect();
+      } catch {
+        // socket je već zatvoren ili se zatvara; rx-stomp se ionako ponovo povezuje
+      }
     }
 
     function povezi(id: number): void {
@@ -187,6 +214,13 @@ export const IzvodjenjeStore = signalStore(
       },
 
       prihvati,
+      osvezi,
+      ponovoPovezi,
+
+      posleVracanja(skrivenoMs: number): void {
+        osvezi();
+        if (skrivenoMs >= PONOVO_POVEZI_POSLE_MS) ponovoPovezi();
+      },
 
       komanda(tip: TipKomande, vrednost?: number): void {
         posalji(() => api.komanda(izvodjenjeId!, { tip, vrednost: vrednost ?? null }), 'Komanda nije izvršena.');
@@ -204,9 +238,15 @@ export const IzvodjenjeStore = signalStore(
         posalji(() => api.sakrij(izvodjenjeId!, rundaId, kljuc, sakriven), 'Izmena nije uspela.');
       },
 
+      /** Zatvara STOMP vezu (završeno izvođenje); poslednje stanje ostaje za završni ekran, komande i dalje rade. */
+      zatvori(): void {
+        zatvoriVezu();
+      },
+
       /** Zatvara STOMP vezu i red komandi (zove se i iz `onDestroy`). */
       destroy(): void {
         zatvoriVezu();
+        izvodjenjeId = null;
         redPretplata.unsubscribe();
       },
     };

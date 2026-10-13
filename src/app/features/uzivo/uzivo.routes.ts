@@ -10,7 +10,8 @@ import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
  * raspoređene po layoutima u `app.routes.ts`:
  * - ljuska: `prezentacije`, `prezentacije/:id`, `prezentacije/:id/izvodjenja` (deca rute `prezentacije`) i
  *   `izvodjenja/:id/pregled` (dete rute `izvodjenja`);
- * - projektor (bez ljuske, uvek svetao, cela strana): `izvodjenja/:id/publika` i `izvodjenja/:id/konzola`;
+ * - projektor (bez ljuske, uvek svetao, cela strana): `izvodjenja/:id/publika` i `izvodjenja/:id/konzola`, kao i
+ *   `izvodjenja/:id/daljinski` (telefon nastavnika; prati dan/noć, `pratiRezim`). Nijedna nije javna: iza basic-auth-a;
  * - javno (student na telefonu, bez basic-auth-a): `uzivo` i `uzivo/:kod` u javnom layoutu. Smeju da zovu samo
  *   `assets/*`, `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (pravilo `gfs/javna-ruta-uvozi`).
  * Id u putanji mora biti broj (`putanjaSaId`), inače 404 bez poziva API-ja.
@@ -41,7 +42,7 @@ export const PREZENTACIJE_RUTE: Route[] = [
   },
 ];
 
-/** Deca rute `izvodjenja` u ljusci (publika i konzola su u projektorskom layoutu, `app.routes.ts`). */
+/** Deca rute `izvodjenja` u ljusci (publika, konzola i daljinski su u projektorskom layoutu, `app.routes.ts`). */
 export const IZVODJENJA_RUTE: Route[] = [
   {
     matcher: putanjaSaId(':id/pregled'),

@@ -11,6 +11,7 @@ export const UzivoPutanje = {
   izvodjenjePregled: (id: number | string) => `izvodjenja/${id}/pregled`,
   izvodjenjePublika: (id: number | string) => `izvodjenja/${id}/publika`,
   izvodjenjeKonzola: (id: number | string) => `izvodjenja/${id}/konzola`,
+  izvodjenjeDaljinski: (id: number | string) => `izvodjenja/${id}/daljinski`,
   uzivo: 'uzivo',
   uzivoKod: (kod: string) => `uzivo/${kod}`,
 } as const;

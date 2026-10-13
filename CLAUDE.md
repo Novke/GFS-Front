@@ -136,9 +136,10 @@ over STOMP; teacher commands are REST.
   (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
   `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
 - Layouts (paths unchanged since the first release, they may be printed as QR codes): `prezentacije`, `prezentacije/:id`,
-  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola` in
+  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola|daljinski` in
   `ProjectorLayout`; `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
-  content frame), because these pages draw the whole screen themselves.
+  content frame), because these pages draw the whole screen themselves. `daljinski` also gets `pratiRezim: true`
+  (`ProjectorLayout` then drops `.rezim-dan`, so the phone follows day/night); projector and console stay day.
 - `javno/` may import exactly: `uzivo-putanje`, `data-access/uzivo.models`, `data-access/stomp`, `data-access/sat`,
   `data-access/razlog-greske`, `ui/format`, `ui/markdown`, `ui/opcija-oblik`, `ui/rang-lista.component`,
   `ui/tajmer.component` (and `lazni-sat.testing` in specs). Never `prezentacije.api`, `izvodjenja.api`, the stores,
@@ -165,6 +166,29 @@ over STOMP; teacher commands are REST.
   **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (`slajdUCmd` and the form do it; omitting
   it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
+- **Console and remote (phase 3 of the slide builder):** the console (`konzola`) shows the position with the step ("korak k/n"
+  from the server's `korak`/`brojStavki`, never from `brojKoraka`), `sledece-panel` (state after the next click; on a
+  question in CEKA/OTVORENO the action plus "Zatim:", pure function `sledeciKlik` in `izvodjenje-pravila`),
+  `beleske-panel` (notes with A-/A+, `pre-wrap`, long words break, scroll back to top on a new slide) and
+  `vreme-izvodjenja` (stopwatch and clock). The size of the notes is one `PreferencesStore` setting `velicinaBeleski`
+  (14-40 px, default 18), shared by console and remote. `data-access/stoperica.ts`: pure stopwatch from the server's
+  `NastavnickoStanje.pocetakMs` (needs backend `pocetakMs`) on server time (`sat.sada()`), pause/reset local to the
+  window but kept in `sessionStorage` (`gfs.uzivo.stoperica.<id>`), reset undone through "Poništi". The console's
+  "Telefon" dialog shows the QR of the remote (toggle "Cela konzola").
+  `izvodjenja/:id/daljinski` (`daljinski.page`): Nazad/Napred (each half the width, at least 25% of the screen height),
+  notes, question controls, no `ZAVRSI` and no keyboard shortcuts. `data-access/dodir.ts`: a second tap of the same button
+  within 300 ms is dropped (`performance.now()`), plus `vibriraj`. `data-access/budan-ekran.ts`: Screen Wake Lock,
+  requested again on every return to the page, released on end/destroy; a visible warning when missing or refused. A
+  command error shows in a `role="alert"` bar on the phone; 410 shows "Izvođenje je završeno.". Waking up:
+  `data-access/povratak.ts` `pratiPovratak` calls the store's `posleVracanja` (always `GET stanje`, after >= 5 s hidden
+  or `online` also `ponovoPovezi`, which drops a half-dead socket at once); while STOMP is not connected the remote polls
+  `GET stanje` every 5 s (page visible only). Console and audience wake up the same way.
+  **The remote is not a public route:** it stays behind basic-auth (the phone asks for user and password once, in the
+  browser); it uses only the existing teacher API and STOMP `/api/ws`, and `javne-putanje.spec.ts` checks that the public
+  regex does not cover it. E2E: `e2e/mock-izvodjenje.ts` (state machine of run 7, fixture `uzivo-izvodjenje.json`, routes
+  `GET stanje` and `POST komande` in `MockApi`), `e2e/lazni-stomp.ts` (fake STOMP broker over `page.routeWebSocket`, also
+  used by `uzivo-javno`), `e2e/uzivo-nastavnik.ts` (teacher broker, Wake Lock stub), specs `uzivo-konzola` and
+  `uzivo-daljinski` (360 x 740 long notes, double tap, 409/410/aborted command, sleep and wake).
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
   `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the

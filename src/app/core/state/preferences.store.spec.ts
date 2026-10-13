@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAX_NEDAVNO, NedavnoStavka, PREFS_KLJUC, PreferencesStore } from './preferences.store';
+import {
+  MAX_NEDAVNO, NedavnoStavka, PREFS_KLJUC, PreferencesStore, manjaVelicinaBeleski, ucitajPreference, vecaVelicinaBeleski,
+} from './preferences.store';
 
 type Slusalac = (e: { matches: boolean }) => void;
 
@@ -181,5 +183,40 @@ describe('PreferencesStore', () => {
     expect(store.nedavno()).toHaveLength(8);
     expect(store.nedavno()[0].id).toBe(12);
     expect(store.nedavno()[7].id).toBe(5);
+  });
+
+  describe('veličina beleški', () => {
+    const ucitaj = (sirovo: unknown) => {
+      localStorage.setItem(PREFS_KLJUC, JSON.stringify(sirovo));
+      return ucitajPreference(localStorage).velicinaBeleski;
+    };
+
+    it('učitavanje: podrazumevano 18, ispravna vrednost se čuva, van liste pada na 18', () => {
+      expect(ucitaj({})).toBe(18);
+      expect(ucitaj({ velicinaBeleski: 24 })).toBe(24);
+      expect(ucitaj({ velicinaBeleski: 17 })).toBe(18);
+      expect(ucitaj({ velicinaBeleski: '24' })).toBe(18);
+      expect(ucitaj({ velicinaBeleski: 1000 })).toBe(18);
+    });
+
+    it('veća i manja veličina idu po koracima i staju na krajevima', () => {
+      expect(vecaVelicinaBeleski(18)).toBe(20);
+      expect(vecaVelicinaBeleski(40)).toBe(40);
+      expect(vecaVelicinaBeleski(17)).toBe(18);
+      expect(manjaVelicinaBeleski(18)).toBe(16);
+      expect(manjaVelicinaBeleski(14)).toBe(14);
+      expect(manjaVelicinaBeleski(19)).toBe(18);
+    });
+
+    it('postaviVelicinuBeleski upisuje u localStorage, vrednost van liste se ignoriše', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      expect(store.velicinaBeleski()).toBe(18);
+      store.postaviVelicinuBeleski(28);
+      TestBed.tick();
+      expect(JSON.parse(localStorage.getItem(PREFS_KLJUC) ?? '{}').velicinaBeleski).toBe(28);
+      store.postaviVelicinuBeleski(29);
+      expect(store.velicinaBeleski()).toBe(28);
+    });
   });
 });

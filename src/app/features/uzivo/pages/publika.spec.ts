@@ -53,6 +53,7 @@ describe('PublikaPage', () => {
     dozvoljene: signal(new Set()),
     init: vi.fn(),
     komanda: vi.fn(),
+    posleVracanja: vi.fn(),
   };
 
   async function prikazi() {
@@ -77,6 +78,27 @@ describe('PublikaPage', () => {
     window.name = '';
     lazniStore.stanje.set(null);
     lazniStore.veza.set('povezan');
+  });
+
+  it('povratak na stranicu zove store.posleVracanja, a posle uništenja ne', async () => {
+    lazniStore.posleVracanja.mockClear();
+    lazniStore.stanje.set(naPitanju('CEKA'));
+    const f = await prikazi();
+    const vidljivost = (v: 'hidden' | 'visible') => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    try {
+      vidljivost('hidden');
+      vidljivost('visible');
+      expect(lazniStore.posleVracanja).toHaveBeenCalledTimes(1);
+      f.destroy();
+      vidljivost('hidden');
+      vidljivost('visible');
+      expect(lazniStore.posleVracanja).toHaveBeenCalledTimes(1);
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
   });
 
   it('epoha veze raste pri svakom prekidu (povezan -> prekinut), ne pri ponovnom povezivanju', async () => {
