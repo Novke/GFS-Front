@@ -7,6 +7,7 @@ import { oznakeListe } from '../ui/platno-tekst';
 import {
   kutijaIzLanca, lanacPlaceholdera, placeholderOblika, razresiPPr, razresiRPr, stiloviNivoa, vrstaTeksta,
 } from './nasledjivanje';
+import { slikaZaSlanje } from './format-slike';
 import { bojaTx1, nazivOblika, rotacijaSloja } from './oblik';
 import { latexOkvira } from './omml-latex';
 import { dekodirajPng, isecKolone, isecRedove, kodirajPng, pojaseviMastila, type Rgba } from './png';
@@ -142,7 +143,8 @@ interface SlikaFormule { cilj: string; kljuc: () => string | null; bajtovi: () =
 
 /**
  * `a:blip r:embed` -> slika formule. Nema je, spoljna je, deo ne postoji ili je format koji pregledač ne dekodira (EMF,
- * WMF, ...: `slike.ts` bi oborio slanje celog uvoza) -> `null` (sloj prikazuje LaTeX izvor).
+ * WMF, po ekstenziji; SVG, PDF, prazan deo po magičnim bajtovima: `slike.ts` bi oborio slanje celog uvoza) -> `null`
+ * (sloj prikazuje LaTeX izvor).
  */
 function slikaIz(blip: Element | null, ctx: KontekstSlajda): SlikaFormule | null {
   const rId = blip?.getAttributeNS(NS.r, 'embed')?.trim() ?? '';
@@ -150,7 +152,9 @@ function slikaIz(blip: Element | null, ctx: KontekstSlajda): SlikaFormule | null
   const deo = deoElementa(blip, ctx);
   const veza = ctx.paket.veza(deo, rId);
   if (!veza || veza.spoljna || NEPODRZANI_FORMATI.test(veza.cilj) || !ctx.paket.postoji(veza.cilj)) return null;
-  return { cilj: veza.cilj, kljuc: () => ctx.medijIzVeze(deo, rId), bajtovi: () => ctx.paket.bajtovi(veza.cilj) };
+  const bajtovi = ctx.paket.bajtovi(veza.cilj);
+  if (!bajtovi || !slikaZaSlanje(bajtovi)) return null;
+  return { cilj: veza.cilj, kljuc: () => ctx.medijIzVeze(deo, rId), bajtovi: () => bajtovi };
 }
 
 /** Udeli kutije `[x0, x1] x [y0, y1]` (0..1 = cela kutija; van toga slika izlazi iz oblika). */

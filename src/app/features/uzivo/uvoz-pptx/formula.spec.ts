@@ -125,6 +125,15 @@ describe('pretvoriFormulu: ceo okvir', () => {
     expect(z.mediji.size).toBe(0);
   });
 
+  it('fallback slika čiji bajtovi nisu slika (SVG pod .png): bez slike + FORMULA_ZA_PROVERU, medij se ne registruje', () => {
+    const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const { ctx, z, ac } = sa(formulaAc(mp(razlomak)), svg);
+    const s = pretvoriFormulu(ac, identitet, ctx, 's5', new Set())!.slojevi[0];
+    expect(s.slikaIzvora).toBeNull();
+    expect(kodovi(z)).toEqual(['FORMULA_ZA_PROVERU']);
+    expect(z.mediji.size).toBe(0);
+  });
+
   it('placeholder bez a:xfrm: položaj iz layouta, znak liste stila tela se ne dodaje', () => {
     const nv = '<p:nvSpPr><p:cNvPr id="5" name="Sadržaj"/><p:cNvSpPr/><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr>';
     const blip = '<a:blipFill><a:blip r:embed="rIdF"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>';
@@ -232,11 +241,13 @@ describe('pretvoriFormulu: po pasusu (PNG pojasevi)', () => {
     expect(kodovi(z)).toEqual(['FORMULA_ODJEDNOM']);
   });
 
-  it('slika koja nije PNG: isto kao neuspeh (jedan sloj + FORMULA_ODJEDNOM)', () => {
-    const { ctx, z, ac } = sa(formulaAc(tri()), Uint8Array.from([1, 2, 3, 4]));
+  it('slika koja nije PNG (JPEG): isto kao neuspeh (jedan sloj + FORMULA_ODJEDNOM)', () => {
+    const { ctx, z, ac } = sa(formulaAc(tri()), Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]));
     const rez = pretvoriFormulu(ac, identitet, ctx, 's5', new Set([0, 2]))!;
     expect(rez.slojevi.length).toBe(1);
+    expect(rez.slojevi[0].slikaIzvora).toBe('pptx:ppt/media/formula1.png');
     expect(kodovi(z)).toEqual(['FORMULA_ODJEDNOM']);
+    expect(z.upozorenja[0].poruka).toContain('slika formule nije PNG koji uvoz čita');
   });
 
   it('bez fallback slike pasusi se ne razdvajaju: jedan sloj + FORMULA_ZA_PROVERU + FORMULA_ODJEDNOM', () => {

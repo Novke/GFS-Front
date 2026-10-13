@@ -97,6 +97,28 @@ describe('pretvoriSliku', () => {
     }
   });
 
+  it('bajtovi koje pregledač ne dekodira (SVG, PDF, prazan deo, smeće pod .png) -> null + OBJEKAT_PRESKOCEN, medij se ne registruje', () => {
+    const slucajevi: [string, string | Uint8Array][] = [
+      ['image1.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>'],
+      ['image1.pdf', '%PDF-1.4 izmisljen'],
+      ['image1.png', new Uint8Array(0)],
+      ['image1.png', 'nije slika'],
+    ];
+    for (const [ime, bajtovi] of slucajevi) {
+      const { s, z } = slika({}, [{ id: 'rIdI', tip: 'image', cilj: `../media/${ime}` }], { [`ppt/media/${ime}`]: bajtovi });
+      expect(s).toBeNull();
+      expect(z.upozorenja).toEqual([expect.objectContaining({ kod: 'OBJEKAT_PRESKOCEN', poruka: "Slika 'Slika 7' nije uvezena: format slike nije podržan." })]);
+      expect(z.mediji.size).toBe(0);
+    }
+  });
+
+  it('BMP (server ga ne prima, pregledač ga dekodira) se uvozi: slanje ga pretvara', () => {
+    const bmp = new Uint8Array([0x42, 0x4d, 1, 2, 3, 4]);
+    const { s, z } = slika({}, [{ id: 'rIdI', tip: 'image', cilj: '../media/image1.bmp' }], { 'ppt/media/image1.bmp': bmp });
+    expect(s?.medijId).toBe('pptx:ppt/media/image1.bmp');
+    expect(z.upozorenja).toEqual([]);
+  });
+
   it('svgBlip u extLst -> koristi se r:embed (PNG)', () => {
     const ext = '<a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="rIdS"/></a:ext></a:extLst>';
     const { s, z } = slika({ blip: ext }, [SLIKA, { id: 'rIdS', tip: 'image', cilj: '../media/image2.svg' }],
@@ -184,6 +206,15 @@ describe('pozadinaSlajda', () => {
     const { p, z } = pozadina({ bg: bgPr('<a:blipFill><a:blip r:embed="rIdI"/></a:blipFill>'), veze: [SLIKA] });
     expect(p).toEqual({ boja: '#FFFFFF', medijId: null });
     expect(kodovi(z)).toEqual(['OBJEKAT_PRESKOCEN']);
+  });
+
+  it('blipFill sa SVG bajtovima -> #FFFFFF bez medija + OBJEKAT_PRESKOCEN', () => {
+    const svg: VezaFabrike = { id: 'rIdI', tip: 'image', cilj: '../media/image1.svg' };
+    const { p, z } = pozadina({ bg: bgPr('<a:blipFill><a:blip r:embed="rIdI"/></a:blipFill>'), veze: [svg] },
+      { delovi: { 'ppt/media/image1.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>' } });
+    expect(p).toEqual({ boja: '#FFFFFF', medijId: null });
+    expect(z.upozorenja.map((u) => u.poruka)).toEqual(['Slika pozadine nije uvezena: format slike nije podržan.']);
+    expect(z.mediji.size).toBe(0);
   });
 
   it('nigde p:bg -> bg1 preko mape boja', () => {

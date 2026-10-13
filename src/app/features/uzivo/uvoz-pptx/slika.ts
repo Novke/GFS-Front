@@ -1,6 +1,7 @@
 // Slike PPTX-a (p:pic) u SLIKA slojeve platna i pozadina slajda (slajd -> layout -> master). Čiste funkcije bez
 // Angular-a (lokalna provera ih pokreće u Node-u).
 import type { SlikaSloj } from '../data-access/platno.models';
+import { slikaZaSlanje } from './format-slike';
 import { bojaPopune, elementPopune, ivicaIz, nazivOblika, okrenut, rotacijaSloja, senkaIz, upozoriJednom } from './oblik';
 import { bojaIz, pomesaj } from './tema';
 import { uSloj, type KontekstSlajda, type Kutija } from './tipovi';
@@ -8,7 +9,8 @@ import { brojAtr, dete, NS } from './xml';
 
 /**
  * Formati koje pregledač ne ume da dekodira (pa ni `slike.ts` da pretvori u PNG/JPEG): vektorski Office formati i TIFF/
- * JPEG XR. Takva slika se preskače umesto da obori slanje celog uvoza.
+ * JPEG XR. Takva slika se preskače umesto da obori slanje celog uvoza. Ekstenzija daje poruku sa imenom formata; presudni
+ * su magični bajtovi (`slikaZaSlanje`), jer `r:embed` može voditi i na SVG, PDF ili prazan deo pod bilo kojim imenom.
  */
 export const NEPODRZANI_FORMATI = /\.(emf|wmf|emz|wmz|tif|tiff|wdp|jxr)$/i;
 const BELA = '#FFFFFF';
@@ -23,7 +25,10 @@ export function deoElementa(el: Element, ctx: KontekstSlajda): string {
   return ctx.slajd.putanja;
 }
 
-/** Registruje sliku iz `a:blip` (`r:embed` u vezama dela `deo`) ili kaže zašto ne može. */
+/**
+ * Registruje sliku iz `a:blip` (`r:embed` u vezama dela `deo`) ili kaže zašto ne može. Bajtovi se čitaju već ovde (paket ih
+ * kešira, slanje ih ionako čita): slika koju slanje ne ume da pošalje se preskače kao objekat, ne obara ceo uvoz.
+ */
 function medijIzBlipa(blip: Element | null, deo: string, ctx: KontekstSlajda): IshodMedija {
   const rId = blip?.getAttributeNS(NS.r, 'embed')?.trim() ?? '';
   if (rId === '') {
@@ -33,8 +38,13 @@ function medijIzBlipa(blip: Element | null, deo: string, ctx: KontekstSlajda): I
   if (veza?.spoljna) return { razlog: 'slika je spoljna veza (nije u fajlu)' };
   const format = veza && NEPODRZANI_FORMATI.exec(veza.cilj);
   if (format) return { razlog: `format ${format[1].toUpperCase()} nije podržan` };
-  const medijId = veza ? ctx.medijIzVeze(deo, rId) : null;
-  return medijId ? { medijId } : { razlog: 'slika nije pronađena u fajlu' };
+  const nema = { razlog: 'slika nije pronađena u fajlu' };
+  if (!veza || !ctx.paket.postoji(veza.cilj)) return nema;
+  const bajtovi = ctx.paket.bajtovi(veza.cilj);
+  if (!bajtovi) return nema;
+  if (!slikaZaSlanje(bajtovi)) return { razlog: 'format slike nije podržan' };
+  const medijId = ctx.medijIzVeze(deo, rId);
+  return medijId ? { medijId } : nema;
 }
 
 /**

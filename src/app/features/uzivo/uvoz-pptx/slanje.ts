@@ -10,7 +10,8 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import type { MedijInfo, PrezentacijaDetails, SlajdCmd, UvozSlajdovaCmd } from '../data-access/uzivo.models';
 import { DUZINA_ID_MEDIJA, preslikajMedije } from './granice';
 import type { Upozorenje } from './izvestaj';
-import { mimeSlike, smanjiSliku } from './slike';
+import { mimeSlike } from './format-slike';
+import { smanjiSliku } from './slike';
 import type { RezultatUvoza, UvezenSlajd } from './uvoz';
 
 /** Granica tela uvoza na serveru (`UvozConfig.MAX_TELO_UVOZA`, po `Content-Length`). */

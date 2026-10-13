@@ -207,7 +207,10 @@ describe('posaljiUvoz', () => {
     expect(ishod.vrednost!.upozorenja).toEqual([expect.objectContaining({ slajd: 2, kod: 'SLIKA_SMANJENA' })]);
   });
 
-  it('format koji server ne prima (magični bajtovi) se pretvara; neuspeh smanjivanja je GreskaSlanja', async () => {
+  // Do slanja stižu samo slike koje `slikaZaSlanje` prima (format servera ili BMP): SVG, PDF i prazan deo preskače već
+  // pretvaranje (`slika.spec.ts`, `uvoz.spec.ts`). Greška ovde je samo stvarna greška slanja (pregledač bez canvas-a,
+  // smanjivanje koje ne uspe).
+  it('BMP (server ga ne prima) se pretvara; stvaran neuspeh pretvaranja u pregledaču je GreskaSlanja', async () => {
     const api = new LazniApi();
     const bmp = new Uint8Array([0x42, 0x4d, 1, 2, 3]);
     const { z, smanji } = zavisnosti(api);

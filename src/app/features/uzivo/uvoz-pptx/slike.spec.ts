@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { mimeSlike, smanjiSliku } from './slike';
+import { smanjiSliku } from './slike';
 
 const MB = 1024 * 1024;
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -11,20 +11,6 @@ const sa = (zaglavlje: number[], velicina = 64) => {
   b.set(zaglavlje);
   return b;
 };
-
-describe('mimeSlike (magični bajtovi kao MedijService)', () => {
-  it.each([
-    [PNG, 'image/png'], [JPEG, 'image/jpeg'], [[0x47, 0x49, 0x46, 0x38, 0x39, 0x61], 'image/gif'], [[0x47, 0x49, 0x46, 0x38, 0x37, 0x61], 'image/gif'],
-    [WEBP, 'image/webp'], [[0x42, 0x4d], null], [[0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45], null], [[], null],
-  ])('%j -> %s', (zaglavlje, mime) => {
-    expect(mimeSlike(sa(zaglavlje as number[], 16))).toBe(mime);
-  });
-
-  it('prekratak niz nije slika', () => {
-    expect(mimeSlike(new Uint8Array([0x89, 0x50]))).toBeNull();
-    expect(mimeSlike(new Uint8Array(0))).toBeNull();
-  });
-});
 
 /** Lažni OffscreenCanvas: beleži veličine i tip izlaza, `convertToBlob` vraća blob zadate veličine. */
 function lazniPregledac(o: { sirina: number; visina: number; alfa: boolean; velicine: number[] }) {

@@ -1,8 +1,8 @@
 // Slike za slanje: prepoznavanje formata po magičnim bajtovima (isto kao `MedijService` na serveru) i smanjivanje u
 // pregledaču (canvas) za slike veće od 10 MB ili u formatu koji server ne prima. Koristi API-je pregledača
-// (`createImageBitmap`, `OffscreenCanvas` ili `<canvas>`), pa ga lokalna provera uvoza (Node) ne učitava.
-
-export type MimeSlike = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+// (`createImageBitmap`, `OffscreenCanvas` ili `<canvas>`), pa ga lokalna provera uvoza (Node) ne učitava; prepoznavanje
+// formata je u `format-slike.ts` (bez API-ja pregledača).
+import { mimeSlike } from './format-slike';
 
 const MB = 1024 * 1024;
 /** Granica servera (`spring.servlet.multipart.max-file-size=10MB`). */
@@ -12,20 +12,6 @@ const CILJ = 9.5 * MB;
 const KORAK = 0.8;
 const POKUSAJA = 5;
 const KVALITET_JPEG = 0.9;
-
-function pocinje(b: Uint8Array, od: number, ocekivano: readonly number[]): boolean {
-  if (b.length < od + ocekivano.length) return false;
-  return ocekivano.every((x, i) => b[od + i] === x);
-}
-
-/** Format slike po prvim bajtovima, kao `MedijService.mime` na serveru; `null` = server je ne prima. */
-export function mimeSlike(b: Uint8Array): MimeSlike | null {
-  if (pocinje(b, 0, [0x89, 0x50, 0x4e, 0x47])) return 'image/png';
-  if (pocinje(b, 0, [0xff, 0xd8, 0xff])) return 'image/jpeg';
-  if (pocinje(b, 0, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) || pocinje(b, 0, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])) return 'image/gif';
-  if (pocinje(b, 0, [0x52, 0x49, 0x46, 0x46]) && pocinje(b, 8, [0x57, 0x45, 0x42, 0x50])) return 'image/webp';
-  return null;
-}
 
 /** Ime sa novom ekstenzijom (`foto.jpeg` -> `foto.jpg`, `crtez` -> `crtez.png`). */
 function saEkstenzijom(ime: string, png: boolean): string {

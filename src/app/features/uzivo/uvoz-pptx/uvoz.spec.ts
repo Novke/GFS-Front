@@ -429,6 +429,18 @@ describe('pretvoriPptx: neispravni delovi (Review Focus 1)', () => {
     expect(r.mediji.size).toBe(0);
   });
 
+  it('slika koju pregledač ne dekodira (SVG) se preskače pri pretvaranju: slajd uvezen, medij se ne šalje', async () => {
+    const r = await uvezi({
+      slajdovi: [{ spTree: oblik.slika(4, 'rIdX', 0, 0, 1270000, 1270000) + okvir(5, 0, 1270000), veze: [{ id: 'rIdX', tip: 'image', cilj: '../media/image1.svg' }] },
+        { spTree: okvir(5, 0, 0) }],
+      delovi: { 'ppt/media/image1.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>' },
+    });
+    expect(r.greske).toEqual([]);
+    expect(platno(r).slojevi.map((s) => s.id)).toEqual(['s5']);
+    expect(ima(r, 'OBJEKAT_PRESKOCEN')).toEqual([expect.objectContaining({ slajd: 1, poruka: "Slika 'Slika 4' nije uvezena: format slike nije podržan." })]);
+    expect(r.mediji.size).toBe(0);
+  });
+
   it('beleskeBezDela: beleske null, bez greške', async () => {
     const r = await jedan({ spTree: okvir(5, 0, 0), beleske: pasus('x') }, { bezDelova: ['ppt/notesSlides/notesSlide1.xml'] });
     expect(r.greske).toEqual([]);
