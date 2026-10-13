@@ -254,17 +254,19 @@ describe('PlatnoPrikazComponent', () => {
     expect(sloj(el, 'tekst').querySelector('.uz-pl-pasus')?.textContent).toBe('a\tb');
   });
 
-  it('TEKST: pasus sa uvlačenjem i tabom ima .uz-pl-tab (mereni tab), pasus bez uvlačenja zadržava \\t', async () => {
+  it('TEKST: pasus sa tabom ima .uz-pl-tab (mereni tab, i bez uvlačenja), pasus bez taba zadržava DOM faze 1', async () => {
     const p = sa<TekstSloj>('tekst', (s) => ({
-      ...s, pasusi: [pasus('a\tb'), { ...pasus('c\td\te'), uvlacenje: { levo: 18, prviRed: -18 } }],
+      ...s, pasusi: [pasus('ab'), { ...pasus('c\td\te'), uvlacenje: { levo: 18, prviRed: -18 } }, pasus('f\tg')],
     }));
     const { el } = await prikazi(p);
-    const [bez, sa_] = Array.from(sloj(el, 'tekst').querySelectorAll<HTMLElement>('.uz-pl-pasus'));
+    const [bez, sa_, bezUvlacenja] = Array.from(sloj(el, 'tekst').querySelectorAll<HTMLElement>('.uz-pl-pasus'));
     expect(bez.querySelector('.uz-pl-tab')).toBeNull();
     expect(bez.hasAttribute('data-meri-tabove')).toBe(false);
-    expect(bez.textContent).toBe('a\tb');
-    // Nemereni pasus zadržava DOM faze 1: jedan tekstualni čvor po delu.
+    // Pasus bez taba zadržava DOM faze 1: jedan tekstualni čvor po delu.
     expect(Array.from(bez.querySelector('.uz-pl-deo')!.childNodes).map((n) => n.nodeType)).toEqual([Node.TEXT_NODE]);
+    // CSS `tab-size` preskače stop bliži od 0,5ch (PowerPoint ne), pa se meri i tab bez uvlačenja i stopova.
+    expect(bezUvlacenja.querySelectorAll('.uz-pl-tab').length).toBe(1);
+    expect(bezUvlacenja.hasAttribute('data-meri-tabove')).toBe(true);
     expect(sa_.querySelectorAll('.uz-pl-tab').length).toBe(2);
     expect(sa_.dataset['pasus']).toBe('1');
     expect(sa_.hasAttribute('data-meri-tabove')).toBe(true);
@@ -317,12 +319,13 @@ describe('PlatnoPrikazComponent', () => {
     }
   });
 
-  it('TEKST: line-height za proredProcenat 100 je 1,2 kao u fazi 1; razmakPre prvog pasusa ostaje', async () => {
+  it('TEKST: line-height za proredProcenat 100 je 1,2 kao u fazi 1; razmakPre prvog pasusa se ne primenjuje (PowerPoint)', async () => {
     const p = sa<TekstSloj>('tekst', (s) => ({ ...s, pasusi: [{ ...pasus('a'), razmakPre: 6 }] }));
     const { el } = await prikazi(p);
     const pasusEl = sloj(el, 'tekst').querySelector<HTMLElement>('.uz-pl-pasus')!;
     expect(pasusEl.style.lineHeight).toBe('1.2');
-    expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 6)');
+    expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 0)');
+    expect(pasusEl.style.top).toBe('');
     expect(el.style.getPropertyValue('font-kerning')).toBe('');
     expect(el.style.getPropertyValue('font-variant-ligatures')).toBe('');
   });
@@ -353,12 +356,14 @@ describe('PlatnoPrikazComponent', () => {
   it('TEKST: skala fonta i proreda iz okvira, prored i razmaci pasusa, ivica centrirana na ivici sloja', async () => {
     const p = sa<TekstSloj>('tekst', (s) => ({
       ...s, okvir: { ...s.okvir, skala: 0.5, skalaProreda: 0.9 }, ivica: { boja: '#000000', debljina: 2, crtica: 'PUNA' },
-      pasusi: [{ ...pasus('a'), proredProcenat: 150, razmakPre: 6, razmakPosle: 12 }],
+      pasusi: [pasus('x'), { ...pasus('a'), proredProcenat: 150, razmakPre: 6, razmakPosle: 12 }],
     }));
     const { el } = await prikazi(p);
     const okvir = sloj(el, 'tekst').querySelector<HTMLElement>('.uz-pl-sadrzaj')!;
-    const pasusEl = okvir.querySelector<HTMLElement>('.uz-pl-pasus')!;
+    const pasusEl = okvir.querySelectorAll<HTMLElement>('.uz-pl-pasus')[1];
     expect(pasusEl.style.lineHeight).toBe('1.62');
+    // razlika proreda iznad bazne linije: (1,62 - 1,2) / 2 * 9 (veličina 18 * skala 0,5)
+    expect(pasusEl.style.top).toBe('calc(var(--u) * 1.89)');
     expect(pasusEl.style.marginTop).toBe('calc(var(--u) * 6)');
     expect(pasusEl.style.marginBottom).toBe('calc(var(--u) * 12)');
     expect(pasusEl.querySelector<HTMLElement>('.uz-pl-deo')!.style.fontSize).toBe('calc(var(--u) * 9)');

@@ -173,6 +173,8 @@ export interface RazresenPPr {
     | { vrsta: 'broj'; sema: string; pocetak: number; boja: Element | null };
   /** `poz` u EMU, `algn` `l`/`ctr`/`r`/`dec`. */
   tabovi: { poz: number; algn: string }[];
+  /** Veličina znaka liste: `buSzPct` (1/1000 %) ili `buSzPts` (stotinke pt); `null` = kao tekst (`buSzTx` ili nema). */
+  velicinaZnaka: { pct: number } | { pts: number } | null;
 }
 
 export interface RazresenRPr {
@@ -267,6 +269,10 @@ export function razresiPPr(pPr: Element | null, nivoi: Element[]): RazresenPPr {
     };
   }
 
+  const buSz = prvoDete(izvori, ['buSzPct', 'buSzPts', 'buSzTx']);
+  const velicinaZnaka = buSz?.localName === 'buSzPct' ? { pct: brojAtr(buSz, 'val', 100000) }
+    : buSz?.localName === 'buSzPts' ? { pts: brojAtr(buSz, 'val', 0) } : null;
+
   const tabLst = prvoDete(izvori, ['tabLst']);
   const tabovi = tabLst
     ? Array.from(tabLst.children)
@@ -284,6 +290,7 @@ export function razresiPPr(pPr: Element | null, nivoi: Element[]): RazresenPPr {
     spcAft: razmak(izvori, 'spcAft'),
     bu,
     tabovi,
+    velicinaZnaka,
   };
 }
 

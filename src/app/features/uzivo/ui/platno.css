@@ -22,6 +22,9 @@
   word-spacing: normal;
   text-align: left;
   text-transform: none;
+  /* Tačne (razlomljene) širine slova kao u PowerPointu: bez ovoga Chromium na Linuxu zaokružuje svaki znak na ceo
+     piksel (Carlito 40 pt na 1920 px: cifra 41 px umesto 40,55), pa se red produži i prelomi drugačije nego u PDF-u. */
+  text-rendering: geometricPrecision;
 }
 
 .uz-pl-pozadina {

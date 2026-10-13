@@ -258,10 +258,28 @@ describe('pretvoriTekst: liste', () => {
     expect(razmak.uvlacenje).toEqual({ levo: 7.2, prviRed: 0 });
     // pravi znak liste zadržava viseće uvlačenje; pozitivno uvlačenje prvog reda ostaje i uz razmak
     expect(tekstOkvir(p(run('a'), `<a:pPr ${viseci}><a:buChar char="•"/></a:pPr>`)).r.pasusi[0].uvlacenje).toEqual({ levo: 7.2, prviRed: -7.2 });
+    // pozitivno uvlačenje: "znak" stoji na marL + indent, a tekst iza njega (razmak Carlita 0,22607 em * 18 pt)
     expect(tekstOkvir(p(run('a'), '<a:pPr marL="91440" indent="91440"><a:buChar char=" "/></a:pPr>')).r.pasusi[0].uvlacenje)
-      .toEqual({ levo: 7.2, prviRed: 7.2 });
+      .toEqual({ levo: 7.2, prviRed: 11.27 });
     // bez liste (buNone) uvlačenje ostaje kakvo je zapisano
     expect(tekstOkvir(p(run('a'), `<a:pPr ${viseci}><a:buNone/></a:pPr>`)).r.pasusi[0].uvlacenje).toEqual({ levo: 7.2, prviRed: -7.2 });
+  });
+
+  it('znak razmak širi od visećeg dela gura prvi red (PowerPoint: tekst počinje iza znaka, ne na marL)', () => {
+    const viseci = 'marL="91440" indent="-91440"';
+    const sa = (velicina: number, buFont = '<a:buFont typeface="Calibri"/>', buSz = '') => tekstOkvir(
+      p(run('a', `<a:rPr sz="${velicina * 100}"/>`), `<a:pPr ${viseci}>${buSz}${buFont}<a:buChar char=" "/></a:pPr>`)).r.pasusi[0];
+    // razmak Calibrija (Carlito) = 0,22607 em: 40 pt -> 9,04, viseći deo 7,2 -> prvi red počinje 1,84 iza marL
+    expect(sa(40).uvlacenje).toEqual({ levo: 7.2, prviRed: 1.84 });
+    expect(sa(96).uvlacenje).toEqual({ levo: 7.2, prviRed: 14.5 });
+    // znak koji staje u viseći deo ne pomera tekst (32 pt: 7,23 - 7,2 = 0,03; 28 pt: manje od nule)
+    expect(sa(28).uvlacenje).toEqual({ levo: 7.2, prviRed: 0 });
+    // font znaka: Arial (Arimo, 0,27783 em); bez buFont -> font teksta
+    expect(sa(40, '<a:buFont typeface="Arial"/>').uvlacenje.prviRed).toBe(3.91);
+    expect(sa(40, '').uvlacenje.prviRed).toBe(1.84);
+    // veličina znaka: buSzPct (udeo veličine teksta) i buSzPts (stotinke pt)
+    expect(sa(40, '<a:buFont typeface="Calibri"/>', '<a:buSzPct val="50000"/>').uvlacenje.prviRed).toBe(0);
+    expect(sa(40, '<a:buFont typeface="Calibri"/>', '<a:buSzPts val="6000"/>').uvlacenje.prviRed).toBe(6.36);
   });
 
   it('boja liste: buClr -> hex, buClrTx -> null', () => {

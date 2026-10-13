@@ -60,8 +60,13 @@ describe('sirinaTaba', () => {
 });
 
 describe('trebaMerenjeTabova', () => {
+  it('sirinaTaba: stop koji je blizu (manje od 0,5ch) se ne preskače', () => {
+    expect(sirinaTaba(35.45, pasus('a\tb'))).toBeCloseTo(0.55, 5);
+  });
+
   it.each([
-    ['tab bez uvlačenja i stopova -> false', sa({}), false],
+    // CSS `tab-size` preskače stop bliži od 0,5ch, a PowerPoint ne ("0.5" pa tab: stop 36 je 0,55 dalje): meri se svaki tab
+    ['tab bez uvlačenja i stopova -> true', sa({}), true],
     ['tab sa levo 18 -> true', sa({ uvlacenje: { levo: 18, prviRed: 0 } }), true],
     ['tab sa prviRed -> true', sa({ uvlacenje: { levo: 0, prviRed: 10 } }), true],
     ['tab sa sopstvenim stopom -> true', sa({ tabulatori: levi(50) }), true],
@@ -213,7 +218,7 @@ describe('pasusiZaMerenje', () => {
     } as unknown as TabelaSloj;
     const slojevi: Sloj[] = [tekst('a', [pasus('bez'), meri]), tekst('b', [pasus('a\tb')]), tabela];
     const m = pasusiZaMerenje(slojevi);
-    expect([...m.pasusi.keys()]).toEqual(['0-1', '2-0-1-1']);
+    expect([...m.pasusi.keys()]).toEqual(['0-1', '1-0', '2-0-1-1']);
     expect(m.pasusi.get('0-1')).toBe(meri);
     expect(pasusiZaMerenje(structuredClone(slojevi)).potpis).toBe(m.potpis);
     // Pomeren, rotiran, providniji sloj i druga z-osa: isti raspored teksta, isti potpis.
@@ -224,6 +229,6 @@ describe('pasusiZaMerenje', () => {
     const izmenjen = structuredClone(slojevi);
     (izmenjen[0] as TekstSloj).sirina = 120;
     expect(pasusiZaMerenje(izmenjen).potpis).not.toBe(m.potpis);
-    expect(pasusiZaMerenje([tekst('b', [pasus('a\tb')])])).toEqual({ pasusi: new Map(), potpis: '' });
+    expect(pasusiZaMerenje([tekst('b', [pasus('ab')])])).toEqual({ pasusi: new Map(), potpis: '' });
   });
 });

@@ -12,6 +12,13 @@ const pasus = (...fontovi: string[]): Pasus => ({
 const osnova = { naziv: null, x: 0, y: 0, sirina: 100, visina: 100, rotacija: 0, providnost: 1, zakljucan: false, senka: null };
 
 describe('platno-fontovi', () => {
+  it('širina razmaka po fontu (hmtx, em): uvoz meri znak liste "razmak"', () => {
+    expect(Object.fromEntries(FONTOVI_PLATNA.map((f) => [f.naziv, f.razmak]))).toEqual({
+      Carlito: 0.22607, Caladea: 0.22, Arimo: 0.27783, Tinos: 0.25, Cousine: 0.6001,
+      'IBM Plex Sans': 0.236, 'IBM Plex Mono': 0.6, 'Atkinson Hyperlegible': 0.28,
+    });
+  });
+
   it('katalog ima tačno osam fontova iz ugovora', () => {
     expect(FONTOVI_PLATNA.map((f) => f.naziv)).toEqual([
       'Carlito', 'Caladea', 'Arimo', 'Tinos', 'Cousine', 'IBM Plex Sans', 'IBM Plex Mono', 'Atkinson Hyperlegible',

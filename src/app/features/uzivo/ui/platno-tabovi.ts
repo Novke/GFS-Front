@@ -3,12 +3,13 @@ import type { Pasus, Sloj } from '../data-access/platno.models';
 /**
  * Mereni tab-stopovi (kao u PowerPointu). CSS `tab-size` meri od ivice sadržaja `<p>` (posle `padding-left` =
  * `uvlacenje.levo`) i zna samo jednak interval, a PowerPoint meri od leve unutrašnje margine okvira (= leva ivica `<p>`)
- * i ima viseću stanicu i sopstvene stopove. Zato u pasusu sa uvlačenjem ili sopstvenim stopovima svaki `\t` postaje
+ * i ima viseću stanicu i sopstvene stopove. Zato u pasusu sa tabom svaki `\t` postaje
  * `<span class="uz-pl-tab">` (inline-block, `tab-size: 0`, pa sam znak nema širinu), a ovde mu se posle crtanja izmeri
  * položaj i postavi širina do sledećeg stopa. Širina je u jedinicama (`var(--u)`), pa ostaje približno tačna i posle
  * promene veličine platna; komponenta ipak meri ponovo kad se veličina smiri, jer se širina teksta na malim veličinama
  * (hinting) ne skalira linearno (Chromium: isti pasus u pregledu editora od 480 px i na 1920 px, razlika do 6 jedinica).
- * Ostali pasusi zadržavaju `\t` sa `tab-size` od 36 pt (`platno.css`), što je isto merenje bez uvlačenja.
+ * Od F19 se meri svaki pasus sa tabom (`trebaMerenjeTabova`); `tab-size` od 36 pt (`platno.css`) ostaje samo za tekst
+ * bez prefiksa merenja.
  * Ne-LEVO stopovi (CENTAR, DESNO, DECIMALNO) se prikazuju kao LEVO (uvoz ih prijavljuje kao `TABULATORI`).
  */
 
@@ -23,9 +24,13 @@ function imaTab(p: Pasus): boolean {
   return p.delovi.some((d) => d.tekst.includes('\t'));
 }
 
-/** Pasus se meri kad ima tab, a tab ne pada tamo gde bi ga stavio `tab-size` (uvlačenje ili sopstveni stopovi). */
+/**
+ * Meri se svaki pasus sa tabom: osim uvlačenja i sopstvenih stopova (tab ne pada tamo gde bi ga stavio `tab-size`),
+ * CSS preskače stop bliži od 0,5ch (CSS Text 3), a PowerPoint ne (F19: "0.5" pa tab u Carlitu 28 pt staje 0,55 pre
+ * stopa 36, PowerPoint ide na 36, Chromium na 72).
+ */
 export function trebaMerenjeTabova(p: Pasus): boolean {
-  return imaTab(p) && (p.uvlacenje.levo !== 0 || p.uvlacenje.prviRed !== 0 || p.tabulatori.length > 0);
+  return imaTab(p);
 }
 
 /**

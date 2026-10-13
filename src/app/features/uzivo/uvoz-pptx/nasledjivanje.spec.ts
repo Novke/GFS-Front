@@ -225,7 +225,15 @@ describe('razresiPPr', () => {
   it('podrazumevane vrednosti bez lanca', () => {
     expect(razresiPPr(null, [])).toEqual({
       algn: null, marL: 0, indent: 0, defTabSz: 457200, lnSpc: null, spcBef: null, spcAft: null, bu: { vrsta: 'nema' }, tabovi: [],
+      velicinaZnaka: null,
     });
+  });
+
+  it('veličina znaka liste: buSzPct, buSzPts, buSzTx (kao tekst) prekida lanac', () => {
+    const nivo = el('<a:lvl1pPr><a:buSzPct val="75000"/></a:lvl1pPr>');
+    expect(razresiPPr(null, [nivo]).velicinaZnaka).toEqual({ pct: 75000 });
+    expect(razresiPPr(el('<a:pPr><a:buSzPts val="1400"/></a:pPr>'), [nivo]).velicinaZnaka).toEqual({ pts: 1400 });
+    expect(razresiPPr(el('<a:pPr><a:buSzTx/></a:pPr>'), [nivo]).velicinaZnaka).toBeNull();
   });
 
   it('buAutoNum sa startAt; buFont i buClr se traže nezavisno', () => {

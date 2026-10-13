@@ -1,6 +1,7 @@
 // Tekst PPTX-a (a:txBody) u pasuse, delove i okvir TEKST sloja platna: liste, tab-stopovi, autofit, velika slova,
 // senka teksta. Čiste funkcije bez Angular-a (lokalna provera ih pokreće u Node-u).
 import type { Deo, FormatBroja, Lista, Okvir, Pasus, Polozaj, Poravnanje, Senka, Sidro, Tabulator } from '../data-access/platno.models';
+import { FONTOVI_PLATNA } from '../ui/platno-fontovi';
 import { razresiBodyPr, razresiPPr, razresiRPr, type RazresenPPr, type RazresenRPr } from './nasledjivanje';
 import { bojaIz, pomesaj, zamenaFonta, type Boja, type KontekstBoja } from './tema';
 import { EMU_PO_PT, zaokruzi, zaokruziKaoServer, type KontekstSlajda } from './tipovi';
@@ -198,6 +199,16 @@ function znakListe(izvor: string, fontListe: string | null, st: Stanje): string 
   return '•';
 }
 
+/** Širina "znaka" razmak u jedinicama: razmak fonta znaka (`buFont`, inače font teksta) * veličina znaka. */
+function sirinaZnakaRazmaka(pp: RazresenPPr, prvi: Deo, st: Stanje): number {
+  if (pp.bu.vrsta !== 'znak') return 0;
+  const naziv = pp.bu.font ? zamenaFonta(pp.bu.font, st.ctx.tema).font : prvi.font;
+  const font = FONTOVI_PLATNA.find((f) => f.naziv === naziv) ?? FONTOVI_PLATNA[0];
+  const v = pp.velicinaZnaka;
+  const velicina = v === null ? prvi.velicina : 'pct' in v ? prvi.velicina * v.pct / 100000 : v.pts / 100 * st.ctx.t.s;
+  return font.razmak * ogranici(velicina, 0, 4000);
+}
+
 function tabulatori(pp: RazresenPPr, imaTab: boolean, sirinaOkvira: number, st: Stanje): Tabulator[] {
   const s = st.ctx.t.s;
   const stopovi: Tabulator[] = pp.tabovi.slice(0, MAX_TABULATORA).map((t) => {
@@ -280,8 +291,11 @@ function pasus(p: Element, nivoi: (nivo: number) => Element[], sirinaOkvira: num
   const imaTab = delovi.some((d) => d.tekst.includes('\t'));
   const l = lista(pp, st);
   let prviRed = ogranici(uJed(pp.indent, s), -1000, 1000);
-  // Znak liste je razmak (lista se izostavlja): PowerPoint crta "znak" u visećem delu, a tekst počinje na marL.
-  if (pp.bu.vrsta === 'znak' && l === null) prviRed = Math.max(prviRed, 0);
+  // Znak liste je razmak (lista se izostavlja): PowerPoint crta "znak" na marL + indent, a tekst počinje na marL ili
+  // iza znaka kad znak ne staje u viseći deo (razmak širine fonta znaka; mereno na uzorku: 40 pt Calibri pomera 1,84).
+  if (pp.bu.vrsta === 'znak' && l === null) {
+    prviRed = zaokruzi(Math.max(prviRed + sirinaZnakaRazmaka(pp, delovi[0], st), 0));
+  }
   return {
     poravnanje: PORAVNANJA[pp.algn ?? 'l'] ?? 'LEVO',
     nivo,

@@ -1,7 +1,7 @@
 import type { Crtica, Deo, FormatBroja, Okvir, Pasus, Poravnanje, Sidro } from '../data-access/platno.models';
 import { kljucPasusa } from '../data-access/platno-koraci';
 import { cssFonta } from './platno-fontovi';
-import { METRIKA, Metrika, pomerajPrveLinije, visinaReda } from './platno-metrika';
+import { METRIKA, Metrika, pomerajPrveLinije, pomerajProreda, visinaReda } from './platno-metrika';
 import { kljucMerenja, trebaMerenjeTabova } from './platno-tabovi';
 
 /**
@@ -177,6 +177,13 @@ function delovi(p: Pasus, skala: number, prored: (font: string) => string, meri:
   return rezultat;
 }
 
+/** Najmanja veličina slova nepraznih delova pasusa (sa skalom okvira; indeks i eksponent umanjeni); prazan -> prvi deo. */
+function najmanjaVelicina(p: Pasus, skala: number): number {
+  const delovi = p.delovi.filter((d) => d.tekst !== '');
+  if (delovi.length === 0) return (p.delovi[0]?.velicina ?? PODRAZUMEVANA_VELICINA) * skala;
+  return Math.min(...delovi.map((d) => velicinaDela(d, skala)));
+}
+
 export interface OpcijePasusa {
   /** Skala fonta i skala proreda okvira (`normAutofit`). */
   skala?: number;
@@ -188,11 +195,11 @@ export interface OpcijePasusa {
   metrika?: Metrika;
 }
 
-/** `margin-top` prvog pasusa okvira: `razmakPre` (ako ga metrika primenjuje) + pomeraj prve linije u em. */
-function razmakPrvog(p: Pasus, m: Metrika): string {
+/** `margin-top` prvog pasusa okvira: `razmakPre` (ako ga metrika primenjuje) + pomeraj prve linije (em prvog dela). */
+function razmakPrvog(p: Pasus, m: Metrika, skala: number): string {
   const razmak = m.razmakPrePrvogPasusa ? p.razmakPre : 0;
-  const em = zaokruzi(pomerajPrveLinije(p.delovi[0]?.font ?? '', m));
-  return em === 0 ? jedinice(razmak) : `calc(var(--u) * ${zaokruzi(razmak)} + ${em}em)`;
+  const prvi = p.delovi[0];
+  return jedinice(razmak + pomerajPrveLinije(prvi?.font ?? '', m) * (prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala);
 }
 
 /**
@@ -213,18 +220,31 @@ export function prikazPasusa(pasusi: Pasus[], o: OpcijePasusa = {}): PrikazPasus
     const meriTabove = prefiksMerenja !== null && trebaMerenjeTabova(p) ? kljucMerenja(prefiksMerenja, indeks) : null;
     const stil: Stil = {
       'text-align': PORAVNANJA[p.poravnanje],
-      'margin-top': indeks === 0 ? razmakPrvog(p, metrika) : jedinice(p.razmakPre),
+      'margin-top': indeks === 0 ? razmakPrvog(p, metrika, skala) : jedinice(p.razmakPre),
       'margin-bottom': jedinice(p.razmakPosle),
       'padding-left': jedinice(p.uvlacenje.levo),
       'text-indent': jedinice(p.uvlacenje.prviRed),
       'line-height': proredDela(prvi?.font ?? ''),
       'font-family': cssFonta(prvi?.font ?? ''),
-      'font-size': jedinice((prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala),
+      // Najmanja veličina dela: "strut" pasusa ne sme da poveća red u kome su samo manja slova (`a:br` posle velikog
+      // dela, pa manji tekst); PowerPoint red meri po najvećem slovu u tom redu.
+      'font-size': jedinice(najmanjaVelicina(p, skala)),
     };
+    // Razlika proreda iznad bazne linije (PowerPoint): ceo pasus se pomeri bez promene rasporeda (relativni položaj).
+    const pomeraj = zaokruzi(pomerajProreda(prvi?.font ?? '', p.proredProcenat, skalaProreda, metrika)
+      * (prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala);
+    if (pomeraj !== 0) {
+      stil['position'] = 'relative';
+      stil['top'] = jedinice(pomeraj);
+    }
     const tekstOznake = oznake[indeks];
     let oznaka: PrikazOznake | null = null;
     if (tekstOznake !== null) {
-      const stilOznake: Stil = {};
+      // Oznaka nosi font i veličinu prvog dela (ne nasleđuje najmanju veličinu pasusa).
+      const stilOznake: Stil = {
+        'font-family': cssFonta(prvi?.font ?? ''),
+        'font-size': jedinice((prvi?.velicina ?? PODRAZUMEVANA_VELICINA) * skala),
+      };
       const boja = p.lista?.boja ?? prvi?.boja;
       if (boja) {
         stilOznake['color'] = boja;
