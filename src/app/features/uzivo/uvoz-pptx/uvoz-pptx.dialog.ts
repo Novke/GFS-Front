@@ -65,7 +65,9 @@ export interface UvozPptxPodaci {
 export function otvoriUvozPptx(dialog: MatDialog, podaci: UvozPptxPodaci): Observable<IshodUvoza> {
   return dialog.open<UvozPptxDialog, UvozPptxPodaci, Exclude<IshodUvoza, undefined>>(UvozPptxDialog, {
     data: podaci, width: '640px', maxWidth: '95vw', disableClose: true, closeOnNavigation: false,
-    autoFocus: 'first-tabbable',
+    // fokus postavlja dijalog sam (i početni): CDK-ov autoFocus stiže tek posle animacije otvaranja i na sporom
+    // računaru bi oteo fokus stanju koje je u međuvremenu već stiglo (brza analiza malog fajla)
+    autoFocus: false,
   }).afterClosed();
 }
 
@@ -329,7 +331,6 @@ export class UvozPptxDialog {
   private obrisana = false;
   /** Slanje je završeno sa nepoznatim ishodom: zatvaranje traži osvežavanje (`OSVEZI_PREZENTACIJU`). */
   private nepoznatIshod = false;
-  private fokusPomeren = false;
 
   /** Redni brojevi uvezenih slajdova (PowerPoint): granice opsega "Od - do". */
   protected readonly granice = computed(() => {
@@ -410,10 +411,9 @@ export class UvozPptxDialog {
       this.pretplataSlanja?.unsubscribe();
     });
 
-    // fokus na glavni element novog stanja (dugme koje je imalo fokus nestaje); početni izbor fokusira sam MatDialog
+    // fokus na glavni element novog stanja (dugme koje je imalo fokus nestaje), i na početni izbor
     effect(() => {
-      if (this.faza() === 'izbor' && !this.fokusPomeren) return;
-      this.fokusPomeren = true;
+      this.faza();
       untracked(() => afterNextRender(() => this.fokusiraj(), { injector: this.injector }));
     });
 
