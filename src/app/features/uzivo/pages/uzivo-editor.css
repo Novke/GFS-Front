@@ -381,6 +381,22 @@ span.uz-ed-napomena {
   outline-offset: -2px;
 }
 
+.uz-ed-slicica {
+  display: block;
+  flex: none;
+  width: 112px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.uz-ed-slicica-mesto {
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-2);
+}
+
 .uz-ed-rb {
   min-width: 1.6em;
   color: var(--muted);

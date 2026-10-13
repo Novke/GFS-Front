@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ErrorHandler } from '@angular/core';
-import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { By } from '@angular/platform-browser';
@@ -595,5 +595,60 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     expect(zatvaranje.observed).toBe(false);
     zatvaranje.next(posleUvoza);
     expect(primeniUvoz).not.toHaveBeenCalled();
+  });
+});
+
+describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
+    id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(),
+  });
+  const el = () => fixture.nativeElement as HTMLElement;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+      // jsdom nema IntersectionObserver: `@defer (on viewport)` se iscrtava ručno.
+      deferBlockBehavior: DeferBlockBehavior.Manual,
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    fixture.debugElement.injector.get(EditorStore).ucitaj(1);
+    http.expectOne('api/prezentacije/1')
+      .flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [slajd(11, 1, 'Uvod'), platnoSlajd(12, 2)] });
+    await fixture.whenStable();
+  });
+
+  afterEach(() => http.verify());
+
+  it('sličica PLATNO slajda prikazuje sve slojeve (i one sa ULAZ animacijom), a sakrivena je od čitača', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    expect(blokovi.length).toBe(2);
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const slicice = [...el().querySelectorAll<HTMLElement>('.uz-ed-slicica')];
+    expect(slicice.length).toBe(2);
+    for (const s of slicice) expect(s.getAttribute('aria-hidden')).toBe('true');
+    const slojevi = [...slicice[1].querySelectorAll<HTMLElement>('.uz-pl-sloj')];
+    expect(slojevi.length).toBeGreaterThan(0);
+    for (const sl of slojevi) expect(sl.style.visibility).toBe('');
+    expect(slicice[1].querySelectorAll('.uz-pl-sloj[style*="hidden"]').length).toBe(0);
+  });
+
+  it('ime dugmeta stavke i dalje počinje rednim brojem; sličica nema fokusabilnih elemenata', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const dugme = el().querySelectorAll<HTMLElement>('.uz-ed-stavka-dugme')[1];
+    const ime = dugme.cloneNode(true) as HTMLElement;
+    ime.querySelectorAll('[aria-hidden="true"]').forEach(n => n.remove());
+    expect(ime.textContent!.trim()).toMatch(/^2/);
+    expect(dugme.querySelectorAll('.uz-ed-slicica button, .uz-ed-slicica a, .uz-ed-slicica [tabindex]').length).toBe(0);
   });
 });

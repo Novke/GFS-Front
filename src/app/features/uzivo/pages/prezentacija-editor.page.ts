@@ -148,6 +148,13 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <mat-icon class="uz-ed-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
                   <button class="uz-ed-stavka-dugme" type="button" (click)="store.izaberi(s.id)"
                           [attr.aria-current]="s.id === store.izabraniId() ? 'true' : null">
+                    <span class="uz-ed-slicica rezim-dan uz-dan" aria-hidden="true">
+                      @defer (on viewport) {
+                        <app-slajd-prikaz [slajd]="slicica(s)" [tema]="vazeca(p.tema)" [korak]="0" />
+                      } @placeholder {
+                        <span class="uz-ed-slicica-mesto"></span>
+                      }
+                    </span>
                     <span class="uz-ed-rb">{{ s.rb }}</span>
                     <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)" [svgIcon]="ikona(s)" />
                     <span class="uz-ed-oznaka">{{ oznaka(s) }}</span>
@@ -262,6 +269,17 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly kod = kodSaRazmakom;
   protected readonly oznaka = (s: SlajdDetails) => oznakaSlajda(s, 48);
   protected readonly teme = Object.values(TEME);
+  private readonly slicice = new WeakMap<SlajdDetails, SlajdDetails>();
+  /** Slajd za sličicu: PLATNO bez animacija (svi slojevi vidljivi), ostali isti objekat; keš po objektu slajda. */
+  protected slicica(s: SlajdDetails): SlajdDetails {
+    if (s.tip !== 'PLATNO' || !s.platno) return s;
+    let k = this.slicice.get(s);
+    if (!k) {
+      k = { ...s, platno: { ...s.platno, animacije: [] } };
+      this.slicice.set(s, k);
+    }
+    return k;
+  }
   protected readonly vazeca = (t: Tema | null | undefined) => vazecaTema(t);
   protected readonly promenljive = promenljiveTeme;
   /** Korak pregleda PLATNO slajda, vezan za slajd: promena izabranog slajda ga vraća na 0. */
