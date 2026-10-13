@@ -672,6 +672,106 @@ describe('EditorStore: RegistarCuvanja (sesija prezentacija-<id>)', () => {
     expect(registar.zauzet('prezentacija-1')).toBe(false);
     b.unisti();
   }));
+
+  /** Nacrt, POST u toku i izmena stigla dok POST traje (čeka u store-u). */
+  function nacrtUSlanju(store: InstanceType<typeof EditorStore>, id: number, posle: number) {
+    store.izaberi(posle);
+    store.dodaj('INFO');
+    const nacrt = store.izabraniId()!;
+    store.izmeniSlajd(nacrt, info('Prvi'));
+    store.sacuvajOdmah();
+    const post = http.expectOne(r => r.url === `api/prezentacije/${id}/slajdovi`);
+    expect(post.request.body.naslov).toBe('Prvi');
+    store.izmeniSlajd(nacrt, info('Drugi'));
+    return { nacrt, post };
+  }
+
+  it('izmena nacrta stigla dok traje POST, pa napušten editor: odgovor na POST šalje PUT sa izmenom, registar ga čeka', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store);
+    const { post } = nacrtUSlanju(a.store, 1, 12);
+    a.unisti();
+    expect(nesacuvane.broj()).toBe(1);
+    const b = napravi();
+    b.store.ucitaj(1);
+    http.expectNone('api/prezentacije/1');
+    post.flush(slajd(30, 3, 'Prvi'));
+    const put = http.expectOne('api/slajdovi/30');
+    expect(put.request.method).toBe('PUT');
+    expect(put.request.body.naslov).toBe('Drugi');
+    expect(nesacuvane.broj()).toBe(1);
+    http.expectNone('api/prezentacije/1');
+    put.flush(slajd(30, 3, 'Drugi'));
+    http.expectOne('api/prezentacije/1').flush(prez(1, [slajd(11, 1), slajd(12, 2), slajd(30, 3, 'Drugi')]));
+    expect(b.store.slajdovi()[2].naslov).toBe('Drugi');
+    expect(nesacuvane.broj()).toBe(0);
+    expect(registar.zauzet('prezentacija-1')).toBe(false);
+    b.unisti();
+  }));
+
+  it('izmena nacrta stigla dok traje POST, pa prelaz 5 -> 6: PUT ide za slajd prezentacije 5, stanje 6 ostaje, ponovno otvaranje 5 čeka PUT', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store, 5, [slajd(51, 1), slajd(52, 2)]);
+    const { post } = nacrtUSlanju(a.store, 5, 52);
+    a.store.ucitaj(6);
+    http.expectOne('api/prezentacije/6').flush(prez(6, [slajd(61, 1)]));
+    const stanje6 = a.store.prezentacija();
+    const b = napravi();
+    b.store.ucitaj(5);
+    http.expectNone('api/prezentacije/5');
+    post.flush(slajd(30, 3, 'Prvi'));
+    const put = http.expectOne('api/slajdovi/30');
+    expect(put.request.method).toBe('PUT');
+    expect(put.request.body.naslov).toBe('Drugi');
+    expect(registar.zauzet('prezentacija-5')).toBe(true);
+    expect(registar.zauzet('prezentacija-6')).toBe(false);
+    expect(a.store.prezentacija()).toBe(stanje6);
+    expect(a.store.izabraniId()).toBe(61);
+    expect(nesacuvane.broj()).toBe(1);
+    http.expectNone('api/prezentacije/5');
+    put.flush(slajd(30, 3, 'Drugi'));
+    http.expectOne('api/prezentacije/5').flush(prez(5, [slajd(51, 1), slajd(52, 2), slajd(30, 3, 'Drugi')]));
+    expect(registar.zauzet('prezentacija-5')).toBe(false);
+    expect(nesacuvane.broj()).toBe(0);
+    a.unisti();
+    b.unisti();
+  }));
+
+  it('nacrt obrisan dok traje POST, pa prelaz 5 -> 6: odgovor na POST briše napravljen slajd (DELETE u sesiji 5)', saLaznimSatom(async () => {
+    const a = napravi();
+    ucitajU(a.store, 5, [slajd(51, 1), slajd(52, 2)]);
+    const { nacrt, post } = nacrtUSlanju(a.store, 5, 52);
+    a.store.obrisi(nacrt);
+    a.store.ucitaj(6);
+    http.expectOne('api/prezentacije/6').flush(prez(6, [slajd(61, 1)]));
+    post.flush(slajd(30, 3, 'Prvi'));
+    const del = http.expectOne('api/slajdovi/30');
+    expect(del.request.method).toBe('DELETE');
+    expect(registar.zauzet('prezentacija-5')).toBe(true);
+    del.flush(null);
+    expect(registar.zauzet('prezentacija-5')).toBe(false);
+    expect(a.store.slajdovi().map(s => s.id)).toEqual([61]);
+    a.unisti();
+  }));
+
+  it('registracija i odjava pražnjenja javljaju registru: upozorenje pre zatvaranja kartice prati otvoreno()', () => {
+    const dodat = vi.spyOn(window, 'addEventListener');
+    const skinut = vi.spyOn(window, 'removeEventListener');
+    const a = napravi();
+    ucitajU(a.store);
+    const odjavi = a.store.registrujPraznjenje(() => undefined, () => true);
+    expect(dodat).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    odjavi();
+    expect(skinut).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    dodat.mockClear();
+    a.store.registrujPraznjenje(() => undefined, () => true);
+    expect(dodat).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    skinut.mockClear();
+    a.store.registrujPraznjenje(null);
+    expect(skinut).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    a.unisti();
+    vi.restoreAllMocks();
+  });
 });
 
 function nacrtPitanje(s: SlajdDetails) {

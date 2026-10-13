@@ -45,6 +45,20 @@ export class NijeSacuvano extends Error {
 const POCETNO: EditorState = { prezentacija: null, izabraniId: null, cuvanje: 'miruje', greska: null };
 
 /**
+ * POST nacrta na putu. Ako se editor napusti ili pređe na drugu prezentaciju pre odgovora, `sacuvajPreIzlaska` ovde
+ * zapiše šta je stiglo posle POST-a (izmena ili brisanje nacrta), a odgovor to pošalje na pravi id (zatvaranje sesije,
+ * ne otkazivanje: izmena nacrta se ne gubi).
+ */
+interface NacrtUSlanju {
+  /** Broj izmene koji nosi POST. */
+  readonly rev: number;
+  /** Poslednja ispravna izmena posle POST-a, zapisana pri izlasku. */
+  ostatak: SlajdCmd | null;
+  /** Nacrt obrisan dok je POST trajao, zapisano pri izlasku. */
+  obrisan: boolean;
+}
+
+/**
  * Sesija čuvanja jedne učitane prezentacije u `RegistarCuvanja` (ključ `prezentacija-<id>`). Ima **sopstveni** brojač
  * zahteva: brojač store-a se vraća na 0 u `ucitaj`, a njegov `zavrsi` je uslovljen generacijom, pa zahtev započet pre
  * ponovnog učitavanja nikad ne bi spustio brojač na koji registar čeka. Ovaj se spušta bezuslovno u `finalize`.
@@ -157,7 +171,7 @@ export const EditorStore = signalStore(
     /** Nacrt -> pravi id posle POST-a, i obrnuto (za `kljuc`). */
     const zamene = new Map<number, number>();
     const poreklo = new Map<number, number>();
-    const nacrtiUSlanju = new Set<number>();
+    const nacrtiUSlanju = new Map<number, NacrtUSlanju>();
     /** Broj izmene koji je upravo na putu (PUT), po id-ju: ista izmena se ne šalje dvaput (npr. iz grupe nacrta i pravog id-ja). */
     const uSlanju = new Map<number, number>();
     const obrisani = new Set<number>();
@@ -165,6 +179,8 @@ export const EditorStore = signalStore(
     let praznjenje: { isprazni: () => void; otvoreno: () => boolean } | null = null;
     /** Sesija učitane prezentacije u registru; posle napuštanja editora ostaje zatvorena (broji zakasnele zahteve). */
     let sesija: SesijaPrezentacije | null = null;
+    /** Store je uništen (editor napušten): `rxMethod` čuvanja više ne radi, zakasneli odgovori šalju direktno. */
+    let napusten = false;
 
     const razresi = (id: number) => zamene.get(id) ?? id;
     const naCekanju = (id: number) => (izmena.get(id) ?? 0) > (sacuvano.get(id) ?? 0);
@@ -174,6 +190,20 @@ export const EditorStore = signalStore(
 
     /** Lokalna izmena je promenila broj nesačuvanih (upozorenje pre zatvaranja kartice se uključuje odmah). */
     const javi = () => registar.promena();
+
+    /**
+     * Upis pri izlasku (van `rxMethod`-a, preživi uništavanje store-a), kroz sesiju prezentacije kojoj pripada; editor je
+     * možda već zatvoren, pa poruka ide kroz globalni snackbar (više neuspeha = jedna poruka).
+     */
+    function posaljiPriIzlasku(s: SesijaPrezentacije | null, zahtev: Observable<unknown>): void {
+      (s ? s.prati(zahtev) : zahtev).subscribe({
+        error: e => {
+          const razlog = razlogGreske(e, '');
+          obavestenja.greska(razlog ? `Izmena slajda nije sačuvana: ${razlog}` : 'Izmena slajda nije sačuvana.',
+            { grupa: 'uzivo-cuvanje-pri-izlasku' });
+        },
+      });
+    }
 
     function postaviSlajdove(lista: SlajdDetails[]): void {
       const p = store.prezentacija();
@@ -263,7 +293,8 @@ export const EditorStore = signalStore(
 
     /**
      * Nacrt ide POST-om van `switchMap`-a: otkazivanje bi prekinulo samo odgovor, a server bi slajd ipak napravio
-     * (duplikat). Izmene stigle dok POST traje šalju se posle njega, na pravi id.
+     * (duplikat). Izmene stigle dok POST traje šalju se posle njega, na pravi id; i kad je editor u međuvremenu napušten
+     * ili je učitana druga prezentacija (tada kroz sesiju u kojoj je POST brojan, pa ih registar čeka).
      */
     function posaljiNacrt(nacrt: number): void {
       if (nacrtiUSlanju.has(nacrt)) return;
@@ -271,8 +302,10 @@ export const EditorStore = signalStore(
       const rev = izmena.get(nacrt)!;
       const { posle, sacuvaniPosle } = posleZa(nacrt);
       const gen = generacija;
+      const s = sesija;
+      const posao: NacrtUSlanju = { rev, ostatak: null, obrisan: false };
       let ishod: string | null | undefined;
-      nacrtiUSlanju.add(nacrt);
+      nacrtiUSlanju.set(nacrt, posao);
       pocni();
       pratiZahtev(api.dodajSlajd(prezentacijaId, cmd, posle))
         .pipe(finalize(() => {
@@ -282,7 +315,12 @@ export const EditorStore = signalStore(
         .subscribe({
           next: d => {
             ishod = null;
-            if (gen !== generacija) return;
+            if (gen !== generacija) {
+              // u međuvremenu je učitana druga prezentacija: ono što je zapisano pri izlasku ide na pravi id
+              if (posao.obrisan) posaljiPriIzlasku(s, api.obrisiSlajd(d.id));
+              else if (posao.ostatak) posaljiPriIzlasku(s, api.izmeniSlajd(d.id, posao.ostatak));
+              return;
+            }
             zamene.set(nacrt, d.id);
             poreklo.set(d.id, nacrt);
             cmdovi.set(d.id, cmdovi.get(nacrt) ?? cmd);
@@ -306,7 +344,13 @@ export const EditorStore = signalStore(
               posaljiRedosled(sacuvaniIds());
             }
             if (naCekanju(d.id)) {
-              cuvaj(d.id);
+              if (!napusten) {
+                cuvaj(d.id);
+              } else if (posao.ostatak) {
+                // editor napušten dok je POST trajao: `cuvaj` (rxMethod) je ugašen, izmena ide direktno
+                sacuvano.set(d.id, izmena.get(d.id)!);
+                posaljiPriIzlasku(s, api.izmeniSlajd(d.id, posao.ostatak));
+              }
             }
           },
           error: e => (ishod = razlogGreske(e, PORUKA_CUVANJE)),
@@ -459,21 +503,22 @@ export const EditorStore = signalStore(
       return undefined;
     }
 
-    /** Šalje sve ispravne nesačuvane izmene van rxMethod-a (preživi uništavanje store-a pri napuštanju editora). */
+    /**
+     * Šalje sve ispravne nesačuvane izmene van rxMethod-a (preživi uništavanje store-a pri napuštanju editora). Za nacrt
+     * čiji POST upravo traje zapisuje šta je stiglo posle njega; to šalje odgovor na POST (`posaljiNacrt`).
+     */
     function sacuvajPreIzlaska(): void {
       isprazni();
       for (const [id, cmd] of cmdovi) {
-        if (obrisani.has(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length || nacrtiUSlanju.has(id)) continue;
+        const posao = nacrtiUSlanju.get(id);
+        if (posao) {
+          posao.obrisan = obrisani.has(id);
+          posao.ostatak = !posao.obrisan && izmena.get(id)! > posao.rev && !greskeSlajdaZaSlanje(cmd).length ? cmd : null;
+          continue;
+        }
+        if (obrisani.has(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length) continue;
         sacuvano.set(id, izmena.get(id)!);
-        const zahtev = pratiZahtev(id > 0 ? api.izmeniSlajd(id, cmd) : api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle));
-        // editor je možda već zatvoren: poruka ide kroz globalni snackbar (više neuspeha = jedna poruka)
-        zahtev.subscribe({
-          error: e => {
-            const razlog = razlogGreske(e, '');
-            obavestenja.greska(razlog ? `Izmena slajda nije sačuvana: ${razlog}` : 'Izmena slajda nije sačuvana.',
-              { grupa: 'uzivo-cuvanje-pri-izlasku' });
-          },
-        });
+        posaljiPriIzlasku(sesija, id > 0 ? api.izmeniSlajd(id, cmd) : api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle));
       }
     }
 
@@ -709,14 +754,20 @@ export const EditorStore = signalStore(
        * briše registraciju nove). `null` briše bilo koju registraciju (stari oblik odjave).
        */
       registrujPraznjenje(f: (() => void) | null, o: () => boolean = () => false): () => void {
+        // otvoreno() ulazi u nesačuvano sesije: upozorenje pre zatvaranja kartice se odmah usklađuje
         if (!f) {
           praznjenje = null;
+          javi();
           return () => undefined;
         }
         const ova = { isprazni: f, otvoreno: o };
         praznjenje = ova;
+        javi();
         return () => {
-          if (praznjenje === ova) praznjenje = null;
+          if (praznjenje === ova) {
+            praznjenje = null;
+            javi();
+          }
         };
       },
 
@@ -732,6 +783,7 @@ export const EditorStore = signalStore(
 
       /** Napušten editor: sesija se zatvara (ne otkazuje), odjavljuje se iz registra kad joj završe zahtevi. */
       _zatvoriSesiju(): void {
+        napusten = true;
         sesija?.zatvori();
       },
     };

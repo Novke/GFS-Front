@@ -347,9 +347,20 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     });
   }
 
-  /** Nepotpuni nacrti i neispravni slajdovi: store ih ne šalje, pa bi se napuštanjem izgubili (ispravne izmene šalje sam). */
+  /**
+   * Nepotpuni slajdovi (novi i postojeći): store ih ne šalje, pa bi se napuštanjem izgubile njihove izmene. Ispravne izmene i
+   * nacrte store šalje sam i posle napuštanja (i izmenu nacrta stiglu dok njegov POST traje), pa se ovde ne broje.
+   */
+  private nepotpuni(): { novi: number; postojeci: number } {
+    const neispravni = this.store.neispravni();
+    const lista = this.store.slajdovi().filter(s => neispravni.has(s.id));
+    const novi = lista.filter(s => s.id < 0).length;
+    return { novi, postojeci: lista.length - novi };
+  }
+
   private nesacuvaniSlajdovi(): number {
-    return this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id)).length;
+    const { novi, postojeci } = this.nepotpuni();
+    return novi + postojeci;
   }
 
   /** Dijalog uvoza upravo šalje slike ili slajdove (sesija `uvoz-<id>` u `RegistarCuvanja`). */
@@ -368,9 +379,16 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     if (this.uvozUToku()) {
       delovi.push('Uvoz iz PowerPointa još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
     }
-    if (this.nesacuvaniSlajdovi() > 0) {
-      delovi.push(`Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
-        + 'Ako napustiš editor, odbacuju se.');
+    const { novi, postojeci } = this.nepotpuni();
+    if (novi + postojeci > 0) {
+      const posledice: string[] = [];
+      if (novi) posledice.push(novi === 1 ? 'novi slajd se ne pravi' : 'novi slajdovi se ne prave');
+      if (postojeci) {
+        const ostaje = postojeci === 1 ? 'ostaje u poslednjoj sačuvanoj verziji' : 'ostaju u poslednjoj sačuvanoj verziji';
+        posledice.push(novi ? `a postojeći ${ostaje}` : `${postojeci === 1 ? 'slajd' : 'slajdovi'} ${ostaje}`);
+      }
+      delovi.push(`Nesačuvanih slajdova: ${novi + postojeci} (nisu potpuni, vidi upozorenja u listi). `
+        + `Ako napustiš editor, ${posledice.join(', ')}.`);
     }
     return delovi.join(' ');
   }

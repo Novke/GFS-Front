@@ -146,7 +146,31 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     store.dodaj('INFO');
     expect(editor.imaNesacuvanihIzmena()).toBe(true);
     expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+    expect(editor.tekstNapustanja()).toContain('Ako napustiš editor, novi slajd se ne pravi.');
+    expect(editor.tekstNapustanja()).not.toContain('odbacuj');
   });
+
+  it('napuštanje: ispravan nacrt čiji POST traje (i izmena stigla za to vreme) se ne broji, jer ga store šalje i posle napuštanja; nepotpuna izmena sačuvanog slajda se broji', saLaznimSatom(async () => {
+    const editor = fixture.componentInstance;
+    store.dodaj('INFO');
+    const nacrt = store.izabraniId()!;
+    store.izmeniSlajd(nacrt, info('Nov'));
+    store.sacuvajOdmah();
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    store.izmeniSlajd(nacrt, info('Nov 2'));
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+    store.izmeniSlajd(11, info(''));
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+    expect(editor.tekstNapustanja()).toContain('Ako napustiš editor, slajd ostaje u poslednjoj sačuvanoj verziji.');
+    expect(editor.tekstNapustanja()).not.toContain('ne pravi');
+    post.flush(slajd(30, 2, 'Nov'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/30');
+    expect(put.request.body.naslov).toBe('Nov 2');
+    put.flush(slajd(30, 2, 'Nov 2'));
+    await pomeriSat(800);
+  }));
 });
 
 describe('PrezentacijaEditorPage: PLATNO i tema', () => {
