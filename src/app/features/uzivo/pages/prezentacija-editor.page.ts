@@ -349,7 +349,8 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
 
   /**
    * Nepotpuni slajdovi (novi i postojeći): store ih ne šalje, pa bi se napuštanjem izgubile njihove izmene. Ispravne izmene i
-   * nacrte store šalje sam i posle napuštanja (i izmenu nacrta stiglu dok njegov POST traje), pa se ovde ne broje.
+   * nacrte store šalje sam i posle napuštanja (i izmenu nacrta stiglu dok njegov POST traje), pa se ovde ne broje; ako
+   * takav upis ne uspe kad editor više nije na ekranu, store to javlja globalnom porukom.
    */
   private nepotpuni(): { novi: number; postojeci: number } {
     const neispravni = this.store.neispravni();

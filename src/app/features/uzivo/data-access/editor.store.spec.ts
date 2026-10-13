@@ -754,6 +754,97 @@ describe('EditorStore: RegistarCuvanja (sesija prezentacija-<id>)', () => {
     a.unisti();
   }));
 
+  describe('neuspeh posle napuštanja editora ili prelaza: globalna poruka (store više nije na ekranu)', () => {
+    let greska: ReturnType<typeof vi.spyOn>;
+    const pao = { status: 500, statusText: 'Server Error' };
+
+    beforeEach(() => {
+      greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('POST nacrta padne posle napuštanja editora', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      const { post } = nacrtUSlanju(a.store, 1, 12);
+      a.unisti();
+      post.flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Novi slajd nije sačuvan: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+      expect(registar.zauzet('prezentacija-1')).toBe(false);
+    }));
+
+    it('POST nacrta padne posle prelaza 5 -> 6 (stanje 6 se ne dira)', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store, 5, [slajd(51, 1), slajd(52, 2)]);
+      const { post } = nacrtUSlanju(a.store, 5, 52);
+      a.store.ucitaj(6);
+      http.expectOne('api/prezentacije/6').flush(prez(6, [slajd(61, 1)]));
+      post.flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Novi slajd nije sačuvan: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+      expect(a.store.greska()).toBeNull();
+      a.unisti();
+    }));
+
+    it('naknadni PUT izmene nacrta padne posle napuštanja editora', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      const { post } = nacrtUSlanju(a.store, 1, 12);
+      a.unisti();
+      post.flush(slajd(30, 3, 'Prvi'));
+      http.expectOne('api/slajdovi/30').flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Izmena slajda nije sačuvana: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+    }));
+
+    it('naknadni DELETE nacrta obrisanog dok je POST trajao padne posle napuštanja editora', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      const { nacrt, post } = nacrtUSlanju(a.store, 1, 12);
+      a.store.obrisi(nacrt);
+      a.unisti();
+      post.flush(slajd(30, 3, 'Prvi'));
+      http.expectOne('api/slajdovi/30').flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Brisanje slajda nije uspelo: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+    }));
+
+    it('nacrt poslat tek pri napuštanju (POST iz sacuvajPreIzlaska) padne: poruka kaže da novi slajd nije sačuvan', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      a.store.izaberi(12);
+      a.store.dodaj('INFO');
+      a.store.izmeniSlajd(a.store.izabraniId()!, info('Nov'));
+      a.unisti();
+      http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi').flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Novi slajd nije sačuvan: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+    }));
+
+    it('podešavanja prezentacije padnu posle napuštanja editora', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      const p = a.store.prezentacija()!;
+      a.store.izmeniPodesavanja({
+        naziv: 'Novi naziv', opis: p.opis, tema: p.tema, takmicenje: p.takmicenje, telefonPrikaz: p.telefonPrikaz,
+        detaljiDozvoljeni: p.detaljiDozvoljeni,
+      });
+      const req = http.expectOne('api/prezentacije/1');
+      expect(req.request.method).toBe('PUT');
+      a.unisti();
+      req.flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).toHaveBeenCalledExactlyOnceWith('Podešavanja prezentacije nisu sačuvana: Server ne radi.', { grupa: 'uzivo-cuvanje-pri-izlasku' });
+    }));
+
+    it('neuspeh dok je editor otvoren ide samo u status editora, ne u globalnu poruku', saLaznimSatom(async () => {
+      const a = napravi();
+      ucitajU(a.store);
+      const { post } = nacrtUSlanju(a.store, 1, 12);
+      post.flush({ reason: 'Server ne radi.' }, pao);
+      expect(greska).not.toHaveBeenCalled();
+      expect(a.store.greska()).toBe('Server ne radi.');
+      a.unisti();
+      http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi').flush(slajd(30, 3, 'Drugi'));
+    }));
+  });
+
   it('registracija i odjava pražnjenja javljaju registru: upozorenje pre zatvaranja kartice prati otvoreno()', () => {
     const dodat = vi.spyOn(window, 'addEventListener');
     const skinut = vi.spyOn(window, 'removeEventListener');

@@ -192,17 +192,20 @@ export const EditorStore = signalStore(
     const javi = () => registar.promena();
 
     /**
-     * Upis pri izlasku (van `rxMethod`-a, preživi uništavanje store-a), kroz sesiju prezentacije kojoj pripada; editor je
-     * možda već zatvoren, pa poruka ide kroz globalni snackbar (više neuspeha = jedna poruka).
+     * Neuspeh upisa kad editor ove prezentacije više nije na ekranu (napušten, ili je učitana druga prezentacija): status
+     * editora to ne može da pokaže, pa poruka ide kroz globalni snackbar (više neuspeha = jedna poruka).
      */
-    function posaljiPriIzlasku(s: SesijaPrezentacije | null, zahtev: Observable<unknown>): void {
-      (s ? s.prati(zahtev) : zahtev).subscribe({
-        error: e => {
-          const razlog = razlogGreske(e, '');
-          obavestenja.greska(razlog ? `Izmena slajda nije sačuvana: ${razlog}` : 'Izmena slajda nije sačuvana.',
-            { grupa: 'uzivo-cuvanje-pri-izlasku' });
-        },
-      });
+    function javiPriIzlasku(sta: string, e: unknown): void {
+      const razlog = razlogGreske(e, '');
+      obavestenja.greska(razlog ? `${sta}: ${razlog}` : `${sta}.`, { grupa: 'uzivo-cuvanje-pri-izlasku' });
+    }
+
+    /** Editor ove prezentacije više nije na ekranu (zahtev je krenuo u generaciji `gen`). */
+    const vanEkrana = (gen: number) => napusten || gen !== generacija;
+
+    /** Upis pri izlasku (van `rxMethod`-a, preživi uništavanje store-a), kroz sesiju prezentacije kojoj pripada. */
+    function posaljiPriIzlasku(s: SesijaPrezentacije | null, zahtev: Observable<unknown>, sta = 'Izmena slajda nije sačuvana'): void {
+      (s ? s.prati(zahtev) : zahtev).subscribe({ error: e => javiPriIzlasku(sta, e) });
     }
 
     function postaviSlajdove(lista: SlajdDetails[]): void {
@@ -271,6 +274,7 @@ export const EditorStore = signalStore(
           next: () => (ishod = null),
           error: e => {
             ishod = razlogGreske(e, PORUKA_CUVANJE);
+            if (vanEkrana(gen)) javiPriIzlasku('Redosled slajdova nije sačuvan', e);
             if (gen === generacija) vrati?.();
           },
         });
@@ -286,6 +290,7 @@ export const EditorStore = signalStore(
           complete: () => (ishod = null),
           error: e => {
             ishod = razlogGreske(e, 'Brisanje slajda nije uspelo.');
+            if (vanEkrana(gen)) javiPriIzlasku('Brisanje slajda nije uspelo', e);
             if (gen === generacija) vrati?.();
           },
         });
@@ -317,7 +322,7 @@ export const EditorStore = signalStore(
             ishod = null;
             if (gen !== generacija) {
               // u međuvremenu je učitana druga prezentacija: ono što je zapisano pri izlasku ide na pravi id
-              if (posao.obrisan) posaljiPriIzlasku(s, api.obrisiSlajd(d.id));
+              if (posao.obrisan) posaljiPriIzlasku(s, api.obrisiSlajd(d.id), 'Brisanje slajda nije uspelo');
               else if (posao.ostatak) posaljiPriIzlasku(s, api.izmeniSlajd(d.id, posao.ostatak));
               return;
             }
@@ -353,7 +358,11 @@ export const EditorStore = signalStore(
               }
             }
           },
-          error: e => (ishod = razlogGreske(e, PORUKA_CUVANJE)),
+          error: e => {
+            ishod = razlogGreske(e, PORUKA_CUVANJE);
+            // editor napušten ili druga prezentacija: ceo nov slajd bi inače nestao bez reči
+            if (vanEkrana(gen)) javiPriIzlasku('Novi slajd nije sačuvan', e);
+          },
         });
     }
 
@@ -518,7 +527,8 @@ export const EditorStore = signalStore(
         }
         if (obrisani.has(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length) continue;
         sacuvano.set(id, izmena.get(id)!);
-        posaljiPriIzlasku(sesija, id > 0 ? api.izmeniSlajd(id, cmd) : api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle));
+        if (id > 0) posaljiPriIzlasku(sesija, api.izmeniSlajd(id, cmd));
+        else posaljiPriIzlasku(sesija, api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle), 'Novi slajd nije sačuvan');
       }
     }
 
@@ -663,7 +673,10 @@ export const EditorStore = signalStore(
               postaviSlajdove(sada);
               izaberi(d.id);
             },
-            error: e => (ishod = razlogGreske(e, 'Dupliranje slajda nije uspelo.')),
+            error: e => {
+              ishod = razlogGreske(e, 'Dupliranje slajda nije uspelo.');
+              if (vanEkrana(gen)) javiPriIzlasku('Dupliranje slajda nije uspelo', e);
+            },
           });
       },
 
@@ -717,6 +730,7 @@ export const EditorStore = signalStore(
             },
             error: e => {
               ishod = razlogGreske(e, PORUKA_CUVANJE);
+              if (vanEkrana(gen)) javiPriIzlasku('Podešavanja prezentacije nisu sačuvana', e);
               if (gen === generacija) primeni(staro);
             },
           });
