@@ -192,14 +192,18 @@ over STOMP; teacher commands are REST.
   used by `uzivo-javno`), `e2e/uzivo-nastavnik.ts` (teacher broker, Wake Lock stub), specs `uzivo-konzola` and
   `uzivo-daljinski` (360 x 740 long notes, double tap, 409/410/aborted command, sleep and wake).
 - **PowerPoint import (phase 2):** `uvoz-pptx/` holds the import as pure TS functions without Angular (`paket`, `xml`, `tema`,
-  `kontekst`, `nasledjivanje`, `tekst`, `oblik`, `slika`, `tabela`, `crtez`, `formula`/`omml-latex`, `animacije`, `beleske`,
-  `granice`, `slanje`, `izvestaj`, `uvoz`; synthetic PPTX files for specs come from `pptx-fabrika.testing.ts`). The only
+  `preset-boje`, `tipovi`, `kontekst`, `nasledjivanje`, `tekst`, `oblik`, `slika`, `tabela`/`tabela-stilovi`, `crtez`,
+  `formula`/`omml-latex`, `png`, `animacije`, `beleske`, `granice`, `ime-fajla`, `format-slike`, `slike`, `slanje`,
+  `izvestaj`, `uvoz`; `slike` uses browser canvas APIs and is not loaded by the Node sample check, `format-slike` is its
+  browser-free part; synthetic PPTX files for specs come from `pptx-fabrika.testing.ts`). The only
   entry from the rest of the app is `pages/uvoz-pptx-otvarac.ts` (`UvozPptxOtvarac`): a dynamic `import()` of
   `uvoz-pptx.dialog`, so the dialog, the modules and `fflate` (used only here) live in a lazy chunk and the main bundle and
   the editor carry none of it (`e2e/lenji-uvoz.spec.ts` checks it). The dialog analyses the file in the browser, shows the
   report, then sends slides and images through `slanje.ts`; `editor.store.primeniUvoz(prezentacija)` merges the result
-  into the open editor (ids of existing slides stay, the first new slide is selected). **`javno/` imports nothing from
-  `uvoz-pptx/`** (`gfs/javna-ruta-uvozi` also forbids `fflate` there). Local check on real decks (outside `ng test` and CI,
+  into the open editor (ids of existing slides stay, the first new slide is selected). A small hostile file must not hang
+  the tab: building a slide stops past 300 layers or 400 animations (the slide then fails with the usual limit message), and
+  a picture whose bytes are neither a server format nor BMP (`format-slike`) is skipped at conversion, never at send time.
+  **`javno/` imports nothing from `uvoz-pptx/`** (`gfs/javna-ruta-uvozi` also forbids `fflate` there). Local check on real decks (outside `ng test` and CI,
   `*.uzorci.ts` read files with `node:fs`): `PPTX_UZORCI=<dir> npx vitest run --config vitest.uzorci.config.mts`; the
   samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
