@@ -141,7 +141,7 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.getAttribute('alt')).toBe('Crtež');
   });
 
-  it('OBLIK: SVG u jedinicama sloja; strelica ima marker-end, dvostruka i marker-start', async () => {
+  it('OBLIK: SVG u jedinicama sloja; vrh strelice je trougao (3 x 3 debljine), linija staje na osnovi vrha', async () => {
     const strelica = sa<OblikSloj>('oblik', (s) => ({
       ...s, oblik: 'STRELICA', popuna: null, ivica: { boja: '#FF0000', debljina: 2, crtica: 'ISPREKIDANA' },
       od: { x: 0, y: 50 }, do: { x: 200, y: 50 },
@@ -151,42 +151,43 @@ describe('PlatnoPrikazComponent', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 200 100');
     expect(svg.getAttribute('preserveAspectRatio')).toBe('none');
     const linija = svg.querySelector('line')!;
-    expect(linija.getAttribute('x2')).toBe('200');
+    // linija se skraćuje do osnove vrha (dužina vrha 3 * 2), pa njen tupi kraj ne viri iz šiljka
+    expect([linija.getAttribute('x1'), linija.getAttribute('x2')]).toEqual(['0', '194']);
     expect(linija.getAttribute('stroke-dasharray')).toBe('8 6');
-    const kraj = linija.getAttribute('marker-end')!;
-    expect(kraj).toMatch(/^url\(#.+\)$/);
-    expect(svg.querySelector(`marker[id="${kraj.slice(5, -1)}"]`)).not.toBeNull();
-    expect(linija.getAttribute('marker-start')).toBeNull();
+    expect(linija.getAttribute('marker-end')).toBeNull();
+    expect(svg.querySelector('marker')).toBeNull();
+    const vrhovi = Array.from(svg.querySelectorAll('polygon'));
+    expect(vrhovi.map((v) => v.getAttribute('points'))).toEqual(['200,50 194,53 194,47']);
+    expect(vrhovi[0].getAttribute('fill')).toBe('#FF0000');
 
     const dvostruka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'DVOSTRUKA_STRELICA', ivica: { boja: '#FF0000', debljina: 2, crtica: 'TACKASTA' }, od: null, do: null }));
     const d = await prikazi(dvostruka);
     const l2 = sloj(d.el, 'oblik').querySelector('line')!;
-    expect(l2.getAttribute('marker-start')).toMatch(/^url\(#.+\)$/);
-    expect(l2.getAttribute('marker-end')).toMatch(/^url\(#.+\)$/);
-    expect(l2.getAttribute('y1')).toBe('50');
+    expect([l2.getAttribute('x1'), l2.getAttribute('y1'), l2.getAttribute('x2')]).toEqual(['6', '50', '194']);
+    expect(Array.from(sloj(d.el, 'oblik').querySelectorAll('polygon')).map((v) => v.getAttribute('points')))
+      .toEqual(['200,50 194,53 194,47', '0,50 6,47 6,53']);
     expect(l2.getAttribute('stroke-dasharray')).toBe('2 4');
     expect(l2.getAttribute('stroke-linecap')).toBe('round');
+
+    // kratka strelica: vrh nije duži od linije (dvostruka: od polovine)
+    const kratka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'DVOSTRUKA_STRELICA', ivica: { boja: '#000000', debljina: 10, crtica: 'PUNA' },
+      od: { x: 0, y: 0 }, do: { x: 0, y: 40 } }));
+    const k = await prikazi(kratka);
+    expect(Array.from(sloj(k.el, 'oblik').querySelectorAll('polygon')).map((v) => v.getAttribute('points')))
+      .toEqual(['0,40 -15,20 15,20', '0,0 15,20 -15,20']);
   });
 
-  it('OBLIK: elipsa, zaobljeni pravougaonik (rx 10% kraće strane), trougao', async () => {
+  it('OBLIK: elipsa, zaobljeni pravougaonik (rx 16,667% kraće strane, PowerPointov roundRect adj), trougao', async () => {
     const elipsa = await prikazi(platno());
     const e = sloj(elipsa.el, 'oblik').querySelector('ellipse')!;
     expect([e.getAttribute('cx'), e.getAttribute('cy'), e.getAttribute('rx'), e.getAttribute('ry')]).toEqual(['100', '50', '100', '50']);
     expect(e.getAttribute('fill')).toBe('#FFCC00');
 
     const zaobljen = await prikazi(sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'ZAOBLJENI_PRAVOUGAONIK' })));
-    expect(sloj(zaobljen.el, 'oblik').querySelector('rect')!.getAttribute('rx')).toBe('10');
+    expect(sloj(zaobljen.el, 'oblik').querySelector('rect')!.getAttribute('rx')).toBe('16.667');
 
     const trougao = await prikazi(sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'TROUGAO' })));
     expect(sloj(trougao.el, 'oblik').querySelector('polygon')!.getAttribute('points')).toBe('100,0 200,100 0,100');
-  });
-
-  it('dve instance ne dele id-jeve markera', async () => {
-    const p = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'STRELICA', ivica: { boja: '#000000', debljina: 1, crtica: 'PUNA' } }));
-    const a = await prikazi(p);
-    const b = await prikazi(p);
-    const id = (el: HTMLElement) => el.querySelector('marker')!.id;
-    expect(id(a.el)).not.toBe(id(b.el));
   });
 
   it('TEKST: nepoznat font se prikazuje kao Carlito, poznat kroz katalog', async () => {
@@ -342,6 +343,35 @@ describe('PlatnoPrikazComponent', () => {
     const mereni = tds[1].querySelector<HTMLElement>('.uz-pl-pasus[data-meri-tabove]')!;
     expect(mereni.querySelector('.uz-pl-tab')).not.toBeNull();
     expect(mereni.hasAttribute('data-pasus')).toBe(false);
+  });
+
+  it('TABELA: ivica ćelije ne povećava red (kao u PowerPointu): margina se meri od linije mreže, minus pola ivice', async () => {
+    const ivica = (debljina: number) => ({ boja: '#FFFFFF', debljina, crtica: 'PUNA' as const });
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, celije: [[{ ...celija('A'), ivice: { gore: ivica(2), dole: ivica(1), levo: ivica(1), desno: null } }, celija('B')]],
+    }));
+    const { el } = await prikazi(p);
+    const td = sloj(el, 'tabela').querySelector<HTMLElement>('td')!;
+    expect([td.style.paddingTop, td.style.paddingRight, td.style.paddingBottom, td.style.paddingLeft])
+      .toEqual(['calc(var(--u) * 2.6)', 'calc(var(--u) * 7.2)', 'calc(var(--u) * 3.1)', 'calc(var(--u) * 6.7)']);
+  });
+
+  it('TABELA: pola ivice ide od šire od dve susedne (border-collapse): red ispod debele ivice zaglavlja nije viši', async () => {
+    const ivica = (debljina: number) => ({ boja: '#FFFFFF', debljina, crtica: 'PUNA' as const });
+    const sve = (debljina: number) => ({ gore: ivica(debljina), dole: ivica(debljina), levo: ivica(debljina), desno: ivica(debljina) });
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, kolone: [50, 50], redovi: [30, 30],
+      celije: [
+        [{ ...celija('A'), spojDesno: 1, ivice: { ...sve(1), dole: ivica(3) } }, { ...celija(''), pokrivena: true, ivice: sve(1) }],
+        [{ ...celija('B'), ivice: sve(1) }, { ...celija('C'), ivice: { ...sve(1), levo: null } }],
+      ],
+    }));
+    const { el } = await prikazi(p);
+    const [, b, c] = Array.from(sloj(el, 'tabela').querySelectorAll<HTMLElement>('td'));
+    // gore: ivica 3 iznad (dole spojene ćelije A) -> 3,6 - 1,5; levo kod C: ivica 1 od B
+    expect([b.style.paddingTop, b.style.paddingRight, b.style.paddingBottom, b.style.paddingLeft])
+      .toEqual(['calc(var(--u) * 2.1)', 'calc(var(--u) * 6.7)', 'calc(var(--u) * 3.1)', 'calc(var(--u) * 6.7)']);
+    expect([c.style.paddingTop, c.style.paddingLeft]).toEqual(['calc(var(--u) * 2.1)', 'calc(var(--u) * 6.7)']);
   });
 
   it('TEKST: okvir bez preloma i sidro', async () => {
