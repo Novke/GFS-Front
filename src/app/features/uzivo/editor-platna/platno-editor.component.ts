@@ -6,7 +6,9 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input, viewChild,
 } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
+import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
+import { TIPOVI_SLIKA } from '../data-access/provera-slike';
 import type { Tema } from '../data-access/platno.models';
 import type { SlajdDetails } from '../data-access/uzivo.models';
 import { PlatnoPrikazComponent } from '../ui/platno-prikaz.component';
@@ -19,6 +21,8 @@ import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore, type TabPanela } from './platno-editor.store';
 import { PlatnoOverlayComponent } from './platno-overlay.component';
 import { komandaTastature, jeSnimanje, uPoljuZaUnos } from './tastatura-platna';
+import { SIRINA_PLATNA } from './geometrija';
+import { PORUKA_PREVLACENJE, SlikeEditora } from './slike-editora';
 import { TrakaAlataComponent } from './traka-alata.component';
 
 /** Tabovi panela redom (indeks `mat-tab-group`-a); "Animacije" dolazi u F17. */
@@ -28,19 +32,20 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
   selector: 'app-platno-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // OtpremanjeSlike živi koliko editor slajda: promena izbora ili taba ne prekida otpremanje (F6)
-  providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike],
+  providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike, SlikeEditora],
   imports: [
     MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
     TrakaAlataComponent,
   ],
   host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep' },
   template: `
-    <app-traka-alata />
+    <app-traka-alata [tema]="tema()" />
     <div class="uz-ep-telo">
       <div class="uz-ep-glavno">
         <!-- okvir (fokus prsten, ivica) prati režim editora; samo platno je uvek dnevno (rezim-dan uz-dan) -->
         <div #okvir class="uz-ep-platno uz-okvir" tabindex="0" role="group" aria-label="Platno slajda"
-             aria-describedby="uz-ep-precice" (keydown)="tastatura($event)">
+             aria-describedby="uz-ep-precice" (keydown)="tastatura($event)"
+             (dragover)="preko($event)" (drop)="spusteno($event)">
           <div class="uz-platno rezim-dan uz-dan">
             <app-platno-prikaz [platno]="store.zaPrikaz()" />
             <app-platno-overlay />
@@ -87,6 +92,8 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   protected readonly store = inject(PlatnoEditorStore);
   private readonly editorStore = inject(EditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
+  private readonly slike = inject(SlikeEditora);
+  private readonly obavestenja = inject(NotificationStore);
   private readonly okvir = viewChild.required<ElementRef<HTMLElement>>('okvir');
   /** Odjava SAMO ove registracije pražnjenja (nova instanca se može registrovati pre nego što ova nestane). */
   private odjava: (() => void) | null = null;
@@ -119,6 +126,29 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
 
   protected promenaTaba(indeks: number): void {
     this.store.postaviTab(TABOVI[indeks] ?? 'SVOJSTVA');
+  }
+
+  /** Prevlačenje fajla preko platna: dozvoljeno samo za fajlove (ostalo prevlačenje se ne dira). */
+  protected preko(e: DragEvent): void {
+    if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+  }
+
+  /** Spuštanje fajla: prvi fajl prihvaćenog tipa, centar = tačka spuštanja u jedinicama platna (isto merenje kao overlay). */
+  protected spusteno(e: DragEvent): void {
+    const fajlovi = Array.from(e.dataTransfer?.files ?? []);
+    if (!fajlovi.length && !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    const fajl = fajlovi.find((f) => TIPOVI_SLIKA.includes(f.type));
+    if (!fajl) {
+      this.obavestenja.greska(PORUKA_PREVLACENJE);
+      return;
+    }
+    const rect = (this.okvir().nativeElement.querySelector('.uz-platno') ?? this.okvir().nativeElement).getBoundingClientRect();
+    const px = rect.width > 0 ? rect.width / SIRINA_PLATNA : 1;
+    const centar = { x: (e.clientX - rect.left) / px, y: (e.clientY - rect.top) / px };
+    void this.slike.ubaci(fajl, centar).then((id) => {
+      if (id !== null) this.fokusPlatna.fokus();
+    });
   }
 
   /** Prečice SAMO na okviru platna (odluka 24). */

@@ -13,6 +13,7 @@ import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
 import { PlatnoEditorStore } from './platno-editor.store';
+import { DIMENZIJE_SLIKE } from './slike-editora';
 
 function platnoSlajd(): SlajdDetails {
   return {
@@ -51,6 +52,7 @@ describe('PlatnoEditorComponent', () => {
         provideZonelessChangeDetection(),
         { provide: EditorStore, useValue: lazni },
         { provide: PrezentacijeApi, useValue: { upload: () => otpremanje } },
+        { provide: DIMENZIJE_SLIKE, useValue: () => Promise.resolve({ sirina: 100, visina: 50 }) },
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
       ],
     });
@@ -290,6 +292,47 @@ describe('PlatnoEditorComponent', () => {
     expect(store.platno().slojevi[1].id).toBe('tekst');
     dugme('Nazad').click();
     expect(store.platno().slojevi[0].id).toBe('tekst');
+  });
+
+  describe('prevlačenje fajla na platno (F7)', () => {
+    const spusti = (fajl: File, x: number, y: number) => {
+      const e = new Event('drop', { bubbles: true, cancelable: true }) as Event & Record<string, unknown>;
+      e['dataTransfer'] = { files: [fajl], types: ['Files'] };
+      e['clientX'] = x;
+      e['clientY'] = y;
+      okvir().dispatchEvent(e);
+      return e;
+    };
+
+    it('PNG spušten na (100, 100) px (1 px = 1 jedinica): centar slike je (100, 100)', async () => {
+      vi.spyOn(okvir().querySelector('.uz-platno')!, 'getBoundingClientRect').mockReturnValue(
+        { left: 0, top: 0, width: 960, height: 540, right: 960, bottom: 540, x: 0, y: 0, toJSON: () => ({}) });
+      const e = spusti(new File([new Uint8Array([137, 80])], 'a.png', { type: 'image/png' }), 100, 100);
+      expect(e.defaultPrevented).toBe(true);
+      otpremanje.next({ id: 'm9', naziv: 'a.png', mime: 'image/png', velicina: 2 });
+      await vi.waitFor(() => expect(store.platno().slojevi.some((s) => s.tip === 'SLIKA' && s.medijId === 'm9')).toBe(true));
+      const s = store.platno().slojevi.find((x) => x.tip === 'SLIKA' && x.medijId === 'm9')!;
+      expect(s.x + s.sirina / 2).toBeCloseTo(100, 1);
+      expect(s.y + s.visina / 2).toBeCloseTo(100, 1);
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('fajl drugog tipa (text/plain): poruka, bez otpremanja', async () => {
+      spusti(new File(['x'], 'a.txt', { type: 'text/plain' }), 10, 10);
+      await fixture.whenStable();
+      expect(poruke.map((p) => p.tekst)).toEqual(['Prevuci sliku (PNG, JPEG, GIF ili WebP).']);
+    });
+
+    it('dragover sa fajlovima se prihvata, bez fajlova ne', () => {
+      const sa = new Event('dragover', { bubbles: true, cancelable: true }) as Event & Record<string, unknown>;
+      sa['dataTransfer'] = { types: ['Files'] };
+      okvir().dispatchEvent(sa);
+      expect(sa.defaultPrevented).toBe(true);
+      const bez = new Event('dragover', { bubbles: true, cancelable: true }) as Event & Record<string, unknown>;
+      bez['dataTransfer'] = { types: ['text/plain'] };
+      okvir().dispatchEvent(bez);
+      expect(bez.defaultPrevented).toBe(false);
+    });
   });
 });
 

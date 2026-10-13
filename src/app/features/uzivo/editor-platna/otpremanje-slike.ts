@@ -24,6 +24,7 @@ export class OtpremanjeSlike implements OnDestroy {
   private readonly obavestenja = inject(NotificationStore);
   private readonly store = inject(PlatnoEditorStore);
   private pretplata: Subscription | null = null;
+  private zavrsi: (id: string | null) => void = () => undefined;
 
   /** Otpremanje u toku (jedno po editoru: dugmad zamene i pozadine su tada onemogućena). */
   readonly salje = signal(false);
@@ -55,6 +56,7 @@ export class OtpremanjeSlike implements OnDestroy {
     if (!this.pretplata || this.pretplata.closed) return;
     this.pretplata.unsubscribe();
     this.obavestenja.greska(PORUKA_SLAJD_ZATVOREN);
+    this.zavrsi(null);
   }
 
   /** `primeni` odbija samo usred gesta mišem (ista slika ili granice ne mogu da je odbiju): tada poruka. */
@@ -66,22 +68,37 @@ export class OtpremanjeSlike implements OnDestroy {
   private otpremi(polje: HTMLInputElement, gotovo: (medijId: string) => void): void {
     const fajl = polje.files?.[0];
     polje.value = '';
-    if (!fajl || this.salje()) return;
+    if (!fajl) return;
+    void this.otpremiFajl(fajl).then((id) => {
+      if (id !== null) gotovo(id);
+    });
+  }
+
+  /**
+   * Provera, `POST /mediji` i greška u snackbar (razlog servera); isti put za polja panela i za traku/prevlačenje
+   * (`SlikeEditora`). Vraća id medija ili `null` (otpremanje u toku, neispravan fajl, greška servera, editor zatvoren).
+   */
+  otpremiFajl(fajl: File): Promise<string | null> {
+    if (this.salje()) return Promise.resolve(null);
     const greska = proveriSliku(fajl);
     if (greska) {
       this.obavestenja.greska(greska);
-      return;
+      return Promise.resolve(null);
     }
     this.salje.set(true);
-    this.pretplata = this.api.upload(fajl).subscribe({
-      next: (m) => {
-        this.salje.set(false);
-        gotovo(m.id);
-      },
-      error: (e: unknown) => {
-        this.salje.set(false);
-        this.obavestenja.greska(razlogGreske(e, 'Slanje slike nije uspelo.'));
-      },
+    return new Promise<string | null>((resolve) => {
+      this.zavrsi = resolve;
+      this.pretplata = this.api.upload(fajl).subscribe({
+        next: (m) => {
+          this.salje.set(false);
+          resolve(m.id);
+        },
+        error: (e: unknown) => {
+          this.salje.set(false);
+          this.obavestenja.greska(razlogGreske(e, 'Slanje slike nije uspelo.'));
+          resolve(null);
+        },
+      });
     });
   }
 }
