@@ -70,9 +70,16 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
       align-items: center;
       justify-content: center;
       border: 1px dashed var(--muted);
-      color: var(--ink-2);
       font-size: calc(var(--u) * 14);
       overflow: hidden;
+    }
+    /* čip sa sopstvenom podlogom (dnevni tokeni platna): čitljiv i na tamnim temama (TAMNA, PONOC) */
+    .uz-ep-prazan > span {
+      padding: calc(var(--u) * 2) calc(var(--u) * 8);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink-2);
+      white-space: nowrap;
     }
   `,
 })

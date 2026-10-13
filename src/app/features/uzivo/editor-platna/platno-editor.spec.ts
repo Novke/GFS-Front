@@ -77,6 +77,16 @@ describe('PlatnoEditorComponent', () => {
     expect(el().querySelector('#' + o.getAttribute('aria-describedby'))!.textContent).toContain('Delete briše');
   });
 
+  it('okvir platna prati režim editora (fokus prsten u tokenima režima), a samo platno je uvek dnevno', () => {
+    expect(okvir().classList).not.toContain('rezim-dan');
+    expect(okvir().classList).not.toContain('uz-dan');
+    const platnoEl = okvir().querySelector<HTMLElement>(':scope > .uz-platno')!;
+    expect(platnoEl.classList).toContain('rezim-dan');
+    expect(platnoEl.classList).toContain('uz-dan');
+    expect(platnoEl.querySelector('app-platno-prikaz')).not.toBeNull();
+    expect(platnoEl.querySelector('app-platno-overlay')).not.toBeNull();
+  });
+
   it('Delete na okviru briše izabran sloj i njegove animacije; Ctrl+Z vraća, Ctrl+Y ponovo briše', async () => {
     const pocetak = store.platno();
     store.izaberi(['oblik']);

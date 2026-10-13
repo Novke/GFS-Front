@@ -30,12 +30,15 @@ import { PlatnoEditorStore } from './platno-editor.store';
                 {{ r.naziv }}
               </button>
             }
-            <button mat-icon-button type="button" [attr.aria-label]="r.zakljucan ? 'Otključaj' : 'Zaključaj'"
-                    [attr.aria-pressed]="r.zakljucan" (click)="store.zakljucaj(r.id, !r.zakljucan)">
+            <!-- stalne labele uz aria-pressed (ARIA APG: stanje nosi aria-pressed, ne labela); tooltip kaže stanje -->
+            <button mat-icon-button type="button" aria-label="Zaključaj" [attr.aria-pressed]="r.zakljucan"
+                    [title]="r.zakljucan ? 'Zaključan (klik otključava)' : 'Zaključaj'"
+                    (click)="store.zakljucaj(r.id, !r.zakljucan)">
               <mat-icon [svgIcon]="r.zakljucan ? 'lock' : 'lock_open'" />
             </button>
-            <button mat-icon-button type="button" [attr.aria-label]="r.skriven ? 'Prikaži u editoru' : 'Sakrij u editoru'"
-                    [attr.aria-pressed]="r.skriven" (click)="store.prebaciSkriven(r.id)">
+            <button mat-icon-button type="button" aria-label="Sakrij u editoru" [attr.aria-pressed]="r.skriven"
+                    [title]="r.skriven ? 'Skriven u editoru (klik prikazuje)' : 'Sakrij u editoru'"
+                    (click)="store.prebaciSkriven(r.id)">
               <mat-icon [svgIcon]="r.skriven ? 'visibility_off' : 'visibility'" />
             </button>
             <button mat-icon-button type="button" aria-label="Preimenuj" (click)="pocniPreimenovanje(r.id)">

@@ -32,9 +32,10 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
     <app-traka-alata />
     <div class="uz-ep-telo">
       <div class="uz-ep-glavno">
-        <div #okvir class="uz-ep-platno uz-okvir rezim-dan uz-dan" tabindex="0" role="group" aria-label="Platno slajda"
+        <!-- okvir (fokus prsten, ivica) prati režim editora; samo platno je uvek dnevno (rezim-dan uz-dan) -->
+        <div #okvir class="uz-ep-platno uz-okvir" tabindex="0" role="group" aria-label="Platno slajda"
              aria-describedby="uz-ep-precice" (keydown)="tastatura($event)">
-          <div class="uz-platno">
+          <div class="uz-platno rezim-dan uz-dan">
             <app-platno-prikaz [platno]="store.zaPrikaz()" />
             <app-platno-overlay />
           </div>

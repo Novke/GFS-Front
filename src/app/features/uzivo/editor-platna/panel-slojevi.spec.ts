@@ -58,30 +58,39 @@ describe('PanelSlojeviComponent', () => {
     expect(store.izbor()).toEqual(['slika']);
   });
 
-  it('"Zaključaj" postavlja zakljucan (izmena ide izlazu) i aria-pressed; "Otključaj" vraća', async () => {
-    dugmeU(red('oblik'), 'Zaključaj').click();
+  it('"Zaključaj" ima stalnu labelu: aria-pressed i ikona prate stanje, izmena ide izlazu', async () => {
+    const dugme = () => dugmeU(red('oblik'), 'Zaključaj');
+    expect(dugme().getAttribute('aria-pressed')).toBe('false');
+    dugme().click();
     await fixture.whenStable();
     expect(store.platno().slojevi.find((s) => s.id === 'oblik')!.zakljucan).toBe(true);
     expect(izlaz).toHaveBeenCalledTimes(1);
-    const dugme = dugmeU(red('oblik'), 'Otključaj');
-    expect(dugme.getAttribute('aria-pressed')).toBe('true');
-    expect(dugme.querySelector('mat-icon')!.getAttribute('data-mat-icon-name')).toBe('lock');
-    dugme.click();
+    expect(dugme()).not.toBeNull();
+    expect(red('oblik').querySelector('button[aria-label="Otključaj"]')).toBeNull();
+    expect(dugme().getAttribute('aria-pressed')).toBe('true');
+    expect(dugme().querySelector('mat-icon')!.getAttribute('data-mat-icon-name')).toBe('lock');
+    expect(dugme().title).toContain('Zaključan');
+    dugme().click();
     await fixture.whenStable();
     expect(store.platno().slojevi.find((s) => s.id === 'oblik')!.zakljucan).toBe(false);
-    expect(dugmeU(red('oblik'), 'Zaključaj').getAttribute('aria-pressed')).toBe('false');
+    expect(dugme().getAttribute('aria-pressed')).toBe('false');
+    expect(dugme().querySelector('mat-icon')!.getAttribute('data-mat-icon-name')).toBe('lock_open');
   });
 
-  it('"Sakrij u editoru" sklanja sloj iz zaPrikaz bez izlaza; "Prikaži u editoru" ga vraća', async () => {
-    dugmeU(red('slika'), 'Sakrij u editoru').click();
+  it('"Sakrij u editoru" ima stalnu labelu: sklanja sloj iz zaPrikaz bez izlaza, aria-pressed prati stanje', async () => {
+    const dugme = () => dugmeU(red('slika'), 'Sakrij u editoru');
+    expect(dugme().getAttribute('aria-pressed')).toBe('false');
+    dugme().click();
     await fixture.whenStable();
     expect(store.zaPrikaz().slojevi.map((s) => s.id)).not.toContain('slika');
     expect(izlaz).not.toHaveBeenCalled();
-    const dugme = dugmeU(red('slika'), 'Prikaži u editoru');
-    expect(dugme.getAttribute('aria-pressed')).toBe('true');
-    dugme.click();
+    expect(red('slika').querySelector('button[aria-label="Prikaži u editoru"]')).toBeNull();
+    expect(dugme().getAttribute('aria-pressed')).toBe('true');
+    expect(dugme().title).toContain('Skriven');
+    dugme().click();
     await fixture.whenStable();
     expect(store.zaPrikaz().slojevi.map((s) => s.id)).toContain('slika');
+    expect(dugme().getAttribute('aria-pressed')).toBe('false');
   });
 
   it('preimenovanje: Enter čuva naziv, Esc odustaje', async () => {
