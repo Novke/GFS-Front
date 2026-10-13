@@ -476,4 +476,16 @@ describe('PlatnoEditorStore', () => {
       expect(izlaz.mock.calls[0][0].slojevi[0].x).toBe(155);
     });
   });
+
+  it('posle destroy izlaz je ugašen: primeni i ubaci ne predaju ništa', () => {
+    store.inicijalizuj(dok([oblik('s1')]));
+    store.izaberi(['s1']);
+    izlaz.mockClear();
+    const sredina = TestBed.inject(EnvironmentInjector);
+    expect(sredina).toBeTruthy();
+    TestBed.resetTestingModule(); // uništava store (onDestroy hook)
+    expect(() => store.primeni((p) => pomeriSlojeve(p, new Set(['s1']), 5, 5))).not.toThrow();
+    store.ubaci((id) => oblik(id));
+    expect(izlaz).not.toHaveBeenCalled();
+  });
 });

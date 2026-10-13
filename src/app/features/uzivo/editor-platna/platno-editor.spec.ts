@@ -294,6 +294,19 @@ describe('PlatnoEditorComponent', () => {
     expect(store.platno().slojevi[0].id).toBe('tekst');
   });
 
+  it('F7: posle ubacivanja oblika iz menija prava strelica (keydown na okviru) pomera nov sloj za 1', async () => {
+    const dugmeOblik = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Oblik')!;
+    dugmeOblik.click();
+    await fixture.whenStable();
+    Array.from(document.body.querySelectorAll<HTMLElement>('.mat-mdc-menu-item')).find((s) => s.textContent!.trim() === 'Pravougaonik')!.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(okvir());
+    const id = store.izbor()[0];
+    const x = store.platno().slojevi.find((s) => s.id === id)!.x;
+    taster(okvir(), 'ArrowRight');
+    expect(store.platno().slojevi.find((s) => s.id === id)!.x).toBe(x + 1);
+  });
+
   describe('prevlačenje fajla na platno (F7)', () => {
     const spusti = (fajl: File, x: number, y: number) => {
       const e = new Event('drop', { bubbles: true, cancelable: true }) as Event & Record<string, unknown>;
@@ -309,6 +322,7 @@ describe('PlatnoEditorComponent', () => {
         { left: 0, top: 0, width: 960, height: 540, right: 960, bottom: 540, x: 0, y: 0, toJSON: () => ({}) });
       const e = spusti(new File([new Uint8Array([137, 80])], 'a.png', { type: 'image/png' }), 100, 100);
       expect(e.defaultPrevented).toBe(true);
+      await new Promise((r) => setTimeout(r)); // merenje dimenzija pre otpremanja
       otpremanje.next({ id: 'm9', naziv: 'a.png', mime: 'image/png', velicina: 2 });
       await vi.waitFor(() => expect(store.platno().slojevi.some((s) => s.tip === 'SLIKA' && s.medijId === 'm9')).toBe(true));
       const s = store.platno().slojevi.find((x) => x.tip === 'SLIKA' && x.medijId === 'm9')!;

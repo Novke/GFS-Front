@@ -289,6 +289,8 @@ export const PlatnoEditorStore = signalStore(
     // ako je komponenta već ispraznila u svom ngOnDestroy
     onDestroy(store) {
       store.isprazni();
+      // posle završnog pražnjenja izlaz se gasi: kasniji (async) put ne sme da upiše u slajd koji se više ne uređuje
+      store._izlaz.f = null;
     },
   }),
 );

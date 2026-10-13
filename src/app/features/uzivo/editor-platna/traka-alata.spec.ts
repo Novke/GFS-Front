@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
-import type { OblikSloj, SlikaSloj } from '../data-access/platno.models';
+import type { OblikSloj, Platno, SlikaSloj } from '../data-access/platno.models';
 import { novaSlika, novoPlatno } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo } from '../data-access/uzivo.models';
@@ -36,6 +36,8 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
   let store: PlatnoEditorStore;
   let upload: ReturnType<typeof vi.fn<(f: File) => ReturnType<PrezentacijeApi['upload']>>>;
   let poruke: Poruka[];
+  let izlaz: ReturnType<typeof vi.fn<(p: Platno) => void>>;
+  let dimenzije: ReturnType<typeof vi.fn<(f: Blob) => Promise<{ sirina: number; visina: number }>>>;
   const sat: LazniSat = { t: 0 };
   const el = () => fixture.nativeElement as HTMLElement;
   const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
@@ -53,24 +55,27 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     const polje = el().querySelector<HTMLInputElement>('input[type="file"]')!;
     Object.defineProperty(polje, 'files', { configurable: true, value: [f] });
     polje.dispatchEvent(new Event('change'));
+    await new Promise((r) => setTimeout(r)); // merenje dimenzija (mikrotask) pre otpremanja
     await fixture.whenStable();
   }
 
   beforeEach(async () => {
     sat.t = 0;
+    dimenzije = vi.fn<(f: Blob) => Promise<{ sirina: number; visina: number }>>(() => Promise.resolve({ sirina: 1920, visina: 1080 }));
     upload = vi.fn<(f: File) => ReturnType<PrezentacijeApi['upload']>>(() => of(medij('m1')));
     TestBed.configureTestingModule({
       providers: [
         ...provajderiSvojstava(sat),
         { provide: PrezentacijeApi, useValue: { upload } },
-        { provide: DIMENZIJE_SLIKE, useValue: () => Promise.resolve({ sirina: 1920, visina: 1080 }) },
+        { provide: DIMENZIJE_SLIKE, useFactory: () => dimenzije },
       ],
     });
     poruke = [];
     TestBed.inject(NotificationStore).poruke$.subscribe((p) => poruke.push(p));
     fixture = TestBed.createComponent(DomacinComponent);
     store = fixture.debugElement.injector.get(PlatnoEditorStore);
-    store.postaviIzlaz(vi.fn());
+    izlaz = vi.fn<(p: Platno) => void>();
+    store.postaviIzlaz(izlaz);
     store.inicijalizuj(novoPlatno('NACRT', 'PRAZNO'));
     await fixture.whenStable();
   });
@@ -97,13 +102,6 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     if (naziv === 'Krug') expect(s.sirina).toBe(s.visina);
     expect(store.izbor()).toEqual([s.id]);
     expect(document.activeElement).toBe(okvir());
-  });
-
-  it('strelica posle ubacivanja pomera nov sloj za 1 (fokus je na okviru)', async () => {
-    await ubaciOblik('Pravougaonik');
-    const x = poslednji().x;
-    store.pomeriIzabrane(1, 0);
-    expect(poslednji().x).toBe(x + 1);
   });
 
   it('dva ista oblika zaredom: drugi je pomeren za 12', async () => {
@@ -133,6 +131,7 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     expect(el().querySelector('[role="status"]')!.textContent).toContain('Slika se otprema…');
     odgovor.next(medij('m1'));
     odgovor.complete();
+    await new Promise((r) => setTimeout(r));
     await fixture.whenStable();
     expect(dugme(el(), 'Slika')!.getAttribute('aria-disabled')).not.toBe('true');
     expect(el().querySelector('[role="status"]')!.textContent!.trim()).toBe('');
@@ -153,5 +152,55 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     expect(upload).not.toHaveBeenCalled();
     expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
     expect(store.platno().slojevi).toHaveLength(300);
+  });
+
+  describe('editor se zatvara usred ubacivanja slike (ispravka 1)', () => {
+    const odloženo = <T>() => {
+      let resolve!: (v: T) => void;
+      const obecanje = new Promise<T>((r) => (resolve = r));
+      return { obecanje, resolve };
+    };
+
+    it('uništen editor pre kraja merenja: upload nije pozvan, izlaz nije pozvan, stigla poruka', async () => {
+      const d = odloženo<{ sirina: number; visina: number }>();
+      dimenzije.mockReturnValue(d.obecanje);
+      await izaberiFajl(png());
+      expect(dimenzije).toHaveBeenCalledTimes(1);
+      expect(upload).not.toHaveBeenCalled(); // dimenzije se mere PRE otpremanja
+      izlaz.mockClear();
+      fixture.destroy();
+      d.resolve({ sirina: 100, visina: 100 });
+      await new Promise((r) => setTimeout(r));
+      expect(upload).not.toHaveBeenCalled();
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(poruke.map((p) => p.tekst)).toEqual(['Slika nije primenjena: slajd je zatvoren.']);
+    });
+
+    it('merenje pada (oštećen fajl): poruka, bez otpremanja', async () => {
+      dimenzije.mockRejectedValue(new Error('x'));
+      await izaberiFajl(png());
+      expect(upload).not.toHaveBeenCalled();
+      expect(poruke.map((p) => p.tekst)).toEqual(['Slika se ne može pročitati.']);
+      expect(store.platno().slojevi).toHaveLength(0);
+    });
+
+    it('uništenje usred otpremanja: poruka iz F6, nema upisa u dokument', async () => {
+      upload.mockReturnValue(new Subject<MedijInfo>());
+      await izaberiFajl(png());
+      expect(upload).toHaveBeenCalledTimes(1);
+      izlaz.mockClear();
+      fixture.destroy();
+      await new Promise((r) => setTimeout(r));
+      expect(poruke.map((p) => p.tekst)).toEqual(['Slika nije primenjena: slajd je zatvoren.']);
+      expect(izlaz).not.toHaveBeenCalled();
+    });
+
+    it('druga slika dok prva još ide: poruka "Sačekaj…", drugi upload nije pozvan', async () => {
+      upload.mockReturnValue(new Subject<MedijInfo>());
+      await izaberiFajl(png());
+      await izaberiFajl(png());
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(poruke.map((p) => p.tekst)).toEqual(['Sačekaj da se prethodna slika otpremi.']);
+    });
   });
 });
