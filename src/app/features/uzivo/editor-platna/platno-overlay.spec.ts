@@ -614,4 +614,42 @@ describe('PlatnoOverlayComponent', () => {
       expect(store.mozeNazad()).toBe(false);
     });
   });
+  describe('uređivanje teksta (F12)', () => {
+    it('dvoklik na TEKST sloj počinje uređivanje tog sloja; na oblik ne', async () => {
+      await pocni(dok());
+      pokazivac('dblclick', 60, 60);
+      expect(store.uredjivanje()).toBeNull();
+      pokazivac('dblclick', 550, 320);
+      expect(store.uredjivanje()).toEqual({ slojId: 'P', celija: null });
+      expect(store.izbor()).toEqual(['P']);
+    });
+
+    it('dvoklik na zaključan TEKST: poruka, bez uređivanja', async () => {
+      const p = dok();
+      await pocni({ ...p, slojevi: p.slojevi.map((s) => (s.id === 'P' ? { ...s, zakljucan: true } : s)) });
+      pokazivac('dblclick', 550, 320);
+      expect(store.uredjivanje()).toBeNull();
+      expect(obavestenja.greska).toHaveBeenCalledWith('Sloj je zaključan.');
+    });
+
+    it('pointerdown van sloja u uređivanju završava uređivanje, pa radi izbor', async () => {
+      await pocni(dok());
+      store.pocniUredjivanje('P');
+      await fixture.whenStable();
+      const zavrsi = vi.spyOn(store, 'zavrsiUredjivanje');
+      klik(350, 100);
+      expect(zavrsi).toHaveBeenCalledTimes(1);
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.izbor()).toEqual(['B']);
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('prazan sloj u uređivanju nema natpis "Dvoklik za tekst"', async () => {
+      await pocni(dok());
+      expect(el().querySelectorAll('.uz-ep-prazan')).toHaveLength(1);
+      store.pocniUredjivanje('P');
+      await fixture.whenStable();
+      expect(el().querySelectorAll('.uz-ep-prazan')).toHaveLength(0);
+    });
+  });
 });

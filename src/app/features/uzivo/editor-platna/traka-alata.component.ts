@@ -1,13 +1,14 @@
-// Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F12 tekst, F14 tabela,
-// F16 formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na
-// okvir platna (odluka 12). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus (npr. Poništi posle
-// poslednjeg koraka), umesto da ga pregledač baci na body.
+// Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F14 tabela, F16
+// formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na okvir
+// platna (odluka 12), i kad je ubacivanje odbijeno (meni sam ne vraća fokus, inače bi pao na body). "Tekst" (F12) ubacuje
+// tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
+// (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import type { Crtica, Platno, Sloj, Tema, VrstaOblika } from '../data-access/platno.models';
-import { noviKrug, noviOblik } from '../data-access/platno-novo';
+import { noviKrug, noviOblik, noviTekst, uSredini } from '../data-access/platno-novo';
 import { slobodnoMesto } from './komande';
 import { FokusPlatna } from './fokus-platna';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -39,6 +40,8 @@ const OBLICI: readonly StavkaOblika[] = [
       <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
               [disabled]="!store.mozeNapred()" (click)="store.ponovi()"><mat-icon svgIcon="redo" /></button>
       <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+      <button mat-icon-button type="button" aria-label="Tekst" title="Tekst (dvoklik na tekst ga uređuje)"
+              (click)="ubaciTekst()"><mat-icon svgIcon="text_fields" /></button>
       <button mat-icon-button type="button" aria-label="Oblik" title="Oblik"
               [matMenuTriggerFor]="meniOblika" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="shapes" /></button>
       <mat-menu #meniOblika="matMenu">
@@ -79,9 +82,23 @@ export class TrakaAlataComponent {
     return this.store.izbor().length > 0;
   }
 
-  /** Ubacivanje iz menija trake (F7 i dalje): nov sloj je izabran, a fokus prelazi na okvir platna (odluka 12). */
+  /**
+   * Ubacivanje iz menija trake (F7 i dalje): nov sloj je izabran, a fokus prelazi na okvir platna (odluka 12). I kad je
+   * odbijeno (granica, poruka): meni ima `RestoreFocus=false`, pa bi fokus inače ostao na body.
+   */
   protected ubaci(napravi: (id: string, p: Platno) => Sloj): void {
-    if (this.store.ubaci(napravi) !== null) this.fokusPlatna.fokus();
+    this.store.ubaci(napravi);
+    this.fokusPlatna.fokus();
+  }
+
+  /** "Tekst": 400 x 60 u fontu i boji tela teme, na slobodnom mestu, i odmah u uređivanju (uređivač uzima fokus). */
+  protected ubaciTekst(): void {
+    const tema = this.tema();
+    const id = this.store.ubaci((novi, p) => {
+      const s = noviTekst(novi, tema, { ...uSredini(400, 60), sirina: 400, visina: 60 });
+      return { ...s, ...slobodnoMesto(p, s.sirina, s.visina) };
+    });
+    if (id !== null) this.store.pocniUredjivanje(id);
   }
 
   /** Dugme je `disabledInteractive` (zadržava fokus), pa klik dok otpremanje traje ovde ne otvara birač fajlova. */

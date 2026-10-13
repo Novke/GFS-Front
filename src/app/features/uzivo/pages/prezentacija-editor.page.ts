@@ -40,7 +40,7 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
- * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno"), u sredini
+ * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno" (meni: Prazno, Naslov i tekst)), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
  * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), a pregled je uvek ispod. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
@@ -173,7 +173,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
-              <button mat-stroked-button type="button" (click)="store.dodaj('PLATNO')"><mat-icon svgIcon="layers" />Platno</button>
+              <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPlatna"><mat-icon svgIcon="layers" />Platno</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
             </div>
@@ -185,6 +185,10 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 <mat-icon [svgIcon]="t.ikona" />{{ t.naziv }}
               </button>
             }
+          </mat-menu>
+          <mat-menu #meniPlatna="matMenu">
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO')">Prazno</button>
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO', undefined, 'NASLOV_I_TEKST')">Naslov i tekst</button>
           </mat-menu>
           <mat-menu #meniSlajda="matMenu">
             <ng-template matMenuContent let-s="s" let-i="i">

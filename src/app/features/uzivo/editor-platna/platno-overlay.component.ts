@@ -3,6 +3,8 @@
 // ka ivicama i centrima), prevlačenje po praznom crta pravougaonik izbora, ručke menjaju veličinu, rotaciju i krajeve
 // linije. Gest menja dokument kroz `PlatnoEditorStore.azurirajGest` najviše jednom po kadru (`PoKadru`, odluka 33) i
 // beleži se kao jedan korak na `pointerup`; Esc i `pointercancel` ga poništavaju. Sve mere idu kroz `--u` kao prikaz.
+// Tekst (F12): dvoklik na TEKST sloj počinje uređivanje; sloj za uređivanje leži IZNAD overlay-a, pa pritisak koji
+// stigne ovde je van sloja u uređivanju: prvo završava uređivanje, pa radi izbor.
 import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
 import type { OblikSloj, Platno, Sloj, Tacka } from '../data-access/platno.models';
@@ -104,6 +106,7 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     '(pointermove)': 'pomeraj($event)',
     '(pointerup)': 'gore($event)',
     '(pointercancel)': 'prekid($event)',
+    '(dblclick)': 'dvoklik($event)',
     '(lostpointercapture)': 'prekid($event)',
   },
   template: `
@@ -285,7 +288,16 @@ export class PlatnoOverlayComponent {
     return p.id !== null && typeof id === 'number' && id !== p.id;
   }
 
+  /** Dvoklik na TEKST sloj (gornji vidljivi sloj na tački): uređivanje teksta (zaključan: poruka iz store-a). */
+  protected dvoklik(e: MouseEvent): void {
+    const { tacka, px } = this.tacka(e);
+    const s = slojNaTacki(this.store.zaPrikaz().slojevi, tacka, TOLERANCIJA_PX / px);
+    if (s?.tip === 'TEKST') this.store.pocniUredjivanje(s.id);
+  }
+
   protected dole(e: PointerEvent): void {
+    // pritisak van sloja u uređivanju (sloj za uređivanje leži iznad overlay-a): tekst u dokument, pa izbor kao inače
+    if (this.store.uredjivanje()) this.store.zavrsiUredjivanje();
     // odluka 24: pritisak na platno fokusira okvir, pa prečice odmah rade
     this.fokusPlatna.fokus();
     if (e.button !== 0) return;

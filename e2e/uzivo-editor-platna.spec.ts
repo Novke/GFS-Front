@@ -19,7 +19,10 @@ const PRAVOUGAONIK = { x: 380, y: 210, sirina: 200, visina: 120 };
 /** PNG 1 x 1 (prolazi `createImageBitmap` u Chromium-u, pa ga editor meri pre otpremanja). */
 const PIKSEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
-interface Sloj { id: string; tip: string; x: number; y: number; sirina: number; visina: number; medijId?: string }
+interface Sloj {
+  id: string; tip: string; x: number; y: number; sirina: number; visina: number; medijId?: string;
+  pasusi?: { delovi: { tekst: string; font: string }[] }[];
+}
 interface Platno { pozadina: { boja: string; medijId: string | null }; slojevi: Sloj[]; animacije: unknown[] }
 interface SlajdCmd { tip: string; beleske: string | null; platno: Platno }
 
@@ -27,6 +30,9 @@ const putovi = (mock: MockApi, id: number) => mock.zahteviZa(`slajdovi/${id}`, '
 /** Telo poslednjeg `PUT`-a slajda (undefined dok ga nema). */
 const poslednji = (mock: MockApi, id: number) => putovi(mock, id).at(-1)?.telo as SlajdCmd | undefined;
 const slojUPut = (mock: MockApi, id: number, slojId: string) => poslednji(mock, id)?.platno.slojevi.find(s => s.id === slojId);
+/** Tekst pasusa sloja u poslednjem `PUT`-u (delovi spojeni). */
+const tekstUPut = (mock: MockApi, id: number, slojId: string) =>
+  slojUPut(mock, id, slojId)?.pasusi?.map(p => p.delovi.map(d => d.tekst).join(''));
 
 const editor = (page: Page) => page.locator('[data-oznaka="gfs-editor-platna"]');
 const okvir = (page: Page) => page.locator('.uz-ep-platno');
@@ -34,11 +40,15 @@ const okvir = (page: Page) => page.locator('.uz-ep-platno');
 const slojEditora = (page: Page, id: string) => page.locator(`.uz-ep-platno [data-sloj="${id}"]`);
 const traka = (page: Page) => page.getByRole('group', { name: 'Alati platna' });
 
-/** "+ Platno" posle izabranog INFO slajda: odmah `POST` (nov PLATNO nacrt je ispravan), pa editor. Vraća pravi id slajda. */
+/**
+ * "+ Platno" > "Prazno" posle izabranog INFO slajda: odmah `POST` (nov PLATNO nacrt je ispravan), pa editor. Vraća pravi
+ * id slajda.
+ */
 async function novoPlatno(page: Page, mock: MockApi): Promise<number> {
   await page.goto(`prezentacije/${PREZENTACIJA}`);
   await expect(page.locator('.uz-ed-stavka-dugme[aria-current="true"]')).toContainText('Uvod');
   await page.getByRole('button', { name: 'Platno', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Prazno', exact: true }).click();
   await expect(editor(page)).toBeVisible();
   await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST').length).toBe(1);
   const post = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST')[0];
@@ -347,5 +357,43 @@ test.describe('uživo: editor platna (4a)', () => {
     expect(panel.y).toBeGreaterThanOrEqual(o.y + o.height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(await page.locator('mat-sidenav-content').evaluate(e => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe('uživo: tekst na platnu (4b, F12)', () => {
+  const uredjivac = (page: Page) => page.getByRole('textbox', { name: /^Tekst sloja/ });
+
+  test('"Tekst" iz trake: kucanje, Enter, Esc; dvoklik, kucanje i Ctrl+S bez Esc; PUT nosi tekst', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await traka(page).getByRole('button', { name: 'Tekst', exact: true }).click();
+    await expect(uredjivac(page)).toBeFocused();
+    await page.keyboard.type('Zdravo');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('svete');
+    await page.keyboard.press('Escape');
+    await expect(uredjivac(page)).toHaveCount(0);
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Zdravo', 'svete']);
+    // font tela teme (NACRT: IBM Plex Sans) u oba pasusa
+    expect(slojUPut(mock, id, 's1')!.pasusi!.map(p => p.delovi[0].font)).toEqual(['IBM Plex Sans', 'IBM Plex Sans']);
+
+    // dvoklik na sloj (overlay je iznad prikaza, pa koordinatama), kursor je na kraju; Ctrl+S upisuje otvoren tekst
+    const c = await centar(slojEditora(page, 's1'));
+    await page.mouse.dblclick(c.x, c.y);
+    await expect(uredjivac(page)).toBeFocused();
+    await page.keyboard.type('!');
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Zdravo', 'svete!']);
+    await expect(uredjivac(page)).toBeFocused();
+
+    // Ctrl+Z u tekstu poništava kucanje (ProseMirror), ne platno; klik van sloja završava uređivanje
+    await page.keyboard.type('?');
+    await page.keyboard.press('Control+z');
+    const b = (await page.locator('.uz-ep-platno .uz-platno').boundingBox())!;
+    await page.mouse.click(b.x + 10, b.y + 10);
+    await expect(uredjivac(page)).toHaveCount(0);
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Zdravo', 'svete!']);
+    expect(poslednji(mock, id)!.platno.slojevi.map(s => s.id)).toEqual(['s1']);
   });
 });

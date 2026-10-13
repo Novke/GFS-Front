@@ -7,7 +7,7 @@ import { Subject } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import type { Platno } from '../data-access/platno.models';
-import { platno } from '../data-access/platno-podaci.testing';
+import { pasus, platno } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
@@ -494,6 +494,147 @@ describe('PlatnoEditorComponent', () => {
       bez['dataTransfer'] = { types: ['text/plain'] };
       okvir().dispatchEvent(bez);
       expect(bez.defaultPrevented).toBe(false);
+    });
+  });
+  describe('uređivanje teksta (F12)', () => {
+    const overlay = () => el().querySelector<HTMLElement>('app-platno-overlay')!;
+    const uredjivac = () => el().querySelector<HTMLElement>('.uz-ep-uredjivanje [contenteditable]');
+    const dvoklik = (x: number, y: number) =>
+      overlay().dispatchEvent(new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true }));
+    /** Samo TEKST sloj (10, 10, 200 x 100) je vidljiv: ostali slojevi fiksture leže preko njega. */
+    async function samoTekst() {
+      for (const id of ['slika', 'oblik', 'tabela', 'formula', 'crtez']) store.prebaciSkriven(id);
+      await fixture.whenStable();
+    }
+    const pasusIz = (t: string) => pasus(t);
+    const tab = (ime: string) => Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).find((t) => t.textContent!.trim() === ime)!;
+
+    it('dvoklik na TEKST sloj: uređivač (contenteditable) u sloju za uređivanje, a prikaz nema taj sloj', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      expect(uredjivac()).not.toBeNull();
+      expect(uredjivac()!.getAttribute('aria-label')).toBe('Tekst sloja Tekst: Prvi');
+      expect(el().querySelector('app-platno-prikaz [data-sloj="tekst"]')).toBeNull();
+      // sloj za uređivanje je UNUTAR okvira platna (Ctrl+S okvira važi i u tekstu)
+      expect(okvir().contains(uredjivac())).toBe(true);
+      expect(document.activeElement).toBe(uredjivac());
+    });
+
+    it('Enter na izabranom TEKST sloju radi isto (F2 takođe)', async () => {
+      store.izaberi(['tekst']);
+      expect(taster(okvir(), 'Enter').defaultPrevented).toBe(true);
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toEqual({ slojId: 'tekst', celija: null });
+      expect(uredjivac()).not.toBeNull();
+      taster(uredjivac()!, 'Escape');
+      await fixture.whenStable();
+      store.izaberi(['tekst']);
+      taster(okvir(), 'F2');
+      expect(store.uredjivanje()?.slojId).toBe('tekst');
+    });
+
+    it('Enter na izabranom oblik sloju: ništa', () => {
+      store.izaberi(['oblik']);
+      taster(okvir(), 'Enter');
+      expect(store.uredjivanje()).toBeNull();
+    });
+
+    it('"Tekst" iz trake: nov sloj u uređivanju sa fontom teme', async () => {
+      Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Tekst')!.click();
+      await fixture.whenStable();
+      const id = store.uredjivanje()!.slojId;
+      expect(store.platno().slojevi.at(-1)!.id).toBe(id);
+      expect(uredjivac()).not.toBeNull();
+      expect(uredjivac()!.querySelector<HTMLElement>('p')!.getAttribute('style') ?? '').toContain('IBM Plex Sans');
+      expect(document.activeElement).toBe(uredjivac());
+    });
+
+    it('Note F4b RF3: uPoljuZaUnos za contenteditable UNUTAR okvira: Delete, strelice i Ctrl+Z u tekstu ne diraju platno', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      lazni.izmeniPlatno.mockClear();
+      const pre = store.platno();
+      const cilj = uredjivac()!;
+      expect(okvir().contains(cilj)).toBe(true);
+      taster(cilj, 'Delete');
+      taster(cilj, 'ArrowRight');
+      taster(cilj, 'z', { ctrlKey: true });
+      taster(cilj, 'a', { ctrlKey: true });
+      expect(store.platno()).toBe(pre);
+      expect(store.izbor()).toEqual(['tekst']);
+      expect(store.uredjivanje()).not.toBeNull();
+      expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+    });
+
+    it('Ctrl+S u tekstu: otvoren tekst ide u dokument (izlaz), sesija ostaje, događaj ide do stranice', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      lazni.izmeniPlatno.mockClear();
+      const k = store.aktivniUredjivac()!;
+      vi.spyOn(k, 'presek').mockReturnValueOnce({ pasusi: [pasusIz('Sačuvano')], mapa: [0, null] });
+      const e = taster(uredjivac()!, 's', { ctrlKey: true });
+      expect(e.defaultPrevented).toBe(false);
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      expect(store.uredjivanje()).not.toBeNull();
+    });
+
+    it('klik van sloja završava uređivanje (izlaz jednom), fokus je na okviru platna', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      const k = store.aktivniUredjivac()!;
+      vi.spyOn(k, 'presek').mockReturnValueOnce({ pasusi: [pasusIz('Novo')], mapa: [0, null] });
+      lazni.izmeniPlatno.mockClear();
+      overlay().dispatchEvent(new MouseEvent('pointerdown', { clientX: 700, clientY: 400, button: 0, bubbles: true }));
+      overlay().dispatchEvent(new MouseEvent('pointerup', { clientX: 700, clientY: 400, button: 0, bubbles: true }));
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(uredjivac()).toBeNull();
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(okvir());
+      expect(el().querySelector('app-platno-prikaz [data-sloj="tekst"]')).not.toBeNull();
+    });
+
+    it('Esc u tekstu završava uređivanje i vraća fokus na okvir platna', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      taster(uredjivac()!, 'Escape');
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(uredjivac()).toBeNull();
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('tokom uređivanja: tab Slojevi je onemogućen, Svojstva ima "Završi uređivanje (Esc)" i napomenu', async () => {
+      store.postaviTab('SLOJEVI');
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      expect(store.tab()).toBe('SVOJSTVA');
+      expect(tab('Slojevi').getAttribute('aria-disabled')).toBe('true');
+      expect(el().querySelector('app-panel-svojstva')!.textContent).toContain('Završi uređivanje teksta (Esc).');
+      const zavrsi = Array.from(el().querySelectorAll<HTMLButtonElement>('app-panel-svojstva button'))
+        .find((b) => b.textContent!.includes('Završi uređivanje (Esc)'))!;
+      zavrsi.click();
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(tab('Slojevi').getAttribute('aria-disabled')).not.toBe('true');
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('uništavanje editora usred uređivanja: tekst ide u izlaz pre odjave', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      vi.spyOn(store.aktivniUredjivac()!, 'presek').mockReturnValueOnce({ pasusi: [pasusIz('Kraj')], mapa: [0, null] });
+      lazni.izmeniPlatno.mockClear();
+      fixture.destroy();
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      expect(lazni.izmeniPlatno.mock.invocationCallOrder[0]).toBeLessThan(odjava.mock.invocationCallOrder[0]);
     });
   });
 });

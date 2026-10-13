@@ -203,3 +203,33 @@ describe('pm-sema', () => {
     expect(div.querySelector('span')?.getAttribute('style')).toContain('font-size: calc(var(--u) * 9)');
   });
 });
+
+describe('dokUPasuse: tekst bez marka `stil` ne nestaje (Note F12 a)', () => {
+  const sema = napraviSemu();
+  const pasusCvor = (attrs: Partial<AtributiPasusa>, ...deca: Parameters<typeof sema.text>[0][]) =>
+    sema.nodes['pasus'].create(attrs, deca.map((t) => sema.text(t)));
+
+  it('stil prethodnog dela u dokumentu', () => {
+    const prvi = pasusiUDok([delovi(deo('a', { font: 'Tinos', velicina: 32 }))], sema).child(0);
+    const dok = sema.nodes['doc'].create(null, [prvi, pasusCvor({}, 'b')]);
+    expect(dokUPasuse(dok)[1].delovi).toEqual([deo('b', { font: 'Tinos', velicina: 32 })]);
+  });
+
+  it('bez prethodnog dela: prazanDeo pasusa', () => {
+    const dok = sema.nodes['doc'].create(null, [pasusCvor({ prazanDeo: atributiDela(deo('', { font: 'Arimo' })) }, 'x')]);
+    expect(dokUPasuse(dok)[0].delovi).toEqual([deo('x', { font: 'Arimo' })]);
+  });
+
+  it('bez ičega: podrazumevani stil (parametar, inače Carlito 18 crno)', () => {
+    const dok = sema.nodes['doc'].create(null, [pasusCvor({}, 'x')]);
+    expect(dokUPasuse(dok)[0].delovi).toEqual([deo('x')]);
+    const podrazumevano = atributiDela(deo('', { velicina: 24, font: 'Caladea' }));
+    expect(dokUPasuse(dok, podrazumevano)[0].delovi).toEqual([deo('x', { velicina: 24, font: 'Caladea' })]);
+  });
+
+  it('podrazumevani objekti atributa šeme su zamrznuti (deljeni među čvorovima)', () => {
+    const a = sema.nodes['pasus'].create().attrs as AtributiPasusa;
+    expect(Object.isFrozen(a.uvlacenje)).toBe(true);
+    expect(Object.isFrozen(a.tabulatori)).toBe(true);
+  });
+});

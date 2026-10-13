@@ -17,6 +17,15 @@ export function uCss(stil: Stil): string {
 }
 
 /**
+ * Podrazumevani objekti atributa pasusa (`uvlacenje`, `tabulatori`) su DELJENI među svim čvorovima bez tih atributa
+ * (ProseMirror ih ne kopira), pa su zamrznuti: atributi se nikad ne menjaju na mestu (`node.attrs.x.y = ...`), nego samo
+ * kroz `setNodeMarkup` sa novim objektom (pm-komande). Izmena na mestu bi promenila sve takve pasuse, a istorija je ne
+ * bi videla.
+ */
+const PODRAZUMEVANO_UVLACENJE = Object.freeze({ levo: 0, prviRed: 0 });
+const PODRAZUMEVANI_TABULATORI = Object.freeze([]);
+
+/**
  * Šema uređivača teksta (odluka 17): ravan niz pasusa (atributi pasusa iz modela + `prazanDeo` + `kljuc`), `prelom` =
  * `\n` unutar pasusa (PowerPointov `a:br`), jedan mark `stil` sa svih 8 atributa dela; tab ostaje znak `\t` u tekstu.
  * Stil pasusa (poravnanje, razmaci, oznaka liste) crta dekoracija (F12), jer zavisi od susednih pasusa; stil dela crta
@@ -32,11 +41,11 @@ export function napraviSemu(skala = 1): Schema {
           poravnanje: { default: 'LEVO' },
           nivo: { default: 0 },
           lista: { default: null },
-          uvlacenje: { default: { levo: 0, prviRed: 0 } },
+          uvlacenje: { default: PODRAZUMEVANO_UVLACENJE },
           razmakPre: { default: 0 },
           razmakPosle: { default: 0 },
           proredProcenat: { default: 100 },
-          tabulatori: { default: [] },
+          tabulatori: { default: PODRAZUMEVANI_TABULATORI },
           prazanDeo: { default: null },
           kljuc: { default: null },
         },

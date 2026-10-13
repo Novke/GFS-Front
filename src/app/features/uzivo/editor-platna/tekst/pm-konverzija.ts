@@ -49,14 +49,26 @@ export function pasusiUDok(pasusi: readonly Pasus[], sema: Schema): PmCvor {
   return sema.nodes['doc'].create(null, cvorovi.length ? cvorovi : [sema.nodes['pasus'].create()]);
 }
 
-export function dokUPasuse(dok: PmCvor): Pasus[] {
+/** Stil teksta bez marka kad ni dokument ni pasus nemaju svoj (Carlito 18, crno; kao `pasus('')` fiksture i uvoz). */
+export const PODRAZUMEVANI_STIL: AtributiDela = Object.freeze({
+  font: 'Carlito', velicina: 18, boja: '#000000', podebljano: false, kurziv: false, podvuceno: false, precrtano: false,
+  polozaj: 'OBICAN',
+});
+
+/**
+ * Pasusi modela iz dokumenta. Tekst i prelom bez marka `stil` (dodatak stila ga inače dodaje odmah) NE nestaju: uzimaju
+ * stil prethodnog dela u dokumentu, pa `prazanDeo` pasusa, pa `podrazumevano`.
+ */
+export function dokUPasuse(dok: PmCvor, podrazumevano: AtributiDela = PODRAZUMEVANI_STIL): Pasus[] {
   const pasusi: Pasus[] = [];
+  let prethodni: AtributiDela | null = null;
   dok.forEach((cvor) => {
     const a = cvor.attrs as AtributiPasusa;
     const delovi: Deo[] = [];
     cvor.forEach((dete) => {
-      const stil = dete.marks.find((m) => m.type.name === 'stil')?.attrs as AtributiDela | undefined;
-      if (!stil) return; // dodatak stila (F12) garantuje mark; bez njega deo ne bi imao font ni veličinu
+      const stil = (dete.marks.find((m) => m.type.name === 'stil')?.attrs as AtributiDela | undefined)
+        ?? prethodni ?? a.prazanDeo ?? podrazumevano;
+      prethodni = stil;
       const tekst = dete.isText ? (dete.text ?? '') : '\n';
       const poslednji = delovi[delovi.length - 1];
       if (poslednji && istiStil(atributiDela(poslednji), stil)) poslednji.tekst += tekst;

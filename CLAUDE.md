@@ -215,7 +215,8 @@ over STOMP; teacher commands are REST.
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
   the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 785 000 B; the editor page
   file (contains `uz-ed-zaglavlje`) <= 215 000 B; the editor's own closure (its closure minus initial and page closure)
-  <= 160 000 B. Public routes load none of it (`e2e/javna-mreza.ts` also checks every JS body for those strings).
+  <= 450 000 B and <= 140 000 B gzip since 4b (it carries ProseMirror, the text editor of F12; 4a alone was
+  <= 160 000 B). Public routes load none of it (`e2e/javna-mreza.ts` also checks every JS body for those strings).
   `PlatnoEditorStore` (per editor instance) holds the document, selection, hidden-in-editor layers, the active panel and
   the undo history (`Istorija`, 100 steps, same-key edits within 1 s merge; the history dies with the instance, so it is
   per slide and survives a draft getting its real id). A mouse gesture changes the document at most once per frame

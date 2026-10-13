@@ -2,6 +2,8 @@
 // `@defer` bloku PLATNO slajda, jedna instanca po slajdu (`@for ... track kljuc`), pa istorija pripada slajdu i nestaje
 // pri promeni slajda, a ne nestaje kad nacrt dobije pravi id (odluka 8). Svaku zabeleženu izmenu sam predaje
 // `EditorStore.izmeniPlatno` (izlaz store-a), a otvorenu sesiju (gest F5, tekst F12) registruje za pražnjenje pre čuvanja.
+// Tekst se uređuje u sloju za uređivanje (`.uz-pl-platno.uz-ep-uredjivanje`) UNUTAR okvira platna, iznad prikaza i
+// overlay-a: isti stil kao prikaz (`stilSloja`, uređivač sa `stilOkvira`), a Ctrl+S okvira važi i dok se kuca.
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input,
   viewChild,
@@ -10,9 +12,10 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import { TIPOVI_SLIKA } from '../data-access/provera-slike';
-import type { Tema } from '../data-access/platno.models';
+import type { Tema, TekstSloj } from '../data-access/platno.models';
 import type { SlajdDetails } from '../data-access/uzivo.models';
-import { PlatnoPrikazComponent } from '../ui/platno-prikaz.component';
+import { METRIKA } from '../ui/platno-metrika';
+import { PlatnoPrikazComponent, stilSloja } from '../ui/platno-prikaz.component';
 import { FokusPlatna } from './fokus-platna';
 import { nazivSloja } from './komande';
 import { OtpremanjeSlike } from './otpremanje-slike';
@@ -24,6 +27,7 @@ import { PlatnoOverlayComponent } from './platno-overlay.component';
 import { jePonistavanje, komandaTastature, jeSnimanje, uPoljuZaUnos, zatvorenIzbornik } from './tastatura-platna';
 import { SIRINA_PLATNA } from './geometrija';
 import { PORUKA_PREVLACENJE, SlikeEditora } from './slike-editora';
+import { ID_POMOCI_TEKSTA, TekstUredjivacComponent } from './tekst/tekst-uredjivac.component';
 import { TrakaAlataComponent } from './traka-alata.component';
 
 /** Tabovi panela redom (indeks `mat-tab-group`-a); "Animacije" dolazi u F17. */
@@ -36,7 +40,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
   providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike, SlikeEditora],
   imports: [
     MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
-    TrakaAlataComponent,
+    TekstUredjivacComponent, TrakaAlataComponent,
   ],
   // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y slušaju se na korenu editora (i iz panela i trake); ostale prečice samo na okviru
   host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep', '(keydown)': 'tastaturaKorena($event)' },
@@ -51,18 +55,27 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
           <div class="uz-platno rezim-dan uz-dan">
             <app-platno-prikaz [platno]="store.zaPrikaz()" />
             <app-platno-overlay />
+            <!-- nova sesija = nov uređivač (track po objektu sesije); presek teksta ne pravi nov -->
+            @for (u of sesija(); track u.uredjivanje) {
+              <div class="uz-pl-platno uz-ep-uredjivanje" [style.font-kerning]="kerning" [style.font-variant-ligatures]="ligature">
+                <div class="uz-pl-sloj" [style]="u.stil"><app-tekst-uredjivac [sloj]="u.sloj" [tema]="tema()" /></div>
+              </div>
+            }
           </div>
         </div>
         <p id="uz-ep-precice" class="cdk-visually-hidden">
           Strelice pomeraju izabrano (Shift: 10), Delete briše, Ctrl+Z poništava, Ctrl+Y ponavlja, Ctrl+D duplira,
-          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor. Ctrl+Z i Ctrl+Y rade i iz panela.
+          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor, Enter uređuje tekst. Ctrl+Z i Ctrl+Y rade i iz panela.
+        </p>
+        <p [id]="idPomoci" class="cdk-visually-hidden">
+          Esc završava uređivanje teksta. Enter pravi nov pasus, Shift+Enter nov red, Tab na početku stavke liste menja nivo.
         </p>
         <p class="cdk-visually-hidden" aria-live="polite">{{ najava() }}</p>
       </div>
       <mat-tab-group class="uz-ep-paneli" mat-stretch-tabs="false" [selectedIndex]="indeksTaba()"
                      (selectedIndexChange)="promenaTaba($event)">
         <mat-tab label="Svojstva"><app-panel-svojstva [tema]="tema()" /></mat-tab>
-        <mat-tab label="Slojevi"><app-panel-slojevi /></mat-tab>
+        <mat-tab label="Slojevi" [disabled]="!!store.uredjivanje()"><app-panel-slojevi /></mat-tab>
       </mat-tab-group>
     </div>
   `,
@@ -109,6 +122,17 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   private odjava: (() => void) | null = null;
 
   protected readonly indeksTaba = computed(() => Math.max(0, TABOVI.indexOf(this.store.tab())));
+  protected readonly idPomoci = ID_POMOCI_TEKSTA;
+  /** Kao prikaz (`platno-prikaz`): `'normal'` = ponašanje pregledača, svojstvo se ne postavlja. */
+  protected readonly kerning = METRIKA.kerning === 'none' ? 'none' : null;
+  protected readonly ligature = METRIKA.ligature === 'none' ? 'none' : null;
+  /** Sesija teksta TEKST sloja (0 ili 1 stavka): sloj, njegov stil (isti kao u prikazu) i objekat sesije za `track`. */
+  protected readonly sesija = computed(() => {
+    const u = this.store.uredjivanje();
+    if (!u || u.celija) return [];
+    const sloj = this.store.platno().slojevi.find((s): s is TekstSloj => s.id === u.slojId && s.tip === 'TEKST');
+    return sloj ? [{ uredjivanje: u, sloj, stil: stilSloja(sloj) }] : [];
+  });
   protected readonly najava = computed(() => {
     const izabrani = this.store.izabraniSlojevi();
     if (!izabrani.length) return 'Ništa nije izabrano';
@@ -218,7 +242,12 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
       case 'IZABERI_SVE': this.store.izaberiSve(); break;
       case 'Z': this.store.zOsaIzabranih(k.smer); break;
       case 'POMERI': this.store.pomeriIzabrane(k.dx, k.dy); break;
-      case 'UREDI': break; // F12 (tekst), F14 (ćelija), F16 (formula); u 4a nema šta da se uređuje
+      case 'UREDI': {
+        // tekst (F12); ćelija (F14) i formula (F16) dodaju svoje
+        const s = this.store.jedan();
+        if (s?.tip === 'TEKST') this.store.pocniUredjivanje(s.id);
+        break;
+      }
     }
   }
 }

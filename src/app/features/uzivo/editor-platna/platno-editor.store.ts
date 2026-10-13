@@ -2,8 +2,10 @@
 // `EditorStore.izmeniPlatno`. Pruža ga komponenta editora (jedna instanca po slajdu), nije root. Pravila editora koja
 // komande (F3) ne proveravaju su ovde: zaključan sloj (odluka 14) i granice broja slojeva, animacija i znakova (odluka 10),
 // sa porukom kroz `NotificationStore`. Gest mišem (F5) menja dokument bez istorije dok traje i beleži se kao jedan korak
-// na kraju. F12 (tekst), F14 (ćelije), F17 (animacije) i F18 (pregled) dodaju svoje metode u isti store.
-import { computed, inject } from '@angular/core';
+// na kraju. Sesija teksta (F12) je takođe jedan korak: aktivni uređivač (`KomandeTeksta`) predaje presek teksta pri
+// izlasku, pre svake druge izmene (`primeni`) i pri pražnjenju. F14 (ćelije), F17 (animacije) i F18 (pregled) dodaju svoje
+// metode u isti store.
+import { computed, inject, signal } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { NotificationStore } from '../../../core/state/notification.store';
 import type { Platno, Sloj } from '../data-access/platno.models';
@@ -13,6 +15,8 @@ import {
   premestiSloj as premestiSlojKomanda, zOsa,
 } from './komande';
 import { Istorija, SAT_ISTORIJE } from './istorija';
+import { preslikajAnimacije } from './tekst/kljucevi-pasusa';
+import type { KomandeTeksta, RezultatTeksta } from './tekst/tekst-uredjivac.component';
 
 export type TabPanela = 'SVOJSTVA' | 'SLOJEVI' | 'ANIMACIJE';
 export type RezimEditora = 'UREDJIVANJE' | 'PREGLED';
@@ -69,11 +73,25 @@ export const PlatnoEditorStore = signalStore(
      */
     _izlaz: { f: null as ((p: Platno) => void) | null, predato: POCETNO_PLATNO },
     _istorija: new Istorija(inject(SAT_ISTORIJE)),
+    /** Aktivni uređivač teksta (F12); van stanja jer nosi funkcije i signal (stanje store-a se zamrzava). */
+    _uredjivac: signal<KomandeTeksta | null>(null),
+  })),
+  withProps(({ _uredjivac }) => ({
+    /** Aktivni uređivač teksta: panel teksta (F13) čita `aktivniUredjivac()?.stanje()` i zove njegove komande. */
+    aktivniUredjivac: _uredjivac.asReadonly(),
   })),
   withMethods((store) => {
     const obavestenja = inject(NotificationStore);
     const zastavice = () => patchState(store, { mozeNazad: store._istorija.mozeNazad, mozeNapred: store._istorija.mozeNapred });
-    /** Nov dokument; izbor i skriveni bez slojeva kojih više nema (nov sloj sa istim id-jem ne nasleđuje skrivenost). */
+    /** Kraj sesije teksta bez preseka (sloj više ne postoji, nov dokument). */
+    const zatvoriSesiju = () => {
+      patchState(store, { uredjivanje: null });
+      store._uredjivac.set(null);
+    };
+    /**
+     * Nov dokument; izbor i skriveni bez slojeva kojih više nema (nov sloj sa istim id-jem ne nasleđuje skrivenost); sesija
+     * teksta sloja koga više nema se zatvara.
+     */
     const postavi = (p: Platno) => {
       const postoje = new Set(p.slojevi.map((s) => s.id));
       patchState(store, {
@@ -81,6 +99,8 @@ export const PlatnoEditorStore = signalStore(
         izbor: store.izbor().filter((id) => postoje.has(id)),
         skriveni: store.skriveni().filter((id) => postoje.has(id)),
       });
+      const u = store.uredjivanje();
+      if (u && !postoje.has(u.slojId)) zatvoriSesiju();
     };
     /** Sinhrona predaja izlazu (Ugovor 4); bez postavljenog izlaza dokument ostaje nepredat, pa ga `isprazni` preda. */
     const predaj = (p: Platno) => {
@@ -95,7 +115,7 @@ export const PlatnoEditorStore = signalStore(
     };
 
     /** Primena izmene: odbija preko granica (poruka), beleži stanje PRE izmene, javlja izlazu. */
-    function primeni(f: (p: Platno) => Platno, kljuc?: string): boolean {
+    function primeniBezTeksta(f: (p: Platno) => Platno, kljuc?: string): boolean {
       if (store.gest()) return false;
       const pre = store.platno();
       const posle = f(pre);
@@ -112,9 +132,47 @@ export const PlatnoEditorStore = signalStore(
       return true;
     }
 
-    /** Snimak iz istorije (poništi/ponovi); ne radi dok traje gest. */
+    /**
+     * Tekst sesije u dokument (F12): presek aktivnog uređivača je jedan korak istorije i jedna predaja izlazu (zamena
+     * pasusa sloja i animacije pasusa po ključevima); bez izmena ništa. Sesija se nastavlja.
+     */
+    function zabeleziTekst(): void {
+      const u = store.uredjivanje();
+      const uredjivac = store._uredjivac();
+      if (!u || u.celija || !uredjivac) return; // ćelije tabele: F14
+      const r: RezultatTeksta | null = uredjivac.presek();
+      if (!r) return;
+      let uklonjeno = 0;
+      const ok = primeniBezTeksta((p) => {
+        const sa = izmeniSlojeve(p, new Set([u.slojId]), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: r.pasusi } : s));
+        if (sa === p) return p;
+        const a = preslikajAnimacije(sa, u.slojId, r.mapa);
+        uklonjeno = a.uklonjeno;
+        return a.platno;
+      });
+      if (ok && uklonjeno > 0) obavestenja.info(`Uklonjene animacije pasusa koji više ne postoje: ${uklonjeno}.`);
+    }
+
+    /** Kraj sesije teksta: presek je jedan korak (prazan rezultat: bez koraka), pa `uredjivanje` null. */
+    function zavrsiUredjivanje(): void {
+      if (!store.uredjivanje()) return;
+      zabeleziTekst();
+      zatvoriSesiju();
+    }
+
+    /** Svaka izmena tokom sesije teksta prvo beleži tekst (redosled istorije: tekst, pa ta izmena). */
+    function primeni(f: (p: Platno) => Platno, kljuc?: string): boolean {
+      zabeleziTekst();
+      return primeniBezTeksta(f, kljuc);
+    }
+
+    /**
+     * Snimak iz istorije (poništi/ponovi); ne radi dok traje gest. Otvorena sesija teksta se prvo završava (tekst je
+     * korak), pa poništi vraća upravo njega; unutar teksta Ctrl+Z je istorija uređivača (ProseMirror).
+     */
     function vrati(snimak: (sada: Platno) => Platno | null): void {
       if (store.gest()) return;
+      zavrsiUredjivanje();
       const p = snimak(store.platno());
       if (!p) return;
       postavi(p);
@@ -154,8 +212,9 @@ export const PlatnoEditorStore = signalStore(
     }
 
     function isprazni(): void {
-      // gest u toku se završava i čuva (pražnjenje pre čuvanja, Ugovor 5); F12 ispred njega dodaje `zabeleziTekst()`.
-      // Predaja posle toga hvata i izmenu koja nije predata jer izlaz još nije bio postavljen (idempotentno).
+      // otvoren tekst (sesija ostaje otvorena) i gest u toku idu u dokument (pražnjenje pre čuvanja, Ugovor 5). Predaja
+      // posle toga hvata i izmenu koja nije predata jer izlaz još nije bio postavljen (idempotentno).
+      zabeleziTekst();
       zavrsiGest();
       predaj(store.platno());
     }
@@ -166,6 +225,7 @@ export const PlatnoEditorStore = signalStore(
         store._istorija.resetuj();
         store._izlaz.predato = p;
         patchState(store, { platno: p, izbor: [], mozeNazad: false, mozeNapred: false, gest: null });
+        zatvoriSesiju();
       },
       postaviIzlaz(f: (p: Platno) => void): void {
         store._izlaz.f = f;
@@ -280,6 +340,31 @@ export const PlatnoEditorStore = signalStore(
       zakljucanUIzboru(): boolean {
         return imaZakljucan();
       },
+      /**
+       * Uređivanje teksta sloja (F12; ćelija tabele: F14): dvoklik, Enter/F2, dugme "Tekst". Zaključan sloj -> poruka i
+       * false; ne-TEKST (bez ćelije), nepostojeći sloj ili gest u toku -> false. Prethodna sesija se završava; sloj postaje
+       * jedini izabran, a panel prelazi na Svojstva (Slojevi i Animacije su zaključani dok traje uređivanje).
+       */
+      pocniUredjivanje(slojId: string, celija?: { r: number; k: number }): boolean {
+        if (store.gest() || store.rezim() !== 'UREDJIVANJE') return false;
+        const s = store.platno().slojevi.find((x) => x.id === slojId);
+        if (!s || (celija ? s.tip !== 'TABELA' : s.tip !== 'TEKST')) return false;
+        if (s.zakljucan) {
+          obavestenja.greska('Sloj je zaključan.');
+          return false;
+        }
+        const u = store.uredjivanje();
+        if (u && u.slojId === slojId && u.celija?.r === celija?.r && u.celija?.k === celija?.k) return true;
+        zavrsiUredjivanje();
+        patchState(store, { uredjivanje: { slojId, celija: celija ? { ...celija } : null }, izbor: [slojId], tab: 'SVOJSTVA' });
+        return true;
+      },
+      /** Aktivni uređivač (komponenta ga registruje pri pravljenju); store ga sam briše na kraju sesije. */
+      registrujUredjivac(k: KomandeTeksta | null): void {
+        store._uredjivac.set(k);
+      },
+      zabeleziTekst,
+      zavrsiUredjivanje,
       /** Da li je nešto otvoreno (gest F5, sesija teksta F12): `EditorStore.imaNesacuvano` ga uključuje. */
       imaOtvoreno(): boolean {
         return store.gest() !== null || store.uredjivanje() !== null;
@@ -291,6 +376,7 @@ export const PlatnoEditorStore = signalStore(
     // instanca nestaje (promena slajda): otvoreno se upisuje i predaje pre nestanka (Ugovor 4); idempotentno, pa ne smeta
     // ako je komponenta već ispraznila u svom ngOnDestroy
     onDestroy(store) {
+      store.zavrsiUredjivanje();
       store.isprazni();
       // posle završnog pražnjenja izlaz se gasi: kasniji (async) put ne sme da upiše u slajd koji se više ne uređuje
       store._izlaz.f = null;

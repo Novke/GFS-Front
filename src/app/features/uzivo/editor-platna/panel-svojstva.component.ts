@@ -1,9 +1,12 @@
 // Panel "Svojstva" editora platna (F6): bez izbora svojstva slajda; za izbor zajednička polja (položaj, veličina,
 // providnost, senka) i, za tačno jedan sloj, polja njegove vrste (OBLIK i okvir TEKSTA, SLIKA). CRTEZ, TABELA i FORMULA
 // u 4a imaju samo zajednička polja (F13, F14, F16 dodaju svoja). Panel je van okvira platna, pa prečice platna u njegovim
-// poljima ne rade (odluka 24).
+// poljima ne rade (odluka 24). Tokom uređivanja teksta (F12) panel pokazuje samo svojstva teksta (F13) i dugme
+// "Završi uređivanje (Esc)"; tabovi Slojevi i Animacije su tada onemogućeni (napomena ovde).
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import type { Tema } from '../data-access/platno.models';
+import { FokusPlatna } from './fokus-platna';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { SvojstvaOblikaComponent } from './svojstva-oblika.component';
 import { SvojstvaSlajdaComponent } from './svojstva-slajda.component';
@@ -13,9 +16,12 @@ import { SvojstvaSlojaComponent } from './svojstva-sloja.component';
 @Component({
   selector: 'app-panel-svojstva',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent],
+  imports: [MatButtonModule, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent],
   template: `
-    @if (store.izbor().length === 0) {
+    @if (store.uredjivanje()) {
+      <p class="uz-ep-napomena">Uređuje se tekst. Slojevi i animacije: Završi uređivanje teksta (Esc).</p>
+      <button mat-stroked-button type="button" (click)="zavrsi()">Završi uređivanje (Esc)</button>
+    } @else if (store.izbor().length === 0) {
       <app-svojstva-slajda [tema]="tema()" />
     } @else {
       <app-svojstva-sloja [tema]="tema()" />
@@ -28,9 +34,20 @@ import { SvojstvaSlojaComponent } from './svojstva-sloja.component';
       }
     }
   `,
-  styles: `:host { display: grid; gap: 8px; padding: 8px 4px 12px; }`,
+  styles: `
+    :host { display: grid; gap: 8px; padding: 8px 4px 12px; }
+    .uz-ep-napomena { margin: 0; font-size: 13px; color: var(--ink-2); }
+    :host > button { justify-self: start; }
+  `,
 })
 export class PanelSvojstvaComponent {
   readonly tema = input.required<Tema>();
   protected readonly store = inject(PlatnoEditorStore);
+  private readonly fokusPlatna = inject(FokusPlatna, { optional: true });
+
+  /** Kraj uređivanja teksta iz panela: tekst u dokument, fokus na okvir platna (kao Esc). */
+  protected zavrsi(): void {
+    this.store.zavrsiUredjivanje();
+    this.fokusPlatna?.fokus();
+  }
 }

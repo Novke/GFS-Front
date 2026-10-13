@@ -1,10 +1,12 @@
-import { EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+import { EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import type { OblikSloj, Platno, Sloj } from '../data-access/platno.models';
-import { animacija, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
-import { noviOblik } from '../data-access/platno-novo';
-import { medjuspremnik, pomeriSlojeve } from './komande';
+import { animacija, pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { noviOblik, noviTekst } from '../data-access/platno-novo';
+import type { KomandeTeksta, RezultatTeksta } from './tekst/tekst-uredjivac.component';
+import type { StanjeSelekcije } from './tekst/stil-teksta';
+import { izmeniSlojeve, medjuspremnik, pomeriSlojeve } from './komande';
 import { SAT_ISTORIJE } from './istorija';
 import { PlatnoEditorStore } from './platno-editor.store';
 
@@ -487,6 +489,174 @@ describe('PlatnoEditorStore', () => {
       TestBed.resetTestingModule();
       expect(izlaz).toHaveBeenCalledTimes(1);
       expect(izlaz.mock.calls[0][0].slojevi[0].x).toBe(155);
+    });
+  });
+
+  describe('uređivanje teksta (F12)', () => {
+    const PRAZNO: StanjeSelekcije = {
+      font: null, velicina: null, boja: null, podebljano: null, kurziv: null, podvuceno: null, precrtano: null, polozaj: null,
+      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null,
+    };
+    /** Tekst sa pasusima "A", "B" i animacijom pasusa 1 (a1) i celog sloja (a2). */
+    const tekst = (id = 't1') => ({ ...noviTekst(id, 'NACRT', { x: 0, y: 0, sirina: 200, visina: 100 }), pasusi: [pasus('A'), pasus('B')] });
+    const sa = () => dok([tekst(), oblik('s1')], [animacija('a1', 't1', { pasus: 1 }), animacija('a2', 't1')]);
+    /** Lažni uređivač: svaki presek vraća sledeći rezultat iz reda (pa null). */
+    function lazni(...red: (RezultatTeksta | null)[]): KomandeTeksta & { presek: ReturnType<typeof vi.fn> } {
+      return {
+        presek: vi.fn(() => red.shift() ?? null), postaviStil: vi.fn(), prebaciStil: vi.fn(), postaviPasus: vi.fn(),
+        prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
+      };
+    }
+    const rezultat = (tekstovi: string[], mapa: (number | null)[]): RezultatTeksta => ({ pasusi: tekstovi.map((t) => pasus(t)), mapa });
+    const tekstoviSloja = (p: Platno, id = 't1') =>
+      (p.slojevi.find((s) => s.id === id) as { pasusi: { delovi: { tekst: string }[] }[] }).pasusi.map((x) => x.delovi[0].tekst);
+
+    it('pocniUredjivanje nad zaključanim -> false + poruka; nad OBLIK (ne-TEKST) -> false bez poruke', () => {
+      pocni(dok([{ ...tekst(), zakljucan: true }, oblik('s1')]));
+      expect(store.pocniUredjivanje('t1')).toBe(false);
+      expect(obavestenja.greska).toHaveBeenCalledWith('Sloj je zaključan.');
+      obavestenja.greska.mockClear();
+      expect(store.pocniUredjivanje('s1')).toBe(false);
+      expect(store.pocniUredjivanje('nema')).toBe(false);
+      expect(obavestenja.greska).not.toHaveBeenCalled();
+      expect(store.uredjivanje()).toBeNull();
+    });
+
+    it('pocniUredjivanje: sesija, izbor tog sloja, tab Svojstva; zaPrikaz nema taj sloj; imaOtvoreno true', () => {
+      pocni(sa());
+      store.postaviTab('SLOJEVI');
+      expect(store.pocniUredjivanje('t1')).toBe(true);
+      expect(store.uredjivanje()).toEqual({ slojId: 't1', celija: null });
+      expect(store.izbor()).toEqual(['t1']);
+      expect(store.tab()).toBe('SVOJSTVA');
+      expect(store.zaPrikaz().slojevi.map((s) => s.id)).toEqual(['s1']);
+      expect(store.imaOtvoreno()).toBe(true);
+    });
+
+    it('zavrsiUredjivanje posle unosa: jedan korak istorije, jedan poziv izlaza, uredjivanje null', () => {
+      const p = pocni(sa());
+      store.pocniUredjivanje('t1');
+      const k = lazni(rezultat(['AX', 'B'], [0, 1]));
+      store.registrujUredjivac(k);
+      store.zavrsiUredjivanje();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(tekstoviSloja(izlaz.mock.calls[0][0])).toEqual(['AX', 'B']);
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.aktivniUredjivac()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      store.ponisti();
+      expect(store.platno()).toBe(p);
+      expect(store.mozeNazad()).toBe(false);
+    });
+
+    it('prazan rezultat (bez izmene) -> bez koraka istorije i bez izlaza', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni());
+      store.zavrsiUredjivanje();
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(store.mozeNazad()).toBe(false);
+    });
+
+    it('zabeleziTekst dva puta tokom sesije sa unosom između -> dva koraka; sesija ostaje otvorena', () => {
+      const p = pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['A1', 'B'], [0, 1]), rezultat(['A12', 'B'], [0, 1])));
+      store.zabeleziTekst();
+      t = 100;
+      store.zabeleziTekst();
+      expect(izlaz).toHaveBeenCalledTimes(2);
+      expect(store.uredjivanje()).not.toBeNull();
+      store.zavrsiUredjivanje();
+      store.ponisti();
+      expect(tekstoviSloja(store.platno())).toEqual(['A1', 'B']);
+      store.ponisti();
+      expect(store.platno()).toBe(p);
+    });
+
+    it('rezultat sa mapom [0, null] uklanja animaciju pasusa 1 uz poruku; animacija sloja ostaje', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AB'], [0, null])));
+      store.zavrsiUredjivanje();
+      expect(store.platno().animacije.map((a) => a.id)).toEqual(['a2']);
+      expect(obavestenja.info).toHaveBeenCalledWith('Uklonjene animacije pasusa koji više ne postoje: 1.');
+    });
+
+    it('isprazni() tokom sesije sa unosom: izlaz dobija tekst, sesija ostaje otvorena; ponovljen isprazni ne predaje', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['Zdravo', 'B'], [0, 1])));
+      store.isprazni();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(tekstoviSloja(izlaz.mock.calls[0][0])).toEqual(['Zdravo', 'B']);
+      expect(store.uredjivanje()).not.toBeNull();
+      expect(store.imaOtvoreno()).toBe(true);
+      store.isprazni();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+    });
+
+    it('store se uništava tokom uređivanja (resetTestingModule) -> izlaz dobija dokument sa novim tekstom (Review Focus 1 i 3)', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['Poslednje', 'B'], [0, 1])));
+      TestBed.resetTestingModule();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(tekstoviSloja(izlaz.mock.calls[0][0])).toEqual(['Poslednje', 'B']);
+    });
+
+    it('primeni tokom sesije prvo beleži tekst (redosled istorije: tekst, pa X)', () => {
+      const p = pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AX', 'B'], [0, 1])));
+      store.primeni((d) => izmeniSlojeve(d, new Set(['s1']), (s) => ({ ...s, x: 500 })));
+      expect(izlaz).toHaveBeenCalledTimes(2);
+      expect(tekstoviSloja(izlaz.mock.calls[0][0])).toEqual(['AX', 'B']);
+      expect(izlaz.mock.calls[0][0].slojevi[1].x).toBe(100);
+      expect(izlaz.mock.calls[1][0].slojevi[1].x).toBe(500);
+      store.zavrsiUredjivanje();
+      store.ponisti();
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+      store.ponisti();
+      expect(store.platno()).toBe(p);
+    });
+
+    it('ponisti tokom sesije završava sesiju (tekst je korak) pa poništava taj korak', () => {
+      const p = pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AX', 'B'], [0, 1])));
+      store.ponisti();
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.platno()).toBe(p);
+      store.ponovi();
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+    });
+
+    it('drugi pocniUredjivanje (drugi sloj) završava prvu sesiju', () => {
+      pocni(dok([tekst('t1'), tekst('t2')]));
+      store.pocniUredjivanje('t1');
+      const prvi = lazni(rezultat(['A1', 'B'], [0, 1]));
+      store.registrujUredjivac(prvi);
+      expect(store.pocniUredjivanje('t2')).toBe(true);
+      expect(prvi.presek).toHaveBeenCalled();
+      expect(tekstoviSloja(store.platno(), 't1')).toEqual(['A1', 'B']);
+      expect(store.uredjivanje()?.slojId).toBe('t2');
+      expect(store.aktivniUredjivac()).toBeNull();
+    });
+
+    it('sloj u uređivanju nestane iz dokumenta (inicijalizuj) -> sesija se zatvara', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni());
+      store.inicijalizuj(dok([oblik('s1')]));
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.aktivniUredjivac()).toBeNull();
+    });
+
+    it('pocniUredjivanje usred gesta -> false', () => {
+      pocni(sa());
+      store.pocniGest();
+      expect(store.pocniUredjivanje('t1')).toBe(false);
     });
   });
 

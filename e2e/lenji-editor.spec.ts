@@ -8,12 +8,16 @@ import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, stiloviIndeksa, tekst, zatvorenje,
   zbir, zbirGzip,
 } from './chunkovi';
-import { NIZ_EDITORA, NIZOVI_EDITORA, nizoviEditora } from './nizovi-editora';
+import { NIZ_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, nizoviEditora } from './nizovi-editora';
 
-/** Budžeti odluke 7 (deo 4a): početno <= 785 000 B (rast <= 5 kB), fajl stranice editora, sopstveno zatvorenje editora. */
+/**
+ * Budžeti odluke 7: početno <= 785 000 B (rast <= 5 kB), fajl stranice editora, sopstveno zatvorenje editora. Od 4b (F12:
+ * uređivač teksta uvodi ProseMirror, ~208 kB) editor platna ima budžet 4b: <= 450 000 B i <= 140 000 B gzip.
+ */
 const BUDZET_POCETNO = 785_000;
 const BUDZET_STRANICA = 215_000;
-const BUDZET_EDITOR_4A = 160_000;
+const BUDZET_EDITOR_4B = 450_000;
+const BUDZET_EDITOR_4B_GZIP = 140_000;
 /** Niz koji postoji samo u šablonu stranice editora prezentacije (zaglavlje). */
 const NIZ_STRANICE = 'uz-ed-zaglavlje';
 
@@ -51,7 +55,7 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     expect(nizoviEditora(tekst(stranica))).toEqual([]);
   });
 
-  test('editor platna: samo dinamički uvoz, sopstveno zatvorenje staje u budžet 4a', () => {
+  test('editor platna: samo dinamički uvoz, sopstveno zatvorenje (sa ProseMirror-om) staje u budžet 4b', () => {
     const editor = fajlSa(NIZ_EDITORA, js);
     expect(js.filter(u => statickiUvozi(tekst(u)).includes(editor)), `${editor}: statički uvoz`).toEqual([]);
     expect(js.some(u => dinamickiUvozi(tekst(u)).includes(editor)), `${editor}: nema dinamičkog import()-a`).toBe(true);
@@ -60,9 +64,13 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     const vecUcitano = new Set([...pocetno, ...zatvorenje([stranica])]);
     expect(vecUcitano.has(editor), 'editor nije u početnom zatvorenju ni u zatvorenju stranice').toBe(false);
     const sopstveno = sopstvenoZatvorenje([editor], vecUcitano);
-    zapisi('editor 4a (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
+    zapisi('editor (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
     zapisi('fajl chunk-a editora', zbir([editor]));
-    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_EDITOR_4A);
+    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_EDITOR_4B);
+    expect(zbirGzip(sopstveno)).toBeLessThanOrEqual(BUDZET_EDITOR_4B_GZIP);
+    // ProseMirror je u sopstvenom zatvorenju editora (lenj), a MathLive nije (dolazi tek sa dijalogom formule, F15/F16)
+    expect([...sopstveno].some(f => tekst(f).includes(NIZ_PROSEMIRROR)), 'ProseMirror u zatvorenju editora').toBe(true);
+    expect([...sopstveno].filter(f => tekst(f).includes(NIZ_MATHLIVE))).toEqual([]);
     // svi nizovi editora (i budući, 4b) su van početnog zatvorenja i fajla stranice
     expect(NIZOVI_EDITORA.filter(n => [...pocetno, stranica].some(f => tekst(f).includes(n)))).toEqual([]);
   });
