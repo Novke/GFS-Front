@@ -205,6 +205,11 @@ export function normalizujUgao(u: number): number {
 
 const LINIJSKI: ReadonlySet<string> = new Set(['LINIJA', 'STRELICA', 'DVOSTRUKA_STRELICA']);
 
+/** Linija, strelica i dvostruka strelica: umesto 8 ručki imaju krajeve (odluka 13). */
+export function jeLinija(s: Sloj): s is OblikSloj {
+  return s.tip === 'OBLIK' && LINIJSKI.has(s.oblik);
+}
+
 /** Krajevi linije na platnu (`od`/`do` su relativni u okviru sloja, koji može biti rotiran; null = sredine bočnih ivica). */
 export function krajeviLinije(s: OblikSloj): [Tacka, Tacka] {
   const k = kutijaSloja(s);
@@ -249,7 +254,7 @@ function rastojanjeDoDuzi(t: Tacka, a: Tacka, b: Tacka): number {
 
 /** Linija se pogađa blizu duži (pola debljine plus tolerancija), ostalo unutar rotiranog okvira (plus tolerancija). */
 export function pogadja(s: Sloj, t: Tacka, tolerancija: number): boolean {
-  if (s.tip === 'OBLIK' && LINIJSKI.has(s.oblik)) {
+  if (jeLinija(s)) {
     const [a, b] = krajeviLinije(s);
     return rastojanjeDoDuzi(t, a, b) <= (s.ivica?.debljina ?? 0) / 2 + tolerancija;
   }

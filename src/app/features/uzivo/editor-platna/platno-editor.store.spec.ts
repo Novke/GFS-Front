@@ -1,12 +1,10 @@
 import { EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { patchState } from '@ngrx/signals';
-import { unprotected } from '@ngrx/signals/testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import type { OblikSloj, Platno, Sloj } from '../data-access/platno.models';
 import { animacija, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { noviOblik } from '../data-access/platno-novo';
-import { medjuspremnik } from './komande';
+import { medjuspremnik, pomeriSlojeve } from './komande';
 import { SAT_ISTORIJE } from './istorija';
 import { PlatnoEditorStore } from './platno-editor.store';
 
@@ -361,12 +359,111 @@ describe('PlatnoEditorStore', () => {
     store.izaberi(['s1']);
     store.pomeriIzabrane(1, 0);
     const p1 = store.platno();
-    // F5 dodaje pocniGest; ovde se gest postavlja kroz stanje (ugovor: `gest` = dokument na početku gesta)
-    patchState(unprotected(store), { gest: p1 });
+    store.pocniGest();
+    expect(store.gest()).toBe(p1);
     expect(store.imaOtvoreno()).toBe(true);
     expect(store.primeni((x) => ({ ...x, slojevi: [] }))).toBe(false);
     store.ponisti();
     expect(store.platno()).toBe(p1);
     expect(store.platno()).not.toBe(p);
+  });
+  describe('gest mišem (F5)', () => {
+    const pomeri = (dx: number) => (p: Platno) => pomeriSlojeve(p, new Set(['s1']), dx, 0);
+
+    it('pocniGest, azurirajGest od početka, zavrsiGest: jedan korak, jedna predaja (kraj gesta)', () => {
+      const p = pocni(dok([oblik('s1')]));
+      store.pocniGest();
+      expect(store.gest()).toBe(p);
+      expect(store.imaOtvoreno()).toBe(true);
+      store.azurirajGest(pomeri(10));
+      store.azurirajGest(pomeri(25));
+      expect(store.platno().slojevi[0].x).toBe(125);   // uvek od početka, ne zbirno
+      expect(izlaz).not.toHaveBeenCalled();
+      expect(store.mozeNazad()).toBe(false);
+      store.zavrsiGest();
+      expect(store.gest()).toBeNull();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(izlaz.mock.calls[0][0].slojevi[0].x).toBe(125);
+      expect(store.mozeNazad()).toBe(true);
+      store.ponisti();
+      expect(store.platno()).toBe(p);
+    });
+
+    it('drugi pocniGest usred gesta ne pomera početak', () => {
+      const p = pocni(dok([oblik('s1')]));
+      store.pocniGest();
+      store.azurirajGest(pomeri(10));
+      store.pocniGest();
+      expect(store.gest()).toBe(p);
+    });
+
+    it('primeni tokom gesta -> false (ni korak ni izlaz); ponisti tokom gesta ne ostavlja polovičan dokument', () => {
+      pocni(dok([oblik('s1')]));
+      store.izaberi(['s1']);
+      store.pocniGest();
+      store.azurirajGest(pomeri(40));
+      const tokom = store.platno();
+      expect(store.primeni((x) => ({ ...x, slojevi: [] }))).toBe(false);
+      store.pomeriIzabrane(1, 0);
+      store.ponisti();
+      expect(store.platno()).toBe(tokom);
+      expect(izlaz).not.toHaveBeenCalled();
+      store.zavrsiGest();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(store.platno().slojevi[0].x).toBe(140);
+    });
+
+    it('zavrsiGest bez promene (ili bez gesta) -> nema koraka ni izlaza', () => {
+      pocni(dok([oblik('s1')]));
+      store.zavrsiGest();
+      store.pocniGest();
+      store.azurirajGest((p) => p);
+      store.zavrsiGest();
+      expect(store.gest()).toBeNull();
+      expect(store.mozeNazad()).toBe(false);
+      expect(izlaz).not.toHaveBeenCalled();
+    });
+
+    it('azurirajGest bez gesta ne menja dokument', () => {
+      const p = pocni(dok([oblik('s1')]));
+      store.azurirajGest(pomeri(10));
+      expect(store.platno()).toBe(p);
+    });
+
+    it('prekiniGest vraća početak bez koraka i bez izlaza; izbor ostaje', () => {
+      const p = pocni(dok([oblik('s1')]));
+      store.izaberi(['s1']);
+      store.pocniGest();
+      store.azurirajGest(pomeri(30));
+      store.prekiniGest();
+      expect(store.platno()).toBe(p);
+      expect(store.gest()).toBeNull();
+      expect(store.izbor()).toEqual(['s1']);
+      expect(store.mozeNazad()).toBe(false);
+      expect(izlaz).not.toHaveBeenCalled();
+    });
+
+    it('isprazni usred gesta završava gest i predaje kraj (pražnjenje pre čuvanja); ponovljen ne predaje', () => {
+      pocni(dok([oblik('s1')]));
+      store.pocniGest();
+      store.azurirajGest(pomeri(7));
+      store.isprazni();
+      expect(store.gest()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(izlaz.mock.calls[0][0].slojevi[0].x).toBe(107);
+      expect(store.mozeNazad()).toBe(true);
+      store.isprazni();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+    });
+
+    it('store uništen usred gesta (resetTestingModule) -> izlaz dobija dokument sa krajem gesta (Review Focus 3)', () => {
+      pocni(dok([oblik('s1')]));
+      store.pocniGest();
+      store.azurirajGest(pomeri(55));
+      TestBed.resetTestingModule();
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(izlaz.mock.calls[0][0].slojevi[0].x).toBe(155);
+    });
   });
 });

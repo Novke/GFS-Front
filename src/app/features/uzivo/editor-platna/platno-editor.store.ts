@@ -1,8 +1,8 @@
 // Stanje jedne instance editora platna (Ugovor 4): dokument, izbor, skriveni slojevi, tab, istorija i izlaz ka
 // `EditorStore.izmeniPlatno`. Pruža ga komponenta editora (jedna instanca po slajdu), nije root. Pravila editora koja
 // komande (F3) ne proveravaju su ovde: zaključan sloj (odluka 14) i granice broja slojeva, animacija i znakova (odluka 10),
-// sa porukom kroz `NotificationStore`. F5 (gest), F12 (tekst), F14 (ćelije), F17 (animacije) i F18 (pregled) dodaju
-// svoje metode u isti store.
+// sa porukom kroz `NotificationStore`. Gest mišem (F5) menja dokument bez istorije dok traje i beleži se kao jedan korak
+// na kraju. F12 (tekst), F14 (ćelije), F17 (animacije) i F18 (pregled) dodaju svoje metode u isti store.
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -141,9 +141,22 @@ export const PlatnoEditorStore = signalStore(
       if (ok) patchState(store, { izbor: nove });
     }
 
+    /** Kraj gesta mišem (pointerup, pražnjenje): ceo gest je jedan korak istorije i jedna predaja (odluka 8). */
+    function zavrsiGest(): void {
+      const pocetak = store.gest();
+      if (!pocetak) return;
+      patchState(store, { gest: null });
+      const kraj = store.platno();
+      if (kraj === pocetak) return;
+      store._istorija.zabelezi(pocetak);
+      zastavice();
+      predaj(kraj);
+    }
+
     function isprazni(): void {
-      // F4a nema ni gest ni otvorenu sesiju teksta, pa nema šta da upiše: telo je namerno samo predaja.
-      // F5 ovde dodaje `zavrsiGest()`, F12 ispred njega `zabeleziTekst()`.
+      // gest u toku se završava i čuva (pražnjenje pre čuvanja, Ugovor 5); F12 ispred njega dodaje `zabeleziTekst()`.
+      // Predaja posle toga hvata i izmenu koja nije predata jer izlaz još nije bio postavljen (idempotentno).
+      zavrsiGest();
       predaj(store.platno());
     }
 
@@ -238,6 +251,24 @@ export const PlatnoEditorStore = signalStore(
         if (!ok) return null;
         patchState(store, { izbor: [id] });
         return id;
+      },
+      /** Početak gesta mišem (pomeranje, ručka, rotacija, kraj linije); drugi poziv usred gesta ne pomera početak. */
+      pocniGest(): void {
+        if (!store.gest()) patchState(store, { gest: store.platno() });
+      },
+      /**
+       * Tokom gesta dokument se menja bez istorije i bez izlaza (čuvanje i istorija tek na kraju); `f` uvek dobija
+       * dokument sa POČETKA gesta, pa se pomeraji ne sabiraju. Bez gesta ne radi ništa.
+       */
+      azurirajGest(f: (pocetak: Platno) => Platno): void {
+        const pocetak = store.gest();
+        if (pocetak) patchState(store, { platno: f(pocetak) });
+      },
+      zavrsiGest,
+      /** Esc ili `pointercancel` usred gesta: vraća početak, bez koraka u istoriji i bez izlaza; izbor ostaje. */
+      prekiniGest(): void {
+        const pocetak = store.gest();
+        if (pocetak) patchState(store, { platno: pocetak, gest: null });
       },
       /** Da li je nešto otvoreno (gest F5, sesija teksta F12): `EditorStore.imaNesacuvano` ga uključuje. */
       imaOtvoreno(): boolean {
