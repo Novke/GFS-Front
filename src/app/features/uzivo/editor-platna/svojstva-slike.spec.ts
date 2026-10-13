@@ -8,13 +8,14 @@ import { novaSlika } from '../data-access/platno-novo';
 import { platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo } from '../data-access/uzivo.models';
+import { OtpremanjeSlike } from './otpremanje-slike';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { type LazniSat, dugme, polje, provajderiSvojstava, upisi } from './svojstva.testing';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [PlatnoEditorStore],
+  providers: [PlatnoEditorStore, OtpremanjeSlike],
   imports: [PanelSvojstvaComponent],
   template: `<app-panel-svojstva tema="NACRT" />`,
 })
@@ -83,12 +84,73 @@ describe('SvojstvaSlikeComponent (kroz panel Svojstva)', () => {
     upload.mockReturnValue(odgovor);
     await izaberiFajl(png());
     expect(dugme(el(), 'Zameni sliku')!.disabled).toBe(true);
-    expect(el().querySelector('[role="status"]')!.textContent).toContain('Slika se otprema…');
+    expect(el().querySelector('app-svojstva-slike [role="status"]')!.textContent).toContain('Slika se otprema…');
     odgovor.next(medij('m2'));
     odgovor.complete();
     await fixture.whenStable();
     expect(dugme(el(), 'Zameni sliku')!.disabled).toBe(false);
     expect(sloj().medijId).toBe('m2');
+    // status region stalno postoji (čitači ekrana najavljuju promenu teksta), prazan kad se ne šalje
+    expect(el().querySelector('app-svojstva-slike [role="status"]')!.textContent!.trim()).toBe('');
+  });
+
+  it('promena izbora usred otpremanja: slika se ipak primeni na ciljni sloj', async () => {
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.ponistiIzbor();
+    await fixture.whenStable();
+    expect(el().querySelector('app-svojstva-slike')).toBeNull();
+    odgovor.next(medij('m2'));
+    odgovor.complete();
+    await fixture.whenStable();
+    expect(sloj().medijId).toBe('m2');
+    expect(poruke).toEqual([]);
+  });
+
+  it('izbor drugog (zaključanog) sloja slike ne smeta: rezultat ide u ciljni sloj', async () => {
+    store.inicijalizuj(platnoSaAnimacijama([], [
+      novaSlika('s1', 'stari-uuid', 400, 200), { ...novaSlika('s2', 'drugi', 400, 200), zakljucan: true },
+    ]));
+    store.izaberi(['s1']);
+    await fixture.whenStable();
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.izaberi(['s2']);
+    await fixture.whenStable();
+    odgovor.next(medij('m3'));
+    odgovor.complete();
+    await fixture.whenStable();
+    expect(sloj().medijId).toBe('m3');
+    expect(poruke).toEqual([]);
+  });
+
+  it('ciljni sloj obrisan pre odgovora: poruka, dokument nepromenjen', async () => {
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.obrisiIzabrane();
+    await fixture.whenStable();
+    const pre = store.platno();
+    odgovor.next(medij('m4'));
+    odgovor.complete();
+    await fixture.whenStable();
+    expect(store.platno()).toBe(pre);
+    expect(poruke.map((p) => p.tekst)).toEqual(['Slika nije primenjena: sloj je obrisan.']);
+  });
+
+  it('ciljni sloj zaključan pre odgovora: poruka, slika ostaje', async () => {
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.zakljucaj('s1', true);
+    await fixture.whenStable();
+    odgovor.next(medij('m5'));
+    odgovor.complete();
+    await fixture.whenStable();
+    expect(sloj().medijId).toBe('stari-uuid');
+    expect(poruke.map((p) => p.tekst)).toEqual(['Slika nije primenjena: sloj je zaključan.']);
   });
 
   it('greška otpremanja -> NotificationStore.greska sa razlogom servera, slika ostaje', async () => {
@@ -115,6 +177,7 @@ describe('SvojstvaSlikeComponent (kroz panel Svojstva)', () => {
 describe('SvojstvaSlikeComponent: izlaz posle otpremanja', () => {
   it('predaje dokument sa novom slikom tačno jednom', async () => {
     const sat: LazniSat = { t: 0 };
+    // OtpremanjeSlike je u providers domaćina (kao u PlatnoEditorComponent)
     TestBed.configureTestingModule({
       providers: [...provajderiSvojstava(sat), { provide: PrezentacijeApi, useValue: { upload: () => of(medij('m9')) } }],
     });

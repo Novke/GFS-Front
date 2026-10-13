@@ -10,7 +10,6 @@ import { PlatnoEditorStore } from './platno-editor.store';
 @Component({
   selector: 'app-svojstva-slajda',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [OtpremanjeSlike],
   imports: [IzborBojeComponent, MatButtonModule],
   template: `
     <h3 class="uz-ep-odeljak">Slajd</h3>
@@ -21,10 +20,10 @@ import { PlatnoEditorStore } from './platno-editor.store';
         {{ pozadina().medijId ? 'Zameni sliku pozadine' : 'Dodaj sliku pozadine' }}
       </button>
       @if (pozadina().medijId) {
-        <button mat-button type="button" [disabled]="otpremanje.salje()" (click)="postaviSliku(null)">Ukloni</button>
+        <button mat-button type="button" [disabled]="otpremanje.salje()" (click)="ukloniSliku()">Ukloni</button>
       }
-      @if (otpremanje.salje()) { <span role="status">Slika se otprema…</span> }
-      <input #fajl type="file" hidden [accept]="prihvacene" (change)="otpremanje.izPolja(fajl, postaviSliku)">
+      <span role="status">{{ otpremanje.salje() ? 'Slika se otprema…' : '' }}</span>
+      <input #fajl type="file" hidden [accept]="prihvacene" (change)="otpremanje.postaviPozadinu(fajl)">
     </div>
     <p class="uz-ep-napomena">Slika se crta preko boje i staje u slajd. Izaberi sloj na platnu ili u panelu Slojevi za
       njegova svojstva.</p>
@@ -56,5 +55,7 @@ export class SvojstvaSlajdaComponent {
     if (boja) this.izmeni({ boja }, 'polje-pozadina');
   }
 
-  protected readonly postaviSliku = (medijId: string | null): void => this.izmeni({ medijId });
+  protected ukloniSliku(): void {
+    this.izmeni({ medijId: null });
+  }
 }

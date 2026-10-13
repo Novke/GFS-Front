@@ -1,18 +1,20 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import type { Platno } from '../data-access/platno.models';
-import { platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
+import type { MedijInfo } from '../data-access/uzivo.models';
+import { OtpremanjeSlike } from './otpremanje-slike';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { type LazniSat, dugme, provajderiSvojstava } from './svojstva.testing';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [PlatnoEditorStore],
+  providers: [PlatnoEditorStore, OtpremanjeSlike],
   imports: [PanelSvojstvaComponent],
   template: `<app-panel-svojstva tema="PAPIR" />`,
 })
@@ -89,6 +91,22 @@ describe('SvojstvaSlajdaComponent (kroz panel Svojstva, ništa izabrano)', () =>
     await fixture.whenStable();
     expect(store.platno().pozadina.medijId).toBeNull();
     expect(dugme(el(), 'Ukloni')).toBeNull();
+  });
+
+  it('izbor sloja usred otpremanja pozadine (panel slajda nestaje): pozadina se ipak postavi', async () => {
+    store.inicijalizuj(platno());
+    await fixture.whenStable();
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(new File([new Uint8Array([1])], 'p.png', { type: 'image/png' }));
+    store.izaberi(['oblik']);
+    await fixture.whenStable();
+    expect(el().querySelector('app-svojstva-slajda')).toBeNull();
+    odgovor.next({ id: 'kasna-pozadina', naziv: 'p.png', mime: 'image/png', velicina: 4 });
+    odgovor.complete();
+    await fixture.whenStable();
+    expect(store.platno().pozadina.medijId).toBe('kasna-pozadina');
+    expect(poruke).toEqual([]);
   });
 
   it('greška otpremanja pozadine -> poruka sa razlogom servera', async () => {

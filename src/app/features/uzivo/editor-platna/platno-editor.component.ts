@@ -12,6 +12,7 @@ import type { SlajdDetails } from '../data-access/uzivo.models';
 import { PlatnoPrikazComponent } from '../ui/platno-prikaz.component';
 import { FokusPlatna } from './fokus-platna';
 import { nazivSloja } from './komande';
+import { OtpremanjeSlike } from './otpremanje-slike';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PanelSlojeviComponent } from './panel-slojevi.component';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
@@ -26,7 +27,8 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
 @Component({
   selector: 'app-platno-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [PlatnoEditorStore, FokusPlatna],
+  // OtpremanjeSlike živi koliko editor slajda: promena izbora ili taba ne prekida otpremanje (F6)
+  providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike],
   imports: [
     MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
     TrakaAlataComponent,

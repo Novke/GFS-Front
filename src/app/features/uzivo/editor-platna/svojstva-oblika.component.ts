@@ -55,7 +55,7 @@ type KrajLinije = 'pocetakX' | 'pocetakY' | 'krajX' | 'krajY' | 'duzina' | 'ugao
                             (promena)="postaviKraj('krajX', $event)" />
         <app-brojcano-polje oznaka="Kraj Y" [vrednost]="k.b.y" [min]="minXY" [max]="maxXY" [onemoguceno]="z"
                             (promena)="postaviKraj('krajY', $event)" />
-        <app-brojcano-polje oznaka="Dužina" [vrednost]="k.duzina" [min]="0" [max]="maxDuzina" [onemoguceno]="z"
+        <app-brojcano-polje oznaka="Dužina" [vrednost]="k.duzina" [min]="1" [max]="maxDuzina" [onemoguceno]="z"
                             (promena)="postaviKraj('duzina', $event)" />
         <app-brojcano-polje oznaka="Ugao" jedinica="°" [vrednost]="k.ugao" [min]="-360" [max]="360" [onemoguceno]="z"
                             (promena)="postaviKraj('ugao', $event)" />

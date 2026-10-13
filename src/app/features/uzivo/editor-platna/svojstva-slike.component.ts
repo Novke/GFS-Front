@@ -16,14 +16,13 @@ export const PORUKA_ISECKA = 'Isečak slike nije ispravan.';
 @Component({
   selector: 'app-svojstva-slike',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [OtpremanjeSlike],
   imports: [BrojcanoPoljeComponent, MatButtonModule],
   template: `
     @let z = sloj().zakljucan;
     <h3 class="uz-ep-odeljak">Slika</h3>
     <div class="uz-ep-red">
       <button mat-stroked-button type="button" [disabled]="z || otpremanje.salje()" (click)="fajl.click()">Zameni sliku</button>
-      @if (otpremanje.salje()) { <span role="status">Slika se otprema…</span> }
+      <span role="status">{{ otpremanje.salje() ? 'Slika se otprema…' : '' }}</span>
       <input #fajl type="file" hidden [accept]="prihvacene" (change)="izabrano(fajl)">
     </div>
     <h3 class="uz-ep-odeljak">Isečak</h3>
@@ -65,8 +64,7 @@ export class SvojstvaSlikeComponent {
   }
 
   protected izabrano(polje: HTMLInputElement): void {
-    const id = this.sloj().id;
-    this.otpremanje.izPolja(polje, (medijId) => this.izmeni(id, (s) => (s.medijId === medijId ? s : { ...s, medijId })));
+    this.otpremanje.zameniSliku(polje, this.sloj().id);
   }
 
   protected postaviIsecak(strana: Strana, procenat: number): void {

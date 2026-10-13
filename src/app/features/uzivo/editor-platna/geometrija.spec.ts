@@ -327,6 +327,14 @@ describe('geometrija: krajevi linije', () => {
     sveDveDecimale([n.x, n.y, n.sirina, n.visina, n.od, n.do]);
   });
 
+  it('isti krajevi (i kraj stegnut na granicu) vraćaju ISTI objekat: bez fantomskog koraka i PUT-a (odluka 8)', () => {
+    const n = linijaIzKrajeva(linija(), { x: 100, y: 112 }, { x: 340, y: 212 });
+    expect(linijaIzKrajeva(n, { x: 100, y: 112 }, { x: 340, y: 212 })).toBe(n);
+    const stegnut = linijaIzKrajeva(n, { x: 100, y: 112 }, { x: 1920, y: 212 });
+    expect(stegnut).not.toBe(n);
+    expect(linijaIzKrajeva(stegnut, { x: 100, y: 112 }, { x: 1950, y: 212 })).toBe(stegnut);
+  });
+
   it('podrazumevani krajevi (od/do null) su sredina leve i desne ivice', () => {
     const [a, b] = krajeviLinije(linija({ od: null, do: null }));
     kaoTacka(a, 100, 112);

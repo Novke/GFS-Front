@@ -221,7 +221,8 @@ export function krajeviLinije(s: OblikSloj): [Tacka, Tacka] {
 
 /**
  * Nova kutija oko krajeva sa marginom `max(6, 3 * debljina)` (vrhovi strelica staju), rotacija 0. Krajevi se prvo
- * ograničavaju na [-960 + m, 1920 - m], pa je okvir u granicama servera i obuhvata oba kraja.
+ * ograničavaju na [-960 + m, 1920 - m], pa je okvir u granicama servera i obuhvata oba kraja. Kad je rezultat isti kao
+ * `s` (iste vrednosti), vraća sam `s`.
  */
 export function linijaIzKrajeva(s: OblikSloj, a: Tacka, b: Tacka): OblikSloj {
   const m = Math.max(6, 3 * (s.ivica?.debljina ?? 1));
@@ -232,7 +233,15 @@ export function linijaIzKrajeva(s: OblikSloj, a: Tacka, b: Tacka): OblikSloj {
     x: Math.min(p.x, q.x) - m, y: Math.min(p.y, q.y) - m,
     sirina: Math.abs(p.x - q.x) + 2 * m, visina: Math.abs(p.y - q.y) + 2 * m, rotacija: 0,
   });
-  return { ...s, ...k, od: { x: z(p.x - k.x), y: z(p.y - k.y) }, do: { x: z(q.x - k.x), y: z(q.y - k.y) } };
+  const od = { x: z(p.x - k.x), y: z(p.y - k.y) };
+  const ka = { x: z(q.x - k.x), y: z(q.y - k.y) };
+  // iste vrednosti -> isti objekat: izmena bez promene (ugao 360, kraj stegnut na granicu) ne pravi korak ni PUT (odluka 8)
+  const ista = (t: Tacka | null, u: Tacka) => t !== null && t.x === u.x && t.y === u.y;
+  if (s.x === k.x && s.y === k.y && s.sirina === k.sirina && s.visina === k.visina && s.rotacija === 0
+    && ista(s.od, od) && ista(s.do, ka)) {
+    return s;
+  }
+  return { ...s, ...k, od, do: ka };
 }
 
 /** Ugao (0 = udesno, smer kazaljke, kao rotacija sloja) i dužina duži a -> b; put tastaturom za linije (F6). */

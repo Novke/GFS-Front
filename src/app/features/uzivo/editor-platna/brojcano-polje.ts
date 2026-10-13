@@ -1,11 +1,12 @@
 // Brojčano polje panela Svojstva (F6): kuca se slobodno (zarez ili tačka), a vrednost se primenjuje tek na Enter ili pri
-// izlasku iz polja, stegnuta u granice i na 2 decimale kao na serveru; neispravan unos ima `aria-invalid` dok se kuca i
+// izlasku iz polja (i pre Ctrl+S), stegnuta u granice i na 2 decimale kao na serveru; neispravan unos ima `aria-invalid` dok se kuca i
 // vraća prikazanu vrednost. Polje je van okvira platna, pa prečice platna ovde ne rade (odluka 24), a Ctrl+Z je polja.
 import { ChangeDetectionStrategy, Component, computed, input, output, signal, viewChild } from '@angular/core';
 import type { ErrorStateMatcher } from '@angular/material/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInput, MatInputModule } from '@angular/material/input';
 import { zaokruziKaoServer as z } from '../data-access/platno-provera';
+import { jeSnimanje } from './tastatura-platna';
 
 /** Decimalni broj sa zarezom ili tačkom (bez eksponenta, razmaka u sredini i hiljadarki). */
 const BROJ = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)$/;
@@ -33,7 +34,7 @@ export function formatBroja(n: number | null): string {
       <mat-label>{{ oznaka() }}</mat-label>
       <input matInput inputmode="decimal" autocomplete="off" spellcheck="false" [value]="prikaz()"
              [disabled]="onemoguceno()" [errorStateMatcher]="greska" (input)="kucanje($event)"
-             (keydown.enter)="potvrdi()" (keydown.escape)="odustani()" (blur)="potvrdi()">
+             (keydown)="tipka($event)" (keydown.enter)="potvrdi()" (keydown.escape)="odustani()" (blur)="potvrdi()">
       @if (jedinica()) { <span matTextSuffix>{{ jedinica() }}</span> }
     </mat-form-field>
   `,
@@ -67,6 +68,11 @@ export class BrojcanoPoljeComponent {
   protected kucanje(e: Event): void {
     this.tekst.set((e.target as HTMLInputElement).value);
     this.polje().updateErrorState();
+  }
+
+  /** Ctrl+S: otkucana vrednost prvo ulazi u dokument, pa događaj ide dalje do stranice (čuvanje; Review Focus 1). */
+  protected tipka(e: KeyboardEvent): void {
+    if (jeSnimanje(e)) this.potvrdi();
   }
 
   protected potvrdi(): void {

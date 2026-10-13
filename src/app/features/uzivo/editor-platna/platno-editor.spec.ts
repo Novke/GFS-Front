@@ -3,11 +3,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { Subject } from 'rxjs';
+import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import type { Platno } from '../data-access/platno.models';
 import { platno } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
-import type { SlajdDetails } from '../data-access/uzivo.models';
+import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -27,6 +29,8 @@ describe('PlatnoEditorComponent', () => {
   };
   let odjava: ReturnType<typeof vi.fn<() => void>>;
   let store: InstanceType<typeof PlatnoEditorStore>;
+  let otpremanje: Subject<MedijInfo>;
+  let poruke: Poruka[];
   const el = () => fixture.nativeElement as HTMLElement;
   const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
   const taster = (cilj: Element, key: string, o: KeyboardEventInit = {}) => {
@@ -46,10 +50,13 @@ describe('PlatnoEditorComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: EditorStore, useValue: lazni },
-        { provide: PrezentacijeApi, useValue: {} },
+        { provide: PrezentacijeApi, useValue: { upload: () => otpremanje } },
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
       ],
     });
+    otpremanje = new Subject<MedijInfo>();
+    poruke = [];
+    TestBed.inject(NotificationStore).poruke$.subscribe((p) => poruke.push(p));
     fixture = TestBed.createComponent(PlatnoEditorComponent);
     fixture.componentRef.setInput('slajd', platnoSlajd());
     fixture.componentRef.setInput('tema', 'NACRT');
@@ -203,6 +210,65 @@ describe('PlatnoEditorComponent', () => {
     el().querySelectorAll<HTMLElement>('[role="tab"]')[0].click();
     await fixture.whenStable();
     expect(store.tab()).toBe('SVOJSTVA');
+  });
+
+  describe('otpremanje slike živi koliko editor slajda', () => {
+    const png = () => new File([new Uint8Array([137, 80, 78, 71])], 'slika.png', { type: 'image/png' });
+    const medij = (id: string): MedijInfo => ({ id, naziv: 'slika.png', mime: 'image/png', velicina: 4 });
+    async function zameniSliku() {
+      store.izaberi(['slika']);
+      await fixture.whenStable();
+      const input = el().querySelector<HTMLInputElement>('app-svojstva-slike input[type="file"]')!;
+      Object.defineProperty(input, 'files', { configurable: true, value: [png()] });
+      input.dispatchEvent(new Event('change'));
+      await fixture.whenStable();
+    }
+    const slika = () => store.platno().slojevi.find((s) => s.id === 'slika') as { medijId: string };
+
+    it('prelazak na tab Slojevi usred otpremanja: slika se ipak primeni', async () => {
+      await zameniSliku();
+      store.postaviTab('SLOJEVI');
+      await fixture.whenStable();
+      expect(el().querySelector('app-svojstva-slike')).toBeNull();
+      otpremanje.next(medij('posle-taba'));
+      otpremanje.complete();
+      await fixture.whenStable();
+      expect(slika().medijId).toBe('posle-taba');
+      expect(lazni.izmeniPlatno).toHaveBeenLastCalledWith(12, store.platno());
+      expect(poruke).toEqual([]);
+    });
+
+    it('editor uništen usred otpremanja: poruka, ništa se ne predaje posle', async () => {
+      await zameniSliku();
+      fixture.destroy();
+      const predaja = lazni.izmeniPlatno.mock.calls.length;
+      otpremanje.next(medij('kasno'));
+      otpremanje.complete();
+      expect(poruke.map((p) => p.tekst)).toEqual(['Slika nije primenjena: slajd je zatvoren.']);
+      expect(lazni.izmeniPlatno.mock.calls.length).toBe(predaja);
+    });
+  });
+
+  it('Review Focus 1: otkucan a nepotvrđen broj u panelu je u dokumentu pre nego što Ctrl+S stigne do stranice', async () => {
+    store.izaberi(['oblik']);
+    await fixture.whenStable();
+    const x = Array.from(el().querySelectorAll<HTMLElement>('app-svojstva-sloja mat-form-field'))
+      .find((f) => f.querySelector('mat-label')?.textContent?.trim() === 'X')!.querySelector('input')!;
+    x.focus();
+    x.value = '321';
+    x.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    let xNaStranici: number | null = null;
+    const stranica = () => { xNaStranici = store.platno().slojevi.find((s) => s.id === 'oblik')!.x; };
+    document.addEventListener('keydown', stranica);
+    try {
+      const e = taster(x, 's', { ctrlKey: true });
+      expect(e.defaultPrevented).toBe(false);
+    } finally {
+      document.removeEventListener('keydown', stranica);
+    }
+    expect(xNaStranici).toBe(321);
+    expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
   });
 
   it('traka: Poništi i Ponovi prate istoriju, Obriši briše izabrano', async () => {

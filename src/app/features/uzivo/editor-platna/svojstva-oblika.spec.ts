@@ -3,14 +3,16 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OblikSloj, Platno, TekstSloj } from '../data-access/platno.models';
 import { noviOblik, noviTekst } from '../data-access/platno-novo';
 import { platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { krajeviLinije } from './geometrija';
+import { OtpremanjeSlike } from './otpremanje-slike';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { type LazniSat, dugme, oznakePolja, polje, provajderiSvojstava, upisi } from './svojstva.testing';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [PlatnoEditorStore],
+  providers: [PlatnoEditorStore, OtpremanjeSlike],
   imports: [PanelSvojstvaComponent],
   template: `<app-panel-svojstva tema="NACRT" />`,
 })
@@ -59,7 +61,7 @@ describe('SvojstvaOblikaComponent (kroz panel Svojstva)', () => {
   beforeEach(() => {
     sat.t = 0;
     localStorage.clear();
-    TestBed.configureTestingModule({ providers: provajderiSvojstava(sat) });
+    TestBed.configureTestingModule({ providers: [...provajderiSvojstava(sat), { provide: PrezentacijeApi, useValue: {} }] });
     fixture = TestBed.createComponent(DomacinComponent);
     store = fixture.debugElement.children[0].injector.get(PlatnoEditorStore);
     store.postaviIzlaz(vi.fn());
@@ -140,6 +142,35 @@ describe('SvojstvaOblikaComponent (kroz panel Svojstva)', () => {
     expect(a.y).toBeCloseTo(112, 6);
     expect(polje(el(), 'Dužina')!.value).toBe('100');
     expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(100, 1);
+  });
+
+  it('izmena krajeva bez promene (Ugao 0 -> 360, Kraj X van granice dvaput) ne pravi korak ni predaju', async () => {
+    const izlaz = vi.fn();
+    store.postaviIzlaz(izlaz);
+    await pocni([linija('s1')], ['s1']);
+    await upisi(fixture, polje(el(), 'Kraj X')!, '340');
+    expect(izlaz).not.toHaveBeenCalled();
+    // prva izmena "peče" linijski okvir oko krajeva (pravi korak), posle nje ista vrednost više nije korak
+    await upisi(fixture, polje(el(), 'Kraj X')!, '341');
+    expect(izlaz).toHaveBeenCalledTimes(1);
+    await upisi(fixture, polje(el(), 'Ugao')!, '360');
+    expect(izlaz).toHaveBeenCalledTimes(1);
+    sat.t = 5000;
+    await upisi(fixture, polje(el(), 'Kraj X')!, '5000');
+    expect(izlaz).toHaveBeenCalledTimes(2);
+    expect(polje(el(), 'Kraj X')!.value).toBe('1911');
+    sat.t = 10000;
+    await upisi(fixture, polje(el(), 'Kraj X')!, '5000');
+    expect(izlaz).toHaveBeenCalledTimes(2);
+    store.ponisti();
+    store.ponisti();
+    expect(store.mozeNazad()).toBe(false);
+  });
+
+  it('"Dužina" je najmanje 1 (linija dužine 0 je nevidljiva i ugao joj ne radi)', async () => {
+    await pocni([linija('s1')], ['s1']);
+    await upisi(fixture, polje(el(), 'Dužina')!, '0');
+    expect(polje(el(), 'Dužina')!.value).toBe('1');
   });
 
   it('TEKST (4a): samo "Popuna" i "Ivica" okvira, bez "Vrsta"', async () => {

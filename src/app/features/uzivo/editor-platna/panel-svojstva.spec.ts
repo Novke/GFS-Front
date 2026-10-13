@@ -2,13 +2,14 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { platno } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
+import { OtpremanjeSlike } from './otpremanje-slike';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { type LazniSat, oznakePolja, provajderiSvojstava } from './svojstva.testing';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [PlatnoEditorStore],
+  providers: [PlatnoEditorStore, OtpremanjeSlike],
   imports: [PanelSvojstvaComponent],
   template: `<app-panel-svojstva tema="NACRT" />`,
 })
