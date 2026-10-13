@@ -175,6 +175,13 @@ describe('PlatnoPrikazComponent', () => {
     const k = await prikazi(kratka);
     expect(Array.from(sloj(k.el, 'oblik').querySelectorAll('polygon')).map((v) => v.getAttribute('points')))
       .toEqual(['0,40 -15,20 15,20', '0,0 15,20 -15,20']);
+
+    // tanka linija: osnova vrha je najmanje 0,7 mm (1,98 jed.), kao u LibreOffice oox (max(debljina, 70/100 mm))
+    const tanka = sa<OblikSloj>('oblik', (s) => ({ ...s, oblik: 'STRELICA', ivica: { boja: '#000000', debljina: 1, crtica: 'PUNA' },
+      od: { x: 0, y: 50 }, do: { x: 200, y: 50 } }));
+    const t = await prikazi(tanka);
+    expect(sloj(t.el, 'oblik').querySelector('polygon')!.getAttribute('points')).toBe('200,50 194.0472,52.9764 194.0472,47.0236');
+    expect(sloj(t.el, 'oblik').querySelector('line')!.getAttribute('x2')).toBe('194.0472');
   });
 
   it('OBLIK: elipsa, zaobljeni pravougaonik (rx 16,667% kraće strane, PowerPointov roundRect adj), trougao', async () => {

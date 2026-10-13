@@ -280,6 +280,17 @@ describe('pretvoriTekst: liste', () => {
     // veličina znaka: buSzPct (udeo veličine teksta) i buSzPts (stotinke pt)
     expect(sa(40, '<a:buFont typeface="Calibri"/>', '<a:buSzPct val="50000"/>').uvlacenje.prviRed).toBe(0);
     expect(sa(40, '<a:buFont typeface="Calibri"/>', '<a:buSzPts val="6000"/>').uvlacenje.prviRed).toBe(6.36);
+    // granica servera (PlatnoPP: uvlačenje +-1000): ogroman znak se ograničava, slajd se ne gubi
+    expect(sa(40, '<a:buFont typeface="Courier New"/>', '<a:buSzPts val="400000"/>').uvlacenje.prviRed).toBe(1000);
+  });
+
+  it('znak razmak u okviru sa normAutofit: širina znaka se skalira kao tekst (fontScale), uvlačenje ne', () => {
+    const viseci = 'marL="91440" indent="-91440"';
+    const pasusi = p(run('a', '<a:rPr sz="4000"/>'), `<a:pPr ${viseci}><a:buFont typeface="Calibri"/><a:buChar char=" "/></a:pPr>`);
+    // 0,22607 * 40 * 0,8 = 7,23 - 7,2 = 0,03 (bez skale bi bilo 1,84)
+    const r = tekstOkvir(pasusi, '<a:bodyPr><a:normAutofit fontScale="80000"/></a:bodyPr>').r;
+    expect(r.okvir.skala).toBe(0.8);
+    expect(r.pasusi[0].uvlacenje).toEqual({ levo: 7.2, prviRed: 0.03 });
   });
 
   it('boja liste: buClr -> hex, buClrTx -> null', () => {

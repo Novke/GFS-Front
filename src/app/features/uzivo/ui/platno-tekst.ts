@@ -205,11 +205,12 @@ function razmakPrvog(p: Pasus, m: Metrika, skala: number): string {
 /**
  * Prikaz pasusa: `<p>` nosi poravnanje, razmake (zbirno, jer su pasusi u fleks koloni pa se margine ne skupljaju,
  * kao u PowerPointu), uvlačenje (`levo` = marL, `prviRed` = indent; viseća oznaka liste stoji u `-prviRed`), prored i
- * font prvog dela (od njega zavise visina praznog reda i oznaka liste). Prored, prva linija i razmak pre prvog pasusa
- * dolaze iz metrike (`platno-metrika.ts`).
- * Tabovi: pasus sa uvlačenjem ili sopstvenim tab-stopovima (`trebaMerenjeTabova`) dobija ključ `meriTabove`, a njegovi
- * delovi `segmenti`; komponenta posle crtanja meri i postavlja širine tabova (`platno-tabovi.ts`). Ostali pasusi
- * zadržavaju `\t` sa podrazumevanim razmakom 36 pt (`tab-size` u `platno.css`).
+ * font prvog dela, a veličinu najmanjeg dela (strut ne sme da poveća red samo sa manjim slovima); oznaka liste nosi font
+ * i veličinu prvog dela. Prored, pomeraj proreda, prva linija i razmak pre prvog pasusa dolaze iz metrike
+ * (`platno-metrika.ts`).
+ * Tabovi: svaki pasus sa tabom (`trebaMerenjeTabova`) dobija ključ `meriTabove` (kad pozivalac da prefiks merenja), a
+ * njegovi delovi `segmenti`; komponenta posle crtanja meri i postavlja širine tabova (`platno-tabovi.ts`). Bez prefiksa
+ * merenja `\t` ostaje sa podrazumevanim razmakom 36 pt (`tab-size` u `platno.css`).
  */
 export function prikazPasusa(pasusi: Pasus[], o: OpcijePasusa = {}): PrikazPasusa[] {
   const { skala = 1, skalaProreda = 1, slojId = null, prefiksMerenja = null, metrika = METRIKA } = o;

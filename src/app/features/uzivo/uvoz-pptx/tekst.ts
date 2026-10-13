@@ -2,7 +2,7 @@
 // senka teksta. Čiste funkcije bez Angular-a (lokalna provera ih pokreće u Node-u).
 import type { Deo, FormatBroja, Lista, Okvir, Pasus, Polozaj, Poravnanje, Senka, Sidro, Tabulator } from '../data-access/platno.models';
 import { FONTOVI_PLATNA } from '../ui/platno-fontovi';
-import { razresiBodyPr, razresiPPr, razresiRPr, type RazresenPPr, type RazresenRPr } from './nasledjivanje';
+import { razresiBodyPr, razresiPPr, razresiRPr, type RazresenBodyPr, type RazresenPPr, type RazresenRPr } from './nasledjivanje';
 import { bojaIz, pomesaj, zamenaFonta, type Boja, type KontekstBoja } from './tema';
 import { EMU_PO_PT, zaokruzi, zaokruziKaoServer, type KontekstSlajda } from './tipovi';
 import { brojAtr, dete, NS } from './xml';
@@ -57,6 +57,8 @@ interface Stanje {
   kb: KontekstBoja;
   /** Poruke `TEKST_PRIBLIZAN`/`TABULATORI` već prijavljene u ovom okviru. */
   prijavljeno: Set<string>;
+  /** `normAutofit@fontScale` okvira (kao `Okvir.skala`): prikaz njome množi slova, pa i znak liste. */
+  skala: number;
 }
 
 function upozoriJednom(st: Stanje, kod: 'TEKST_PRIBLIZAN' | 'TABULATORI', poruka: string): void {
@@ -199,14 +201,17 @@ function znakListe(izvor: string, fontListe: string | null, st: Stanje): string 
   return '•';
 }
 
-/** Širina "znaka" razmak u jedinicama: razmak fonta znaka (`buFont`, inače font teksta) * veličina znaka. */
+/**
+ * Širina "znaka" razmak u jedinicama: razmak fonta znaka (`buFont`, inače font teksta) * veličina znaka * skala fonta
+ * okvira (`normAutofit`: PowerPoint umanjuje i znak, a prikaz skalira samo slova, ne `prviRed`).
+ */
 function sirinaZnakaRazmaka(pp: RazresenPPr, prvi: Deo, st: Stanje): number {
   if (pp.bu.vrsta !== 'znak') return 0;
   const naziv = pp.bu.font ? zamenaFonta(pp.bu.font, st.ctx.tema).font : prvi.font;
   const font = FONTOVI_PLATNA.find((f) => f.naziv === naziv) ?? FONTOVI_PLATNA[0];
   const v = pp.velicinaZnaka;
   const velicina = v === null ? prvi.velicina : 'pct' in v ? prvi.velicina * v.pct / 100000 : v.pts / 100 * st.ctx.t.s;
-  return font.razmak * ogranici(velicina, 0, 4000);
+  return font.razmak * ogranici(velicina, 0, 4000) * st.skala;
 }
 
 function tabulatori(pp: RazresenPPr, imaTab: boolean, sirinaOkvira: number, st: Stanje): Tabulator[] {
@@ -294,7 +299,7 @@ function pasus(p: Element, nivoi: (nivo: number) => Element[], sirinaOkvira: num
   // Znak liste je razmak (lista se izostavlja): PowerPoint crta "znak" na marL + indent, a tekst počinje na marL ili
   // iza znaka kad znak ne staje u viseći deo (razmak širine fonta znaka; mereno na uzorku: 40 pt Calibri pomera 1,84).
   if (pp.bu.vrsta === 'znak' && l === null) {
-    prviRed = zaokruzi(Math.max(prviRed + sirinaZnakaRazmaka(pp, delovi[0], st), 0));
+    prviRed = zaokruzi(ogranici(prviRed + sirinaZnakaRazmaka(pp, delovi[0], st), 0, 1000));
   }
   return {
     poravnanje: PORAVNANJA[pp.algn ?? 'l'] ?? 'LEVO',
@@ -308,6 +313,9 @@ function pasus(p: Element, nivoi: (nivo: number) => Element[], sirinaOkvira: num
     delovi,
   };
 }
+
+/** `normAutofit@fontScale` kao odnos (server čuva 2 decimale). */
+const skalaFonta = (b: RazresenBodyPr) => odnos(ogranici(b.fontScale / 100000, 0.25, 1));
 
 function okvir(bodyLanac: Element[], st: Stanje): Okvir {
   const s = st.ctx.t.s;
@@ -323,7 +331,7 @@ function okvir(bodyLanac: Element[], st: Stanje): Okvir {
     sidro: SIDRA[b.anchor] ?? 'VRH',
     prelom: b.wrap,
     // Odnosi (ne jedinice): bez zaokruživanja na 2 decimale, samo bez šuma pokretnog zareza.
-    skala: odnos(ogranici(b.fontScale / 100000, 0.25, 1)),
+    skala: skalaFonta(b),
     skalaProreda: odnos(ogranici(1 - b.lnSpcReduction / 100000, 0.5, 1)),
   };
 }
@@ -335,7 +343,9 @@ function okvir(bodyLanac: Element[], st: Stanje): Okvir {
  */
 export function pretvoriTekst(txBody: Element, nivoi: (nivo: number) => Element[], bodyLanac: Element[],
                               ctx: KontekstSlajda, sirinaOkvira: number, o: OpcijeTeksta = {}): RezultatTeksta {
-  const st: Stanje = { ctx, o, kb: { tema: ctx.tema, mapaBoja: ctx.mapaBoja }, prijavljeno: new Set() };
+  const st: Stanje = {
+    ctx, o, kb: { tema: ctx.tema, mapaBoja: ctx.mapaBoja }, prijavljeno: new Set(), skala: skalaFonta(razresiBodyPr(bodyLanac)),
+  };
   const senke: (Senka | null)[] = [];
   const pasusi = Array.from(txBody.children)
     .filter((el) => el.namespaceURI === NS.a && el.localName === 'p')

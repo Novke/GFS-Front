@@ -59,8 +59,8 @@
 .uz-pl-tabela {
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  /* Podrazumevani tab-stop PowerPointa je 36 pt (od leve ivice pasusa bez uvlačenja). Pasusi sa uvlačenjem ili
-     sopstvenim stopovima imaju merene tabove (`.uz-pl-tab`, `platno-tabovi.ts`). */
+  /* Podrazumevani tab-stop PowerPointa je 36 pt (od leve ivice pasusa bez uvlačenja). Svaki pasus sa tabom u TEKST
+     sloju i ćeliji ima merene tabove (`.uz-pl-tab`, `platno-tabovi.ts`); `tab-size` ostaje samo za tekst bez merenja. */
   tab-size: calc(var(--u) * 36);
 }
 

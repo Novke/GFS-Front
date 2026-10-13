@@ -17,6 +17,7 @@ export interface Metrika {
   /**
    * Udeo razlike proreda (visina reda - prosti prored) koji ide iznad bazne linije. CSS je deli pola-pola (0,5);
    * PowerPoint celu razliku stavlja iznad (1): kod proreda 90% bazna linija je za 0,06 em više nego u CSS-u.
+   * Izmereno samo za 85%, 90% i 100% (uzorak); prored iznad 100% (pomeraj naniže) je ekstrapolacija istog modela.
    */
   razlikaProredaIznad: number;
   /** `'normal'` = ponašanje pregledača (CSS se ne postavlja), `'none'` isključuje. */

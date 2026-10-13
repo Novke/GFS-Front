@@ -82,8 +82,14 @@ function stilIsecka(isecak: SlikaSloj['isecak']): Stil {
 
 const LINIJSKI = new Set(['LINIJA', 'STRELICA', 'DVOSTRUKA_STRELICA']);
 
-/** Odnos dužine i širine vrha strelice prema debljini linije (PowerPointova srednja strelica: 3 x 3). */
+/**
+ * Vrh strelice (`triangle`, `med` x `med`): dužina i širina = 3 x osnova, osnova = max(debljina, 0,7 mm). Izvor je
+ * LibreOffice oox (`lineproperties.cxx`: sm/med/lg = 2/3/5, `max(nLineWidth, 70)` u 1/100 mm), nije mereno prema
+ * PowerPointu (uzorak nema strelica). Model nema veličinu vrha, pa je uvek srednja.
+ */
 const VRH_STRELICE = 3;
+/** 0,7 mm u jedinicama platna (pt). */
+const NAJMANJA_OSNOVA_VRHA = 0.7 / 25.4 * 72;
 
 /**
  * Vrh strelice u `vrh` (pravac `od` -> `vrh`) kao trougao dužine `duzina`, i tačka osnove do koje ide linija. Linija sa
@@ -114,14 +120,15 @@ function prikazOblika(s: OblikSloj): PrikazOblika {
   const kraj = s.oblik === 'STRELICA' || s.oblik === 'DVOSTRUKA_STRELICA';
   const pocetak = s.oblik === 'DVOSTRUKA_STRELICA';
   if (kraj && ivica && d > 0) {
-    // Vrh nije duži od linije (dvostruka: od polovine), širina ostaje 3 x debljina.
-    const duzina = Math.min(VRH_STRELICE * d, Math.hypot(doTacke.x - od.x, doTacke.y - od.y) / (pocetak ? 2 : 1));
+    // Vrh nije duži od linije (dvostruka: od polovine), širina ostaje puna.
+    const osnovaVrha = VRH_STRELICE * Math.max(d, NAJMANJA_OSNOVA_VRHA);
+    const duzina = Math.min(osnovaVrha, Math.hypot(doTacke.x - od.x, doTacke.y - od.y) / (pocetak ? 2 : 1));
     const [a, b] = [od, doTacke];
-    const k = vrhStrelice(a, b, duzina, VRH_STRELICE * d);
+    const k = vrhStrelice(a, b, duzina, osnovaVrha);
     vrhovi.push(k.tacke);
     doTacke = k.osnova;
     if (pocetak) {
-      const p = vrhStrelice(b, a, duzina, VRH_STRELICE * d);
+      const p = vrhStrelice(b, a, duzina, osnovaVrha);
       vrhovi.push(p.tacke);
       od = p.osnova;
     }
