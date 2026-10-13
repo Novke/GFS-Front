@@ -20,7 +20,7 @@ export const IKONE = [
   'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer', 'layers',
   'restart_alt', 'upload_file',
   // Editor platna (faza 4).
-  'undo', 'redo', 'flip_to_front', 'flip_to_back', 'visibility', 'shapes', 'select_all',
+  'undo', 'redo', 'flip_to_front', 'flip_to_back', 'visibility', 'shapes',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

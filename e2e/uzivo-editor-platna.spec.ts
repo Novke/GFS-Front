@@ -197,20 +197,53 @@ test.describe('uživo: editor platna (4a)', () => {
     expect(s).toMatchObject({ x: PRAVOUGAONIK.x, y: PRAVOUGAONIK.y });
   });
 
+  test('Ctrl+Z radi i kad je fokus u panelu (prekidač senke), a u polju panela ne menja dokument', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await ubaciOblik(page, 'Pravougaonik');
+    await expect.poll(() => slojUPut(mock, id, 's1')?.x).toBe(PRAVOUGAONIK.x);
+    const senka = editor(page).getByRole('switch', { name: 'Senka' });
+    await senka.click();
+    await expect(senka).toBeFocused();
+    const saSenkom = () => (poslednji(mock, id)?.platno.slojevi[0] as { senka?: unknown } | undefined)?.senka;
+    await expect.poll(() => saSenkom() ?? null).not.toBeNull();
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => saSenkom() ?? null).toBeNull();
+    await expect(senka).toBeFocused();
+    await page.keyboard.press('Control+y');
+    await expect.poll(() => saSenkom() ?? null).not.toBeNull();
+
+    // Ctrl+Z u polju "Širina" je poništavanje polja, ne dokumenta
+    const sirina = editor(page).getByRole('textbox', { name: 'Širina', exact: true });
+    await sirina.click();
+    const broj = putovi(mock, id).length;
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Tab');
+    await expect(sirina).not.toBeFocused();
+    expect(putovi(mock, id).length).toBe(broj);
+    expect(saSenkom() ?? null).not.toBeNull();
+  });
+
   test('Review Focus 1: pomeranje pa odmah beleška pa Ctrl+S, poslednji PUT nosi i platno i belešku', async ({ page, mock }) => {
+    // lažni sat stranice: posle zaustavljanja debounce čuvanja (800 ms) ne može da okine, pa PUT sme da dođe samo od Ctrl+S
+    await page.clock.install();
     const id = await novoPlatno(page, mock);
     await ubaciOblik(page, 'Strelica');
     await expect.poll(() => slojUPut(mock, id, 's1')?.x).toBe(STRELICA.x);
+    // skok unapred sme samo u budućnost lažnog sata (on teče dok se ne zaustavi); posle prethodnog PUT-a ništa ne čeka
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 500));
+    const pre = putovi(mock, id).length;
 
     await page.keyboard.press('ArrowRight');
     const beleske = page.getByRole('textbox', { name: 'Beleške za predavača' });
     await beleske.click();
     await page.keyboard.type('Pokazati smer sile');
+    await expect(beleske).toHaveValue('Pokazati smer sile');
+    expect(putovi(mock, id).length).toBe(pre);   // sat stoji: bez Ctrl+S nema PUT-a
     await page.keyboard.press('Control+s');
-    await expect.poll(() => {
-      const t = poslednji(mock, id);
-      return t && { beleske: t.beleske, x: t.platno.slojevi[0]?.x };
-    }).toEqual({ beleske: 'Pokazati smer sile', x: STRELICA.x + 1 });
+    await expect.poll(() => putovi(mock, id).length).toBe(pre + 1);
+    const t = poslednji(mock, id)!;
+    expect({ beleske: t.beleske, x: t.platno.slojevi[0]?.x }).toEqual({ beleske: 'Pokazati smer sile', x: STRELICA.x + 1 });
+    await page.clock.resume();
   });
 
   test('istorija pripada instanci editora: posle prelaska na drugi slajd i nazad Ctrl+Z ne šalje ništa', async ({ page, mock }) => {
@@ -233,10 +266,83 @@ test.describe('uživo: editor platna (4a)', () => {
 
     const pre = putovi(mock, id).length;
     await okvir(page).focus();
+    await expect(okvir(page)).toBeFocused();
     await page.keyboard.press('Control+z');
     // nema vidljivog ishoda koji bi se čekao: provera je da u 1 s (više od 800 ms čekanja čuvanja) ne stigne PUT
     await page.waitForTimeout(1_200);
     expect(putovi(mock, id).length).toBe(pre);
     expect(slojUPut(mock, id, 's1')?.x).toBe(STRELICA.x);
+  });
+
+  // Raspored (završna recenzija 4a, Important 1): na uobičajenim laptopima paneli su desno od platna, a vrh tabova je na
+  // ekranu dok je okvir platna ceo vidljiv; na telefonu paneli idu ispod, bez horizontalnog skrola.
+  /** PLATNO slajd 52 sa izabranim oblikom (Svojstva oblika: najduži panel); mere okvira, tabova i panela posle skrola do okvira. */
+  async function mereRasporeda(page: Page, sirina: number, visina: number) {
+    await page.setViewportSize({ width: sirina, height: visina });
+    await page.goto(`prezentacije/${PREZENTACIJA}`);
+    await page.getByRole('button', { name: /^2\s/ }).click();
+    await expect(slojEditora(page, 'oblik')).toBeVisible();
+    // sloj izbora (overlay) leži preko prikaza i prima pokazivač: klik u centar sloja
+    const c = await centar(slojEditora(page, 'oblik'));
+    await page.mouse.click(c.x, c.y);
+    await expect(editor(page).getByText('Izabrano: Elipsa 1')).toBeAttached();
+    await expect(editor(page).locator('app-panel-svojstva app-svojstva-oblika')).toBeVisible();
+    await okvir(page).scrollIntoViewIfNeeded();
+    const o = (await okvir(page).boundingBox())!;
+    const tabovi = (await editor(page).getByRole('tablist').boundingBox())!;
+    const panel = (await editor(page).locator('.uz-ep-paneli').boundingBox())!;
+    const r = Math.round;
+    test.info().annotations.push({ type: 'raspored', description: `${sirina}x${visina}: okvir x${r(o.x)} y${r(o.y)} `
+      + `${r(o.width)}x${r(o.height)}; tabovi y${r(tabovi.y)}; panel x${r(panel.x)} y${r(panel.y)} ${r(panel.width)}x${r(panel.height)}` });
+    const traka = (await page.locator('app-top-bar').boundingBox())!;
+    expect(o.y).toBeGreaterThanOrEqual(traka.y + traka.height);
+    expect(o.y + o.height).toBeLessThanOrEqual(visina);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(sirina);
+    return { o, tabovi, panel };
+  }
+
+  for (const [sirina, visina] of [[1366, 768], [1440, 900]] as const) {
+    test(`raspored ${sirina} x ${visina}: paneli desno od platna, tabovi vidljivi uz celo platno`, async ({ page }) => {
+      const { o, tabovi, panel } = await mereRasporeda(page, sirina, visina);
+      expect(tabovi.y).toBeGreaterThanOrEqual(o.y);
+      expect(tabovi.y + tabovi.height).toBeLessThanOrEqual(visina);
+      expect(panel.x).toBeGreaterThan(o.x + o.width);
+      expect(o.width).toBeGreaterThanOrEqual(500);   // platno ostaje čitljivo
+
+      // skrol do dna dugačkog panela (Svojstva oblika): platno i tabovi su lepljivi, pa ostaju celi na ekranu
+      const poslednje = editor(page).locator('app-svojstva-oblika').locator('button, input').last();
+      await poslednje.scrollIntoViewIfNeeded();
+      const dno = (await poslednje.boundingBox())!;
+      const o2 = (await okvir(page).boundingBox())!;
+      const t2 = (await editor(page).getByRole('tablist').boundingBox())!;
+      // lepljiva gornja traka ljuske prekriva vrh sadržaja: platno i tabovi moraju biti ispod nje
+      const traka = (await page.locator('app-top-bar').boundingBox())!;
+      const vrh = traka.y + traka.height;
+      test.info().annotations.push({ type: 'raspored', description: `${sirina}x${visina} posle skrola: okvir y${Math.round(o2.y)}, `
+        + `tabovi y${Math.round(t2.y)}, poslednja kontrola panela y${Math.round(dno.y)}, gornja traka do y${Math.round(vrh)}` });
+      expect(dno.y + dno.height).toBeLessThanOrEqual(visina);
+      expect(o2.y).toBeGreaterThanOrEqual(vrh);
+      expect(o2.y + o2.height).toBeLessThanOrEqual(visina);
+      expect(t2.y).toBeGreaterThanOrEqual(vrh);
+      expect(t2.y + t2.height).toBeLessThanOrEqual(o2.y + o2.height);
+    });
+  }
+
+  test('raspored 1280 x 800: editor je uži od praga (736 px), paneli su ispod platna pune širine', async ({ page }) => {
+    const { o, panel } = await mereRasporeda(page, 1280, 800);
+    expect(panel.y).toBeGreaterThanOrEqual(o.y + o.height);
+    expect(o.width).toBeGreaterThanOrEqual(700);
+  });
+
+  test('raspored 390 x 844: paneli ispod platna, bez horizontalnog skrola', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`prezentacije/${PREZENTACIJA}`);
+    await page.getByRole('button', { name: /^2\s/ }).click();
+    await expect(slojEditora(page, 'oblik')).toBeVisible();
+    const o = (await okvir(page).boundingBox())!;
+    const panel = (await editor(page).locator('.uz-ep-paneli').boundingBox())!;
+    expect(panel.y).toBeGreaterThanOrEqual(o.y + o.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    expect(await page.locator('mat-sidenav-content').evaluate(e => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(0);
   });
 });

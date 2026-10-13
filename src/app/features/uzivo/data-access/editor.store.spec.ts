@@ -444,12 +444,12 @@ describe('EditorStore: PLATNO', () => {
 
   it('imaNesacuvano je true dok je u editoru nešto otvoreno (i bez izmene), false posle odjave', () => {
     let otvoreno = true;
-    store.registrujPraznjenje(() => undefined, () => otvoreno);
+    const odjavi = store.registrujPraznjenje(() => undefined, () => otvoreno);
     expect(store.imaNesacuvano()).toBe(true);
     otvoreno = false;
     expect(store.imaNesacuvano()).toBe(false);
     otvoreno = true;
-    store.registrujPraznjenje(null);
+    odjavi();
     expect(store.imaNesacuvano()).toBe(false);
   });
 
@@ -469,11 +469,11 @@ describe('EditorStore: PLATNO', () => {
     expect(store.imaNesacuvano()).toBe(false);
     odjaviNovu();   // ponovljena odjava ne smeta
     const treca = vi.fn();
-    store.registrujPraznjenje(treca);
+    const odjaviTrecu = store.registrujPraznjenje(treca);
     odjaviStaru();
     store.isprazni();
     expect(treca).toHaveBeenCalledTimes(1);
-    store.registrujPraznjenje(null);   // stara odjava (null) i dalje briše sve
+    odjaviTrecu();
     store.isprazni();
     expect(treca).toHaveBeenCalledTimes(1);
   });
@@ -855,10 +855,10 @@ describe('EditorStore: RegistarCuvanja (sesija prezentacija-<id>)', () => {
     odjavi();
     expect(skinut).toHaveBeenCalledWith('beforeunload', expect.any(Function));
     dodat.mockClear();
-    a.store.registrujPraznjenje(() => undefined, () => true);
+    const odjaviDrugu = a.store.registrujPraznjenje(() => undefined, () => true);
     expect(dodat).toHaveBeenCalledWith('beforeunload', expect.any(Function));
     skinut.mockClear();
-    a.store.registrujPraznjenje(null);
+    odjaviDrugu();
     expect(skinut).toHaveBeenCalledWith('beforeunload', expect.any(Function));
     a.unisti();
     vi.restoreAllMocks();

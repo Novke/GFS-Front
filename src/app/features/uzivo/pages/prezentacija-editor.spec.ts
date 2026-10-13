@@ -297,7 +297,7 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
   it('beforeunload prvo zove pražnjenje editora platna, pa traži potvrdu dok je nešto otvoreno', () => {
     const isprazni = vi.fn();
     let otvoreno = true;
-    store.registrujPraznjenje(isprazni, () => otvoreno);
+    const odjavi = store.registrujPraznjenje(isprazni, () => otvoreno);
     const dogadjaj = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(dogadjaj);
     expect(isprazni).toHaveBeenCalled();
@@ -308,7 +308,7 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     window.dispatchEvent(drugi);
     expect(isprazni).toHaveBeenCalledTimes(1);
     expect(drugi.defaultPrevented).toBe(false);
-    store.registrujPraznjenje(null);
+    odjavi();
   });
 
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {

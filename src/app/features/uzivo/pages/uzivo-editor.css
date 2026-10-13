@@ -306,15 +306,33 @@ span.uz-ed-napomena {
   max-height: none;
 }
 
+/* Uža lista (sličica 112 px i dalje staje) i uži razmak: editor platna dobija mesto za panele desno od platna */
 @media (min-width: 900px) {
   .uz-ed-telo.uz-ed-telo--platno {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 200px minmax(0, 1fr);
     grid-template-areas: "lista sredina" "lista pregled";
+    column-gap: 16px;
   }
 
   .uz-ed-telo--platno .uz-ed-lista {
     position: sticky;
     max-height: calc(100vh - 16px);
+  }
+}
+
+/*
+ * Editor platna (lenj chunk): kad je panel desno od platna (container query `uz-ep`, isti prag kao u komponenti),
+ * zaglavlje tabova je lepljivo kao i platno (senka iste boje pokriva traku od 8 px iznad njega). Unutrašnjost
+ * `mat-tab-group`-a je van enkapsulacije komponente, zato je pravilo ovde.
+ */
+@container uz-ep (min-width: 760px) {
+  .uz-ep-paneli .mat-mdc-tab-header {
+    position: sticky;
+    top: 64px; /* kao platno: ispod lepljive gornje trake ljuske (56 px) */
+    z-index: 2;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: 0 -8px 0 var(--bg);
   }
 }
 

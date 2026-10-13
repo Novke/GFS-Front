@@ -20,7 +20,7 @@ import { PanelSlojeviComponent } from './panel-slojevi.component';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore, type TabPanela } from './platno-editor.store';
 import { PlatnoOverlayComponent } from './platno-overlay.component';
-import { komandaTastature, jeSnimanje, uPoljuZaUnos } from './tastatura-platna';
+import { jePonistavanje, komandaTastature, jeSnimanje, uPoljuZaUnos, zatvorenIzbornik } from './tastatura-platna';
 import { SIRINA_PLATNA } from './geometrija';
 import { PORUKA_PREVLACENJE, SlikeEditora } from './slike-editora';
 import { TrakaAlataComponent } from './traka-alata.component';
@@ -37,7 +37,8 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
     MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
     TrakaAlataComponent,
   ],
-  host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep' },
+  // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y slušaju se na korenu editora (i iz panela i trake); ostale prečice samo na okviru
+  host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep', '(keydown)': 'tastaturaKorena($event)' },
   template: `
     <app-traka-alata [tema]="tema()" />
     <div class="uz-ep-telo">
@@ -67,8 +68,15 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
   styles: `
     :host { display: block; container: uz-ep / inline-size; margin-bottom: 16px; }
     .uz-ep-telo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 16px; align-items: start; }
-    @container uz-ep (min-width: 1100px) {
-      .uz-ep-telo { grid-template-columns: minmax(0, 1fr) 300px; }
+    /*
+     * Paneli desno od platna od editora širokog 760 px (prozor 1366 px sa bočnom navigacijom: editor 822 px, platno
+     * 526 px); ispod praga idu ispod platna. Platno je lepljivo, a zaglavlje tabova takođe (globalni deo u
+     * uzivo-editor.css): dok se stranica skroluje kroz dugačak panel, platno i tabovi ostaju na ekranu. 64 px = lepljiva
+     * gornja traka ljuske (56 px, top-bar.scss) + 8 px.
+     */
+    @container uz-ep (min-width: 760px) {
+      .uz-ep-telo { grid-template-columns: minmax(0, 1fr) 280px; }
+      .uz-ep-glavno { position: sticky; top: 64px; }
     }
     .uz-ep-glavno { min-width: 0; }
     .uz-ep-platno {
@@ -151,7 +159,21 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Prečice SAMO na okviru platna (odluka 24). */
+  /**
+   * Poništi/ponovi na korenu editora: posle izmene u panelu (boja, prekidač, zatvoren izbornik) fokus je tamo, a ne na
+   * okviru. Isti filter kao okvir (polja za unos i kontrole sa sopstvenim tasterima zadržavaju svoje ponašanje); zatvoren
+   * `mat-select` je jedini izuzetak (Ctrl+Z/Y mu ništa ne znače). Okvir ove prečice ne obrađuje, pa nema duplog izvršavanja.
+   */
+  protected tastaturaKorena(e: KeyboardEvent): void {
+    const k = komandaTastature(e);
+    if (!k || !jePonistavanje(k) || e.defaultPrevented) return;
+    if (uPoljuZaUnos(e.target) && !zatvorenIzbornik(e.target)) return;
+    e.preventDefault();
+    if (k.tip === 'PONISTI') this.store.ponisti();
+    else this.store.ponovi();
+  }
+
+  /** Ostale prečice SAMO na okviru platna (odluka 24); poništi/ponovi idu do korena (`tastaturaKorena`). */
   protected tastatura(e: KeyboardEvent): void {
     if (jeSnimanje(e)) {
       this.store.isprazni(); // otvorena sesija teksta i gest u dokument; događaj ide dalje do stranice (sacuvajOdmah)
@@ -160,15 +182,13 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     if (uPoljuZaUnos(e.target)) return;
     if (e.key === 'Escape' && this.store.gest()) return; // Esc usred gesta: samo F5 prekida gest (izbor ostaje)
     const k = komandaTastature(e);
-    if (!k) return;
+    if (!k || jePonistavanje(k)) return;
     e.preventDefault();
     switch (k.tip) {
       case 'OBRISI': this.store.obrisiIzabrane(); break;
       case 'KOPIRAJ': this.store.kopiraj(); break;
       case 'NALEPI': this.store.nalepi(); break;
       case 'DUPLIRAJ': this.store.duplirajIzabrane(); break;
-      case 'PONISTI': this.store.ponisti(); break;
-      case 'PONOVI': this.store.ponovi(); break;
       case 'PONISTI_IZBOR': this.store.ponistiIzbor(); break;
       case 'IZABERI_SVE': this.store.izaberiSve(); break;
       case 'Z': this.store.zOsaIzabranih(k.smer); break;

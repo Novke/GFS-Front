@@ -189,9 +189,12 @@ export const PlatnoEditorStore = signalStore(
       ponistiIzbor(): void {
         patchState(store, { izbor: [] });
       },
+      /** Ctrl+A: vidljivi i otključani slojevi (zaključan, npr. pozadina, bira se klikom ili u panelu). */
       izaberiSve(): void {
         const skriveni = new Set(store.skriveni());
-        patchState(store, { izbor: store.platno().slojevi.filter((s) => !skriveni.has(s.id)).map((s) => s.id) });
+        patchState(store, {
+          izbor: store.platno().slojevi.filter((s) => !s.zakljucan && !skriveni.has(s.id)).map((s) => s.id),
+        });
       },
       obrisiIzabrane(): void {
         if (!store.izbor().length || imaZakljucan()) return;

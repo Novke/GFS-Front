@@ -765,15 +765,10 @@ export const EditorStore = signalStore(
       /**
        * Editor platna predaje funkciju koja upisuje otvorenu sesiju teksta i gest, i proveru da li je nešto otvoreno.
        * Vraća odjavu koja briše SAMO ovu registraciju (stara instanca editora koja se uništava posle pravljenja nove ne
-       * briše registraciju nove). `null` briše bilo koju registraciju (stari oblik odjave).
+       * briše registraciju nove).
        */
-      registrujPraznjenje(f: (() => void) | null, o: () => boolean = () => false): () => void {
+      registrujPraznjenje(f: () => void, o: () => boolean = () => false): () => void {
         // otvoreno() ulazi u nesačuvano sesije: upozorenje pre zatvaranja kartice se odmah usklađuje
-        if (!f) {
-          praznjenje = null;
-          javi();
-          return () => undefined;
-        }
         const ova = { isprazni: f, otvoreno: o };
         praznjenje = ova;
         javi();

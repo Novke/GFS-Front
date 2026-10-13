@@ -1,4 +1,6 @@
-import { type KomandaTastature, jeSnimanje, komandaTastature, uPoljuZaUnos } from './tastatura-platna';
+import {
+  type KomandaTastature, jePonistavanje, jeSnimanje, komandaTastature, uPoljuZaUnos, zatvorenIzbornik,
+} from './tastatura-platna';
 
 interface T { key: string; code?: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean }
 const taster = (t: T) => ({ code: '', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...t });
@@ -83,5 +85,26 @@ describe('tastatura-platna: uPoljuZaUnos', () => {
 
   it('null -> false', () => {
     expect(uPoljuZaUnos(null)).toBe(false);
+  });
+});
+
+describe('tastatura-platna: jePonistavanje i zatvorenIzbornik', () => {
+  it('samo PONISTI i PONOVI rade van okvira', () => {
+    expect(jePonistavanje({ tip: 'PONISTI' })).toBe(true);
+    expect(jePonistavanje({ tip: 'PONOVI' })).toBe(true);
+    expect(jePonistavanje({ tip: 'OBRISI' })).toBe(false);
+    expect(jePonistavanje({ tip: 'POMERI', dx: 1, dy: 0 })).toBe(false);
+  });
+
+  it('zatvoren mat-select jeste izuzetak, otvoren i drugi combobox nisu', () => {
+    const koren = document.createElement('div');
+    koren.innerHTML = '<div id="z" class="mat-mdc-select" role="combobox" aria-expanded="false"></div>'
+      + '<div id="o" class="mat-mdc-select" role="combobox" aria-expanded="true"></div>'
+      + '<input id="i" role="combobox" aria-expanded="false">';
+    const el = (id: string) => koren.querySelector('#' + id);
+    expect(zatvorenIzbornik(el('z'))).toBe(true);
+    expect(zatvorenIzbornik(el('o'))).toBe(false);
+    expect(zatvorenIzbornik(el('i'))).toBe(false);
+    expect(zatvorenIzbornik(null)).toBe(false);
   });
 });

@@ -113,6 +113,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(editor.getByText('Izabrano: Elipsa 1')).toBeAttached();
       const popuna = editor.getByRole('button', { name: /^Popuna:/ });
       await expect(popuna).toBeVisible();
+      // kao i ostali testovi ovog fajla: axe tek kad stanu zahtevi (slike i fontovi platna, lenji chunk-ovi panela), jer
+      // nema jednog vidljivog stanja koje bi pokazalo da su svi stigli (slika sloja može da stigne posle teksta)
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva oblika (${rezim})`).toEqual([]);
 

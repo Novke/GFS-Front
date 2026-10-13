@@ -1,6 +1,6 @@
 // Panel "Slojevi" editora platna (F4b): lista od vrha z-ose ka dnu, izbor, zaključavanje, skrivanje u editoru,
-// preimenovanje i prevlačenje redosleda. Panel je van okvira platna, pa prečice platna ovde ne rade (odluka 24): put
-// tastaturom je izbor ovde, pa Shift+Tab do okvira platna, pa strelice.
+// preimenovanje i prevlačenje redosleda. Panel je van okvira platna, pa prečice platna ovde ne rade (odluka 24), osim
+// Ctrl+Z/Ctrl+Y (koren editora): put tastaturom je izbor ovde, pa Shift+Tab do okvira platna, pa strelice.
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import {
   ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, signal,
@@ -9,6 +9,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { nazivSloja } from './komande';
 import { PlatnoEditorStore } from './platno-editor.store';
+
+/** Prefiks id-jeva imena redova jedinstven po instanci panela (id sloja je jedinstven samo u svom dokumentu). */
+let brojacPanela = 0;
 
 @Component({
   selector: 'app-panel-slojevi',
@@ -22,26 +25,31 @@ import { PlatnoEditorStore } from './platno-editor.store';
               [class.uz-ep-sloj--izabran]="r.izabran" [class.uz-ep-sloj--skriven]="r.skriven">
             <mat-icon class="uz-ep-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
             @if (urednik() === r.id) {
-              <input #polje class="uz-ep-naziv-polje" aria-label="Naziv sloja" maxlength="60" [value]="r.naziv"
+              <input #polje class="uz-ep-naziv-polje" aria-label="Naziv sloja" maxlength="60" [value]="r.naziv" [id]="r.idImena"
                      (keydown.enter)="sacuvaj(r.id, polje.value)" (keydown.escape)="odustani(r.id)"
                      (blur)="sacuvaj(r.id, polje.value)">
             } @else {
-              <button type="button" class="uz-ep-sloj-ime" [attr.aria-pressed]="r.izabran" (click)="izaberi(r.id, $event)">
+              <button type="button" class="uz-ep-sloj-ime" [id]="r.idImena" [attr.aria-pressed]="r.izabran"
+                      (click)="izaberi(r.id, $event)">
                 {{ r.naziv }}
               </button>
             }
-            <!-- stalne labele uz aria-pressed (ARIA APG: stanje nosi aria-pressed, ne labela); tooltip kaže stanje -->
-            <button mat-icon-button type="button" aria-label="Zaključaj" [attr.aria-pressed]="r.zakljucan"
+            <!-- stalne labele uz aria-pressed (ARIA APG: stanje nosi aria-pressed, ne labela); tooltip kaže stanje;
+                 ime sloja kroz aria-describedby (u listi kontrola čitača ekrana dugmad redova se razlikuju) -->
+            <button mat-icon-button type="button" aria-label="Zaključaj" [attr.aria-describedby]="r.idImena"
+                    [attr.aria-pressed]="r.zakljucan"
                     [title]="r.zakljucan ? 'Zaključan (klik otključava)' : 'Zaključaj'"
                     (click)="store.zakljucaj(r.id, !r.zakljucan)">
               <mat-icon [svgIcon]="r.zakljucan ? 'lock' : 'lock_open'" />
             </button>
-            <button mat-icon-button type="button" aria-label="Sakrij u editoru" [attr.aria-pressed]="r.skriven"
+            <button mat-icon-button type="button" aria-label="Sakrij u editoru" [attr.aria-describedby]="r.idImena"
+                    [attr.aria-pressed]="r.skriven"
                     [title]="r.skriven ? 'Skriven u editoru (klik prikazuje)' : 'Sakrij u editoru'"
                     (click)="store.prebaciSkriven(r.id)">
               <mat-icon [svgIcon]="r.skriven ? 'visibility_off' : 'visibility'" />
             </button>
-            <button mat-icon-button type="button" aria-label="Preimenuj" (click)="pocniPreimenovanje(r.id)">
+            <button mat-icon-button type="button" aria-label="Preimenuj" [attr.aria-describedby]="r.idImena"
+                    (click)="pocniPreimenovanje(r.id)">
               <mat-icon svgIcon="edit" />
             </button>
           </li>
@@ -103,6 +111,8 @@ export class PanelSlojeviComponent {
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
 
+  private readonly prefiks = `uz-ep-sloj-${++brojacPanela}-`;
+
   /** Id sloja čiji se naziv upravo menja (null = nijedan). */
   protected readonly urednik = signal<string | null>(null);
 
@@ -113,6 +123,7 @@ export class PanelSlojeviComponent {
     const skriveni = new Set(this.store.skriveni());
     return [...p.slojevi].reverse().map((s) => ({
       id: s.id, naziv: nazivSloja(p, s), izabran: izbor.has(s.id), zakljucan: s.zakljucan, skriven: skriveni.has(s.id),
+      idImena: this.prefiks + s.id,
     }));
   });
 

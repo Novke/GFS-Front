@@ -46,6 +46,30 @@ describe('PanelSlojeviComponent', () => {
     expect(ime(red('tekst')).textContent!.trim()).toBe('Tekst: Prvi');
   });
 
+  it('dugmad reda nose ime sloja kroz aria-describedby (labela ostaje stalna); id-jevi su jedinstveni', async () => {
+    const opis = (d: HTMLElement) => {
+      const id = d.getAttribute('aria-describedby');
+      expect(id).toBeTruthy();
+      return el().querySelector<HTMLElement>(`[id="${id}"]`);
+    };
+    const nazivi = new Map([['oblik', 'Elipsa 1'], ['tekst', 'Tekst: Prvi']]);
+    for (const [id, naziv] of nazivi) {
+      for (const labela of ['Zaključaj', 'Sakrij u editoru', 'Preimenuj']) {
+        const d = dugmeU(red(id), labela);
+        expect(d.getAttribute('aria-label')).toBe(labela);
+        expect(opis(d)).toBe(ime(red(id)));
+        expect(opis(d)!.textContent!.trim()).toBe(naziv);
+      }
+    }
+    const idjevi = redovi().map((r) => ime(r).id);
+    expect(new Set(idjevi).size).toBe(redovi().length);
+    // dok se naziv menja, opis pokazuje na polje (njegova vrednost je naziv)
+    dugmeU(red('oblik'), 'Preimenuj').click();
+    await fixture.whenStable();
+    const polje = red('oblik').querySelector<HTMLInputElement>('.uz-ep-naziv-polje')!;
+    expect(opis(dugmeU(red('oblik'), 'Zaključaj'))).toBe(polje);
+  });
+
   it('klik na ime bira sloj (aria-pressed), Shift+klik dodaje ili uklanja iz izbora', async () => {
     ime(red('oblik')).click();
     await fixture.whenStable();

@@ -228,7 +228,6 @@ export class PlatnoOverlayComponent {
     const o = obuhvatSvih(izabrani.map(kutijaSloja));
     return o ? stilObuhvata(o) : null;
   });
-  /** Jedan izabran, vidljiv i otključan sloj: ručke ili krajevi linije. */
   /**
    * Tačno jedan izabran sloj (isti skup kao strelice: `izabraniSlojevi`, i skriveni), vidljiv i otključan: ručke ili
    * krajevi linije.

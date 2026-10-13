@@ -143,6 +143,19 @@ describe('PlatnoEditorStore', () => {
     expect(store.izbor()).toEqual([]);
   });
 
+  it('izaberiSve (Ctrl+A) preskače zaključane; zaključan se i dalje bira klikom/panelom', () => {
+    pocni(dok([oblik('s1', 100, 100, { zakljucan: true }), oblik('s2'), oblik('s3')]));
+    store.izaberiSve();
+    expect(store.izbor()).toEqual(['s2', 's3']);
+    // izbor bez zaključanog se pomera strelicama (ranije: "Sloj je zaključan." i ništa)
+    store.pomeriIzabrane(1, 0);
+    expect(store.platno().slojevi.map((s) => s.x)).toEqual([100, 101, 101]);
+    store.izaberi(['s1']);
+    expect(store.izbor()).toEqual(['s1']);
+    store.prebaciIzbor('s2');
+    expect(store.izbor()).toEqual(['s1', 's2']);
+  });
+
   it('brisanje izabranog sloja izbacuje ga iz izbora (i animacije sloja)', () => {
     pocni(dok([oblik('s1'), oblik('s2')], [animacija('a1', 's1')]));
     store.izaberi(['s1']);

@@ -1,5 +1,6 @@
 // Prečice editora platna (odluka 24) kao čiste funkcije, bez Angular-a: okvir platna (`.uz-ep-platno`, F4b) ih zove iz
-// svog `keydown`-a; Ctrl+S (`jeSnimanje`) obrađuje PRE provere `uPoljuZaUnos` i pušta ga do stranice.
+// svog `keydown`-a; Ctrl+S (`jeSnimanje`) obrađuje PRE provere `uPoljuZaUnos` i pušta ga do stranice. Poništi/ponovi
+// (`jePonistavanje`) obrađuje koren editora, pa rade i kad je fokus u panelu ili traci.
 import type { SmerZ } from './komande';
 
 export type KomandaTastature =
@@ -45,6 +46,11 @@ export function komandaTastature(e: Taster): KomandaTastature | null {
   }
 }
 
+/** Poništi ili ponovi (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y): jedine prečice koje rade i van okvira platna. */
+export function jePonistavanje(k: KomandaTastature): boolean {
+  return k.tip === 'PONISTI' || k.tip === 'PONOVI';
+}
+
 /** Polja za unos i kontrole sa sopstvenim tasterima (odluka 24): editor ih ne presreće. */
 const SOPSTVENI_TASTERI = 'input, textarea, select, [contenteditable="true"], .cdk-overlay-container, '
   + '[role="menu"], [role="menuitem"], [role="dialog"], [role="tab"], [role="tablist"], [role="combobox"], '
@@ -53,4 +59,13 @@ const SOPSTVENI_TASTERI = 'input, textarea, select, [contenteditable="true"], .c
 export function uPoljuZaUnos(cilj: EventTarget | null): boolean {
   const el = cilj instanceof Element ? cilj : null;
   return !!el?.closest(SOPSTVENI_TASTERI);
+}
+
+/**
+ * Zatvoren `mat-select` (dugme izbornika, `role="combobox"`): Ctrl+Z/Y mu ništa ne znače, pa ih koren editora sme da
+ * obradi (posle izbora vrste ili crtice fokus ostaje na njemu). Otvoren izbornik i ostale kontrole zadržavaju svoje tastere.
+ */
+export function zatvorenIzbornik(cilj: EventTarget | null): boolean {
+  const el = cilj instanceof Element ? cilj : null;
+  return !!el?.matches('.mat-mdc-select[role="combobox"]') && el.getAttribute('aria-expanded') !== 'true';
 }

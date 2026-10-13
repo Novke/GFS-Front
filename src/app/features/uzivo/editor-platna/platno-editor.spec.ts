@@ -26,7 +26,7 @@ describe('PlatnoEditorComponent', () => {
   let fixture: ComponentFixture<PlatnoEditorComponent>;
   let lazni: {
     izmeniPlatno: ReturnType<typeof vi.fn<(id: number, p: Platno) => void>>;
-    registrujPraznjenje: ReturnType<typeof vi.fn<(f: (() => void) | null, o?: () => boolean) => () => void>>;
+    registrujPraznjenje: ReturnType<typeof vi.fn<(f: () => void, o?: () => boolean) => () => void>>;
   };
   let odjava: ReturnType<typeof vi.fn<() => void>>;
   let store: InstanceType<typeof PlatnoEditorStore>;
@@ -44,7 +44,7 @@ describe('PlatnoEditorComponent', () => {
     odjava = vi.fn<() => void>();
     lazni = {
       izmeniPlatno: vi.fn<(id: number, p: Platno) => void>(),
-      registrujPraznjenje: vi.fn<(f: (() => void) | null, o?: () => boolean) => () => void>(() => odjava),
+      registrujPraznjenje: vi.fn<(f: () => void, o?: () => boolean) => () => void>(() => odjava),
     };
     TestBed.configureTestingModule({
       imports: [PlatnoEditorComponent],
@@ -139,6 +139,98 @@ describe('PlatnoEditorComponent', () => {
     expect(store.mozeNazad()).toBe(true);
   });
 
+  describe('Ctrl+Z, Ctrl+Shift+Z i Ctrl+Y na korenu editora (i iz panela); ostale prečice samo na okviru', () => {
+    const oblikSloj = () => store.platno().slojevi.find((s) => s.id === 'oblik')!;
+    const prekidacSenke = () => el().querySelector<HTMLButtonElement>('app-svojstva-sloja .uz-ep-senka button[role="switch"]')!;
+    const dugmeBoje = () => el().querySelector<HTMLButtonElement>('app-svojstva-oblika button[aria-haspopup="dialog"]')!;
+    async function izaberiOblik() {
+      store.izaberi(['oblik']);
+      await fixture.whenStable();
+    }
+
+    it('fokus na prekidaču senke posle izmene: Ctrl+Z poništava, Ctrl+Shift+Z i Ctrl+Y ponavljaju', async () => {
+      await izaberiOblik();
+      const pre = store.platno();
+      prekidacSenke().click();
+      await fixture.whenStable();
+      expect(oblikSloj().senka).not.toBeNull();
+      const posle = store.platno();
+
+      const e = taster(prekidacSenke(), 'z', { ctrlKey: true });
+      expect(e.defaultPrevented).toBe(true);
+      expect(store.platno()).toBe(pre);
+      expect(lazni.izmeniPlatno).toHaveBeenLastCalledWith(12, pre);
+      taster(prekidacSenke(), 'z', { ctrlKey: true, shiftKey: true });
+      expect(store.platno()).toBe(posle);
+      taster(prekidacSenke(), 'z', { ctrlKey: true });
+      expect(store.platno()).toBe(pre);
+      taster(prekidacSenke(), 'y', { ctrlKey: true });
+      expect(store.platno()).toBe(posle);
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(5);
+    });
+
+    it('fokus na dugmetu boje posle izmene: Ctrl+Z poništava; strelice i Delete tu ne rade', async () => {
+      await izaberiOblik();
+      const pre = store.platno();
+      store.pomeriIzabrane(5, 0);
+      await fixture.whenStable();
+      const posle = store.platno();
+      dugmeBoje().focus();
+
+      for (const [key, o] of [['ArrowRight', {}], ['Delete', {}], ['d', { ctrlKey: true }], ['a', { ctrlKey: true }]] as const) {
+        const e = taster(dugmeBoje(), key, o);
+        expect(e.defaultPrevented).toBe(false);
+      }
+      expect(store.platno()).toBe(posle);
+      expect(store.izbor()).toEqual(['oblik']);
+
+      taster(dugmeBoje(), 'z', { ctrlKey: true });
+      expect(store.platno()).toBe(pre);
+    });
+
+    it('zatvoren mat-select (Vrsta) posle izmene: Ctrl+Z poništava', async () => {
+      await izaberiOblik();
+      const pre = store.platno();
+      store.pomeriIzabrane(5, 0);
+      await fixture.whenStable();
+      const izbornik = el().querySelector<HTMLElement>('app-svojstva-oblika mat-select')!;
+      expect(izbornik.getAttribute('role')).toBe('combobox');
+      expect(izbornik.getAttribute('aria-expanded')).toBe('false');
+      const e = taster(izbornik, 'z', { ctrlKey: true });
+      expect(e.defaultPrevented).toBe(true);
+      expect(store.platno()).toBe(pre);
+    });
+
+    it('Ctrl+Z u polju za unos panela ne menja dokument (polje zadržava svoje poništavanje)', async () => {
+      await izaberiOblik();
+      store.pomeriIzabrane(5, 0);
+      await fixture.whenStable();
+      const posle = store.platno();
+      const x = Array.from(el().querySelectorAll<HTMLElement>('app-svojstva-sloja mat-form-field'))
+        .find((f) => f.querySelector('mat-label')?.textContent?.trim() === 'X')!.querySelector('input')!;
+      for (const key of ['z', 'y']) {
+        const e = taster(x, key, { ctrlKey: true });
+        expect(e.defaultPrevented).toBe(false);
+      }
+      expect(taster(x, 'z', { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+      expect(store.platno()).toBe(posle);
+      expect(store.mozeNazad()).toBe(true);
+    });
+
+    it('Ctrl+Z na okviru poništava tačno jednom (koren ne ponavlja komandu okvira)', async () => {
+      await izaberiOblik();
+      store.pomeriIzabrane(5, 0);
+      store.pomeriIzabrane(0, 5);
+      const ponisti = vi.spyOn(store, 'ponisti');
+      const ponovi = vi.spyOn(store, 'ponovi');
+      taster(okvir(), 'z', { ctrlKey: true });
+      expect(ponisti).toHaveBeenCalledTimes(1);
+      taster(okvir(), 'y', { ctrlKey: true });
+      expect(ponovi).toHaveBeenCalledTimes(1);
+      expect(store.mozeNazad()).toBe(true);
+    });
+  });
+
   it('Ctrl+S na okviru prazni otvorenu sesiju i pušta događaj do stranice (bez preventDefault)', () => {
     const isprazni = vi.spyOn(store, 'isprazni');
     const e = taster(okvir(), 's', { ctrlKey: true });
@@ -153,7 +245,7 @@ describe('PlatnoEditorComponent', () => {
     expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
   });
 
-  it('registruje pražnjenje u ngOnInit (dve funkcije), a pri uništavanju prvo prazni pa zove SVOJU odjavu (ne null)', () => {
+  it('registruje pražnjenje u ngOnInit (dve funkcije), a pri uništavanju prvo prazni pa zove SVOJU odjavu', () => {
     expect(lazni.registrujPraznjenje).toHaveBeenCalledTimes(1);
     const [isprazni, otvoreno] = lazni.registrujPraznjenje.mock.calls[0];
     expect(typeof isprazni).toBe('function');
@@ -169,7 +261,6 @@ describe('PlatnoEditorComponent', () => {
     expect(spij).toHaveBeenCalled();
     expect(spij.mock.invocationCallOrder[0]).toBeLessThan(odjava.mock.invocationCallOrder[0]);
     expect(lazni.registrujPraznjenje).toHaveBeenCalledTimes(1);
-    expect(lazni.registrujPraznjenje).not.toHaveBeenCalledWith(null);
   });
 
   it('uništavanje posle izmene bez izlaza ne predaje ništa dvaput (pražnjenje je idempotentno)', () => {

@@ -166,8 +166,8 @@ over STOMP; teacher commands are REST.
   not cached). `publika-scena` counts reconnect epochs: no animation right after a reconnect or a late-opened window; it records every
   snapshot as "previous" (PRIJAVA and KRAJ too, through an effect), so → from PRIJAVA to the first slide plays group 0.
   Editor: a PLATNO slide shows the preview with steps, the form edits only notes and the theme (radio).
-  **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (`slajdUCmd` and the form do it; omitting
-  it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
+  **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (the page always sends the store's
+  `platno`, never the form's (`izmenaForme`), and `slajdUCmd` copies it from the slide; omitting it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
 - **Console and remote (phase 3 of the slide builder):** the console (`konzola`) shows the position with the step ("korak k/n"
   from the server's `korak`/`brojStavki`, never from `brojKoraka`), `sledece-panel` (state after the next click; on a
@@ -231,14 +231,25 @@ over STOMP; teacher commands are REST.
   (decremented unconditionally in `finalize`); writes after leaving the editor (including a draft edit that arrived while
   its POST was running) go through the closed session, and a failure off screen is a global message with group
   `'uzivo-cuvanje-pri-izlasku'`. Shortcuts (`tastatura-platna.ts`) work only while focus is on the canvas frame
-  `.uz-ep-platno` (`role="group"`), never in inputs, tabs, menus or overlays; Ctrl+S is handled before that check and still
-  reaches the page; letters come from `key`, `[`/`]` from `code`. Inserting a layer focuses the frame. The keyboard path:
-  select in the "Slojevi" panel, Shift+Tab to the frame, arrows; exact values in the "Svojstva" number fields. Locked layers
-  can be selected and reordered but not moved, resized or deleted; hiding is editor-only (not saved). `platno-prikaz`
+  `.uz-ep-platno` (`role="group"`), never in inputs, tabs, menus or overlays; the exception is undo/redo (Ctrl+Z,
+  Ctrl+Shift+Z, Ctrl+Y): the editor root (`app-platno-editor` host `keydown`) handles them anywhere in the editor (panels,
+  toolbar, after a colour or switch change) with the same `uPoljuZaUnos` filter plus a closed `mat-select` as the only
+  exception (`zatvorenIzbornik`), and the frame leaves them to the root (no double undo). Ctrl+S is handled before that
+  check and still reaches the page; letters come from `key`, `[`/`]` from `code`. Inserting a layer focuses the frame. The
+  keyboard path: select in the "Slojevi" panel, Shift+Tab to the frame, arrows; exact values in the "Svojstva" number
+  fields. Row buttons of "Slojevi" keep fixed labels with `aria-pressed` and get the layer name through
+  `aria-describedby`. Locked layers can be selected (click, panel) and reordered but not moved, resized or deleted, and
+  Ctrl+A skips them (and hidden ones); hiding is editor-only (not saved). Layout: the panels (280 px) sit right of the canvas
+  when the editor is at least 760 px wide (container query `uz-ep`); then the canvas and the tab header are sticky at
+  64 px (below the shell's 56 px sticky top bar; the header rule is global in `uzivo-editor.css`), so scrolling through a
+  long panel keeps both on screen. For a PLATNO slide the slide list is 200 px, so this holds from a 1366 px window with
+  the side nav (1366: canvas ~526 px, 1440: ~600 px); at 1280 the editor is 736 px and the panels go below a full-width
+  canvas, as on a phone. `platno-prikaz`
   caches the prepared view per (layer object, index) in a `WeakMap`, so moving one layer rebuilds only that layer. Slide
   list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (no
   version check on the backend). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
-  instance, last `PUT` carries both canvas and notes), editor panels and the colour popover in `pristupacnost.spec.ts`.
+  instance and from a panel, last `PUT` after Ctrl+S carries both canvas and notes with the page clock paused so the
+  debounce cannot send it, layout at 1280/1366/1440/390 px), editor panels and the colour popover in `pristupacnost.spec.ts`.
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and
