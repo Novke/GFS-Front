@@ -134,16 +134,17 @@ export const PlatnoEditorStore = signalStore(
 
     /**
      * Tekst sesije u dokument (F12): presek aktivnog uređivača je jedan korak istorije i jedna predaja izlazu (zamena
-     * pasusa sloja i animacije pasusa po ključevima); bez izmena ništa. Sesija se nastavlja.
+     * pasusa sloja i animacije pasusa po ključevima); bez izmena ništa. Sesija se nastavlja. Vraća false kad tekst NIJE
+     * u dokumentu (gest u toku ili odbijena izmena): tada se sesija ne sme zatvoriti, inače bi se tekst izgubio.
      */
-    function zabeleziTekst(): void {
+    function zabeleziTekst(): boolean {
       const u = store.uredjivanje();
       const uredjivac = store._uredjivac();
-      if (!u || u.celija || !uredjivac) return; // ćelije tabele: F14
+      if (!u || u.celija || !uredjivac) return true; // ćelije tabele: F14
       // usred gesta izmena ne bi prošla: presek se ne uzima (tekst ostaje u uređivaču do sledećeg preseka)
-      if (store.gest()) return;
+      if (store.gest()) return false;
       const r: RezultatTeksta | null = uredjivac.presek();
-      if (!r) return;
+      if (!r) return true;
       let uklonjeno = 0;
       const ok = primeniBezTeksta((p) => {
         const sa = izmeniSlojeve(p, new Set([u.slojId]), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: r.pasusi } : s));
@@ -153,15 +154,24 @@ export const PlatnoEditorStore = signalStore(
         return a.platno;
       });
       // odbijena izmena (granice, poruka) ne sme da pomeri osnovu preseka: tekst nije u dokumentu, pa ga sledeći presek daje
-      if (!ok) uredjivac.odbaciPresek();
-      else if (uklonjeno > 0) obavestenja.info(`Uklonjene animacije pasusa koji više ne postoje: ${uklonjeno}.`);
+      if (!ok) {
+        uredjivac.odbaciPresek();
+        return false;
+      }
+      if (uklonjeno > 0) obavestenja.info(`Uklonjene animacije pasusa koji više ne postoje: ${uklonjeno}.`);
+      return true;
     }
 
-    /** Kraj sesije teksta: presek je jedan korak (prazan rezultat: bez koraka), pa `uredjivanje` null. */
-    function zavrsiUredjivanje(): void {
-      if (!store.uredjivanje()) return;
-      zabeleziTekst();
+    /**
+     * Kraj sesije teksta: presek je jedan korak (prazan rezultat: bez koraka), pa `uredjivanje` null. Kad presek nije
+     * primljen (gest, granica), sesija ostaje otvorena i vraća se false: tekst se ne gubi, a pozivalac ne nastavlja kao da
+     * je sesija zatvorena (nova sesija, ubacivanje, poništavanje).
+     */
+    function zavrsiUredjivanje(): boolean {
+      if (!store.uredjivanje()) return true;
+      if (!zabeleziTekst()) return false;
       zatvoriSesiju();
+      return true;
     }
 
     /** Svaka izmena tokom sesije teksta prvo beleži tekst (redosled istorije: tekst, pa ta izmena). */
@@ -175,8 +185,7 @@ export const PlatnoEditorStore = signalStore(
      * korak), pa poništi vraća upravo njega; unutar teksta Ctrl+Z je istorija uređivača (ProseMirror).
      */
     function vrati(snimak: (sada: Platno) => Platno | null): void {
-      if (store.gest()) return;
-      zavrsiUredjivanje();
+      if (store.gest() || !zavrsiUredjivanje()) return;
       const p = snimak(store.platno());
       if (!p) return;
       postavi(p);
@@ -193,7 +202,8 @@ export const PlatnoEditorStore = signalStore(
 
     /** Kopije slojeva na vrh (lepljenje, dupliranje), izabrane posle uspeha. */
     function dodajKopije(slojevi: readonly Sloj[]): void {
-      if (!slojevi.length) return;
+      // kopije menjaju izbor na druge slojeve: otvorena sesija teksta se prvo završava (kao ubaci)
+      if (!slojevi.length || !zavrsiUredjivanje()) return;
       let nove: string[] = [];
       const ok = primeni((p) => {
         const r = kopijeSlojeva(p, slojevi, POMAK_KOPIJE);
@@ -313,7 +323,7 @@ export const PlatnoEditorStore = signalStore(
        * završava (tekst je korak), kao u PowerPointu: ubacivanje iz trake, menija ili prevlačenjem izlazi iz teksta.
        */
       ubaci(napravi: (id: string, p: Platno) => Sloj): string | null {
-        zavrsiUredjivanje();
+        if (!zavrsiUredjivanje()) return null;
         let id = '';
         const ok = primeni((p) => {
           id = noviId(p, 's');
@@ -363,7 +373,7 @@ export const PlatnoEditorStore = signalStore(
         }
         const u = store.uredjivanje();
         if (u && u.slojId === slojId && u.celija?.r === celija?.r && u.celija?.k === celija?.k) return true;
-        zavrsiUredjivanje();
+        if (!zavrsiUredjivanje()) return false;
         patchState(store, { uredjivanje: { slojId, celija: celija ? { ...celija } : null }, izbor: [slojId], tab: 'SVOJSTVA' });
         return true;
       },
@@ -384,6 +394,8 @@ export const PlatnoEditorStore = signalStore(
     // instanca nestaje (promena slajda): otvoreno se upisuje i predaje pre nestanka (Ugovor 4); idempotentno, pa ne smeta
     // ako je komponenta već ispraznila u svom ngOnDestroy
     onDestroy(store) {
+      // gest prvo, pa tekst (tekst usred gesta se ne bi primio)
+      store.zavrsiGest();
       store.zavrsiUredjivanje();
       store.isprazni();
       // posle završnog pražnjenja izlaz se gasi: kasniji (async) put ne sme da upiše u slajd koji se više ne uređuje

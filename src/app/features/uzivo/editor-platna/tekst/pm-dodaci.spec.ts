@@ -6,6 +6,7 @@ import { prikazPasusa } from '../../ui/platno-tekst';
 import { dodatakPasusa } from './pm-dodaci';
 import { atributiDela } from './pm-konverzija';
 import type { AtributiDela, AtributiPasusa } from './pm-sema';
+import { nalepiTekst, podeliPasus, postaviPasus, tabIliNivo } from './pm-komande';
 import { Sesija, deo, pasusSa, poz } from './pm.testing';
 
 const stilTeksta = (s: Sesija, i = 0, j = 0): AtributiDela | undefined =>
@@ -87,6 +88,54 @@ describe('dodatakStila', () => {
     expect(Object.isFrozen(prazan.attrs['uvlacenje'])).toBe(true);
     expect(Object.isFrozen(prazan.attrs['tabulatori'])).toBe(true);
     expect(prazan.attrs['uvlacenje']).toEqual({ levo: 0, prviRed: 0 });
+  });
+});
+
+describe('dodatakStila: netaknut prazan pasus (delovi: []) ostaje bajt-isti (Fix 2)', () => {
+  const ZNAK: Lista = { vrsta: 'ZNAK', znak: '•', boja: null, format: null, pocetak: null };
+  const prazan = pasusSa([]);
+  /** "Naslov" 40 pt (stavka liste, da Tab menja nivo), prazan bez delova, "kraj" Tinos 30 pt. */
+  const nova = () => new Sesija([
+    pasusSa([deo('Naslov', { velicina: 40 })], { lista: ZNAK, uvlacenje: { levo: 18, prviRed: -18 } }),
+    prazan,
+    pasusSa([deo('kraj', { font: 'Tinos', velicina: 30 })]),
+  ]);
+  const slucajevi: [string, (s: Sesija) => void, number][] = [
+    ['Enter na kraju prethodnog pasusa (i dodela ključa novom susedu)', (s) => {
+      s.izaberi(poz(s.dok, 0, 6)); s.izvrsi(podeliPasus);
+    }, 2],
+    ['Enter na početku prethodnog pasusa', (s) => { s.izaberi(poz(s.dok, 0, 0)); s.izvrsi(podeliPasus); }, 2],
+    ['višeredno lepljenje na kraj prethodnog pasusa', (s) => {
+      s.izaberi(poz(s.dok, 0, 6)); s.dispatch(nalepiTekst(s.state, 'x\ny'));
+    }, 2],
+    ['postaviPasus na prethodnom pasusu', (s) => { s.izaberi(poz(s.dok, 0, 2)); s.izvrsi(postaviPasus({ poravnanje: 'CENTAR' })); }, 1],
+    ['postaviPasus na sledećem pasusu', (s) => { s.izaberi(poz(s.dok, 2, 2)); s.izvrsi(postaviPasus({ poravnanje: 'DESNO' })); }, 1],
+    ['tabIliNivo na prethodnom pasusu (nivo liste)', (s) => { s.izaberi(poz(s.dok, 0, 0)); s.izvrsi(tabIliNivo(1)); }, 1],
+    ['kucanje na kraju prethodnog i na početku sledećeg', (s) => {
+      s.izaberi(poz(s.dok, 0, 6)); s.kucaj('!'); s.izaberi(poz(s.dok, 2, 0)); s.kucaj('?');
+    }, 1],
+  ];
+
+  it.each(slucajevi)('%s', (_, radnja, indeks) => {
+    const s = nova();
+    const pre = s.dok.child(1);
+    radnja(s);
+    expect(s.dok.child(indeks)).toBe(pre);
+    expect(s.pasusi()[indeks]).toStrictEqual(prazan);
+  });
+
+  it('pasus koji korisnik stvarno dira i dalje dobija stil: kucanje u prazan pasus -> stil prethodnog teksta', () => {
+    const s = nova();
+    s.izaberi(poz(s.dok, 1, 0));
+    s.kucaj('a');
+    expect(s.pasusi()[1].delovi).toEqual([deo('a', { velicina: 40 })]);
+  });
+
+  it('pasus koji brisanjem postane prazan pamti stil obrisanog teksta (nov čvor)', () => {
+    const s = nova();
+    s.izaberi(poz(s.dok, 2, 0), poz(s.dok, 2, 4));
+    s.dispatch(s.state.tr.deleteSelection());
+    expect(s.pasusi()[2].delovi).toEqual([deo('', { font: 'Tinos', velicina: 30 })]);
   });
 });
 

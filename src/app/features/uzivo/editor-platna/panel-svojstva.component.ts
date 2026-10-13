@@ -58,7 +58,6 @@ export class PanelSvojstvaComponent {
 
   /** Kraj uređivanja teksta iz panela: tekst u dokument, fokus na okvir platna (kao Esc). */
   protected zavrsi(): void {
-    this.store.zavrsiUredjivanje();
-    this.fokusPlatna?.fokus();
+    if (this.store.zavrsiUredjivanje()) this.fokusPlatna?.fokus();
   }
 }

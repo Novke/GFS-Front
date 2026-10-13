@@ -703,6 +703,56 @@ describe('PlatnoEditorStore', () => {
       expect(k.odbaciPresek).not.toHaveBeenCalled();
     });
 
+    it('Fix 2/2: nalepi i duplirajIzabrane tokom sesije zatvaraju uređivanje (tekst je korak)', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AX', 'B'], [0, 1])));
+      store.izaberi(['s1']);
+      store.kopiraj();
+      store.izaberi(['t1']);
+      store.nalepi();
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.imaOtvoreno()).toBe(false);
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+      expect(store.izbor()).not.toContain('t1');
+
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni());
+      store.duplirajIzabrane();
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.izbor()).toHaveLength(1);
+      expect(store.izbor()[0]).not.toBe('t1');
+    });
+
+    it('Fix 2/3: zavrsiUredjivanje sa odbijenim presekom ne zatvara sesiju (tekst ostaje u uređivaču)', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      const preko = rezultat(['x'.repeat(50_001), 'B'], [0, 1]);
+      const k = lazni(preko, preko);
+      store.registrujUredjivac(k);
+      expect(store.zavrsiUredjivanje()).toBe(false);
+      expect(store.uredjivanje()).not.toBeNull();
+      expect(store.aktivniUredjivac()).toBe(k);
+      // ni druga sesija ni ubacivanje ne smeju da je zatvore
+      expect(store.pocniUredjivanje('s1')).toBe(false);
+      expect(store.ubaci((id) => oblik(id))).toBeNull();
+      expect(store.uredjivanje()?.slojId).toBe('t1');
+      expect(izlaz).not.toHaveBeenCalled();
+    });
+
+    it('Fix 2/3: zavrsiUredjivanje usred gesta ne zatvara sesiju; posle gesta tekst ulazi i sesija se zatvara', () => {
+      pocni(sa());
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['AX', 'B'], [0, 1])));
+      store.pocniGest();
+      expect(store.zavrsiUredjivanje()).toBe(false);
+      expect(store.uredjivanje()).not.toBeNull();
+      store.zavrsiGest();
+      expect(store.zavrsiUredjivanje()).toBe(true);
+      expect(store.uredjivanje()).toBeNull();
+      expect(tekstoviSloja(store.platno())).toEqual(['AX', 'B']);
+    });
+
     it('pocniUredjivanje usred gesta -> false', () => {
       pocni(sa());
       store.pocniGest();

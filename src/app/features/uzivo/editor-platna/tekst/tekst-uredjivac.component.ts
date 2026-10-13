@@ -142,8 +142,8 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
         podrazumevano: this.podrazumevano, skala: s.okvir.skala, skalaProreda: s.okvir.skalaProreda, ostalo,
         prekoracenje: () => this.obavestenja.greska(PORUKA_ZNAKOVA),
         naEsc: () => {
-          this.store.zavrsiUredjivanje();
-          this.fokusPlatna.fokus();
+          // presek nije primljen (granica, gest): sesija ostaje otvorena, pa i fokus ostaje u tekstu
+          if (this.store.zavrsiUredjivanje()) this.fokusPlatna.fokus();
           return true;
         },
       }),
