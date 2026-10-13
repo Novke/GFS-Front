@@ -123,6 +123,13 @@
   object-fit: contain;
 }
 
+/* Slika crteža je PowerPointova slika iz `mc:Fallback` (oko 96 dpi, celi pikseli), pa joj se odnos stranica ne poklapa
+   tačno sa kutijom (tanka linija 133 x 4,17 pt -> 179 x 7 px). PowerPoint sliku razvlači na kutiju; `contain` bi je
+   smanjio i centrirao (kraći potez). */
+.uz-pl-crtez img {
+  object-fit: fill;
+}
+
 .uz-pl-formula-izvor {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

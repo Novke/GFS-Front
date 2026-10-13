@@ -203,7 +203,8 @@ function zaokruziKaoServer(n: number): number {
 // ------------------------------------------------------------------ InkML
 
 interface Format { iX: number; iY: number; kanala: number; rezX: number | null; rezY: number | null; }
-interface Cetka { boja: string; sirinaPt: number; }
+/** `marker`: `rasterOp` `maskPen` (marker; PowerPointov PDF ga crta 50% providnog). */
+interface Cetka { boja: string; sirinaPt: number; marker: boolean; }
 interface SirovTrag { tacke: number[]; format: Format; cetka: Cetka; }
 interface Okvir { minX: number; maxX: number; minY: number; maxY: number; }
 type Ishod<T> = T | { razlog: string };
@@ -318,16 +319,18 @@ class Definicije {
     if (!c) {
       let boja = CRNA;
       let sirinaPt = PODRAZUMEVANA_SIRINA_CM * PT_PO_CM;
+      let marker = false;
       for (const bp of el ? deca(el, NS.inkml, 'brushProperty') : []) {
         const ime = bp.getAttribute('name');
         const v = bp.getAttribute('value')?.trim() ?? '';
         if (ime === 'color' && /^#[0-9A-Fa-f]{6}$/.test(v)) boja = v.toUpperCase();
+        if (ime === 'rasterOp') marker = v === 'maskPen';
         if (ime === 'width') {
           const w = brojAtr(bp, 'value', NaN);
           if (w > 0) sirinaPt = sirinaUPt(w, bp.getAttribute('units') ?? 'cm');
         }
       }
-      c = { boja, sirinaPt };
+      c = { boja, sirinaPt, marker };
       this.cetke.set(el, c);
     }
     return c;
@@ -429,8 +432,8 @@ function izabraniDeo(ac: Element): Element | null {
   return null;
 }
 
-/** Potezi crteža iz `p:contentPart` (veza iz dela kome element pripada) ili razlog zašto ih nema. */
-function potezi(deo: Element | null, kutijaGrupe: (k: Kutija) => Kutija, ctx: KontekstSlajda, sloj: { x: number; y: number }): Ishod<Potez[]> {
+/** Potezi crteža iz `p:contentPart` (veza iz dela kome element pripada) ili razlog zašto ih nema; `marker` = svi tragovi markerom. */
+function potezi(deo: Element | null, kutijaGrupe: (k: Kutija) => Kutija, ctx: KontekstSlajda, sloj: { x: number; y: number }): Ishod<{ potezi: Potez[]; marker: boolean }> {
   if (!deo) return { razlog: 'format crteža nije podržan' };
   const xfrm = dete(deo, NS.p14, 'xfrm');
   const off = xfrm && dete(xfrm, NS.a, 'off');
@@ -455,7 +458,9 @@ function potezi(deo: Element | null, kutijaGrupe: (k: Kutija) => Kutija, ctx: Ko
 
   const procitano = procitajTragove(koren);
   if ('razlog' in procitano) return procitano;
-  return preslikaj(procitano.tragovi, procitano.okvir, kp, ctx, sloj);
+  const preslikano = preslikaj(procitano.tragovi, procitano.okvir, kp, ctx, sloj);
+  if ('razlog' in preslikano) return preslikano;
+  return { potezi: preslikano, marker: procitano.tragovi.every((t) => t.cetka.marker) };
 }
 
 /**
@@ -485,9 +490,13 @@ export function pretvoriCrtez(ac: Element, kutijaGrupe: (k: Kutija) => Kutija, c
     const naziv = nazivOblika(pic);
     ctx.upozori('CRTEZ_BEZ_POTEZA', `${naziv ? `Crtež '${naziv}'` : 'Crtež'}: potezi nisu uvezeni (${ishod.razlog}), crtež se prikazuje kao slika.`);
   }
+  // Marker: slika iz Fallback-a je neprovidno žuta i prekriva tekst, a PowerPointov PDF ga crta 50% providnog
+  // (izmereno: #FFFC00 preko bele -> #FFFD7F). Model nema providnost poteza, pa se primenjuje na ceo sloj.
+  const marker = !('razlog' in ishod) && ishod.marker;
   return {
     id, tip: 'CRTEZ', naziv: slika.naziv, x: slika.x, y: slika.y, sirina: slika.sirina, visina: slika.visina,
-    rotacija: slika.rotacija, providnost: slika.providnost, zakljucan: false, senka: slika.senka, medijId: slika.medijId,
-    potezi: 'razlog' in ishod ? null : ishod,
+    rotacija: slika.rotacija, providnost: marker ? zaokruziKaoServer(slika.providnost * 0.5) : slika.providnost,
+    zakljucan: false, senka: slika.senka, medijId: slika.medijId,
+    potezi: 'razlog' in ishod ? null : ishod.potezi,
   };
 }

@@ -267,6 +267,17 @@ describe('pretvoriCrtez', () => {
     expect(debljina('<inkml:brushProperty name="width" value="0.05" units="in"/>').debljina).toBe(3.6);
   });
 
+  it('marker (rasterOp maskPen): sloj je 50% providan kao u PowerPointovom PDF-u; olovka i mešavina ostaju neprovidne', () => {
+    const marker = '<inkml:brushProperty name="width" value="0.5" units="cm"/><inkml:brushProperty name="color" value="#FFFC00"/>'
+      + '<inkml:brushProperty name="tip" value="rectangle"/><inkml:brushProperty name="rasterOp" value="maskPen"/>';
+    expect(crtez({}, ink({ cetka: marker })).s!.providnost).toBe(0.5);
+    expect(crtez({}, ink()).s!.providnost).toBe(1);
+    const dveCetke = ink({ cetka: marker }).replace('</inkml:definitions>',
+      '<inkml:brush xml:id="br1"><inkml:brushProperty name="color" value="#000000"/></inkml:brush></inkml:definitions>')
+      .replace('</inkml:ink>', '<inkml:trace contextRef="#ctx0" brushRef="#br1">0 0, 10 10</inkml:trace></inkml:ink>');
+    expect(crtez({}, dveCetke).s!.providnost).toBe(1);
+  });
+
   it('debljina se zaokružuje HALF_UP na 2 decimale kao server (2,835 -> 2,84, Math.round bi dao 2,83)', () => {
     const cetka = '<inkml:brushProperty name="width" value="2.835" units="pt"/>';
     expect(crtez({}, ink({ cetka, rezolucija: null })).s!.potezi![0].debljina).toBe(2.84);
