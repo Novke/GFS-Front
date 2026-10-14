@@ -217,13 +217,6 @@ describe('tabela', () => {
       expect(izmeniCelije(t0, { r1: 0, k1: 0, r2: 2, k2: 2 }, (c) => c)).toBe(t0);
     });
 
-    it('SPOLJNE na 2 x 2 opsegu: spoljne strane dobijaju ivicu, unutrašnje su null', () => {
-      const t = postaviIvice(tabela(), { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SPOLJNE', ivica);
-      expect(t.celije[0][0].ivice).toEqual({ gore: ivica, levo: ivica, dole: null, desno: null });
-      expect(t.celije[1][1].ivice).toEqual({ gore: null, levo: null, dole: ivica, desno: ivica });
-      expect(t.celije[2][2].ivice.gore).not.toBeNull(); // van opsega netaknuto
-    });
-
     it('Fix m3: iste ivice -> isti objekat (bez koraka); ćelije sa istim ivicama ostaju isti objekti', () => {
       const t = postaviIvice(tabela(), { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SVE', ivica);
       expect(postaviIvice(t, { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SVE', { ...ivica })).toBe(t);
@@ -250,11 +243,56 @@ describe('tabela', () => {
       proveriMrezu(sp);
     });
 
-    it('UNUTRASNJE, SVE i NIJEDNA', () => {
-      const o = { r1: 0, k1: 0, r2: 1, k2: 1 };
-      expect(postaviIvice(tabela(), o, 'UNUTRASNJE', ivica).celije[0][0].ivice).toEqual({ gore: null, levo: null, dole: ivica, desno: ivica });
-      expect(postaviIvice(tabela(), o, 'SVE', ivica).celije[0][1].ivice).toEqual({ gore: ivica, levo: ivica, dole: ivica, desno: ivica });
-      expect(postaviIvice(tabela(), o, 'NIJEDNA', ivica).celije[1][0].ivice).toEqual({ gore: null, levo: null, dole: null, desno: null });
+    describe('presuda m4: varijanta dira samo svoje strane (opseg 2 x 2 u tabeli 4 x 4, susedi imaju ivice teme)', () => {
+      const o = { r1: 1, k1: 1, r2: 2, k2: 2 };
+      let t0: TabelaSloj;
+      let tema: Ivica;
+      beforeEach(() => {
+        t0 = tabela(4, 4);
+        tema = t0.celije[0][1].ivice.dole!;
+        expect(tema).not.toBeNull();
+      });
+      const svaPoljaOpsega = [[1, 1], [1, 2], [2, 1], [2, 2]] as const;
+
+      it('SVE: sve strane vlasnika u opsegu + susedova strana na rubu', () => {
+        const t = postaviIvice(t0, o, 'SVE', ivica);
+        for (const [r, k] of svaPoljaOpsega) expect(t.celije[r][k].ivice).toEqual({ gore: ivica, dole: ivica, levo: ivica, desno: ivica });
+        expect([t.celije[0][1].ivice.dole, t.celije[1][0].ivice.desno, t.celije[3][2].ivice.gore, t.celije[2][3].ivice.levo])
+          .toEqual([ivica, ivica, ivica, ivica]);
+        expect(t.celije[0][1].ivice.gore).toBe(tema);
+        expect(t.celije[0][0]).toBe(t0.celije[0][0]);
+        expect(postaviIvice(t, o, 'SVE', { ...ivica })).toBe(t);
+      });
+
+      it('NIJEDNA: sve strane null + susedova strana na rubu null', () => {
+        const t = postaviIvice(t0, o, 'NIJEDNA', ivica);
+        for (const [r, k] of svaPoljaOpsega) expect(t.celije[r][k].ivice).toEqual({ gore: null, dole: null, levo: null, desno: null });
+        expect([t.celije[0][1].ivice.dole, t.celije[1][0].ivice.desno, t.celije[3][2].ivice.gore, t.celije[2][3].ivice.levo])
+          .toEqual([null, null, null, null]);
+        expect(postaviIvice(t, o, 'NIJEDNA', null)).toBe(t);
+      });
+
+      it('SPOLJNE: samo rub opsega (+ sused); unutrašnje strane ostaju netaknute', () => {
+        const t = postaviIvice(t0, o, 'SPOLJNE', ivica);
+        expect(t.celije[1][1].ivice).toEqual({ gore: ivica, levo: ivica, dole: tema, desno: tema });
+        expect(t.celije[2][2].ivice).toEqual({ gore: tema, levo: tema, dole: ivica, desno: ivica });
+        expect(t.celije[1][1].ivice.dole).toBe(t0.celije[1][1].ivice.dole);
+        expect([t.celije[0][1].ivice.dole, t.celije[1][0].ivice.desno, t.celije[3][2].ivice.gore, t.celije[2][3].ivice.levo])
+          .toEqual([ivica, ivica, ivica, ivica]);
+        expect(postaviIvice(t, o, 'SPOLJNE', { ...ivica })).toBe(t);
+      });
+
+      it('UNUTRASNJE: samo unutrašnje strane; rub i sused netaknuti', () => {
+        const t = postaviIvice(t0, o, 'UNUTRASNJE', ivica);
+        expect(t.celije[1][1].ivice).toEqual({ gore: tema, levo: tema, dole: ivica, desno: ivica });
+        expect(t.celije[2][2].ivice).toEqual({ gore: ivica, levo: ivica, dole: tema, desno: tema });
+        for (const [r, k] of [[0, 1], [1, 0], [3, 2], [2, 3]] as const) expect(t.celije[r][k]).toBe(t0.celije[r][k]);
+        expect(postaviIvice(t, o, 'UNUTRASNJE', { ...ivica })).toBe(t);
+      });
+
+      it('jedna ćelija bez unutrašnjih strana: UNUTRASNJE ne menja ništa (isti objekat)', () => {
+        expect(postaviIvice(t0, { r1: 1, k1: 1, r2: 1, k2: 1 }, 'UNUTRASNJE', ivica)).toBe(t0);
+      });
     });
   });
 

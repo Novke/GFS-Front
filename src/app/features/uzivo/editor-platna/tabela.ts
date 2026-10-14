@@ -210,26 +210,32 @@ const istaIvica = (a: Ivica | null, b: Ivica | null) =>
   a === b || (!!a && !!b && a.boja === b.boja && a.debljina === b.debljina && a.crtica === b.crtica);
 
 /**
- * Ivice vlasnika u (proširenom) opsegu: SVE = sve četiri strane, SPOLJNE = samo strane na rubu opsega (ostale null),
- * UNUTRASNJE = samo strane unutar opsega (rub null), NIJEDNA = sve null (`ivica` se ne gleda). Rub opsega dobija istu
- * vrednost i na suprotnoj strani suseda van opsega (prikaz crta širu od dve ivice deljene linije, `border-collapse`), pa
- * posle "Bez ivica" nema ruba ni sa jedne strane. Ćelija sa istim ivicama ostaje isti objekat; bez promene isti `t`.
+ * Ivice vlasnika u (proširenom) opsegu; varijanta dira SAMO svoje strane (kao PowerPoint): SVE = sve četiri strane,
+ * SPOLJNE = samo strane na rubu opsega, UNUTRASNJE = samo strane unutar opsega, NIJEDNA = sve četiri null (`ivica` se ne
+ * gleda). Kad varijanta menja rub, ista vrednost ide i na suprotnu stranu suseda van opsega (prikaz crta širu od dve
+ * ivice deljene linije, `border-collapse`), pa posle "Bez ivica" nema ruba ni sa jedne strane; UNUTRASNJE ne dira ni rub
+ * ni susede. Ćelija sa istim ivicama ostaje isti objekat; bez promene isti `t`.
  */
 export function postaviIvice(t: TabelaSloj, o: Opseg, vrsta: VrstaIvica, ivica: Ivica | null): TabelaSloj {
   const g = prosiriOpseg(t, o);
   const iv = vrsta === 'NIJEDNA' ? null : ivica;
-  const strana = (rub: boolean) => (vrsta === 'SVE' || (vrsta === 'SPOLJNE') === rub ? iv : null);
+  /** Vrednost strane, ili `undefined` kad varijanta tu stranu ne dira. */
+  const strana = (rub: boolean): Ivica | null | undefined =>
+    vrsta === 'SVE' || vrsta === 'NIJEDNA' || (vrsta === 'SPOLJNE') === rub ? iv : undefined;
+  /** Samo strane koje varijanta dira. */
+  const samo = (izmena: Partial<Record<keyof IviceCelije, Ivica | null | undefined>>): Partial<IviceCelije> =>
+    Object.fromEntries(Object.entries(izmena).filter(([, v]) => v !== undefined));
   let celije: Celija[][] | null = null;
   const postavi = (r: number, k: number, izmena: Partial<IviceCelije>) => {
     const c = (celije ?? t.celije)[r][k];
     const strane = Object.keys(izmena) as (keyof IviceCelije)[];
-    if (strane.every((s) => istaIvica(c.ivice[s], izmena[s] ?? null))) return;
+    if (!strane.length || strane.every((s) => istaIvica(c.ivice[s], izmena[s] ?? null))) return;
     celije ??= t.celije.map((red) => [...red]);
     celije[r][k] = { ...c, ivice: { ...c.ivice, ...izmena } };
   };
-  const sused = (r: number, k: number, izmena: Partial<IviceCelije>) => {
+  const sused = (r: number, k: number, izmena: Partial<Record<keyof IviceCelije, Ivica | null | undefined>>) => {
     const v = vlasnik(t, r, k);
-    postavi(v.r, v.k, izmena);
+    postavi(v.r, v.k, samo(izmena));
   };
   const R = t.redovi.length;
   const K = t.kolone.length;
@@ -243,7 +249,7 @@ export function postaviIvice(t: TabelaSloj, o: Opseg, vrsta: VrstaIvica, ivica: 
       const dole = strana(dno === g.r2);
       const levo = strana(k === g.k1);
       const desnaIvica = strana(desno === g.k2);
-      postavi(r, k, { gore, dole, levo, desno: desnaIvica });
+      postavi(r, k, samo({ gore, dole, levo, desno: desnaIvica }));
       // susedi van opsega (opseg je proširen, pa se njihova ivica poklapa sa rubom)
       for (let j = k; j <= desno; j++) {
         if (r === g.r1 && r > 0) sused(r - 1, j, { dole: gore });
