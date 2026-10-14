@@ -27,11 +27,19 @@ const DOZVOLJENO_PO_FEATURE = {
     'features/uzivo/data-access/sat', // čista klasa, bez uvoza
     'features/uzivo/data-access/razlog-greske', // samo HttpErrorResponse (tip), bez HTTP poziva
     'features/uzivo/ui/format', // čiste funkcije, bez uvoza
-    'features/uzivo/ui/markdown', // samo paket marked
+    'features/uzivo/ui/markdown', // paket marked i ui/tekst-formule (markdownSaFormulama; tekst-formule ima samo `import type` iz marked)
     'features/uzivo/ui/opcija-oblik', // komponenta, samo @angular/core
     'features/uzivo/ui/rang-lista.component', // uvozi samo uzivo.models i ui/format (oba gore)
     'features/uzivo/ui/tajmer.component', // uvozi samo data-access/sat (gore)
     'features/uzivo/lazni-sat.testing', // samo za specove (vitest), bez uvoza iz src/app
+    // Formule $...$ na telefonu (faza 5, odluka 4; pregled uvoza 2026-10-14, F3). Javni fajl ne uvozi ui/formula-markup,
+    // ui/formula-prikaz.component ni ui/formula-ucitavanje direktno (testovi pravila to drže): put do mathlive/ssr je samo
+    // lenji import() u ui/formula-ucitavanje, iza komponente. Tranzitivno statički: ui/formula-ucitavanje -> ui/preducitavanje
+    // (`import type` modela, uzivo.models/medijUrl, ui/platno-fontovi, ui/teme, ui/tekst-formule): podaci, `new Image()` i
+    // document.fonts, bez HTTP klijenta i bez /api/* van api/public/*; ui/formula-markup -> mathlive/ssr, ui/formula-komande,
+    // ui/formula-sanitizer (bez uvoza), samo u lenjom chunk-u.
+    'features/uzivo/ui/tekst-formule.component', // formule $...$: uvozi @angular/core, ui/tekst-formule, ui/markdown i ui/formula-ucitavanje; mathlive/ssr samo dinamički (ui/formula-markup), stil i fontovi iz assets/mathlive/
+    'features/uzivo/ui/tekst-formule', // čiste funkcije (tekstZaCitac), samo `import type` iz marked
   ],
 };
 
@@ -49,10 +57,11 @@ const ZABRANJENI_PAKETI_JAVNO = [
   'prosemirror-commands',
   'prosemirror-keymap',
   'prosemirror-history',
-  // Formule, faza 4 (F15): `mathlive/ssr` samo kroz lenji `ui/formula-markup` (projektor, konzola, editor), ceo `mathlive`
-  // samo u dijalogu formule editora (F16). Faza 5 sme da dozvoli `ui/formula-prikaz`, `ui/formula-ucitavanje` i
-  // `ui/formula-markup` javnom delu (DOZVOLJENO_PO_FEATURE), `mathlive` ostaje zabranjen za direktan uvoz.
+  // Formule, faza 4 (F15): `mathlive/ssr` samo kroz lenji `ui/formula-markup` (projektor, konzola, editor, od faze 5 i
+  // telefon preko `ui/tekst-formule.component`), ceo `mathlive` samo u dijalogu formule editora (F16). Javni fajl nikad
+  // ne uvozi paket direktno (ni `mathlive/ssr`, podputanja).
   'mathlive',
+  'pdfjs-dist', // uvoz PDF-a (features/uzivo/uvoz-pdf), samo dinamički iz nastavničkog dijaloga (faza 5)
 ];
 
 /** Ukupan spisak dozvoljenog za javni feature: zajednički plus njegov dodatak. */

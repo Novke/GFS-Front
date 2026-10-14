@@ -1,5 +1,5 @@
 import { InjectionToken } from '@angular/core';
-import { sacekajFontove } from './preducitavanje';
+import { sacekajFontove } from './cekanje-fontova';
 
 /*
  * Lenjo učitavanje statičkog prikaza formula (odluka 6 i 7): jedini dinamički `import()` modula `formula-markup` (u njemu

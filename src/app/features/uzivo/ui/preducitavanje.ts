@@ -1,5 +1,6 @@
 import type { Tema } from '../data-access/platno.models';
 import { SlajdDetails, medijUrl } from '../data-access/uzivo.models';
+import { sacekajFontove, skupFontova, ucitajRezove } from './cekanje-fontova';
 import { ModulFormule, resetujUcitavanjeFormula, ucitajFormule, ucitajStilFormula } from './formula-ucitavanje';
 import { FONTOVI_PLATNA, fontoviPlatna } from './platno-fontovi';
 import { imaFormulu } from './tekst-formule';
@@ -68,39 +69,8 @@ export function fontoviZaPrikaz(tema: Tema | null | undefined, slajdovi: readonl
   return fontovi;
 }
 
-/** Znakovi za `document.fonts.load`: latinica i latin-ext (`unicode-range` deli fajlove; č ć đ š ž su u latin-ext). */
-const UZORAK = 'AaZz09 čćđšž ČĆĐŠŽ';
-const REZOVI = ['400', '700'];
-
-interface SkupFontova { load(font: string, tekst?: string): Promise<unknown>; }
-
-function skupFontova(): SkupFontova | null {
-  const fonts = (document as Document & { fonts?: SkupFontova }).fonts;
-  return typeof fonts?.load === 'function' ? fonts : null;
-}
-
-/** Normalan i podebljan rez fonta (kurziv se učita sam pri prvom crtanju). */
-function ucitaj(skup: SkupFontova, font: string): Promise<unknown>[] {
-  return REZOVI.map((rez) => skup.load(`${rez} 32px "${font}"`, UZORAK));
-}
-
-/**
- * Čeka da se fontovi učitaju, najviše `maxMs`. Nikad ne odbija: greška učitavanja ili pregledač bez `document.fonts`
- * znači da se prikaz crta odmah (sa rezervnim fontom ili kad font stigne).
- */
-export function sacekajFontove(fontovi: Iterable<string>, maxMs = 3000): Promise<void> {
-  const skup = skupFontova();
-  if (!skup) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((razresi) => {
-    const tajmer = setTimeout(razresi, maxMs);
-    void Promise.allSettled([...new Set(fontovi)].flatMap((f) => ucitaj(skup, f))).then(() => {
-      clearTimeout(tajmer);
-      razresi();
-    });
-  });
-}
+/** Čekanje fontova je u `cekanje-fontova.ts` (bez uvoza); ovde se izvozi i dalje, za publiku i specove. */
+export { sacekajFontove };
 
 const trazeniFontovi = new Set<string>();
 
@@ -113,7 +83,7 @@ export function preducitajFontove(fontovi: Iterable<string>): void {
   for (const f of fontovi) {
     if (trazeniFontovi.has(f)) continue;
     trazeniFontovi.add(f);
-    void Promise.all(ucitaj(skup, f)).catch(() => trazeniFontovi.delete(f));
+    void Promise.all(ucitajRezove(skup, f)).catch(() => trazeniFontovi.delete(f));
   }
 }
 

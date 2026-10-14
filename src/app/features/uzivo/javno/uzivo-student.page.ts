@@ -7,10 +7,10 @@ import { distinctUntilChanged, map } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { medijUrl } from '../data-access/uzivo.models';
 import { grupisiCifre } from '../ui/format';
-import { renderMarkdown } from '../ui/markdown';
 import { OpcijaOblikComponent } from '../ui/opcija-oblik';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { TajmerComponent } from '../ui/tajmer.component';
+import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore } from './student.store';
 
@@ -27,13 +27,15 @@ export function naslovIshoda(
 /**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
  * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`).
- * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first.
+ * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first. Tekst pitanja i opcija (i tačne opcije)
+ * ide kroz `app-tekst-formule` (formule `$...$`): lenji `mathlive/ssr` chunk i `assets/mathlive/` traže se samo kad tekst
+ * ima formulu. Prihvatljivi odgovori, jedinica i oznake skale ostaju običan tekst (plan faze 5, odluka 2).
  */
 @Component({
   selector: 'app-uzivo-student',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [StudentStore],
-  imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent],
+  imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
     @let s = store;
@@ -121,7 +123,7 @@ export function naslovIshoda(
                   <div class="uz-st-pitanje">
                     <div class="uz-st-pitanje-vrh">
                       @if (celoPitanje() && p.tekst) {
-                        <div class="uz-st-md" [innerHTML]="md(p.tekst)"></div>
+                        <app-tekst-formule class="uz-st-md" [tekst]="p.tekst" [markdown]="true" />
                       }
                       <app-tajmer class="uz-st-tajmer" [rokMs]="p.rokMs" [preostaloMs]="p.preostaloMs" [sat]="s.sat()"
                                   [ukupnoMs]="s.ukupnoMs()" />
@@ -157,7 +159,7 @@ export function naslovIshoda(
                     @for (o of t.opcije; track o.indeks) {
                       <p class="uz-st-tacna">
                         <app-opcija-oblik [indeks]="o.indeks" [velicina]="40" />
-                        @if (o.tekst) { <span>{{ o.tekst }}</span> }
+                        @if (o.tekst) { <app-tekst-formule [tekst]="o.tekst" /> }
                       </p>
                     }
                     @if (t.tekst) { <p class="uz-st-tacna"><strong>{{ t.tekst }}</strong></p> }
@@ -188,12 +190,12 @@ export function naslovIshoda(
               <h2 id="uz-st-detalji-naslov" class="uz-st-podnaslov">Pitanje</h2>
               <button #zatvoriDetalje type="button" class="uz-st-dugme" (click)="detaljiOtvoreni.set(false)">Zatvori</button>
             </div>
-            @if (p.tekst) { <div class="uz-st-md" [innerHTML]="md(p.tekst)"></div> }
+            @if (p.tekst) { <app-tekst-formule class="uz-st-md" [tekst]="p.tekst" [markdown]="true" /> }
             @if (p.slikaId) { <img class="uz-st-slika" [src]="slika(p.slikaId)" alt="Slika uz pitanje" /> }
             @if (p.opcije?.length) {
               <ul class="uz-st-detalji-opcije">
                 @for (o of p.opcije; track o.id; let i = $index) {
-                  <li><app-opcija-oblik [indeks]="i" [velicina]="32" /><span>{{ tekstOpcije(p, i) }}</span></li>
+                  <li><app-opcija-oblik [indeks]="i" [velicina]="32" /><app-tekst-formule [tekst]="tekstOpcije(p, i)" /></li>
                 }
               </ul>
             }
@@ -213,7 +215,6 @@ export class UzivoStudentPage {
   protected readonly poeni = grupisiCifre;
   protected readonly ishod = naslovIshoda;
   protected readonly tekstOpcije = tekstOpcije;
-  protected readonly md = renderMarkdown;
   protected readonly slika = medijUrl;
 
   /** Režim A: tekst pitanja i opcija na telefonu. */
