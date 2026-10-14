@@ -1,7 +1,8 @@
 // Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F14 tabela, F16
 // formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na okvir
 // platna (odluka 12), i kad je ubacivanje odbijeno (meni sam ne vraća fokus, inače bi pao na body). "Tabela" (F14) je
-// CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Tekst" (F12) ubacuje
+// CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Formula" (F16) otvara dijalog (lenji chunk): posle
+// "Sačuvaj" nov sloj i fokus na okviru (i kad je odbijen); Otkaži vraća fokus na dugme (`restoreFocus` dijaloga). "Tekst" (F12) ubacuje
 // tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
 // (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
 // Poništi/Ponovi tokom sesije teksta (sloj ili ćelija) idu prvo u istoriju uređivača, pa u istoriju platna, kao
@@ -14,6 +15,7 @@ import type { Crtica, Platno, Sloj, Tema, VrstaOblika } from '../data-access/pla
 import { novaTabela, noviKrug, noviOblik, noviTekst, uSredini } from '../data-access/platno-novo';
 import { slobodnoMesto } from './komande';
 import { FokusPlatna } from './fokus-platna';
+import { formulaEditora } from './formula/formula-otvarac';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PRIHVACENE_SLIKE, SlikeEditora } from './slike-editora';
 import { UbaciTabeluComponent, type VelicinaTabele } from './ubaci-tabelu.component';
@@ -56,6 +58,8 @@ const OBLICI: readonly StavkaOblika[] = [
       <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
               [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
       <app-ubaci-tabelu (ubaci)="ubaciTabelu($event)" />
+      <button mat-icon-button type="button" aria-label="Formula" title="Formula (dvoklik na formulu je uređuje)"
+              (click)="ubaciFormulu()"><mat-icon svgIcon="functions" /></button>
       <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
       <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
       <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
@@ -80,6 +84,7 @@ export class TrakaAlataComponent {
   protected readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
   protected readonly slike = inject(SlikeEditora);
+  private readonly formula = formulaEditora();
   protected readonly oblici = OBLICI;
   protected readonly prihvaceneSlike = PRIHVACENE_SLIKE;
 
@@ -127,6 +132,14 @@ export class TrakaAlataComponent {
       const t = novaTabela(id, tema, v.redova, v.kolona);
       return { ...t, ...slobodnoMesto(p, t.sirina, t.visina) };
     });
+  }
+
+  /**
+   * "Formula": prazan dijalog (boja teksta teme, 28 pt, centar), pa nov izabran sloj. Posle "Sačuvaj" fokus na okvir platna
+   * (i kad je ubacivanje odbijeno granicom); posle Otkaži ostaje na dugmetu (dijalog ga vraća).
+   */
+  protected async ubaciFormulu(): Promise<void> {
+    if ((await this.formula.ubaci(this.tema())).sacuvano) this.fokusPlatna.fokus();
   }
 
   /** Dugme je `disabledInteractive` (zadržava fokus), pa klik dok otpremanje traje ovde ne otvara birač fajlova. */

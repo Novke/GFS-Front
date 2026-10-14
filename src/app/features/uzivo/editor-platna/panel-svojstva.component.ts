@@ -1,7 +1,7 @@
 // Panel "Svojstva" editora platna (F6): bez izbora svojstva slajda; za izbor zajednička polja (položaj, veličina,
 // providnost, senka) i, za tačno jedan sloj, polja njegove vrste (OBLIK i okvir TEKSTA, SLIKA); svojstva teksta (F13) za
-// jedan ili više izabranih TEKST slojeva. TABELA (F14): panel tabele i ispod svojstva teksta opsega ćelija. CRTEZ i
-// FORMULA imaju samo zajednička polja (F16 dodaje formulu). Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24). Tokom uređivanja teksta
+// jedan ili više izabranih TEKST slojeva. TABELA (F14): panel tabele i ispod svojstva teksta opsega ćelija. FORMULA
+// (F16): "Uredi formulu", boja, veličina i poravnanje. CRTEZ ima samo zajednička polja. Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24). Tokom uređivanja teksta
 // (F12) panel pokazuje samo svojstva teksta (F13, komande idu uređivaču) i dugme "Završi uređivanje (Esc)"; tabovi
 // Slojevi i Animacije su tada onemogućeni (napomena ovde).
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import type { Tema } from '../data-access/platno.models';
 import { FokusPlatna } from './fokus-platna';
 import { PlatnoEditorStore } from './platno-editor.store';
+import { SvojstvaFormuleComponent } from './svojstva-formule.component';
 import { SvojstvaOblikaComponent } from './svojstva-oblika.component';
 import { SvojstvaSlajdaComponent } from './svojstva-slajda.component';
 import { SvojstvaSlikeComponent } from './svojstva-slike.component';
@@ -20,7 +21,7 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
   selector: 'app-panel-svojstva',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatButtonModule, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent,
+    MatButtonModule, SvojstvaFormuleComponent, SvojstvaOblikaComponent, SvojstvaSlajdaComponent, SvojstvaSlikeComponent, SvojstvaSlojaComponent,
     SvojstvaTabeleComponent, SvojstvaTekstaComponent,
   ],
   template: `
@@ -43,6 +44,8 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
         } @else if (s.tip === 'TABELA') {
           <app-svojstva-tabele [sloj]="s" [tema]="tema()" />
           <app-svojstva-teksta [tema]="tema()" />
+        } @else if (s.tip === 'FORMULA') {
+          <app-svojstva-formule [sloj]="s" [tema]="tema()" />
         }
       }
     }

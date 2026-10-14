@@ -93,7 +93,8 @@ for (const rezim of ['dan', 'noc'] as const) {
     });
 
     // editor platna (lenji chunk) nad PLATNO slajdom 52: panel Svojstva sa izabranim oblikom i slikom, otvorena paleta
-    // boja (CDK popover), tekst, tabela (F14: popover "Tabela", panel tabele, uređivanje ćelije) i panel Slojevi
+    // boja (CDK popover), tekst, tabela (F14: popover "Tabela", panel tabele, uređivanje ćelije), formula (F16: panel i
+    // dijalog) i panel Slojevi
     test('editor platna (svojstva oblika i slike, paleta boja, slojevi): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('prezentacije/5');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
@@ -142,6 +143,19 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta tokom uređivanja (${rezim})`).toEqual([]);
       await page.keyboard.press('Escape');
       await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
+      // F16: panel formule, pa dijalog formule (math-field MathLive-a u fokusu posle učitavanja)
+      await izaberi('formula');
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva formule (${rezim})`).toEqual([]);
+      await editor.getByRole('button', { name: 'Uredi formulu' }).click();
+      const formula = page.locator('[data-oznaka="gfs-formula-editor"]');
+      await expect(formula.locator('math-field')).toBeFocused();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: dijalog formule (${rezim})`).toEqual([]);
+      await formula.getByRole('button', { name: 'Otkaži' }).click();
+      await expect(formula).toHaveCount(0);
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeFocused();
 
       // F14: "Tabela" (CDK popover sa poljima), panel tabele, pa uređivanje ćelije
       await editor.getByRole('button', { name: 'Tabela', exact: true }).click();

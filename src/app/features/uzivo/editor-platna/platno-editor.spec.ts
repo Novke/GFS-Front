@@ -3,15 +3,20 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { Subject } from 'rxjs';
+import type { MatDialog } from '@angular/material/dialog';
+import { Observable, Subject, of } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import { By } from '@angular/platform-browser';
-import type { Platno, TabelaSloj, TekstSloj } from '../data-access/platno.models';
+import type { FormulaSloj, Platno, TabelaSloj, TekstSloj } from '../data-access/platno.models';
 import { celija, pasus, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { novaTabela } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
+import { TEME } from '../ui/teme';
+import { FormulaOtvarac } from './formula/formula-otvarac';
+import type { FormulaUnos } from './formula/formula-pravila';
+import type { FormulaPodaci } from './formula/formula.dialog';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -35,6 +40,9 @@ describe('PlatnoEditorComponent', () => {
   let store: InstanceType<typeof PlatnoEditorStore>;
   let otpremanje: Subject<MedijInfo>;
   let poruke: Poruka[];
+  /** Lažni otvarač dijaloga formule: ishod je `ishodFormule(podaci)` (podrazumevano Otkaži). */
+  let ishodFormule: (p: FormulaPodaci) => FormulaUnos | undefined;
+  let otvoriFormulu: ReturnType<typeof vi.fn<(d: MatDialog, p: FormulaPodaci) => Promise<Observable<FormulaUnos | undefined>>>>;
   const el = () => fixture.nativeElement as HTMLElement;
   const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
   const taster = (cilj: Element, key: string, o: KeyboardEventInit = {}) => {
@@ -80,6 +88,8 @@ describe('PlatnoEditorComponent', () => {
 
   beforeEach(async () => {
     odjava = vi.fn<() => void>();
+    ishodFormule = () => undefined;
+    otvoriFormulu = vi.fn((_d: MatDialog, p: FormulaPodaci) => Promise.resolve(of(ishodFormule(p))));
     lazni = {
       izmeniPlatno: vi.fn<(id: number, p: Platno) => void>(),
       registrujPraznjenje: vi.fn<(f: () => void, o?: () => boolean) => () => void>(() => odjava),
@@ -92,6 +102,7 @@ describe('PlatnoEditorComponent', () => {
         { provide: PrezentacijeApi, useValue: { upload: () => otpremanje } },
         { provide: DIMENZIJE_SLIKE, useValue: () => Promise.resolve({ sirina: 100, visina: 50 }) },
         { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: FormulaOtvarac, useValue: { otvori: otvoriFormulu } },
       ],
     });
     otpremanje = new Subject<MedijInfo>();
@@ -988,6 +999,131 @@ describe('PlatnoEditorComponent', () => {
       taster(uredjivac()!, 'Tab', { shiftKey: true });
       await fixture.whenStable();
       expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 0 });
+    });
+  });
+
+  describe('formule (F16)', () => {
+    const SLIKA = '00000000-0000-0000-0000-0000000000aa';
+    const overlay = () => el().querySelector<HTMLElement>('app-platno-overlay')!;
+    const dvoklik = (x: number, y: number) =>
+      overlay().dispatchEvent(new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true }));
+    const formula = (id: string) => store.platno().slojevi.find((s) => s.id === id) as FormulaSloj;
+    /** Otvaranje dijaloga je asinhrono (dinamički import): obećanje, pa zatvaranje. */
+    const posle = async () => {
+      await fixture.whenStable();
+      await new Promise((r) => setTimeout(r));
+      await fixture.whenStable();
+    };
+    /** Samo formula (10, 10, 200 x 100) je vidljiva, sa slikom izvora iz PowerPointa. */
+    async function uvezenaFormula(deo: Partial<FormulaSloj> = {}) {
+      const p = platno();
+      store.inicijalizuj({
+        ...p, slojevi: p.slojevi.map((s) => (s.tip === 'FORMULA' ? { ...s, slikaIzvora: SLIKA, ...deo } : s)),
+      });
+      for (const id of ['tekst', 'slika', 'oblik', 'tabela', 'crtez']) store.prebaciSkriven(id);
+      lazni.izmeniPlatno.mockClear();
+      await fixture.whenStable();
+    }
+
+    it('"Formula" u traci: prazan dijalog iz teme; "Sačuvaj" -> izabran FORMULA sloj sa LaTeX-om (jedan korak), fokus na okviru', async () => {
+      ishodFormule = (p) => ({ ...p.pocetak, latex: '\\frac{a}{b}' });
+      const pre = store.platno();
+      dugmeTrake('Formula').click();
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      expect(otvoriFormulu.mock.calls[0][1]).toEqual({
+        pocetak: { latex: '', boja: TEME.NACRT.tekst, velicina: 28, poravnanje: 'CENTAR' }, tema: 'NACRT', izSlike: false,
+      });
+      const nov = store.jedan() as FormulaSloj;
+      expect(nov).toMatchObject({ tip: 'FORMULA', latex: '\\frac{a}{b}', slikaIzvora: null });
+      expect(store.platno().slojevi.at(-1)).toBe(nov);
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(okvir());
+      store.ponisti();
+      expect(store.platno()).toBe(pre);
+    });
+
+    it('"Formula" pa Otkaži: nema sloja ni izmene', async () => {
+      const pre = store.platno();
+      dugmeTrake('Formula').click();
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      expect(store.platno()).toBe(pre);
+      expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+    });
+
+    it('"Formula" kad bi sloj prešao granicu (301.): poruka, fokus na okviru (ne na body)', async () => {
+      const p = platno();
+      const slojevi = Array.from({ length: 300 }, (_, i) => ({ ...p.slojevi[2], id: `o${i}` }));
+      store.inicijalizuj({ ...p, slojevi, animacije: [] });
+      ishodFormule = (x) => ({ ...x.pocetak, latex: 'x' });
+      dugmeTrake('Formula').click();
+      await posle();
+      expect(store.platno().slojevi).toHaveLength(300);
+      expect(poruke.some((m) => m.tekst.includes('300'))).toBe(true);
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('dvoklik na uvezenu formulu (sa slikom izvora) i "Sačuvaj" bez izmene -> slikaIzvora null, jedan korak', async () => {
+      await uvezenaFormula();
+      const pocetak = formula('formula');
+      ishodFormule = (p) => p.pocetak;
+      dvoklik(50, 50);
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      expect(otvoriFormulu.mock.calls[0][1]).toEqual({
+        pocetak: { latex: 'x^2', boja: '#000000', velicina: 24, poravnanje: 'CENTAR' }, tema: 'NACRT', izSlike: true,
+      });
+      expect(formula('formula')).toEqual({ ...pocetak, slikaIzvora: null });
+      expect(lazni.izmeniPlatno).toHaveBeenCalledTimes(1);
+      store.ponisti();
+      expect(formula('formula')).toEqual(pocetak);
+    });
+
+    it('formula bez slike i "Sačuvaj" bez izmene: nema koraka ni PUT-a', async () => {
+      await uvezenaFormula({ slikaIzvora: null });
+      ishodFormule = (p) => p.pocetak;
+      dvoklik(50, 50);
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+      expect(store.mozeNazad()).toBe(false);
+    });
+
+    it('Enter (i F2) na izabranoj formuli otvara dijalog; zaključana: poruka "Sloj je zaključan." bez dijaloga', async () => {
+      store.izaberi(['formula']);
+      expect(taster(okvir(), 'Enter').defaultPrevented).toBe(true);
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      await uvezenaFormula({ zakljucan: true });
+      store.izaberi(['formula']);
+      taster(okvir(), 'F2');
+      await posle();
+      dvoklik(50, 50);
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      expect(poruke.filter((m) => m.tekst === 'Sloj je zaključan.')).toHaveLength(2);
+    });
+
+    it('editor nestao dok je dijalog otvoren: zakasneli "Sačuvaj" ne piše u slajd', async () => {
+      let zatvori!: (u: FormulaUnos) => void;
+      otvoriFormulu.mockImplementation(() => Promise.resolve(new Observable<FormulaUnos | undefined>((s) => {
+        zatvori = (u) => {
+          s.next(u);
+          s.complete();
+        };
+      })));
+      store.izaberi(['formula']);
+      taster(okvir(), 'Enter');
+      await posle();
+      const pocetak = formula('formula');
+      fixture.destroy();
+      zatvori({ latex: 'y', boja: '#000000', velicina: 24, poravnanje: 'CENTAR' });
+      await new Promise((r) => setTimeout(r));
+      expect(lazni.izmeniPlatno).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        slojevi: expect.arrayContaining([expect.objectContaining({ id: 'formula', latex: 'y' })]),
+      }));
+      expect(pocetak.latex).toBe('x^2');
     });
   });
 });

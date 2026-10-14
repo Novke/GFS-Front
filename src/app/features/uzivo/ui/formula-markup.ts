@@ -1,4 +1,5 @@
 import { convertLatexToMarkup, validateLatex } from 'mathlive/ssr';
+import { ZABRANJENE_KOMANDE } from './formula-komande';
 
 /*
  * Statički prikaz formule (odluka 5 i 6 plana editora): LaTeX -> markup MathLive-a, očišćen po dozvoljenoj listi. LaTeX
@@ -8,8 +9,8 @@ import { convertLatexToMarkup, validateLatex } from 'mathlive/ssr';
  * dozvoljenom listom elemenata, atributa i deklaracija stila. Ovaj modul učitava SAMO `formula-ucitavanje.ts`, dinamički.
  */
 
-/** Komande koje prave atribute ili stil iz LaTeX-a (odluka 5a): formula sa njima se crta kao izvor. */
-export const ZABRANJENE_KOMANDE = /\\(?:htmlStyle|style|cssId|htmlId|class|htmlData|href|url|csname)(?![A-Za-z])/;
+// spisak zabranjenih komandi (odluka 5a) je u `formula-komande.ts`: deli ga i editor (dijalog formule, F16) bez mathlive/ssr
+export { ZABRANJENE_KOMANDE } from './formula-komande';
 
 const ELEMENTI = new Set(['span', 'svg', 'path', 'line']);
 /** Elementi koji se brišu zajedno sa sadržajem (ostali nepoznati se razvijaju: ostaje sadržaj). */

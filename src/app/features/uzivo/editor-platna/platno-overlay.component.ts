@@ -6,9 +6,10 @@
 // Tekst (F12): dvoklik na TEKST sloj počinje uređivanje; sloj za uređivanje leži IZNAD overlay-a, pa pritisak koji
 // stigne ovde je van sloja u uređivanju: prvo završava uređivanje, pa radi izbor. Tabela (F14): klik u izabranu (ili
 // upravo izabranu) tabelu bira ćeliju po nacrtanim `td[data-celija]`, Shift+klik širi opseg, dvoklik uređuje ćeliju.
+// Formula (F16): dvoklik javlja id kroz `urediFormulu`; dijalog otvara koren editora (store ne zna za dijaloge).
 import { DOCUMENT } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, signal, untracked,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, output, signal, untracked,
 } from '@angular/core';
 import type { OblikSloj, Platno, Sloj, TabelaSloj, Tacka } from '../data-access/platno.models';
 import { stilSloja } from '../ui/platno-prikaz.component';
@@ -210,6 +211,8 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
   `,
 })
 export class PlatnoOverlayComponent {
+  /** Dvoklik na FORMULA sloj (F16): id sloja; koren editora otvara dijalog formule. */
+  readonly urediFormulu = output<string>();
   private readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
@@ -342,11 +345,15 @@ export class PlatnoOverlayComponent {
     return p.id !== null && typeof id === 'number' && id !== p.id;
   }
 
-  /** Dvoklik na TEKST sloj ili ćeliju tabele (gornji vidljivi sloj na tački): uređivanje teksta (zaključan: poruka iz store-a). */
+  /**
+   * Dvoklik na TEKST sloj ili ćeliju tabele (gornji vidljivi sloj na tački): uređivanje teksta (zaključan: poruka iz
+   * store-a); na FORMULA sloj: `urediFormulu` (F16).
+   */
   protected dvoklik(e: MouseEvent): void {
     const { tacka, px } = this.tacka(e);
     const s = slojNaTacki(this.store.zaPrikaz().slojevi, tacka, TOLERANCIJA_PX / px);
     if (s?.tip === 'TEKST') this.store.pocniUredjivanje(s.id);
+    if (s?.tip === 'FORMULA') this.urediFormulu.emit(s.id);
     const polje = s?.tip === 'TABELA' ? this.celijaNa(s, tacka) : null;
     if (s && polje) this.store.pocniUredjivanje(s.id, polje);
   }

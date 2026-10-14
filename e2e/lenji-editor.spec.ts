@@ -8,7 +8,7 @@ import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, stiloviIndeksa, tekst, zatvorenje,
   zbir, zbirGzip,
 } from './chunkovi';
-import { NIZ_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, nizoviEditora } from './nizovi-editora';
+import { NIZ_EDITORA, NIZ_FORMULE_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, nizoviEditora } from './nizovi-editora';
 
 /**
  * Budžeti odluke 7: početno <= 785 000 B (rast <= 5 kB), fajl stranice editora, sopstveno zatvorenje editora. Od 4b (F12:
@@ -20,6 +20,8 @@ const BUDZET_EDITOR_4B = 450_000;
 const BUDZET_EDITOR_4B_GZIP = 140_000;
 /** Sopstveno zatvorenje `mathlive/ssr` (statički prikaz formula, F15) minus početno, stranica i editor. */
 const BUDZET_MATHLIVE_SSR = 380_000;
+/** Dijalog formule (F16) sa celim `mathlive`-om koji dinamički uvozi, minus početno, stranica i editor (odluka 7). */
+const BUDZET_DIJALOG_FORMULE = 900_000;
 /** Niz koji ima samo ceo `mathlive` (`<math-field>`, dijalog formule F16), a ne `mathlive/ssr`. */
 const NIZ_MATH_FIELD = 'math-field';
 /** Niz koji postoji samo u šablonu stranice editora prezentacije (zaglavlje). */
@@ -61,7 +63,10 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
 
   test('editor platna: samo dinamički uvoz, sopstveno zatvorenje (sa ProseMirror-om) staje u budžet 4b', () => {
     const editor = fajlSa(NIZ_EDITORA, js);
-    expect(js.filter(u => statickiUvozi(tekst(u)).includes(editor)), `${editor}: statički uvoz`).toEqual([]);
+    // jedini statički uvoznik sme biti lenji dijalog formule (F16): builder kod koji dijalog deli sa editorom (izbor boje,
+    // brojčano polje, pravila formule) ostavlja u chunk-u editora, a dijalog se ionako učitava tek iz editora (dinamički)
+    const dijalog = fajlSa(NIZ_FORMULE_EDITORA, js);
+    expect(js.filter(u => u !== dijalog && statickiUvozi(tekst(u)).includes(editor)), `${editor}: statički uvoz`).toEqual([]);
     expect(js.some(u => dinamickiUvozi(tekst(u)).includes(editor)), `${editor}: nema dinamičkog import()-a`).toBe(true);
 
     const stranica = fajlSa(NIZ_STRANICE, js);
@@ -94,6 +99,41 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     const sopstveno = sopstvenoZatvorenje([ssr], ucitano);
     zapisi('mathlive/ssr (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
     expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_MATHLIVE_SSR);
+  });
+
+  test('dijalog formule: samo dinamički uvoz iz editora, ceo mathlive tek iz dijaloga, sopstveno zatvorenje u budžetu', () => {
+    const src = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'editor-platna', 'formula', 'formula.dialog.ts'), 'utf8');
+    expect(src).toContain(`export const OZNAKA_FORMULE_EDITORA = '${NIZ_FORMULE_EDITORA}';`);
+    const dijalog = fajlSa(NIZ_FORMULE_EDITORA, js);
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(dijalog)), `${dijalog}: statički uvoz`).toEqual([]);
+    const stranica = fajlSa(NIZ_STRANICE, js);
+    const editor = fajlSa(NIZ_EDITORA, js);
+    const vecUcitano = new Set([...pocetno, ...zatvorenje([stranica])]);
+    const sopstvenoEditor = sopstvenoZatvorenje([editor], vecUcitano);
+    expect(sopstvenoEditor.has(dijalog), 'dijalog nije u zatvorenju editora').toBe(false);
+    // dinamički ga uvozi samo editor (otvarač formule), nikad početno ni stranica
+    const uvoznici = js.filter(u => dinamickiUvozi(tekst(u)).includes(dijalog));
+    expect(uvoznici.length, `${dijalog}: nema dinamičkog import()-a`).toBeGreaterThan(0);
+    expect(uvoznici.filter(u => !sopstvenoEditor.has(u))).toEqual([]);
+    // ono što otvaranje dijaloga na kraju učita (statički i dinamički uvozi: mathlive se uvozi dinamički iz dijaloga);
+    // fajlovi koji su već učitani (početno, stranica, editor) se ne prate dalje: njihovi lenji uvozi nisu deo dijaloga
+    const sve = new Set<string>();
+    const red = [dijalog];
+    while (red.length) {
+      const f = red.pop()!;
+      if (sve.has(f) || vecUcitano.has(f) || sopstvenoEditor.has(f)) continue;
+      sve.add(f);
+      red.push(...statickiUvozi(tekst(f)), ...dinamickiUvozi(tekst(f)));
+    }
+    const sopstveno = [...sve];
+    zapisi('dijalog formule (sa mathlive, sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
+    zapisi('fajl chunk-a dijaloga formule', zbir([dijalog]));
+    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_DIJALOG_FORMULE);
+    const ceo = sopstveno.filter(f => tekst(f).includes(NIZ_MATHLIVE) && tekst(f).includes(NIZ_MATH_FIELD));
+    expect(ceo.length, 'ceo mathlive (math-field) u zatvorenju dijaloga').toBe(1);
+    // ceo mathlive nije statički uvezen ni iz dijaloga ni iz čega drugog (tek dinamički, posle otvaranja)
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(ceo[0])), `${ceo[0]}: statički uvoz`).toEqual([]);
+    expect(tekst(dijalog).includes(NIZ_MATHLIVE), 'fajl dijaloga nema MathLive').toBe(false);
   });
 
   test('izvori statičkog prikaza formula ne sadrže niz MathLive-a (odluka 26: niz prepoznaje samo biblioteku)', () => {

@@ -397,3 +397,59 @@ test.describe('uživo: tekst na platnu (4b, F12)', () => {
     expect(poslednji(mock, id)!.platno.slojevi.map(s => s.id)).toEqual(['s1']);
   });
 });
+
+test.describe('uživo: formula (4b, F16)', () => {
+  const dijalog = (page: Page) => page.locator('[data-oznaka="gfs-formula-editor"]');
+
+  test('"Formula": math-field u fokusu, kucanje, polje LaTeX, Sačuvaj; nijedan zahtev van porekla, fontovi lokalni', async ({ page, mock }) => {
+    const zahtevi: { url: string; metod: string }[] = [];
+    page.on('request', r => zahtevi.push({ url: r.url(), metod: r.method() }));
+    const id = await novoPlatno(page, mock);
+    const poreklo = new URL(page.url()).origin;
+
+    await traka(page).getByRole('button', { name: 'Formula', exact: true }).click();
+    await expect(dijalog(page)).toBeVisible();
+    const mf = dijalog(page).locator('math-field');
+    // dijalog sam fokusira math-field posle učitavanja MathLive-a (autoFocus: false, odluka 20)
+    await expect(mf).toBeFocused();
+    await page.keyboard.type('x^2');
+    const latex = dijalog(page).getByRole('textbox', { name: 'LaTeX' });
+    await expect(latex).toHaveValue('x^2');
+    // Esc u math-field-u pripada MathLive-u (LaTeX režim): dijalog ostaje otvoren
+    await page.keyboard.press('Escape');
+    await expect(dijalog(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await latex.fill('x^2');
+    const sacuvaj = dijalog(page).getByRole('button', { name: 'Sačuvaj' });
+    await expect(sacuvaj).toBeEnabled();
+    await sacuvaj.click();
+    await expect(dijalog(page)).toHaveCount(0);
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => poslednji(mock, id)?.platno.slojevi.map(s => ({ tip: s.tip, latex: (s as { latex?: string }).latex })))
+      .toEqual([{ tip: 'FORMULA', latex: 'x^2' }]);
+    expect((poslednji(mock, id)!.platno.slojevi[0] as { slikaIzvora?: string | null }).slikaIzvora).toBeNull();
+    await expect(okvir(page).locator('.ML__latex')).toBeVisible();
+
+    // nijedan zahtev van porekla (CDN fontova, zvuci, HEAD provera putanje MathLive-a), fontovi samo iz assets/mathlive/fonts/
+    await page.waitForLoadState('networkidle');
+    expect(zahtevi.filter(z => new URL(z.url).origin !== poreklo)).toEqual([]);
+    expect(zahtevi.filter(z => z.metod === 'HEAD')).toEqual([]);
+    const fontovi = zahtevi.filter(z => /\.woff2?$/.test(new URL(z.url).pathname) && /KaTeX/.test(z.url));
+    expect(fontovi.length).toBeGreaterThan(0);
+    expect(fontovi.filter(z => !new URL(z.url).pathname.includes('/assets/mathlive/fonts/'))).toEqual([]);
+    expect(zahtevi.filter(z => /sounds|\.wav$/.test(z.url))).toEqual([]);
+  });
+
+  test('zabranjena komanda u polju LaTeX: poruka i "Sačuvaj" onemogućeno; Otkaži vraća fokus na dugme', async ({ page, mock }) => {
+    await novoPlatno(page, mock);
+    const dugme = traka(page).getByRole('button', { name: 'Formula', exact: true });
+    await dugme.click();
+    await expect(dijalog(page).locator('math-field')).toBeFocused();
+    await dijalog(page).getByRole('textbox', { name: 'LaTeX' }).fill('\\href{http://e.com}{x}');
+    await expect(dijalog(page).getByRole('alert')).toContainText('nije dozvoljena');
+    await expect(dijalog(page).getByRole('button', { name: 'Sačuvaj' })).toBeDisabled();
+    await dijalog(page).getByRole('button', { name: 'Otkaži' }).click();
+    await expect(dijalog(page)).toHaveCount(0);
+    await expect(dugme).toBeFocused();
+  });
+});

@@ -7,6 +7,8 @@
 // tabele (F14) se uređuje istim uređivačem preko pravougaonika ćelije u sloju (iste rotacije), sa pozadinom
 // `popuna ?? pozadina slajda` (pokriva tekst prikaza) i sidrom ćelije; tabela ostaje u prikazu. Pravougaonik ćelije se
 // meri POSLE crtanja prikaza (red koji je tekst upravo raširio), a uređivač ima samo najmanju visinu, pa raste dok se kuca.
+// Formula (F16) se uređuje u dijalogu (lenji chunk, `formulaEditora`): dvoklik na sloj i Enter/F2 na izabranoj formuli;
+// posle zatvaranja dijalog vraća fokus na okvir platna (`restoreFocus`), a zakasneo ishod ne piše u uništen editor.
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, afterRenderEffect, computed,
   inject, input, signal, viewChild,
@@ -21,6 +23,7 @@ import { METRIKA } from '../ui/platno-metrika';
 import { PlatnoPrikazComponent, stilSloja } from '../ui/platno-prikaz.component';
 import { jedinice } from '../ui/platno-tekst';
 import { FokusPlatna } from './fokus-platna';
+import { formulaEditora } from './formula/formula-otvarac';
 import { nazivSloja } from './komande';
 import { OtpremanjeSlike } from './otpremanje-slike';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
@@ -59,7 +62,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
              (dragover)="preko($event)" (drop)="spusteno($event)">
           <div class="uz-platno rezim-dan uz-dan">
             <app-platno-prikaz [platno]="store.zaPrikaz()" />
-            <app-platno-overlay />
+            <app-platno-overlay (urediFormulu)="urediFormulu($event)" />
             <!-- nova sesija = nov uređivač (track po objektu sesije); presek teksta ne pravi nov -->
             @for (u of sesija(); track u.uredjivanje) {
               <div class="uz-pl-platno uz-ep-uredjivanje" [style.font-kerning]="kerning" [style.font-variant-ligatures]="ligature">
@@ -77,7 +80,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
         </div>
         <p id="uz-ep-precice" class="cdk-visually-hidden">
           Strelice pomeraju izabrano (Shift: 10), Delete briše, Ctrl+Z poništava, Ctrl+Y ponavlja, Ctrl+D duplira,
-          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor, Enter uređuje tekst. Ctrl+Z i Ctrl+Y rade i iz panela.
+          Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor, Enter uređuje tekst ili formulu. Ctrl+Z i Ctrl+Y rade i iz panela.
         </p>
         <p [id]="idPomoci" class="cdk-visually-hidden">
           Esc završava uređivanje teksta. Enter pravi nov pasus, Shift+Enter nov red, Tab na početku stavke liste menja nivo.
@@ -131,6 +134,7 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   private readonly fokusPlatna = inject(FokusPlatna);
   private readonly slike = inject(SlikeEditora);
   private readonly obavestenja = inject(NotificationStore);
+  private readonly formula = formulaEditora();
   private readonly okvir = viewChild.required<ElementRef<HTMLElement>>('okvir');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** Odjava SAMO ove registracije pražnjenja (nova instanca se može registrovati pre nego što ova nestane). */
@@ -220,6 +224,11 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     this.fokusPlatna.postavi(null);
   }
 
+  /** Dijalog formule za sloj (dvoklik, Enter/F2); zaključan sloj: poruka iz `formulaEditora`. */
+  protected urediFormulu(id: string): void {
+    void this.formula.uredi(id, this.tema());
+  }
+
   protected promenaTaba(indeks: number): void {
     this.store.postaviTab(TABOVI[indeks] ?? 'SVOJSTVA');
   }
@@ -305,8 +314,12 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
       case 'Z': this.store.zOsaIzabranih(k.smer); break;
       case 'POMERI': this.store.pomeriIzabrane(k.dx, k.dy); break;
       case 'UREDI': {
-        // tekst (F12), izabrana ćelija tabele ili prva (F14); formula (F16) dodaje svoje
+        // tekst (F12), izabrana ćelija tabele ili prva (F14); formula (F16): dijalog
         const s = this.store.jedan();
+        if (s?.tip === 'FORMULA') {
+          this.urediFormulu(s.id);
+          break;
+        }
         // izabrana ćelija (ako je posle poništavanja još u tabeli) ili prva
         const a = this.store.izabranaCelija();
         const celija = s?.tip !== 'TABELA' ? undefined : a && s.celije[a.r]?.[a.k] ? a : { r: 0, k: 0 };

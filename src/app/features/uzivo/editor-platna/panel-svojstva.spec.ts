@@ -49,10 +49,15 @@ describe('PanelSvojstvaComponent', () => {
     expect(svi.filter(ima)).toEqual(svi.filter((s) => delovi.includes(s)));
   });
 
-  it('CRTEZ i FORMULA: samo zajednička polja (TABELA ima svoj panel, F14)', async () => {
-    store.izaberi(['formula']);
+  it('CRTEZ: samo zajednička polja; FORMULA (F16): zajednička plus svojstva formule (TABELA ima svoj panel, F14)', async () => {
+    store.izaberi(['crtez']);
     await fixture.whenStable();
     expect(oznakePolja(el())).toEqual(['X', 'Y', 'Širina', 'Visina', 'Rotacija', 'Providnost']);
+    expect(ima('app-svojstva-formule')).toBe(false);
+    store.izaberi(['formula']);
+    await fixture.whenStable();
+    expect(oznakePolja(el())).toEqual(['X', 'Y', 'Širina', 'Visina', 'Rotacija', 'Providnost', 'Veličina']);
+    expect(ima('app-svojstva-formule')).toBe(true);
   });
 
   it('dva TEKST sloja: svojstva teksta (za oba); TEKST i OBLIK zajedno: bez njih', async () => {
