@@ -287,6 +287,69 @@ test.describe('uživo: formula bez slike na projektoru i konzoli', () => {
     });
   }
   /*
+   * F2 fix krug (recenzija F2, Minor 1): PITANJE (slajd 3 izvođenja 7) sa dugačkom formulom u tekstu i u opciji. Nacrtana
+   * formula ostaje u svom okviru (tekst pitanja, pločica) i skroluje se u sebi; strana nema horizontalni preliv.
+   */
+  test('publika: PITANJE sa dugačkom formulom: tekst i pločice ne izlaze iz okvira', async ({ page, mock }) => {
+    const duga = '$\\frac{a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9+a_{10}}{b_1+b_2+b_3+b_4+b_5+b_6+b_7+b_8+b_9+b_{10}}'
+      + '=x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8+x_9+x_{10}+y_1+y_2+y_3+y_4+y_5+y_6$';
+    mock.izvodjenje.izmeniSlajd(2, {
+      pitanje: {
+        id: 51, tip: 'JEDAN_TACAN', tekst: `Izračunaj ${duga} za zadate vrednosti.`, slika: null, vremeSekunde: null,
+        opcije: [
+          { id: 1, rb: 1, tekst: duga, tacna: false },
+          { id: 2, rb: 2, tekst: '$13$', tacna: true },
+          { id: 3, rb: 3, tekst: 'Vat', tacna: false },
+        ],
+        brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+        prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+      },
+    });
+    for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3) -> slajd 2 (3) -> slajd 3
+    await nastavnickiBroker(page, mock);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('izvodjenja/7/publika');
+
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--spremna .ML__latex')).toHaveCount(1);
+    await expect(page.locator('.uz-plocica .uz-formula--spremna .ML__latex')).toHaveCount(2);
+    const mere = await page.evaluate(() => {
+      const unutra = (f: Element, okvir: Element) => {
+        const a = f.getBoundingClientRect();
+        const b = okvir.getBoundingClientRect();
+        return a.left >= b.left - 0.5 && a.right <= b.right + 0.5;
+      };
+      const formule = [...document.querySelectorAll('.uz-formula--spremna')];
+      return {
+        preliv: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        uOkviru: formule.map(f => unutra(f, f.closest('.uz-plocica, .uz-pitanje-tekst')!)),
+        uSlajdu: formule.map(f => unutra(f, f.closest('.uz-slajd')!)),
+        skrol: formule.map(f => f.scrollWidth > f.clientWidth),
+        // znaci (tekstualni čvorovi) formule su vertikalno unutar kutije skrola, pa ih `overflow-y: hidden` ne seče
+        odsecenoPx: formule.map(f => {
+          const k = f.getBoundingClientRect();
+          const hodac = document.createTreeWalker(f, NodeFilter.SHOW_TEXT);
+          let najvise = 0;
+          for (let n = hodac.nextNode(); n; n = hodac.nextNode()) {
+            if (!n.textContent?.trim()) continue;
+            const opseg = document.createRange();
+            opseg.selectNodeContents(n);
+            for (const r of opseg.getClientRects()) {
+              if (r.width && r.height) najvise = Math.max(najvise, k.top - r.top, r.bottom - k.bottom);
+            }
+          }
+          return Math.max(0, Math.round(najvise));
+        }),
+      };
+    });
+    expect(mere.preliv, 'horizontalni preliv strane (px)').toBe(0);
+    expect(mere.uOkviru).toEqual([true, true, true]);
+    expect(mere.uSlajdu).toEqual([true, true, true]);
+    // dugačka formula je šira od mesta (skroluje se u sebi), kratka nije
+    expect(mere.skrol).toEqual([true, true, false]);
+    expect(mere.odsecenoPx, 'znaci formule van kutije po visini (px)').toEqual([0, 0, 0]);
+  });
+
+  /*
    * B-I1 (završna recenzija 4b B, Important 1): MathLive za `\cancel` piše `svg` sa `z-index: 2`. Bez `isolation` na
    * omotaču formule taj `svg` se crtao iznad kasnijih slojeva (sloj bez rotacije, providnosti i senke nema stacking context).
    */

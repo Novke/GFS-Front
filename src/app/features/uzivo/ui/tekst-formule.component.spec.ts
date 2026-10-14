@@ -228,6 +228,46 @@ describe('ucitajStilFormulaUTekstu', () => {
     expect(linkovi()[0].rel).toBe('stylesheet');
   });
 
+  it('postoji <link data-gfs="mathlive"> faze 4 (projektor): nema drugog linka, čeka se njegov load', async () => {
+    const faza4 = document.createElement('link');
+    faza4.rel = 'stylesheet';
+    faza4.href = 'assets/mathlive/mathlive-static.css';
+    faza4.dataset['gfs'] = 'mathlive';
+    document.head.appendChild(faza4);
+    let gotovo = false;
+    const p = ucitajStilFormulaUTekstu().then(() => { gotovo = true; });
+    expect(linkovi().length).toBe(0);
+    expect(document.head.querySelectorAll('link[href="assets/mathlive/mathlive-static.css"]').length).toBe(1);
+    await Promise.resolve();
+    expect(gotovo).toBe(false);
+    faza4.dispatchEvent(new Event('load'));
+    await p;
+    expect(load.mock.calls.map((c) => c[0])).toEqual([...FONTOVI_TEKSTA_FORMULE]);
+  });
+
+  it('link faze 4 je već učitan (sheet postoji): fontovi odmah, bez čekanja događaja', async () => {
+    const faza4 = document.createElement('link');
+    faza4.rel = 'stylesheet';
+    faza4.href = 'assets/mathlive/mathlive-static.css';
+    faza4.dataset['gfs'] = 'mathlive';
+    Object.defineProperty(faza4, 'sheet', { configurable: true, value: {} });
+    document.head.appendChild(faza4);
+    await ucitajStilFormulaUTekstu();
+    expect(linkovi().length).toBe(0);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('link faze 4 koji ne odgovori: najviše 3000 ms, pa fontovi', async () => {
+    const faza4 = document.createElement('link');
+    faza4.dataset['gfs'] = 'mathlive';
+    document.head.appendChild(faza4);
+    void ucitajStilFormulaUTekstu();
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(load).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('posle load linka: fonts.load tačno sa dva fonta teksta (ne svih 7 porodica faze 4)', async () => {
     const p = ucitajStilFormulaUTekstu();
     await Promise.resolve();

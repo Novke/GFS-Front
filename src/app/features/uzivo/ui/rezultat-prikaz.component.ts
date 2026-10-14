@@ -107,7 +107,8 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
                 [style.--uz-boja]="o.boja">
               <app-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
               <span class="uz-rez-opcija-tekst">
-                @if (o.tacna) { <span class="uz-tacno-znak">✓ tačno</span> }
+                <!-- razmak kao tekst: Angular briše čvor sa samim razmakom između dva elementa -->
+                @if (o.tacna) {<span class="uz-tacno-znak">✓ tačno</span>{{ ' ' }}}
                 <app-tekst-formule [tekst]="o.tekst" />
               </span>
               <span class="uz-rez-opcija-vrednost">{{ o.broj }} · {{ o.procenat }} %</span>

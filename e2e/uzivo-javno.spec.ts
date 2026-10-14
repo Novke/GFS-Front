@@ -91,50 +91,70 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
 const DUGA_FORMULA = '$\\frac{a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9}{b_1+b_2+b_3+b_4+b_5+b_6+b_7+b_8+b_9}=x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8$';
 
 /** Snimak sa otvorenim pitanjem (režim PITANJE: tekst i opcije na telefonu) sa dugačkom formulom u tekstu i opciji. */
-const saFormulom = (ime: string) => {
+type Ekran360 = 'unos' | 'tacan' | 'detalji';
+const saFormulom = (ime: string, ekran: Ekran360 = 'unos') => {
   const p = pocetno(ime);
   return {
     licno: p.licno,
     javno: {
-      ...p.javno, prikaz: 'SLAJD', slajdTip: 'PITANJE', telefonPrikaz: 'PITANJE',
+      ...p.javno, prikaz: 'SLAJD', slajdTip: 'PITANJE',
+      // detalji: režim B (dugmad) sa dozvoljenim detaljima, tekst stiže u panel "Detalji"
+      telefonPrikaz: ekran === 'detalji' ? 'DUGMAD' : 'PITANJE', detaljiDozvoljeni: ekran === 'detalji',
       pitanje: {
-        tip: 'JEDAN_TACAN', faza: 'OTVORENO', rundaId: 31, brojOpcija: 2,
+        tip: 'JEDAN_TACAN', faza: ekran === 'tacan' ? 'ZATVORENO' : 'OTVORENO', rundaId: 31, brojOpcija: 2,
         opcije: [{ id: 1, tekst: DUGA_FORMULA }, { id: 2, tekst: '$13$' }],
         tekst: `Izračunaj ${DUGA_FORMULA} za zadate vrednosti.`, slikaId: null, jedinica: null, skalaMinOznaka: null,
-        skalaMaxOznaka: null, rokMs: null, preostaloMs: null, tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+        skalaMaxOznaka: null, rokMs: null, preostaloMs: null, tacneOpcije: ekran === 'tacan' ? [1] : null, tacanBroj: null,
+        prihvatljiviOdgovori: null,
       },
     },
   };
 };
 
 /*
- * Raspored telefona od 360 px sa dugačkom formulom (F3; napomena recenzije F2, Minor 1). Namerno na osnovnoj fiksturi,
+ * Raspored telefona od 360 px sa dugačkom formulom (F3; napomena recenzije F2, Minor 1, ispravljeno u F2 fix krugu). Namerno na osnovnoj fiksturi,
  * ne na `javna-mreza`: ta do F5 obara svaki zahtev na `assets/mathlive/` i svaki JS sa `ML__latex`, a formula ih traži.
  * Mrežu javne rute sa formulom proverava F5 (`uzivo-javno` pod `javna-mreza`, `zabranjeniJavno`).
  */
 osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () => {
   osnovniTest.use({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
 
-  async function otvoriPitanje(page: Page): Promise<void> {
+  async function otvoriPitanje(page: Page, ekran: Ekran360 = 'unos'): Promise<void> {
     let ime = '';
-    await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? saFormulom(ime) : undefined));
+    await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? saFormulom(ime, ekran) : undefined));
     await page.goto(`uzivo/${KOD}`);
     ime = 'Mina';
     await page.getByLabel('Tvoje ime').fill(ime);
     const udji = page.getByRole('button', { name: 'Uđi' });
     await expect(udji).toBeEnabled();
     await udji.click();
-    await expect(page.locator('app-tekst-formule.uz-st-md')).toBeVisible();
+    if (ekran === 'detalji') {
+      const detalji = page.getByRole('button', { name: 'Detalji' });
+      await expect(detalji).toBeEnabled();
+      await detalji.click();
+      await expect(page.getByRole('dialog', { name: 'Pitanje' })).toBeVisible();
+    }
+    if (ekran === 'tacan') {
+      await expect(page.locator('.uz-st-tacna app-tekst-formule')).toBeVisible();
+    } else {
+      await expect(page.locator('app-tekst-formule.uz-st-md')).toBeVisible();
+    }
   }
+
+  /** Desna ivica svake nacrtane formule unutar okvira (fiksiran panel "Detalji" se ne vidi u `scrollWidth` dokumenta). */
+  const formuleUOkviru = (page: Page, okvir: string) => page.evaluate((sel) => {
+    const o = document.querySelector(sel)!.getBoundingClientRect();
+    return [...document.querySelectorAll(`${sel} .uz-formula--spremna`)].map((f) => {
+      const r = f.getBoundingClientRect();
+      return r.left >= o.left - 0.5 && r.right <= o.right + 0.5;
+    });
+  }, okvir);
 
   const preliv = (page: Page) =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
   osnovniTest('izvor formule (modul se ne učita): dokument nema horizontalni preliv', async ({ page }) => {
-    // Očekivan pad (izmereno 2026-10-14: preliv 893 px) dok F2 fix krug ne skine `white-space: nowrap` sa izvora (`.uz-formula`
-    // u uzivo-tokeni.css): izvor se ne lomi i izlazi iz ekrana. Kad CSS bude ispravljen, Playwright javi "expected to fail"
-    // i ova linija se briše.
-    osnovniTest.fail(true, 'F2 Minor 1: .uz-formula nowrap važi i za izvor');
+    // Izvor se lomi i usred LaTeX-a bez razmaka (`.uz-formula`, uzivo-tokeni.css; pre F2 fix kruga preliv 893 px).
     // lenji chunk-ovi ne stižu (kao telefon bez mreže usred časa): formula ostaje izvor `$...$`
     await page.route(/\/chunk-[^/]+\.js$/, async r => {
       const telo = await (await r.fetch()).text();
@@ -150,12 +170,27 @@ osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () 
   });
 
   osnovniTest('spremna formula (MathLive): dokument nema horizontalni preliv', async ({ page }) => {
-    // Očekivan pad (izmereno 2026-10-14: preliv 312 px) dok F2 fix krug ne doda skrol unutar `.uz-formula--spremna`
-    // (`.ML__latex` i `nowrap` šire stranu). Kad CSS bude ispravljen, ova linija se briše.
-    osnovniTest.fail(true, 'F2 Minor 1: spremna formula nema sopstveni skrol');
+    // Šira formula se skroluje u sebi (`.uz-formula--spremna`, uzivo-tokeni.css; pre F2 fix kruga preliv 312 px).
     await otvoriPitanje(page);
     await expect(page.locator('.uz-st-md .uz-formula--spremna .ML__latex')).toHaveCount(1);
     await expect(page.locator('.uz-st-opcija .uz-formula--spremna .ML__latex')).toHaveCount(2);
+    expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
+    expect(await formuleUOkviru(page, '.uz-st-telo')).toEqual([true, true, true]);
+  });
+
+  osnovniTest('ekran "tačan odgovor" (flex red sa značkom): nacrtana formula ostaje u ekranu', async ({ page }) => {
+    await otvoriPitanje(page, 'tacan');
+    await expect(page.locator('.uz-st-tacna .uz-formula--spremna .ML__latex')).toHaveCount(1);
+    expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
+    expect(await formuleUOkviru(page, '.uz-st-telo')).toEqual([true]);
+  });
+
+  osnovniTest('panel "Detalji" (position: fixed): nema preliva panela, formule u panelu', async ({ page }) => {
+    await otvoriPitanje(page, 'detalji');
+    const panel = page.locator('.uz-st-detalji');
+    await expect(panel.locator('.uz-formula--spremna .ML__latex')).toHaveCount(3);
+    expect(await panel.evaluate(e => e.scrollWidth - e.clientWidth), 'preliv panela (px)').toBe(0);
+    expect(await formuleUOkviru(page, '.uz-st-detalji')).toEqual([true, true, true]);
     expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
   });
 });

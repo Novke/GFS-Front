@@ -31,19 +31,33 @@ let stilTeksta: Promise<void> | null = null;
 
 /**
  * Lakši stil za formule u tekstu (telefon): isti `assets/mathlive/mathlive-static.css` kao faza 4, pa samo dva fonta
- * (najviše 3 + 3 s). Ne odbija (greška ili istek -> formula se ipak crta, fontovi stižu kasnije).
+ * (najviše 3 + 3 s). Ne odbija (greška ili istek -> formula se ipak crta, fontovi stižu kasnije). Kad link faze 4
+ * (`link[data-gfs="mathlive"]`, `ucitajStilFormula`: projektor i konzola posle `preducitajFormule`) već postoji, drugi se
+ * ne dodaje: to je isti fajl (`PUTANJA_STILA_FORMULA`), pa bi se ista pravila samo primenila dvaput; čeka se njegov `load`
+ * (slušalac, ne `onload`, koji pripada fazi 4), ili ništa ako je već učitan (`sheet`).
  */
 export function ucitajStilFormulaUTekstu(): Promise<void> {
   stilTeksta ??= new Promise<void>((razresi) => {
+    const postojeci = document.head.querySelector<HTMLLinkElement>('link[data-gfs="mathlive"]');
+    if (postojeci?.sheet) {
+      razresi();
+      return;
+    }
+    const tajmer = setTimeout(razresi, NAJDUZE_MS);
+    const gotovo = () => {
+      clearTimeout(tajmer);
+      razresi();
+    };
+    if (postojeci) {
+      postojeci.addEventListener('load', gotovo, { once: true });
+      postojeci.addEventListener('error', gotovo, { once: true });
+      return;
+    }
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = PUTANJA_STILA_FORMULA; // relativno, kao faza 4 (radi pod svakim <base href>)
     link.dataset['gfs'] = 'mathlive-tekst';
-    const tajmer = setTimeout(razresi, NAJDUZE_MS);
-    link.onload = link.onerror = () => {
-      clearTimeout(tajmer);
-      razresi();
-    };
+    link.onload = link.onerror = gotovo;
     document.head.appendChild(link);
   }).then(() => {
     const fonts = (document as Document & { fonts?: { load(f: string, t?: string): Promise<unknown> } }).fonts;

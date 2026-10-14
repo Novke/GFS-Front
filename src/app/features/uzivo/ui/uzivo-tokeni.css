@@ -165,11 +165,35 @@
   border-top: 1px solid var(--line);
 }
 
-/* Formula u tekstu pitanja i opcije (`app-tekst-formule`): ne lomi se na pola. `isolation` kao `.uz-pl-formula-markup`
-   (platno.css): `svg` MathLive-a za `\cancel` i `\enclose` ima `z-index: 2`, koji tako važi samo unutar formule. */
+/* Formula u tekstu pitanja i opcije (`app-tekst-formule`). Izvor (`$...$` dok se modul učitava ili kad formula nije
+   ispravna) se lomi kao tekst, i usred dugačkog LaTeX-a bez razmaka (`anywhere`), da telefon od 360 px nema
+   horizontalni skrol. `isolation` kao `.uz-pl-formula-markup` (platno.css): `svg` MathLive-a za `\cancel` i `\enclose` ima
+   `z-index: 2`, koji tako važi samo unutar formule. */
 .uz-formula {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   isolation: isolate;
+}
+
+/* Nacrtana formula se ne lomi na pola; šira od mesta se skroluje u sebi (`max-width` od bloka roditelja). `inline-flex`,
+   ne `inline-block`: blok sa `overflow` koji nije `visible` bi seo na donju ivicu umesto na osnovnu liniju teksta
+   (Chromium: pomak ~0,25em), a flex kontejner zadržava osnovnu liniju formule. Indeksi MathLive-a izlaze ~0,1em ispod
+   kutije `.ML__latex`, a skrol kontejner seče i po visini: `padding-block` daje im mesto, a jednaka negativna margina
+   vraća visinu reda kakva je bila. */
+.uz-formula--spremna {
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25em;
+  margin-block: -0.25em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* Domaćin kao flex stavka (pločica, opcija na telefonu, ekran "tačan odgovor", Detalji): bez ovoga je najmanja širina
+   cela formula, pa bi `max-width: 100%` formule pratio raširen domaćin i strana bi dobila horizontalni skrol. */
+app-tekst-formule {
+  min-width: 0;
 }
 
 /* ---------- Slajd: INFO ---------- */
