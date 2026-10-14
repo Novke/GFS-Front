@@ -534,3 +534,14 @@
     animation: none !important;
   }
 }
+
+/* Formula na telefonu (`app-tekst-formule`): smanjuje se do 0,75 (`MIN_K_FORMULE_TELEFON`), a tek šira od toga se skroluje
+   u sebi (overlay trake telefona ne pomeraju raspored). Skrol kontejner seče i po visini: indeksi MathLive-a izlaze ~0,1em
+   ispod `.ML__latex`, pa `padding-block` daje mesto, a negativna margina vraća visinu reda. */
+.uz-st .uz-formula--spremna {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25em;
+  margin-block: -0.25em;
+}

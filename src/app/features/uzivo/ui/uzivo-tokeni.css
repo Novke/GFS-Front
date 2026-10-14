@@ -174,26 +174,30 @@
   isolation: isolate;
 }
 
-/* Nacrtana formula se ne lomi na pola; šira od mesta se skroluje u sebi (`max-width` od bloka roditelja). `inline-flex`,
-   ne `inline-block`: blok sa `overflow` koji nije `visible` bi seo na donju ivicu umesto na osnovnu liniju teksta
-   (Chromium: pomak ~0,25em), a flex kontejner zadržava osnovnu liniju formule. Indeksi MathLive-a izlaze ~0,1em ispod
-   kutije `.ML__latex`, a skrol kontejner seče i po visini: `padding-block` daje im mesto, a jednaka negativna margina
-   vraća visinu reda kakva je bila. */
+/* Nacrtana formula se ne lomi na pola i nije skrol kontejner (projektor, konzola, pregled u editoru, pregled izvođenja:
+   tu niko ne skroluje, a klasična traka od 15 px bi i kratkoj formuli podigla red). Šira od svog bloka se smanjuje:
+   `--uz-formula-k` (`app-tekst-formule`, merenje posle crtanja i na promenu veličine; markup MathLive-a je u `em`, pa se
+   smanjuje i raspored), najviše do 0,5; ispod toga je seče ivica domaćina (`overflow-x: clip`), bez trake.
+   `inline-flex`: osnovna linija formule kao u tekstu. `padding-inline-end` uvlači prepust MathLive-a (~2 px van
+   `.ML__latex`) u kutiju, a jednaka negativna margina vraća raspored. `font-weight: 400`: debljina teksta oko formule
+   (pitanje 600, tačna opcija 700) bi tražila bold KaTeX fontove, koje lakši učitavač stila ne čeka. */
 .uz-formula--spremna {
   display: inline-flex;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-block: 0.25em;
-  margin-block: -0.25em;
+  box-sizing: border-box;
+  padding-inline-end: 0.15em;
+  margin-inline-end: -0.15em;
+  font-size: calc(var(--uz-formula-k, 1) * 1em);
+  font-weight: 400;
   white-space: nowrap;
   vertical-align: baseline;
 }
 
-/* Domaćin kao flex stavka (pločica, opcija na telefonu, ekran "tačan odgovor", Detalji): bez ovoga je najmanja širina
-   cela formula, pa bi `max-width: 100%` formule pratio raširen domaćin i strana bi dobila horizontalni skrol. */
+/* Domaćin: kao flex stavka (pločica, opcija na telefonu, ekran "tačan odgovor", Detalji) bez `min-width: 0` je najmanja
+   širina cela formula, pa bi blok formule (mesto za merenje) bio raširen i strana bi dobila horizontalni skrol.
+   `overflow-x: clip`: formula koja ni sa k = 0,5 ne staje seče se na ivici, bez skrol kontejnera i trake. */
 app-tekst-formule {
   min-width: 0;
+  overflow-x: clip;
 }
 
 /* ---------- Slajd: INFO ---------- */

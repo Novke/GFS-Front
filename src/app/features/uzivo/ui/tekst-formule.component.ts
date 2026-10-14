@@ -1,5 +1,6 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input,
+  signal,
 } from '@angular/core';
 import { PUTANJA_STILA_FORMULA, UCITAJ_FORMULE, type ModulFormule } from './formula-ucitavanje';
 import { markdownSaFormulama } from './markdown';
@@ -25,6 +26,34 @@ function najvise(p: Promise<unknown>, ms: number): Promise<void> {
     };
     p.then(kraj, kraj);
   });
+}
+
+/** Najmanji koeficijent veličine formule: nastavnički prikazi (ispod se seče na ivici okvira) i telefon (ispod: skrol). */
+export const MIN_K_FORMULE = 0.5;
+export const MIN_K_FORMULE_TELEFON = 0.75;
+/** Rezerva u em teksta oko formule: prepust MathLive-a (~2 px van `.ML__latex`) i `padding-inline-end` formule (0,15em). */
+const REZERVA_EM = 0.3;
+
+/**
+ * Koeficijent veličine formule (`--uz-formula-k`, `font-size: k * 1em`) da prirodna širina (pri k = 1) stane u raspoloživu:
+ * `clamp(min, raspolozivo / prirodna, 1)`; bez merenja (0, NaN) 1. Markup MathLive-a je u `em`, pa se širina menja linearno.
+ */
+export function koeficijentFormule(prirodna: number, raspolozivo: number, min: number): number {
+  if (!(prirodna > 0) || !(raspolozivo > 0)) {
+    return 1;
+  }
+  return Math.min(1, Math.max(min, raspolozivo / prirodna));
+}
+
+/** Najbliži predak koji nije u redu (`inline*`, `contents`): njegova širina sadržaja je mesto formule. */
+function blokRoditelja(el: HTMLElement): HTMLElement | null {
+  for (let e = el.parentElement; e; e = e.parentElement) {
+    const d = getComputedStyle(e).display;
+    if (d !== 'contents' && !d.startsWith('inline')) {
+      return e;
+    }
+  }
+  return null;
 }
 
 let stilTeksta: Promise<void> | null = null;
@@ -103,6 +132,10 @@ export class TekstFormuleComponent {
   private readonly ucitajStil = inject(UCITAJ_STIL_TEKSTA_FORMULE);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly modul = signal<ModulFormule | null>(null);
+  /** Raste kad se promeni veličina okvira (`ResizeObserver`) ili stignu fontovi: formula se ponovo meri. */
+  private readonly preracun = signal(0);
+  private posmatrac: ResizeObserver | null = null;
+  private readonly posmatrani = new WeakSet<Element>();
   private ucitavanje = false;
   protected readonly pripremljen = computed(() =>
     this.markdown() ? markdownSaFormulama(this.tekst()) : tekstSaFormulama(this.tekst()));
@@ -147,6 +180,63 @@ export class TekstFormuleComponent {
           el.setAttribute('aria-label', latex);
         });
       },
+      // Formula se smanjuje da stane u svoj blok (projektor i konzola ne skroluju; telefon tek ispod MIN_K_FORMULE_TELEFON,
+      // `.uz-st`): prvo sva čitanja, pa svi upisi, bez naizmeničnog rasporeda.
+      mixedReadWrite: () => {
+        this.preracun();
+        if (!this.modul() || !this.pripremljen().formula) {
+          return;
+        }
+        const min = this.host.closest('.uz-st') ? MIN_K_FORMULE_TELEFON : MIN_K_FORMULE;
+        const mere = Array.from(this.host.querySelectorAll<HTMLElement>(`span.${KLASA_FORMULE}--spremna`)).map((el) => {
+          const ml = el.firstElementChild;
+          const blok = blokRoditelja(el);
+          if (!ml || !blok) {
+            return null;
+          }
+          const stari = Number(el.style.getPropertyValue('--uz-formula-k')) || 1;
+          const sb = getComputedStyle(blok);
+          const levo = blok.getBoundingClientRect().left + blok.clientLeft + parseFloat(sb.paddingLeft || '0');
+          let raspolozivo = blok.clientWidth - parseFloat(sb.paddingLeft || '0') - parseFloat(sb.paddingRight || '0');
+          // u redu bez preloma (ćelija rezultata) formula ne prelazi u novi red: mesto je od njenog početka do ivice
+          if (sb.whiteSpace === 'nowrap' || sb.whiteSpace === 'pre') {
+            raspolozivo -= el.getBoundingClientRect().left - levo;
+          }
+          const fs = parseFloat(getComputedStyle(el.parentElement ?? blok).fontSize) || 16;
+          const prirodna = ml.getBoundingClientRect().width / stari;
+          return { el, blok, stari, k: koeficijentFormule(prirodna, raspolozivo - REZERVA_EM * fs, min) };
+        });
+        for (const m of mere) {
+          if (!m) {
+            continue;
+          }
+          this.posmatraj(m.blok);
+          if (Math.abs(m.k - m.stari) > 0.01) {
+            if (m.k === 1) {
+              m.el.style.removeProperty('--uz-formula-k');
+            } else {
+              m.el.style.setProperty('--uz-formula-k', m.k.toFixed(3));
+            }
+          }
+        }
+      },
     });
+    const fonts = (document as Document & { fonts?: EventTarget }).fonts;
+    const kadFontovi = () => this.preracun.update((n) => n + 1);
+    fonts?.addEventListener?.('loadingdone', kadFontovi);
+    inject(DestroyRef).onDestroy(() => {
+      fonts?.removeEventListener?.('loadingdone', kadFontovi);
+      this.posmatrac?.disconnect();
+    });
+  }
+
+  /** Promena veličine bloka formule (prozor, umanjen prikaz konzole, `cqw`) -> novo merenje; isti k ne menja ništa. */
+  private posmatraj(blok: Element): void {
+    if (typeof ResizeObserver === 'undefined' || this.posmatrani.has(blok)) {
+      return;
+    }
+    this.posmatrac ??= new ResizeObserver(() => this.preracun.update((n) => n + 1));
+    this.posmatrac.observe(blok);
+    this.posmatrani.add(blok);
   }
 }

@@ -2,7 +2,7 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { TestBed } from '@angular/core/testing';
 import { ModulFormule, UCITAJ_FORMULE, ucitajFormule } from './formula-ucitavanje';
 import {
-  FONTOVI_TEKSTA_FORMULE, MAX_FORMULA_U_TEKSTU, TekstFormuleComponent, UCITAJ_STIL_TEKSTA_FORMULE, resetujStilTekstaFormule,
+  FONTOVI_TEKSTA_FORMULE, MAX_FORMULA_U_TEKSTU, MIN_K_FORMULE, MIN_K_FORMULE_TELEFON, TekstFormuleComponent, koeficijentFormule, UCITAJ_STIL_TEKSTA_FORMULE, resetujStilTekstaFormule,
   ucitajStilFormulaUTekstu,
 } from './tekst-formule.component';
 
@@ -199,6 +199,89 @@ describe('TekstFormuleComponent', () => {
       await stabilno(fixture);
       expect(el.querySelector('.uz-formula--spremna .ML__latex')).not.toBeNull();
     }, { timeout: 5000 });
+  });
+});
+
+describe('koeficijentFormule', () => {
+  it.each([
+    [200, 400, 0.5, 1], // staje: prirodna veličina
+    [400, 400, 0.5, 1], // tačno staje
+    [800, 400, 0.5, 0.5], // pola
+    [600, 400, 0.5, 400 / 600],
+    [2000, 400, 0.5, 0.5], // ispod najmanjeg: najmanji (seče se na ivici / skrol na telefonu)
+    [2000, 400, 0.75, 0.75],
+    [0, 400, 0.5, 1], // bez merenja (jsdom, nema markupa)
+    [Number.NaN, 400, 0.5, 1],
+    [300, 0, 0.5, 1], // okvir bez širine (sakriven): ne dira se
+  ])('prirodna %d, raspoloživo %d, min %d -> %d', (prirodna, raspolozivo, min, k) => {
+    expect(koeficijentFormule(prirodna, raspolozivo, min)).toBeCloseTo(k, 6);
+  });
+
+  it('najmanji koeficijenti: nastavnički prikazi 0,5, telefon 0,75', () => {
+    expect([MIN_K_FORMULE, MIN_K_FORMULE_TELEFON]).toEqual([0.5, 0.75]);
+  });
+});
+
+describe('TekstFormuleComponent: smanjivanje formule da stane', () => {
+  @Component({
+    imports: [TekstFormuleComponent],
+    template: `<div [class.uz-st]="telefon()"><app-tekst-formule [tekst]="tekst()" [markdown]="true" /></div>`,
+  })
+  class Okvir {
+    readonly tekst = signal('Koliko je $x$?');
+    readonly telefon = signal(false);
+  }
+
+  /** jsdom nema raspored: širina bloka (p) i prirodna širina markupa se zadaju, `font-size` 20 px. */
+  function napravi(sirinaBloka: number, sirinaMarkupa: () => number, telefon = false) {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.tagName === 'P' ? sirinaBloka : 0;
+    });
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const w = this.classList.contains('ML__latex') ? sirinaMarkupa() : 0;
+      return { left: 0, top: 0, right: w, bottom: 0, width: w, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: UCITAJ_FORMULE, useValue: () => Promise.resolve(lazniModul([])) },
+        { provide: UCITAJ_STIL_TEKSTA_FORMULE, useValue: () => Promise.resolve() },
+      ],
+    });
+    const fixture = TestBed.createComponent(Okvir);
+    fixture.componentInstance.telefon.set(telefon);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    el.style.fontSize = '20px';
+    return { fixture, el };
+  }
+
+  const k = (el: HTMLElement) => el.querySelector<HTMLElement>('.uz-formula--spremna')!.style.getPropertyValue('--uz-formula-k');
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('formula koja staje: bez --uz-formula-k (k = 1)', async () => {
+    const { fixture, el } = napravi(400, () => 100);
+    await stabilno(fixture);
+    expect(el.querySelector('.uz-formula--spremna')).not.toBeNull();
+    expect(k(el)).toBe('');
+  });
+
+  it('široka formula: k = (raspoloživo - rezerva 0,3em) / prirodna', async () => {
+    const { fixture, el } = napravi(400, () => 600);
+    await stabilno(fixture);
+    expect(Number(k(el))).toBeCloseTo((400 - 0.3 * 20) / 600, 3);
+  });
+
+  it('nastavnički prikaz: najmanje 0,5; telefon (.uz-st): najmanje 0,75', async () => {
+    const nastavnik = napravi(400, () => 4000);
+    await stabilno(nastavnik.fixture);
+    expect(k(nastavnik.el)).toBe('0.500');
+    vi.restoreAllMocks();
+    TestBed.resetTestingModule();
+    const telefon = napravi(400, () => 4000, true);
+    await stabilno(telefon.fixture);
+    expect(k(telefon.el)).toBe('0.750');
   });
 });
 
