@@ -115,6 +115,13 @@ span.uz-ed-napomena {
   font-size: 13px;
 }
 
+/* Upozorenje forme pitanja (formula se crta kao izvor); boja iz `.uz-ed-upozorenje`, dugačak LaTeX se lomi. */
+p.uz-ed-upozorenje {
+  margin: 4px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Editor: zaglavlje ---------- */
 
 .uz-ed {

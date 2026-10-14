@@ -1,6 +1,6 @@
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
 import { TextFieldModule } from '@angular/cdk/text-field';
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormArray, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -15,7 +15,12 @@ import {
   MAX_OPCIJA, MAX_VREME, MIN_OPCIJA, MIN_VREME, PODRAZUMEVANO_VREME, TIPOVI_PITANJA, imaOpcije, promeniTipPitanja,
 } from '../data-access/slajd-pravila';
 import { OdstupanjeTip, OpcijaCmd, PitanjeCmd, TekstPrikaz, TipPitanja } from '../data-access/uzivo.models';
+import { sRecju } from '../../../shared/util/mnozina';
+import { UCITAJ_FORMULE } from '../ui/formula-ucitavanje';
+import { markdownSaFormulama } from '../ui/markdown';
 import { OpcijaOblikComponent, oblikOpcije } from '../ui/opcija-oblik';
+import { MAX_FORMULA_U_TEKSTU } from '../ui/tekst-formule.component';
+import { KLASA_FORMULE, podeliFormule } from '../ui/tekst-formule';
 import { SlikaPoljeComponent } from './slika-polje.component';
 
 /** Validacija pitanja kao čista funkcija (iste poruke kao backend `SlajdPP`); živi u `slajd-pravila.ts`. */
@@ -91,6 +96,53 @@ export function pitanjeIzForme(f: PitanjeForma): PitanjeCmd {
   };
 }
 
+/**
+ * Formule jednog teksta tačno kako ih nalazi prikaz (`app-tekst-formule`): tekst pitanja je Markdown
+ * (`markdownSaFormulama`, pa `$` u kodu nije formula), opcija običan tekst (`podeliFormule`). Iz Markdown-a se čitaju
+ * mesta formula kao u prikazu (`span.uz-formula`, izvor bez `$`); `<template>` je inertan (ništa se ne izvršava ni ne
+ * učitava), a `marked` ionako briše sirov HTML.
+ */
+function formuleTeksta(tekst: string | null | undefined, markdown: boolean): string[] {
+  if (!tekst?.includes('$')) {
+    return [];
+  }
+  if (!markdown) {
+    return podeliFormule(tekst).flatMap((d) => (d.vrsta === 'FORMULA' ? [d.latex] : []));
+  }
+  const t = document.createElement('template');
+  t.innerHTML = markdownSaFormulama(tekst).html;
+  return Array.from(t.content.querySelectorAll(`span.${KLASA_FORMULE}`), (m) => (m.textContent ?? '').slice(1, -1));
+}
+
+/** Tekst pitanja i svaka opcija posebno (prikaz crta svaki tekst svojom komponentom, i granica formula je po tekstu). */
+function formulePoTekstu(p: Pick<PitanjeCmd, 'tekst' | 'opcije'>): { gde: string; formule: string[] }[] {
+  return [
+    { gde: 'Tekst pitanja', formule: formuleTeksta(p.tekst, true) },
+    ...p.opcije.map((o, i) => ({ gde: `Odgovor ${oblikOpcije(i).slovo}`, formule: formuleTeksta(o.tekst, false) })),
+  ];
+}
+
+/**
+ * Sve formule iz teksta pitanja i opcija, redom, bez duplikata. Po tekstu najviše `MAX_FORMULA_U_TEKSTU` (koliko prikaz
+ * crta MathLive-om; ostale su izvor bez obzira na LaTeX, za njih forma ima posebnu poruku), pa provera ne radi više
+ * posla od prikaza.
+ */
+export function formuleIzPitanja(p: Pick<PitanjeCmd, 'tekst' | 'opcije'>): string[] {
+  return jedinstvene(formulePoTekstu(p));
+}
+
+const jedinstvene = (tekstovi: { formule: string[] }[]): string[] =>
+  [...new Set(tekstovi.flatMap((t) => t.formule.slice(0, MAX_FORMULA_U_TEKSTU)))];
+
+/** Debounce provere formula posle izmene teksta ili opcija. */
+const CEKANJE_PROVERE_FORMULA_MS = 300;
+/** Najviše pojedinačnih upozorenja za formule; ostale se samo broje. */
+const MAX_UPOZORENJA = 3;
+const MAX_ZNAKOVA_U_PORUCI = 60;
+
+const skrati = (latex: string): string =>
+  latex.length > MAX_ZNAKOVA_U_PORUCI ? `${latex.slice(0, MAX_ZNAKOVA_U_PORUCI)}…` : latex;
+
 let sledeciId = 0;
 
 /**
@@ -131,9 +183,19 @@ let sledeciId = 0;
 
     <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
       <mat-label>Tekst pitanja</mat-label>
-      <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" [formControl]="f.controls.tekst"></textarea>
-      <mat-hint>Markdown: **podebljano**, *kurziv*, \`kod\`</mat-hint>
+      <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" [formControl]="f.controls.tekst"
+                [aria-describedby]="id + '-formule'"></textarea>
+      <mat-hint>
+        Markdown: **podebljano**, *kurziv*, \`kod\`<br>
+        Formula između znakova dolara: $1011_2$, $\\frac&#123;1&#125;&#123;2&#125;$ · znak dolara: \\$
+      </mat-hint>
     </mat-form-field>
+    <!-- Upozorenje ne blokira čuvanje (server ne proverava formule); region postoji uvek, da čitač ekrana najavi promenu. -->
+    <div [id]="id + '-formule'" role="status">
+      @for (u of upozorenjaFormula(); track $index) {
+        <p class="uz-ed-upozorenje">{{ u }}</p>
+      }
+    </div>
 
     <app-slika-polje [slikaId]="f.controls.slikaId.value" oznaka="Slika uz pitanje"
                      (promena)="f.controls.slikaId.setValue($event?.id ?? null)" />
@@ -203,6 +265,9 @@ let sledeciId = 0;
         @let radio = tip === 'JEDAN_TACAN' || tn;
         <fieldset class="uz-ed-opcije">
           <legend class="uz-ed-oznaka-grupe">{{ tn ? 'Tačan odgovor' : 'Ponuđeni odgovori' }}</legend>
+          @if (!tn) {
+            <p class="uz-ed-napomena">Formule važe i u odgovorima: $x^2$.</p>
+          }
           @for (o of f.controls.opcije.controls; track o; let i = $index, prva = $first, poslednja = $last) {
             <div class="uz-ed-opcija">
               <app-opcija-oblik [indeks]="i" [velicina]="34" />
@@ -256,6 +321,47 @@ export class PitanjeFormaComponent {
   protected readonly maxOpcija = MAX_OPCIJA;
   protected readonly minVreme = MIN_VREME;
   protected readonly maxVreme = MAX_VREME;
+
+  private readonly ucitajFormule = inject(UCITAJ_FORMULE);
+  /** LaTeX formula (bez `$`) koje prikaz ne bi nacrtao (ista provera: `latexUMarkup`, kao `app-tekst-formule`). */
+  readonly neispravne = signal<string[]>([]);
+  /** Tekstovi sa više od `MAX_FORMULA_U_TEKSTU` formula ("Tekst pitanja", "Odgovor B"). */
+  protected readonly previseFormula = signal<string[]>([]);
+  /** Poruke ispod teksta pitanja: tekstovi preko granice, pa najviše `MAX_UPOZORENJA` formula i "i još n". */
+  protected readonly upozorenjaFormula = computed(() => {
+    const n = this.neispravne().length - MAX_UPOZORENJA;
+    return [
+      ...this.previseFormula().map(
+        (gde) => `${gde} ima više od ${MAX_FORMULA_U_TEKSTU} formula; ostale će se prikazati kao tekst.`),
+      ...this.neispravne().slice(0, MAX_UPOZORENJA).map(
+        (l) => `Formula „${skrati(l)}“ ima grešku u LaTeX-u i prikazaće se kao tekst.`),
+      ...(n > 0 ? [`i još ${sRecju(n, 'formula', 'formule', 'formula')} sa greškom.`] : []),
+    ];
+  });
+  /** Redni broj poslednje provere: odgovor starije (sporo učitavanje modula) ne prepisuje noviju. */
+  private provera = 0;
+
+  constructor() {
+    // Nova forma (drugi slajd): stara upozorenja nestaju odmah, nova provera posle debounce-a, pa na svaku izmenu.
+    effect((onCleanup) => {
+      const f = this.forma();
+      this.provera++;
+      this.neispravne.set([]);
+      this.previseFormula.set([]);
+      let tajmer: ReturnType<typeof setTimeout> | undefined;
+      const zakazi = () => {
+        clearTimeout(tajmer);
+        tajmer = setTimeout(() => void this.proveriFormule(f), CEKANJE_PROVERE_FORMULA_MS);
+      };
+      zakazi();
+      const pretplata = f.valueChanges.subscribe(zakazi);
+      onCleanup(() => {
+        this.provera++;
+        clearTimeout(tajmer);
+        pretplata.unsubscribe();
+      });
+    });
+  }
 
   protected slovo(i: number): string {
     return oblikOpcije(i).slovo;
@@ -316,6 +422,38 @@ export class PitanjeFormaComponent {
   protected ukloniPrihvatljiv(i: number): void {
     const c = this.forma().controls.prihvatljiviOdgovori;
     c.setValue(c.value.filter((_, j) => j !== i));
+  }
+
+  /**
+   * Isti put kao prikaz (`app-tekst-formule`): bez formule se ništa ne učitava; inače lenji modul `formula-markup`
+   * (`UCITAJ_FORMULE`, `mathlive/ssr` nije u stranici editora) i `latexUMarkup('\\textstyle ' + f)`: zabranjene komande i
+   * `^^`, `trosakFormule`, `validateLatex`, konverzija u `try/catch` i sanitizer (keš je zajednički sa pregledom slajda).
+   * Ne blokira čuvanje. Greška učitavanja: bez upozorenja.
+   */
+  private async proveriFormule(f: PitanjeForma): Promise<void> {
+    const broj = ++this.provera;
+    const tekstovi = formulePoTekstu(pitanjeIzForme(f));
+    const previse = tekstovi.filter((t) => t.formule.length > MAX_FORMULA_U_TEKSTU).map((t) => t.gde);
+    const formule = jedinstvene(tekstovi);
+    let neispravne: string[] = [];
+    if (formule.length) {
+      try {
+        const m = await this.ucitajFormule();
+        if (broj !== this.provera) {
+          return;
+        }
+        neispravne = formule.filter((l) => m.latexUMarkup(`\\textstyle ${l}`) === null);
+      } catch (e: unknown) {
+        console.warn('Provera formula nije učitana; upozorenja se ne prikazuju.', e);
+        if (broj === this.provera) {
+          this.neispravne.set([]);
+          this.previseFormula.set([]);
+        }
+        return;
+      }
+    }
+    this.neispravne.set(neispravne);
+    this.previseFormula.set(previse);
   }
 
   private postaviOpcije(opcije: OpcijaCmd[]): void {
