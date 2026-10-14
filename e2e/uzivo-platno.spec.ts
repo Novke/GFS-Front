@@ -260,7 +260,11 @@ test.describe('uživo: formula bez slike na projektoru i konzoli', () => {
       await expect(sloj.locator('img')).toHaveCount(0);
       await expect(sloj).not.toContainText('\\cdot');
       expect(zahtevi.some(p => p.includes('/assets/mathlive/') && p.endsWith('.css')), 'stil formula').toBe(true);
-      expect(zahtevi.filter(p => /KaTeX.*\.woff2$/.test(p) && !p.includes('/assets/mathlive/fonts/'))).toEqual([]);
+      // fontovi pre prikaza (spec 5): bar jedan KaTeX font, i svi samo iz assets/mathlive/fonts/
+      await page.waitForLoadState('networkidle');
+      const fontovi = zahtevi.filter(p => /KaTeX.*\.woff2$/.test(p));
+      expect(fontovi.length, 'KaTeX fontovi su učitani').toBeGreaterThan(0);
+      expect(fontovi.filter(p => !p.includes('/assets/mathlive/fonts/'))).toEqual([]);
     });
   }
 });

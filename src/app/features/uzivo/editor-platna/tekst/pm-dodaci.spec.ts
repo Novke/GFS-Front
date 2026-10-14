@@ -5,7 +5,7 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import type { Lista } from '../../data-access/platno.models';
 import { METRIKA, type Metrika } from '../../ui/platno-metrika';
 import { prikazPasusa } from '../../ui/platno-tekst';
-import { dodatakPasusa } from './pm-dodaci';
+import { dodatakIzboraIzDoma, dodatakPasusa } from './pm-dodaci';
 import { atributiDela } from './pm-konverzija';
 import type { AtributiDela, AtributiPasusa } from './pm-sema';
 import { nalepiTekst, podeliPasus, postaviPasus, tabIliNivo } from './pm-komande';
@@ -246,5 +246,24 @@ describe('dodatakGranice', () => {
     expect(prekoracenje).not.toHaveBeenCalled();
     s.kucaj('x');
     expect(prekoracenje).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dodatakIzboraIzDoma', () => {
+  it('tokom kompozicije (IME) i bez izbora u uređivaču ne dira stanje i pušta taster dalje', () => {
+    const p = dodatakIzboraIzDoma();
+    const dispatch = vi.fn();
+    const koren = document.createElement('div');
+    document.body.append(koren);
+    koren.textContent = 'abc';
+    document.getSelection()!.setBaseAndExtent(koren.firstChild!, 0, koren.firstChild!, 2);
+    const s = new Sesija([pasusSa([deo('abc')])]);
+    const pogled = (composing: boolean, dom: HTMLElement) =>
+      ({ composing, dom, state: s.state, dispatch, posAtDOM: () => 1 }) as unknown as EditorView;
+    const ev = new KeyboardEvent('keydown', { key: 'Backspace' });
+    expect(p.props.handleKeyDown!.call(p, pogled(true, koren), ev)).toBe(false);
+    expect(p.props.handleKeyDown!.call(p, pogled(false, document.createElement('div')), ev)).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    koren.remove();
   });
 });

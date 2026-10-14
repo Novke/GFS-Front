@@ -164,6 +164,49 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
     view().dispatch(view().state.tr.insertText('a', 1));
     expect(view().state.doc.child(0).textContent).toBe('aPrvi');
   });
+
+  /*
+   * F19 fix 1: Shift/Ctrl+strelice menja izbor u DOM-u, a ProseMirror ga upisuje u stanje tek na `selectionchange`
+   * (zaseban zadatak). Kad je glavna nit zauzeta, sledeći taster stigne pre toga. Ovde je DOM izbor promenjen bez
+   * `selectionchange`: komanda mora da radi nad izborom iz DOM-a, ne nad starim. "Prvi" = 1..5, "Drugi" = 7..12.
+   */
+  describe('izbor iz DOM-a pre komande tastature (zakasneo selectionchange)', () => {
+    const naKraju = () => view().dispatch(view().state.tr.setSelection(TextSelection.create(view().state.doc, 12)));
+    const izaberiUDomu = (od: number, ka: number) => {
+      const a = view().domAtPos(od);
+      const b = view().domAtPos(ka);
+      document.getSelection()!.setBaseAndExtent(a.node, a.offset, b.node, b.offset);
+    };
+    const taster = (key: string, ctrlKey = false) =>
+      view().dom.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey, bubbles: true, cancelable: true }));
+
+    it('Ctrl+B podebljava reč izabranu u DOM-u, ne stari (prazan) izbor', () => {
+      naKraju();
+      izaberiUDomu(7, 12);
+      taster('b', true);
+      const r = komande().presek()!;
+      expect(r.pasusi[1].delovi.map((d) => [d.tekst, d.podebljano])).toEqual([['Drugi', true]]);
+      expect(r.pasusi[0].delovi.map((d) => d.podebljano)).toEqual([false]);
+    });
+
+    it('Backspace briše izbor iz DOM-a (kraj prvog do kraja drugog pasusa) u jednom koraku; jedan Ctrl+Z ga vraća', () => {
+      naKraju();
+      izaberiUDomu(5, 12);
+      taster('Backspace');
+      expect(view().state.doc.childCount).toBe(1);
+      expect(view().state.doc.textContent).toBe('Prvi');
+      taster('z', true);
+      expect([view().state.doc.child(0).textContent, view().state.doc.child(1).textContent]).toEqual(['Prvi', 'Drugi']);
+    });
+
+    it('isti izbor u DOM-u i u stanju: nijedna dodatna transakcija', () => {
+      naKraju();
+      izaberiUDomu(12, 12);
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      taster('Shift');
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('STIL_UREDJIVACA', () => {

@@ -190,6 +190,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(editor.locator('.uz-ep-platno [data-sloj="naslov"]')).toBeVisible();
 
       await editor.getByRole('tab', { name: 'Animacije' }).click();
+      // kraj animacije tela taba pre klika u panelu (Material tada skida privremenu visinu omotača)
+      await expect(editor.locator('.mat-tab-body-animating')).toHaveCount(0);
       const red = editor.locator('[data-animacija="a2"] > button');
       await red.click();
       await expect(red).toHaveAttribute('aria-pressed', 'true');

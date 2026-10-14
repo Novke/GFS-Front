@@ -504,17 +504,23 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     await page.mouse.dblclick(c.x, c.y);
     await expect(uredjivac(page)).toBeFocused();
   };
-  /** Meni "Dodaj ulaz" > efekat (tab Animacije mora biti otvoren). */
+  /**
+   * Tab "Animacije" i kraj animacije tela taba (vidljiv ishod pre klika u panelu). Na kraju animacije Material skida
+   * privremenu visinu omotača (`_onCentered`), pa se strana (i dugmad panela) može pomeriti; klik usred toga ode između
+   * `mousedown` i `mouseup` na drugi element. Jednom viđeno u celom paketu pod opterećenjem; brojač otvaranja i
+   * zatvaranja menija u 55 izolovanih ponavljanja nije pokazao meni koji se sam zatvara (izveštaj F19, fix 1).
+   */
+  const tabAnimacije = async (page: Page) => {
+    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await expect(page.getByRole('tab', { name: 'Animacije' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.mat-tab-body-animating')).toHaveCount(0);
+  };
+  /** Meni "Dodaj ulaz" > efekat (tab Animacije mora biti otvoren, `tabAnimacije`). */
   const dodajUlaz = async (page: Page, efekat: string) => {
     const dugme = page.getByRole('button', { name: 'Dodaj ulaz' });
     await expect(dugme).toBeEnabled();
-    const stavka = page.getByRole('menuitem', { name: efekat, exact: true });
-    // klik odmah posle izbora taba ponekad ne otvori meni (sadržaj taba se još pomera); ponovo samo dok meni nije otvoren
-    await expect(async () => {
-      if (!(await page.getByRole('menu').isVisible())) await dugme.click();
-      await expect(stavka).toBeVisible({ timeout: 2_000 });
-    }).toPass({ timeout: 15_000 });
-    await stavka.click();
+    await dugme.click();
+    await page.getByRole('menuitem', { name: efekat, exact: true }).click();
     await expect(page.getByRole('menu')).toHaveCount(0);
   };
 
@@ -522,11 +528,8 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     const id = await novoPlatno(page, mock, 'Naslov i tekst');
     await uredi(page, 's1');
     await page.keyboard.type('Uvod u statiku');
+    // odmah posle izbora (bez čekanja selectionchange): uređivač pre komande usklađuje izbor sa DOM-om (F19 fix 1)
     await page.keyboard.press('Shift+Control+ArrowLeft');
-    // izbor menja pregledač, a ProseMirror ga čita na `selectionchange` (asinhrono): sačekaj izbor u DOM-u i jedan kadar,
-    // da Ctrl+B ne deluje na stari (prazan) izbor
-    await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe('statiku');
-    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => setTimeout(r))));
     await page.keyboard.press('Control+b');
     await page.keyboard.press('Escape');
     await expect(uredjivac(page)).toHaveCount(0);
@@ -566,12 +569,12 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     const dijalog = page.getByRole('dialog');
     await expect(dijalog.getByRole('button', { name: 'Otkaži' })).toBeVisible();
 
-    const put = putovi(mock, id).find(z => (z.telo as SlajdCmd).platno.slojevi.find(s => s.id === 's1')?.pasusi
+    const put = () => putovi(mock, id).find(z => (z.telo as SlajdCmd).platno.slojevi.find(s => s.id === 's1')?.pasusi
       ?.some(p => p.delovi.some(d => d.tekst === 'X')));
-    const predavanja = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/predavanja`, 'GET')[0];
-    expect(put, 'PUT sa otkucanim tekstom').toBeDefined();
-    expect(predavanja, 'GET predavanja dijaloga').toBeDefined();
-    expect(put!.rb).toBeLessThan(predavanja.rb);
+    const predavanja = () => mock.zahteviZa(`prezentacije/${PREZENTACIJA}/predavanja`, 'GET')[0];
+    await expect.poll(put, { message: 'PUT sa otkucanim tekstom' }).toBeDefined();
+    await expect.poll(predavanja, { message: 'GET predavanja dijaloga' }).toBeDefined();
+    expect(put()!.rb).toBeLessThan(predavanja().rb);
     await dijalog.getByRole('button', { name: 'Otkaži' }).click();
     await expect(dijalog).toHaveCount(0);
   });
@@ -579,7 +582,7 @@ test.describe('uživo: editor platna (4b, F19)', () => {
   test('strelica sa ULET-om: značka 1, Pregled i Korak napred je otkrivaju, Ctrl+Z na okviru briše animaciju', async ({ page, mock }) => {
     const id = await novoPlatno(page, mock);
     await ubaciOblik(page, 'Strelica');
-    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await tabAnimacije(page);
     await dodajUlaz(page, 'Ulet');
     await expect.poll(() => animacijeUPut(mock, id)?.map(a => [a.slojId, a.vrsta, a.efekat, a.smer]))
       .toEqual([['s1', 'ULAZ', 'ULET', 'DOLE']]);
@@ -651,7 +654,7 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     await page.keyboard.press('Escape');
     await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Prvi', 'Drugi']);
 
-    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await tabAnimacije(page);
     await page.getByRole('combobox', { name: 'Cilj' }).click();
     await page.getByRole('option', { name: 'Po pasusima' }).click();
     await expect(page.getByRole('combobox', { name: 'Cilj' })).toContainText('Po pasusima');
@@ -659,24 +662,24 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     await expect.poll(() => animacijeUPut(mock, id)?.map(a => [a.slojId, a.pasus])).toEqual([['s1', 0], ['s1', 1]]);
 
     /**
-     * Izabran sloj, Enter na okviru: uređivanje sa kursorom na kraju (stanje ProseMirror-a, bez miša), pa Backspace 6 puta
-     * ("Drugi" i spoj sa prvim pasusom). Ne izbor Shift+strelicama: pregledač ga menja sam, a ProseMirror ga čita tek na
-     * `selectionchange`, pa bi Backspace odmah posle ponekad obrisao stari izbor (samo "Drugi", prazan pasus ostaje).
+     * Izabran sloj, Enter na okviru: uređivanje sa kursorom na kraju. Izbor "\nDrugi" Shift+strelicama (kraj prvog do
+     * kraja drugog pasusa) i odmah jedan Backspace: jedan korak istorije.
      */
     const obrisiDrugi = async () => {
       await okvir(page).focus();
       await page.keyboard.press('Enter');
       await expect(uredjivac(page)).toBeFocused();
-      for (let i = 0; i < 'Drugi'.length + 1; i++) await page.keyboard.press('Backspace');
+      await page.keyboard.press('Control+End');
+      await page.keyboard.press('Shift+Home');
+      await page.keyboard.press('Shift+ArrowLeft');
+      await page.keyboard.press('Backspace');
       await expect(uredjivac(page).locator('p')).toHaveCount(1);
       await expect(uredjivac(page)).toHaveText('Prvi');
     };
 
     // brisanje pa Ctrl+Z u tekstu pre Esc: oba pasusa i obe animacije ostaju
     await obrisiDrugi();
-    // ProseMirror spaja brze susedne korake u jedan; pod opterećenjem ih može biti više, pa Ctrl+Z dok se pasus ne vrati
-    const vracen = async () => (await uredjivac(page).locator('p').count()) === 2 && (await uredjivac(page).innerText()).includes('Drugi');
-    for (let i = 0; i < 'Drugi'.length + 1 && !(await vracen()); i++) await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
     await expect(uredjivac(page).locator('p')).toHaveText(['Prvi', 'Drugi']);
     await page.keyboard.press('Escape');
     await expect(uredjivac(page)).toHaveCount(0);

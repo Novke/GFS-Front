@@ -123,6 +123,13 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     // bez ograde (zatvorenje pa filter) bi se kroz chunk editora brojali i njegovi lenji chunk-ovi: zapisuje se radi poređenja
     const bezOgrade = [...potpunoZatvorenje([dijalog])].filter(f => !ucitano.has(f));
     zapisi('dijalog formule bez ograde (i lenji chunk-ovi editora, samo za poređenje)', zbir(bezOgrade));
+    // od čega je razlika (ime, veličina i nizovi po kojima se fajl prepoznaje): nijedan fajl razlike nije kod dijaloga
+    const razlika = bezOgrade.filter(f => !sopstveno.includes(f)).sort((a, b) => zbir([b]) - zbir([a]));
+    test.info().annotations.push({
+      type: 'velicina',
+      description: `razlika bez ograde: ${razlika.map(f => `${f} ${zbir([f])} B${nizoviEditora(tekst(f)).length ? ` [${nizoviEditora(tekst(f)).join(', ')}]` : ''}`).join('; ')}`,
+    });
+    expect(razlika.filter(f => tekst(f).includes(NIZ_FORMULE_EDITORA))).toEqual([]);
     expect(bezOgrade.filter(f => !sopstveno.includes(f)).every(f => !tekst(f).includes(NIZ_MATH_FIELD)),
       'razlika bez ograde nije ceo mathlive').toBe(true);
     expect(sopstveno.every(f => bezOgrade.includes(f))).toBe(true);
