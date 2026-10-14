@@ -182,6 +182,29 @@ describe('FormulaDialog', () => {
     expect(dugme('Sačuvaj').disabled).toBe(true);
   });
 
+  it('preduboka formula (\\sqrt{ x700) ne ide u math-field i ne crta se (MathLive se ni ne zove); poruka o dubini', async () => {
+    const crtaj = vi.fn((l: string) => convertLatexToMarkup(l, { defaultMode: 'math' }));
+    ucitaj = () => Promise.resolve({ ...LAZNI, convertLatexToMarkup: crtaj } as unknown as MathLive);
+    otvori();
+    await ucitano();
+    crtaj.mockClear();
+    const latex = '\\sqrt{'.repeat(700) + 'x' + '}'.repeat(700);
+    const t = performance.now();
+    upisiLatex(latex);
+    expect(performance.now() - t).toBeLessThan(500);
+    expect(crtaj).not.toHaveBeenCalled();
+    expect(mf()!.value).toBe('x^2');
+    expect(greska().textContent).toContain('ugnježdena');
+    expect(dugme('Sačuvaj').disabled).toBe(true);
+  });
+
+  it('markup veći od 1 MB ne ide u math-field (bez parsiranja u <template>)', async () => {
+    ucitaj = () => Promise.resolve({ ...LAZNI, convertLatexToMarkup: () => '<span>' + 'x'.repeat(1_000_001) + '</span>' } as unknown as MathLive);
+    otvori();
+    await ucitano();
+    expect(mf()!.value ?? '').toBe('');
+  });
+
   it('greška crtača MathLive-a (izuzetak) -> math-field ne dobija formulu, polje LaTeX radi', async () => {
     ucitaj = () => Promise.resolve({ ...LAZNI, convertLatexToMarkup: () => { throw new Error('x'); } } as unknown as MathLive);
     otvori();

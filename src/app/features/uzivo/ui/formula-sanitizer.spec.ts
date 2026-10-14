@@ -1,6 +1,6 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
 import { latexUMarkup as latexUMarkupZaTest } from './formula-markup';
-import { markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer';
+import { MAX_MARKUP, markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer';
 
 const ml = (latex: string) => convertLatexToMarkup(latex, { defaultMode: 'math' });
 
@@ -104,6 +104,36 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
     ['style opacity, dug', () => ocistiStil(`opacity:0.${'1'.repeat(30000)}x`)],
   ])('%s: najgori slučaj ispod granice', (_ime, f) => {
     expect(traje(f)).toBeLessThan(GRANICA_MS);
+  });
+
+  // tik ispod granice dužine (199 / 19 999): regex se zaista pokreće (recenzija 2, m2)
+  it.each([
+    ['x1', () => ocistiMarkup(`<svg><line x1="${'1'.repeat(198)}x"></line></svg>`)],
+    ['width', () => svg(`width="${'1'.repeat(198)}x"`)],
+    ['viewBox', () => svg(`viewBox="${'1 '.repeat(98)}1x"`)],
+    ['points', () => ocistiMarkup(`<svg><polygon points="${'1'.repeat(19_998)}x"></polygon></svg>`)],
+    ['points sa separatorima', () => ocistiMarkup(`<svg><polygon points="${'1,'.repeat(9_999)}x"></polygon></svg>`)],
+    ['d', () => ocistiMarkup(`<svg><path d="${'M0 1'.repeat(4_999)}#"></path></svg>`)],
+    ['stil height', () => ocistiStil(`height:${'1'.repeat(198)}x`)],
+    ['stil calc( razmaci', () => ocistiStil(`left:calc(${' '.repeat(193)}x)`)],
+    ['stil calc( jedinice', () => ocistiStil(`left:calc(${'1em'.repeat(63)}x)`)],
+    ['stil border', () => ocistiStil(`border:${'1'.repeat(186)}x solid`)],
+  ])('%s tik ispod granice dužine: regex brz', (_ime, f) => {
+    expect(traje(f)).toBeLessThan(GRANICA_MS);
+  });
+
+  it('eksponent dosledno: stil i x1..y2 primaju 1e+23em / 1e-7 kao points (recenzija 2, m3)', () => {
+    expect(ocistiStil('height:1e+23em;top:-1.5e-7em')).toBe('height:1e+23em;top:-1.5e-7em');
+    const l = ocistiMarkup('<svg><line x1="1e-7" y1="-2.5e+3" x2="1" y2="0"></line></svg>').querySelector('line')!;
+    expect(l.getAttribute('x1')).toBe('1e-7');
+    expect(l.getAttribute('y1')).toBe('-2.5e+3');
+  });
+
+  it('markupNepromenjen: markup veći od MAX_MARKUP je izmena (dijalog ga ne upisuje), bez <template>', () => {
+    const t = performance.now();
+    expect(markupNepromenjen('<span>' + 'x'.repeat(MAX_MARKUP) + '</span>')).toBe(false);
+    expect(traje(() => markupNepromenjen('<span>x</span>'))).toBeLessThan(GRANICA_MS);
+    expect(performance.now() - t).toBeLessThan(GRANICA_MS);
   });
 
   it('predugačke vrednosti se odbacuju pre regexa (atribut, deklaracija stila)', () => {

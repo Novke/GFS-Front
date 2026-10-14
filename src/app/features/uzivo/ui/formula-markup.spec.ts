@@ -1,5 +1,7 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
+import { MAX_DUBINA_FORMULE, dubinaFormule } from './formula-komande';
 import { ZABRANJENE_KOMANDE, konvertuj, latexUMarkup, ocistiMarkup, ocistiStil } from './formula-markup';
+import { MAX_MARKUP } from './formula-sanitizer';
 
 /** Sirov izlaz MathLive-a (bez čišćenja), parsiran kao HTML, radi poređenja sa očišćenim. */
 function sirov(latex: string): DocumentFragment {
@@ -239,5 +241,89 @@ describe('ocistiMarkup', () => {
     const div = document.createElement('div');
     div.append(f);
     expect(div.innerHTML).toBe('<span>a</span><svg></svg>');
+  });
+});
+
+/**
+ * F15 fix 3: MathLive kvadratno širi ugnježdene korene (`\sqrt{` x700, 4201 znak: 36 MB HTML-a, 20,8 s u Chromium-u).
+ * Preduboka formula se ne pretvara (izvor), a markup veći od 1 MB se odbacuje pre `<template>`. Granica vremena labava.
+ */
+describe('latexUMarkup: ugnježdavanje i veličina markup-a (vremenska granica)', () => {
+  const GRANICA_MS = 500;
+  const GRANICA_JSDOM_MS = 2000;
+  const r = (s: string, n: number) => s.repeat(n);
+  const meri = (latex: string) => {
+    const t = performance.now();
+    const f = latexUMarkup(latex);
+    return { ms: performance.now() - t, f };
+  };
+
+  it.each([
+    ['\\sqrt{ x700', r('\\sqrt{', 700) + 'x' + r('}', 700)],
+    ['\\sqrt{ x33', r('\\sqrt{', 33) + 'x' + r('}', 33)],
+    ['\\frac{1}{ x300', r('\\frac{1}{', 300) + 'x' + r('}', 300)],
+    ['\\left( x300', r('\\left(', 300) + 'x' + r('\\right)', 300)],
+    ['x^{ x500', r('x^{', 500) + 'x' + r('}', 500)],
+    ['x_{ x500', r('x_{', 500) + 'x' + r('}', 500)],
+    ['matrica u matrici, 33 nivoa', (() => {
+      let s = 'x';
+      for (let i = 0; i < 33; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
+      return s;
+    })()],
+  ])('preduboka %s -> izvor (null), brzo', (_ime, latex) => {
+    const { ms, f } = meri(latex);
+    expect(f).toBeNull();
+    expect(ms).toBeLessThan(GRANICA_MS);
+  });
+
+  it.each([
+    ['\\sqrt{ dubina 32', r('\\sqrt{', 32) + 'x' + r('}', 32)],
+    ['\\frac{1}{ dubina 32', r('\\frac{1}{', 32) + 'x' + r('}', 32)],
+    ['\\left( dubina 32', r('\\left(', 32) + 'x' + r('\\right)', 32)],
+    ['x^{ dubina 32', r('x^{', 32) + 'x' + r('}', 32)],
+    ['matrica u matrici, dubina 4', (() => {
+      let s = 'x';
+      for (let i = 0; i < 4; i++) s = `\\begin{pmatrix}${s}&1\\\\1&${s}\\end{pmatrix}`;
+      return s;
+    })()],
+    ['matrica u matrici, 12 nivoa', (() => {
+      let s = 'x';
+      for (let i = 0; i < 12; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
+      return s;
+    })()],
+    ['pmatrix 30x30', '\\begin{pmatrix}' + Array.from({ length: 30 }, () => Array(30).fill('1').join('&')).join('\\\\') + '\\end{pmatrix}'],
+    ['\\frac{1}{ dubina 32, ponovljeno do ~4800 znakova', r(r('\\frac{1}{', 32) + 'x' + r('}', 32) + '+', 14) + 'x'],
+    ['x^{ dubina 32, ponovljeno do ~4900 znakova', r(r('x^{', 32) + 'x' + r('}', 32) + '+', 37) + 'x'],
+    ['\\left( dubina 32, ponovljeno do ~4600 znakova', r(r('\\left(', 32) + 'x' + r('\\right)', 32) + '+', 11) + 'x'],
+  ])('dozvoljena dubina %s -> markup, ispod granice', (_ime, latex) => {
+    expect(latex.length).toBeLessThanOrEqual(5000);
+    const { ms, f } = meri(latex);
+    expect(f).not.toBeNull();
+    // jsdom parsira HTML ~20x sporije od Chromium-a (izmereno u Chromium-u: najviše 78 ms, izveštaj F15 fix 3)
+    expect(ms).toBeLessThan(GRANICA_JSDOM_MS);
+  });
+
+  it('\\sqrt{ dubine 32 ponovljen do ~4500 znakova (markup ~2 MB) -> izvor, bez parsiranja u <template>', () => {
+    const latex = r(r('\\sqrt{', 32) + 'x' + r('}', 32) + '+', 20) + 'x';
+    expect(latex.length).toBeLessThanOrEqual(5000);
+    const { ms, f } = meri(latex);
+    expect(f).toBeNull();
+    expect(ms).toBeLessThan(GRANICA_MS);
+  });
+
+  it('konvertuj: markup veći od MAX_MARKUP se odbacuje pre <template>', () => {
+    expect(MAX_MARKUP).toBe(1_000_000);
+    const veliki = '<span>' + 'x'.repeat(MAX_MARKUP) + '</span>';
+    const t = performance.now();
+    expect(konvertuj('x', () => veliki)).toBeNull();
+    expect(performance.now() - t).toBeLessThan(GRANICA_MS);
+    expect(konvertuj('x', () => '<span>x</span>')).not.toBeNull();
+  });
+
+  it('svaka formula iz testa "dozvoljena lista ne kvari" je ispod granice dubine', () => {
+    for (const l of ['\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}', '\\left(\\frac{a}{b}\\right)', '\\begin{cases}x&y\\\\z&w\\end{cases}',
+      '\\sqrt{\\left(\\begin{pmatrix}\\frac{1}{\\sqrt{x}}\\end{pmatrix}\\right)}', '\\frac{1}{1+\\frac{1}{1+\\frac{1}{1+\\frac{1}{x}}}}']) {
+      expect(dubinaFormule(l), l).toBeLessThanOrEqual(MAX_DUBINA_FORMULE);
+    }
   });
 });

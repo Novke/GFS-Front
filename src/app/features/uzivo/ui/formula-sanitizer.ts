@@ -44,7 +44,12 @@ const EKS = String.raw`(?:e[-+]?\d+)?`;
 const JEDINICA = '(?:em|ex|px|pt|%)';
 const BROJ = new RegExp(`^-?${NUM}${EKS}$`);
 /** Dužina ili calc() sa brojevima i jedinicama; nijedna druga zagrada (image-set, url, var, attr, ...). */
-const DUZINA = new RegExp(String.raw`^(?:-?${NUM}${JEDINICA}?|calc\([-+*/.\d\s]*(?:${JEDINICA}[-+*/.\d\s]*)*\))$`);
+const DUZINA = new RegExp(String.raw`^(?:-?${NUM}${EKS}${JEDINICA}?|calc\([-+*/.\d\s]*(?:${JEDINICA}[-+*/.\d\s]*)*\))$`);
+/**
+ * Najveći markup MathLive-a koji se parsira (F15 fix 3): veći se odbacuje pre `<template>` (parsiranje 36 MB markup-a
+ * ugnježdenih korena trajalo je 16 s). Legitimne formule: `'x+'.repeat(2500)` 0,43 MB, `pmatrix` 30x30 0,21 MB.
+ */
+export const MAX_MARKUP = 1_000_000;
 /** Najduža vrednost atributa ili deklaracije stila (MathLive piše kratke: najduži `calc(...)` oko 40 znakova). */
 const MAX_VREDNOST = 200;
 /** Najduža `d`/`points` (najduža putanja u izvoru MathLive-a je 561 znak). */
@@ -153,7 +158,7 @@ export function ocistiMarkup(html: string): DocumentFragment {
  * `convertLatexToMarkup` iste formule.
  */
 export function markupNepromenjen(html: string): boolean {
-  return !ocisti(html).izmena;
+  return html.length <= MAX_MARKUP && !ocisti(html).izmena;
 }
 
 function ocisti(html: string): { fragment: DocumentFragment; izmena: boolean } {

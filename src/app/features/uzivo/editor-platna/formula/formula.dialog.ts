@@ -19,6 +19,7 @@ import type { Observable } from 'rxjs';
 import type { Poravnanje, Tema } from '../../data-access/platno.models';
 import { BrojcanoPoljeComponent } from '../brojcano-polje';
 import { IzborBojeComponent } from '../izbor-boje.component';
+import { preDubokaFormula } from '../../ui/formula-komande';
 import { markupNepromenjen } from '../../ui/formula-sanitizer';
 import {
   type FormulaUnos, MAX_LATEX, PORUKA_PRAZNA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule,
@@ -264,7 +265,8 @@ export class FormulaDialog {
    */
   private smeUPolje(l: string): boolean {
     const m = this.modul();
-    if (!m || ZABRANJENE_KOMANDE_FORMULE.test(l) || [...l].length > MAX_LATEX) return false;
+    // dubina pre MathLive-a (duboko ugnježdeni koreni: sekunde crtanja, desetine MB markup-a)
+    if (!m || ZABRANJENE_KOMANDE_FORMULE.test(l) || [...l].length > MAX_LATEX || preDubokaFormula(l)) return false;
     try {
       return markupNepromenjen(m.convertLatexToMarkup(l, { defaultMode: 'math' }));
     } catch {

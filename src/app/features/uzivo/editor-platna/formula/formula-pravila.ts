@@ -2,7 +2,9 @@
 // FORMULA sloj. Bez biblioteka: proveru sintakse (`validateLatex` MathLive-a) daje pozivalac, pa ovaj fajl ide i u editor
 // (panel, traka) i u lenji chunk dijaloga bez da ijedan od njih vuče MathLive.
 import type { FormulaSloj, Poravnanje } from '../../data-access/platno.models';
-import { OPIS_ZABRANJENIH_KOMANDI, ZABRANJENE_KOMANDE } from '../../ui/formula-komande';
+import {
+  MAX_DUBINA_FORMULE, OPIS_ZABRANJENIH_KOMANDI, ZABRANJENE_KOMANDE, preDubokaFormula,
+} from '../../ui/formula-komande';
 
 /** Najviše znakova LaTeX-a (code point-i, kao server). */
 export const MAX_LATEX = 5000;
@@ -17,6 +19,8 @@ export interface FormulaUnos { latex: string; boja: string; velicina: number; po
 export const ZABRANJENE_KOMANDE_FORMULE = ZABRANJENE_KOMANDE;
 
 export const PORUKA_PRAZNA = 'Formula je prazna.';
+export const PORUKA_DUBOKA =
+  `Formula je previše ugnježdena (najviše ${MAX_DUBINA_FORMULE} nivoa zagrada { }, \\left i \\begin jedno u drugom).`;
 export const PORUKA_ZABRANJENA = `Formula koristi komandu koja nije dozvoljena (${OPIS_ZABRANJENIH_KOMANDI}) ili zapis ^^.`;
 
 /**
@@ -27,6 +31,7 @@ export function greskaFormule(latex: string, provera: (l: string) => readonly un
   if (!latex.trim()) return PORUKA_PRAZNA;
   if ([...latex].length > MAX_LATEX) return 'Formula može imati najviše 5000 znakova.';
   if (ZABRANJENE_KOMANDE_FORMULE.test(latex)) return PORUKA_ZABRANJENA;
+  if (preDubokaFormula(latex)) return PORUKA_DUBOKA;
   try {
     if (provera(latex).length > 0) return 'Formula ima grešku u LaTeX-u.';
   } catch {

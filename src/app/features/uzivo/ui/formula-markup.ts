@@ -1,6 +1,6 @@
 import { convertLatexToMarkup, validateLatex } from 'mathlive/ssr';
-import { ZABRANJENE_KOMANDE } from './formula-komande';
-import { ocistiMarkup } from './formula-sanitizer';
+import { ZABRANJENE_KOMANDE, preDubokaFormula } from './formula-komande';
+import { MAX_MARKUP, ocistiMarkup } from './formula-sanitizer';
 
 /*
  * Statički prikaz formule (odluka 5 i 6 plana editora): LaTeX -> markup MathLive-a, očišćen po dozvoljenoj listi. LaTeX
@@ -19,7 +19,9 @@ export { markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer
 /** `convertLatexToMarkup` u try/catch (izuzetak -> null), pa `ocistiMarkup`; `f` je zamenljiv radi testa grane catch. */
 export function konvertuj(latex: string, f: typeof convertLatexToMarkup = convertLatexToMarkup): DocumentFragment | null {
   try {
-    return ocistiMarkup(f(latex, { defaultMode: 'math' }));
+    const html = f(latex, { defaultMode: 'math' });
+    // preveliki markup (npr. duboko ugnježdeni koreni) se ne parsira: izvor
+    return html.length > MAX_MARKUP ? null : ocistiMarkup(html);
   } catch {
     // npr. \href{javascript:...} baca iz MathLive-a; projektor (afterRenderEffect) ne sme da padne (Review Focus 5)
     return null;
@@ -28,7 +30,7 @@ export function konvertuj(latex: string, f: typeof convertLatexToMarkup = conver
 
 /** Markup za LaTeX (prikaz "math"), očišćen; null kad LaTeX nije ispravan, ima zabranjenu komandu ili konverzija baci. */
 export function latexUMarkup(latex: string): DocumentFragment | null {
-  if (!latex.trim() || ZABRANJENE_KOMANDE.test(latex)) return null;
+  if (!latex.trim() || ZABRANJENE_KOMANDE.test(latex) || preDubokaFormula(latex)) return null;
   try {
     if (validateLatex(latex).length > 0) return null;
   } catch {
