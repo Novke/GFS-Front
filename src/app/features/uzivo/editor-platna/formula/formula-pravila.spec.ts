@@ -108,3 +108,23 @@ describe('primeniFormulu', () => {
     expect(r.slikaIzvora).toBeNull();
   });
 });
+
+describe('ZABRANJENE_KOMANDE i greskaFormule: bez katastrofalnog vraćanja (F15 fix 2)', () => {
+  const traje = (f: () => unknown) => {
+    const t = performance.now();
+    f();
+    return performance.now() - t;
+  };
+  it.each([
+    ['\\html + mnogo slova', '\\html' + 'a'.repeat(5000)],
+    ['mnogo kosih crta', '\\'.repeat(5000)],
+    ['mnogo kapica', '^'.repeat(5000)],
+    ['kose crte i slova naizmenično', '\\htmla'.repeat(800)],
+    ['skoro komanda bez kraja', '\\cssI'.repeat(1000)],
+  ])('%s: ispod granice', (_ime, latex) => {
+    expect(traje(() => {
+      ZABRANJENE_KOMANDE_FORMULE.test(latex);
+      greskaFormule(latex, () => []);
+    })).toBeLessThan(200);
+  });
+});

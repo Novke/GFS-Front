@@ -31,9 +31,24 @@ const KLASE_ML = new Set([
 const KLASE_OSTALE = /^(?:col-align-[lcrm]|delim-size[1-4]|slice-[1-3]-of-[1-3]|(?:over|under)line(?:-line)?|lcGreek|style-wrap)$/;
 const KLASA_OBLACICA = 'ML__tooltip-content';
 
-const BROJ = /^-?\d*\.?\d+(?:e-?\d+)?$/;
+/*
+ * Svi regexi ovde rade nad vrednošću iz markup-a (posredno iz LaTeX-a dokumenta, nepouzdan ulaz), pa su pisani bez
+ * katastrofalnog vraćanja (F15 fix 2): nema ugnježdenih kvantifikatora nad istim znakovima, delovi koji se ponavljaju
+ * imaju obavezan i disjunktan separator, a broj je jednoznačan (`\d+(?:\.\d+)?|\.\d+`, ne `\d*\.?\d+`, koji je kvadratan).
+ * Uz to, vrednost duža od granice se odbacuje pre regexa (`MAX_VREDNOST`, `MAX_PUTANJA`).
+ */
+/** Broj bez znaka, jednoznačno: `12`, `0.35`, `.5`. */
+const NUM = String.raw`(?:\d+(?:\.\d+)?|\.\d+)`;
+/** Eksponent: MathLive za velike vrednosti piše `-1.1999999999999997e+44`. */
+const EKS = String.raw`(?:e[-+]?\d+)?`;
+const JEDINICA = '(?:em|ex|px|pt|%)';
+const BROJ = new RegExp(`^-?${NUM}${EKS}$`);
 /** Dužina ili calc() sa brojevima i jedinicama; nijedna druga zagrada (image-set, url, var, attr, ...). */
-const DUZINA = /^(?:-?\d*\.?\d+(?:em|ex|px|pt|%)?|calc\(\s*[-+*/.\d\s]*(?:(?:em|ex|px|pt|%)[-+*/.\d\s]*)*\))$/;
+const DUZINA = new RegExp(String.raw`^(?:-?${NUM}${JEDINICA}?|calc\([-+*/.\d\s]*(?:${JEDINICA}[-+*/.\d\s]*)*\))$`);
+/** Najduža vrednost atributa ili deklaracije stila (MathLive piše kratke: najduži `calc(...)` oko 40 znakova). */
+const MAX_VREDNOST = 200;
+/** Najduža `d`/`points` (najduža putanja u izvoru MathLive-a je 561 znak). */
+const MAX_PUTANJA = 20_000;
 const BOJA = /^(?:#[0-9a-fA-F]{3,8}|transparent|currentcolor)$/i;
 const BOJA_SVG = /^(?:none|currentcolor|#[0-9a-fA-F]{3,8})$/i;
 
@@ -44,13 +59,14 @@ const ATRIBUTI: Record<string, RegExp | null> = {
   width: DUZINA,
   height: DUZINA,
   'stroke-width': DUZINA,
-  viewbox: /^-?\d*\.?\d+(?:[\s,]+-?\d*\.?\d+){3}$/,
+  viewbox: new RegExp(String.raw`^-?${NUM}(?:[\s,]+-?${NUM}){3}$`),
   preserveaspectratio: /^(?:none|x(?:Min|Mid|Max)Y(?:Min|Mid|Max))(?: (?:meet|slice))?$/,
   fill: BOJA_SVG,
   stroke: BOJA_SVG,
   // samo komande putanje i brojevi: nikad url(, # ni slova van komandi
   d: /^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]*$/,
-  points: /^(?:-?\d*\.?\d+(?:e-?\d+)?[\s,]*)*$/,
+  // separator obavezan između brojeva (neobavezan unutar `*` je bio eksponencijalan), eksponent sa znakom
+  points: new RegExp(String.raw`^-?${NUM}${EKS}(?:[\s,]+-?${NUM}${EKS})*$`),
   'stroke-linecap': /^(?:butt|round|square)$/,
   'vector-effect': /^(?:none|non-scaling-stroke)$/,
   'aria-hidden': /^(?:true|false)$/,
@@ -71,7 +87,7 @@ const DUZINSKA = new Set([
  * `border:0.04em solid #000000`, kolona `array{c|c}` `border-right:0.04em solid currentColor`, `\enclose{top}` ...
  * `border-top:solid currentColor`. Imenovana boja su samo slova (nikad zagrada ni `url`).
  */
-const IVICA = /^(?:\d*\.?\d+(?:em|px) )?(?:solid|dashed|dotted)(?: (?:#[0-9a-fA-F]{3,8}|[A-Za-z]+))?$/;
+const IVICA = new RegExp(String.raw`^(?:${NUM}(?:em|px) )?(?:solid|dashed|dotted)(?: (?:#[0-9a-fA-F]{3,8}|[A-Za-z]+))?$`);
 const DOZVOLJENE_VREDNOSTI: Record<string, RegExp> = {
   'vertical-align': new RegExp(`${DUZINA.source}|^(?:baseline|top|middle|bottom)$`),
   display: /^(?:inline-block|inline|block)$/,
@@ -107,8 +123,8 @@ function ocistiStilSaIzmenom(stil: string): { stil: string; izmena: boolean } {
     }
     const ime = d.slice(0, i).trim().toLowerCase();
     const vrednost = d.slice(i + 1).trim();
-    // CSS komentar (npr. unutar calc() bi "pojeo" sledeće deklaracije istog stila
-    if (vrednost.includes('/*') || vrednost.includes('*/')) {
+    // predugačka vrednost (pre regexa), CSS komentar (npr. unutar calc() bi "pojeo" sledeće deklaracije istog stila)
+    if (vrednost.length > MAX_VREDNOST || vrednost.includes('/*') || vrednost.includes('*/')) {
       izmena = true;
       return [];
     }
@@ -162,7 +178,8 @@ function ocisti(html: string): { fragment: DocumentFragment; izmena: boolean } {
     for (const a of [...el.attributes]) {
       const n = a.name.toLowerCase();
       const forma = Object.hasOwn(ATRIBUTI, n) ? ATRIBUTI[n] : undefined;
-      if (forma === undefined || (forma !== null && !forma.test(a.value))) {
+      const granica = n === 'd' || n === 'points' ? MAX_PUTANJA : MAX_VREDNOST;
+      if (forma === undefined || (forma !== null && (a.value.length > granica || !forma.test(a.value)))) {
         izmena = true;
         el.removeAttribute(a.name);
         continue;

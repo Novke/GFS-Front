@@ -1,5 +1,6 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
-import { markupNepromenjen, ocistiMarkup } from './formula-sanitizer';
+import { latexUMarkup as latexUMarkupZaTest } from './formula-markup';
+import { markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer';
 
 const ml = (latex: string) => convertLatexToMarkup(latex, { defaultMode: 'math' });
 
@@ -38,5 +39,75 @@ describe('formula-sanitizer: markupNepromenjen (dijalog: upis u math-field samo 
     const div = document.createElement('div');
     div.append(ocistiMarkup('<span constructor="x" style="constructor:x;toString:y;color:#000">a</span>'));
     expect(div.innerHTML).toBe('<span style="color:#000">a</span>');
+  });
+});
+
+/**
+ * Katastrofalno vraćanje (F15 fix 2): najgori slučaj svakog regexa nad vrednošću iz markup-a ili LaTeX-a. Granica je
+ * labava (CI je opterećen); pre popravke `points` je bio eksponencijalan (24 cifre: 61 s), a brojevi i `calc(`
+ * kvadratni (`\d*\.?\d+`, `\s*[...\s]*`).
+ */
+describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', () => {
+  const GRANICA_MS = 200;
+  const traje = (f: () => unknown) => {
+    const t = performance.now();
+    f();
+    return performance.now() - t;
+  };
+  const svg = (atributi: string) => ocistiMarkup(`<svg ${atributi}><polygon></polygon></svg>`);
+
+  it('formula sa ogromnim \\rule u \\enclose{updiagonalarrow} (points sa e+44) se crta brzo, vrh strelice ostaje', () => {
+    // pre popravke: oko 1 s (recenzija; varijanta sa padding="0.1234567" i 1.123456789em ni posle 30 s)
+    const latex = '\\enclose{updiagonalarrow}{\\rule{1em}{100000000000000000000000em}}';
+    let f: DocumentFragment | null = null;
+    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_MS);
+    expect(f!.querySelector('polygon')!.getAttribute('points')).toMatch(/e\+\d+/);
+  });
+
+  it('formula iz re-recenzije (pre popravke ni posle 30 s; RED nije puštan, zamrzao bi suite) se crta brzo', () => {
+    const latex = '\\enclose{updiagonalarrow}[padding="0.1234567"]{\\rule{1.123456789em}{100000000000000000000000em}}';
+    let f: DocumentFragment | null = null;
+    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_MS);
+    expect(f!.querySelector('polygon')).not.toBeNull();
+    expect(traje(() => markupNepromenjen(convertLatexToMarkup(latex, { defaultMode: 'math' })))).toBeLessThan(GRANICA_MS);
+  });
+
+  it('points: niz cifara bez separatora pa nedozvoljen znak (eksponencijalno pre popravke)', () => {
+    let f!: DocumentFragment;
+    // posle popravke i 40 cifara (pre: 21 cifra ~3 s, 24 cifre ~61 s)
+    expect(traje(() => ocistiMarkup(`<svg><polygon points="${'1'.repeat(40)}x"></polygon></svg>`))).toBeLessThan(GRANICA_MS);
+    expect(traje(() => (f = ocistiMarkup(`<svg><polygon points="${'1'.repeat(21)}x"></polygon></svg>`)))).toBeLessThan(GRANICA_MS);
+    expect(f.querySelector('polygon')!.hasAttribute('points')).toBe(false);
+    // ispravne vrednosti i dalje prolaze, i sa eksponentom sa znakom
+    const ok = ocistiMarkup('<svg><polygon points="1.3,0.3 -1.1999999999999997e+44,2e-3 .5 4"></polygon></svg>');
+    expect(ok.querySelector('polygon')!.getAttribute('points')).toBe('1.3,0.3 -1.1999999999999997e+44,2e-3 .5 4');
+  });
+
+  it.each([
+    ['x1 (BROJ)', () => ocistiMarkup(`<svg><line x1="${'1'.repeat(30000)}x"></line></svg>`)],
+    ['width (DUZINA, broj)', () => svg(`width="${'1'.repeat(30000)}x"`)],
+    ['viewBox', () => svg(`viewBox="${'1'.repeat(30000)}x"`)],
+    ['points (dug, sa separatorima)', () => ocistiMarkup(`<svg><polygon points="${'1 '.repeat(30000)}x"></polygon></svg>`)],
+    ['d (dug)', () => ocistiMarkup(`<svg><path d="${'M0 1'.repeat(20000)}#"></path></svg>`)],
+    ['style height (DUZINA, broj)', () => ocistiStil(`height:${'1'.repeat(30000)}x`)],
+    ['style calc( sa razmacima', () => ocistiStil(`left:calc(${' '.repeat(30000)}x)`)],
+    ['style calc( sa jedinicama', () => ocistiStil(`left:calc(${'1em'.repeat(20000)}x)`)],
+    ['style vertical-align', () => ocistiStil(`vertical-align:${'1'.repeat(30000)}x`)],
+    ['style border (IVICA)', () => ocistiStil(`border:${'1'.repeat(30000)}x solid`)],
+    ['style border, imenovana boja', () => ocistiStil(`border:1px solid ${'a'.repeat(30000)}1`)],
+    ['style mnogo deklaracija', () => ocistiStil('height:1em;'.repeat(20000))],
+    ['class sa mnogo razmaka', () => ocistiMarkup(`<span class="${' '.repeat(30000)}ML__base x">a</span>`)],
+    ['class, dug token (KLASE_OSTALE)', () => ocistiMarkup(`<span class="slice-1-of-${'1'.repeat(30000)} overline${'-line'.repeat(5000)}">a</span>`)],
+    ['preserveAspectRatio, dug', () => svg(`preserveAspectRatio="xMinYMin ${'slice'.repeat(10000)}"`)],
+    ['fill (BOJA_SVG), dug', () => svg(`fill="#${'f'.repeat(30000)}"`)],
+    ['style color (BOJA), dug', () => ocistiStil(`color:#${'f'.repeat(30000)}`)],
+    ['style opacity, dug', () => ocistiStil(`opacity:0.${'1'.repeat(30000)}x`)],
+  ])('%s: najgori slučaj ispod granice', (_ime, f) => {
+    expect(traje(f)).toBeLessThan(GRANICA_MS);
+  });
+
+  it('predugačke vrednosti se odbacuju pre regexa (atribut, deklaracija stila)', () => {
+    expect(ocistiStil(`height:${'1'.repeat(300)}em`)).toBe('');
+    expect(svg(`width="${'1'.repeat(300)}"`).querySelector('svg')!.hasAttribute('width')).toBe(false);
   });
 });
