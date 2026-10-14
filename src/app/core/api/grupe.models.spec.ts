@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { emailoviZaKopiranje, grupeZaPremestanje, imeStudenta, procenat, SEPARATOR_EMAILOVA, stanjeCelije } from './grupe.models';
+import { emailoviZaKopiranje, grupeZaPremestanje, imeStudenta, mailtoWaLinka, procenat, SEPARATOR_EMAILOVA, stanjeCelije } from './grupe.models';
 
 describe('emailoviZaKopiranje (G6)', () => {
   it('bez praznih i bez duplikata (velika slova i razmaci se ne računaju), redosledom studenata', () => {
@@ -60,5 +60,26 @@ describe('imeStudenta i procenat', () => {
     expect(procenat(3, 4)).toBe(75);
     expect(procenat(0, 0)).toBeNull();
     expect(procenat(null, 4)).toBeNull();
+  });
+});
+
+describe('mailtoWaLinka', () => {
+  const LINK = 'https://chat.whatsapp.com/AbCdEfGhIj1234567890Kl';
+
+  it('sve adrese u BCC-u (prazan primalac), naslov i telo sa linkom, po RFC 6068', () => {
+    const url = mailtoWaLinka(['ana@example.com', 'boris+gfs@example.com'], 'GD-2026', LINK);
+    expect(url.startsWith('mailto:?bcc=')).toBe(true);
+    const upit = new URLSearchParams(url.slice('mailto:?'.length));
+    expect(upit.get('bcc')).toBe('ana@example.com,boris+gfs@example.com');
+    expect(upit.get('subject')).toBe('WhatsApp grupa GD-2026');
+    expect(upit.get('body')).toContain(`\r\n${LINK}\r\n`);
+    expect(url).not.toContain(' '); // sve enkodovano, i plus u adresi
+    expect(url).toContain('boris%2Bgfs%40example.com');
+  });
+
+  it('naziv i link sa znakovima koji bi pokvarili upit ostaju u svom polju', () => {
+    const upit = new URLSearchParams(mailtoWaLinka(['a@b.rs'], 'A&B=1?#', LINK).slice('mailto:?'.length));
+    expect(upit.get('subject')).toBe('WhatsApp grupa A&B=1?#');
+    expect([...upit.keys()]).toEqual(['bcc', 'subject', 'body']);
   });
 });

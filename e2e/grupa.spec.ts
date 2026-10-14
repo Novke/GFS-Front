@@ -49,6 +49,45 @@ test.describe('grupa', () => {
     ]);
   });
 
+  test('WhatsApp: povezivanje linka, mejl sa linkom u BCC-u i kontakti za telefon', async ({ page }) => {
+    await page.goto('grupe/1/studenti');
+    await expect(page.locator('tbody tr')).toHaveCount(6);
+    const alati = page.getByRole('group', { name: 'Telefon i WhatsApp' });
+    await expect(alati.getByRole('link', { name: /Pošalji WA link/ })).toHaveCount(0);
+
+    await alati.getByRole('button', { name: 'Poveži WhatsApp grupu' }).click();
+    const dijalog = page.getByRole('dialog', { name: 'WhatsApp grupa · GD-2025' });
+    await dijalog.getByLabel('Link za poziv').fill('https://wa.me/381641234567');
+    await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(dijalog.getByText('Link mora biti poziv u WhatsApp grupu')).toBeVisible();
+    await dijalog.getByLabel('Link za poziv').fill('chat.whatsapp.com/AbCdEfGhIj1234567890Kl?mode=ems_copy_t');
+    await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(dijalog).toBeHidden();
+    await expect(page.getByText('WhatsApp link je sačuvan.')).toBeVisible();
+
+    // Bojan nema email, Dragana ima Goranovu adresu (duplikat): 4 adrese, sve u BCC-u
+    const mejl = alati.getByRole('link', { name: 'Pošalji WA link (4 adrese)' });
+    const href = (await mejl.getAttribute('href')) ?? '';
+    expect(href.startsWith('mailto:?bcc=')).toBe(true);
+    const upit = new URLSearchParams(href.slice('mailto:?'.length));
+    expect(upit.get('bcc')?.split(',').sort()).toEqual([
+      'ana.primerovic@primer.test',
+      'djordje.lazic@primer.test',
+      'goran.probic@primer.test',
+      'vesna.testic@primer.test',
+    ]);
+    expect(upit.get('body')).toContain('https://chat.whatsapp.com/AbCdEfGhIj1234567890Kl');
+
+    // vCard i ime fajla (Content-Disposition) daje server; ovde samo da link vodi na njega i da pregledač fajl preuzima.
+    // (Ime fajla iz route.fulfill Playwright ne prenosi u preuzimanje, pa se ne proverava.)
+    await page.route('**/api/grupe/1/kontakti.vcf', route =>
+      route.fulfill({ status: 200, contentType: 'text/vcard; charset=utf-8', body: 'BEGIN:VCARD\r\nVERSION:3.0\r\nN:Primerović;Ana;;;GD-2025\r\nEND:VCARD\r\n' }),
+    );
+    const preuzimanje = page.waitForEvent('download');
+    await alati.getByRole('link', { name: 'Kontakti za telefon' }).click();
+    expect(new URL((await preuzimanje).url()).pathname).toMatch(/\/api\/grupe\/1\/kontakti\.vcf$/);
+  });
+
   test('onboarding: QR za projektor ima canvas od bar 320 px', async ({ page }) => {
     await page.goto('grupe/1/onboarding');
     await page.locator('[data-qr]').first().click();

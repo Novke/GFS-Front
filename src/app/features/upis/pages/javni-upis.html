@@ -44,6 +44,10 @@
             <dt>Email</dt><dd>{{ p.email }}</dd>
             <dt>Telefon</dt><dd class="mono">{{ p.brojTelefona }}</dd>
           </dl>
+          @if (waLink(); as wa) {
+            <p class="wa-uvod">Pridruži se WhatsApp grupi generacije, tamo stižu obaveštenja.</p>
+            <a mat-flat-button class="dugme" [href]="wa" target="_blank" rel="noopener noreferrer" data-wa-link>Pridruži se WhatsApp grupi</a>
+          }
         }
       }
 
