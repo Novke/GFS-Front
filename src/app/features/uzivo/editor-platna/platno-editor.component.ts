@@ -88,9 +88,11 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI', 'ANIMACIJE'];
         <p id="uz-ep-precice" class="cdk-visually-hidden">
           Strelice pomeraju izabrano (Shift: 10), Delete briše, Ctrl+Z poništava, Ctrl+Y ponavlja, Ctrl+D duplira,
           Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor, Enter uređuje tekst ili formulu. Ctrl+Z i Ctrl+Y rade i iz panela.
+          Tokom uređivanja teksta F6 prelazi u panel Svojstva i nazad u tekst.
         </p>
         <p [id]="idPomoci" class="cdk-visually-hidden">
           Esc završava uređivanje teksta. Enter pravi nov pasus, Shift+Enter nov red, Tab na početku stavke liste menja nivo.
+          F6 prelazi u panel Svojstva (uređivanje ostaje otvoreno, izbor teksta se čuva); F6 iz panela vraća u tekst.
         </p>
         <p class="cdk-visually-hidden" aria-live="polite">{{ najava() }}</p>
       </div>
@@ -206,6 +208,7 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
+    this.fokusPlatna.postaviKoren(this.host);
     afterRenderEffect(() => this.fokusPlatna.postavi(this.okvir()?.nativeElement ?? null));
     afterRenderEffect({
       read: () => {
@@ -276,12 +279,26 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
    * obrađuje, pa nema duplog izvršavanja; zatvoren izbornik obrađuje `izbornikPreSelecta` u capture fazi.
    */
   protected tastaturaKorena(e: KeyboardEvent): void {
+    if (this.f6IzPanela(e)) return;
     const k = komandaTastature(e);
     // Pregled (F18): alati su skriveni, pa poništavanje ne menja dokument koji se gleda
     if (!k || !jePonistavanje(k) || e.defaultPrevented || this.pregled()) return;
     if (uPoljuZaUnos(e.target)) return;
     e.preventDefault();
     this.ponistiIliPonovi(k.tip);
+  }
+
+  /**
+   * F6 / Shift+F6 iz panela tokom sesije teksta: fokus nazad u tekst, sa izborom koji je uređivač sačuvao (`fokus` ga
+   * vraća u DOM). F6 iz samog teksta obrađuje uređivač (fokus na panel), pa ovde stiže kao `defaultPrevented`.
+   */
+  private f6IzPanela(e: KeyboardEvent): boolean {
+    const u = this.store.uredjivanje() ? this.store.aktivniUredjivac() : null;
+    if (e.key !== 'F6' || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented || !u) return false;
+    if (!(e.target as Element | null)?.closest?.('.uz-ep-paneli')) return false;
+    e.preventDefault();
+    u.fokus();
+    return true;
   }
 
   /**
@@ -300,12 +317,12 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
 
   /**
    * Tokom sesije teksta (fokus u panelu ili na okviru) undo/redo prvo ide u istoriju uređivača, pa npr. Ctrl+Z posle
-   * izbora fonta vraća samo font; tek kad uređivač nema šta, sesija se završava i radi istorija platna.
+   * izbora fonta vraća samo font; tek kad uređivač nema šta, Ctrl+Z završava sesiju i radi istorija platna (redo tokom
+   * sesije ostaje u uređivaču, `store.ponovi`).
    */
   private ponistiIliPonovi(tip: 'PONISTI' | 'PONOVI'): void {
-    if (tip === 'PONISTI') {
-      if (!this.store.ponistiUTekstu()) this.store.ponisti();
-    } else if (!this.store.ponoviUTekstu()) this.store.ponovi();
+    if (tip === 'PONOVI') this.store.ponovi();
+    else if (!this.store.ponistiUTekstu()) this.store.ponisti();
   }
 
   /** Ostale prečice SAMO na okviru platna (odluka 24); poništi/ponovi idu do korena (`tastaturaKorena`). */

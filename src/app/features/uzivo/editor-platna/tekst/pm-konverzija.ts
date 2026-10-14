@@ -46,7 +46,8 @@ export function pasusiUDok(pasusi: readonly Pasus[], sema: Schema): PmCvor {
     const attrs: AtributiPasusa = { ...atributiPasusa(p), prazanDeo, kljuc: `p${i}` };
     return sema.nodes['pasus'].create(attrs, sadrzaj);
   });
-  return sema.nodes['doc'].create(null, cvorovi.length ? cvorovi : [sema.nodes['pasus'].create()]);
+  // sloj bez pasusa (server, uvoz): rezervni pasus odmah ima ključ, pa ga `dodeliKljuceve` ne menja (bez koraka i PUT-a)
+  return sema.nodes['doc'].create(null, cvorovi.length ? cvorovi : [sema.nodes['pasus'].create({ kljuc: 'p0' })]);
 }
 
 /** Stil teksta bez marka kad ni dokument ni pasus nemaju svoj (Carlito 18, crno; kao `pasus('')` fiksture i uvoz). */

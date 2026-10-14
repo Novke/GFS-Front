@@ -4,6 +4,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import type { MatDialog } from '@angular/material/dialog';
+import { TextSelection } from 'prosemirror-state';
 import { Observable, Subject, of } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
@@ -909,6 +910,156 @@ describe('PlatnoEditorComponent', () => {
       expect(document.activeElement).toBe(okvir());
     });
 
+    describe('završni talas 4b (A): granica istorije, ponovi, F6, onemogućena dugmad', () => {
+      async function uredi() {
+        await samoTekst();
+        dvoklik(50, 50);
+        await fixture.whenStable();
+      }
+      const sloj = () => store.platno().slojevi.find((s) => s.id === 'tekst') as TekstSloj;
+      const tekstSloja = () => sloj().pasusi.map((p) => p.delovi.map((d) => d.tekst).join('')).join('|');
+
+      it('tok A: kucanje "abc", Ctrl+S, dvaput Poništi na traci: obrisan tekst se ne vraća, platno i uređivač se slažu', async () => {
+        await uredi();
+        const pocetak = tekstSloja();
+        kucajNaKraj('abc');
+        taster(uredjivac()!, 's', { ctrlKey: true });
+        expect(tekstSloja()).toContain('abc');
+        await fixture.whenStable();
+        dugmeTrake('Poništi').click();
+        await fixture.whenStable();
+        // ProseMirror ne prelazi presek (već je korak platna): poništava se taj korak, a sesija se završava
+        expect(tekstSloja()).toBe(pocetak);
+        expect(store.uredjivanje()).toBeNull();
+        dugmeTrake('Poništi').click();
+        await fixture.whenStable();
+        expect(tekstSloja()).toBe(pocetak);
+        expect(store.mozeNazad()).toBe(false);
+        dugmeTrake('Ponovi').click();
+        await fixture.whenStable();
+        expect(tekstSloja()).toContain('abc');
+      });
+
+      it('tok A u tekstu: posle Ctrl+S dalje kucanje je nov korak; Poništi ga skida, pa sledeći skida presek', async () => {
+        await uredi();
+        const pocetak = tekstSloja();
+        kucajNaKraj('abc');
+        taster(uredjivac()!, 's', { ctrlKey: true });
+        await fixture.whenStable();
+        kucajNaKraj('d');
+        await fixture.whenStable();
+        dugmeTrake('Poništi').click();
+        await fixture.whenStable();
+        expect(pogled().state.doc.textContent).toContain('abc');
+        expect(pogled().state.doc.textContent).not.toContain('abcd');
+        expect(store.uredjivanje()).not.toBeNull();
+        dugmeTrake('Poništi').click();
+        await fixture.whenStable();
+        expect(store.uredjivanje()).toBeNull();
+        expect(tekstSloja()).toBe(pocetak);
+      });
+
+      it('tok B: kucanje, "Prelom reda" u panelu, Ctrl+Z na tom prekidaču: vraća se okvir, tekst ostaje; sledeći Ctrl+Z skida tekst', async () => {
+        await uredi();
+        const pocetak = tekstSloja();
+        const prelom = sloj().okvir.prelom;
+        kucajNaKraj('abc');
+        const prekidac = panelTeksta().querySelector<HTMLButtonElement>('mat-slide-toggle button[role="switch"]')!;
+        prekidac.click();
+        await fixture.whenStable();
+        expect(sloj().okvir.prelom).toBe(!prelom);
+        expect(tekstSloja()).toContain('abc');
+        expect(store.uredjivanje()).not.toBeNull();
+        prekidac.focus();
+        expect(taster(prekidac, 'z', { ctrlKey: true }).defaultPrevented).toBe(true);
+        await fixture.whenStable();
+        expect(sloj().okvir.prelom).toBe(prelom);
+        expect(tekstSloja()).toContain('abc');
+        taster(panelTeksta(), 'z', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(tekstSloja()).toBe(pocetak);
+        expect(sloj().okvir.prelom).toBe(prelom);
+      });
+
+      it('Ctrl+Y iz panela i Ponovi tokom sesije: samo istorija uređivača; bez nje ništa (sesija ostaje, tekst nije upisan)', async () => {
+        store.preimenuj('slika', 'Pozadina');
+        store.ponisti();
+        expect(store.mozeNapred()).toBe(true);
+        await uredi();
+        // platno ima "ponovi", uređivač nema: dugme je sivo (redo platna bi presek teksta obrisao)
+        expect(dugmeTrake('Ponovi').getAttribute('aria-disabled')).toBe('true');
+        kucajNaKraj('X');
+        lazni.izmeniPlatno.mockClear();
+        expect(taster(panelTeksta(), 'y', { ctrlKey: true }).defaultPrevented).toBe(true);
+        dugmeTrake('Ponovi').click();
+        await fixture.whenStable();
+        expect(store.uredjivanje()).not.toBeNull();
+        expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+        expect(pogled().state.doc.textContent).toContain('X');
+        expect(store.mozeNapred()).toBe(true);
+        expect(store.platno().slojevi.find((x) => x.id === 'slika')!.naziv).toBeNull();
+      });
+
+      it('sivo Poništi i Ponovi na traci tokom sesije (nijedna istorija nema korak): klik ne zatvara sesiju', async () => {
+        await uredi();
+        lazni.izmeniPlatno.mockClear();
+        for (const ime of ['Poništi', 'Ponovi']) {
+          expect([ime, dugmeTrake(ime).getAttribute('aria-disabled')]).toEqual([ime, 'true']);
+          dugmeTrake(ime).click();
+          await fixture.whenStable();
+        }
+        expect(store.uredjivanje()).not.toBeNull();
+        expect(uredjivac()).not.toBeNull();
+        expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+      });
+
+      it('siva Napred, Nazad i Obriši na traci (bez izbora): klik ne radi ništa', async () => {
+        store.ponistiIzbor();
+        await fixture.whenStable();
+        const pre = store.platno();
+        for (const ime of ['Napred', 'Nazad', 'Obriši']) {
+          expect([ime, dugmeTrake(ime).getAttribute('aria-disabled')]).toEqual([ime, 'true']);
+          dugmeTrake(ime).click();
+        }
+        await fixture.whenStable();
+        expect(store.platno()).toBe(pre);
+        expect(store.mozeNazad()).toBe(false);
+      });
+
+      it('F6: iz teksta na font u panelu (sesija i izbor ostaju), font tastaturom ide na izbor; Shift+F6 i F6 iz panela nazad', async () => {
+        await uredi();
+        const v = pogled();
+        v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, 1, 3)));
+        expect(taster(uredjivac()!, 'F6').defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(selectFonta());
+        expect(store.uredjivanje()).not.toBeNull();
+        await fontIzPanela('Tinos', 'tastatura');
+        expect(document.activeElement).toBe(selectFonta());
+        expect(fontoviUredjivaca().sort()).toEqual(['Carlito', 'Tinos']);
+        expect(taster(selectFonta(), 'F6', { shiftKey: true }).defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(uredjivac());
+        expect([pogled().state.selection.from, pogled().state.selection.to]).toEqual([1, 3]);
+        taster(uredjivac()!, 'F6');
+        expect(document.activeElement).toBe(selectFonta());
+        taster(selectFonta(), 'F6');
+        expect(document.activeElement).toBe(uredjivac());
+        expect(store.uredjivanje()).not.toBeNull();
+        taster(uredjivac()!, 'Escape');
+        await fixture.whenStable();
+        expect(sloj().pasusi[0].delovi.map((d) => d.font)).toEqual(['Tinos', 'Carlito']);
+      });
+
+      it('F6 bez sesije (fokus u panelu) ne radi ništa; najava F6 je u opisu uređivača i okvira platna', async () => {
+        store.izaberi(['tekst']);
+        await fixture.whenStable();
+        expect(taster(selectFonta(), 'F6').defaultPrevented).toBe(false);
+        await uredi();
+        const opis = (id: string) => el().querySelector(`[id="${id}"]`)!.textContent!;
+        expect(opis(uredjivac()!.getAttribute('aria-describedby')!)).toContain('F6');
+        expect(opis(okvir().getAttribute('aria-describedby')!)).toContain('F6');
+      });
+    });
+
     it('uništavanje editora usred uređivanja: tekst ide u izlaz pre odjave', async () => {
       await samoTekst();
       dvoklik(50, 50);
@@ -1021,6 +1172,36 @@ describe('PlatnoEditorComponent', () => {
       await fixture.whenStable();
       expect(pogled().state.doc.textContent).toBe('A');
       expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 1 });
+    });
+
+    it('završni talas (I1): ćelija, kucanje, Ctrl+S, dvaput Poništi na traci: obrisan tekst ćelije se ne vraća', async () => {
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      kucaj('abc');
+      taster(uredjivac()!, 's', { ctrlKey: true });
+      expect(tekstCelije(0, 1)).toEqual(['Aabc']);
+      await fixture.whenStable();
+      dugmeTrake('Poništi').click();
+      await fixture.whenStable();
+      expect(tekstCelije(0, 1)).toEqual(['A']);
+      expect(store.uredjivanje()).toBeNull();
+      dugmeTrake('Poništi').click();
+      await fixture.whenStable();
+      expect(tekstCelije(0, 1)).toEqual(['A']);
+    });
+
+    it('završni talas (I2): F6 iz uređivanja ćelije na panel Svojstva i nazad; sesija ćelije ostaje', async () => {
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      expect(taster(uredjivac()!, 'F6').defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(selectFonta());
+      taster(selectFonta(), 'F6');
+      expect(document.activeElement).toBe(uredjivac());
+      expect(store.uredjivanje()).toEqual({ slojId: 'tabela', celija: { r: 0, k: 1 } });
     });
 
     it('Tab u ćeliji prelazi na sledeću (tekst je korak), Shift+Tab nazad; poslednja + Tab ostaje', async () => {

@@ -2,7 +2,7 @@
 // platna) i granica znakova slajda. Bez Angular-a; uređivač ih sastavlja kroz `dodaciUredjivaca`.
 import { history } from 'prosemirror-history';
 import type { Node as PmCvor } from 'prosemirror-model';
-import { type EditorState, Plugin, PluginKey, TextSelection, type Transaction } from 'prosemirror-state';
+import { type Command, type EditorState, Plugin, PluginKey, TextSelection, type Transaction } from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { GRANICE, codePointa } from '../../data-access/platno-provera';
@@ -238,6 +238,10 @@ export interface OpcijeUredjivaca {
   naEsc: () => boolean;
   /** Tab / Shift+Tab u ćeliji tabele (F14): sledeća / prethodna ćelija; bez njega Tab je znak ili nivo liste. */
   naTab?: (smer: 1 | -1) => boolean;
+  /** Ctrl+Z u tekstu (podrazumevano `undo`): uređivač ga ograničava na granicu poslednjeg preseka. */
+  ponisti?: Command;
+  /** F6 / Shift+F6: fokus na panel Svojstva bez kraja sesije (true = taster obrađen). */
+  naF6?: () => boolean;
 }
 
 /** Svi dodaci uređivača, redom: izbor iz DOM-a (pre tastera), granica, istorija, tasteri, stil, prikaz pasusa. */
@@ -246,7 +250,7 @@ export function dodaciUredjivaca(o: OpcijeUredjivaca): Plugin[] {
     dodatakIzboraIzDoma(),
     dodatakGranice(o.ostalo, o.prekoracenje),
     history(),
-    ...tasteriUredjivaca(o.naEsc, o.naTab),
+    ...tasteriUredjivaca(o.naEsc, o.naTab, o.ponisti, o.naF6),
     dodatakStila(o.podrazumevano),
     dodatakPasusa({ skala: o.skala, skalaProreda: o.skalaProreda }),
   ];

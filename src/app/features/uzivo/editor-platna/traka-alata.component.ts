@@ -4,9 +4,10 @@
 // CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Formula" (F16) otvara dijalog (lenji chunk): posle
 // "Sačuvaj" nov sloj i fokus na okviru (i kad je odbijen); Otkaži vraća fokus na dugme (`restoreFocus` dijaloga). "Tekst" (F12) ubacuje
 // tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
-// (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
-// Poništi/Ponovi tokom sesije teksta (sloj ili ćelija) idu prvo u istoriju uređivača, pa u istoriju platna, kao
-// Ctrl+Z iz panela; omogućeni su kad bilo koja od dve ima korak. Prekidač "Pregled" / "Uređivanje" (F18) je uvek tu (isto
+// (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body. `disabledInteractive` NE blokira klik
+// (Material blokira samo `<a>`), pa svaki handler na početku proverava isti uslov kao `[disabled]`.
+// Poništi tokom sesije teksta (sloj ili ćelija) ide prvo u istoriju uređivača, pa u istoriju platna, kao Ctrl+Z iz
+// panela (omogućeno kad bilo koja od dve ima korak); Ponovi tokom sesije samo u istoriju uređivača. Prekidač "Pregled" / "Uređivanje" (F18) je uvek tu (isto
 // dugme, pa fokus ostaje na njemu); u Pregledu su ostali alati sklonjeni, jer bi menjali dokument koji se gleda.
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -71,11 +72,11 @@ const OBLICI: readonly StavkaOblika[] = [
         <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
         <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
         <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
-                [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
+                [disabled]="!imaIzbor()" (click)="zOsa('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
         <button mat-icon-button type="button" aria-label="Nazad" title="Nazad (Ctrl+[)" disabledInteractive
-                [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
+                [disabled]="!imaIzbor()" (click)="zOsa('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
         <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
-                [disabled]="!imaIzbor()" (click)="store.obrisiIzabrane()"><mat-icon svgIcon="delete" /></button>
+                [disabled]="!imaIzbor()" (click)="obrisi()"><mat-icon svgIcon="delete" /></button>
       }
     </div>
   `,
@@ -100,19 +101,28 @@ export class TrakaAlataComponent {
   /** Istorija uređivača teksta dok traje sesija (TEKST sloj ili ćelija), inače null. */
   private readonly tekst = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac()?.istorija() ?? null : null));
   protected readonly mozeNazad = computed(() => this.store.mozeNazad() || !!this.tekst()?.nazad);
-  protected readonly mozeNapred = computed(() => this.store.mozeNapred() || !!this.tekst()?.napred);
+  /** Tokom sesije samo istorija uređivača (redo platna bi presek teksta obrisao). */
+  protected readonly mozeNapred = computed(() => (this.store.uredjivanje() ? !!this.tekst()?.napred : this.store.mozeNapred()));
 
   /** Kao Ctrl+Z iz panela: tokom sesije teksta prvo istorija uređivača, pa (kad je prazna) istorija platna. */
   protected ponisti(): void {
-    if (!this.store.ponistiUTekstu()) this.store.ponisti();
+    if (this.mozeNazad() && !this.store.ponistiUTekstu()) this.store.ponisti();
   }
 
   protected ponovi(): void {
-    if (!this.store.ponoviUTekstu()) this.store.ponovi();
+    if (this.mozeNapred()) this.store.ponovi();
   }
 
   protected imaIzbor(): boolean {
     return this.store.izbor().length > 0;
+  }
+
+  protected zOsa(smer: 'NAPRED' | 'NAZAD'): void {
+    if (this.imaIzbor()) this.store.zOsaIzabranih(smer);
+  }
+
+  protected obrisi(): void {
+    if (this.imaIzbor()) this.store.obrisiIzabrane();
   }
 
   /**

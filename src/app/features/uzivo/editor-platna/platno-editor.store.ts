@@ -311,22 +311,27 @@ export const PlatnoEditorStore = signalStore(
       ponisti(): void {
         vrati((sada) => store._istorija.ponisti(sada));
       },
+      /**
+       * Tokom sesije teksta ponavljanje ide SAMO u istoriju uređivača: kad ona nema šta, ništa (sesija ostaje otvorena, a
+       * "ponovi" platna se ne briše presekom).
+       */
       ponovi(): void {
+        const u = store.uredjivanje() ? store._uredjivac() : null;
+        if (u) {
+          if (!store.gest()) u.ponovi();
+          return;
+        }
         vrati((sada) => store._istorija.ponovi(sada));
       },
       /**
        * Undo iz panela ili sa korena editora tokom sesije teksta (zajednički krug F12/F13): ide u istoriju uređivača
-       * (ProseMirror), sesija ostaje otvorena. false = nema sesije, gest u toku ili uređivač nema šta da poništi: pozivalac
-       * tada zove `ponisti` (sesija se završava, tekst je korak, pa se poništava istorija platna).
+       * (ProseMirror), sesija ostaje otvorena. false = nema sesije, gest u toku ili uređivač nema šta da poništi (ni ispod
+       * granice poslednjeg preseka, koji je već korak platna): pozivalac tada zove `ponisti` (sesija se završava, pa se
+       * poništava istorija platna: poslednji korak, npr. okvir iz panela, pa presek).
        */
       ponistiUTekstu(): boolean {
         const u = store.uredjivanje() ? store._uredjivac() : null;
         return !!u && !store.gest() && u.ponisti();
-      },
-      /** Redo tokom sesije teksta: kao `ponistiUTekstu`. */
-      ponoviUTekstu(): boolean {
-        const u = store.uredjivanje() ? store._uredjivac() : null;
-        return !!u && !store.gest() && u.ponovi();
       },
       izaberi(ids: readonly string[]): void {
         postaviIzbor(postojeci(ids));

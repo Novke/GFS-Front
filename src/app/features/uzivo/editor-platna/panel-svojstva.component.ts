@@ -26,7 +26,7 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
   ],
   template: `
     @if (store.uredjivanje()) {
-      <p class="uz-ep-napomena">Uređuje se tekst. Slojevi i animacije: Završi uređivanje teksta (Esc).</p>
+      <p class="uz-ep-napomena">Uređuje se tekst. F6 vraća u tekst. Slojevi i animacije: Završi uređivanje teksta (Esc).</p>
       <button mat-stroked-button type="button" (click)="zavrsi()">Završi uređivanje (Esc)</button>
       <app-svojstva-teksta [tema]="tema()" />
     } @else if (store.izbor().length === 0) {

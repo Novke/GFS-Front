@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { closeHistory } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { NotificationStore } from '../../../../core/state/notification.store';
 import { okvirPodrazumevani, pasus, platnoSaAnimacijama } from '../../data-access/platno-podaci.testing';
@@ -18,18 +19,20 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
   let fixture: ComponentFixture<TekstUredjivacComponent>;
   let store: InstanceType<typeof PlatnoEditorStore>;
   let fokus: ReturnType<typeof vi.fn>;
+  let fokusPanela: ReturnType<typeof vi.fn>;
   const obavestenja = { greska: vi.fn(), info: vi.fn(), uspeh: vi.fn() };
   const view = () => fixture.componentInstance.pogled()!;
   const komande = () => fixture.componentInstance.komande;
 
   beforeEach(async () => {
     fokus = vi.fn();
+    fokusPanela = vi.fn(() => true);
     TestBed.configureTestingModule({
       imports: [TekstUredjivacComponent],
       providers: [
         provideZonelessChangeDetection(),
         PlatnoEditorStore,
-        { provide: FokusPlatna, useValue: { fokus, postavi: vi.fn() } },
+        { provide: FokusPlatna, useValue: { fokus, fokusPanela, postavi: vi.fn() } },
         { provide: NotificationStore, useValue: obavestenja },
         { provide: SAT_ISTORIJE, useValue: () => 0 },
       ],
@@ -206,6 +209,93 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
       taster('Shift');
       expect(dispatch).not.toHaveBeenCalled();
     });
+
+    it('F19 rr m3: kursor na početku pasusa liste (ispred i iza oznake u DOM-u): taster ne pravi transakciju', async () => {
+      view().dispatch(view().state.tr.setSelection(TextSelection.create(view().state.doc, 1)));
+      komande().prebaciListu('ZNAK');
+      await fixture.whenStable();
+      const p = view().dom.querySelector('p')!;
+      expect(p.querySelector('.uz-pl-oznaka')).not.toBeNull();
+      const a = view().domAtPos(1);
+      for (const [cvor, pomeraj] of [[p, 0], [a.node, a.offset]] as [Node, number][]) {
+        document.getSelection()!.setBaseAndExtent(cvor, pomeraj, cvor, pomeraj);
+        const dispatch = vi.spyOn(view(), 'dispatch');
+        taster('Shift');
+        expect(dispatch).not.toHaveBeenCalled();
+        dispatch.mockRestore();
+      }
+      expect(view().state.selection.from).toBe(1);
+    });
+  });
+
+  describe('završni talas 4b: granica istorije posle preseka usred sesije', () => {
+    const ctrlZ = () => {
+      const e = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+      view().dom.dispatchEvent(e);
+      return e;
+    };
+    const tekst = () => view().state.doc.child(0).textContent;
+    const kucaj = (t: string) => view().dispatch(closeHistory(view().state.tr.insertText(t, 1)));
+
+    it('primljen presek je granica: ni ponisti() ni Ctrl+Z u tekstu je ne prelaze; kucanje posle nje je nov korak', () => {
+      kucaj('X');
+      expect(komande().presek()).not.toBeNull();
+      expect(komande().istorija().nazad).toBe(false);
+      expect(komande().ponisti()).toBe(false);
+      // Ctrl+Z u tekstu: obrađen (bez poništavanja pregledača), tekst ostaje
+      expect(ctrlZ().defaultPrevented).toBe(true);
+      expect(tekst()).toBe('XPrvi');
+      kucaj('Y');
+      expect(komande().istorija().nazad).toBe(true);
+      expect(komande().ponisti()).toBe(true);
+      expect(tekst()).toBe('XPrvi');
+      expect(komande().ponisti()).toBe(false);
+      expect(komande().istorija()).toEqual({ nazad: false, napred: true });
+      expect(komande().ponovi()).toBe(true);
+      expect(tekst()).toBe('YXPrvi');
+    });
+
+    it('odbijen presek (odbaciPresek) vraća i granicu: kucanje se opet poništava', () => {
+      kucaj('X');
+      komande().presek();
+      komande().odbaciPresek();
+      expect(komande().istorija().nazad).toBe(true);
+      expect(komande().ponisti()).toBe(true);
+      expect(tekst()).toBe('Prvi');
+    });
+
+    it('preliv istorije (posle 120 događaja ProseMirror odbacuje najstarije): granica se pomera sa njima', () => {
+      kucaj('X');
+      komande().presek();
+      for (let i = 0; i < 120; i++) kucaj('a');
+      let n = 0;
+      while (komande().ponisti()) n++;
+      // svih 100 preostalih događaja je posle preseka (događaj preseka je odbačen)
+      expect(n).toBe(100);
+    });
+  });
+
+  it('završni talas 4b (m6): sloj sa `pasusi: []` bez kucanja: presek je null (nema koraka ni PUT-a)', async () => {
+    const prazan: TekstSloj = { ...sloj(), pasusi: [] };
+    store.inicijalizuj(platnoSaAnimacijama([], [prazan]));
+    store.pocniUredjivanje('t');
+    fixture.destroy();
+    fixture = TestBed.createComponent(TekstUredjivacComponent);
+    fixture.componentRef.setInput('sloj', prazan);
+    fixture.componentRef.setInput('tema', 'NACRT');
+    await fixture.whenStable();
+    view().dispatch(view().state.tr.setSelection(TextSelection.create(view().state.doc, 1)));
+    expect(komande().presek()).toBeNull();
+  });
+
+  it('F6 i Shift+F6 u tekstu: fokus na panel Svojstva (FokusPlatna), taster obrađen, sesija ostaje', () => {
+    for (const shiftKey of [false, true]) {
+      const e = new KeyboardEvent('keydown', { key: 'F6', shiftKey, bubbles: true, cancelable: true });
+      view().dom.dispatchEvent(e);
+      expect(e.defaultPrevented).toBe(true);
+    }
+    expect(fokusPanela).toHaveBeenCalledTimes(2);
+    expect(store.uredjivanje()).not.toBeNull();
   });
 });
 

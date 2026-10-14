@@ -777,7 +777,7 @@ describe('PlatnoEditorStore', () => {
     });
 
     describe('zajednički krug F12/F13', () => {
-      it('ponistiUTekstu / ponoviUTekstu: tokom sesije idu u istoriju uređivača; sesija ostaje, istorija platna netaknuta', () => {
+      it('ponistiUTekstu / ponovi: tokom sesije idu u istoriju uređivača; sesija ostaje, istorija platna netaknuta', () => {
         pocni(sa());
         expect(store.ponistiUTekstu()).toBe(false);
         store.pocniUredjivanje('t1');
@@ -786,7 +786,8 @@ describe('PlatnoEditorStore', () => {
         vi.mocked(k.ponisti).mockReturnValueOnce(true);
         vi.mocked(k.ponovi).mockReturnValueOnce(true);
         expect(store.ponistiUTekstu()).toBe(true);
-        expect(store.ponoviUTekstu()).toBe(true);
+        store.ponovi();
+        expect(k.ponovi).toHaveBeenCalledTimes(1);
         // uređivač nema šta da poništi -> false (pozivalac tada ide na istoriju platna)
         expect(store.ponistiUTekstu()).toBe(false);
         expect(k.ponisti).toHaveBeenCalledTimes(2);

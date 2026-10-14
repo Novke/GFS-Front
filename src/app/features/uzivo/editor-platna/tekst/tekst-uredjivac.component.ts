@@ -4,12 +4,14 @@
 // aktivni uređivač: store kroz `presek()` uzima tekst (pražnjenje pre čuvanja, kraj sesije, uništavanje), a rezultat se
 // računa iz poslednjeg dokumenta, pa radi i kad je `EditorView` već uništen (promena slajda). Ćelija tabele (F14) koristi
 // isti uređivač: editor mu daje TEKST sloj sastavljen od pasusa, sidra i popune ćelije, uz `celija` (Tab prelazi ćelije).
+// Granica istorije: presek primljen usred sesije (Ctrl+S, izmena okvira iz panela, kopiraj) je već korak platna, pa
+// ProseMirror-ovo poništavanje (Ctrl+Z u tekstu, panel, traka) ne prelazi stanje tog preseka; dalje ide istorija platna.
 import {
   type AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, type OnDestroy, type OnInit, type Signal, ViewEncapsulation,
   afterNextRender, computed, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
 import type { Node as PmCvor } from 'prosemirror-model';
-import { closeHistory, redo, redoDepth, undo, undoDepth } from 'prosemirror-history';
+import { closeHistory, isHistoryTransaction, redo, redoDepth, undo, undoDepth } from 'prosemirror-history';
 import { type Command, EditorState, Selection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { NotificationStore } from '../../../../core/state/notification.store';
@@ -48,11 +50,12 @@ export interface KomandeTeksta {
   fokus(): void;
   /**
    * Poništi / ponovi u istoriji uređivača (ProseMirror), bez fokusa: undo/redo iz panela tokom sesije (zajednički krug
-   * F12/F13). false = nema šta (pozivalac tada ide na istoriju platna).
+   * F12/F13). false = nema šta (pozivalac tada ide na istoriju platna). Poništavanje ne prelazi granicu poslednjeg
+   * primljenog preseka usred sesije (taj tekst je već korak platna).
    */
   ponisti(): boolean;
   ponovi(): boolean;
-  /** Ima li istorija uređivača korak nazad / napred (dugmad Poništi/Ponovi na traci tokom sesije). */
+  /** Ima li istorija uređivača korak nazad (iznad granice) / napred (dugmad Poništi/Ponovi na traci tokom sesije). */
   readonly istorija: Signal<{ nazad: boolean; napred: boolean }>;
 }
 
@@ -121,6 +124,12 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   /** Osnova pre poslednjeg preseka (za `odbaciPresek`); null kad nema šta da se vrati. */
   private prethodnaOsnova: { dok: PmCvor; kljucevi: (string | null)[] } | null = null;
   private podrazumevano!: AtributiDela;
+  /**
+   * Granica istorije: broj događaja ProseMirror istorije u trenutku poslednjeg primljenog preseka (i pre njega, za
+   * `odbaciPresek`). Poništavanje ispod nje bi vratilo tekst koji je već korak platna.
+   */
+  private granica = 0;
+  private prethodnaGranica = 0;
   private readonly brojac = { n: 0 };
   private readonly stanje = signal<StanjeSelekcije>(PRAZNO_STANJE);
   private readonly koraci = signal({ nazad: false, napred: false }, { equal: (a, b) => a.nazad === b.nazad && a.napred === b.napred });
@@ -135,7 +144,7 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     promeniNivo: (razlika) => this.izvrsi(promeniNivo(razlika)),
     stanje: this.stanje.asReadonly(),
     fokus: () => this.view?.focus(),
-    ponisti: () => this.istorija(undo),
+    ponisti: () => !!this.view && undoDepth(this.view.state) > this.granica && this.istorija(undo),
     ponovi: () => this.istorija(redo),
     istorija: this.koraci.asReadonly(),
   };
@@ -172,6 +181,10 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
           this.store.predjiNaCeliju(smer);
           return true;
         } : undefined,
+        // granica preseka: obrađen taster (bez poništavanja u pregledaču); bez ijednog koraka kao ranije (false)
+        ponisti: (state, dispatch) => (undoDepth(state) > this.granica ? undo(state, dispatch) : undoDepth(state) > 0),
+        // F6: panel Svojstva, sesija i izbor ostaju (povratak: F6 iz panela, koren editora)
+        naF6: () => this.fokusPlatna.fokusPanela(),
       }),
     });
     this.dok = this.dokPreseka = doc;
@@ -209,13 +222,22 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   private primeni(tr: Parameters<EditorView['dispatch']>[0]): void {
     const view = this.view;
     if (!view) return;
+    const dubina = undoDepth(view.state);
     let s = view.state.apply(tr);
     const k = dodeliKljuceve(s, this.brojac);
     if (k) s = s.apply(k);
     view.updateState(s);
     this.dok = s.doc;
+    // preliv istorije (posle 120 događaja odbacuje najstarijih 20): granica se pomera sa njima
+    const posle = undoDepth(s);
+    if (!isHistoryTransaction(tr) && posle < dubina) this.granica = Math.max(0, this.granica - (dubina + 1 - posle));
     this.stanje.set(stanjeSelekcije(s));
-    this.koraci.set({ nazad: undoDepth(s) > 0, napred: redoDepth(s) > 0 });
+    this.osveziKorake();
+  }
+
+  private osveziKorake(): void {
+    const s = this.view?.state;
+    if (s) this.koraci.set({ nazad: undoDepth(s) > this.granica, napred: redoDepth(s) > 0 });
   }
 
   /**
@@ -240,6 +262,14 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     this.prethodnaOsnova = { dok: this.dokPreseka, kljucevi: this.kljuceviPreseka };
     this.dokPreseka = this.dok;
     this.kljuceviPreseka = kljuceviPasusa(this.dok);
+    // granica: dalje kucanje je nov događaj istorije, a poništavanje staje na ovom stanju (store ga odbacuje ako odbije)
+    this.prethodnaGranica = this.granica;
+    const view = this.view;
+    if (view) {
+      view.dispatch(closeHistory(view.state.tr));
+      this.granica = undoDepth(view.state);
+      this.osveziKorake();
+    }
     return rezultat;
   }
 
@@ -249,5 +279,7 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     this.dokPreseka = o.dok;
     this.kljuceviPreseka = o.kljucevi;
     this.prethodnaOsnova = null;
+    this.granica = this.prethodnaGranica;
+    this.osveziKorake();
   }
 }

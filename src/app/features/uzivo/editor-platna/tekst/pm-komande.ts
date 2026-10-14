@@ -266,17 +266,22 @@ export function izaberiSav(state: EditorState, dispatch?: Dispatch): boolean {
 }
 
 /**
- * Tasteri uređivača (pre `baseKeymap`): Enter, Shift+Enter, Tab, poništi/ponovi, B/I/U, Ctrl+A i Esc. `naTab` (ćelija
- * tabele, F14) zamenjuje Tab / Shift+Tab: prelaz na sledeću / prethodnu ćeliju.
+ * Tasteri uređivača (pre `baseKeymap`): Enter, Shift+Enter, Tab, poništi/ponovi, B/I/U, Ctrl+A, Esc i F6. `naTab` (ćelija
+ * tabele, F14) zamenjuje Tab / Shift+Tab: prelaz na sledeću / prethodnu ćeliju. `ponisti` zamenjuje `undo` (granica
+ * istorije posle preseka usred sesije, uređivač), a `naF6` (F6 i Shift+F6) prebacuje fokus na panel Svojstva.
  */
-export function tasteriUredjivaca(naEsc: () => boolean, naTab?: (smer: 1 | -1) => boolean): Plugin[] {
+export function tasteriUredjivaca(
+  naEsc: () => boolean, naTab?: (smer: 1 | -1) => boolean, ponisti: Command = undo, naF6?: () => boolean,
+): Plugin[] {
   return [
     keymap({
       Enter: podeliPasus,
       'Shift-Enter': umetniPrelom,
       Tab: naTab ? () => naTab(1) : tabIliNivo(1),
       'Shift-Tab': naTab ? () => naTab(-1) : tabIliNivo(-1),
-      'Mod-z': undo,
+      F6: () => !!naF6?.(),
+      'Shift-F6': () => !!naF6?.(),
+      'Mod-z': ponisti,
       'Mod-y': redo,
       'Shift-Mod-z': redo,
       'Mod-b': prebaciStil('podebljano'),
