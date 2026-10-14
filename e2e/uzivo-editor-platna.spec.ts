@@ -1,5 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 
+import type { Platno as PlatnoModel } from '../src/app/features/uzivo/data-access/platno.models';
+import { proveriKaoServer } from '../src/app/features/uzivo/data-access/platno-provera';
 import { expect, test } from './fixture';
 import type { MockApi } from './mock-api';
 
@@ -19,11 +21,14 @@ const PRAVOUGAONIK = { x: 380, y: 210, sirina: 200, visina: 120 };
 /** PNG 1 x 1 (prolazi `createImageBitmap` u Chromium-u, pa ga editor meri pre otpremanja). */
 const PIKSEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
+interface Deo { tekst: string; font: string; podebljano: boolean }
+interface Celija { pasusi: { delovi: Deo[] }[]; spojDesno: number; spojDole: number }
 interface Sloj {
   id: string; tip: string; x: number; y: number; sirina: number; visina: number; medijId?: string;
-  pasusi?: { delovi: { tekst: string; font: string }[] }[];
+  pasusi?: { delovi: Deo[] }[]; celije?: Celija[][]; latex?: string; slikaIzvora?: string | null;
 }
-interface Platno { pozadina: { boja: string; medijId: string | null }; slojevi: Sloj[]; animacije: unknown[] }
+interface Animacija { id: string; slojId: string; pasus: number | null; vrsta: string; efekat: string; smer: string | null; trajanjeMs: number }
+interface Platno { pozadina: { boja: string; medijId: string | null }; slojevi: Sloj[]; animacije: Animacija[] }
 interface SlajdCmd { tip: string; beleske: string | null; platno: Platno }
 
 const putovi = (mock: MockApi, id: number) => mock.zahteviZa(`slajdovi/${id}`, 'PUT');
@@ -44,11 +49,11 @@ const traka = (page: Page) => page.getByRole('group', { name: 'Alati platna' });
  * "+ Platno" > "Prazno" posle izabranog INFO slajda: odmah `POST` (nov PLATNO nacrt je ispravan), pa editor. Vraća pravi
  * id slajda.
  */
-async function novoPlatno(page: Page, mock: MockApi): Promise<number> {
+async function novoPlatno(page: Page, mock: MockApi, raspored: 'Prazno' | 'Naslov i tekst' = 'Prazno'): Promise<number> {
   await page.goto(`prezentacije/${PREZENTACIJA}`);
   await expect(page.locator('.uz-ed-stavka-dugme[aria-current="true"]')).toContainText('Uvod');
   await page.getByRole('button', { name: 'Platno', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Prazno', exact: true }).click();
+  await page.getByRole('menuitem', { name: raspored, exact: true }).click();
   await expect(editor(page)).toBeVisible();
   await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST').length).toBe(1);
   const post = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST')[0];
@@ -430,6 +435,17 @@ test.describe('uživo: formula (4b, F16)', () => {
     expect((poslednji(mock, id)!.platno.slojevi[0] as { slikaIzvora?: string | null }).slikaIzvora).toBeNull();
     await expect(okvir(page).locator('.ML__latex')).toBeVisible();
 
+    // drugi prolaz bez math-field-a: samo polje LaTeX (pristupačna alternativa), razlomak na platnu
+    await traka(page).getByRole('button', { name: 'Formula', exact: true }).click();
+    await expect(dijalog(page).locator('math-field')).toBeFocused();
+    await dijalog(page).getByRole('textbox', { name: 'LaTeX' }).fill('\\frac{a}{b}');
+    await expect(dijalog(page).getByRole('button', { name: 'Sačuvaj' })).toBeEnabled();
+    await dijalog(page).getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(dijalog(page)).toHaveCount(0);
+    await expect.poll(() => poslednji(mock, id)?.platno.slojevi.map(s => s.latex)).toEqual(['x^2', '\\frac{a}{b}']);
+    expect(poslednji(mock, id)!.platno.slojevi[1].slikaIzvora).toBeNull();
+    await expect(okvir(page).locator('.ML__mfrac')).toBeVisible();
+
     // nijedan zahtev van porekla (CDN fontova, zvuci, HEAD provera putanje MathLive-a), fontovi samo iz assets/mathlive/fonts/
     await page.waitForLoadState('networkidle');
     expect(zahtevi.filter(z => new URL(z.url).origin !== poreklo)).toEqual([]);
@@ -472,5 +488,242 @@ test.describe('uživo: formula (4b, F16)', () => {
     await dijalog(page).getByRole('button', { name: 'Otkaži' }).click();
     await expect(dijalog(page)).toHaveCount(0);
     await expect(dugme).toBeFocused();
+  });
+});
+
+/*
+ * Spec 13 (4b): tekst, tabela, formula i animacije kroz pravi put (miš i tastatura -> `PUT slajdovi/<id>`), uspeh 4 i 5.
+ * Ishod se čita iz tela poslednjeg `PUT`-a; posle svake akcije čeka se vidljiv ishod (bez trka).
+ */
+test.describe('uživo: editor platna (4b, F19)', () => {
+  const uredjivac = (page: Page) => page.getByRole('textbox', { name: /^Tekst sloja/ });
+  const animacijeUPut = (mock: MockApi, id: number) => poslednji(mock, id)?.platno.animacije;
+  /** Dvoklik na sloj (overlay je iznad prikaza, pa koordinatama): otvara uređivač teksta. */
+  const uredi = async (page: Page, slojId: string) => {
+    const c = await centar(slojEditora(page, slojId));
+    await page.mouse.dblclick(c.x, c.y);
+    await expect(uredjivac(page)).toBeFocused();
+  };
+  /** Meni "Dodaj ulaz" > efekat (tab Animacije mora biti otvoren). */
+  const dodajUlaz = async (page: Page, efekat: string) => {
+    const dugme = page.getByRole('button', { name: 'Dodaj ulaz' });
+    await expect(dugme).toBeEnabled();
+    const stavka = page.getByRole('menuitem', { name: efekat, exact: true });
+    // klik odmah posle izbora taba ponekad ne otvori meni (sadržaj taba se još pomera); ponovo samo dok meni nije otvoren
+    await expect(async () => {
+      if (!(await page.getByRole('menu').isVisible())) await dugme.click();
+      await expect(stavka).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
+    await stavka.click();
+    await expect(page.getByRole('menu')).toHaveCount(0);
+  };
+
+  test('naslov: kucanje, izbor reči i Ctrl+B, Esc na okvir; Ctrl+Z i Ctrl+Y nad celom sesijom', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock, 'Naslov i tekst');
+    await uredi(page, 's1');
+    await page.keyboard.type('Uvod u statiku');
+    await page.keyboard.press('Shift+Control+ArrowLeft');
+    // izbor menja pregledač, a ProseMirror ga čita na `selectionchange` (asinhrono): sačekaj izbor u DOM-u i jedan kadar,
+    // da Ctrl+B ne deluje na stari (prazan) izbor
+    await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe('statiku');
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => setTimeout(r))));
+    await page.keyboard.press('Control+b');
+    await page.keyboard.press('Escape');
+    await expect(uredjivac(page)).toHaveCount(0);
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Uvod u statiku']);
+    const delovi = slojUPut(mock, id, 's1')!.pasusi![0].delovi;
+    expect(delovi.map(d => [d.tekst, d.podebljano])).toEqual([['Uvod u ', false], ['statiku', true]]);
+
+    const pre = putovi(mock, id).length;
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => putovi(mock, id).length).toBeGreaterThan(pre);
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['']);
+    await page.keyboard.press('Control+y');
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Uvod u statiku']);
+    expect(slojUPut(mock, id, 's1')!.pasusi![0].delovi.map(d => d.podebljano)).toEqual([false, true]);
+  });
+
+  test('pražnjenje (Critical): otkucan tekst bez Esc pa "Pokreni" -> PUT sa tekstom stiže pre GET predavanja dijaloga', async ({ page, mock }) => {
+    // pitanje u prezentaciji: "Pokreni" tada otvara dijalog (bez pitanja kreće odmah, bez čuvanja rezultata)
+    const prezentacija = mock.podaci.prezentacije.find(p => p.id === PREZENTACIJA)!;
+    prezentacija.slajdovi.push({
+      id: 59, rb: prezentacija.slajdovi.length + 1, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: null,
+      postepeno: false, platno: null,
+      pitanje: {
+        id: 590, tip: 'JEDAN_TACAN', tekst: 'Koja je jedinica za silu?', slika: null, vremeSekunde: null,
+        opcije: [{ id: 1, rb: 1, tekst: 'Džul', tacna: false }, { id: 2, rb: 2, tekst: 'Njutn', tacna: true }],
+        brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+        prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+      },
+    });
+    const id = await novoPlatno(page, mock, 'Naslov i tekst');
+    await uredi(page, 's1');
+    await page.keyboard.type('X');
+    const pokreni = page.getByRole('button', { name: 'Pokreni', exact: true });
+    await expect(pokreni).toBeEnabled();
+    await pokreni.click();
+    const dijalog = page.getByRole('dialog');
+    await expect(dijalog.getByRole('button', { name: 'Otkaži' })).toBeVisible();
+
+    const put = putovi(mock, id).find(z => (z.telo as SlajdCmd).platno.slojevi.find(s => s.id === 's1')?.pasusi
+      ?.some(p => p.delovi.some(d => d.tekst === 'X')));
+    const predavanja = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/predavanja`, 'GET')[0];
+    expect(put, 'PUT sa otkucanim tekstom').toBeDefined();
+    expect(predavanja, 'GET predavanja dijaloga').toBeDefined();
+    expect(put!.rb).toBeLessThan(predavanja.rb);
+    await dijalog.getByRole('button', { name: 'Otkaži' }).click();
+    await expect(dijalog).toHaveCount(0);
+  });
+
+  test('strelica sa ULET-om: značka 1, Pregled i Korak napred je otkrivaju, Ctrl+Z na okviru briše animaciju', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await ubaciOblik(page, 'Strelica');
+    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await dodajUlaz(page, 'Ulet');
+    await expect.poll(() => animacijeUPut(mock, id)?.map(a => [a.slojId, a.vrsta, a.efekat, a.smer]))
+      .toEqual([['s1', 'ULAZ', 'ULET', 'DOLE']]);
+    await expect(okvir(page).locator('.uz-ep-znacka')).toHaveText(['1']);
+
+    await traka(page).getByRole('button', { name: 'Pregled' }).click();
+    const strelica = page.locator('.uz-ep-pregled [data-sloj="s1"]');
+    await expect(page.locator('.uz-ep-korak')).toHaveText('Korak 0 / 1');
+    await expect(strelica).toBeHidden();
+    // F18 m3: u Pregledu je sadržaj panela sakriven (globalno pravilo), ne samo tabovi onemogućeni
+    await expect(page.getByRole('button', { name: 'Dodaj ulaz' })).toBeHidden();
+    await expect(page.locator('app-panel-animacije')).toBeHidden();
+    await page.getByRole('button', { name: 'Korak napred' }).click();
+    await expect(page.locator('.uz-ep-korak')).toHaveText('Korak 1 / 1');
+    await expect(strelica).toBeVisible();
+    await page.getByRole('button', { name: 'Uređivanje' }).click();
+    await expect(page.locator('.uz-ep-pregled')).toHaveCount(0);
+
+    await okvir(page).focus();
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => animacijeUPut(mock, id)).toEqual([]);
+    expect(poslednji(mock, id)!.platno.slojevi.map(s => s.id)).toEqual(['s1']);
+  });
+
+  test('tabela 2 x 2: Enter uređuje ćeliju 1, 1, Tab ide u sledeću; opseg 1-1/1-2 i "Spoji ćelije"', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await traka(page).getByRole('button', { name: 'Tabela', exact: true }).click();
+    const ubaci = page.getByRole('dialog', { name: 'Ubaci tabelu' });
+    await expect(ubaci.getByLabel('Redova')).toBeFocused();
+    await ubaci.getByLabel('Redova').fill('2');
+    await ubaci.getByLabel('Kolona').fill('2');
+    await page.keyboard.press('Enter');
+    await expect(ubaci).toBeHidden();
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => slojUPut(mock, id, 's1')?.celije?.map(r => r.length)).toEqual([2, 2]);
+
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Tekst ćelije 1, 1' })).toBeFocused();
+    await page.keyboard.type('A');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('textbox', { name: 'Tekst ćelije 1, 2' })).toBeFocused();
+    await page.keyboard.type('B');
+    await page.keyboard.press('Escape');
+    await expect(okvir(page)).toBeFocused();
+    const tekstCelije = (c: Celija | undefined) => c?.pasusi.map(p => p.delovi.map(d => d.tekst).join('')).join('\n');
+    await expect.poll(() => slojUPut(mock, id, 's1')?.celije?.[0].map(tekstCelije)).toEqual(['A', 'B']);
+
+    const celije = page.getByRole('group', { name: 'Ćelije' });
+    for (const [naziv, vrednost] of [['Od reda', '1'], ['Do reda', '1'], ['Od kolone', '1'], ['Do kolone', '2']] as const) {
+      const polje = celije.getByRole('textbox', { name: naziv });
+      await polje.fill(vrednost);
+      await polje.press('Enter');
+      await expect(polje).toHaveValue(vrednost);
+    }
+    const spoji = page.getByRole('button', { name: 'Spoji ćelije' });
+    await expect(spoji).toBeEnabled();
+    await spoji.click();
+    await expect.poll(() => slojUPut(mock, id, 's1')?.celije?.[0][0].spojDesno).toBe(1);
+    expect(slojUPut(mock, id, 's1')!.celije![1][0].spojDesno).toBe(0);
+  });
+
+  test('Review Focus 2: "Po pasusima", brisanje drugog pasusa briše njegovu animaciju; Ctrl+Z pre Esc je vraća', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await traka(page).getByRole('button', { name: 'Tekst', exact: true }).click();
+    await expect(uredjivac(page)).toBeFocused();
+    await page.keyboard.type('Prvi');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Drugi');
+    await page.keyboard.press('Escape');
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Prvi', 'Drugi']);
+
+    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await page.getByRole('combobox', { name: 'Cilj' }).click();
+    await page.getByRole('option', { name: 'Po pasusima' }).click();
+    await expect(page.getByRole('combobox', { name: 'Cilj' })).toContainText('Po pasusima');
+    await dodajUlaz(page, 'Postepeno');
+    await expect.poll(() => animacijeUPut(mock, id)?.map(a => [a.slojId, a.pasus])).toEqual([['s1', 0], ['s1', 1]]);
+
+    /**
+     * Izabran sloj, Enter na okviru: uređivanje sa kursorom na kraju (stanje ProseMirror-a, bez miša), pa Backspace 6 puta
+     * ("Drugi" i spoj sa prvim pasusom). Ne izbor Shift+strelicama: pregledač ga menja sam, a ProseMirror ga čita tek na
+     * `selectionchange`, pa bi Backspace odmah posle ponekad obrisao stari izbor (samo "Drugi", prazan pasus ostaje).
+     */
+    const obrisiDrugi = async () => {
+      await okvir(page).focus();
+      await page.keyboard.press('Enter');
+      await expect(uredjivac(page)).toBeFocused();
+      for (let i = 0; i < 'Drugi'.length + 1; i++) await page.keyboard.press('Backspace');
+      await expect(uredjivac(page).locator('p')).toHaveCount(1);
+      await expect(uredjivac(page)).toHaveText('Prvi');
+    };
+
+    // brisanje pa Ctrl+Z u tekstu pre Esc: oba pasusa i obe animacije ostaju
+    await obrisiDrugi();
+    // ProseMirror spaja brze susedne korake u jedan; pod opterećenjem ih može biti više, pa Ctrl+Z dok se pasus ne vrati
+    const vracen = async () => (await uredjivac(page).locator('p').count()) === 2 && (await uredjivac(page).innerText()).includes('Drugi');
+    for (let i = 0; i < 'Drugi'.length + 1 && !(await vracen()); i++) await page.keyboard.press('Control+z');
+    await expect(uredjivac(page).locator('p')).toHaveText(['Prvi', 'Drugi']);
+    await page.keyboard.press('Escape');
+    await expect(uredjivac(page)).toHaveCount(0);
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Prvi', 'Drugi']);
+    expect(animacijeUPut(mock, id)!.map(a => a.pasus)).toEqual([0, 1]);
+
+    // brisanje pa Esc: jedan pasus, jedna animacija, a dokument prolazi proveru servera
+    await obrisiDrugi();
+    await page.keyboard.press('Escape');
+    await expect(uredjivac(page)).toHaveCount(0);
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Prvi']);
+    expect(animacijeUPut(mock, id)!.map(a => [a.slojId, a.pasus])).toEqual([['s1', 0]]);
+    expect(proveriKaoServer(poslednji(mock, id)!.platno as unknown as PlatnoModel)).toBeNull();
+  });
+
+  test('samo tastatura: tab Animacije, Tab do reda, Enter, "Trajanje (s)" 2 i Enter -> trajanjeMs 2000', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    await ubaciOblik(page, 'Pravougaonik');
+    // okvir -> zaglavlje tabova (Svojstva), strelica desno do Animacije (tabovi menjaju fokus strelicama), Enter ga otvara
+    const tabAnimacije = page.getByRole('tab', { name: 'Animacije' });
+    await tasterDo(page, page.getByRole('tab', { name: 'Svojstva' }), 'Tab');
+    for (let i = 0; i < 3 && !(await jeFokusiran(tabAnimacije)); i++) await page.keyboard.press('ArrowRight');
+    await expect(tabAnimacije).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(tabAnimacije).toHaveAttribute('aria-selected', 'true');
+
+    const dodaj = page.getByRole('button', { name: 'Dodaj ulaz' });
+    await tasterDo(page, dodaj, 'Tab');
+    await page.keyboard.press('Enter');
+    // meni otvoren tastaturom fokusira prvu stavku (Pojavi); strelica dole do "Postepeno"
+    await expect(page.getByRole('menuitem').first()).toBeFocused();
+    const postepeno = page.getByRole('menuitem', { name: 'Postepeno', exact: true });
+    for (let i = 0; i < 7 && !(await jeFokusiran(postepeno)); i++) await page.keyboard.press('ArrowDown');
+    await expect(postepeno).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => animacijeUPut(mock, id)?.map(a => [a.efekat, a.trajanjeMs])).toEqual([['FADE', 500]]);
+
+    const red = page.locator('[data-animacija] > button').first();
+    await tasterDo(page, red, 'Tab');
+    await page.keyboard.press('Enter');
+    await expect(red).toHaveAttribute('aria-pressed', 'true');
+    const trajanje = page.getByRole('textbox', { name: 'Trajanje (s)' });
+    await tasterDo(page, trajanje, 'Tab');
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('2');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => animacijeUPut(mock, id)?.map(a => a.trajanjeMs)).toEqual([2000]);
+    await expect(trajanje).toHaveValue('2');
   });
 });

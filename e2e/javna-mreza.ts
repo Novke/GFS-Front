@@ -8,6 +8,8 @@ export { expect } from './fixture';
 export interface JavnaMreza {
   /** Svi zahtevi stranice ka `/api/` (`METOD /api/...`), i oni koje odbije zaključavanje. */
   api: string[];
+  /** Putanje svih zahteva stranice (i statičkih fajlova), redom. */
+  zahtevi: string[];
   /** URL-ovi odgovora 401. */
   odgovori401: string[];
   /**
@@ -42,7 +44,7 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       const origin = new URL(baseURL!).origin;
       const citanja: Promise<{ putanja: string; nizovi: string[]; editor: string[] }>[] = [];
       const mreza: JavnaMreza = {
-        api: [], odgovori401: [], ws: [],
+        api: [], zahtevi: [], odgovori401: [], ws: [],
         skripte: async () => {
           // čeka i čitanja koja počnu dok se raniji odgovori čitaju (broj se ustali)
           let procitane: { putanja: string; nizovi: string[]; editor: string[] }[];
@@ -58,6 +60,7 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       };
       page.on('request', r => {
         const putanja = new URL(r.url()).pathname;
+        mreza.zahtevi.push(putanja);
         if (putanja.includes('/api/')) {
           mreza.api.push(`${r.method()} ${putanja}`);
         }
@@ -89,6 +92,8 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       const skripte = await mreza.skripte();
       expect(skripte.saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);
       expect(skripte.saEditorom, 'JS sa kodom editora platna na javnoj ruti').toEqual([]);
+      // javne strane ne crtaju formule (faza 4): ni stil ni KaTeX fontovi MathLive-a
+      expect(mreza.zahtevi.filter(p => p.includes('/assets/mathlive/')), 'MathLive assets na javnoj ruti').toEqual([]);
     },
     { auto: true },
   ],

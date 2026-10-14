@@ -9,8 +9,10 @@
 // platno). Bez preskakanja kašnjenje animacije je baš kašnjenje efekta; sa preskočenim efektom (putanja, naglašavanje,
 // meta koja nije uvezena) sledeći efekti ne kreću ranije nego u PowerPointu. Vreme se gubi samo na granici 0..10000 ms.
 //
-// Pretpostavka (proverava se vizuelnim poređenjem u F19): IZLAZ BRISANJE i PODELI na platnu su obrnut ulaz
-// (`kadroviAnimacije`), pa izlaz sa istim podtipom/filterom kao ulaz nestaje obrnutim redom od pojavljivanja.
+// IZLAZ BRISANJE i PODELI na platnu su obrnut ulaz (`kadroviAnimacije`). PowerPointov izlaz "Wipe" nosi isti podtip
+// kao ulaz (strana sa koje brisanje KREĆE: izlaz "From Bottom" prvo sakriva donji deo), a obrnut ulaz odozdo bi prvo
+// sakrio gornji: zato se smer izlaza BRISANJA zrcali (F19; dokaz u `animacije.spec.ts`). PODELI (`barn`) se u
+// PowerPointu za izlaz pušta obrnuto u vremenu, kao na platnu, pa se ne zrcali.
 import type { Animacija, Efekat, Okidac, Smer, VrstaAnimacije } from '../data-access/platno.models';
 import { GRANICE } from './granice';
 import type { KodUpozorenja } from './izvestaj';
@@ -215,6 +217,11 @@ function smerIzPodtipa(podtip: number): Smer {
   return 'DOLE';
 }
 
+/** Suprotna strana (izlaz BRISANJA). */
+const ZRCALO: Record<Smer, Smer> = {
+  GORE: 'DOLE', DOLE: 'GORE', LEVO: 'DESNO', DESNO: 'LEVO', HORIZONTALNO: 'HORIZONTALNO', VERTIKALNO: 'VERTIKALNO',
+};
+
 interface Preslikano { efekat: Efekat; smer: Smer | null; }
 
 function preslikaj(e: EfekatPptx, u: Zbirna): Preslikano {
@@ -222,8 +229,8 @@ function preslikaj(e: EfekatPptx, u: Zbirna): Preslikano {
     case 1: return { efekat: 'POJAVI', smer: null };
     case 10: return { efekat: 'FADE', smer: null };
     case 2: return { efekat: 'ULET', smer: smerIzPodtipa(e.podtip) };
-    // BRISANJE i PODELI kao IZLAZ: platno obrće ulaz (pretpostavka iz zaglavlja, proverava F19).
-    case 22: return { efekat: 'BRISANJE', smer: smerIzPodtipa(e.podtip) };
+    // IZLAZ: zrcaljen smer, jer platno izlaz crta kao obrnut ulaz (zaglavlje).
+    case 22: return { efekat: 'BRISANJE', smer: e.klasa === 'exit' ? ZRCALO[smerIzPodtipa(e.podtip)] : smerIzPodtipa(e.podtip) };
     case 16: {
       const m = /barn\((in|out)?(vertical|horizontal)\)/i.exec(e.filter);
       if (m?.[1]?.toLowerCase() === 'in') u.dodaj('PODELI_SMER', 'Podela ka sredini se prikazuje kao podela od sredine.');

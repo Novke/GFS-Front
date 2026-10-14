@@ -50,6 +50,25 @@ export function zatvorenje(pocetak: readonly string[]): Set<string> {
   return vidjeno;
 }
 
+/**
+ * Zatvorenje i po statičkim i po dinamičkim uvozima (ono što jedna radnja, npr. otvaranje dijaloga, na kraju učita).
+ * `granica`: fajlovi koji su već učitani (npr. početno, stranica i editor); oni se ne broje i **ne prate se dalje**, jer
+ * njihovi lenji uvozi pripadaju njima, a ne radnji (dijalog formule statički uvozi deljeni chunk editora, pa bi se bez
+ * granice kroz njega brojali i lenji chunk-ovi editora, npr. `mathlive/ssr`).
+ */
+export function potpunoZatvorenje(pocetak: readonly string[], granica: ReadonlySet<string> = new Set()): Set<string> {
+  const vidjeno = new Set<string>();
+  const red = [...pocetak];
+  while (red.length) {
+    const f = red.pop()!;
+    if (vidjeno.has(f) || granica.has(f)) continue;
+    vidjeno.add(f);
+    const t = tekst(f);
+    red.push(...statickiUvozi(t), ...dinamickiUvozi(t));
+  }
+  return vidjeno;
+}
+
 export const velicina = (f: string): number => statSync(join(KOREN, f)).size;
 export const zbir = (fajlovi: Iterable<string>): number => [...fajlovi].reduce((n, f) => n + velicina(f), 0);
 export const zbirGzip = (fajlovi: Iterable<string>): number =>

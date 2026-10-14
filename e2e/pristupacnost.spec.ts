@@ -179,6 +179,35 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, slojevi (${rezim})`).toEqual([]);
     });
 
+    // F19: tab "Animacije" sa izabranom animacijom (detalji, značke grupa na platnu) i režim "Pregled" (koraci, tabovi
+    // onemogućeni, sadržaj panela sakriven), nad PLATNO slajdom 52 sa tri KLIK animacije
+    test('editor platna (animacije sa izabranom animacijom, režim Pregled): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      await expect(page.locator('.uz-ed-slicica a')).toHaveCount(1);
+      const editor = page.locator('[data-oznaka="gfs-editor-platna"]');
+      await expect(editor.locator('.uz-ep-platno [data-sloj="naslov"]')).toBeVisible();
+
+      await editor.getByRole('tab', { name: 'Animacije' }).click();
+      const red = editor.locator('[data-animacija="a2"] > button');
+      await red.click();
+      await expect(red).toHaveAttribute('aria-pressed', 'true');
+      await expect(editor.getByRole('textbox', { name: 'Trajanje (s)' })).toBeVisible();
+      await expect(editor.locator('.uz-ep-znacka')).toHaveText(['1', '2', '3']);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, animacije (${rezim})`).toEqual([]);
+
+      await editor.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 0 / 3');
+      await editor.getByRole('button', { name: 'Korak napred' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 1 / 3');
+      await expect(editor.getByRole('tab', { name: 'Animacije' })).toBeDisabled();
+      await expect(editor.locator('app-panel-animacije')).toBeHidden();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, režim Pregled (${rezim})`).toEqual([]);
+    });
+
     // dijalog uvoza iz PowerPointa (lenji chunk) u stanju pregleda i izveštaja, nad editorom prezentacije
     test('dijalog uvoza iz PowerPointa (pregled, izveštaj): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('prezentacije/5');

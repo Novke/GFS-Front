@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
+import { nastavnickiBroker } from './uzivo-nastavnik';
 
 /** Prezentacija i slajdovi iz `fixtures/prezentacije.json` (izmišljeno): 51 = INFO, 52 = PLATNO sa 3 KLIK animacije. */
 const PREZENTACIJA = 5;
@@ -230,4 +231,36 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}`, 'PUT').length).toBe(1);
     expect((mock.zahteviZa(`prezentacije/${PREZENTACIJA}`, 'PUT')[0].telo as { tema: string }).tema).toBe('PONOC');
   });
+});
+
+/*
+ * Formula bez slike izvora (F15/F19): projektor (`publika`) i konzola crtaju je pravim putem (snimak izvođenja ->
+ * `platno-prikaz` -> lenji `mathlive/ssr` -> sanitizer -> markup), ne kroz učitavače iz specova komponenti. Slajd 2
+ * izvođenja 7 dobija platno slajda 52 (FORMULA `M = F \cdot l`, `slikaIzvora: null`) bez animacija.
+ */
+test.describe('uživo: formula bez slike na projektoru i konzoli', () => {
+  for (const stranica of ['publika', 'konzola'] as const) {
+    test(`${stranica}: FORMULA bez slikaIzvora se crta MathLive markupom, fontovi iz assets/mathlive`, async ({ page, mock }) => {
+      const platno = JSON.parse(JSON.stringify(mock.podaci.prezentacije[0].slajdovi[1].platno)) as {
+        slojevi: { id: string; tip: string; latex?: string; slikaIzvora?: string | null }[]; animacije: unknown[];
+      };
+      const formula = platno.slojevi.find(s => s.id === 'formula')!;
+      expect(formula).toMatchObject({ tip: 'FORMULA', slikaIzvora: null });
+      platno.animacije = [];
+      mock.izvodjenje.izmeniSlajd(1, { platno });
+      for (let i = 0; i < 5; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3 koraka) -> slajd 2
+      const zahtevi: string[] = [];
+      page.on('request', r => zahtevi.push(new URL(r.url()).pathname));
+      await nastavnickiBroker(page, mock);
+      await page.goto(`izvodjenja/7/${stranica}`);
+
+      const sloj = page.locator('[data-sloj="formula"]').first();
+      await expect(sloj.locator('.ML__latex')).toBeVisible();
+      // markup, ne rezervni prikaz izvora ni slika
+      await expect(sloj.locator('img')).toHaveCount(0);
+      await expect(sloj).not.toContainText('\\cdot');
+      expect(zahtevi.some(p => p.includes('/assets/mathlive/') && p.endsWith('.css')), 'stil formula').toBe(true);
+      expect(zahtevi.filter(p => /KaTeX.*\.woff2$/.test(p) && !p.includes('/assets/mathlive/fonts/'))).toEqual([]);
+    });
+  }
 });

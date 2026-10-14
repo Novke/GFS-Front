@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import {
-  dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, stiloviIndeksa, tekst, zatvorenje,
+  dinamickiUvozi, fajlSa, jsFajlovi, potpunoZatvorenje, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, stiloviIndeksa, tekst, zatvorenje,
   zbir, zbirGzip,
 } from './chunkovi';
 import { NIZ_EDITORA, NIZ_FORMULE_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, nizoviEditora } from './nizovi-editora';
@@ -116,16 +116,16 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     expect(uvoznici.length, `${dijalog}: nema dinamičkog import()-a`).toBeGreaterThan(0);
     expect(uvoznici.filter(u => !sopstvenoEditor.has(u))).toEqual([]);
     // ono što otvaranje dijaloga na kraju učita (statički i dinamički uvozi: mathlive se uvozi dinamički iz dijaloga);
-    // fajlovi koji su već učitani (početno, stranica, editor) se ne prate dalje: njihovi lenji uvozi nisu deo dijaloga
-    const sve = new Set<string>();
-    const red = [dijalog];
-    while (red.length) {
-      const f = red.pop()!;
-      if (sve.has(f) || vecUcitano.has(f) || sopstvenoEditor.has(f)) continue;
-      sve.add(f);
-      red.push(...statickiUvozi(tekst(f)), ...dinamickiUvozi(tekst(f)));
-    }
-    const sopstveno = [...sve];
+    // ograda (Note -> F19): fajlovi koji su već učitani (početno, stranica, editor) se ne broje i ne prate dalje, jer
+    // dijalog statički uvozi deljeni chunk editora, a lenji uvozi editora (npr. mathlive/ssr) nisu deo dijaloga
+    const ucitano = new Set([...vecUcitano, ...sopstvenoEditor]);
+    const sopstveno = [...potpunoZatvorenje([dijalog], ucitano)];
+    // bez ograde (zatvorenje pa filter) bi se kroz chunk editora brojali i njegovi lenji chunk-ovi: zapisuje se radi poređenja
+    const bezOgrade = [...potpunoZatvorenje([dijalog])].filter(f => !ucitano.has(f));
+    zapisi('dijalog formule bez ograde (i lenji chunk-ovi editora, samo za poređenje)', zbir(bezOgrade));
+    expect(bezOgrade.filter(f => !sopstveno.includes(f)).every(f => !tekst(f).includes(NIZ_MATH_FIELD)),
+      'razlika bez ograde nije ceo mathlive').toBe(true);
+    expect(sopstveno.every(f => bezOgrade.includes(f))).toBe(true);
     zapisi('dijalog formule (sa mathlive, sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
     zapisi('fajl chunk-a dijaloga formule', zbir([dijalog]));
     expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_DIJALOG_FORMULE);

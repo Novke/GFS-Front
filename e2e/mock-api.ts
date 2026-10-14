@@ -861,6 +861,11 @@ export class MockApi {
       x.brojSlajdova = x.slajdovi.length;
       return { status: 201, telo: x };
     });
+    // dijalog "Pokreni" (prezentacija sa pitanjem): predavanja za izbor; mok ih nema (izbor "Uz predavanje" je onemogućen)
+    get('prezentacije/:id/predavanja', (_z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      return jeOdgovor(x) ? x : ok([]);
+    });
     get('prezentacije/:id', (_z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
       return jeOdgovor(x) ? x : ok(x);
