@@ -1,0 +1,7 @@
+{
+  "_napomena": "Javni uživo (student): izvođenja po kodu; učesnici nastaju prijavom u testu (izmišljeni podaci).",
+  "izvodjenja": [
+    { "id": 7, "kod": "123456", "naziv": "Statika · uvodni čas", "status": "AKTIVNO" },
+    { "id": 8, "kod": "654321", "naziv": "Završeno izvođenje", "status": "ZAVRSENO" }
+  ]
+}

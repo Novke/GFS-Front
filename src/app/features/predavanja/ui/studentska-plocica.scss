@@ -1,0 +1,36 @@
+// Pločica studenta (maketa, Ekran 3). Stanje bez oslanjanja samo na boju: okvir, ispuna, ikone, sr-only tekst.
+:host {
+  position: relative;
+  display: block;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed color-mix(in srgb, var(--muted) 70%, transparent);
+  background: transparent;
+  color: var(--ink-2);
+  transition: background-color .12s, color .12s, border-color .12s;
+}
+:host(.s-prisutan) { border: 1.5px solid transparent; background: var(--primary-soft); color: var(--primary-soft-ink); }
+:host(.s-zadatak), :host(.s-zvezdica) { border: 1.5px solid transparent; background: var(--primary); color: var(--primary-ink); }
+:host(.ceka) { border-color: var(--accent); }
+
+.glavno {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 78px;
+  padding: 12px 44px 10px 12px; border: 0; border-radius: inherit; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; -webkit-touch-callout: none; user-select: none; touch-action: manipulation;
+}
+:host(.citanje) .glavno { cursor: default; padding-right: 36px; }
+.glavno:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ime { font-weight: 600; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.red { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: auto; }
+.indeks { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+.stariji { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 0 6px; background: var(--warn-soft); color: var(--warn); }
+
+.meni { position: absolute; top: 0; right: 0; color: inherit; }
+.znaci { position: absolute; right: 12px; bottom: 8px; display: flex; align-items: center; gap: 4px; pointer-events: none; }
+:host(.citanje) .znaci { top: 10px; bottom: auto; }
+.znak, .znak-napomena { width: 20px; height: 20px; }
+.znak-napomena { width: 16px; height: 16px; opacity: .85; }
+.zvezda { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--star); color: var(--accent-ink); }
+.zvezda .mat-icon { width: 18px; height: 18px; }
+
+@media (prefers-reduced-motion: reduce) { :host { transition: none; } }

@@ -1,0 +1,11 @@
+{
+  "predmeti": [
+    { "id": 1, "naziv": "Programiranje u građevinarstvu" },
+    { "id": 2, "naziv": "Primenjena informatika" }
+  ],
+  "tipoviTesta": [
+    { "id": 1, "naziv": "Kolokvijum 1", "predmetId": 1, "aktivan": true },
+    { "id": 2, "naziv": "Kolokvijum 2", "predmetId": 1, "aktivan": true },
+    { "id": 3, "naziv": "Test", "predmetId": 2, "aktivan": true }
+  ]
+}

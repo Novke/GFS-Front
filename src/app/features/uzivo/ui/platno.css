@@ -1,0 +1,159 @@
+/*
+ * Platno sa slojevima (slajd tipa PLATNO, `platno-prikaz.component.ts`). Globalno kao ostali uživo stilovi (budžet
+ * stilova komponente), prefiks `uz-pl-`. Jedinica `--u` = 1/960 širine okvira = 1 pt PowerPointovog 16:9 slajda; sve
+ * mere iz dokumenta stižu kao `calc(var(--u) * N)` u inline stilu. Boje stižu iz dokumenta (podaci), ovde ih nema.
+ *
+ * Domaćin pokriva ceo `uz-platno` (i njegov padding) i poništava tipografiju `uz-platno` i Materiala, da tekst platna
+ * zavisi samo od dokumenta. Pravila za `p` imaju specifičnost iznad `.mat-typography p` (0,1,1).
+ */
+
+.uz-pl-platno {
+  --u: calc(100cqw / 960);
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  font-family: 'Carlito', 'Calibri', sans-serif;
+  font-size: calc(var(--u) * 18);
+  font-weight: 400;
+  font-style: normal;
+  line-height: normal;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: left;
+  text-transform: none;
+  /* Tačne (razlomljene) širine slova kao u PowerPointu: bez ovoga Chromium na Linuxu zaokružuje svaki znak na ceo
+     piksel (Carlito 40 pt na 1920 px: cifra 41 px umesto 40,55), pa se red produži i prelomi drugačije nego u PDF-u. */
+  text-rendering: geometricPrecision;
+}
+
+.uz-pl-pozadina {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.uz-pl-sloj {
+  position: absolute;
+}
+
+/* Unutrašnji element sloja: nosi sadržaj i animacije koraka. */
+.uz-pl-sadrzaj {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------- Tekst (TEKST i ćelije tabele) ---------- */
+
+/* Fleks kolona: margine pasusa se sabiraju kao u PowerPointu (ne skupljaju se), a `justify-content` je sidro. */
+.uz-pl-tekst,
+.uz-pl-celija {
+  display: flex;
+  flex-direction: column;
+}
+
+.uz-pl-tekst,
+.uz-pl-tabela {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  /* Podrazumevani tab-stop PowerPointa je 36 pt (od leve ivice pasusa bez uvlačenja). Svaki pasus sa tabom u TEKST
+     sloju i ćeliji ima merene tabove (`.uz-pl-tab`, `platno-tabovi.ts`); `tab-size` ostaje samo za tekst bez merenja. */
+  tab-size: calc(var(--u) * 36);
+}
+
+.uz-pl-tekst--bez-preloma {
+  white-space: pre;
+}
+
+.uz-pl-platno .uz-pl-pasus {
+  flex: none;
+  min-width: 0;
+  margin: 0;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: normal;
+}
+
+/* Mereni pasus je `offsetParent` svojih tabova: položaj taba se meri od leve ivice pasusa (unutrašnja margina okvira). */
+.uz-pl-platno .uz-pl-pasus[data-meri-tabove] {
+  position: relative;
+}
+
+/* Mereni tab: širinu do sledećeg tab-stopa postavlja merenje (inline, u jedinicama); sam znak `\t` ostaje u tekstu
+   (kopiranje, čitač ekrana), a `tab-size: 0` ga ne crta. */
+.uz-pl-tab {
+  display: inline-block;
+  tab-size: 0;
+  text-indent: 0;
+}
+
+/* Oznaka liste: viseća u `-prviRed` (min-width iz inline stila); `text-indent` pasusa se ne nasleđuje u nju. */
+.uz-pl-oznaka {
+  display: inline-block;
+  text-indent: 0;
+}
+
+/* ---------- Slika, formula, crtež ---------- */
+
+.uz-pl-slika {
+  overflow: hidden;
+}
+
+.uz-pl-slika img {
+  position: absolute;
+  display: block;
+  max-width: none;
+}
+
+.uz-pl-formula,
+.uz-pl-crtez {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.uz-pl-formula img,
+.uz-pl-crtez img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Slika crteža je PowerPointova slika iz `mc:Fallback` (oko 96 dpi, celi pikseli), pa joj se odnos stranica ne poklapa
+   tačno sa kutijom (tanka linija 133 x 4,17 pt -> 179 x 7 px). PowerPoint sliku razvlači na kutiju; `contain` bi je
+   smanjio i centrirao (kraći potez). */
+.uz-pl-crtez img {
+  object-fit: fill;
+}
+
+.uz-pl-formula-izvor {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Oblik ---------- */
+
+.uz-pl-oblik svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Potez je centriran na ivici oblika, pa pola debljine (i strelica) izlazi iz sloja. */
+  overflow: visible;
+}
+
+/* ---------- Tabela ---------- */
+
+.uz-pl-tabela table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* Unutrašnje margine ćelije stižu inline iz metrike (`METRIKA.marginaCelije`, PowerPointove 7,2 / 3,6 pt). */
+.uz-pl-platno .uz-pl-tabela td {
+  padding: 0;
+  border: 0;
+}

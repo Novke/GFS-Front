@@ -1,0 +1,24 @@
+:host { display: block; }
+
+.traka {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+  vertical-align: middle;
+
+  i { display: block; height: 100%; background: var(--primary); }
+}
+
+.stariji {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--primary-soft-ink);
+  font-size: 12px;
+  font-weight: 600;
+}

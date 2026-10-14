@@ -1,0 +1,51 @@
+:host {
+  display: block;
+  height: 100dvh;
+}
+
+.kontejner {
+  height: 100%;
+  background: transparent;
+}
+
+.bocna {
+  width: 248px;
+  border-right: 1px solid var(--side-line);
+}
+
+.desno {
+  display: flex;
+  flex-direction: column;
+}
+
+.sadrzaj {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 1440px;
+  padding: 24px;
+  outline: none;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 600;
+  transform: translateY(-200%);
+
+  &:focus-visible,
+  &:focus {
+    transform: none;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .sadrzaj {
+    padding: 16px 14px;
+  }
+}

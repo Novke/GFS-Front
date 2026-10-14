@@ -1,0 +1,32 @@
+:host { display: block; }
+.traka { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 8px; }
+.akcije { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
+.legenda li { display: inline-flex; align-items: center; gap: 6px; }
+.legenda li::before { content: ""; width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.legenda .mat-icon { width: 16px; height: 16px; order: 1; }
+.l-odsutan::before { border: 1.5px dashed var(--muted); }
+.l-prisutan::before { background: var(--primary-soft); border: 1px solid var(--primary-soft-ink); }
+.l-zadatak::before, .l-zvezdica::before { background: var(--primary); }
+.l-zvezdica .mat-icon, .tip .zvezda { color: var(--warn); }
+.uputstvo { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.uputstvo .mat-icon { width: 18px; height: 18px; flex: none; }
+.plocice { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.aktivnosti { margin-top: 24px; }
+.aktivnosti h2 { font-size: 18px; margin-bottom: 8px; }
+.prazno, .tab-akt th { color: var(--muted); }
+.tab-akt { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.tab-akt th, .tab-akt td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tab-akt th { font-size: 12.5px; font-weight: 600; }
+.tab-akt td:last-child { overflow-wrap: anywhere; }
+.tip { display: inline-flex; align-items: center; gap: 4px; }
+.tip .mat-icon { width: 18px; height: 18px; }
+@media (max-width: 599.98px) {
+  .plocice { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .akcije { width: 100%; margin-left: 0; }
+  .akcije > * { flex: 1 1 0; }
+  .tab-akt thead { display: none; }
+  .tab-akt tr { display: grid; grid-template-columns: 1fr auto; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .tab-akt td { padding: 2px 0; border: 0; }
+  .tab-akt td:nth-child(3), .tab-akt td:nth-child(4) { grid-column: 1 / -1; }
+}

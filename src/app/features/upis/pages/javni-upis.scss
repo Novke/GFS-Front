@@ -1,0 +1,119 @@
+// Javna mobilna forma ("Nacrt", dnevni režim iz PublicLayout-a): uska kolona, i na 360 px bez horizontalnog skrola.
+:host { display: block; }
+
+.upis {
+  max-width: 480px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.zaglavlje {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--hero-bg);
+  color: var(--hero-ink);
+}
+
+// Znak iz logoa (obrezan iz gfs-logo.png kao u bočnoj navigaciji), beo na tamnoj podlozi.
+.znak {
+  flex: none;
+  width: 39px;
+  height: 57px;
+  overflow: hidden;
+  filter: var(--logo-filter);
+  mix-blend-mode: screen;
+
+  img {
+    display: block; // širina i visina su atributi <img>
+    max-width: none;
+    margin: -36px 0 0 -66px;
+  }
+}
+
+.naslovi { min-width: 0; }
+
+.nadnaslov {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .8;
+}
+
+h1 {
+  margin: 0;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.godina {
+  margin: 6px 0 0;
+  opacity: .9;
+
+  strong { font-family: var(--font-mono); font-weight: 600; }
+}
+
+.telo { padding: 20px; }
+
+.forma {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+mat-form-field { width: 100%; }
+
+// iOS Safari daje polju za datum minimalnu širinu sadržaja; bez ovoga može da izađe iz kolone.
+input[type='date'] { min-width: 0; }
+
+.mono { font-family: var(--font-mono); }
+
+.dugme {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 8px;
+  font-size: 16px;
+
+  mat-progress-spinner { display: inline-block; margin-right: 8px; }
+}
+
+.stanje {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 24px 0;
+  color: var(--muted);
+}
+
+.poruka {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  &.upozorenje { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+  &.neutralno { background: var(--surface-2); border-color: var(--line); color: var(--ink-2); }
+  &.opasnost { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+  &.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+}
+
+.pregled {
+  display: grid;
+  grid-template-columns: minmax(96px, 5fr) 7fr;
+  gap: 8px 12px;
+  margin: 0;
+
+  dt { color: var(--muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+}

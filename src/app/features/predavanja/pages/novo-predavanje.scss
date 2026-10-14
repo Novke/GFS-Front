@@ -1,0 +1,36 @@
+:host { display: block; }
+
+.forma {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 480px;
+  padding: 20px 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+mat-form-field { width: 100%; }
+
+.predlog {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+
+  strong { color: var(--ink); }
+}
+
+.dugmad {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-bottom: 12px;
+
+  mat-progress-spinner { display: inline-block; margin-right: 8px; }
+}
+
+@media (max-width: 599.98px) {
+  .forma { max-width: none; }
+  .dugmad .mat-mdc-button-base { min-height: 44px; }
+}

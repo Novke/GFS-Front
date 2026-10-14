@@ -1,0 +1,22 @@
+[
+  { "id": 1, "rb": 3, "datum": "2026-10-06", "tema": "Petlje i nizovi", "zavrseno": false, "predmetId": 1, "grupaId": 1, "posecenost": 1,
+    "aktivnosti": [ { "id": 101, "studentId": 2, "tip": "PRISUSTVO", "napomene": null } ] },
+  { "id": 2, "rb": 2, "datum": "2026-09-29", "tema": "Uslovi i grananje", "zavrseno": true, "predmetId": 1, "grupaId": 1, "posecenost": 4,
+    "aktivnosti": [
+      { "id": 201, "studentId": 1, "tip": "ZADATAK", "napomene": null },
+      { "id": 202, "studentId": 2, "tip": "PRISUSTVO", "napomene": null },
+      { "id": 203, "studentId": 3, "tip": "SA_ZVEZDICOM", "napomene": "Objasnila rešenje celoj grupi." },
+      { "id": 204, "studentId": 11, "tip": "PRISUSTVO", "napomene": null }
+    ] },
+  { "id": 3, "rb": 1, "datum": "2026-09-22", "tema": "Uvod u algoritme", "zavrseno": true, "predmetId": 1, "grupaId": 1, "posecenost": 4,
+    "aktivnosti": [
+      { "id": 301, "studentId": 1, "tip": "PRISUSTVO", "napomene": null },
+      { "id": 302, "studentId": 2, "tip": "PRISUSTVO", "napomene": null },
+      { "id": 303, "studentId": 3, "tip": "PRISUSTVO", "napomene": null },
+      { "id": 304, "studentId": 4, "tip": "PRISUSTVO", "napomene": null }
+    ] },
+  { "id": 4, "rb": 1, "datum": "2026-10-01", "tema": "Tabele i formule", "zavrseno": false, "predmetId": 2, "grupaId": 2, "posecenost": 0,
+    "aktivnosti": [] },
+  { "id": 5, "rb": 1, "datum": "2025-10-10", "tema": null, "zavrseno": true, "predmetId": 1, "grupaId": null, "posecenost": 1,
+    "aktivnosti": [ { "id": 501, "studentId": 11, "tip": "PRISUSTVO", "napomene": null } ] }
+]

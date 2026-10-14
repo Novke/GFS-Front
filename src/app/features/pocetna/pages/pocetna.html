@@ -1,0 +1,33 @@
+<app-page-header [naslov]="pozdrav()" [podnaslov]="podnaslov()" />
+
+@if (store.imaGresku() && !store.tabla()) {
+  <app-error-panel [poruka]="store.greska()" (ponovo)="store.ucitaj()" />
+} @else if (!store.tabla()) {
+  <app-skeleton-rows [redovi]="6" />
+} @else {
+  @if (store.imaGresku()) {
+    <app-error-panel naslov="Osvežavanje nije uspelo." [poruka]="store.greska()" (ponovo)="store.ucitaj()" />
+  }
+
+  @for (p of store.uToku(); track p.id) {
+    <div class="u-toku" role="status" data-u-toku>
+      <app-status-chip tekst="U toku" ton="uToku" />
+      <span class="u-toku-tekst">
+        <b>Predavanje {{ p.rb }}@if (p.tema) { · {{ p.tema }}}</b> je u toku · {{ p.predmet.naziv }} · {{ p.grupa?.naziv ?? '—' }}
+        · {{ p.brojPrisutnih }} {{ p.brojPrisutnih === 1 ? 'prisutan' : 'prisutnih' }}
+      </span>
+      <a matButton="filled" class="nastavi" [routerLink]="['/predavanja', p.id]">Nastavi<span class="sr-only"> predavanje {{ p.rb }}</span></a>
+    </div>
+  }
+
+  <div class="tabla">
+    <div class="kolona">
+      <app-sledece-predavanje [sledece]="store.sledece()" [sada]="store.sada()" [salje]="salje()" (zapocni)="zapocni()" />
+      <app-ova-nedelja [nedelja]="store.nedelja()" />
+    </div>
+    <div class="kolona">
+      <app-ceka-na-tebe [ceka]="store.ceka()" />
+      <app-nedavno [stavke]="preference.nedavno()" />
+    </div>
+  </div>
+}

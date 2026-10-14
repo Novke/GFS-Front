@@ -1,16 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="sr-Latn">
 <head>
   <meta charset="utf-8">
-  <title>GfsFront</title>
+  <title>GFS</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#111c30" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#080e19" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="preconnect" href="https://fonts.gstatic.com">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <script>
+    // Režim dan/noć pre prvog renderovanja (bez treptanja). Isti ključ i pravila kao PreferencesStore.
+    (function () {
+      var html = document.documentElement;
+      var rezim = 'sistem';
+      try {
+        var p = JSON.parse(localStorage.getItem('gfs.prefs.v1') || 'null');
+        if (p && (p.rezim === 'dan' || p.rezim === 'noc')) rezim = p.rezim;
+      } catch (e) { /* oštećeno ili nedostupno: sistem */ }
+      if (rezim === 'sistem') {
+        rezim = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'noc' : 'dan';
+      }
+      html.setAttribute('data-mode', rezim);
+      html.style.colorScheme = rezim === 'noc' ? 'dark' : 'light';
+    })();
+  </script>
 </head>
-<body class="mat-typography">
+<body>
   <app-root></app-root>
 </body>
 </html>

@@ -1,0 +1,51 @@
+<app-page-header naslov="Novo predavanje" podnaslov="Izaberi predmet i grupu. Predavanje se beleži za današnji dan." />
+
+@if (reference.imaGresku() && !referencePodaci()) {
+  <app-error-panel [poruka]="reference.greska()" (ponovo)="reference.ucitaj()" />
+}
+
+<form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
+  <app-form-error-banner [poruka]="greska()" />
+
+  <mat-form-field appearance="outline">
+    <mat-label>Predmet</mat-label>
+    <mat-select formControlName="predmet" data-predmet>
+      @for (p of reference.predmeti(); track p.id) {
+        <mat-option [value]="p.id">{{ p.naziv }}</mat-option>
+      }
+    </mat-select>
+    @if (poruka('predmet'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Grupa</mat-label>
+    <mat-select formControlName="grupa" data-grupa>
+      @for (g of reference.grupe(); track g.id) {
+        <mat-option [value]="g.id">{{ g.naziv }}</mat-option>
+      }
+    </mat-select>
+    @if (poruka('grupa'); as m) {
+      <mat-error>{{ m }}</mat-error>
+    }
+  </mat-form-field>
+
+  <p class="predlog" aria-live="polite">
+    @if (sledeciRb(); as rb) {
+      <span data-rb>Biće predavanje broj <strong class="mono">{{ rb }}</strong> · danas, {{ danas }}</span>
+    } @else {
+      <span>Datum: danas, {{ danas }}</span>
+    }
+  </p>
+
+  <div class="dugmad">
+    <a matButton routerLink="/predavanja">Odustani</a>
+    <button matButton="filled" type="submit" data-zapocni [disabled]="salje()">
+      @if (salje()) {
+        <mat-progress-spinner mode="indeterminate" diameter="18" aria-label="Započinjanje" />
+      }
+      Započni
+    </button>
+  </div>
+</form>

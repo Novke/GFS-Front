@@ -1,0 +1,88 @@
+{
+  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka.",
+  "izvodjenje": {
+    "id": 7,
+    "prezentacija": { "id": 3, "naziv": "Statika · uvodni čas", "predmetId": 1 },
+    "kod": "123456",
+    "status": "AKTIVNO",
+    "cuvanje": true,
+    "grupa": null,
+    "predavanje": null,
+    "pocetak": "2026-10-07T10:00:00",
+    "kraj": null,
+    "brojUcesnika": 2,
+    "brojPitanja": 1
+  },
+  "tema": "NACRT",
+  "takmicenje": false,
+  "telefonPrikaz": "DUGMAD",
+  "detaljiDozvoljeni": false,
+  "slajdovi": [
+    {
+      "id": 101, "rb": 1, "tip": "INFO", "naslov": "Šta je sila", "postepeno": true,
+      "sadrzaj": "- Sila menja kretanje tela\n- Jedinica je njutn (N)\n- Sila ima pravac, smer i intenzitet",
+      "slika": null, "pitanje": null, "platno": null,
+      "beleske": "Prvo pitaj šta već znaju o sili.\n\nPokaži primer sa guranjem stola.\n\nNapomeni da je sila vektor."
+    },
+    {
+      "id": 102, "rb": 2, "tip": "PLATNO", "naslov": null, "sadrzaj": null, "slika": null, "pitanje": null, "postepeno": false,
+      "beleske": "Platno: dva koraka.",
+      "platno": {
+        "verzija": 1,
+        "pozadina": { "boja": "#FFFFFF", "medijId": null },
+        "slojevi": [
+          {
+            "id": "t1", "tip": "TEKST", "naziv": null, "x": 60, "y": 60, "sirina": 600, "visina": 80, "rotacija": 0,
+            "providnost": 1, "zakljucan": false, "senka": null, "popuna": null, "ivica": null,
+            "okvir": { "unutraLevo": 7.2, "unutraGore": 3.6, "unutraDesno": 7.2, "unutraDole": 3.6, "sidro": "VRH", "prelom": true, "skala": 1, "skalaProreda": 1 },
+            "pasusi": [
+              {
+                "poravnanje": "LEVO", "nivo": 0, "lista": null, "uvlacenje": { "levo": 0, "prviRed": 0 }, "razmakPre": 0,
+                "razmakPosle": 0, "proredProcenat": 100, "tabulatori": [],
+                "delovi": [{ "tekst": "Prvi korak: sile na gredi", "font": "Carlito", "velicina": 28, "boja": "#1F2937", "podebljano": true, "kurziv": false, "podvuceno": false, "precrtano": false, "polozaj": "OBICAN" }]
+              }
+            ]
+          },
+          {
+            "id": "t2", "tip": "TEKST", "naziv": null, "x": 60, "y": 200, "sirina": 600, "visina": 80, "rotacija": 0,
+            "providnost": 1, "zakljucan": false, "senka": null, "popuna": null, "ivica": null,
+            "okvir": { "unutraLevo": 7.2, "unutraGore": 3.6, "unutraDesno": 7.2, "unutraDole": 3.6, "sidro": "VRH", "prelom": true, "skala": 1, "skalaProreda": 1 },
+            "pasusi": [
+              {
+                "poravnanje": "LEVO", "nivo": 0, "lista": null, "uvlacenje": { "levo": 0, "prviRed": 0 }, "razmakPre": 0,
+                "razmakPosle": 0, "proredProcenat": 100, "tabulatori": [],
+                "delovi": [{ "tekst": "Drugi korak: uslovi ravnoteže", "font": "Carlito", "velicina": 28, "boja": "#1F2937", "podebljano": false, "kurziv": false, "podvuceno": false, "precrtano": false, "polozaj": "OBICAN" }]
+              }
+            ]
+          }
+        ],
+        "animacije": [
+          { "id": "a1", "slojId": "t1", "pasus": null, "vrsta": "ULAZ", "efekat": "FADE", "smer": null, "okidac": "KLIK", "trajanjeMs": 400, "kasnjenjeMs": 0 },
+          { "id": "a2", "slojId": "t2", "pasus": null, "vrsta": "ULAZ", "efekat": "FADE", "smer": null, "okidac": "KLIK", "trajanjeMs": 400, "kasnjenjeMs": 0 }
+        ]
+      }
+    },
+    {
+      "id": 103, "rb": 3, "tip": "PITANJE", "naslov": null, "sadrzaj": null, "slika": null, "postepeno": false, "platno": null,
+      "beleske": "Pitaj pa sačekaj.",
+      "pitanje": {
+        "id": 51, "tip": "JEDAN_TACAN", "tekst": "Koja je jedinica za silu?", "slika": null, "vremeSekunde": null,
+        "opcije": [
+          { "id": 1, "rb": 1, "tekst": "Džul", "tacna": false },
+          { "id": 2, "rb": 2, "tekst": "Njutn", "tacna": true },
+          { "id": 3, "rb": 3, "tekst": "Vat", "tacna": false }
+        ],
+        "brojTacno": null, "brojOdstupanje": null, "odstupanjeTip": null, "jedinica": null, "tekstPrikaz": null,
+        "prihvatljiviOdgovori": null, "skalaMinOznaka": null, "skalaMaxOznaka": null
+      }
+    },
+    {
+      "id": 104, "rb": 4, "tip": "INFO", "naslov": "Za sledeći čas", "sadrzaj": "Pročitati poglavlje o momentu sile.",
+      "slika": null, "beleske": null, "postepeno": false, "pitanje": null, "platno": null
+    }
+  ],
+  "ucesnici": [
+    { "id": 1, "ime": "Ana", "poeni": 0, "povezan": true, "odgovorio": false },
+    { "id": 2, "ime": "Bojan", "poeni": 0, "povezan": true, "odgovorio": false }
+  ]
+}

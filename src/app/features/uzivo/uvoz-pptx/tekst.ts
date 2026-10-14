@@ -1,0 +1,397 @@
+// Tekst PPTX-a (a:txBody) u pasuse, delove i okvir TEKST sloja platna: liste, tab-stopovi, autofit, velika slova,
+// senka teksta. Čiste funkcije bez Angular-a (lokalna provera ih pokreće u Node-u).
+import type { Deo, FormatBroja, Lista, Okvir, Pasus, Polozaj, Poravnanje, Senka, Sidro, Tabulator } from '../data-access/platno.models';
+import { FONTOVI_PLATNA } from '../ui/platno-fontovi';
+import { razresiBodyPr, razresiPPr, razresiRPr, type RazresenBodyPr, type RazresenPPr, type RazresenRPr } from './nasledjivanje';
+import { bojaIz, pomesaj, zamenaFonta, type Boja, type KontekstBoja } from './tema';
+import { EMU_PO_PT, zaokruzi, zaokruziKaoServer, type KontekstSlajda } from './tipovi';
+import { brojAtr, dete, NS } from './xml';
+
+/**
+ * Stil oblika (`p:style/a:fontRef`, stil tabele): slabiji od sopstvenog `rPr` dela (i `pPr/a:defRPr`), jači od
+ * nasleđenih stilova nivoa (lstStyle, txStyles mastera, defaultTextStyle), kao u PowerPointu (beo tekst na plavom obliku
+ * iako `defaultTextStyle` kaže `tx1`). Ograničenje potpisa: `lstStyle` samog oblika stiže kroz `nivoi(n)` zajedno sa
+ * ostalim nasleđenim stilovima, pa je i on slabiji od ovih opcija (pozivaoci F5/F6 to treba da znaju).
+ */
+export interface OpcijeTeksta { podrazumevanaBoja?: string; fontIzStila?: string; podebljanoIzStila?: boolean; }
+/**
+ * Stil teksta iz `p:style/a:fontRef` oblika (boja i font teme), slabiji od sopstvenog `rPr`. Isti stil dobijaju TEKST
+ * sloj oblika i formula u obliku (samo boja).
+ */
+export function opcijeStilaOblika(sp: Element, ctx: KontekstSlajda): OpcijeTeksta {
+  const stil = dete(sp, NS.p, 'style');
+  const fontRef = stil && dete(stil, NS.a, 'fontRef');
+  if (!fontRef) return {};
+  const o: OpcijeTeksta = {};
+  const b = bojaIz(fontRef, { tema: ctx.tema, mapaBoja: ctx.mapaBoja });
+  if (b) o.podrazumevanaBoja = pomesaj(b, ctx.pozadina);
+  const idx = fontRef.getAttribute('idx');
+  if (idx === 'minor' || idx === 'major') o.fontIzStila = idx === 'minor' ? '+mn-lt' : '+mj-lt';
+  return o;
+}
+
+export interface RezultatTeksta { pasusi: Pasus[]; okvir: Okvir; senka: Senka | null | 'razlicite'; prazan: boolean; }
+
+/** Granice iz `PlatnoPP` (server odbija dokument van njih). */
+const MAX_TABULATORA = 32;
+const PODRAZUMEVANI_DEF_TAB = 457200;
+/** `defTabSz` ispod 1 pt (EMU) se zanemaruje: nema podrazumevanih stopova (zaštita od izmišljenog fajla). */
+const NAJMANJI_DEF_TAB = EMU_PO_PT;
+const PODRAZUMEVANA_VELICINA_PT = 18;
+
+const ogranici = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+/** EMU -> jedinice platna (bez pomeraja), 2 decimale, bez `-0`. */
+const uJed = (emu: number, s: number) => zaokruzi(emu / EMU_PO_PT * s) || 0;
+
+/** `skala` i `skalaProreda`: server ih čuva sa 2 decimale (`PlatnoPP.okvir`), pa i uvoz, da prikaz = sačuvano. */
+const odnos = zaokruziKaoServer;
+
+const PORAVNANJA: Readonly<Record<string, Poravnanje>> = {
+  l: 'LEVO', ctr: 'CENTAR', r: 'DESNO', just: 'OBOSTRANO', dist: 'OBOSTRANO', justLow: 'OBOSTRANO', thaiDist: 'OBOSTRANO',
+};
+const SIDRA: Readonly<Record<string, Sidro>> = { t: 'VRH', ctr: 'SREDINA', b: 'DNO', just: 'VRH', dist: 'VRH' };
+const TABOVI: Readonly<Record<string, Tabulator['poravnanje']>> = { l: 'LEVO', ctr: 'CENTAR', r: 'DESNO', dec: 'DECIMALNO' };
+
+const SEME_BROJEVA: Readonly<Record<string, FormatBroja>> = {
+  arabicPeriod: 'ARAPSKI_TACKA', arabicParenR: 'ARAPSKI_ZAGRADA', arabicPlain: 'ARAPSKI',
+  alphaLcParenR: 'MALA_SLOVA_ZAGRADA', alphaUcPeriod: 'VELIKA_SLOVA_TACKA',
+  romanUcPeriod: 'RIMSKI_VELIKI_TACKA', romanLcPeriod: 'RIMSKI_MALI_TACKA',
+};
+
+/** Znaci simbolskih fontova (posle skidanja PUA pomeraja U+F000) -> Unicode. */
+const ZNACI_WINGDINGS: Readonly<Record<string, string>> = {
+  l: '●', n: '■', q: '❑', v: '❖', 'Ø': '➢', 'ü': '✓', '§': '▪', 'à': '➔',
+};
+const ZNACI_SYMBOL: Readonly<Record<string, string>> = { '·': '•' };
+
+/** Upozorenja `FONT_ZAMENJEN` već prijavljena za slajd (jednom po fontu po slajdu, kroz sve okvire). */
+const prijavljeniFontovi = new WeakMap<KontekstSlajda, Set<string>>();
+
+interface Stanje {
+  ctx: KontekstSlajda;
+  o: OpcijeTeksta;
+  kb: KontekstBoja;
+  /** Poruke `TEKST_PRIBLIZAN`/`TABULATORI` već prijavljene u ovom okviru. */
+  prijavljeno: Set<string>;
+  /** `normAutofit@fontScale` okvira (kao `Okvir.skala`): prikaz njome množi slova, pa i znak liste. */
+  skala: number;
+}
+
+function upozoriJednom(st: Stanje, kod: 'TEKST_PRIBLIZAN' | 'TABULATORI', poruka: string): void {
+  if (st.prijavljeno.has(poruka)) return;
+  st.prijavljeno.add(poruka);
+  st.ctx.upozori(kod, poruka);
+}
+
+function font(st: Stanje, ime: string | null): string {
+  const z = zamenaFonta(ime, st.ctx.tema);
+  if (z.upozorenje) {
+    let skup = prijavljeniFontovi.get(st.ctx);
+    if (!skup) prijavljeniFontovi.set(st.ctx, (skup = new Set()));
+    if (!skup.has(z.upozorenje)) {
+      skup.add(z.upozorenje);
+      st.ctx.upozori('FONT_ZAMENJEN', z.upozorenje);
+    }
+  }
+  return z.font;
+}
+
+/** Boja kao `#RRGGBB` preko pozadine slajda (model nema providnost boje). */
+const hex = (b: Boja, st: Stanje) => pomesaj(b, st.ctx.pozadina);
+
+/** `tx1` preko mape boja (podrazumevana boja teksta). */
+function tx1(st: Stanje): string {
+  return st.ctx.tema.boje[st.ctx.mapaBoja['tx1'] ?? 'dk1'] ?? '#000000';
+}
+
+/** Boja hiperveze: `hlink` teme preko mape boja. */
+function bojaVeze(st: Stanje): string {
+  return st.ctx.tema.boje[st.ctx.mapaBoja['hlink'] ?? 'hlink'] ?? '#0563C1';
+}
+
+/** Deo pre spajanja: deo platna, veličina u pt izvora (za prored u tačkama) i senka (za senku okvira). */
+interface SirovDeo { deo: Deo; velicinaPt: number; senka: Senka | null; }
+
+/** Svojstva dela: sopstveni `rPr` (+ `pPr/a:defRPr`) -> stil oblika (opcije) -> nasleđeni nivoi. */
+function napraviDeo(tekst: string, rPr: Element | null, defRPr: Element | null, nivoi: Element[], st: Stanje): SirovDeo {
+  const { ctx, o } = st;
+  const s = ctx.t.s;
+  const svoj = razresiRPr(rPr, defRPr, []);
+  const r: RazresenRPr = razresiRPr(rPr, defRPr, nivoi);
+  const imaSvoj = (ime: string) => [rPr, defRPr].some((e) => !!e?.getAttribute(ime)?.trim());
+
+  const latin = svoj.latin ?? o.fontIzStila ?? r.latin;
+  const podebljano = imaSvoj('b') ? svoj.b : o.podebljanoIzStila ?? r.b;
+  // Hiperveza (`a:hlinkClick` u rPr dela): PowerPoint je crta bojom `hlink` teme i podvučenu, osim kad deo ima svoju
+  // boju odnosno svoj `u`; to je jače i od stila oblika i od nasleđenih stilova.
+  const veza = !!rPr && dete(rPr, NS.a, 'hlinkClick') !== null;
+  const imaSvojuBoju = !!(svoj.boja || svoj.bezBoje);
+
+  let boja: string;
+  const izvorBoje = imaSvojuBoju ? svoj : veza || o.podrazumevanaBoja ? null : r;
+  if (izvorBoje?.bezBoje) boja = ctx.pozadina;
+  else {
+    const b = izvorBoje?.boja ? bojaIz(izvorBoje.boja, st.kb) : null;
+    boja = b ? hex(b, st) : veza && !imaSvojuBoju ? bojaVeze(st) : o.podrazumevanaBoja ?? tx1(st);
+  }
+  const podvuceno = veza && !imaSvoj('u') ? true : r.u;
+
+  const velicinaPt = ogranici(r.sz !== null ? r.sz / 100 : PODRAZUMEVANA_VELICINA_PT, 0.01, 4000);
+  let velicina = ogranici(velicinaPt * s, 1, 400);
+  let t = tekst;
+  if (r.cap !== 'none') {
+    t = t.toLocaleUpperCase('sr-Latn');
+    if (r.cap === 'small') {
+      velicina = ogranici(velicina * 0.8, 1, 400);
+      if (t.trim() !== '') upozoriJednom(st, 'TEKST_PRIBLIZAN', 'Mala velika slova (small caps) su prikazana kao umanjena velika slova.');
+    }
+  }
+  const polozaj: Polozaj = r.baseline > 0 ? 'EKSPONENT' : r.baseline < 0 ? 'INDEKS' : 'OBICAN';
+  return {
+    deo: {
+      tekst: t, font: font(st, latin), velicina: zaokruzi(velicina), boja,
+      podebljano, kurziv: r.i, podvuceno, precrtano: r.strike, polozaj,
+    },
+    velicinaPt,
+    senka: r.senka ? senkaIzEfekta(r.senka, ctx) : null,
+  };
+}
+
+const istaSvojstva = (a: Deo, b: Deo) => a.font === b.font && a.velicina === b.velicina && a.boja === b.boja
+  && a.podebljano === b.podebljano && a.kurziv === b.kurziv && a.podvuceno === b.podvuceno && a.precrtano === b.precrtano
+  && a.polozaj === b.polozaj;
+
+const istaSenka = (a: Senka | null, b: Senka | null) => a === b || (!!a && !!b && a.boja === b.boja
+  && a.pomerajX === b.pomerajX && a.pomerajY === b.pomerajY && a.zamucenje === b.zamucenje);
+
+const prazanTekst = (t: string) => t.trim() === '';
+
+/**
+ * Šema `a:buAutoNum@type` -> format platna; nepoznata šema -> najbliži format iste vrste (`priblizan`, pozivalac upozorava).
+ * Deli je i okvir formule (F9), koji numeraciju pasusa piše kao tekst ispred LaTeX-a.
+ */
+export function formatBroja(sema: string): { format: FormatBroja; priblizan: boolean } {
+  const tacan = Object.hasOwn(SEME_BROJEVA, sema) ? SEME_BROJEVA[sema] : null;
+  if (tacan) return { format: tacan, priblizan: false };
+  const format: FormatBroja = sema.startsWith('alphaLc') ? 'MALA_SLOVA_ZAGRADA'
+    : sema.startsWith('alphaUc') ? 'VELIKA_SLOVA_TACKA'
+      : sema.startsWith('romanUc') ? 'RIMSKI_VELIKI_TACKA'
+        : sema.startsWith('romanLc') ? 'RIMSKI_MALI_TACKA'
+          : 'ARAPSKI_TACKA';
+  return { format, priblizan: true };
+}
+
+/** `startAt` liste u opsegu koji server prima (1..9999). */
+export const pocetakListe = (n: number) => ogranici(Math.trunc(n), 1, 9999);
+
+function lista(pp: RazresenPPr, st: Stanje): Lista | null {
+  const bu = pp.bu;
+  if (bu.vrsta === 'nema') return null;
+  const b = bu.boja ? bojaIz(bu.boja, st.kb) : null;
+  const boja = b ? hex(b, st) : null;
+  if (bu.vrsta === 'broj') {
+    const { format, priblizan } = formatBroja(bu.sema);
+    if (priblizan) upozoriJednom(st, 'TEKST_PRIBLIZAN', `Numeracija liste '${bu.sema}' je prikazana približno.`);
+    return { vrsta: 'BROJ', znak: null, boja, format, pocetak: pocetakListe(bu.pocetak) };
+  }
+  const znak = znakListe(bu.znak, bu.font, st);
+  return znak === null ? null : { vrsta: 'ZNAK', znak, boja, format: null, pocetak: null };
+}
+
+/** Znak liste: simbolski fontovi (Wingdings, Symbol) i PUA U+F000-F0FF u Unicode; razmak -> bez liste. */
+function znakListe(izvor: string, fontListe: string | null, st: Stanje): string | null {
+  const prvi = Array.from(izvor)[0] ?? '•';
+  if (prazanTekst(prvi)) return null;
+  const kod = prvi.codePointAt(0)!;
+  const pua = kod >= 0xf000 && kod <= 0xf0ff;
+  const f = (fontListe ?? '').trim().toLowerCase();
+  const simbolski = f === 'symbol' || f.startsWith('wingdings') || f === 'webdings';
+  if (!simbolski && !pua) return prvi;
+  // Pravi Unicode znak (iznad U+00FF, van PUA) u simbolskom fontu PowerPoint crta zamenskim fontom: ostaje kakav jeste.
+  if (!pua && kod > 0xff) return prvi;
+  const znak = pua ? String.fromCodePoint(kod - 0xf000) : prvi;
+  const tabela = f === 'wingdings' ? ZNACI_WINGDINGS : f === 'symbol' ? ZNACI_SYMBOL : null;
+  const preslikan = tabela && Object.hasOwn(tabela, znak) ? tabela[znak] : null;
+  if (preslikan) return preslikan;
+  upozoriJednom(st, 'TEKST_PRIBLIZAN', `Znak liste iz simbolskog fonta${fontListe ? ` '${fontListe}'` : ''} je zamenjen tačkom.`);
+  return '•';
+}
+
+/**
+ * Širina "znaka" razmak u jedinicama: razmak fonta znaka (`buFont`, inače font teksta) * veličina znaka * skala fonta
+ * okvira (`normAutofit`: PowerPoint umanjuje i znak, a prikaz skalira samo slova, ne `prviRed`).
+ */
+function sirinaZnakaRazmaka(pp: RazresenPPr, prvi: Deo, st: Stanje): number {
+  if (pp.bu.vrsta !== 'znak') return 0;
+  const naziv = pp.bu.font ? zamenaFonta(pp.bu.font, st.ctx.tema).font : prvi.font;
+  const font = FONTOVI_PLATNA.find((f) => f.naziv === naziv) ?? FONTOVI_PLATNA[0];
+  const v = pp.velicinaZnaka;
+  const velicina = v === null ? prvi.velicina : 'pct' in v ? prvi.velicina * v.pct / 100000 : v.pts / 100 * st.ctx.t.s;
+  return font.razmak * ogranici(velicina, 0, 4000) * st.skala;
+}
+
+function tabulatori(pp: RazresenPPr, imaTab: boolean, sirinaOkvira: number, st: Stanje): Tabulator[] {
+  const s = st.ctx.t.s;
+  const stopovi: Tabulator[] = pp.tabovi.slice(0, MAX_TABULATORA).map((t) => {
+    const poravnanje = TABOVI[t.algn] ?? 'LEVO';
+    return { poz: ogranici(uJed(t.poz, s), 0, 2880), poravnanje };
+  });
+  if (imaTab && stopovi.some((t) => t.poravnanje !== 'LEVO')) {
+    upozoriJednom(st, 'TABULATORI', 'Tab-stopovi koji nisu levi su prikazani kao levi.');
+  }
+  if (imaTab && pp.defTabSz >= NAJMANJI_DEF_TAB && pp.defTabSz !== PODRAZUMEVANI_DEF_TAB) {
+    const poslednji = stopovi.reduce((m, t) => Math.max(m, t.poz), 0);
+    const pozicije = podrazumevaniStopovi(pp.defTabSz / EMU_PO_PT * s, poslednji, Math.min(sirinaOkvira, 2880),
+      MAX_TABULATORA - stopovi.length);
+    for (const poz of pozicije) stopovi.push({ poz, poravnanje: 'LEVO' });
+  }
+  return stopovi;
+}
+
+/**
+ * Podrazumevani tab-stopovi `k * d` (jedinice) posle `poslednji` sopstvenog stopa, do `granica`, najviše `najvise`.
+ * Petlja počinje od prvog umnoška iza `poslednji`, pa ima najviše `najvise + 2` koraka bez obzira na `d` i `granica`
+ * (`d` ispod 0,01 bi se posle zaokruživanja na 2 decimale ponavljao, pa tada nema stopova).
+ */
+export function podrazumevaniStopovi(d: number, poslednji: number, granica: number, najvise: number): number[] {
+  const rezultat: number[] = [];
+  if (!(d >= 0.01) || najvise <= 0) return rezultat;
+  for (let k = Math.max(1, Math.floor(poslednji / d) + 1); rezultat.length < najvise && k * d <= granica + 1e-9; k++) {
+    const poz = zaokruzi(k * d);
+    if (poz > poslednji) rezultat.push(poz);
+  }
+  return rezultat;
+}
+
+function razmak(r: RazresenPPr['spcBef'], s: number, velicinaPrvog: number): number {
+  if (!r) return 0;
+  const v = 'pts' in r ? r.pts / 100 * s : r.pct / 100000 * 1.2 * velicinaPrvog;
+  return zaokruzi(ogranici(v, 0, 1000));
+}
+
+function pasus(p: Element, nivoi: (nivo: number) => Element[], sirinaOkvira: number, st: Stanje, senke: (Senka | null)[]): Pasus {
+  const s = st.ctx.t.s;
+  const pPr = dete(p, NS.a, 'pPr');
+  const nivo = Math.trunc(ogranici(brojAtr(pPr, 'lvl', 0), 0, 8));
+  const stilovi = nivoi(nivo);
+  const pp = razresiPPr(pPr, stilovi);
+  const defRPr = pPr && dete(pPr, NS.a, 'defRPr');
+
+  const sirovi: SirovDeo[] = [];
+  for (const el of Array.from(p.children)) {
+    if (el.namespaceURI !== NS.a) continue;
+    const rPr = dete(el, NS.a, 'rPr');
+    if (el.localName === 'r' || el.localName === 'fld') {
+      const tekst = dete(el, NS.a, 't')?.textContent ?? '';
+      if (tekst !== '') sirovi.push(napraviDeo(tekst, rPr, defRPr, stilovi, st));
+    } else if (el.localName === 'br') {
+      sirovi.push(napraviDeo('\n', rPr, defRPr, stilovi, st));
+    }
+  }
+  for (const d of sirovi) if (!prazanTekst(d.deo.tekst)) senke.push(d.senka);
+
+  let delovi: Deo[] = [];
+  for (const { deo } of sirovi) {
+    const prethodni = delovi[delovi.length - 1];
+    if (prethodni && istaSvojstva(prethodni, deo)) prethodni.tekst += deo.tekst;
+    else delovi.push({ ...deo });
+  }
+  let najveciPt = Math.max(0, ...sirovi.map((d) => d.velicinaPt));
+  if (delovi.length === 0) {
+    // Prazan pasus zadržava visinu reda (odluka 9 faze 1): veličina iz a:endParaRPr, pa iz lanca.
+    const kraj = napraviDeo('', dete(p, NS.a, 'endParaRPr'), defRPr, stilovi, st);
+    delovi = [kraj.deo];
+    najveciPt = kraj.velicinaPt;
+  }
+
+  const prviVelicina = delovi[0].velicina;
+  let proredProcenat = 100;
+  if (pp.lnSpc) {
+    proredProcenat = 'pct' in pp.lnSpc ? pp.lnSpc.pct / 1000 : (pp.lnSpc.pts / 100) / (1.2 * najveciPt) * 100;
+  }
+  const imaTab = delovi.some((d) => d.tekst.includes('\t'));
+  const l = lista(pp, st);
+  let prviRed = ogranici(uJed(pp.indent, s), -1000, 1000);
+  // Znak liste je razmak (lista se izostavlja): PowerPoint crta "znak" na marL + indent, a tekst počinje na marL ili
+  // iza znaka kad znak ne staje u viseći deo (razmak širine fonta znaka; mereno na uzorku: 40 pt Calibri pomera 1,84).
+  if (pp.bu.vrsta === 'znak' && l === null) {
+    prviRed = zaokruzi(ogranici(prviRed + sirinaZnakaRazmaka(pp, delovi[0], st), 0, 1000));
+  }
+  return {
+    poravnanje: PORAVNANJA[pp.algn ?? 'l'] ?? 'LEVO',
+    nivo,
+    lista: l,
+    uvlacenje: { levo: ogranici(uJed(pp.marL, s), -1000, 1000), prviRed },
+    razmakPre: razmak(pp.spcBef, s, prviVelicina),
+    razmakPosle: razmak(pp.spcAft, s, prviVelicina),
+    proredProcenat: zaokruzi(ogranici(proredProcenat, 50, 300)),
+    tabulatori: tabulatori(pp, imaTab, sirinaOkvira, st),
+    delovi,
+  };
+}
+
+/** `normAutofit@fontScale` kao odnos (server čuva 2 decimale). */
+const skalaFonta = (b: RazresenBodyPr) => odnos(ogranici(b.fontScale / 100000, 0.25, 1));
+
+function okvir(bodyLanac: Element[], st: Stanje): Okvir {
+  const s = st.ctx.t.s;
+  const b = razresiBodyPr(bodyLanac);
+  if (b.vert !== 'horz' || b.numCol > 1) {
+    upozoriJednom(st, 'TEKST_PRIBLIZAN', b.numCol > 1
+      ? 'Tekst u više kolona je prikazan u jednoj koloni.'
+      : 'Uspravan tekst je prikazan vodoravno.');
+  }
+  const unutra = (emu: number) => ogranici(uJed(emu, s), 0, 200);
+  return {
+    unutraLevo: unutra(b.lIns), unutraGore: unutra(b.tIns), unutraDesno: unutra(b.rIns), unutraDole: unutra(b.bIns),
+    sidro: SIDRA[b.anchor] ?? 'VRH',
+    prelom: b.wrap,
+    // Odnosi (ne jedinice): bez zaokruživanja na 2 decimale, samo bez šuma pokretnog zareza.
+    skala: skalaFonta(b),
+    skalaProreda: odnos(ogranici(1 - b.lnSpcReduction / 100000, 0.5, 1)),
+  };
+}
+
+/**
+ * Tekst oblika: pasusi 1:1 sa `a:p` (i prazni), okvir iz `bodyPr` lanca, senka teksta (odluka 21: ista na svim
+ * nepraznim delovima -> senka; nijedna -> null; inače `'razlicite'`). `nivoi(lvl)` daje stilove nivoa (najjači prvi,
+ * `stiloviNivoa`); `sirinaOkvira` (jedinice platna) ograničava podrazumevane tab-stopove.
+ */
+export function pretvoriTekst(txBody: Element, nivoi: (nivo: number) => Element[], bodyLanac: Element[],
+                              ctx: KontekstSlajda, sirinaOkvira: number, o: OpcijeTeksta = {}): RezultatTeksta {
+  const st: Stanje = {
+    ctx, o, kb: { tema: ctx.tema, mapaBoja: ctx.mapaBoja }, prijavljeno: new Set(), skala: skalaFonta(razresiBodyPr(bodyLanac)),
+  };
+  const senke: (Senka | null)[] = [];
+  const pasusi = Array.from(txBody.children)
+    .filter((el) => el.namespaceURI === NS.a && el.localName === 'p')
+    .map((p) => pasus(p, nivoi, sirinaOkvira, st, senke));
+
+  let senka: RezultatTeksta['senka'] = null;
+  if (senke.length > 0 && senke.some((x) => x !== null)) {
+    senka = senke.every((x) => istaSenka(x, senke[0])) ? senke[0] : 'razlicite';
+  }
+  return {
+    pasusi,
+    okvir: okvir(bodyLanac, st),
+    senka,
+    prazan: pasusi.every((p) => p.delovi.every((d) => prazanTekst(d.tekst))),
+  };
+}
+
+/**
+ * Senka iz `a:outerShdw`: `dist` (EMU) u smeru `dir` (1/60000 stepena, 0 = desno, smer kazaljke), `blurRad` (EMU) ->
+ * zamućenje; sve u jedinicama platna, ograničeno na opsege `PlatnoPP`; boja (podrazumevano crna) pomešana sa pozadinom.
+ */
+export function senkaIzEfekta(outerShdw: Element, ctx: KontekstSlajda): Senka {
+  const s = ctx.t.s;
+  const dist = brojAtr(outerShdw, 'dist', 0);
+  const ugao = brojAtr(outerShdw, 'dir', 0) / 60000 * Math.PI / 180;
+  const b = bojaIz(outerShdw, { tema: ctx.tema, mapaBoja: ctx.mapaBoja }) ?? { hex: '#000000', alfa: 1 };
+  return {
+    boja: pomesaj(b, ctx.pozadina),
+    pomerajX: ogranici(uJed(dist * Math.cos(ugao), s), -100, 100),
+    pomerajY: ogranici(uJed(dist * Math.sin(ugao), s), -100, 100),
+    zamucenje: ogranici(uJed(brojAtr(outerShdw, 'blurRad', 0), s), 0, 100),
+  };
+}
