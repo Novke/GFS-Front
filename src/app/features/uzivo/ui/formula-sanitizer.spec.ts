@@ -1,7 +1,7 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
 import { latexUMarkup as latexUMarkupZaTest } from './formula-markup';
 import { MAX_MARKUP, markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer';
-import { GRANICA_ODBIJENE_MS, GRANICA_PROLAZI_MS } from './formula-vreme.testing';
+import { GRANICA_ODBIJENE_MS, GRANICA_PROLAZI_MS, GRANICA_TIK_ISPOD_MS } from './formula-vreme.testing';
 
 const ml = (latex: string) => convertLatexToMarkup(latex, { defaultMode: 'math' });
 
@@ -120,7 +120,7 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
     ['stil calc( jedinice', () => ocistiStil(`left:calc(${'1em'.repeat(63)}x)`)],
     ['stil border', () => ocistiStil(`border:${'1'.repeat(186)}x solid`)],
   ])('%s tik ispod granice dužine: regex brz', (_ime, f) => {
-    expect(traje(f)).toBeLessThan(GRANICA_PROLAZI_MS);
+    expect(traje(f)).toBeLessThan(GRANICA_TIK_ISPOD_MS);
   });
 
   it('eksponent dosledno: stil i x1..y2 primaju 1e+23em / 1e-7 kao points (recenzija 2, m3)', () => {

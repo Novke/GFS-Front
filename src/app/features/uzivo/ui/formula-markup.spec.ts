@@ -430,8 +430,8 @@ describe('KesFormula: keš LaTeX -> markup (zbirni trošak slajda, recenzija 4b 
     expect(mali.broj).toBe(0);
   });
 
-  it('granice keša: najviše slojeva jednog slajda i 4 MB markup-a', () => {
-    expect([MAX_KES_FORMULA, MAX_KES_ZNAKOVA]).toEqual([300, 4_000_000]);
+  it('granice keša: najviše slojeva jednog slajda i 2 M znakova markup-a', () => {
+    expect([MAX_KES_FORMULA, MAX_KES_ZNAKOVA]).toEqual([300, 2_000_000]);
   });
 
   @Component({

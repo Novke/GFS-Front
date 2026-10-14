@@ -49,7 +49,8 @@ export function konverzija(latex: string, f: typeof convertLatexToMarkup = conve
 
 /** Najviše formula u kešu (= najviše slojeva jednog slajda na serveru) i ukupno znakova njihovog markup-a. */
 export const MAX_KES_FORMULA = 300;
-export const MAX_KES_ZNAKOVA = 4_000_000;
+// Granica je u znakovima markup-a (string), ne u bajtovima memorije: DOM fragmenti u kešu zauzimaju znatno više od svog markup-a.
+export const MAX_KES_ZNAKOVA = 2_000_000;
 
 /**
  * Keš LaTeX -> očišćen fragment (posle sanitizera), LRU po broju stavki i zbiru veličina. Jedan po prozoru (modul se učitava

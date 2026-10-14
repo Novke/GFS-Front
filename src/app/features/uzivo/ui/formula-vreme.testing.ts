@@ -8,3 +8,8 @@
 export const GRANICA_ODBIJENE_MS = 100;
 /** Ulaz koji prolazi proveru i ide kroz MathLive i sanitizer (jsdom), uklj. linearne ulaze tik ispod `MAX_MARKUP`. */
 export const GRANICA_PROLAZI_MS = 1500;
+/**
+ * Ulaz tik ispod granice dužine koji NE zove MathLive (samo sanitizer): granica 100 ms hvata kvadratnu regresiju (stari
+ * kvadratni regex na 19 999 znakova traje ~178 ms), a linearni prolaz traje par ms, pa je rezerva za CI velika.
+ */
+export const GRANICA_TIK_ISPOD_MS = 100;

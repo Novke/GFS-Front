@@ -347,7 +347,7 @@ over STOMP; teacher commands are REST.
   pass before MathLive): depth <= 32 (braces, `\bgroup`, `\left`, `\begin`, argument-taking commands), stretchy constructs inside each
   other <= 16, roots <= 32, structural commands <= 200, rows <= 100, columns in one matrix row <= 100 and cells of all matrices
   <= 2000 (LaTeX <= 5000 characters). `latexUMarkup` caches the sanitised fragment per LaTeX (`KesFormula`, LRU, 300 formulas and
-  4 MB of markup, a copy on every read), one cache per window shared by projector, console and editor, so the same formula on a
+  2 M characters of markup, a copy on every read), one cache per window shared by projector, console and editor, so the same formula on a
   slide (or the same slide drawn twice) is converted once. A formula over a limit, a markup over
   450 kB or an exception is **drawn as the LaTeX source**, and the dialog refuses to save it. **This protection exists only in the
   client**: the server (unchanged in 4b) still accepts and stores such LaTeX, and the projector then draws it as the source. The
