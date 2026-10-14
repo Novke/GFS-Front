@@ -210,6 +210,47 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
       expect(dispatch).not.toHaveBeenCalled();
     });
 
+    /*
+     * CI #16 (drugi pad): posle prvog fokusa novog uređivača ProseMirror zakaže `setTimeout(20)` koji, ako se DOM izbor
+     * razlikuje od poslednjeg koji je PM video, upiše izbor IZ STANJA u DOM. Kad tajmer zakasni iza Shift+Home (a
+     * `selectionchange` još nije obrađen), poništio bi izbor tastature. `keyup` ga prenosi u stanje pre tajmera.
+     */
+    it('keyup posle Shift+Home prenosi izbor iz DOM-a u stanje; zakasneo tajmer fokusa ga više ne vraća', () => {
+      (view().dom as HTMLElement).blur();
+      naKraju();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        view().focus();
+        expect(view().hasFocus()).toBe(true);
+        izaberiUDomu(12, 7);
+        view().dom.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home', shiftKey: true, bubbles: true, cancelable: true }));
+        expect([view().state.selection.anchor, view().state.selection.head]).toEqual([12, 7]);
+        vi.advanceTimersByTime(50);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect([view().state.selection.anchor, view().state.selection.head]).toEqual([12, 7]);
+      expect(document.getSelection()!.toString()).toBe('Drugi');
+    });
+
+    it('keyup bez razlike, tokom kompozicije (IME) i posle Ctrl+A: nijedna dodatna transakcija', () => {
+      naKraju();
+      izaberiUDomu(12, 12);
+      const dispatch = vi.spyOn(view(), 'dispatch');
+      const pusti = (init: KeyboardEventInit) =>
+        view().dom.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...init }));
+      pusti({ key: 'Shift' });
+      izaberiUDomu(7, 12);
+      pusti({ key: 'Process', isComposing: true });
+      expect(dispatch).not.toHaveBeenCalled();
+      izaberiUDomu(12, 12);
+      taster('a', true);
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(document.getSelection()!.toString().replace(/\s/g, '')).toBe('PrviDrugi');
+      pusti({ key: 'a', ctrlKey: true });
+      expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+
     it('F19 rr m3: kursor na početku pasusa liste (ispred i iza oznake u DOM-u): taster ne pravi transakciju', async () => {
       view().dispatch(view().state.tr.setSelection(TextSelection.create(view().state.doc, 1)));
       komande().prebaciListu('ZNAK');
