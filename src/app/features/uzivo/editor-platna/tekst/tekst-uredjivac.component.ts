@@ -153,6 +153,16 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     afterNextRender(() => this.view?.focus());
   }
 
+  /**
+   * Ctrl+Z (i Undo pregledača) u tekstu kad ProseMirror nema korak iznad granice preseka: kao Poništi iz panela i trake, sesija
+   * se završava i poništava se poslednji korak platna; fokus tada prelazi na okvir (uređivača više nema). Kad presek nije
+   * primljen (granica znakova, gest), sesija i fokus ostaju.
+   */
+  private ponistiNaPlatnu(): void {
+    this.store.ponisti();
+    if (!this.store.uredjivanje()) this.fokusPlatna.fokus();
+  }
+
   /** ProseMirror view (testovi i panel teksta); null pre crtanja i posle uništenja. */
   pogled(): EditorView | null {
     return this.view;
@@ -181,8 +191,14 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
           this.store.predjiNaCeliju(smer);
           return true;
         } : undefined,
-        // granica preseka: obrađen taster (bez poništavanja u pregledaču); bez ijednog koraka kao ranije (false)
-        ponisti: (state, dispatch) => (undoDepth(state) > this.granica ? undo(state, dispatch) : undoDepth(state) > 0),
+        // na granici posle preseka kao Poništi iz panela: kraj sesije i korak platna (TALAS-B); bez preseka i bez ijednog
+        // koraka kao ranije (false: Ctrl+Z u tekstu ne dira platno, Note F4b RF3)
+        ponisti: (state, dispatch) => {
+          if (undoDepth(state) > this.granica) return undo(state, dispatch);
+          if (!this.granica) return false;
+          if (dispatch) this.ponistiNaPlatnu();
+          return true;
+        },
         // F6: panel Svojstva, sesija i izbor ostaju (povratak: F6 iz panela, koren editora)
         naF6: () => this.fokusPlatna.fokusPanela(),
       }),

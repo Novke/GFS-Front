@@ -1,6 +1,6 @@
 // Dodaci (plugin-i) uređivača teksta (F12): stil teksta bez marka i praznih pasusa, prikaz pasusa (isti stil kao prikaz
 // platna) i granica znakova slajda. Bez Angular-a; uređivač ih sastavlja kroz `dodaciUredjivaca`.
-import { history } from 'prosemirror-history';
+import { history, redo, undo } from 'prosemirror-history';
 import type { Node as PmCvor } from 'prosemirror-model';
 import { type Command, type EditorState, Plugin, PluginKey, TextSelection, type Transaction } from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
@@ -244,11 +244,34 @@ export interface OpcijeUredjivaca {
   naF6?: () => boolean;
 }
 
-/** Svi dodaci uređivača, redom: izbor iz DOM-a (pre tastera), granica, istorija, tasteri, stil, prikaz pasusa. */
+/**
+ * Undo i Redo pregledača (meni "Uredi", kontekstni meni, gest na tabletu) stižu kao `beforeinput` sa `historyUndo` /
+ * `historyRedo`, mimo tastera. `history()` ih obrađuje sirovim `undo` / `redo`, pa bi Undo prešao granicu preseka
+ * (re-recenzija TALAS-A, m1). Ovaj dodatak stoji PRE `history()` i šalje ih na isti (ograničen) `ponisti` kao Ctrl+Z.
+ */
+export function dodatakUndoPregledaca(ponisti: Command): Plugin {
+  return new Plugin({
+    props: {
+      handleDOMEvents: {
+        beforeinput(view, e) {
+          const vrsta = (e as InputEvent).inputType;
+          const komanda = vrsta === 'historyUndo' ? ponisti : vrsta === 'historyRedo' ? redo : null;
+          if (!komanda) return false;
+          e.preventDefault();
+          komanda(view.state, view.dispatch, view);
+          return true;
+        },
+      },
+    },
+  });
+}
+
+/** Svi dodaci uređivača, redom: izbor iz DOM-a (pre tastera), granica, Undo pregledača, istorija, tasteri, stil, pasusi. */
 export function dodaciUredjivaca(o: OpcijeUredjivaca): Plugin[] {
   return [
     dodatakIzboraIzDoma(),
     dodatakGranice(o.ostalo, o.prekoracenje),
+    dodatakUndoPregledaca(o.ponisti ?? undo),
     history(),
     ...tasteriUredjivaca(o.naEsc, o.naTab, o.ponisti, o.naF6),
     dodatakStila(o.podrazumevano),

@@ -976,10 +976,77 @@ describe('PlatnoEditorComponent', () => {
         await fixture.whenStable();
         expect(sloj().okvir.prelom).toBe(prelom);
         expect(tekstSloja()).toContain('abc');
-        taster(panelTeksta(), 'z', { ctrlKey: true });
+        // TALAS-B (re-recenzija A, I1): prvi Ctrl+Z je završio sesiju, a fokusirana kontrola je ista (nije napravljena
+        // iznova), pa drugi Ctrl+Z ide sa pravog fokusa do editora
+        expect(store.uredjivanje()).toBeNull();
+        expect(prekidac.isConnected).toBe(true);
+        expect(document.activeElement).toBe(prekidac);
+        expect(taster(document.activeElement!, 'z', { ctrlKey: true }).defaultPrevented).toBe(true);
         await fixture.whenStable();
         expect(tekstSloja()).toBe(pocetak);
         expect(sloj().okvir.prelom).toBe(prelom);
+        expect(el().contains(document.activeElement)).toBe(true);
+      });
+
+      it('TALAS-B: Ctrl+Z i Ctrl+Y na mat-button-toggle (role=radio, sidro) idu do korena; strelice ostaju radio grupi', async () => {
+        store.izaberi(['tekst']);
+        await fixture.whenStable();
+        const sidro = sloj().okvir.sidro;
+        const dno = panelTeksta().querySelector<HTMLButtonElement>('mat-button-toggle[aria-label="Dno"] button')
+          ?? panelTeksta().querySelector<HTMLElement>('[aria-label="Dno"]')!.closest('mat-button-toggle')!.querySelector('button')!;
+        expect(dno.getAttribute('role')).toBe('radio');
+        dno.click();
+        await fixture.whenStable();
+        expect(sloj().okvir.sidro).toBe('DNO');
+        dno.focus();
+        expect(taster(dno, 'z', { ctrlKey: true }).defaultPrevented).toBe(true);
+        await fixture.whenStable();
+        expect(sloj().okvir.sidro).toBe(sidro);
+        expect(taster(document.activeElement!, 'y', { ctrlKey: true }).defaultPrevented).toBe(true);
+        await fixture.whenStable();
+        expect(sloj().okvir.sidro).toBe('DNO');
+        // strelica na radio dugmetu: nije prečica editora (ni poništavanje ni pomeranje sloja)
+        const x = sloj().x;
+        taster(document.activeElement!, 'ArrowRight');
+        await fixture.whenStable();
+        expect(sloj().x).toBe(x);
+      });
+
+      it('TALAS-B: Ctrl+Z u tekstu na granici (posle Ctrl+S) ide na platno kao iz panela: kraj sesije, korak, fokus na okviru', async () => {
+        await uredi();
+        const pocetak = tekstSloja();
+        kucajNaKraj('abc');
+        taster(uredjivac()!, 's', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(taster(uredjivac()!, 'z', { ctrlKey: true }).defaultPrevented).toBe(true);
+        await fixture.whenStable();
+        expect(store.uredjivanje()).toBeNull();
+        expect(tekstSloja()).toBe(pocetak);
+        expect(document.activeElement).toBe(okvir());
+      });
+
+      it('TALAS-B (re-recenzija A, m1): Undo pregledača (beforeinput historyUndo) poštuje granicu kao Ctrl+Z', async () => {
+        await uredi();
+        const pocetak = tekstSloja();
+        kucajNaKraj('abc');
+        taster(uredjivac()!, 's', { ctrlKey: true });
+        await fixture.whenStable();
+        kucajNaKraj('d');
+        const undo = () => {
+          const e = new InputEvent('beforeinput', { inputType: 'historyUndo', bubbles: true, cancelable: true });
+          uredjivac()!.dispatchEvent(e);
+          return e;
+        };
+        expect(undo().defaultPrevented).toBe(true);
+        expect(pogled().state.doc.textContent).toContain('abc');
+        expect(pogled().state.doc.textContent).not.toContain('abcd');
+        expect(store.uredjivanje()).not.toBeNull();
+        // na granici: ne prelazi presek u ProseMirror-u (tekst "abc" ostaje korak platna), nego ide na platno
+        undo();
+        await fixture.whenStable();
+        expect(store.uredjivanje()).toBeNull();
+        expect(tekstSloja()).toBe(pocetak);
+        expect(store.mozeNapred()).toBe(true);
       });
 
       it('Ctrl+Y iz panela i Ponovi tokom sesije: samo istorija uređivača; bez nje ništa (sesija ostaje, tekst nije upisan)', async () => {

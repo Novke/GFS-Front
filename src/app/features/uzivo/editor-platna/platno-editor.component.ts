@@ -12,8 +12,8 @@
 // Režim "Pregled" (F18, prekidač u traci): umesto okvira i sloja izbora `app-pregled-platna` (koraci, puštanje), tabovi
 // onemogućeni, sadržaj panela sakriven, a Ctrl+Z ne radi; "Uređivanje" pravi nov okvir, koji `FokusPlatna` odmah prati.
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterRenderEffect, computed,
-  inject, input, signal, viewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, afterNextRender, afterRenderEffect,
+  computed, inject, input, signal, viewChild,
 } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -143,6 +143,7 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   protected readonly store = inject(PlatnoEditorStore);
   private readonly editorStore = inject(EditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
+  private readonly injector = inject(Injector);
   private readonly slike = inject(SlikeEditora);
   private readonly obavestenja = inject(NotificationStore);
   private readonly formula = formulaEditora();
@@ -283,7 +284,7 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     const k = komandaTastature(e);
     // Pregled (F18): alati su skriveni, pa poništavanje ne menja dokument koji se gleda
     if (!k || !jePonistavanje(k) || e.defaultPrevented || this.pregled()) return;
-    if (uPoljuZaUnos(e.target)) return;
+    if (uPoljuZaUnos(e.target, true)) return;
     e.preventDefault();
     this.ponistiIliPonovi(k.tip);
   }
@@ -323,6 +324,10 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   private ponistiIliPonovi(tip: 'PONISTI' | 'PONOVI'): void {
     if (tip === 'PONOVI') this.store.ponovi();
     else if (!this.store.ponistiUTekstu()) this.store.ponisti();
+    // kontrola sa fokusom je nestala (npr. poništen sloj čiji je panel bio otvoren): fokus na okvir, ne na body
+    afterNextRender(() => {
+      if (document.activeElement === document.body) this.fokusPlatna.fokus();
+    }, { injector: this.injector });
   }
 
   /** Ostale prečice SAMO na okviru platna (odluka 24); poništi/ponovi idu do korena (`tastaturaKorena`). */

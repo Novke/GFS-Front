@@ -28,22 +28,24 @@ import { SvojstvaTekstaComponent } from './svojstva-teksta.component';
     @if (store.uredjivanje()) {
       <p class="uz-ep-napomena">Uređuje se tekst. F6 vraća u tekst. Slojevi i animacije: Završi uređivanje teksta (Esc).</p>
       <button mat-stroked-button type="button" (click)="zavrsi()">Završi uređivanje (Esc)</button>
-      <app-svojstva-teksta [tema]="tema()" />
     } @else if (store.izbor().length === 0) {
       <app-svojstva-slajda [tema]="tema()" />
     } @else {
       <app-svojstva-sloja [tema]="tema()" />
-      @if (samoTekst()) {
-        <app-svojstva-teksta [tema]="tema()" />
+      @if (store.jedan(); as s) {
+        @if (s.tip === 'TABELA') { <app-svojstva-tabele [sloj]="s" [tema]="tema()" /> }
       }
+    }
+    <!-- jedan primerak i tokom sesije i posle nje: Ctrl+Z na kontroli koji završi sesiju ne uništava fokusiranu kontrolu -->
+    @if (tekst()) {
+      <app-svojstva-teksta [tema]="tema()" />
+    }
+    @if (!store.uredjivanje()) {
       @if (store.jedan(); as s) {
         @if (s.tip === 'OBLIK' || s.tip === 'TEKST') {
           <app-svojstva-oblika [sloj]="s" [tema]="tema()" />
         } @else if (s.tip === 'SLIKA') {
           <app-svojstva-slike [sloj]="s" />
-        } @else if (s.tip === 'TABELA') {
-          <app-svojstva-tabele [sloj]="s" [tema]="tema()" />
-          <app-svojstva-teksta [tema]="tema()" />
         } @else if (s.tip === 'FORMULA') {
           <app-svojstva-formule [sloj]="s" [tema]="tema()" />
         }
@@ -61,7 +63,13 @@ export class PanelSvojstvaComponent {
   protected readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna, { optional: true });
   /** Svi izabrani slojevi su TEKST (mešan izbor nema zajednička svojstva teksta). */
-  protected readonly samoTekst = computed(() => this.store.izabraniSlojevi().every((s) => s.tip === 'TEKST'));
+  private readonly samoTekst = computed(() => this.store.izabraniSlojevi().every((s) => s.tip === 'TEKST'));
+  /**
+   * Svojstva teksta: tokom sesije, za izbor samo TEKST slojeva i za jednu tabelu (opseg ćelija). Jedan `@if` za sve
+   * slučajeve (re-recenzija TALAS-A, I1): kraj sesije (Ctrl+Z iz panela) ne pravi komponentu iznova, pa fokus ostaje.
+   */
+  protected readonly tekst = computed(() => !!this.store.uredjivanje()
+    || (this.store.izbor().length > 0 && (this.samoTekst() || this.store.jedan()?.tip === 'TABELA')));
 
   /** Kraj uređivanja teksta iz panela: tekst u dokument, fokus na okvir platna (kao Esc). */
   protected zavrsi(): void {

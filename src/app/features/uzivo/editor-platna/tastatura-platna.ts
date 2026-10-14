@@ -56,9 +56,13 @@ const SOPSTVENI_TASTERI = 'input, textarea, select, [contenteditable="true"], .c
   + '[role="menu"], [role="menuitem"], [role="dialog"], [role="tab"], [role="tablist"], [role="combobox"], '
   + '[role="listbox"], [role="option"], [role="radio"], [role="slider"]';
 
-export function uPoljuZaUnos(cilj: EventTarget | null): boolean {
-  const el = cilj instanceof Element ? cilj : null;
-  return !!el?.closest(SOPSTVENI_TASTERI);
+/**
+ * `zaPonistavanje`: poništi/ponovi na korenu editora. Radio dugme (`mat-button-toggle`: poravnanje, sidro) zadržava
+ * strelice, Home i End, ali Ctrl+Z i Ctrl+Y ne koristi, pa oni idu do korena kao sa ostalih kontrola panela (TALAS-B).
+ */
+export function uPoljuZaUnos(cilj: EventTarget | null, zaPonistavanje = false): boolean {
+  const el = cilj instanceof Element ? cilj.closest(SOPSTVENI_TASTERI) : null;
+  return !!el && !(zaPonistavanje && el.getAttribute('role') === 'radio');
 }
 
 /**

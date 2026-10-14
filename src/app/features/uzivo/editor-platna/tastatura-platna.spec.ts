@@ -86,6 +86,17 @@ describe('tastatura-platna: uPoljuZaUnos', () => {
   it('null -> false', () => {
     expect(uPoljuZaUnos(null)).toBe(false);
   });
+
+  it('TALAS-B: za poništavanje radio dugme (mat-button-toggle) nije polje; ostala polja i kontrole jesu', () => {
+    const radio = element('<div role="radiogroup"><button id="c" role="radio">x</button></div>', '#c');
+    expect(uPoljuZaUnos(radio)).toBe(true);
+    expect(uPoljuZaUnos(radio, true)).toBe(false);
+    for (const [html, selektor] of [['<input id="c">', '#c'], ['<div id="c" role="slider">x</div>', '#c'],
+      ['<div class="cdk-overlay-container"><button id="c" role="radio">x</button></div>', '#c']]) {
+      // radio u overlay-u: najbliži je on sam, ali koren editora ga ionako ne vidi (overlay je van domaćina)
+      expect(uPoljuZaUnos(element(html, selektor), true)).toBe(!html.includes('role="radio"'));
+    }
+  });
 });
 
 describe('tastatura-platna: jePonistavanje i zatvorenIzbornik', () => {

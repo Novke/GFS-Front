@@ -242,9 +242,6 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
       expect(komande().presek()).not.toBeNull();
       expect(komande().istorija().nazad).toBe(false);
       expect(komande().ponisti()).toBe(false);
-      // Ctrl+Z u tekstu: obrađen (bez poništavanja pregledača), tekst ostaje
-      expect(ctrlZ().defaultPrevented).toBe(true);
-      expect(tekst()).toBe('XPrvi');
       kucaj('Y');
       expect(komande().istorija().nazad).toBe(true);
       expect(komande().ponisti()).toBe(true);
@@ -253,6 +250,50 @@ describe('TekstUredjivacComponent (pravi EditorView u jsdom-u)', () => {
       expect(komande().istorija()).toEqual({ nazad: false, napred: true });
       expect(komande().ponovi()).toBe(true);
       expect(tekst()).toBe('YXPrvi');
+    });
+
+    it('TALAS-B: Ctrl+Z u tekstu na granici ne prelazi presek, nego ide na platno kao iz panela (store.ponisti, fokus okvira)', () => {
+      const ponisti = vi.spyOn(store, 'ponisti');
+      kucaj('X');
+      expect(komande().presek()).not.toBeNull();
+      expect(ctrlZ().defaultPrevented).toBe(true);
+      expect(tekst()).toBe('XPrvi');
+      expect(ponisti).toHaveBeenCalledTimes(1);
+      expect(store.uredjivanje()).toBeNull();
+      expect(fokus).toHaveBeenCalled();
+    });
+
+    it('TALAS-B: bez preseka Ctrl+Z ostaje u tekstu; bez ijednog koraka nije obrađen i ne dira platno (Note F4b RF3)', () => {
+      const ponisti = vi.spyOn(store, 'ponisti');
+      kucaj('X');
+      expect(ctrlZ().defaultPrevented).toBe(true);
+      expect(tekst()).toBe('Prvi');
+      expect(ctrlZ().defaultPrevented).toBe(false);
+      expect(ponisti).not.toHaveBeenCalled();
+      expect(store.uredjivanje()).not.toBeNull();
+    });
+
+    it('TALAS-B (re-recenzija A, m1): Undo i Redo pregledača (beforeinput) idu na isti ograničen ponisti i na redo', () => {
+      const ponisti = vi.spyOn(store, 'ponisti');
+      const pregledac = (inputType: string) => {
+        const e = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+        view().dom.dispatchEvent(e);
+        return e;
+      };
+      kucaj('X');
+      komande().presek();
+      kucaj('Y');
+      expect(pregledac('historyUndo').defaultPrevented).toBe(true);
+      expect(tekst()).toBe('XPrvi');
+      expect(pregledac('historyRedo').defaultPrevented).toBe(true);
+      expect(tekst()).toBe('YXPrvi');
+      pregledac('historyUndo');
+      // granica: ne vraća "Prvi" (presek je već korak platna), nego ide na platno
+      expect(pregledac('historyUndo').defaultPrevented).toBe(true);
+      expect(tekst()).toBe('XPrvi');
+      expect(ponisti).toHaveBeenCalledTimes(1);
+      // ostali beforeinput (kucanje) idu dalje
+      expect(pregledac('insertText').defaultPrevented).toBe(false);
     });
 
     it('odbijen presek (odbaciPresek) vraća i granicu: kucanje se opet poništava', () => {
