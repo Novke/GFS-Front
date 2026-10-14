@@ -133,7 +133,7 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
 
   const PAKETI_EDITORA = [
     'prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'prosemirror-transform', 'prosemirror-commands',
-    'prosemirror-keymap', 'prosemirror-history',
+    'prosemirror-keymap', 'prosemirror-history', 'mathlive',
   ];
 
   it('biblioteke editora platna su na spisku zabranjenih', () => {
@@ -148,6 +148,27 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       assert.equal(m.length, 1, JSON.stringify(m));
       assert.equal(m[0].messageId, 'zabranjenPaket');
     }
+  });
+
+  it('obara mathlive i mathlive/ssr u javnom feature-u (statički i dinamički uvoz)', async () => {
+    for (const feature of JAVNI_FEATURE) {
+      for (const kod of [
+        `import { convertLatexToMarkup } from 'mathlive/ssr';\nexport const y = convertLatexToMarkup;\n`,
+        `import { MathfieldElement } from 'mathlive';\nexport const y = MathfieldElement;\n`,
+        `export const y = () => import('mathlive/ssr');\n`,
+      ]) {
+        const m = await poruke(feature, kod);
+        assert.equal(m.length, 1, JSON.stringify(m));
+        assert.equal(m[0].messageId, 'zabranjenPaket');
+      }
+    }
+  });
+
+  it('mathlive/ssr je dozvoljen van javnih feature-a (ui/formula-markup, projektor i editor)', async () => {
+    const [r] = await eslint.lintText(`import { convertLatexToMarkup } from 'mathlive/ssr';\nexport const y = convertLatexToMarkup;\n`, {
+      filePath: path.join(KORENI, 'src/app/features/uzivo/ui/test-nejavni.ts'),
+    });
+    assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
   });
 
   it('prosemirror je dozvoljen van javnih feature-a (editor platna)', async () => {

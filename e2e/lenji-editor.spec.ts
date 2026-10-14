@@ -18,6 +18,10 @@ const BUDZET_POCETNO = 785_000;
 const BUDZET_STRANICA = 215_000;
 const BUDZET_EDITOR_4B = 450_000;
 const BUDZET_EDITOR_4B_GZIP = 140_000;
+/** Sopstveno zatvorenje `mathlive/ssr` (statički prikaz formula, F15) minus početno, stranica i editor. */
+const BUDZET_MATHLIVE_SSR = 380_000;
+/** Niz koji ima samo ceo `mathlive` (`<math-field>`, dijalog formule F16), a ne `mathlive/ssr`. */
+const NIZ_MATH_FIELD = 'math-field';
 /** Niz koji postoji samo u šablonu stranice editora prezentacije (zaglavlje). */
 const NIZ_STRANICE = 'uz-ed-zaglavlje';
 
@@ -73,5 +77,29 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     expect([...sopstveno].filter(f => tekst(f).includes(NIZ_MATHLIVE))).toEqual([]);
     // svi nizovi editora (i budući, 4b) su van početnog zatvorenja i fajla stranice
     expect(NIZOVI_EDITORA.filter(n => [...pocetno, stranica].some(f => tekst(f).includes(n)))).toEqual([]);
+  });
+
+  test('mathlive/ssr (formule na projektoru, konzoli i u editoru): samo dinamički uvoz, sopstveni chunk u budžetu', () => {
+    const ssrFajlovi = js.filter(f => tekst(f).includes(NIZ_MATHLIVE) && !tekst(f).includes(NIZ_MATH_FIELD));
+    expect(ssrFajlovi.length, 'tačno jedan chunk sa mathlive/ssr').toBe(1);
+    const [ssr] = ssrFajlovi;
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(ssr)), `${ssr}: statički uvoz`).toEqual([]);
+    expect(js.some(u => dinamickiUvozi(tekst(u)).includes(ssr)), `${ssr}: nema dinamičkog import()-a`).toBe(true);
+
+    const stranica = fajlSa(NIZ_STRANICE, js);
+    const editor = fajlSa(NIZ_EDITORA, js);
+    const vecUcitano = new Set([...pocetno, ...zatvorenje([stranica])]);
+    const ucitano = new Set([...vecUcitano, ...sopstvenoZatvorenje([editor], vecUcitano)]);
+    expect(ucitano.has(ssr), 'mathlive/ssr nije u početnom zatvorenju, stranici ni editoru').toBe(false);
+    const sopstveno = sopstvenoZatvorenje([ssr], ucitano);
+    zapisi('mathlive/ssr (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
+    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_MATHLIVE_SSR);
+  });
+
+  test('izvori statičkog prikaza formula ne sadrže niz MathLive-a (odluka 26: niz prepoznaje samo biblioteku)', () => {
+    const ui = join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'ui');
+    for (const f of ['formula-markup.ts', 'formula-ucitavanje.ts', 'formula-prikaz.component.ts']) {
+      expect(readFileSync(join(ui, f), 'utf8').includes(NIZ_MATHLIVE), f).toBe(false);
+    }
   });
 });

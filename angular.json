@@ -20,7 +20,10 @@
             "tsConfig": "tsconfig.app.json",
             "assets": [
               "src/favicon.ico",
-              "src/assets"
+              "src/assets",
+              { "glob": "mathlive-static.css", "input": "node_modules/mathlive", "output": "assets/mathlive" },
+              { "glob": "LICENSE.txt", "input": "node_modules/mathlive", "output": "assets/mathlive" },
+              { "glob": "*.woff2", "input": "node_modules/mathlive/fonts", "output": "assets/mathlive/fonts" }
             ],
             "styles": [
               "src/styles.scss"

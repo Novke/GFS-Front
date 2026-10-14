@@ -4,6 +4,7 @@ import { celija, pasus, platno } from '../data-access/platno-podaci.testing';
 import {
   FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
+import { UCITAJ_FORMULE, UCITAJ_STIL_FORMULA } from './formula-ucitavanje';
 import { PlatnoPrikazComponent } from './platno-prikaz.component';
 
 async function prikazi(p: Platno, korak = 0) {
@@ -22,6 +23,17 @@ function sa<T extends Sloj>(id: string, izmena: (s: T) => T): Platno {
 }
 
 const sloj = (el: HTMLElement, id: string) => el.querySelector<HTMLElement>(`.uz-pl-sloj[data-sloj="${id}"]`)!;
+
+// MathLive se ovde ne učitava (formula-prikaz.spec i formula-markup.spec ga proveravaju): formula ostaje LaTeX izvor,
+// pa izgled ne zavisi od toga koliko je brzo stigao lenji modul.
+beforeEach(() => {
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: UCITAJ_FORMULE, useValue: () => new Promise(() => undefined) },
+      { provide: UCITAJ_STIL_FORMULA, useValue: () => new Promise(() => undefined) },
+    ],
+  });
+});
 
 describe('PlatnoPrikazComponent', () => {
   it('renderuje šest slojeva redom (z-osa = redosled u DOM-u), svaki sa unutrašnjim sadržajem', async () => {
@@ -135,10 +147,12 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.style.top).toBe('-20%');
   });
 
-  it('FORMULA: sa slikaIzvora je <img>, bez nje LaTeX izvor', async () => {
+  it('FORMULA: sa slikaIzvora je <img>, bez nje app-formula-prikaz (dok se MathLive učitava: LaTeX izvor)', async () => {
     const bez = await prikazi(platno());
     expect(sloj(bez.el, 'formula').querySelector('img')).toBeNull();
-    expect(sloj(bez.el, 'formula').querySelector('.uz-pl-formula-izvor')?.textContent).toBe('x^2');
+    const prikaz = sloj(bez.el, 'formula').querySelector('.uz-pl-formula > app-formula-prikaz')!;
+    expect(prikaz).not.toBeNull();
+    expect(prikaz.querySelector('.uz-pl-formula-izvor')?.textContent).toBe('x^2');
 
     const p = sa<FormulaSloj>('formula', (s) => ({ ...s, slikaIzvora: '00000000-0000-0000-0000-000000000003' }));
     const sa_ = await prikazi(p);
@@ -146,6 +160,7 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000003');
     expect(img.getAttribute('alt')).toBe('x^2');
     expect(sloj(sa_.el, 'formula').querySelector('.uz-pl-formula-izvor')).toBeNull();
+    expect(sloj(sa_.el, 'formula').querySelector('app-formula-prikaz')).toBeNull();
   });
 
   it('CRTEZ: slika preko sloja, alt Crtež', async () => {

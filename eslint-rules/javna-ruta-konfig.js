@@ -37,7 +37,7 @@ const DOZVOLJENO_PO_FEATURE = {
 
 // npm paketi koje javni feature ne sme da uvozi (ni podputanje, npr. `fflate/esm`; "@scope/*" = ceo scope). Paketi su
 // inače slobodni (nemaju pristup `/api/*`), ali biblioteke editora i uvoza graditelja slajdova (uvoz PPTX-a,
-// ProseMirror, kasnije mathlive (F15)) su teške i nastavničke: idu ovde da nikad ne uđu u javni chunk studenta.
+// ProseMirror, MathLive) su teške i nastavničke: idu ovde da nikad ne uđu u javni chunk studenta.
 // Pravilo uzima ovaj spisak i kad mu se ne prosledi opcija (fail-closed).
 const ZABRANJENI_PAKETI_JAVNO = [
   'fflate', // uvoz PPTX-a (features/uzivo/uvoz-pptx), samo dinamički iz nastavničkog dijaloga
@@ -49,6 +49,10 @@ const ZABRANJENI_PAKETI_JAVNO = [
   'prosemirror-commands',
   'prosemirror-keymap',
   'prosemirror-history',
+  // Formule, faza 4 (F15): `mathlive/ssr` samo kroz lenji `ui/formula-markup` (projektor, konzola, editor), ceo `mathlive`
+  // samo u dijalogu formule editora (F16). Faza 5 sme da dozvoli `ui/formula-prikaz`, `ui/formula-ucitavanje` i
+  // `ui/formula-markup` javnom delu (DOZVOLJENO_PO_FEATURE), `mathlive` ostaje zabranjen za direktan uvoz.
+  'mathlive',
 ];
 
 /** Ukupan spisak dozvoljenog za javni feature: zajednički plus njegov dodatak. */

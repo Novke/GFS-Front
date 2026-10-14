@@ -9,7 +9,9 @@ import { IzvodjenjeStore, Veza } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
-import { fontoviZaPrikaz, preducitajFontove, preducitajSlike, sacekajFontove, slikeSlajda } from '../ui/preducitavanje';
+import {
+  fontoviZaPrikaz, preducitajFontove, preducitajFormule, preducitajSlike, sacekajFontove, slikeSlajda,
+} from '../ui/preducitavanje';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
@@ -108,6 +110,8 @@ export class PublikaPage {
         }
         preducitajSlike(slikeSlajda(s.sledeciSlajd));
         preducitajFontove(fontoviZaPrikaz(s.tema, [s.sledeciSlajd]));
+        // formule bez slike (MathLive, CSS, KaTeX fontovi) za trenutni i sledeći slajd (odluka 32)
+        preducitajFormule(s.trenutniSlajd, s.sledeciSlajd);
       });
     });
     inject(ActivatedRoute).paramMap.pipe(

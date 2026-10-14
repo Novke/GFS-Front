@@ -16,7 +16,7 @@ import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { TipKomande } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { kodSaRazmakom } from '../ui/format';
-import { preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
+import { preducitajFormule, preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
 import { EkranOpis, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
@@ -297,6 +297,11 @@ export class KonzolaPage {
 
     // Slike sledećeg slajda unapred (i u "Sledeće" i na umanjenom projektoru prelaz ne čeka mrežu).
     effect(() => preducitajSlike(slikeSlajda(this.store.stanje()?.sledeciSlajd ?? null)));
+    // Formule bez slike (MathLive, CSS, KaTeX fontovi) trenutnog i sledećeg slajda (odluka 32).
+    effect(() => {
+      const s = this.store.stanje();
+      if (s) untracked(() => preducitajFormule(s.trenutniSlajd, s.sledeciSlajd));
+    });
 
     // Završeno (ovom konzolom, drugim prozorom ili automatski posle 12 h): pregled ako se čuva, inače editor.
     effect(() => {

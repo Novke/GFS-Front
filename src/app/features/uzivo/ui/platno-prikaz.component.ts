@@ -7,6 +7,7 @@ import {
   Animacija, Celija, FormulaSloj, Ivica, IviceCelije, OblikSloj, Pasus, Platno, SlikaSloj, Sloj, TabelaSloj, Tacka, TekstSloj,
 } from '../data-access/platno.models';
 import { medijUrl } from '../data-access/uzivo.models';
+import { FormulaPrikazComponent } from './formula-prikaz.component';
 import { cssFonta } from './platno-fontovi';
 import { METRIKA } from './platno-metrika';
 import { pasusiZaMerenje, poravnajSveTabove, prefiksCelije, prefiksSloja } from './platno-tabovi';
@@ -343,7 +344,7 @@ function smanjenoKretanje(): boolean {
 @Component({
   selector: 'app-platno-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, FormulaPrikazComponent],
   host: {
     class: 'uz-pl-platno',
     '[style.background-color]': 'platno().pozadina.boja',
@@ -411,7 +412,7 @@ function smanjenoKretanje(): boolean {
             @if (f.slika) {
               <img [src]="f.slika" [alt]="f.latex">
             } @else {
-              <span class="uz-pl-formula-izvor" [style]="f.stil">{{ f.latex }}</span>
+              <app-formula-prikaz [latex]="f.latex" [stil]="f.stil" />
             }
           </div>
         } @else if (s.crtez; as c) {

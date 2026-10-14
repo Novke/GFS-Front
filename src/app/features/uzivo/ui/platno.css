@@ -135,6 +135,17 @@
   overflow-wrap: anywhere;
 }
 
+/* `app-formula-prikaz` (izvor ili markup MathLive-a, F15): blok, da `text-align` sloja poravna formulu. */
+.uz-pl-formula > app-formula-prikaz,
+.uz-pl-formula-izvor,
+.uz-pl-formula-markup {
+  display: block;
+}
+
+.uz-pl-formula-markup {
+  position: relative;
+}
+
 /* ---------- Oblik ---------- */
 
 .uz-pl-oblik svg {
