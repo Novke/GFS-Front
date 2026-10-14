@@ -21,7 +21,7 @@ import { type KorakPustanja, korakPreAnimacije, planPustanja } from './pregled';
         <app-platno-prikaz [platno]="store.platno()" [korak]="korak()" [animacija]="animacija()" />
       </div>
     </div>
-    <!-- disabledInteractive: na kraju koraka fokus ostaje na dugmetu (ne pada na body); čuvar je u pomeri() -->
+    <!-- disabledInteractive: na kraju koraka fokus ostaje na dugmetu (ne pada na body); čuvar je na početku pomeri() -->
     <div class="uz-ep-koraci">
       <button mat-stroked-button type="button" disabledInteractive [disabled]="korak() <= 0" (click)="pomeri(-1)">
         <mat-icon svgIcon="arrow_back" />Korak nazad
@@ -55,11 +55,14 @@ export class PregledPlatnaComponent {
     inject(DestroyRef).onDestroy(() => this.zaustavi());
   }
 
-  /** Korak nazad (bez animacije) ili napred (pušta njegovu grupu); granica ne menja ništa. Prekida puštanje. */
-  protected pomeri(razlika: number): void {
-    const k = Math.max(0, Math.min(this.ukupno(), this.korak() + razlika));
+  /**
+   * Korak nazad (bez animacije) ili napred (pušta njegovu grupu), pa prekida puštanje. Na granici (dugme onemogućeno,
+   * isti uslov kao `[disabled]`; `disabledInteractive` ne blokira klik) ne radi ništa, ni ne zaustavlja puštanje.
+   */
+  protected pomeri(razlika: 1 | -1): void {
+    if (razlika < 0 ? this.korak() <= 0 : this.korak() >= this.ukupno()) return;
     this.zaustavi();
-    if (k !== this.korak()) this.idi(k, razlika > 0);
+    this.idi(this.korak() + razlika, razlika > 0);
   }
 
   /** Od koraka `od` (0: grupa 0 se pušta odmah, kao pri ulasku na slajd) do kraja, po planu. */

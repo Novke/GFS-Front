@@ -133,6 +133,26 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     await pomeriSat(800);
   }));
 
+  it('završni talas: dok radi (Pokreni čeka PUT), klik na onemogućena dugmad (Dupliraj, Obriši, Pokreni, PowerPoint) ne radi ništa', saLaznimSatom(async () => {
+    store.izmeniSlajd(11, info('Izmenjen uvod'));
+    strana.pokreni();
+    const put = http.expectOne('api/slajdovi/11');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dugmad = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-akcije button, .uz-ed-dodaj button[aria-label="Uvezi iz PowerPointa"]')];
+    expect(dugmad.map((b) => [b.textContent!.trim(), b.getAttribute('aria-disabled')])).toEqual([
+      ['Dupliraj prezentaciju', 'true'], ['Obriši', 'true'], ['Pokreni', 'true'], ['PowerPoint', 'true'],
+    ]);
+    dugmad.forEach((b) => b.click());
+    await isprazniMikrozadatke();
+    expect(dijalog).not.toHaveBeenCalled();
+    put.flush(slajd(11, 1, 'Izmenjen uvod'));
+    http.expectOne(POKRENI).flush({ id: 77 });
+    http.expectNone('api/prezentacije/1/dupliraj');
+    expect(navigate).toHaveBeenCalledTimes(1);
+    await pomeriSat(800);
+  }));
+
   it('Dupliraj prezentaciju čeka PUT, pa kopira', saLaznimSatom(async () => {
     store.izmeniSlajd(11, info('Poslednja izmena'));
     strana.duplirajPrezentaciju();

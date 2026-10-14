@@ -103,6 +103,25 @@ describe('PregledPlatnaComponent (F18)', () => {
     expect(vi.getTimerCount()).toBe(0);
   }));
 
+  it('završni talas: klik na onemogućeno dugme (Korak nazad na 0, Pusti od izabrane bez izbora) ne zaustavlja puštanje', saLaznimSatom(async () => {
+    klik('Pusti slajd');
+    for (const d of ['Korak nazad', 'Pusti od izabrane']) {
+      expect([d, dugme(d).getAttribute('aria-disabled')]).toEqual([d, 'true']);
+      klik(d);
+    }
+    expect(status()).toBe('Korak 0 / 2');
+    await sat(900);
+    expect(status()).toBe('Korak 1 / 2');
+    await sat(900);
+    expect(status()).toBe('Korak 2 / 2');
+    // na kraju: Korak napred onemogućen, klik ništa
+    animate.mockClear();
+    expect(dugme('Korak napred').getAttribute('aria-disabled')).toBe('true');
+    klik('Korak napred');
+    expect(status()).toBe('Korak 2 / 2');
+    expect(animate).not.toHaveBeenCalled();
+  }));
+
   it('Zaustavi posle 100 ms: nijedan korak dalje', saLaznimSatom(async () => {
     klik('Pusti slajd');
     await sat(100);

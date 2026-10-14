@@ -85,7 +85,7 @@ const ZINDEX_TASTATURE = '1100';
           <div class="uz-fd-vizuelno">
             <math-field #mf tabindex="0" math-virtual-keyboard-policy="manual" aria-label="Formula (vizuelno)"
                         (input)="izPolja($event)" (beforeinput)="preUnosa($event)" (mount)="fokusPolja()"></math-field>
-            <button mat-stroked-button type="button" disabledInteractive [attr.aria-pressed]="tastaturaVidljiva()"
+            <button mat-stroked-button type="button" [attr.aria-pressed]="tastaturaVidljiva()"
                     (click)="prebaciTastaturu()"><mat-icon svgIcon="keyboard" />Tastatura</button>
           </div>
         }

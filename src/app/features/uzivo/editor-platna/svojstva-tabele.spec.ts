@@ -167,6 +167,30 @@ describe('SvojstvaTabeleComponent (kroz panel Svojstva)', () => {
     expect(tabela().celije[0][0].pasusi[0].delovi[0].velicina).toBe(30);
   });
 
+  /*
+   * Završni talas 4b: `disabledInteractive` ne blokira klik, pa handler proverava isti uslov kao `[disabled]`. Klik na
+   * onemogućeno dugme: bez poruke (ne "2880" ni "zaključan"), isti dokument, bez koraka istorije.
+   */
+  const SVA_DUGMAD = ['Ubaci red iznad', 'Ubaci red ispod', 'Ubaci kolonu levo', 'Ubaci kolonu desno', 'Obriši red',
+    'Obriši kolonu', 'Spoji ćelije', 'Razdvoji', 'Primeni ivice'];
+  it.each([
+    { slucaj: 'zaključana tabela', zakljucan: true, celija: { r: 0, k: 0 } as { r: number; k: number } | null, dugmad: SVA_DUGMAD },
+    { slucaj: 'opseg = cela tabela (bez izbora ćelija)', zakljucan: false, celija: null, dugmad: ['Obriši red', 'Obriši kolonu', 'Razdvoji'] },
+    { slucaj: 'jedna ćelija bez spajanja', zakljucan: false, celija: { r: 1, k: 1 }, dugmad: ['Spoji ćelije', 'Razdvoji'] },
+  ])('klik na onemogućeno dugme ne radi ništa: $slucaj', async ({ zakljucan, celija, dugmad }) => {
+    await pocni({ ...novaTabela('T', 'NACRT', 2, 2), zakljucan }, celija);
+    const pre = store.platno();
+    for (const ime of dugmad) {
+      const b = dugme(panel(), ime)!;
+      expect([ime, b.getAttribute('aria-disabled')]).toEqual([ime, 'true']);
+      b.click();
+      await fixture.whenStable();
+    }
+    expect(poruke.map((p) => p.tekst)).toEqual([]);
+    expect(store.platno()).toBe(pre);
+    expect(store.mozeNazad()).toBe(false);
+  });
+
   it('zaključana tabela: dugmad onemogućena', async () => {
     await pocni({ ...novaTabela('T', 'NACRT', 2, 2), zakljucan: true }, { r: 0, k: 0 });
     expect(dugme(panel(), 'Ubaci red ispod')!.getAttribute('aria-disabled')).toBe('true');

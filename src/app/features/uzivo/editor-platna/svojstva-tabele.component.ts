@@ -3,6 +3,8 @@
 // obriši), spajanje i razdvajanje, popuna, ivice (vrsta, boja, debljina, "Primeni"), sidro, širina kolone i visina reda.
 // Radnja koja bi prešla 30 redova/kolona ili 2880 se odbija porukom (`NotificationStore`) i ne menja dokument; svaka
 // uspela radnja je jedan korak istorije (polja mera: isti ključ u roku od 1 s). Tekst opsega menja panel teksta ispod.
+// Dugmad su `disabledInteractive` (fokus ostaje na njima), a to NE blokira klik: svaki handler proverava isti uslov kao
+// `[disabled]` (npr. "Obriši red" nad svim redovima ne sme da javi poruku o 2880).
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -19,6 +21,7 @@ import {
   MAX_KOLONA, MAX_REDOVA, type Opseg, PREVELIKA_TABELA, type VrstaIvica, dodajKolonu, dodajRed, izmeniCelije, obrisiKolonu,
   obrisiRed, postaviIvice, razdvoji, sirinaKolone, spoji, visinaReda,
 } from './tabela';
+import { jedna } from './tekst/stil-teksta';
 
 const VRSTE_IVICA: readonly { v: VrstaIvica; naziv: string }[] = [
   { v: 'SVE', naziv: 'Sve' }, { v: 'SPOLJNE', naziv: 'Spoljne' }, { v: 'UNUTRASNJE', naziv: 'Unutrašnje' }, { v: 'NIJEDNA', naziv: 'Bez ivica' },
@@ -31,11 +34,6 @@ const SIDRA: readonly { v: Sidro; naziv: string; ikona: string }[] = [
 const POLJA_OPSEGA: readonly { k: keyof Opseg; naziv: string }[] = [
   { k: 'r1', naziv: 'Od reda' }, { k: 'r2', naziv: 'Do reda' }, { k: 'k1', naziv: 'Od kolone' }, { k: 'k2', naziv: 'Do kolone' },
 ];
-
-/** Jedna vrednost ako je ista za sve, inače null (mešano). */
-function jedna<T>(v: readonly T[]): T | null {
-  return v.length && v.every((x) => x === v[0]) ? v[0] : null;
-}
 
 @Component({
   selector: 'app-svojstva-tabele',
@@ -56,12 +54,12 @@ function jedna<T>(v: readonly T[]): T | null {
       <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajRed(o.r2)">Ubaci red ispod</button>
       <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajKolonu(o.k1 - 1)">Ubaci kolonu levo</button>
       <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajKolonu(o.k2)">Ubaci kolonu desno</button>
-      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || o.r2 - o.r1 + 1 >= redova()" (click)="obrisiRedove()">Obriši red</button>
-      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || o.k2 - o.k1 + 1 >= kolona()" (click)="obrisiKolone()">Obriši kolonu</button>
-      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || !viseCelija()" (click)="izmeni(spojeno)">
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="!moze().red" (click)="obrisiRedove()">Obriši red</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="!moze().kolona" (click)="obrisiKolone()">Obriši kolonu</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="!moze().spoji" (click)="spojiCelije()">
         <mat-icon svgIcon="cell_merge" />Spoji ćelije
       </button>
-      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || !imaSpajanje()" (click)="izmeni(razdvojeno)">Razdvoji</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="!moze().razdvoji" (click)="razdvojiCelije()">Razdvoji</button>
     </div>
     <app-izbor-boje oznaka="Popuna ćelija" [tema]="tema()" [vrednost]="popuna()" [dozvoliPrazno]="true" [onemoguceno]="z"
                     (izbor)="celijama({ popuna: $event })" />
@@ -124,8 +122,16 @@ export class SvojstvaTabeleComponent {
     const { r1, k1, r2, k2 } = this.opseg();
     return this.sloj().celije.slice(r1, r2 + 1).flatMap((red) => red.slice(k1, k2 + 1)).filter((c) => !c.pokrivena);
   });
-  protected readonly viseCelija = computed(() => this.vlasnici().length > 1);
-  protected readonly imaSpajanje = computed(() => this.vlasnici().some((c) => c.spojDesno || c.spojDole));
+  /** Uslovi `[disabled]` dugmadi; isti uslov čuva i handler (`disabledInteractive` ne blokira klik). */
+  protected readonly moze = computed(() => {
+    const o = this.opseg();
+    const z = this.sloj().zakljucan;
+    const v = this.vlasnici();
+    return {
+      red: !z && o.r2 - o.r1 + 1 < this.redova(), kolona: !z && o.k2 - o.k1 + 1 < this.kolona(),
+      spoji: !z && v.length > 1, razdvoji: !z && v.some((c) => c.spojDesno || c.spojDole),
+    };
+  });
   protected readonly popuna = computed(() => jedna(this.vlasnici().map((c) => c.popuna)));
   protected readonly sidro = computed(() => jedna(this.vlasnici().map((c) => c.sidro)));
   protected readonly sirina = computed(() => jedna(this.sloj().kolone.slice(this.opseg().k1, this.opseg().k2 + 1)));
@@ -137,13 +143,19 @@ export class SvojstvaTabeleComponent {
   protected readonly bojaTeme = computed(() => TEME[this.tema()].tekst);
   protected readonly debljinaIvica = signal(1);
 
-  protected readonly spojeno = (t: TabelaSloj) => spoji(t, this.opseg());
-  protected readonly razdvojeno = (t: TabelaSloj) => {
+  protected spojiCelije(): void {
+    if (this.moze().spoji) this.izmeni((t) => spoji(t, this.opseg()));
+  }
+
+  protected razdvojiCelije(): void {
+    if (!this.moze().razdvoji) return;
     const { r1, k1, r2, k2 } = this.opseg();
-    let n = t;
-    for (let r = r1; r <= r2; r++) for (let k = k1; k <= k2; k++) n = razdvoji(n, { r, k });
-    return n;
-  };
+    this.izmeni((t) => {
+      let n = t;
+      for (let r = r1; r <= r2; r++) for (let k = k1; k <= k2; k++) n = razdvoji(n, { r, k });
+      return n;
+    });
+  }
 
   /** Izmena izabrane tabele kao jedan korak; null iz `f` = odbijeno (poruka), dokument ostaje isti. */
   protected izmeni(f: (t: TabelaSloj) => TabelaSloj | null, poruka = PREVELIKA_TABELA, kljuc?: string): void {
@@ -164,17 +176,20 @@ export class SvojstvaTabeleComponent {
   }
 
   protected dodajRed(posle: number): void {
+    if (this.sloj().zakljucan) return;
     this.izmeni((t) => dodajRed(t, posle),
       this.redova() >= MAX_REDOVA ? `Tabela može imati najviše ${MAX_REDOVA} redova.` : PREVELIKA_TABELA);
   }
 
   protected dodajKolonu(posle: number): void {
+    if (this.sloj().zakljucan) return;
     this.izmeni((t) => dodajKolonu(t, posle),
       this.kolona() >= MAX_KOLONA ? `Tabela može imati najviše ${MAX_KOLONA} kolona.` : PREVELIKA_TABELA);
   }
 
   /** Briše redove opsega odozdo (indeksi gornjih se ne pomeraju); ceo opseg sme da ostavi bar jedan red (dugme). */
   protected obrisiRedove(): void {
+    if (!this.moze().red) return;
     const { r1, r2 } = this.opseg();
     this.izmeni((t) => {
       let n: TabelaSloj | null = t;
@@ -184,6 +199,7 @@ export class SvojstvaTabeleComponent {
   }
 
   protected obrisiKolone(): void {
+    if (!this.moze().kolona) return;
     const { k1, k2 } = this.opseg();
     this.izmeni((t) => {
       let n: TabelaSloj | null = t;
@@ -199,6 +215,7 @@ export class SvojstvaTabeleComponent {
   }
 
   protected primeniIvice(): void {
+    if (this.sloj().zakljucan) return;
     const ivica = { boja: this.bojaIvica() ?? this.bojaTeme(), debljina: this.debljinaIvica(), crtica: 'PUNA' as const };
     this.izmeni((t) => postaviIvice(t, this.opseg(), this.vrstaIvica(), ivica));
   }

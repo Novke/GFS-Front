@@ -331,6 +331,8 @@ describe('FormulaDialog', () => {
     await ucitano();
     const t = dugme('Tastatura');
     expect(t.getAttribute('aria-pressed')).toBe('false');
+    // završni talas: `disabledInteractive` bez `[disabled]` nema smisla (dugme nikad nije onemogućeno)
+    expect(t.classList).not.toContain('mat-mdc-button-disabled-interactive');
     t.click();
     TestBed.tick();
     expect(tastatura.show).toHaveBeenCalled();
