@@ -52,16 +52,16 @@ function jedna<T>(v: readonly T[]): T | null {
       }
     </div>
     <div class="uz-ep-dugmad">
-      <button mat-stroked-button type="button" [disabled]="z" (click)="dodajRed(o.r1 - 1)">Ubaci red iznad</button>
-      <button mat-stroked-button type="button" [disabled]="z" (click)="dodajRed(o.r2)">Ubaci red ispod</button>
-      <button mat-stroked-button type="button" [disabled]="z" (click)="dodajKolonu(o.k1 - 1)">Ubaci kolonu levo</button>
-      <button mat-stroked-button type="button" [disabled]="z" (click)="dodajKolonu(o.k2)">Ubaci kolonu desno</button>
-      <button mat-stroked-button type="button" [disabled]="z || o.r2 - o.r1 + 1 >= redova()" (click)="obrisiRedove()">Obriši red</button>
-      <button mat-stroked-button type="button" [disabled]="z || o.k2 - o.k1 + 1 >= kolona()" (click)="obrisiKolone()">Obriši kolonu</button>
-      <button mat-stroked-button type="button" [disabled]="z || !viseCelija()" (click)="izmeni(spojeno)">
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajRed(o.r1 - 1)">Ubaci red iznad</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajRed(o.r2)">Ubaci red ispod</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajKolonu(o.k1 - 1)">Ubaci kolonu levo</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z" (click)="dodajKolonu(o.k2)">Ubaci kolonu desno</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || o.r2 - o.r1 + 1 >= redova()" (click)="obrisiRedove()">Obriši red</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || o.k2 - o.k1 + 1 >= kolona()" (click)="obrisiKolone()">Obriši kolonu</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || !viseCelija()" (click)="izmeni(spojeno)">
         <mat-icon svgIcon="cell_merge" />Spoji ćelije
       </button>
-      <button mat-stroked-button type="button" [disabled]="z || !imaSpajanje()" (click)="izmeni(razdvojeno)">Razdvoji</button>
+      <button mat-stroked-button type="button" disabledInteractive [disabled]="z || !imaSpajanje()" (click)="izmeni(razdvojeno)">Razdvoji</button>
     </div>
     <app-izbor-boje oznaka="Popuna ćelija" [tema]="tema()" [vrednost]="popuna()" [dozvoliPrazno]="true" [onemoguceno]="z"
                     (izbor)="celijama({ popuna: $event })" />
@@ -77,7 +77,7 @@ function jedna<T>(v: readonly T[]): T | null {
     <div class="uz-ep-polja">
       <app-brojcano-polje oznaka="Debljina ivica" jedinica="pt" [vrednost]="debljinaIvica()" [min]="0.25" [max]="20"
                           [onemoguceno]="z" (promena)="debljinaIvica.set($event)" />
-      <button mat-stroked-button type="button" aria-label="Primeni ivice" [disabled]="z" (click)="primeniIvice()">
+      <button mat-stroked-button type="button" aria-label="Primeni ivice" disabledInteractive [disabled]="z" (click)="primeniIvice()">
         <mat-icon svgIcon="border_all" />Primeni
       </button>
     </div>

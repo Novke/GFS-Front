@@ -206,27 +206,56 @@ export function izmeniCelije(t: TabelaSloj, o: Opseg, f: (c: Celija) => Celija):
   return celije ? { ...t, celije } : t;
 }
 
+const istaIvica = (a: Ivica | null, b: Ivica | null) =>
+  a === b || (!!a && !!b && a.boja === b.boja && a.debljina === b.debljina && a.crtica === b.crtica);
+
 /**
  * Ivice vlasnika u (proširenom) opsegu: SVE = sve četiri strane, SPOLJNE = samo strane na rubu opsega (ostale null),
- * UNUTRASNJE = samo strane unutar opsega (rub null), NIJEDNA = sve null (`ivica` se ne gleda).
+ * UNUTRASNJE = samo strane unutar opsega (rub null), NIJEDNA = sve null (`ivica` se ne gleda). Rub opsega dobija istu
+ * vrednost i na suprotnoj strani suseda van opsega (prikaz crta širu od dve ivice deljene linije, `border-collapse`), pa
+ * posle "Bez ivica" nema ruba ni sa jedne strane. Ćelija sa istim ivicama ostaje isti objekat; bez promene isti `t`.
  */
 export function postaviIvice(t: TabelaSloj, o: Opseg, vrsta: VrstaIvica, ivica: Ivica | null): TabelaSloj {
   const g = prosiriOpseg(t, o);
   const iv = vrsta === 'NIJEDNA' ? null : ivica;
   const strana = (rub: boolean) => (vrsta === 'SVE' || (vrsta === 'SPOLJNE') === rub ? iv : null);
-  const celije = t.celije.map((red) => [...red]);
+  let celije: Celija[][] | null = null;
+  const postavi = (r: number, k: number, izmena: Partial<IviceCelije>) => {
+    const c = (celije ?? t.celije)[r][k];
+    const strane = Object.keys(izmena) as (keyof IviceCelije)[];
+    if (strane.every((s) => istaIvica(c.ivice[s], izmena[s] ?? null))) return;
+    celije ??= t.celije.map((red) => [...red]);
+    celije[r][k] = { ...c, ivice: { ...c.ivice, ...izmena } };
+  };
+  const sused = (r: number, k: number, izmena: Partial<IviceCelije>) => {
+    const v = vlasnik(t, r, k);
+    postavi(v.r, v.k, izmena);
+  };
+  const R = t.redovi.length;
+  const K = t.kolone.length;
   for (let r = g.r1; r <= g.r2; r++) {
     for (let k = g.k1; k <= g.k2; k++) {
       const c = t.celije[r][k];
       if (c.pokrivena) continue;
-      const ivice: IviceCelije = {
-        gore: strana(r === g.r1), dole: strana(r + c.spojDole === g.r2),
-        levo: strana(k === g.k1), desno: strana(k + c.spojDesno === g.k2),
-      };
-      celije[r][k] = { ...c, ivice };
+      const dno = r + c.spojDole;
+      const desno = k + c.spojDesno;
+      const gore = strana(r === g.r1);
+      const dole = strana(dno === g.r2);
+      const levo = strana(k === g.k1);
+      const desnaIvica = strana(desno === g.k2);
+      postavi(r, k, { gore, dole, levo, desno: desnaIvica });
+      // susedi van opsega (opseg je proširen, pa se njihova ivica poklapa sa rubom)
+      for (let j = k; j <= desno; j++) {
+        if (r === g.r1 && r > 0) sused(r - 1, j, { dole: gore });
+        if (dno === g.r2 && dno < R - 1) sused(dno + 1, j, { gore: dole });
+      }
+      for (let i = r; i <= dno; i++) {
+        if (k === g.k1 && k > 0) sused(i, k - 1, { desno: levo });
+        if (desno === g.k2 && desno < K - 1) sused(i, desno + 1, { levo: desnaIvica });
+      }
     }
   }
-  return { ...t, celije };
+  return celije ? { ...t, celije } : t;
 }
 
 /** Širina kolone `k`; širina sloja = zbir kolona; null preko 2880. */

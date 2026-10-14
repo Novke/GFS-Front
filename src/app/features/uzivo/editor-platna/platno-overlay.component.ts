@@ -7,7 +7,9 @@
 // stigne ovde je van sloja u uređivanju: prvo završava uređivanje, pa radi izbor. Tabela (F14): klik u izabranu (ili
 // upravo izabranu) tabelu bira ćeliju po nacrtanim `td[data-celija]`, Shift+klik širi opseg, dvoklik uređuje ćeliju.
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, signal, untracked,
+} from '@angular/core';
 import type { OblikSloj, Platno, Sloj, TabelaSloj, Tacka } from '../data-access/platno.models';
 import { stilSloja } from '../ui/platno-prikaz.component';
 import { jedinice, type Stil } from '../ui/platno-tekst';
@@ -20,7 +22,7 @@ import {
 import { izmeniSlojeve, pomeriSlojeve, postaviKutiju } from './komande';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PoKadru, RASPORED_KADRA } from './po-kadru';
-import { type Polje, celijaNaTacki, pravougaoniciTabele } from './tabela';
+import { type Polje, type PravougaonikCelije, celijaNaTacki, pravougaoniciTabele } from './tabela';
 
 /** Pomeraj pokazivača (px) do kog je pritisak pa puštanje i dalje klik (i do kog gest ne počinje). */
 const PRAG_KLIKA_PX = 3;
@@ -266,7 +268,11 @@ export class PlatnoOverlayComponent {
     const s = this.store.jedan();
     const o = this.store.opsegCelijaIzbora();
     if (s?.tip !== 'TABELA' || !o || this.store.uredjivanje()) return null;
-    const u = pravougaoniciTabele(this.host.closest('.uz-platno'), s)
+    // izmereno posle crtanja za ovaj sadržaj tabele; do tada (i bez merenja) mere modela
+    const m = this.mereTabele();
+    const sve = m && m.id === s.id && m.celije === s.celije && m.kolone === s.kolone && m.redovi === s.redovi
+      ? m.pravougaonici : pravougaoniciTabele(null, s);
+    const u = sve
       .filter((c) => c.polje.r >= o.r1 && c.polje.r <= o.r2 && c.polje.k >= o.k1 && c.polje.k <= o.k2);
     if (!u.length) return null;
     const x = Math.min(...u.map((c) => c.x));
@@ -275,6 +281,15 @@ export class PlatnoOverlayComponent {
     const visina = Math.max(...u.map((c) => c.y + c.h)) - y;
     return { sloj: okvirSloja(s), opseg: stilObuhvata({ x, y, sirina, visina }) };
   });
+  /** Takt učitavanja fontova (`document.fonts` `loadingdone`): drugi font menja visine redova, pa se ćelije mere ponovo. */
+  private readonly fontovi = signal(0);
+  /**
+   * Nacrtani pravougaonici ćelija izabrane tabele, izmereni POSLE crtanja i vezani za njen sadržaj (ćelije, kolone,
+   * redovi) i takt fontova: pomeranje sloja ih ne menja, pa prevlačenje ne radi prinudni raspored po kadru (odluka 33).
+   */
+  private readonly mereTabele = signal<{
+    id: string; celije: unknown; kolone: unknown; redovi: unknown; fontovi: number; pravougaonici: PravougaonikCelije[];
+  } | null>(null);
   protected readonly prazni = computed(() =>
     this.store.zaPrikaz().slojevi.filter(prazanTekst).map((s) => ({ id: s.id, stil: okvirSloja(s) })));
   protected readonly pravougaonik = computed(() => {
@@ -286,10 +301,27 @@ export class PlatnoOverlayComponent {
   constructor() {
     const raspored = inject(RASPORED_KADRA);
     this.kadar = new PoKadru<Pokret>((v) => this.obradi(v), (f) => raspored.zakazi(f), (id) => raspored.otkazi(id));
+    const fontovi = this.dokument.fonts as FontFaceSet | undefined;
+    const naFont = () => this.fontovi.update((n) => n + 1);
+    fontovi?.addEventListener('loadingdone', naFont);
+    afterRenderEffect({
+      read: () => {
+        const s = this.store.jedan();
+        const f = this.fontovi();
+        if (s?.tip !== 'TABELA' || !this.store.opsegCelijaIzbora() || this.store.uredjivanje()) return;
+        const m = untracked(this.mereTabele);
+        if (m && m.id === s.id && m.celije === s.celije && m.kolone === s.kolone && m.redovi === s.redovi && m.fontovi === f) return;
+        this.mereTabele.set({
+          id: s.id, celije: s.celije, kolone: s.kolone, redovi: s.redovi, fontovi: f,
+          pravougaonici: pravougaoniciTabele(this.host.closest('.uz-platno'), s),
+        });
+      },
+    });
     // uništavanje usred gesta: ono što čeka se odbacuje, a store sam završava i čuva gest (onDestroy -> isprazni)
     inject(DestroyRef).onDestroy(() => {
       this.kadar.prekini();
       this.dokument.removeEventListener('keydown', this.naEsc, true);
+      fontovi?.removeEventListener('loadingdone', naFont);
     });
   }
 

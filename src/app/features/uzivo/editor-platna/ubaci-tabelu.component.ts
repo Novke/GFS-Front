@@ -1,6 +1,6 @@
 // "Tabela" u traci (F14, odluka 23): dugme otvara CDK popover (ne `mat-menu`: meni se zatvara na klik i njegov typeahead
 // guta cifre) sa poljima Redova i Kolona (1-30, podrazumevano 3) i dugmetom "Ubaci" (i Enter). Fokus: na otvaranju prvo
-// polje; Esc i klik van vraćaju ga na dugme; posle "Ubaci" ga traka prebacuje na okvir platna (i kad je ubacivanje
+// polje (sadržaj izabran); Esc i klik van vraćaju ga na dugme; posle "Ubaci" ga traka prebacuje na okvir platna (i kad je ubacivanje
 // odbijeno), pa zamka fokusa namerno nema `autoCapture` (njeno vraćanje fokusa na dugme bi to pregazilo).
 import { A11yModule } from '@angular/cdk/a11y';
 import { CdkConnectedOverlay, CdkOverlayOrigin } from '@angular/cdk/overlay';
@@ -76,7 +76,12 @@ export class UbaciTabeluComponent {
 
   protected otvori(): void {
     this.otvoreno.set(true);
-    afterNextRender(() => this.prvo()?.nativeElement.focus(), { injector: this.injector });
+    // sadržaj izabran: kucanje "5" zamenjuje podrazumevano "3" (ne daje "35")
+    afterNextRender(() => {
+      const polje = this.prvo()?.nativeElement;
+      polje?.focus();
+      polje?.select();
+    }, { injector: this.injector });
   }
 
   /** Esc, klik van ili ponovni klik na dugme: bez ubacivanja, fokus na dugme. */

@@ -8,7 +8,8 @@ import { NotificationStore, type Poruka } from '../../../core/state/notification
 import { EditorStore } from '../data-access/editor.store';
 import { By } from '@angular/platform-browser';
 import type { Platno, TabelaSloj, TekstSloj } from '../data-access/platno.models';
-import { pasus, platno } from '../data-access/platno-podaci.testing';
+import { celija, pasus, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { novaTabela } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
@@ -67,6 +68,14 @@ describe('PlatnoEditorComponent', () => {
       if (n.isText) f.push(n.marks.find((m) => m.type.name === 'stil')!.attrs['font'] as string);
     });
     return [...new Set(f)];
+  };
+
+  /** Dugme trake po `aria-label`-u. */
+  const dugmeTrake = (ime: string) => el().querySelector<HTMLButtonElement>(`app-traka-alata button[aria-label="${ime}"]`)!;
+  /** Pravi uređivač: ProseMirror view i njegov tekst. */
+  const kucajNaKraj = (tekst: string) => {
+    const v = pogled();
+    v.dispatch(v.state.tr.insertText(tekst, v.state.doc.content.size - 1));
   };
 
   beforeEach(async () => {
@@ -610,6 +619,43 @@ describe('PlatnoEditorComponent', () => {
       expect(store.uredjivanje()).not.toBeNull();
     });
 
+    it('Poništi/Ponovi na traci tokom sesije: prvo istorija teksta (sesija ostaje), pa platno (sesija se završava)', async () => {
+      store.preimenuj('slika', 'Pozadina');
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      lazni.izmeniPlatno.mockClear();
+      const pocetak = pogled().state.doc.textContent;
+      kucajNaKraj('X');
+      await fixture.whenStable();
+      expect(dugmeTrake('Ponovi').getAttribute('aria-disabled')).toBe('true');
+      dugmeTrake('Poništi').click();
+      await fixture.whenStable();
+      expect(pogled().state.doc.textContent).toBe(pocetak);
+      expect(store.uredjivanje()).not.toBeNull();
+      expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+      expect(dugmeTrake('Ponovi').getAttribute('aria-disabled')).not.toBe('true');
+      dugmeTrake('Ponovi').click();
+      await fixture.whenStable();
+      expect(pogled().state.doc.textContent).toBe(pocetak + 'X');
+      dugmeTrake('Poništi').click();
+      // istorija teksta je prazna: sledeći Poništi ide na platno (sesija se završava, naziv se vraća)
+      dugmeTrake('Poništi').click();
+      await fixture.whenStable();
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.platno().slojevi.find((x) => x.id === 'slika')!.naziv).toBeNull();
+    });
+
+    it('dugme Poništi je omogućeno tokom sesije čim tekst ima korak, i kad platno nema nijedan', async () => {
+      await samoTekst();
+      dvoklik(50, 50);
+      await fixture.whenStable();
+      expect(dugmeTrake('Poništi').getAttribute('aria-disabled')).toBe('true');
+      kucajNaKraj('X');
+      await fixture.whenStable();
+      expect(dugmeTrake('Poništi').getAttribute('aria-disabled')).not.toBe('true');
+    });
+
     it('F13: panel teksta tokom uređivanja: Ctrl+A, pa B iz panela (fokus ostaje u tekstu), pa Esc -> tekst podebljan', async () => {
       await samoTekst();
       dvoklik(50, 50);
@@ -877,6 +923,52 @@ describe('PlatnoEditorComponent', () => {
       await fixture.whenStable();
       expect(tekstCelije(0, 1)).toEqual(['AX']);
       expect(tabela().celije[0][1].pasusi[0].delovi.map((d) => d.font)).not.toContain('Tinos');
+    });
+
+    it('Fix m1: uređivač ćelije meri pravougaonik POSLE crtanja prikaza (red raširen tekstom) i ima min-height', async () => {
+      // lažan raspored: visina td = 10 po znaku teksta, red 1 počinje ispod reda 0 (mere tek nacrtanog DOM-a)
+      const znakova = (td: Element | null | undefined) => (td?.textContent ?? '').length;
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'TD' ? 100 : 0;
+      });
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'TD' ? 10 * znakova(this) : 0;
+      });
+      vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
+        return this.dataset['celija'] === '1-0' ? 10 * znakova(this.closest('table')?.querySelector('[data-celija="0-0"]')) : 0;
+      });
+      const t: TabelaSloj = {
+        ...novaTabela('T', 'NACRT', 2, 1), x: 0, y: 0, kolone: [100], sirina: 100, redovi: [40, 40], visina: 80,
+        celije: [[celija('A')], [celija('B')]],
+      };
+      store.inicijalizuj(platnoSaAnimacijama([], [t]));
+      await fixture.whenStable();
+      store.izaberi(['T']);
+      store.izaberiCeliju({ r: 0, k: 0 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      kucaj('XXXXX');
+      taster(uredjivac()!, 'Tab');
+      await fixture.whenStable();
+      await fixture.whenStable();
+      expect(store.uredjivanje()?.celija).toEqual({ r: 1, k: 0 });
+      const c = el().querySelector<HTMLElement>('.uz-ep-uredjivanje .uz-ep-celija')!;
+      expect(c.style.top).toBe('calc(var(--u) * 60)');
+      expect(c.style.minHeight).toBe('calc(var(--u) * 10)');
+      expect(c.style.height).toBe('');
+    });
+
+    it('Poništi na traci u ćeliji: prvo istorija teksta ćelije', async () => {
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      kucaj('X');
+      await fixture.whenStable();
+      dugmeTrake('Poništi').click();
+      await fixture.whenStable();
+      expect(pogled().state.doc.textContent).toBe('A');
+      expect(store.uredjivanje()?.celija).toEqual({ r: 0, k: 1 });
     });
 
     it('Tab u ćeliji prelazi na sledeću (tekst je korak), Shift+Tab nazad; poslednja + Tab ostaje', async () => {

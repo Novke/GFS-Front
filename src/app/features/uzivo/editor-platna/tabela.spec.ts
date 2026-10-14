@@ -224,6 +224,32 @@ describe('tabela', () => {
       expect(t.celije[2][2].ivice.gore).not.toBeNull(); // van opsega netaknuto
     });
 
+    it('Fix m3: iste ivice -> isti objekat (bez koraka); ćelije sa istim ivicama ostaju isti objekti', () => {
+      const t = postaviIvice(tabela(), { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SVE', ivica);
+      expect(postaviIvice(t, { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SVE', { ...ivica })).toBe(t);
+      const t2 = postaviIvice(t, { r1: 0, k1: 0, r2: 0, k2: 0 }, 'SVE', { ...ivica, debljina: 3 });
+      expect(t2.celije[1][1]).toBe(t.celije[1][1]);
+      expect(t2.celije[2][2]).toBe(t.celije[2][2]);
+    });
+
+    it('Fix m4: rub opsega usklađuje suprotnu stranu suseda; posle NIJEDNA nema ruba ni sa jedne strane', () => {
+      const t0 = tabela();
+      const t = postaviIvice(t0, { r1: 1, k1: 1, r2: 1, k2: 1 }, 'NIJEDNA', null);
+      expect(t.celije[0][1].ivice.dole).toBeNull();
+      expect(t.celije[2][1].ivice.gore).toBeNull();
+      expect(t.celije[1][0].ivice.desno).toBeNull();
+      expect(t.celije[1][2].ivice.levo).toBeNull();
+      expect(t.celije[0][1].ivice.gore).not.toBeNull();   // ostale strane suseda netaknute
+      expect(t.celije[0][0]).toBe(t0.celije[0][0]);   // ugao nije sused po strani
+      const s = postaviIvice(tabela(), { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SPOLJNE', ivica);
+      expect([s.celije[2][0].ivice.gore, s.celije[2][1].ivice.gore, s.celije[0][2].ivice.levo, s.celije[1][2].ivice.levo])
+        .toEqual([ivica, ivica, ivica, ivica]);
+      // sused preko spajanja: vlasnik (2,0)-(2,1) dobija ivicu jednom
+      const sp = postaviIvice(saSpajanjem(tabela(), 2, 0, 0, 1), { r1: 0, k1: 0, r2: 1, k2: 1 }, 'SPOLJNE', ivica);
+      expect(sp.celije[2][0].ivice.gore).toEqual(ivica);
+      proveriMrezu(sp);
+    });
+
     it('UNUTRASNJE, SVE i NIJEDNA', () => {
       const o = { r1: 0, k1: 0, r2: 1, k2: 1 };
       expect(postaviIvice(tabela(), o, 'UNUTRASNJE', ivica).celije[0][0].ivice).toEqual({ gore: null, levo: null, dole: ivica, desno: ivica });

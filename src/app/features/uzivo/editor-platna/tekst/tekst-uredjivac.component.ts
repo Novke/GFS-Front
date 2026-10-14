@@ -9,7 +9,7 @@ import {
   afterNextRender, computed, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
 import type { Node as PmCvor } from 'prosemirror-model';
-import { closeHistory, redo, undo } from 'prosemirror-history';
+import { closeHistory, redo, redoDepth, undo, undoDepth } from 'prosemirror-history';
 import { type Command, EditorState, Selection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { NotificationStore } from '../../../../core/state/notification.store';
@@ -52,6 +52,8 @@ export interface KomandeTeksta {
    */
   ponisti(): boolean;
   ponovi(): boolean;
+  /** Ima li istorija uređivača korak nazad / napred (dugmad Poništi/Ponovi na traci tokom sesije). */
+  readonly istorija: Signal<{ nazad: boolean; napred: boolean }>;
 }
 
 /** Id skrivenog opisa tastera uređivača (u šablonu editora platna). */
@@ -60,10 +62,13 @@ export const ID_POMOCI_TEKSTA = 'uz-ep-tekst-pomoc';
 /**
  * Stil uređivača (globalan: `ViewEncapsulation.None`). Svako pravilo počinje sa `.uz-ep-uredjivanje` (sloj za uređivanje
  * editora), nikad golo `.uz-pl-*`, jer bi inače pogodilo i projektor. `prosemirror-view/style/prosemirror.css` se ne
- * uvozi (odluka 4): ovde su samo pravila koja uređivaču trebaju; `font-variant-ligatures` ostaje kao u prikazu.
+ * uvozi (odluka 4): ovde su samo pravila koja uređivaču trebaju; `font-variant-ligatures` ostaje kao u prikazu. U ćeliji
+ * tabele (F14) sadržaj je u toku (ne `inset: 0`), pa ćelija uređivača raste dok se kuca (najmanja visina je ćelija).
  */
 export const STIL_UREDJIVACA = `
 .uz-ep-uredjivanje { pointer-events: none; }
+.uz-ep-uredjivanje .uz-ep-celija > app-tekst-uredjivac { display: flex; flex-direction: column; flex: 1 0 auto; }
+.uz-ep-uredjivanje .uz-ep-celija .uz-pl-sadrzaj { position: relative; inset: auto; flex: 1 0 auto; }
 .uz-ep-uredjivanje .uz-pl-sloj { pointer-events: auto; outline: 1px dashed var(--primary); }
 .uz-ep-uredjivanje .uz-pl-tekst {
   white-space: pre-wrap; word-wrap: break-word; outline: none; caret-color: currentColor; cursor: text;
@@ -118,6 +123,7 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
   private podrazumevano!: AtributiDela;
   private readonly brojac = { n: 0 };
   private readonly stanje = signal<StanjeSelekcije>(PRAZNO_STANJE);
+  private readonly koraci = signal({ nazad: false, napred: false }, { equal: (a, b) => a.nazad === b.nazad && a.napred === b.napred });
 
   readonly komande: KomandeTeksta = {
     presek: () => this.presek(),
@@ -131,6 +137,7 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     fokus: () => this.view?.focus(),
     ponisti: () => this.istorija(undo),
     ponovi: () => this.istorija(redo),
+    istorija: this.koraci.asReadonly(),
   };
 
   constructor() {
@@ -208,6 +215,7 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     view.updateState(s);
     this.dok = s.doc;
     this.stanje.set(stanjeSelekcije(s));
+    this.koraci.set({ nazad: undoDepth(s) > 0, napred: redoDepth(s) > 0 });
   }
 
   /**

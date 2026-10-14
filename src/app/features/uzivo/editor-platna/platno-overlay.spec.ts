@@ -56,6 +56,9 @@ function lazniKadrovi() {
 interface Tasteri { shift?: boolean; alt?: boolean; ctrl?: boolean; pointerId?: number; }
 
 describe('PlatnoOverlayComponent', () => {
+  // jsdom nema `document.fonts`: lažni izvor događaja učitavanja fontova (overlay ponovo meri ćelije na `loadingdone`)
+  beforeAll(() => Object.defineProperty(document, 'fonts', { value: new EventTarget(), configurable: true }));
+  afterAll(() => Reflect.deleteProperty(document, 'fonts'));
   let fixture: ComponentFixture<DomacinComponent>;
   let store: InstanceType<typeof PlatnoEditorStore>;
   let izlaz: ReturnType<typeof vi.fn<(p: Platno) => void>>;
@@ -660,19 +663,21 @@ describe('PlatnoOverlayComponent', () => {
      * Lažni nacrtani `td[data-celija]` sloja T: red 0 je u DOM-u visok 60 (tekst ga je raširio), red 1 od 60 do 80. Klik na
      * lokalnu tačku (50, 50) je po DOM-u ćelija (0, 0), a po modelu bi bila (1, 0).
      */
+    let mere: Record<string, [number, number, number, number]>;
+    /** Broj čitanja `offset*` lažnih `td` (prinudni raspored u pregledaču). */
+    let citanja = 0;
     function lazniTd() {
+      mere = { '0-0': [0, 0, 100, 60], '0-1': [100, 0, 100, 60], '1-0': [0, 60, 100, 20], '1-1': [100, 60, 100, 20] };
+      citanja = 0;
       const sloj = document.createElement('div');
       sloj.dataset['sloj'] = 'T';
       const tabelaEl = document.createElement('table');
-      const mere: [string, number, number, number, number][] = [
-        ['0-0', 0, 0, 100, 60], ['0-1', 100, 0, 100, 60], ['1-0', 0, 60, 100, 20], ['1-1', 100, 60, 100, 20],
-      ];
-      for (const [polje, x, y, w, h] of mere) {
+      for (const polje of Object.keys(mere)) {
         const td = document.createElement('td');
         td.dataset['celija'] = polje;
-        for (const [k, v] of [['offsetLeft', x], ['offsetTop', y], ['offsetWidth', w], ['offsetHeight', h]] as const) {
-          Object.defineProperty(td, k, { value: v });
-        }
+        (['offsetLeft', 'offsetTop', 'offsetWidth', 'offsetHeight'] as const).forEach((k, i) => {
+          Object.defineProperty(td, k, { get: () => (citanja++, mere[polje][i]) });
+        });
         tabelaEl.appendChild(td);
       }
       sloj.appendChild(tabelaEl);
@@ -704,6 +709,28 @@ describe('PlatnoOverlayComponent', () => {
       prevuci(150, 150, 170, 150);
       expect((store.platno().slojevi[0] as { x: number }).x).toBe(120);
       expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+    });
+
+    it('Fix m1: okvir opsega se osvežava posle učitavanja fontova (red je viši), a prevlačenje tabele ne meri ćelije', async () => {
+      klik(150, 150);
+      await fixture.whenStable();
+      const opseg = () => el().querySelector<HTMLElement>('.uz-ep-celije > div')!;
+      expect(opseg().style.height).toBe('calc(var(--u) * 60)');
+      mere['0-0'][3] = 75;
+      (document as unknown as { fonts: EventTarget }).fonts.dispatchEvent(new Event('loadingdone'));
+      await fixture.whenStable();
+      expect(opseg().style.height).toBe('calc(var(--u) * 75)');
+      citanja = 0;
+      vuci(150, 150, 190, 150, {}, 4);
+      kadrovi.kadar();
+      await fixture.whenStable();
+      pokazivac('pointermove', 200, 150);
+      kadrovi.kadar();
+      await fixture.whenStable();
+      pokazivac('pointerup', 200, 150);
+      await fixture.whenStable();
+      expect((store.platno().slojevi[0] as { x: number }).x).toBe(150);
+      expect(citanja).toBe(0);
     });
 
     it('dvoklik u ćeliju počinje uređivanje te ćelije', () => {

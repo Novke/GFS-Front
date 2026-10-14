@@ -72,7 +72,7 @@ describe('SvojstvaTekstaComponent', () => {
     return {
       presek: vi.fn(() => null), odbaciPresek: vi.fn(), postaviStil: vi.fn(), prebaciStil: vi.fn(), postaviPasus: vi.fn(),
       prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(stanje), fokus: vi.fn(),
-      ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
+      ponisti: vi.fn(() => false), ponovi: vi.fn(() => false), istorija: signal({ nazad: false, napred: false }),
     };
   }
 

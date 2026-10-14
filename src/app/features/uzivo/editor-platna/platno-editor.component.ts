@@ -5,16 +5,17 @@
 // Tekst se uređuje u sloju za uređivanje (`.uz-pl-platno.uz-ep-uredjivanje`) UNUTAR okvira platna, iznad prikaza i
 // overlay-a: isti stil kao prikaz (`stilSloja`, uređivač sa `stilOkvira`), a Ctrl+S okvira važi i dok se kuca. Ćelija
 // tabele (F14) se uređuje istim uređivačem preko pravougaonika ćelije u sloju (iste rotacije), sa pozadinom
-// `popuna ?? pozadina slajda` (pokriva tekst prikaza) i sidrom ćelije; tabela ostaje u prikazu.
+// `popuna ?? pozadina slajda` (pokriva tekst prikaza) i sidrom ćelije; tabela ostaje u prikazu. Pravougaonik ćelije se
+// meri POSLE crtanja prikaza (red koji je tekst upravo raširio), a uređivač ima samo najmanju visinu, pa raste dok se kuca.
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input,
-  viewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, afterRenderEffect, computed,
+  inject, input, signal, viewChild,
 } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { EditorStore } from '../data-access/editor.store';
 import { TIPOVI_SLIKA } from '../data-access/provera-slike';
-import type { TabelaSloj, Tema, TekstSloj } from '../data-access/platno.models';
+import type { Tema, TekstSloj } from '../data-access/platno.models';
 import type { SlajdDetails } from '../data-access/uzivo.models';
 import { METRIKA } from '../ui/platno-metrika';
 import { PlatnoPrikazComponent, stilSloja } from '../ui/platno-prikaz.component';
@@ -30,7 +31,7 @@ import { PlatnoOverlayComponent } from './platno-overlay.component';
 import { jePonistavanje, komandaTastature, jeSnimanje, uPoljuZaUnos, zatvorenIzbornik } from './tastatura-platna';
 import { SIRINA_PLATNA } from './geometrija';
 import { PORUKA_PREVLACENJE, SlikeEditora } from './slike-editora';
-import { type Polje, pravougaoniciTabele } from './tabela';
+import { type PravougaonikCelije, pravougaonikPolja, pravougaoniciTabele } from './tabela';
 import { ID_POMOCI_TEKSTA, TekstUredjivacComponent } from './tekst/tekst-uredjivac.component';
 import { TrakaAlataComponent } from './traka-alata.component';
 
@@ -116,7 +117,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
     .uz-ep-platno:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
     .uz-ep-paneli { min-width: 0; }
     .uz-ep-uredjivanje .uz-ep-sloj-celije { pointer-events: none; outline: none; }
-    .uz-ep-celija { position: absolute; pointer-events: auto; outline: 1px dashed var(--primary); }
+    .uz-ep-celija { position: absolute; display: flex; flex-direction: column; pointer-events: auto; outline: 1px dashed var(--primary); }
   `,
 })
 export class PlatnoEditorComponent implements OnInit, OnDestroy {
@@ -161,7 +162,21 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
       },
     };
     const { left, top, width, height, transform } = stilSloja(s);
-    return [{ uredjivanje: u, sloj, stil: { left, top, width, height, transform }, celija: this.celijaSesije(s, u.celija) }];
+    // izmereno posle crtanja (ako je za ovo polje), do tada mere modela
+    const m0 = this.mereCelije();
+    const r = m0 && m0.polje.r === u.celija.r && m0.polje.k === u.celija.k ? m0 : pravougaonikPolja(s, u.celija);
+    const celija = {
+      polje: u.celija, stil: { left: jedinice(r.x), top: jedinice(r.y), width: jedinice(r.w), 'min-height': jedinice(r.h) },
+    };
+    return [{ uredjivanje: u, sloj, stil: { left, top, width, height, transform }, celija }];
+  });
+  /**
+   * Pravougaonik ćelije u uređivanju, izmeren iz prikaza POSLE crtanja (`afterRenderEffect`): `computed` sesije se računa
+   * pre nego što se prikaz (dete) ponovo nacrta, pa bi posle Tab-a iz ćelije koja je raširila red merio stari raspored.
+   */
+  private readonly mereCelije = signal<PravougaonikCelije | null>(null, {
+    equal: (a, b) => a === b || (!!a && !!b && a.polje.r === b.polje.r && a.polje.k === b.polje.k && a.x === b.x
+      && a.y === b.y && a.w === b.w && a.h === b.h),
   });
   protected readonly najava = computed(() => {
     const izabrani = this.store.izabraniSlojevi();
@@ -175,6 +190,15 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
 
   constructor() {
     afterNextRender(() => this.fokusPlatna.postavi(this.okvir().nativeElement));
+    afterRenderEffect({
+      read: () => {
+        const c = this.store.uredjivanje()?.celija;
+        const t = this.store.platno().slojevi.find((x) => x.id === this.store.uredjivanje()?.slojId);
+        if (!c || t?.tip !== 'TABELA') return;
+        const r = pravougaoniciTabele(this.host.querySelector('.uz-platno'), t).find((x) => x.polje.r === c.r && x.polje.k === c.k);
+        if (r) this.mereCelije.set(r);
+      },
+    });
     // capture na hostu: zatvoren mat-select ne sme da vidi Ctrl/Cmd+Shift+Z (typeahead bi posle 200 ms izabrao opciju na "Z")
     const host = this.host;
     const uhvati = (e: KeyboardEvent) => this.izbornikPreSelecta(e);
@@ -194,13 +218,6 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     this.odjava?.();
     this.odjava = null;
     this.fokusPlatna.postavi(null);
-  }
-
-  /** Pravougaonik ćelije u sloju: izmeren iz prikaza (red raširen tekstom) ili po modelu. */
-  private celijaSesije(t: TabelaSloj, p: Polje) {
-    const r = pravougaoniciTabele(this.host.querySelector('.uz-platno'), t).find((x) => x.polje.r === p.r && x.polje.k === p.k);
-    const stil = r ? { left: jedinice(r.x), top: jedinice(r.y), width: jedinice(r.w), height: jedinice(r.h) } : {};
-    return { polje: p, stil };
   }
 
   protected promenaTaba(indeks: number): void {

@@ -259,7 +259,9 @@ export class SvojstvaTekstaComponent {
 
   /** Ključ istorije po polju i izboru (bez uređivanja): isto polje istog izbora u roku od 1 s je jedan korak. */
   private kljuc(polje: string): string {
-    return `tekst-${polje}:${this.store.izbor().join(',')}`;
+    // tabela (F14): i opseg ćelija, pa isto polje na drugim ćelijama u roku od 1 s nije isti korak
+    const o = this.celije()?.o;
+    return `tekst-${polje}:${this.store.izbor().join(',')}${o ? `:${o.r1}-${o.k1}-${o.r2}-${o.k2}` : ''}`;
   }
 
   /**

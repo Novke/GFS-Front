@@ -80,16 +80,20 @@ describe('SvojstvaTabeleComponent (kroz panel Svojstva)', () => {
 
   it('"Spoji ćelije" je onemogućeno za jednu ćeliju; polja opsega 1-2 / 1-2 + "Spoji ćelije" -> spojeno', async () => {
     await pocni(novaTabela('T', 'NACRT', 3, 3), { r: 0, k: 0 });
-    expect(dugme(panel(), 'Spoji ćelije')!.disabled).toBe(true);
-    expect(dugme(panel(), 'Razdvoji')!.disabled).toBe(true);
+    expect(dugme(panel(), 'Spoji ćelije')!.getAttribute('aria-disabled')).toBe('true');
+    expect(dugme(panel(), 'Razdvoji')!.getAttribute('aria-disabled')).toBe('true');
     await upisi(fixture, polje(panel(), 'Do reda')!, '2');
     await upisi(fixture, polje(panel(), 'Do kolone')!, '2');
     expect(store.opsegCelijaIzbora()).toEqual({ r1: 0, k1: 0, r2: 1, k2: 1 });
+    dugme(panel(), 'Spoji ćelije')!.focus();
     dugme(panel(), 'Spoji ćelije')!.click();
     await fixture.whenStable();
     expect(tabela().celije[0][0]).toMatchObject({ spojDesno: 1, spojDole: 1 });
+    // Fix m2: dugme postaje onemogućeno, a fokus ostaje na njemu (ne pada na body)
+    expect(dugme(panel(), 'Spoji ćelije')!.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(dugme(panel(), 'Spoji ćelije'));
     expect(tabela().celije[1][1].pokrivena).toBe(true);
-    expect(dugme(panel(), 'Razdvoji')!.disabled).toBe(false);
+    expect(dugme(panel(), 'Razdvoji')!.getAttribute('aria-disabled')).not.toBe('true');
     dugme(panel(), 'Razdvoji')!.click();
     await fixture.whenStable();
     expect(tabela().celije[0][0]).toMatchObject({ spojDesno: 0, spojDole: 0 });
@@ -97,12 +101,12 @@ describe('SvojstvaTabeleComponent (kroz panel Svojstva)', () => {
 
   it('"Obriši red" na tabeli od jednog reda (i "Obriši kolonu" na jednoj koloni) je onemogućeno', async () => {
     await pocni(novaTabela('T', 'NACRT', 1, 2), { r: 0, k: 0 });
-    expect(dugme(panel(), 'Obriši red')!.disabled).toBe(true);
-    expect(dugme(panel(), 'Obriši kolonu')!.disabled).toBe(false);
+    expect(dugme(panel(), 'Obriši red')!.getAttribute('aria-disabled')).toBe('true');
+    expect(dugme(panel(), 'Obriši kolonu')!.getAttribute('aria-disabled')).not.toBe('true');
     dugme(panel(), 'Obriši kolonu')!.click();
     await fixture.whenStable();
     expect(tabela().kolone).toHaveLength(1);
-    expect(dugme(panel(), 'Obriši kolonu')!.disabled).toBe(true);
+    expect(dugme(panel(), 'Obriši kolonu')!.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('31. red: poruka o 30 redova', async () => {
@@ -135,9 +139,37 @@ describe('SvojstvaTabeleComponent (kroz panel Svojstva)', () => {
     expect(tabela().celije[1][0].pasusi[0].delovi[0].podebljano).toBe(false);
   });
 
+  it('Fix m3: ponovljeno "Primeni ivice" sa istim vrednostima ne pravi korak ni izlaz', async () => {
+    await pocni(novaTabela('T', 'NACRT', 2, 2), { r: 0, k: 0 });
+    const izlaz = vi.fn();
+    store.postaviIzlaz(izlaz);
+    dugme(panel(), 'Primeni ivice')!.click();
+    await fixture.whenStable();
+    const posle = izlaz.mock.calls.length;
+    sat.t = 5000;
+    dugme(panel(), 'Primeni ivice')!.click();
+    await fixture.whenStable();
+    expect(izlaz.mock.calls.length).toBe(posle);
+  });
+
+  it('Fix m5: isto polje panela teksta na drugom opsegu ćelija u roku od 1 s je novi korak', async () => {
+    const t0 = novaTabela('T', 'NACRT', 2, 2);
+    await pocni(t0, { r: 0, k: 0 });
+    const velicina = () => polje(el().querySelector('app-svojstva-teksta')!, 'Veličina')!;
+    await upisi(fixture, velicina(), '30');
+    store.izaberiCeliju({ r: 1, k: 1 });
+    await fixture.whenStable();
+    sat.t = 200;
+    await upisi(fixture, velicina(), '40');
+    expect(tabela().celije[1][1].pasusi[0].delovi[0].velicina).toBe(40);
+    store.ponisti();
+    expect(tabela().celije[1][1].pasusi[0].delovi[0].velicina).toBe(18);
+    expect(tabela().celije[0][0].pasusi[0].delovi[0].velicina).toBe(30);
+  });
+
   it('zaključana tabela: dugmad onemogućena', async () => {
     await pocni({ ...novaTabela('T', 'NACRT', 2, 2), zakljucan: true }, { r: 0, k: 0 });
-    expect(dugme(panel(), 'Ubaci red ispod')!.disabled).toBe(true);
-    expect(dugme(panel(), 'Primeni ivice')!.disabled).toBe(true);
+    expect(dugme(panel(), 'Ubaci red ispod')!.getAttribute('aria-disabled')).toBe('true');
+    expect(dugme(panel(), 'Primeni ivice')!.getAttribute('aria-disabled')).toBe('true');
   });
 });

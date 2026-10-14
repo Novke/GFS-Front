@@ -57,6 +57,14 @@ describe('UbaciTabeluComponent', () => {
     expect(polje(dijalog()!, 'Kolona')!.value).toBe('3');
   });
 
+  it('Fix m6: na otvaranju je sadržaj polja Redova izabran (kucanje "5" ga zamenjuje, ne daje "35")', async () => {
+    const izbor = vi.spyOn(HTMLInputElement.prototype, 'select');
+    await otvori();
+    expect(document.activeElement).toBe(polje(dijalog()!, 'Redova'));
+    expect(izbor.mock.contexts).toContain(polje(dijalog()!, 'Redova'));
+    izbor.mockRestore();
+  });
+
   it('kucanje "5" u Redova i "4" u Kolona ostaje u poljima, Enter ubacuje 5 x 4 i zatvara', async () => {
     await otvori();
     await kucaj(polje(dijalog()!, 'Redova')!, '5');

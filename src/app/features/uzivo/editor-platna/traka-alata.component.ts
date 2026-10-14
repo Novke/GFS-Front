@@ -4,7 +4,9 @@
 // CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Tekst" (F12) ubacuje
 // tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
 // (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+// Poništi/Ponovi tokom sesije teksta (sloj ili ćelija) idu prvo u istoriju uređivača, pa u istoriju platna, kao
+// Ctrl+Z iz panela; omogućeni su kad bilo koja od dve ima korak.
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -38,9 +40,9 @@ const OBLICI: readonly StavkaOblika[] = [
   template: `
     <div class="uz-ep-traka" role="group" aria-label="Alati platna">
       <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
-              [disabled]="!store.mozeNazad()" (click)="store.ponisti()"><mat-icon svgIcon="undo" /></button>
+              [disabled]="!mozeNazad()" (click)="ponisti()"><mat-icon svgIcon="undo" /></button>
       <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
-              [disabled]="!store.mozeNapred()" (click)="store.ponovi()"><mat-icon svgIcon="redo" /></button>
+              [disabled]="!mozeNapred()" (click)="ponovi()"><mat-icon svgIcon="redo" /></button>
       <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
       <button mat-icon-button type="button" aria-label="Tekst" title="Tekst (dvoklik na tekst ga uređuje)"
               (click)="ubaciTekst()"><mat-icon svgIcon="text_fields" /></button>
@@ -80,6 +82,20 @@ export class TrakaAlataComponent {
   protected readonly slike = inject(SlikeEditora);
   protected readonly oblici = OBLICI;
   protected readonly prihvaceneSlike = PRIHVACENE_SLIKE;
+
+  /** Istorija uređivača teksta dok traje sesija (TEKST sloj ili ćelija), inače null. */
+  private readonly tekst = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac()?.istorija() ?? null : null));
+  protected readonly mozeNazad = computed(() => this.store.mozeNazad() || !!this.tekst()?.nazad);
+  protected readonly mozeNapred = computed(() => this.store.mozeNapred() || !!this.tekst()?.napred);
+
+  /** Kao Ctrl+Z iz panela: tokom sesije teksta prvo istorija uređivača, pa (kad je prazna) istorija platna. */
+  protected ponisti(): void {
+    if (!this.store.ponistiUTekstu()) this.store.ponisti();
+  }
+
+  protected ponovi(): void {
+    if (!this.store.ponoviUTekstu()) this.store.ponovi();
+  }
 
   protected imaIzbor(): boolean {
     return this.store.izbor().length > 0;

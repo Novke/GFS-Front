@@ -507,7 +507,7 @@ describe('PlatnoEditorStore', () => {
       return {
         presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(() => undefined), postaviStil: vi.fn(), prebaciStil: vi.fn(),
         postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
-        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
+        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false), istorija: signal({ nazad: false, napred: false }),
       };
     }
     const rezultat = (tekstovi: string[], mapa: (number | null)[]): RezultatTeksta => ({ pasusi: tekstovi.map((t) => pasus(t)), mapa });
@@ -856,7 +856,7 @@ describe('PlatnoEditorStore', () => {
       return {
         presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(), postaviStil: vi.fn(), prebaciStil: vi.fn(),
         postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
-        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
+        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false), istorija: signal({ nazad: false, napred: false }),
       };
     }
 
