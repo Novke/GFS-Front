@@ -108,6 +108,8 @@ input[type='date'] { min-width: 0; }
   &.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
 }
 
+.wa-uvod { margin: 20px 0 0; }
+
 .pregled {
   display: grid;
   grid-template-columns: minmax(96px, 5fr) 7fr;

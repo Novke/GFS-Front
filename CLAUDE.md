@@ -134,6 +134,13 @@ stays forbidden (the rule sees direct imports only, so the full `<math-field>` b
 the CSS and KaTeX fonts already sit under `assets/mathlive/`. On the backend, anything mapped under `/public/**` is reachable from the internet
 without auth.
 
+After a successful submit `upis` shows "Pridruži se WhatsApp grupi" when the `POST` response carries `waLink`; it renders
+only a canonical `https://chat.whatsapp.com/<code>` (`waLinkZaPrikaz` in `upis.pravila`, the server enforces the same), so
+the `href` is never an arbitrary URL. The teacher side lives on the group's Studenti tab: "Kontakti za telefon" is a plain
+`<a download>` to `api/grupe/{id}/kontakti.vcf` (vCard; the phone offers the import into Contacts), "Pošalji WA link" is a
+`mailto:` built by `mailtoWaLinka` (`core/api/grupe.models.ts`: shown students' addresses in BCC, RFC 6068 encoding) that
+opens the teacher's own mail app, and `ui/wa-link-dialog` sets the link (`PATCH grupe/{id}/wa-link`).
+
 ## Uživo (`features/uzivo`)
 
 Interactive presentation with live questions (spec `docs/superpowers/specs/2026-10-07-interaktivna-prezentacija-design.md`

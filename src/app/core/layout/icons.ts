@@ -34,6 +34,8 @@ export const IKONE = [
   'animation', 'motion_photos_on',
   // Pregled platna (F18): "Zaustavi".
   'stop',
+  // Grupa: kontakti za telefon i WhatsApp grupa.
+  'download', 'link',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

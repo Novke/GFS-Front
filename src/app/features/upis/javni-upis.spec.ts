@@ -124,6 +124,31 @@ describe('JavniUpis (upis/:token)', () => {
     expect(html().querySelector('form')).toBeNull();
   });
 
+  it('posle prijave nudi WhatsApp grupu samo za kanonski link iz odgovora', async () => {
+    const waDugme = () => html().querySelector<HTMLAnchorElement>('a[data-wa-link]');
+    for (const [waLink, ocekivano] of [
+      ['https://chat.whatsapp.com/AbCdEfGhIj1234567890Kl', 'https://chat.whatsapp.com/AbCdEfGhIj1234567890Kl'],
+      [null, null],
+      [undefined, null],
+      ['javascript:alert(1)', null],
+      ['https://evil.example/chat.whatsapp.com/AbCdEfGhIj1234567890Kl', null],
+    ] as const) {
+      await otvori();
+      await popuni();
+      await posalji();
+      http.expectOne(URL_UPISA).flush(waLink === undefined ? { id: 7 } : { id: 7, waLink });
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(tekst()).toContain('Prijava primljena');
+      expect(waDugme()?.getAttribute('href') ?? null).toBe(ocekivano);
+      if (ocekivano) {
+        expect(waDugme()?.getAttribute('rel')).toContain('noopener');
+        expect(waDugme()?.textContent).toContain('Pridruži se WhatsApp grupi');
+      }
+      fixture.destroy();
+    }
+  });
+
   it('dvoklik na "Pošalji" šalje samo jedan zahtev', async () => {
     await otvori();
     await popuni();
