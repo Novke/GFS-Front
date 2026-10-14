@@ -165,6 +165,13 @@
   border-top: 1px solid var(--line);
 }
 
+/* Formula u tekstu pitanja i opcije (`app-tekst-formule`): ne lomi se na pola. `isolation` kao `.uz-pl-formula-markup`
+   (platno.css): `svg` MathLive-a za `\cancel` i `\enclose` ima `z-index: 2`, koji tako važi samo unutar formule. */
+.uz-formula {
+  white-space: nowrap;
+  isolation: isolate;
+}
+
 /* ---------- Slajd: INFO ---------- */
 
 .uz-platno .uz-slajd-naslov {

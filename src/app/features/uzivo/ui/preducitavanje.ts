@@ -2,6 +2,7 @@ import type { Tema } from '../data-access/platno.models';
 import { SlajdDetails, medijUrl } from '../data-access/uzivo.models';
 import { ModulFormule, resetujUcitavanjeFormula, ucitajFormule, ucitajStilFormula } from './formula-ucitavanje';
 import { FONTOVI_PLATNA, fontoviPlatna } from './platno-fontovi';
+import { imaFormulu } from './tekst-formule';
 import { TEME, vazecaTema } from './teme';
 
 /**
@@ -116,8 +117,16 @@ export function preducitajFontove(fontovi: Iterable<string>): void {
   }
 }
 
-/** PLATNO slajd sa bar jednom formulom bez slike izvora: nju `platno-prikaz` crta MathLive-om (`formula-prikaz`). */
+/**
+ * PLATNO slajd sa bar jednom formulom bez slike izvora (nju `platno-prikaz` crta MathLive-om, `formula-prikaz`) ili
+ * pitanje sa formulom `$...$` u tekstu ili u nekoj opciji (`app-tekst-formule`). INFO ne tumači `$`. Tekst pitanja je
+ * Markdown, ali za unapred učitavanje je dovoljno pravilo običnog teksta (jeftino posle svakog snimka): retka razlika
+ * (`` `$x$` `` u kodu) samo učita modul bez potrebe, a obrnuto prikaz sam učita modul.
+ */
 export function imaFormuluZaCrtanje(s: SlajdDetails | null): boolean {
+  if (s?.tip === 'PITANJE') {
+    return !!s.pitanje && (imaFormulu(s.pitanje.tekst) || s.pitanje.opcije.some((o) => imaFormulu(o.tekst)));
+  }
   return s?.tip === 'PLATNO' && !!s.platno?.slojevi.some((sloj) => sloj.tip === 'FORMULA' && !sloj.slikaIzvora);
 }
 

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { Rezultat, RezultatTekst, TekstPrikaz, TipPitanja } from '../data-access/uzivo.models';
 import { decimalni } from './format';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
+import { TekstFormuleComponent } from './tekst-formule.component';
 
 const MAKS_OBLAK = 60;
 const MAKS_LISTA = 50;
@@ -95,7 +96,7 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
 @Component({
   selector: 'app-rezultat-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OpcijaOblikComponent],
+  imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()' },
   template: `
     @switch (vrsta()) {
@@ -107,7 +108,7 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
               <app-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
               <span class="uz-rez-opcija-tekst">
                 @if (o.tacna) { <span class="uz-tacno-znak">✓ tačno</span> }
-                {{ o.tekst }}
+                <app-tekst-formule [tekst]="o.tekst" />
               </span>
               <span class="uz-rez-opcija-vrednost">{{ o.broj }} · {{ o.procenat }} %</span>
               <span class="uz-rez-traka" aria-hidden="true"><span class="uz-rez-ispuna" [style.--uz-udeo]="o.procenat + '%'"></span></span>

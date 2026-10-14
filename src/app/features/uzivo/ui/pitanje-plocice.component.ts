@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { PitanjeDetails } from '../data-access/uzivo.models';
 import { decimalni } from './format';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
+import { TekstFormuleComponent } from './tekst-formule.component';
 
 /**
  * Pločice opcija na projektoru: mreža 2x2 (do 4 opcije) ili 3x2 (5-6), svaka sa oblikom, slovom i tekstom. Za broj,
@@ -12,7 +13,7 @@ import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
 @Component({
   selector: 'app-pitanje-plocice',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OpcijaOblikComponent],
+  imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-plocice' },
   template: `
     @switch (pitanje().tip) {
@@ -49,7 +50,7 @@ import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
             <li class="uz-plocica" [class.uz-plocica--tacna]="o.tacna" [class.uz-plocica--prigusena]="o.prigusena"
                 [style.--uz-boja]="o.boja">
               <app-opcija-oblik class="uz-plocica-oblik" [indeks]="o.indeks" />
-              <span class="uz-plocica-tekst">{{ o.tekst }}</span>
+              <app-tekst-formule class="uz-plocica-tekst" [tekst]="o.tekst" />
               @if (o.tacna) { <span class="uz-plocica-tacno"><span aria-hidden="true">✓</span> tačno</span> }
             </li>
           }

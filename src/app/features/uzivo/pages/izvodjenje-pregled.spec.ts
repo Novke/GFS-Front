@@ -118,6 +118,17 @@ describe('IzvodjenjePregledPage', () => {
     expect(karte[3].textContent).toContain('Ana');
   });
 
+  it('tekst pitanja je app-tekst-formule (Markdown sa formulom), klase uz-md i uz-pr-tekst', () => {
+    const r = runda(1, 1, 10);
+    r.pitanje = snimak(60, 10, 'Koliko je **tačno** $1011_2$?');
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [r], rangLista: [] });
+    const tekst = el.querySelector<HTMLElement>('app-tekst-formule.uz-pr-tekst')!;
+    expect(tekst).not.toBeNull();
+    expect(tekst.classList).toContain('uz-md');
+    expect(tekst.querySelector('strong')?.textContent).toBe('tačno');
+    expect(tekst.querySelector('span.uz-formula')?.textContent).toBe('$1011_2$');
+  });
+
   it('bez takmičenja nema rang-liste, ni kad server šalje učesnike', () => {
     const el = otvori({
       izvodjenje: INFO, takmicenje: false, pitanja: [runda(1, 1, 10)],

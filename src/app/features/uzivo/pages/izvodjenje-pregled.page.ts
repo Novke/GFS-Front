@@ -11,7 +11,7 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import { IzvodjenjeRezultati, RezultatPitanja, medijUrl } from '../data-access/uzivo.models';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
-import { renderMarkdown } from '../ui/markdown';
+import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
@@ -51,7 +51,8 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
 @Component({
   selector: 'app-izvodjenje-pregled',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
+    TekstFormuleComponent],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -99,7 +100,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
                 }
               </header>
               <div class="uz-pr-sadrzaj">
-                <div class="uz-md uz-pr-tekst" [innerHTML]="k.html"></div>
+                <app-tekst-formule class="uz-md uz-pr-tekst" [tekst]="k.p.pitanje.tekst" [markdown]="true" />
                 @if (k.p.pitanje.slikaId; as slika) {
                   <img class="uz-pr-slika" [src]="url(slika)" alt="Slika uz pitanje">
                 }
@@ -151,7 +152,7 @@ export class IzvodjenjePregledPage {
   protected readonly kartice = computed(() => {
     const pitanja = this.podaci()?.pitanja ?? [];
     const oznake = oznakeRundi(pitanja);
-    return pitanja.map((p, i) => ({ p, oznaka: oznake[i], html: renderMarkdown(p.pitanje.tekst) }));
+    return pitanja.map((p, i) => ({ p, oznaka: oznake[i] }));
   });
 
   constructor() {

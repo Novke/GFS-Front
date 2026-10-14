@@ -56,6 +56,25 @@ describe('SlajdPrikazComponent', () => {
     expect(el.querySelector('.uz-slajd-md')?.textContent).toContain('Tekst');
   });
 
+  it('tekst pitanja sa formulom: app-tekst-formule sa klasama uz-md i uz-pitanje-tekst (Markdown, blok)', async () => {
+    const { el } = await prikazi({ slajd: { ...slajdPitanje, pitanje: { ...pitanje, tekst: 'Koliko je **tačno** $x^2$?' } } });
+    const tekst = el.querySelector<HTMLElement>('app-tekst-formule.uz-pitanje-tekst')!;
+    expect(tekst).not.toBeNull();
+    expect(tekst.classList).toContain('uz-md');
+    expect(tekst.style.display).toBe('block');
+    expect(tekst.querySelector('strong')?.textContent).toBe('tačno');
+    expect(tekst.querySelector('span.uz-formula')?.textContent).toBe('$x^2$');
+  });
+
+  it('tekst pitanja: HTML iz Markdown-a ne stiže u DOM', async () => {
+    const { el } = await prikazi({
+      slajd: { ...slajdPitanje, pitanje: { ...pitanje, tekst: '<script>alert(1)</script>\n\nTekst <img src=x onerror=alert(1)> $x$' } },
+    });
+    const tekst = el.querySelector('.uz-pitanje-tekst')!;
+    expect(tekst.querySelector('script, img')).toBeNull();
+    expect(tekst.textContent).toContain('Tekst');
+  });
+
   it('pitanje: pločice po rb, tačna istaknuta tek kad je tačan prikazan', async () => {
     const { fixture, el } = await prikazi({ slajd: slajdPitanje });
     const tekstovi = Array.from(el.querySelectorAll('.uz-plocica-tekst')).map(t => t.textContent?.trim());

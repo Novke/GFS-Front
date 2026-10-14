@@ -1,0 +1,138 @@
+import {
+  ChangeDetectionStrategy, Component, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input, signal,
+} from '@angular/core';
+import { PUTANJA_STILA_FORMULA, UCITAJ_FORMULE, type ModulFormule } from './formula-ucitavanje';
+import { markdownSaFormulama } from './markdown';
+import { KLASA_FORMULE, tekstSaFormulama } from './tekst-formule';
+
+/** Fontovi koje formula u tekstu čeka pre prikaza (odluka 5); ostale KaTeX porodice stižu kad zatrebaju. */
+export const FONTOVI_TEKSTA_FORMULE = ['400 1em KaTeX_Main', 'italic 400 1em KaTeX_Math'] as const;
+const NAJDUZE_MS = 3000;
+/**
+ * Najviše formula koje jedan tekst crta MathLive-om; ostale ostaju izvor. Tekst pitanja (2000 znakova) može nositi oko
+ * 500 formula (`$a$ $b$ ...`), a 500 malih je oko 0,45 s u jsdom-u na serveru (na telefonu više), dok `KesFormula` čuva
+ * 300. Pitanje ili opcija sa više od 50 formula nije realno, pa granica samo čuva glavnu nit telefona.
+ */
+export const MAX_FORMULA_U_TEKSTU = 50;
+
+/** Obećanje koje se razrešava kad `p` završi (uspeh ili greška) ili posle `ms`; tajmer se uvek čisti. */
+function najvise(p: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise<void>((razresi) => {
+    const tajmer = setTimeout(razresi, ms);
+    const kraj = () => {
+      clearTimeout(tajmer);
+      razresi();
+    };
+    p.then(kraj, kraj);
+  });
+}
+
+let stilTeksta: Promise<void> | null = null;
+
+/**
+ * Lakši stil za formule u tekstu (telefon): isti `assets/mathlive/mathlive-static.css` kao faza 4, pa samo dva fonta
+ * (najviše 3 + 3 s). Ne odbija (greška ili istek -> formula se ipak crta, fontovi stižu kasnije).
+ */
+export function ucitajStilFormulaUTekstu(): Promise<void> {
+  stilTeksta ??= new Promise<void>((razresi) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = PUTANJA_STILA_FORMULA; // relativno, kao faza 4 (radi pod svakim <base href>)
+    link.dataset['gfs'] = 'mathlive-tekst';
+    const tajmer = setTimeout(razresi, NAJDUZE_MS);
+    link.onload = link.onerror = () => {
+      clearTimeout(tajmer);
+      razresi();
+    };
+    document.head.appendChild(link);
+  }).then(() => {
+    const fonts = (document as Document & { fonts?: { load(f: string, t?: string): Promise<unknown> } }).fonts;
+    if (typeof fonts?.load !== 'function') {
+      return undefined;
+    }
+    return najvise(Promise.all(FONTOVI_TEKSTA_FORMULE.map((f) => fonts.load(f, 'x2'))), NAJDUZE_MS);
+  });
+  return stilTeksta;
+}
+
+/** Samo za testove: zaboravlja keširano obećanje stila (keš inače traje koliko i prozor). */
+export function resetujStilTekstaFormule(): void {
+  stilTeksta = null;
+}
+
+export const UCITAJ_STIL_TEKSTA_FORMULE = new InjectionToken<() => Promise<void>>('UCITAJ_STIL_TEKSTA_FORMULE', {
+  providedIn: 'root',
+  factory: () => ucitajStilFormulaUTekstu,
+});
+
+/**
+ * Tekst pitanja (`markdown`) ili opcije sa formulama `$...$` (spec 16.1). Bez formule: samo tekst, ništa se ne učitava.
+ * Sa formulom: `mathlive/ssr` (faza 4, lenjo, token `UCITAJ_FORMULE`) i njegov stil; dok se ne učitaju, i kad formula
+ * nije ispravna, vidi se izvor `$...$`. Host je kontejner (`[innerHTML]`, Angularov sanitizer, nikad
+ * `bypassSecurityTrustHtml`: on je jedina odbrana od `[x](javascript:...)` u Markdown-u), pa klase roditelja (`uz-md`,
+ * `uz-pitanje-tekst`) važe kao do sada. Markup formule ide samo kroz `latexUMarkup` (zabranjene komande, `trosakFormule`,
+ * MathLive u `try/catch`, sanitizer po dozvoljenoj listi) i `replaceChildren`. Jedini ulaz javnog dela u formule
+ * (odluka 4): ne uvozi ništa iz editora ni nastavničkog API-ja.
+ */
+@Component({
+  selector: 'app-tekst-formule',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[innerHTML]': 'pripremljen().html', '[style.display]': "markdown() ? 'block' : null" },
+  template: '',
+})
+export class TekstFormuleComponent {
+  readonly tekst = input<string | null | undefined>(null);
+  /** Tekst pitanja je Markdown; tekst opcije je običan tekst. */
+  readonly markdown = input(false);
+
+  private readonly ucitaj = inject(UCITAJ_FORMULE);
+  private readonly ucitajStil = inject(UCITAJ_STIL_TEKSTA_FORMULE);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly modul = signal<ModulFormule | null>(null);
+  private ucitavanje = false;
+  protected readonly pripremljen = computed(() =>
+    this.markdown() ? markdownSaFormulama(this.tekst()) : tekstSaFormulama(this.tekst()));
+
+  constructor() {
+    effect(() => {
+      if (!this.pripremljen().formula || this.modul() || this.ucitavanje) {
+        return;
+      }
+      this.ucitavanje = true;
+      Promise.all([this.ucitaj(), this.ucitajStil()]).then(
+        ([m]) => this.modul.set(m),
+        (e: unknown) => {
+          this.ucitavanje = false;
+          // projektor i telefon ne prikazuju grešku: ostaje izvor `$...$`
+          console.warn('Formule nisu učitane; prikazuje se izvor.', e);
+        },
+      );
+    });
+    // Posle svakog upisa HTML-a (Angular postavlja `innerHTML` domaćina pre ovoga) mesta bez klase dobijaju markup.
+    afterRenderEffect({
+      write: () => {
+        const m = this.modul();
+        if (!m || !this.pripremljen().formula) {
+          return;
+        }
+        const mesta = Array.from(this.host.querySelectorAll<HTMLElement>(`span.${KLASA_FORMULE}`));
+        mesta.forEach((el, i) => {
+          if (el.classList.contains(`${KLASA_FORMULE}--spremna`) || el.classList.contains(`${KLASA_FORMULE}--izvor`)) {
+            return;
+          }
+          const latex = (el.textContent ?? '').slice(1, -1);
+          // isti put kao faza 4: zabranjene komande, trošak, validateLatex, konvertuj (try/catch), ocistiMarkup/ocistiStil
+          const fragment = i < MAX_FORMULA_U_TEKSTU ? m.latexUMarkup(`\\textstyle ${latex}`) : null;
+          if (!fragment) {
+            el.classList.add(`${KLASA_FORMULE}--izvor`);
+            return;
+          }
+          el.replaceChildren(fragment);
+          el.classList.add(`${KLASA_FORMULE}--spremna`);
+          el.setAttribute('role', 'img');
+          el.setAttribute('aria-label', latex);
+        });
+      },
+    });
+  }
+}
