@@ -495,7 +495,7 @@ describe('PlatnoEditorStore', () => {
   describe('uređivanje teksta (F12)', () => {
     const PRAZNO: StanjeSelekcije = {
       font: null, velicina: null, boja: null, podebljano: null, kurziv: null, podvuceno: null, precrtano: null, polozaj: null,
-      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null,
+      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null, polozaji: [], liste: [],
     };
     /** Tekst sa pasusima "A", "B" i animacijom pasusa 1 (a1) i celog sloja (a2). */
     const tekst = (id = 't1') => ({ ...noviTekst(id, 'NACRT', { x: 0, y: 0, sirina: 200, visina: 100 }), pasusi: [pasus('A'), pasus('B')] });
@@ -507,6 +507,7 @@ describe('PlatnoEditorStore', () => {
       return {
         presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(() => undefined), postaviStil: vi.fn(), prebaciStil: vi.fn(),
         postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
+        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
       };
     }
     const rezultat = (tekstovi: string[], mapa: (number | null)[]): RezultatTeksta => ({ pasusi: tekstovi.map((t) => pasus(t)), mapa });
@@ -758,6 +759,71 @@ describe('PlatnoEditorStore', () => {
       store.pocniGest();
       expect(store.pocniUredjivanje('t1')).toBe(false);
     });
+
+    describe('zajednički krug F12/F13', () => {
+      it('ponistiUTekstu / ponoviUTekstu: tokom sesije idu u istoriju uređivača; sesija ostaje, istorija platna netaknuta', () => {
+        pocni(sa());
+        expect(store.ponistiUTekstu()).toBe(false);
+        store.pocniUredjivanje('t1');
+        const k = lazni();
+        store.registrujUredjivac(k);
+        vi.mocked(k.ponisti).mockReturnValueOnce(true);
+        vi.mocked(k.ponovi).mockReturnValueOnce(true);
+        expect(store.ponistiUTekstu()).toBe(true);
+        expect(store.ponoviUTekstu()).toBe(true);
+        // uređivač nema šta da poništi -> false (pozivalac tada ide na istoriju platna)
+        expect(store.ponistiUTekstu()).toBe(false);
+        expect(k.ponisti).toHaveBeenCalledTimes(2);
+        expect(store.uredjivanje()).not.toBeNull();
+        expect(store.mozeNazad()).toBe(false);
+        expect(izlaz).not.toHaveBeenCalled();
+      });
+
+      it('ponistiUTekstu usred gesta: false, uređivač se ne zove', () => {
+        pocni(sa());
+        store.pocniUredjivanje('t1');
+        const k = lazni();
+        store.registrujUredjivac(k);
+        store.pocniGest();
+        expect(store.ponistiUTekstu()).toBe(false);
+        expect(k.ponisti).not.toHaveBeenCalled();
+      });
+
+      it('F12 rr2/2: duplirajIzabrane tokom sesije kopira NOVI tekst (tekst se beleži pre čitanja izbora)', () => {
+        pocni(sa());
+        store.pocniUredjivanje('t1');
+        store.registrujUredjivac(lazni(rezultat(['Novo', 'B'], [0, 1])));
+        store.duplirajIzabrane();
+        const p = store.platno();
+        expect(p.slojevi).toHaveLength(3);
+        expect(tekstoviSloja(p, 't1')).toEqual(['Novo', 'B']);
+        expect(tekstoviSloja(p, store.izbor()[0])).toEqual(['Novo', 'B']);
+      });
+
+      it('F12 rr2/2: kopiraj tokom sesije kopira NOVI tekst; sesija ostaje otvorena', () => {
+        pocni(sa());
+        store.pocniUredjivanje('t1');
+        store.registrujUredjivac(lazni(rezultat(['Kopija', 'B'], [0, 1])));
+        store.kopiraj();
+        const kopija = medjuspremnik.slojevi[0] as { pasusi: { delovi: { tekst: string }[] }[] };
+        expect(kopija.pasusi.map((x) => x.delovi[0].tekst)).toEqual(['Kopija', 'B']);
+        expect(store.uredjivanje()).not.toBeNull();
+      });
+
+      it('F12 rr2/3: isprazni usred gesta i sesije: gest pa tekst (oba u dokumentu, kao onDestroy)', () => {
+        pocni(sa());
+        store.pocniUredjivanje('t1');
+        store.registrujUredjivac(lazni(rezultat(['Upisano', 'B'], [0, 1])));
+        store.pocniGest();
+        store.azurirajGest((p) => pomeriSlojeve(p, new Set(['s1']), 5, 0));
+        store.isprazni();
+        const p = store.platno();
+        expect(tekstoviSloja(p, 't1')).toEqual(['Upisano', 'B']);
+        expect(p.slojevi.find((s) => s.id === 's1')!.x).toBe(oblik('s1').x + 5);
+        expect(store.gest()).toBeNull();
+        expect(izlaz).toHaveBeenLastCalledWith(p);
+      });
+    });
   });
 
   it('posle destroy izlaz je ugašen: primeni i ubaci ne predaju ništa', () => {
@@ -774,7 +840,7 @@ describe('PlatnoEditorStore', () => {
   describe('tabele (F14)', () => {
     const PRAZNO: StanjeSelekcije = {
       font: null, velicina: null, boja: null, podebljano: null, kurziv: null, podvuceno: null, precrtano: null, polozaj: null,
-      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null,
+      poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null, polozaji: [], liste: [],
     };
     /** Tabela T 2 x 3 sa spajanjem (0,0)-(0,1). */
     function tabela(): TabelaSloj {
@@ -790,6 +856,7 @@ describe('PlatnoEditorStore', () => {
       return {
         presek: vi.fn(() => red.shift() ?? null), odbaciPresek: vi.fn(), postaviStil: vi.fn(), prebaciStil: vi.fn(),
         postaviPasus: vi.fn(), prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(PRAZNO), fokus: vi.fn(),
+        ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
       };
     }
 

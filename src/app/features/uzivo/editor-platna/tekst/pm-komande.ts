@@ -9,7 +9,7 @@ import { type Command, type EditorState, type Plugin, TextSelection, type Transa
 import type { Pasus } from '../../data-access/platno.models';
 import { PODRAZUMEVANI_STIL } from './pm-konverzija';
 import type { AtributiDela, AtributiPasusa } from './pm-sema';
-import { MAX_NIVO, type StanjeSelekcije, novaLista, uvlacenjeListe } from './stil-teksta';
+import { MAX_NIVO, type StanjeSelekcije, jedna, novaLista, uvlacenjeListe } from './stil-teksta';
 
 type Dispatch = (tr: Transaction) => void;
 export type PoljeStila = 'podebljano' | 'kurziv' | 'podvuceno' | 'precrtano';
@@ -226,11 +226,6 @@ export function promeniNivo(razlika: 1 | -1): Command {
   };
 }
 
-/** Jedna vrednost ako je ista za sve, inače null (mešano). */
-function jedna<T>(vrednosti: readonly T[]): T | null {
-  return vrednosti.length && vrednosti.every((v) => v === vrednosti[0]) ? vrednosti[0] : null;
-}
-
 /** Stil izbora za panel teksta (F13): vrednosti delova i pasusa izbora, null = mešano. */
 export function stanjeSelekcije(state: EditorState): StanjeSelekcije {
   const { from, to, empty } = state.selection;
@@ -259,6 +254,8 @@ export function stanjeSelekcije(state: EditorState): StanjeSelekcije {
     proredProcenat: jedna(pasusi.map((p) => p.proredProcenat)),
     razmakPre: jedna(pasusi.map((p) => p.razmakPre)),
     razmakPosle: jedna(pasusi.map((p) => p.razmakPosle)),
+    polozaji: [...new Set(stilovi.map((s) => s.polozaj))],
+    liste: [...new Set(pasusi.map((p) => p.lista?.vrsta ?? 'BEZ'))],
   };
 }
 

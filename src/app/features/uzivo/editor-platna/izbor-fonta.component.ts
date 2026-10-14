@@ -1,5 +1,6 @@
 // Izbor fonta panela teksta (F13): `mat-select` sa katalogom fontova platna (`FONTOVI_PLATNA`, isti spisak kao server);
-// svaka opcija i izabrana vrednost su u svom fontu (`cssFonta`). Mešani fontovi (null) daju prazno polje sa natpisom.
+// svaka opcija i izabrana vrednost su u svom fontu (`cssFonta`). Mešani fontovi (null) daju vidljiv natpis "Različiti".
+// Fokus posle izbora (mišem: nazad u tekst uređivanja) rešava panel teksta.
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -10,7 +11,8 @@ import { FONTOVI_PLATNA, cssFonta } from '../ui/platno-fontovi';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatFormFieldModule, MatSelectModule],
   template: `
-    <mat-form-field subscriptSizing="dynamic">
+    <!-- mešano: labela pluta i bez fokusa, pa je natpis "Različiti" vidljiv (inače MDC skriva placeholder) -->
+    <mat-form-field subscriptSizing="dynamic" [floatLabel]="vrednost() === null ? 'always' : 'auto'">
       <mat-label>Font</mat-label>
       <mat-select [value]="vrednost()" [disabled]="onemoguceno()" placeholder="Različiti" [style.font-family]="css()"
                   (selectionChange)="izbor.emit($event.value)">

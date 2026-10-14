@@ -10,6 +10,8 @@ export interface StanjeSelekcije {
   podebljano: boolean | null; kurziv: boolean | null; podvuceno: boolean | null; precrtano: boolean | null;
   polozaj: Polozaj | null; poravnanje: Poravnanje | null; lista: 'ZNAK' | 'BROJ' | 'BEZ' | null; nivo: number | null;
   proredProcenat: number | null; razmakPre: number | null; razmakPosle: number | null;
+  /** Položaji i vrste liste PRISUTNI u izboru (redom pojavljivanja): `aria-pressed="mixed"` samo za prisutnu vrednost. */
+  polozaji: readonly Polozaj[]; liste: readonly ('ZNAK' | 'BROJ' | 'BEZ')[];
 }
 
 /** Najviši nivo liste (0-8, kao PowerPoint). */
@@ -41,7 +43,7 @@ export function novaLista(vrsta: 'ZNAK' | 'BROJ'): Lista {
 }
 
 /** Jedna vrednost ako je ista za sve, inače null (mešano ili prazno). */
-function jedna<T>(vrednosti: readonly T[]): T | null {
+export function jedna<T>(vrednosti: readonly T[]): T | null {
   return vrednosti.length && vrednosti.every((v) => v === vrednosti[0]) ? vrednosti[0] : null;
 }
 
@@ -64,6 +66,8 @@ export function stanjeDelova(pasusi: readonly Pasus[]): StanjeSelekcije {
     proredProcenat: jedna(pasusi.map((p) => p.proredProcenat)),
     razmakPre: jedna(pasusi.map((p) => p.razmakPre)),
     razmakPosle: jedna(pasusi.map((p) => p.razmakPosle)),
+    polozaji: [...new Set(delovi.map((d) => d.polozaj))],
+    liste: [...new Set(pasusi.map((p) => p.lista?.vrsta ?? 'BEZ'))],
   };
 }
 
@@ -77,13 +81,22 @@ function istiIliNovi(stari: readonly Pasus[], novi: Pasus[]): Pasus[] {
 
 /**
  * Stil dela svim delovima, i praznim delovima praznih pasusa (stil praznog reda, kao PowerPointov kraj pasusa). Pasus
- * bez delova (`delovi: []`, prikaz ga crta 18 pt) dobija prazan deo u stilu prethodnog teksta, sa izmenom, da prazan
- * red prati izmenu celog sloja.
+ * bez delova (`delovi: []`, prikaz ga crta 18 pt) dobija prazan deo, sa izmenom, da prazan red prati izmenu celog sloja;
+ * osnova je prvi SLEDEĆI deo sa tekstom (pa poslednji prethodni deo, pa Carlito 18). Pozivalac zove funkciju po sloju
+ * (ili ćeliji), pa osnova nikad ne dolazi iz drugog sloja.
  */
 export function stilSvima(pasusi: readonly Pasus[], izmena: Partial<AtributiDela>): Pasus[] {
-  let prethodni: Omit<Deo, 'tekst'> = PODRAZUMEVANI_DEO;
-  const novi = pasusi.map((p) => {
-    if (!p.delovi.length) return { ...p, delovi: [{ ...prethodni, ...izmena, tekst: '' }] };
+  // sledeci[i] = prvi deo sa tekstom u pasusima posle i-tog
+  const sledeci: (Deo | null)[] = new Array(pasusi.length).fill(null);
+  for (let i = pasusi.length - 2; i >= 0; i--) {
+    sledeci[i] = pasusi[i + 1].delovi.find((d) => d.tekst !== '') ?? sledeci[i + 1];
+  }
+  let prethodni: Omit<Deo, 'tekst'> | null = null;
+  const novi = pasusi.map((p, i) => {
+    if (!p.delovi.length) {
+      const osnova = sledeci[i] ?? prethodni ?? PODRAZUMEVANI_DEO;
+      return { ...p, delovi: [{ ...osnova, ...izmena, tekst: '' }] };
+    }
     prethodni = p.delovi[p.delovi.length - 1];
     if (!p.delovi.some((d) => imaIzmenu(d, izmena))) return p;
     return { ...p, delovi: p.delovi.map((d) => (imaIzmenu(d, izmena) ? { ...d, ...izmena } : d)) };

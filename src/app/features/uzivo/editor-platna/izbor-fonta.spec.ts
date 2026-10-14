@@ -62,5 +62,9 @@ describe('IzborFontaComponent', () => {
     fixture.componentInstance.vrednost.set(null);
     await fixture.whenStable();
     expect(el().querySelector('.mat-mdc-select-placeholder')!.textContent!.trim()).toBe('Različiti');
+    // natpis je VIDLJIV i bez fokusa (labela pluta), a ne prazno polje "Font"
+    const polje = el().querySelector('mat-form-field')!;
+    expect(polje.classList.contains('mat-form-field-hide-placeholder')).toBe(false);
+    expect(polje.classList.contains('mat-mdc-form-field-label-always-float')).toBe(true);
   });
 });

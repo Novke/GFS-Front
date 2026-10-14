@@ -1,3 +1,5 @@
+import { joinBackward } from 'prosemirror-commands';
+import { undo } from 'prosemirror-history';
 import { EditorView } from 'prosemirror-view';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import type { Lista } from '../../data-access/platno.models';
@@ -129,6 +131,17 @@ describe('dodatakStila: netaknut prazan pasus (delovi: []) ostaje bajt-isti (Fix
     s.izaberi(poz(s.dok, 1, 0));
     s.kucaj('a');
     expect(s.pasusi()[1].delovi).toEqual([deo('a', { velicina: 40 })]);
+  });
+
+  it('F12 rr2/1: prazan pasus obrisan (Backspace) pa vraćen sa Ctrl+Z ostaje bez delova (dokument = početni)', () => {
+    const s = nova();
+    const pocetni = s.dok;
+    s.izaberi(poz(s.dok, 2, 0));
+    expect(s.izvrsi(joinBackward)).toBe(true);
+    expect(s.dok.childCount).toBe(2);
+    expect(s.izvrsi(undo)).toBe(true);
+    expect(s.dok.eq(pocetni)).toBe(true);
+    expect(s.pasusi()[1]).toStrictEqual(prazan);
   });
 
   it('pasus koji brisanjem postane prazan pamti stil obrisanog teksta (nov čvor)', () => {

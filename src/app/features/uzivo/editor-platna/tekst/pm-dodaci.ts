@@ -2,7 +2,7 @@
 // platna) i granica znakova slajda. Bez Angular-a; uređivač ih sastavlja kroz `dodaciUredjivaca`.
 import { history } from 'prosemirror-history';
 import type { Node as PmCvor } from 'prosemirror-model';
-import { type EditorState, Plugin, type Transaction } from 'prosemirror-state';
+import { type EditorState, Plugin, PluginKey, type Transaction } from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { GRANICE, codePointa } from '../../data-access/platno-provera';
@@ -49,7 +49,19 @@ function stilPraznog(
  * kucanje u prazan pasus) nikad tiho ne nestane iz modela, a prazan red zadržava font i veličinu (odluka 9 faze 1).
  */
 export function dodatakStila(podrazumevano: AtributiDela): Plugin {
+  const kljuc = new PluginKey<ReadonlySet<PmCvor>>('stil');
   return new Plugin({
+    key: kljuc,
+    // pasusi POČETNOG dokumenta sesije: prazan pasus koji istorija vrati (Ctrl+Z posle brisanja) je isti objekat kao na
+    // početku, pa ostaje netaknut iako ga nema u stanju neposredno pre poništavanja (F12 rr2/1)
+    state: {
+      init: (_c, s) => {
+        const pocetni = new Set<PmCvor>();
+        s.doc.forEach((c) => pocetni.add(c));
+        return pocetni;
+      },
+      apply: (_tr, v) => v,
+    },
     appendTransaction(transakcije, stari, novi) {
       if (!transakcije.some((t) => t.docChanged)) return null;
       const nazad = new Mapping();
@@ -59,6 +71,7 @@ export function dodatakStila(podrazumevano: AtributiDela): Plugin {
       // identitet, ne opsezi mapa: `setNodeMarkup` suseda pokriva i token granice pa bi "dirao" i ovaj pasus
       const stariCvorovi = new Set<PmCvor>();
       stari.doc.forEach((c) => stariCvorovi.add(c));
+      const pocetni = kljuc.getState(novi) ?? new Set<PmCvor>();
       const tip = novi.schema.marks['stil'];
       let tr: Transaction | null = null;
       let prethodni: AtributiDela | null = null;
@@ -78,7 +91,7 @@ export function dodatakStila(podrazumevano: AtributiDela): Plugin {
         });
         if (pasus.content.size > 0) {
           if (a.prazanDeo) (tr ??= novi.tr).setNodeMarkup(pos, undefined, { ...a, prazanDeo: null });
-        } else if (!a.prazanDeo && !stariCvorovi.has(pasus)) {
+        } else if (!a.prazanDeo && !stariCvorovi.has(pasus) && !pocetni.has(pasus)) {
           const prazanDeo = { ...stilPraznog(novi, stari, unazad, pos, prethodni, podrazumevano) };
           (tr ??= novi.tr).setNodeMarkup(pos, undefined, { ...a, prazanDeo });
         }

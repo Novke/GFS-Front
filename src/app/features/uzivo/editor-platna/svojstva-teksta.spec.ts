@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { Mock } from 'vitest';
-import type { Platno, TekstSloj } from '../data-access/platno.models';
+import type { Pasus, Platno, TekstSloj } from '../data-access/platno.models';
 import { noviTekst } from '../data-access/platno-novo';
 import { platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -22,6 +22,7 @@ class DomacinComponent {}
 const STANJE: StanjeSelekcije = {
   font: 'Carlito', velicina: 18, boja: '#000000', podebljano: false, kurziv: false, podvuceno: false, precrtano: false,
   polozaj: 'OBICAN', poravnanje: 'LEVO', lista: 'BEZ', nivo: 0, proredProcenat: 100, razmakPre: 0, razmakPosle: 0,
+  polozaji: ['OBICAN'], liste: ['BEZ'],
 };
 
 /** Tekst sa dva pasusa: "Prvi" (Carlito) + "drugi" (Tinos) i "Treći" (Carlito). */
@@ -32,6 +33,8 @@ function tekst(id: string, izmene: Partial<TekstSloj> = {}): TekstSloj {
     ...izmene,
   };
 }
+
+const listaZnak = (p: Pasus): Pasus => ({ ...p, lista: { vrsta: 'ZNAK', znak: '•', boja: null, format: null, pocetak: null } });
 
 describe('SvojstvaTekstaComponent', () => {
   let fixture: ComponentFixture<DomacinComponent>;
@@ -69,6 +72,7 @@ describe('SvojstvaTekstaComponent', () => {
     return {
       presek: vi.fn(() => null), odbaciPresek: vi.fn(), postaviStil: vi.fn(), prebaciStil: vi.fn(), postaviPasus: vi.fn(),
       prebaciListu: vi.fn(), promeniNivo: vi.fn(), stanje: signal(stanje), fokus: vi.fn(),
+      ponisti: vi.fn(() => false), ponovi: vi.fn(() => false),
     };
   }
 
@@ -195,6 +199,61 @@ describe('SvojstvaTekstaComponent', () => {
       await klik('Vrati 100%');
       expect(sloj('t1').okvir).toMatchObject({ skala: 1, skalaProreda: 1 });
       expect(el().textContent).not.toContain('Smanjenje fonta');
+    });
+
+    it('sidro ima ključ (tekst-sidro): uzastopne promene u roku od 1 s su jedan korak', async () => {
+      const pre = tekst('t1');
+      await pocni([pre], ['t1']);
+      const sidro = (ime: string) =>
+        el().querySelector<HTMLButtonElement>(`mat-button-toggle-group[aria-label="Sidro teksta"] button[aria-label="${ime}"]`)!;
+      sidro('Sredina').click();
+      await fixture.whenStable();
+      sat.t = 400;
+      sidro('Dno').click();
+      await fixture.whenStable();
+      expect(sloj('t1').okvir.sidro).toBe('DNO');
+      store.ponisti();
+      expect(sloj('t1')).toEqual(pre);
+      expect(store.mozeNazad()).toBe(false);
+    });
+
+    it('mešane boje: dugme boje vidljivo kaže "Različito" (ne "Bez")', async () => {
+      await pocni([tekst('t1', { pasusi: [pasusSa([deo('a'), deo('b', { boja: '#C00000' })])] })], ['t1']);
+      const b = dugme(el(), 'Boja teksta: Različito');
+      expect(b).not.toBeNull();
+      expect(b!.textContent).toContain('Različito');
+      expect(b!.textContent).not.toContain('Bez');
+    });
+
+    it('aria-pressed mixed samo za vrednost prisutnu u izboru (OBICAN + INDEKS: Indeks mixed, Eksponent false)', async () => {
+      await pocni([tekst('t1', { pasusi: [pasusSa([deo('a'), deo('b', { polozaj: 'INDEKS' })]), pasusSa([deo('c')])] })], ['t1']);
+      expect(dugme(el(), 'Indeks')!.getAttribute('aria-pressed')).toBe('mixed');
+      expect(dugme(el(), 'Eksponent')!.getAttribute('aria-pressed')).toBe('false');
+      // lista: jedan pasus sa znakovima, drugi bez -> Znakovi mixed, Numerisana false
+      const t = sloj('t1');
+      store.inicijalizuj(platnoSaAnimacijama([], [{ ...t, pasusi: [listaZnak(t.pasusi[0]), t.pasusi[1]] }]));
+      store.izaberi(['t1']);
+      await fixture.whenStable();
+      expect(dugme(el(), 'Lista sa znakovima')!.getAttribute('aria-pressed')).toBe('mixed');
+      expect(dugme(el(), 'Numerisana lista')!.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('title sa prečicom samo tokom uređivanja (Ctrl+B radi samo u tekstu)', async () => {
+      await pocni([tekst('t1')], ['t1']);
+      expect(dugme(el(), 'Podebljano')!.title).toBe('Podebljano');
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni());
+      await fixture.whenStable();
+      expect(dugme(el(), 'Podebljano')!.title).toBe('Podebljano (Ctrl+B)');
+    });
+
+    it('dva sloja: prazan pasus na početku drugog dobija stil teksta SVOG sloja (ne prethodnog sloja)', async () => {
+      await pocni([
+        tekst('t1', { pasusi: [pasusSa([deo('a', { font: 'Arimo' })])] }),
+        tekst('t2', { pasusi: [pasusSa([]), pasusSa([deo('b', { font: 'Tinos', velicina: 40 })])] }),
+      ], ['t1', 't2']);
+      await klik('Kurziv');
+      expect(sloj('t2').pasusi[0].delovi).toEqual([deo('', { font: 'Tinos', velicina: 40, kurziv: true })]);
     });
 
     it('zaključan sloj: kontrole onemogućene, dokument se ne menja', async () => {

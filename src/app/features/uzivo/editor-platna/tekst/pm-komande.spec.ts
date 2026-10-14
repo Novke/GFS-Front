@@ -281,10 +281,22 @@ describe('stanjeSelekcije', () => {
     expect(stanjeSelekcije(g.state)).toEqual({
       font: 'Tinos', velicina: 30, boja: '#C00000', podebljano: false, kurziv: false, podvuceno: false, precrtano: false,
       polozaj: 'OBICAN', poravnanje: 'LEVO', lista: 'BEZ', nivo: 0, proredProcenat: 90, razmakPre: 6, razmakPosle: 0,
+      polozaji: ['OBICAN'], liste: ['BEZ'],
     });
     g.izaberi(poz(g.dok, 0, 0), poz(g.dok, 1, 2));
     expect(stanjeSelekcije(g.state)).toMatchObject({
       font: null, velicina: 30, boja: null, poravnanje: null, proredProcenat: 90, razmakPre: null, lista: 'BEZ',
+    });
+  });
+
+  it('mešan položaj i lista: polozaji i liste nose samo vrednosti prisutne u izboru (aria-pressed mixed, F13)', () => {
+    const g = new Golo([
+      pasusSa([deo('ab'), deo('cd', { polozaj: 'INDEKS' })]),
+      pasusSa([deo('ef')], { lista: { vrsta: 'ZNAK', znak: '•', boja: null, format: null, pocetak: null } }),
+    ]);
+    g.izaberi(poz(g.dok, 0, 0), poz(g.dok, 1, 2));
+    expect(stanjeSelekcije(g.state)).toMatchObject({
+      polozaj: null, polozaji: ['OBICAN', 'INDEKS'], lista: null, liste: ['BEZ', 'ZNAK'],
     });
   });
 

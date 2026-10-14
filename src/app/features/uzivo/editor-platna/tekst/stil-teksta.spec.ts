@@ -1,7 +1,7 @@
 import type { Pasus } from '../../data-access/platno.models';
 import { deo, pasusSa } from './pm.testing';
 import {
-  MAX_NIVO, VELICINE_SLOVA, listaSvima, nivoSvima, novaLista, pasusSvima, stanjeDelova, stilSvima, uvlacenjeListe,
+  MAX_NIVO, VELICINE_SLOVA, jedna, listaSvima, nivoSvima, novaLista, pasusSvima, stanjeDelova, stilSvima, uvlacenjeListe,
 } from './stil-teksta';
 
 const znak = (p: Pasus = pasusSa([deo('x')])): Pasus => ({ ...p, lista: novaLista('ZNAK'), uvlacenje: uvlacenjeListe(p.nivo) });
@@ -33,6 +33,11 @@ describe('stil-teksta (panel teksta nad celim slojem, F13)', () => {
       expect(stanjeDelova([pasusSa([deo('', { velicina: 30 })])]).velicina).toBe(30);
     });
 
+    it('polozaji i liste: samo vrednosti prisutne u sloju (redom pojavljivanja)', () => {
+      const s = stanjeDelova([pasusSa([deo('a'), deo('b', { polozaj: 'EKSPONENT' })]), znak()]);
+      expect([s.polozaj, s.polozaji, s.lista, s.liste]).toEqual([null, ['OBICAN', 'EKSPONENT'], null, ['BEZ', 'ZNAK']]);
+    });
+
     it('atributi pasusa: poravnanje, lista (BEZ / vrsta / mešano), nivo, prored i razmaci', () => {
       const a = pasusSa([deo('a')], { poravnanje: 'CENTAR', proredProcenat: 120, razmakPre: 6, razmakPosle: 0 });
       const b = { ...znak(pasusSa([deo('b')], { poravnanje: 'CENTAR', proredProcenat: 120, razmakPre: 6, razmakPosle: 12 })) };
@@ -55,6 +60,15 @@ describe('stil-teksta (panel teksta nad celim slojem, F13)', () => {
     it('pasus bez delova (`delovi: []`) dobija prazan deo u stilu prethodnog teksta, sa izmenom', () => {
       const r = stilSvima([pasusSa([deo('a', { font: 'Tinos', velicina: 40 })]), pasusSa([])], { boja: '#FF0000' });
       expect(r[1].delovi).toEqual([deo('', { font: 'Tinos', velicina: 40, boja: '#FF0000' })]);
+    });
+
+    it('pasus bez delova na početku: osnova je prvi sledeći deo sa tekstom (ne podrazumevani Carlito 18)', () => {
+      const r = stilSvima([pasusSa([]), pasusSa([deo('')]), pasusSa([deo('a', { font: 'Tinos', velicina: 40 })])], { kurziv: true });
+      expect(r[0].delovi).toEqual([deo('', { font: 'Tinos', velicina: 40, kurziv: true })]);
+    });
+
+    it('jedna: ista vrednost ili null (mešano i prazno)', () => {
+      expect([jedna([1, 1]), jedna([1, 2]), jedna([])]).toEqual([1, null, null]);
     });
 
     it('bez promene vraća isti niz i iste pasuse (nema koraka istorije ni PUT-a)', () => {

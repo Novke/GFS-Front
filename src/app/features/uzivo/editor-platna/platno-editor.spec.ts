@@ -42,6 +42,33 @@ describe('PlatnoEditorComponent', () => {
     return e;
   };
 
+  /** Pravi uređivač (ProseMirror view) aktivne sesije. */
+  const pogled = () => (fixture.debugElement.query(By.directive(TekstUredjivacComponent)).componentInstance as TekstUredjivacComponent).pogled()!;
+  /** Modalitet unosa (CDK InputModalityDetector): pravi pritisak miša (buttons i detail 1) ili taster na dokumentu. */
+  const misem = (cilj: Element) => cilj.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, buttons: 1, detail: 1 }));
+  const tastaturom = () => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  const panelTeksta = () => el().querySelector<HTMLElement>('app-svojstva-teksta')!;
+  const selectFonta = () => panelTeksta().querySelector<HTMLElement>('app-izbor-fonta mat-select')!;
+  /** Font iz panela teksta (otvori select, izaberi opciju mišem ili tastaturom). */
+  async function fontIzPanela(naziv: string, nacin: 'mis' | 'tastatura') {
+    panelTeksta().querySelector<HTMLElement>('app-izbor-fonta .mat-mdc-select-trigger')!.click();
+    await fixture.whenStable();
+    const opcija = Array.from(document.querySelectorAll<HTMLElement>('mat-option')).find((o) => o.textContent!.trim() === naziv)!;
+    if (nacin === 'mis') misem(opcija);
+    else tastaturom();
+    opcija.click();
+    await fixture.whenStable();
+    await Promise.resolve();
+  }
+  /** Fontovi svih delova teksta u view-u uređivača. */
+  const fontoviUredjivaca = () => {
+    const f: string[] = [];
+    pogled().state.doc.descendants((n) => {
+      if (n.isText) f.push(n.marks.find((m) => m.type.name === 'stil')!.attrs['font'] as string);
+    });
+    return [...new Set(f)];
+  };
+
   beforeEach(async () => {
     odjava = vi.fn<() => void>();
     lazni = {
@@ -604,6 +631,111 @@ describe('PlatnoEditorComponent', () => {
       expect(t.pasusi.flatMap((p) => p.delovi).every((d) => d.podebljano)).toBe(true);
     });
 
+    describe('zajednički krug F12/F13', () => {
+      async function uredi() {
+        await samoTekst();
+        dvoklik(50, 50);
+        await fixture.whenStable();
+      }
+      const kucajNaKraj = (t: string) => pogled().dispatch(pogled().state.tr.insertText(t, pogled().state.doc.content.size - 1));
+
+      it('(I) Ctrl+A, font Tinos iz panela, Ctrl+Z na select-u: font vraćen, tekst ostaje, sesija otvorena; Ctrl+Y vraća Tinos', async () => {
+        await uredi();
+        kucajNaKraj('X');
+        taster(uredjivac()!, 'a', { ctrlKey: true });
+        await fontIzPanela('Tinos', 'tastatura');
+        expect(document.activeElement).toBe(selectFonta());
+        expect(fontoviUredjivaca()).toEqual(['Tinos']);
+        lazni.izmeniPlatno.mockClear();
+        const z = taster(selectFonta(), 'z', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(z.defaultPrevented).toBe(true);
+        expect(fontoviUredjivaca()).toEqual(['Carlito']);
+        expect(pogled().state.doc.textContent).toContain('X');
+        expect(store.uredjivanje()).not.toBeNull();
+        expect(lazni.izmeniPlatno).not.toHaveBeenCalled();
+        taster(selectFonta(), 'y', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(fontoviUredjivaca()).toEqual(['Tinos']);
+        taster(uredjivac()!, 'Escape');
+        await fixture.whenStable();
+        const t = store.platno().slojevi.find((s) => s.id === 'tekst') as TekstSloj;
+        expect([...new Set(t.pasusi.flatMap((p) => p.delovi).map((d) => d.font))]).toEqual(['Tinos']);
+        expect(t.pasusi.map((p) => p.delovi.map((d) => d.tekst).join('')).join('|')).toContain('X');
+      });
+
+      it('(I) kad ProseMirror nema šta da poništi, Ctrl+Z iz panela završava sesiju (tekst je korak) i poništava ga', async () => {
+        await uredi();
+        const pocetak = store.platno();
+        kucajNaKraj('X');
+        taster(uredjivac()!, 'a', { ctrlKey: true });
+        await fontIzPanela('Tinos', 'tastatura');
+        taster(selectFonta(), 'z', { ctrlKey: true });
+        taster(selectFonta(), 'z', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(pogled().state.doc.textContent).not.toContain('X');
+        expect(store.uredjivanje()).not.toBeNull();
+        taster(selectFonta(), 'z', { ctrlKey: true });
+        await fixture.whenStable();
+        expect(store.uredjivanje()).toBeNull();
+        expect(store.platno()).toBe(pocetak);
+      });
+
+      it('(2) font izabran MIŠEM: fokus se vraća u tekst; TASTATUROM: ostaje na select-u', async () => {
+        await uredi();
+        taster(uredjivac()!, 'a', { ctrlKey: true });
+        await fontIzPanela('Arimo', 'mis');
+        expect(document.activeElement).toBe(uredjivac());
+        await fontIzPanela('Tinos', 'tastatura');
+        expect(document.activeElement).toBe(selectFonta());
+        expect(fontoviUredjivaca()).toEqual(['Tinos']);
+      });
+
+      it('(2) meni veličina: mišem fokus u tekst, tastaturom na okidač menija', async () => {
+        await uredi();
+        taster(uredjivac()!, 'a', { ctrlKey: true });
+        const okidac = Array.from(panelTeksta().querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => b.getAttribute('aria-label') === 'Veličine slova')!;
+        const izaberi = async (v: string, nacin: 'mis' | 'tastatura') => {
+          okidac.click();
+          await fixture.whenStable();
+          const stavka = Array.from(document.querySelectorAll<HTMLElement>('[mat-menu-item]')).find((x) => x.textContent!.trim() === v)!;
+          if (nacin === 'mis') misem(stavka);
+          else tastaturom();
+          stavka.click();
+          await fixture.whenStable();
+          await Promise.resolve();
+        };
+        await izaberi('48', 'mis');
+        expect(document.activeElement).toBe(uredjivac());
+        await izaberi('60', 'tastatura');
+        expect(document.activeElement).toBe(okidac);
+        expect(store.aktivniUredjivac()!.stanje().velicina).toBe(60);
+      });
+
+      it('(2) paleta boje: mišem fokus u tekst, tastaturom na dugme boje', async () => {
+        await uredi();
+        taster(uredjivac()!, 'a', { ctrlKey: true });
+        const dugmeBoje = () => Array.from(panelTeksta().querySelectorAll<HTMLButtonElement>('app-izbor-boje button'))
+          .find((b) => b.getAttribute('aria-label')!.startsWith('Boja teksta: '))!;
+        const izaberi = async (nacin: 'mis' | 'tastatura') => {
+          dugmeBoje().click();
+          await fixture.whenStable();
+          const uzorak = Array.from(document.querySelectorAll<HTMLButtonElement>('.uz-ep-paleta button'))
+            .find((b) => b.getAttribute('aria-label')?.startsWith('Akcent 1'))!;
+          if (nacin === 'mis') misem(uzorak);
+          else tastaturom();
+          uzorak.click();
+          await fixture.whenStable();
+          await Promise.resolve();
+        };
+        await izaberi('mis');
+        expect(document.activeElement).toBe(uredjivac());
+        await izaberi('tastatura');
+        expect(document.activeElement).toBe(dugmeBoje());
+      });
+    });
+
     it('klik van sloja završava uređivanje (izlaz jednom), fokus je na okviru platna', async () => {
       await samoTekst();
       dvoklik(50, 50);
@@ -726,6 +858,25 @@ describe('PlatnoEditorComponent', () => {
       expect(document.activeElement).toBe(okvir());
       store.ponisti();
       expect(store.platno()).toBe(pocetak);
+    });
+
+    it('zajednički krug (I): ćelija, Ctrl+A, font Tinos iz panela, Ctrl+Z na select-u -> font vraćen, tekst ostaje, sesija otvorena', async () => {
+      store.izaberi(['tabela']);
+      store.izaberiCeliju({ r: 0, k: 1 });
+      taster(okvir(), 'Enter');
+      await fixture.whenStable();
+      kucaj('X');
+      taster(uredjivac()!, 'a', { ctrlKey: true });
+      await fontIzPanela('Tinos', 'tastatura');
+      expect(fontoviUredjivaca()).toEqual(['Tinos']);
+      taster(selectFonta(), 'z', { ctrlKey: true });
+      await fixture.whenStable();
+      expect(fontoviUredjivaca()).not.toContain('Tinos');
+      expect(store.uredjivanje()).toEqual({ slojId: 'tabela', celija: { r: 0, k: 1 } });
+      taster(uredjivac()!, 'Escape');
+      await fixture.whenStable();
+      expect(tekstCelije(0, 1)).toEqual(['AX']);
+      expect(tabela().celije[0][1].pasusi[0].delovi.map((d) => d.font)).not.toContain('Tinos');
     });
 
     it('Tab u ćeliji prelazi na sledeću (tekst je korak), Shift+Tab nazad; poslednja + Tab ostaje', async () => {

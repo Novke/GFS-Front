@@ -8,11 +8,12 @@
 // Okvir (sidro, margine, prelom, skala) je svojstvo sloja: menja se kroz `primeni` i dok se kuca (tekst se prvo upiše).
 // Izabrana tabela (F14): isto, nad pasusima vlasnika u opsegu ćelija (bez izbora ćelija: cela tabela), bez odeljka okvira.
 // Panel je van okvira platna, pa prečice platna u njegovim poljima ne rade (odluka 24).
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { InputModalityDetector } from '@angular/cdk/a11y';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
+import { MatMenuModule, type MenuCloseReason } from '@angular/material/menu';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import type { Celija, Okvir, Pasus, Poravnanje, Sidro, Tema, TekstSloj } from '../data-access/platno.models';
 import { zaokruziKaoServer as z } from '../data-access/platno-provera';
@@ -25,7 +26,7 @@ import { izmeniCelije } from './tabela';
 import type { PoljeStila } from './tekst/pm-komande';
 import type { AtributiDela } from './tekst/pm-sema';
 import {
-  type StanjeSelekcije, VELICINE_SLOVA, listaSvima, nivoSvima, pasusSvima, stanjeDelova, stilSvima,
+  type StanjeSelekcije, VELICINE_SLOVA, jedna, listaSvima, nivoSvima, pasusSvima, stanjeDelova, stilSvima,
 } from './tekst/stil-teksta';
 
 const UKRASI: readonly { polje: PoljeStila; naziv: string; naslov: string; ikona: string }[] = [
@@ -51,9 +52,14 @@ const MARGINE: readonly { polje: Margina; naziv: string }[] = [
   { polje: 'unutraDesno', naziv: 'Margina desno' }, { polje: 'unutraDole', naziv: 'Margina dole' },
 ];
 
-/** Jedna vrednost ako je ista za sve, inače null (mešano). */
-function jedna<T>(vrednosti: readonly T[]): T | null {
-  return vrednosti.length && vrednosti.every((v) => v === vrednosti[0]) ? vrednosti[0] : null;
+/** Nove pasuse samo jedinicama (slojevima ili ćelijama) koje `f` menja; `f` bez promene vraća isti niz. */
+function poJedinicama<T extends { pasusi: Pasus[] }>(jedinice: readonly T[], f: (pasusi: readonly Pasus[]) => Pasus[]): Map<T, Pasus[]> {
+  const m = new Map<T, Pasus[]>();
+  for (const j of jedinice) {
+    const novi = f(j.pasusi);
+    if (novi !== j.pasusi) m.set(j, novi);
+  }
+  return m;
 }
 const procenat = (v: number) => `${z(v * 100)}%`.replace('.', ',');
 
@@ -69,30 +75,30 @@ const procenat = (v: number) => `${z(v * 100)}%`.replace('.', ',');
     @let st = stanje();
     @let z = zakljucano();
     <h3 class="uz-ep-odeljak">Tekst</h3>
-    <app-izbor-fonta [vrednost]="st.font" [onemoguceno]="z" (izbor)="postaviStil({ font: $event }, 'font')" />
+    <app-izbor-fonta [vrednost]="st.font" [onemoguceno]="z" (izbor)="postaviStil({ font: $event }, 'font'); posleIzbora()" />
     <div class="uz-ep-velicina">
       <app-brojcano-polje oznaka="Veličina" jedinica="pt" [vrednost]="st.velicina" [min]="1" [max]="400" [stegni]="false"
                           [onemoguceno]="z" (promena)="postaviStil({ velicina: $event }, 'velicina')" />
-      <button mat-icon-button type="button" aria-label="Veličine slova" title="Veličine slova" [disabled]="z"
-              [matMenuTriggerFor]="meniVelicina"><mat-icon svgIcon="expand_more" /></button>
-      <mat-menu #meniVelicina="matMenu">
+      <button #okidacVelicina mat-icon-button type="button" aria-label="Veličine slova" title="Veličine slova" [disabled]="z"
+              [matMenuTriggerFor]="meniVelicina" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="expand_more" /></button>
+      <mat-menu #meniVelicina="matMenu" (closed)="posleMenija($event)">
         @for (v of velicine; track v) {
           <button mat-menu-item type="button" (click)="postaviStil({ velicina: v }, 'velicina')">{{ v }}</button>
         }
       </mat-menu>
     </div>
-    <app-izbor-boje oznaka="Boja teksta" [tema]="tema()" [vrednost]="st.boja" [onemoguceno]="z"
-                    (izbor)="postaviBoju($event)" />
+    <app-izbor-boje oznaka="Boja teksta" [tema]="tema()" [vrednost]="st.boja" [mesano]="st.boja === null" [onemoguceno]="z"
+                    [fokusPosleIzbora]="fokusUTekstMisem" (izbor)="postaviBoju($event)" />
     <div class="uz-ep-dugmad" role="group" aria-label="Stil slova">
       @for (u of ukrasi; track u.polje) {
-        <button mat-icon-button type="button" [attr.aria-label]="u.naziv" [title]="u.naslov" [disabled]="z"
+        <button mat-icon-button type="button" [attr.aria-label]="u.naziv" [title]="uredjuje() ? u.naslov : u.naziv" [disabled]="z"
                 [attr.aria-pressed]="pritisnuto(st[u.polje])" (click)="prebaci(u.polje)"><mat-icon [svgIcon]="u.ikona" /></button>
       }
       <button mat-icon-button type="button" aria-label="Indeks" title="Indeks" [disabled]="z"
-              [attr.aria-pressed]="pritisnuto(st.polozaj === null ? null : st.polozaj === 'INDEKS')"
+              [attr.aria-pressed]="prisutno(st.polozaj, st.polozaji, 'INDEKS')"
               (click)="prebaciPolozaj('INDEKS')"><mat-icon svgIcon="subscript" /></button>
       <button mat-icon-button type="button" aria-label="Eksponent" title="Eksponent" [disabled]="z"
-              [attr.aria-pressed]="pritisnuto(st.polozaj === null ? null : st.polozaj === 'EKSPONENT')"
+              [attr.aria-pressed]="prisutno(st.polozaj, st.polozaji, 'EKSPONENT')"
               (click)="prebaciPolozaj('EKSPONENT')"><mat-icon svgIcon="superscript" /></button>
     </div>
 
@@ -105,14 +111,16 @@ const procenat = (v: number) => `${z(v * 100)}%`.replace('.', ',');
     </mat-button-toggle-group>
     <div class="uz-ep-dugmad" role="group" aria-label="Lista i nivo">
       <button mat-icon-button type="button" aria-label="Lista sa znakovima" title="Lista sa znakovima" [disabled]="z"
-              [attr.aria-pressed]="pritisnuto(st.lista === null ? null : st.lista === 'ZNAK')"
+              [attr.aria-pressed]="prisutno(st.lista, st.liste, 'ZNAK')"
               (click)="prebaciListu('ZNAK')"><mat-icon svgIcon="format_list_bulleted" /></button>
       <button mat-icon-button type="button" aria-label="Numerisana lista" title="Numerisana lista" [disabled]="z"
-              [attr.aria-pressed]="pritisnuto(st.lista === null ? null : st.lista === 'BROJ')"
+              [attr.aria-pressed]="prisutno(st.lista, st.liste, 'BROJ')"
               (click)="prebaciListu('BROJ')"><mat-icon svgIcon="format_list_numbered" /></button>
-      <button mat-icon-button type="button" aria-label="Smanji nivo" title="Smanji nivo (Shift+Tab na početku stavke)"
+      <button mat-icon-button type="button" aria-label="Smanji nivo"
+              [title]="uredjuje() ? 'Smanji nivo (Shift+Tab na početku stavke)' : 'Smanji nivo'"
               [disabled]="z" (click)="promeniNivo(-1)"><mat-icon svgIcon="format_indent_decrease" /></button>
-      <button mat-icon-button type="button" aria-label="Povećaj nivo" title="Povećaj nivo (Tab na početku stavke)"
+      <button mat-icon-button type="button" aria-label="Povećaj nivo"
+              [title]="uredjuje() ? 'Povećaj nivo (Tab na početku stavke)' : 'Povećaj nivo'"
               [disabled]="z" (click)="promeniNivo(1)"><mat-icon svgIcon="format_indent_increase" /></button>
     </div>
     <div class="uz-ep-polja">
@@ -127,7 +135,7 @@ const procenat = (v: number) => `${z(v * 100)}%`.replace('.', ',');
     @if (okvir(); as o) {
       <h3 class="uz-ep-odeljak">Raspored u okviru</h3>
       <mat-button-toggle-group aria-label="Sidro teksta" hideSingleSelectionIndicator [value]="o.sidro" [disabled]="z"
-                               (change)="postaviOkvir({ sidro: $event.value })">
+                               (change)="postaviOkvir({ sidro: $event.value }, 'sidro')">
         @for (s of sidra; track s.v) {
           <mat-button-toggle [value]="s.v" [aria-label]="s.naziv" [title]="s.naziv"><mat-icon [svgIcon]="s.ikona" /></mat-button-toggle>
         }
@@ -166,6 +174,8 @@ export class SvojstvaTekstaComponent {
   readonly tema = input.required<Tema>();
 
   private readonly store = inject(PlatnoEditorStore);
+  private readonly modalitet = inject(InputModalityDetector);
+  private readonly okidacVelicina = viewChild.required('okidacVelicina', { read: ElementRef });
 
   protected readonly velicine = VELICINE_SLOVA;
   protected readonly ukrasi = UKRASI;
@@ -173,6 +183,7 @@ export class SvojstvaTekstaComponent {
   protected readonly sidra = SIDRA;
   protected readonly margine = MARGINE;
 
+  protected readonly uredjuje = computed(() => this.store.uredjivanje() !== null);
   /** Aktivni uređivač teksta (samo dok traje sesija); null bez uređivanja. */
   private readonly uredjivac = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac() : null));
   private readonly tekstSlojevi = computed(() => this.store.izabraniSlojevi().filter((s): s is TekstSloj => s.tip === 'TEKST'));
@@ -211,6 +222,36 @@ export class SvojstvaTekstaComponent {
     return v === null ? 'mixed' : v ? 'true' : 'false';
   }
 
+  /** `aria-pressed` za vrednost polja sa više vrednosti (položaj, lista): "mixed" samo kad je vrednost PRISUTNA u izboru. */
+  protected prisutno<T>(v: T | null, prisutne: readonly T[], vrednost: T): 'true' | 'false' | 'mixed' {
+    return v === vrednost ? 'true' : v === null && prisutne.includes(vrednost) ? 'mixed' : 'false';
+  }
+
+  /**
+   * Posle izbora MIŠEM (font, veličina iz menija, boja) tokom uređivanja fokus se vraća u tekst, kao u PowerPointu; posle
+   * izbora tastaturom ostaje na kontroli (komanda je ionako otišla na sačuvan izbor uređivača). true = fokus je u tekstu.
+   */
+  protected readonly fokusUTekstMisem = (): boolean => {
+    const u = this.uredjivac();
+    if (!u || this.modalitet.mostRecentModality === 'keyboard') return false;
+    u.fokus();
+    return true;
+  };
+
+  /** Font: `mat-select` posle izbora sinhrono vraća fokus na sebe, pa se fokus u tekst premešta tek posle toga. */
+  protected posleIzbora(): void {
+    queueMicrotask(() => this.fokusUTekstMisem());
+  }
+
+  /**
+   * Meni veličina ne vraća fokus sam (`matMenuTriggerRestoreFocus` false): mišem tokom uređivanja u tekst, inače na
+   * okidač; Tab pušta fokus dalje.
+   */
+  protected posleMenija(razlog: MenuCloseReason): void {
+    if (razlog === 'tab' || (razlog !== 'keydown' && this.fokusUTekstMisem())) return;
+    this.okidacVelicina().nativeElement.focus();
+  }
+
   /** Tokom uređivanja pritisak na dugme ne uzima fokus: fokus i izbor ostaju u tekstu (polja i izbornici ga uzimaju). */
   protected pritisak(e: MouseEvent): void {
     if (this.store.uredjivanje() && (e.target as Element | null)?.closest('button')) e.preventDefault();
@@ -222,50 +263,26 @@ export class SvojstvaTekstaComponent {
   }
 
   /**
-   * Izmena pasusa svih izabranih TEKST slojeva (bez uređivanja). `f` radi nad spojenim pasusima svih slojeva (odluka
-   * "svi već te vrste" za listu važi za ceo izbor), pa se rezultat deli nazad po slojevima; nepromenjen sloj ostaje isti.
+   * Izmena pasusa izabranih TEKST slojeva, ili vlasnika opsega ćelija izabrane tabele (F14), bez uređivanja. `f` radi po
+   * jedinici (sloju ili ćeliji), pa npr. osnova praznog pasusa u `stilSvima` nikad ne dolazi iz drugog sloja; nepromenjena
+   * jedinica ostaje ista.
    */
   private slojevima(f: (pasusi: readonly Pasus[]) => Pasus[], polje?: string): void {
     if (this.store.uredjivanje() || this.store.zakljucanUIzboru()) return;
+    const kljuc = polje ? this.kljuc(polje) : undefined;
     const t = this.celije();
     if (t) {
-      this.celijama(t, f, polje);
+      const poCeliji = poJedinicama<Celija>(t.vlasnici, f);
+      if (!poCeliji.size) return;
+      this.store.primeni((p) => izmeniSlojeve(p, new Set([t.id]), (s) => (s.tip !== 'TABELA' ? s
+        : izmeniCelije(s, t.o, (c) => (poCeliji.has(c) ? { ...c, pasusi: poCeliji.get(c)! } : c)))), kljuc);
       return;
     }
-    const slojevi = this.tekstSlojevi();
-    const svi = slojevi.flatMap((s) => s.pasusi);
-    const novi = f(svi);
-    if (novi === svi) return;
-    const poSloju = new Map<string, Pasus[]>();
-    let i = 0;
-    for (const s of slojevi) {
-      const deo = novi.slice(i, i + s.pasusi.length);
-      i += s.pasusi.length;
-      if (deo.some((p, j) => p !== s.pasusi[j])) poSloju.set(s.id, deo);
-    }
+    const poSloju = new Map([...poJedinicama<TekstSloj>(this.tekstSlojevi(), f)].map(([s, pasusi]) => [s.id, pasusi]));
+    if (!poSloju.size) return;
     this.store.primeni(
       (p) => izmeniSlojeve(p, new Set(poSloju.keys()), (s) => (s.tip === 'TEKST' ? { ...s, pasusi: poSloju.get(s.id)! } : s)),
-      polje ? this.kljuc(polje) : undefined,
-    );
-  }
-
-  /** Isto nad pasusima vlasnika opsega tabele (spojeni redom, pa nazad po ćelijama; nepromenjena ćelija ostaje ista). */
-  private celijama(t: { id: string; o: { r1: number; k1: number; r2: number; k2: number }; vlasnici: Celija[] },
-                   f: (pasusi: readonly Pasus[]) => Pasus[], polje?: string): void {
-    const svi = t.vlasnici.flatMap((c) => c.pasusi);
-    const novi = f(svi);
-    if (novi === svi) return;
-    const poCeliji = new Map<Celija, Pasus[]>();
-    let i = 0;
-    for (const c of t.vlasnici) {
-      const deo = novi.slice(i, i + c.pasusi.length);
-      i += c.pasusi.length;
-      if (deo.some((p, j) => p !== c.pasusi[j])) poCeliji.set(c, deo);
-    }
-    this.store.primeni(
-      (p) => izmeniSlojeve(p, new Set([t.id]), (s) => (s.tip !== 'TABELA' ? s
-        : izmeniCelije(s, t.o, (c) => (poCeliji.has(c) ? { ...c, pasusi: poCeliji.get(c)! } : c)))),
-      polje ? this.kljuc(polje) : undefined,
+      kljuc,
     );
   }
 
@@ -300,10 +317,18 @@ export class SvojstvaTekstaComponent {
     else this.slojevima((p) => pasusSvima(p, izmena), polje);
   }
 
+  /**
+   * Lista: "svi već te vrste" važi za ceo izbor (više slojeva ili ćelija): tada se lista uklanja svima; inače je dobijaju
+   * sve jedinice koje je još nemaju (jedinica u kojoj su svi pasusi već te vrste ostaje ista).
+   */
   protected prebaciListu(vrsta: 'ZNAK' | 'BROJ'): void {
     const u = this.uredjivac();
-    if (u) u.prebaciListu(vrsta);
-    else this.slojevima((p) => listaSvima(p, vrsta));
+    if (u) {
+      u.prebaciListu(vrsta);
+      return;
+    }
+    const svi = this.stanje().lista === vrsta;
+    this.slojevima((p) => (!svi && p.every((x) => x.lista?.vrsta === vrsta) ? (p as Pasus[]) : listaSvima(p, vrsta)));
   }
 
   protected promeniNivo(razlika: 1 | -1): void {

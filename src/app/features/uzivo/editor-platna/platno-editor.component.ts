@@ -257,9 +257,14 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
     this.ponistiIliPonovi(k.tip);
   }
 
+  /**
+   * Tokom sesije teksta (fokus u panelu ili na okviru) undo/redo prvo ide u istoriju uređivača, pa npr. Ctrl+Z posle
+   * izbora fonta vraća samo font; tek kad uređivač nema šta, sesija se završava i radi istorija platna.
+   */
   private ponistiIliPonovi(tip: 'PONISTI' | 'PONOVI'): void {
-    if (tip === 'PONISTI') this.store.ponisti();
-    else this.store.ponovi();
+    if (tip === 'PONISTI') {
+      if (!this.store.ponistiUTekstu()) this.store.ponisti();
+    } else if (!this.store.ponoviUTekstu()) this.store.ponovi();
   }
 
   /** Ostale prečice SAMO na okviru platna (odluka 24); poništi/ponovi idu do korena (`tastaturaKorena`). */

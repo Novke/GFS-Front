@@ -222,10 +222,15 @@ export const PlatnoEditorStore = signalStore(
     };
     const izabrani = () => new Set(store.izbor());
 
-    /** Kopije slojeva na vrh (lepljenje, dupliranje), izabrane posle uspeha. */
-    function dodajKopije(slojevi: readonly Sloj[]): void {
+    /**
+     * Kopije slojeva na vrh (lepljenje, dupliranje), izabrane posle uspeha. Slojevi se čitaju TEK posle završetka sesije
+     * teksta, pa kopija sloja u uređivanju nosi novi tekst.
+     */
+    function dodajKopije(izvor: () => readonly Sloj[]): void {
       // kopije menjaju izbor na druge slojeve: otvorena sesija teksta se prvo završava (kao ubaci)
-      if (!slojevi.length || !zavrsiUredjivanje()) return;
+      if (!zavrsiUredjivanje()) return;
+      const slojevi = izvor();
+      if (!slojevi.length) return;
       let nove: string[] = [];
       const ok = primeni((p) => {
         const r = kopijeSlojeva(p, slojevi, POMAK_KOPIJE);
@@ -248,10 +253,11 @@ export const PlatnoEditorStore = signalStore(
     }
 
     function isprazni(): void {
-      // otvoren tekst (sesija ostaje otvorena) i gest u toku idu u dokument (pražnjenje pre čuvanja, Ugovor 5). Predaja
-      // posle toga hvata i izmenu koja nije predata jer izlaz još nije bio postavljen (idempotentno).
-      zabeleziTekst();
+      // gest u toku i otvoren tekst (sesija ostaje otvorena) idu u dokument (pražnjenje pre čuvanja, Ugovor 5); gest prvo,
+      // kao u onDestroy, jer se tekst usred gesta ne prima. Predaja posle toga hvata i izmenu koja nije predata jer izlaz
+      // još nije bio postavljen (idempotentno).
       zavrsiGest();
+      zabeleziTekst();
       predaj(store.platno());
     }
 
@@ -302,6 +308,20 @@ export const PlatnoEditorStore = signalStore(
       ponovi(): void {
         vrati((sada) => store._istorija.ponovi(sada));
       },
+      /**
+       * Undo iz panela ili sa korena editora tokom sesije teksta (zajednički krug F12/F13): ide u istoriju uređivača
+       * (ProseMirror), sesija ostaje otvorena. false = nema sesije, gest u toku ili uređivač nema šta da poništi: pozivalac
+       * tada zove `ponisti` (sesija se završava, tekst je korak, pa se poništava istorija platna).
+       */
+      ponistiUTekstu(): boolean {
+        const u = store.uredjivanje() ? store._uredjivac() : null;
+        return !!u && !store.gest() && u.ponisti();
+      },
+      /** Redo tokom sesije teksta: kao `ponistiUTekstu`. */
+      ponoviUTekstu(): boolean {
+        const u = store.uredjivanje() ? store._uredjivac() : null;
+        return !!u && !store.gest() && u.ponovi();
+      },
       izaberi(ids: readonly string[]): void {
         postaviIzbor(postojeci(ids));
       },
@@ -342,15 +362,18 @@ export const PlatnoEditorStore = signalStore(
       },
       /** Duboka kopija izabranih u unutrašnji međuspremnik (odluka 15). */
       kopiraj(): void {
+        // otvoren tekst prvo u dokument (sesija ostaje), pa kopija sloja u uređivanju nosi novi tekst
+        zabeleziTekst();
         const s = store.izabraniSlojevi();
         if (s.length) medjuspremnik.slojevi = structuredClone(s);
       },
       nalepi(): void {
-        dodajKopije(medjuspremnik.slojevi);
+        // prazan međuspremnik ne dira sesiju teksta
+        if (medjuspremnik.slojevi.length) dodajKopije(() => medjuspremnik.slojevi);
       },
       duplirajIzabrane(): void {
         if (!store.izbor().length || imaZakljucan()) return;
-        dodajKopije(store.izabraniSlojevi());
+        dodajKopije(() => store.izabraniSlojevi());
       },
       /** Zaključani se pomeraju po z-osi kao i ostali (odluka 14). */
       zOsaIzabranih(smer: SmerZ): void {

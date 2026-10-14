@@ -9,6 +9,7 @@ import {
   afterNextRender, computed, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
 import type { Node as PmCvor } from 'prosemirror-model';
+import { closeHistory, redo, undo } from 'prosemirror-history';
 import { type Command, EditorState, Selection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { NotificationStore } from '../../../../core/state/notification.store';
@@ -45,6 +46,12 @@ export interface KomandeTeksta {
   promeniNivo(razlika: 1 | -1): void;
   readonly stanje: Signal<StanjeSelekcije>;
   fokus(): void;
+  /**
+   * Poništi / ponovi u istoriji uređivača (ProseMirror), bez fokusa: undo/redo iz panela tokom sesije (zajednički krug
+   * F12/F13). false = nema šta (pozivalac tada ide na istoriju platna).
+   */
+  ponisti(): boolean;
+  ponovi(): boolean;
 }
 
 /** Id skrivenog opisa tastera uređivača (u šablonu editora platna). */
@@ -70,7 +77,7 @@ export const STIL_UREDJIVACA = `
 
 const PRAZNO_STANJE: StanjeSelekcije = {
   font: null, velicina: null, boja: null, podebljano: null, kurziv: null, podvuceno: null, precrtano: null, polozaj: null,
-  poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null,
+  poravnanje: null, lista: null, nivo: null, proredProcenat: null, razmakPre: null, razmakPosle: null, polozaji: [], liste: [],
 };
 const PORUKA_ZNAKOVA = 'Slajd može imati najviše 50000 znakova teksta.';
 
@@ -122,6 +129,8 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     promeniNivo: (razlika) => this.izvrsi(promeniNivo(razlika)),
     stanje: this.stanje.asReadonly(),
     fokus: () => this.view?.focus(),
+    ponisti: () => this.istorija(undo),
+    ponovi: () => this.istorija(redo),
   };
 
   constructor() {
@@ -201,9 +210,20 @@ export class TekstUredjivacComponent implements OnInit, AfterViewInit, OnDestroy
     this.stanje.set(stanjeSelekcije(s));
   }
 
+  /**
+   * Komanda panela teksta nad sačuvanim izborom: svoj korak ProseMirror istorije (`closeHistory` pre i posle), pa Ctrl+Z
+   * posle izbora fonta vraća samo font, a ne i kucanje pre njega ni posle njega.
+   */
   private izvrsi(c: Command): void {
     const view = this.view;
-    if (view) c(view.state, (tr) => view.dispatch(tr));
+    if (!view) return;
+    c(view.state, (tr) => view.dispatch(closeHistory(tr)));
+    view.dispatch(closeHistory(view.state.tr));
+  }
+
+  private istorija(c: Command): boolean {
+    const view = this.view;
+    return !!view && c(view.state, (tr) => view.dispatch(tr));
   }
 
   private presek(): RezultatTeksta | null {
