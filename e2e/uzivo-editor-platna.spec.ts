@@ -505,14 +505,16 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     await expect(uredjivac(page)).toBeFocused();
   };
   /**
-   * Tab "Animacije" i kraj animacije tela taba (vidljiv ishod pre klika u panelu). Na kraju animacije Material skida
-   * privremenu visinu omotača (`_onCentered`), pa se strana (i dugmad panela) može pomeriti; klik usred toga ode između
-   * `mousedown` i `mouseup` na drugi element. Jednom viđeno u celom paketu pod opterećenjem; brojač otvaranja i
-   * zatvaranja menija u 55 izolovanih ponavljanja nije pokazao meni koji se sam zatvara (izveštaj F19, fix 1).
+   * Tab "Animacije" i kraj klizanja tela taba (vidljiv ishod pre klika u panelu): klik na dugme koje još klizi može da
+   * promaši (kao u svakom Material tabu sa animacijom), a uzrok jednog pada u celom paketu nije utvrđen (izveštaj F19,
+   * fix 1). Redosled je bitan: klasa `.mat-tab-body-animating` se dodaje tek na `transitionstart` (posle kadra ili
+   * rezervnog tajmera od 100 ms), pa bi provera "0" odmah posle klika prošla PRE animacije. Zato prvo čeka sadržaj novog
+   * taba (`app-panel-animacije` se kači na `transitionstart`, zajedno sa klasom), pa tek onda kraj animacije.
    */
   const tabAnimacije = async (page: Page) => {
     await page.getByRole('tab', { name: 'Animacije' }).click();
     await expect(page.getByRole('tab', { name: 'Animacije' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('app-panel-animacije')).toBeVisible();
     await expect(page.locator('.mat-tab-body-animating')).toHaveCount(0);
   };
   /** Meni "Dodaj ulaz" > efekat (tab Animacije mora biti otvoren, `tabAnimacije`). */
@@ -771,5 +773,39 @@ test.describe('uživo: editor platna (4b, završni talas)', () => {
     expect(slojUPut(mock, id, 's1')!.pasusi![0].delovi.map(d => [d.tekst, d.font])).toEqual([
       ['Stat', 'IBM Plex Sans'], ['ika 1', 'Tinos'],
     ]);
+  });
+});
+
+/*
+ * B-I1 (završna recenzija 4b B, Important 1): `svg` precrtavanja MathLive-a (`z-index: 2`) bez `isolation` na omotaču
+ * formule bio je iznad overlay-a editora: klik na precrtani deo nije birao formulu, a `\cancel{\rule{500em}{500em}}`
+ * pokrivao je celo platno, pa se mišem nije mogao izabrati nijedan sloj. Slajd 52 iz `fixtures/prezentacije.json`.
+ */
+test.describe('uživo: editor platna (4b, završni talas B): formula ne presreće pokazivač', () => {
+  async function slajdSaFormulom(page: Page, mock: MockApi, latex: string): Promise<void> {
+    const slajd = mock.podaci.prezentacije.find(p => p.id === PREZENTACIJA)!.slajdovi[1];
+    const platno = slajd.platno as unknown as Platno;
+    platno.slojevi.find(s => s.id === 'formula')!.latex = latex;
+    await page.goto(`prezentacije/${PREZENTACIJA}`);
+    await page.getByRole('button', { name: /^2\s/ }).click();
+    await expect(slojEditora(page, 'formula').locator('.ML__latex')).toBeVisible();
+  }
+  const svojstva = (page: Page, vrsta: 'formule' | 'oblika') => editor(page).locator(`app-svojstva-${vrsta}`);
+
+  test('klik na precrtani deo formule (\\cancel) bira formulu', async ({ page, mock }) => {
+    await slajdSaFormulom(page, mock, '\\cancel{MMMMMM}');
+    const precrtano = slojEditora(page, 'formula').locator('.uz-pl-formula-markup svg').first();
+    await expect(precrtano).toBeAttached();
+    const c = await centar(precrtano);
+    await page.mouse.click(c.x, c.y);
+    await expect(svojstva(page, 'formule')).toBeVisible();
+  });
+
+  test('\\cancel{\\rule{500em}{500em}} ne pokriva platno za miš: drugi sloj se bira klikom', async ({ page, mock }) => {
+    await slajdSaFormulom(page, mock, '\\cancel{\\rule{500em}{500em}}');
+    const c = await centar(slojEditora(page, 'oblik'));
+    await page.mouse.click(c.x, c.y);
+    await expect(svojstva(page, 'oblika')).toBeVisible();
+    await expect(svojstva(page, 'formule')).toHaveCount(0);
   });
 });

@@ -289,8 +289,15 @@ over STOMP; teacher commands are REST.
   (`ponistiUTekstu`). **History boundary:** a cut accepted in the middle of a session (Ctrl+S, a frame change from the panel such as
   anchor, margin or wrap, copy) is already a canvas step, so the editor closes ProseMirror's history there and remembers its depth
   (`granica`, moved along when ProseMirror drops its oldest events past 120); no undo (in the text, panel, toolbar or root) goes
-  below it: from the text Ctrl+Z then does nothing, from the panels and the toolbar the next undo ends the session and undoes the
-  last canvas step (the frame change, then the cut). Redo during a session goes **only** to ProseMirror (nothing to redo = nothing
+  below it: from the text, the panels and the toolbar alike the next undo ends the session and undoes the last canvas step (the
+  frame change, then the cut; from the text focus then goes to the frame). Without any cut and without a ProseMirror step, Ctrl+Z
+  in the text does nothing (Note F4b RF3). The browser's own Undo/Redo (menu "Edit", context menu, tablet gesture) arrives as
+  `beforeinput` `historyUndo`/`historyRedo`, which `prosemirror-history` would run unbounded: `dodatakUndoPregledaca` (before
+  `history()`) sends it to the same bounded undo. The panel keeps **one** `app-svojstva-teksta` for the session and after it
+  (`panel-svojstva`, `tekst()`), so a Ctrl+Z on a panel control that ends the session does not destroy the focused control; if
+  the focused control still disappears (the undone layer had the panel open), the root moves focus to the frame, never `body`.
+  Undo/redo on a `mat-button-toggle` (`role="radio"`: alignment, anchor) also goes to the root (`uPoljuZaUnos(cilj, true)`);
+  the radio group keeps arrows, Home and End. Redo during a session goes **only** to ProseMirror (nothing to redo = nothing
   happens: the session stays open and the canvas "redo" is not wiped by a cut; the toolbar "Ponovi" shows only ProseMirror's redo
   then). The tabs "Slojevi" and "Animacije" are disabled; **F6** (and Shift+F6) in the text or a cell moves focus to the first
   control of the text panel ("Font") without ending the session, and F6 from the panels returns to the text with the saved
@@ -320,7 +327,10 @@ over STOMP; teacher commands are REST.
   points to the local `assets/mathlive/fonts/`, sounds off, no CDN: `angular.json` copies `mathlive-static.css` and the 20 KaTeX `woff2`
   there). The `<math-field>` and the plain "LaTeX" field are kept in sync both ways (the field is also the accessible alternative);
   "Sačuvaj" always clears `slikaIzvora`. Toolbar, editor root and panel each call `formulaEditora()`, but one guard per editor
-  (`otvoreni`, keyed by its `PlatnoEditorStore`) allows one dialog at a time, also while its lazy chunk is still loading. The static view is **not** in the editor: `ui/formula-markup.ts` is the only import of
+  (`otvoreni`, keyed by its `PlatnoEditorStore`) allows one dialog at a time, also while its lazy chunk is still loading. When the
+  component that opened the dialog is destroyed (slide change), the dialog closes (`OtvorenaFormula.zatvori`; a message when it
+  had changes) and a dialog whose chunk is still loading never opens. The save check (`greskaFormule`, messages, `MAX_LATEX`) is in
+  `formula/provera-formule.ts`, imported **only** by the dialog, so neither it nor `ui/formula-komande` is in the editor chunk. The static view is **not** in the editor: `ui/formula-markup.ts` is the only import of
   `mathlive/ssr` (`convertLatexToMarkup`), `ui/formula-ucitavanje.ts` its only dynamic `import()` (tokens `UCITAJ_FORMULE`,
   `UCITAJ_STIL_FORMULA`: one `<link data-gfs="mathlive">` and the KaTeX fonts, 3 s at most) and `ui/formula-prikaz.component.ts` the view
   `platno-prikaz` uses for a FORMULA layer without `slikaIzvora`; projector, console and editor therefore look the same, and `publika` /
@@ -335,11 +345,20 @@ over STOMP; teacher commands are REST.
   `ui/formula-komande.ts` has the forbidden commands (the whole `\html…` family, `\href`, `\url`, `\style`, `\class`, `\cssId`, `\csname`)
   and `^^` (it can spell a backslash), one list for the regex and the dialog message; and `trosakFormule` (structural cost, one linear
   pass before MathLive): depth <= 32 (braces, `\bgroup`, `\left`, `\begin`, argument-taking commands), stretchy constructs inside each
-  other <= 16, roots <= 32, structural commands <= 200, rows <= 100 (LaTeX <= 5000 characters). A formula over a limit, a markup over
+  other <= 16, roots <= 32, structural commands <= 200, rows <= 100, columns in one matrix row <= 100 and cells of all matrices
+  <= 2000 (LaTeX <= 5000 characters). `latexUMarkup` caches the sanitised fragment per LaTeX (`KesFormula`, LRU, 300 formulas and
+  4 MB of markup, a copy on every read), one cache per window shared by projector, console and editor, so the same formula on a
+  slide (or the same slide drawn twice) is converted once. A formula over a limit, a markup over
   450 kB or an exception is **drawn as the LaTeX source**, and the dialog refuses to save it. **This protection exists only in the
   client**: the server (unchanged in 4b) still accepts and stores such LaTeX, and the projector then draws it as the source. The
   `math-field` receives LaTeX only if it passes the lists and `markupNepromenjen` (the sanitizer changes nothing in MathLive's own
-  markup); `\mathtip` / `\texttip` make a `position: fixed` bubble and are therefore deleted by the sanitizer.
+  markup); `\mathtip` / `\texttip` make a `position: fixed` bubble and are therefore deleted by the sanitizer. The markup wrapper has
+  `isolation: isolate` (`platno.css`): MathLive's `svg` for `\cancel`, `\bcancel`, `\xcancel`, `\enclose{…strike|…arrow}` carries
+  `z-index: 2` and would otherwise paint above later layers and catch the pointer above the editor overlay. A formula may still
+  draw **outside its layer box** (`\rule`, `\colorbox`, negative `\hspace`, as in LaTeX and PowerPoint) but never outside the
+  canvas (`overflow: hidden`). Timing limits in the formula specs come from `ui/formula-vreme.testing.ts` (refused input 100 ms,
+  input that goes through MathLive 1500 ms; CI is 2-3 times slower), and the fuzz (`formula-fuzz.testing.ts`, also wide matrices)
+  checks the two classes separately.
   **Animations** (`animacije.ts` pure, panel `panel-animacije`): the list is in execution order (CDK drag-drop plus "Pomeri gore/dole" for
   the keyboard), a KLIK row shows its group number, the others are indented with the trigger icon, group 0 (before the first click) is
   marked "Kreće sama"; for a TEXT layer the target is the whole layer, "Po pasusima" (one KLIK per non-empty paragraph) or one paragraph.
@@ -349,13 +368,16 @@ over STOMP; teacher commands are REST.
   **Pregled** (`pregled.ts`, `pregled-platna.component.ts`, `PlatnoEditorStore.postaviRezim`): one toolbar button switches between
   "Uređivanje" and "Pregled"; the preview is the real `app-platno-prikaz` with the full document, with "Korak nazad/napred", "Pusti slajd"
   (all steps, 400 ms between groups, `planPustanja`), "Pusti od izabrane" (from the group before the selected animation; group 0 or 1
-  plays the whole slide), "Zaustavi" and Esc. In Pregled the tools are removed, the tabs are disabled and their content is hidden by a
+  plays the whole slide), "Zaustavi" and Esc; keys as in PowerPoint: right/down arrow, Space, PageDown and Enter step forward,
+  left/up arrow, PageUp and Backspace step back (a `document` listener that reacts only to events from this editor or `body`, not
+  already handled, without Ctrl/Alt/Meta, outside fields, menus and dialogs; Enter and Space on a button press the button). The
+  toolbar's "Slika se otprema…" stays visible in Pregled (an upload started before it adds the image to the document shown). In Pregled the tools are removed, the tabs are disabled and their content is hidden by a
   **global** rule in `pages/uzivo-editor.css` (`.uz-ep-paneli--pregled .mat-mdc-tab-body-wrapper`): the inside of `mat-tab-group` is outside
   the component's encapsulation, the same reason as the sticky tab header rule next to it (that is the precedent); Ctrl+Z is ignored there.
   The group badges on the canvas (tab "Animacije" only) are drawn by the overlay.
-  **Budgets** (`e2e/lenji-editor.spec.ts`, measured on the 4b tip): initial 781 776 B (<= 785 000), editor page file 208 345 B (<= 215 000),
-  the editor's own closure 445 326 B / 132 077 B gzip (<= 450 000 / 140 000), `mathlive/ssr` 343 565 B (<= 380 000), the formula dialog
-  839 450 B (<= 900 000, counted with a "fence" in `potpunoZatvorenje`: files of initial + page + editor are neither counted nor followed,
+  **Budgets** (`e2e/lenji-editor.spec.ts`, measured after the final wave of 4b): initial 781 794 B (<= 785 000), editor page file 208 350 B
+  (<= 215 000), the editor's own closure 444 088 B / 131 002 B gzip (<= 450 000 / 140 000), `mathlive/ssr` 348 195 B (<= 380 000; it now
+  also carries `ui/formula-komande`, which left the editor), the formula dialog 844 170 B (<= 900 000, counted with a "fence" in `potpunoZatvorenje`: files of initial + page + editor are neither counted nor followed,
   otherwise the dialog would drag in the editor's lazy chunks). Nothing of ProseMirror or MathLive is in the initial closure or the page
   file, and public routes load none of it (`NIZOVI_EDITORA`; `JavnaMreza` fails a public test on any `/assets/mathlive/` request).
   **Two tabs editing one slide: the last `PUT` wins**, with no version check (the backend has none; adding one is out of scope).

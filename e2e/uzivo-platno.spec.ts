@@ -64,6 +64,18 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     await expect(status).toHaveText('Korak 2 / 3');
     await expect(sloj(page, 'formula')).toBeHidden();
     await expect(sloj(page, 'tabela')).toBeVisible();
+
+    // tasteri kao u PowerPointu (F18 m5): fokus je na dugmetu Pregleda; strelica i PageDown napred, Backspace i PageUp nazad
+    await expect(nazad).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(status).toHaveText('Korak 3 / 3');
+    await expect(sloj(page, 'formula')).toBeVisible();
+    await page.keyboard.press('Backspace');
+    await expect(status).toHaveText('Korak 2 / 3');
+    await page.keyboard.press('PageUp');
+    await expect(status).toHaveText('Korak 1 / 3');
+    await page.keyboard.press('PageDown');
+    await expect(status).toHaveText('Korak 2 / 3');
   });
 
   test('Pusti slajd ide sam do poslednjeg koraka (tabovi onemogućeni); u uređivanju tab Animacije crta brojeve grupa', async ({ page }) => {
@@ -71,10 +83,17 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     await expect(page.locator('.uz-ed-pregled')).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Animacije' })).toBeDisabled();
     const status = page.locator('.uz-ep-korak');
+    // međukoraci se beleže dok traju (MutationObserver), pa provera ne zavisi od toga da prozivanje uhvati prozor od ~900 ms
+    await status.evaluate((el) => {
+      const w = window as unknown as { koraci: string[] };
+      w.koraci = [];
+      new MutationObserver(() => w.koraci.push(el.textContent!.trim())).observe(el, { subtree: true, characterData: true, childList: true });
+    });
     await page.getByRole('button', { name: 'Pusti slajd' }).click();
-    await expect(status).toHaveText('Korak 1 / 3');
     await expect(status).toHaveText('Korak 3 / 3', { timeout: 10_000 });
     await expect(sloj(page, 'formula')).toBeVisible();
+    const koraci = await page.evaluate(() => (window as unknown as { koraci: string[] }).koraci);
+    expect(koraci.filter((k, i) => k !== koraci[i - 1])).toEqual(['Korak 1 / 3', 'Korak 2 / 3', 'Korak 3 / 3']);
 
     await page.getByRole('button', { name: 'Uređivanje' }).click();
     await expect(page.locator('.uz-ep-pregled')).toHaveCount(0);
@@ -267,4 +286,31 @@ test.describe('uživo: formula bez slike na projektoru i konzoli', () => {
       expect(fontovi.filter(p => !p.includes('/assets/mathlive/fonts/'))).toEqual([]);
     });
   }
+  /*
+   * B-I1 (završna recenzija 4b B, Important 1): MathLive za `\cancel` piše `svg` sa `z-index: 2`. Bez `isolation` na
+   * omotaču formule taj `svg` se crtao iznad kasnijih slojeva (sloj bez rotacije, providnosti i senke nema stacking context).
+   */
+  test('publika: sloj posle precrtane formule (\\cancel) ostaje iznad nje', async ({ page, mock }) => {
+    const platno = JSON.parse(JSON.stringify(mock.podaci.prezentacije[0].slajdovi[1].platno)) as {
+      slojevi: { id: string; tip: string; latex?: string; x: number; y: number; sirina: number; visina: number }[]; animacije: unknown[];
+    };
+    const formula = platno.slojevi.find(s => s.id === 'formula')!;
+    formula.latex = '\\cancel{MMMMMM}';
+    const oblik = platno.slojevi.find(s => s.id === 'oblik')!;
+    platno.slojevi.push({ ...oblik, id: 'pokrov', x: formula.x, y: formula.y, sirina: formula.sirina, visina: formula.visina });
+    platno.animacije = [];
+    mock.izvodjenje.izmeniSlajd(1, { platno });
+    for (let i = 0; i < 5; i++) mock.izvodjenje.primeni('SLEDECI');
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    const precrtano = page.locator('[data-sloj="formula"] .uz-pl-formula-markup svg').first();
+    await expect(precrtano).toBeAttached();
+    await expect(page.locator('[data-sloj="pokrov"]')).toBeVisible();
+    expect(await page.locator('[data-sloj="formula"] .uz-pl-formula-markup').evaluate(el => getComputedStyle(el).isolation)).toBe('isolate');
+    const iznad = await precrtano.evaluate((svg) => {
+      const r = svg.getBoundingClientRect();
+      return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('[data-sloj]')?.getAttribute('data-sloj');
+    });
+    expect(iznad).toBe('pokrov');
+  });
 });
