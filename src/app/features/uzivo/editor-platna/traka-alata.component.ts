@@ -8,7 +8,8 @@
 // (Material blokira samo `<a>`), pa svaki handler na početku proverava isti uslov kao `[disabled]`.
 // Poništi tokom sesije teksta (sloj ili ćelija) ide prvo u istoriju uređivača, pa u istoriju platna, kao Ctrl+Z iz
 // panela (omogućeno kad bilo koja od dve ima korak); Ponovi tokom sesije samo u istoriju uređivača. Prekidač "Pregled" / "Uređivanje" (F18) je uvek tu (isto
-// dugme, pa fokus ostaje na njemu); u Pregledu su ostali alati sklonjeni, jer bi menjali dokument koji se gleda.
+// dugme, pa fokus ostaje na njemu); u Pregledu su ostali alati sklonjeni, jer bi menjali dokument koji se gleda. Natpis
+// "Slika se otprema…" ostaje i u Pregledu (otpremanje započeto pre njega doda ili zameni sliku u dokumentu koji se gleda).
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -69,7 +70,6 @@ const OBLICI: readonly StavkaOblika[] = [
         <button mat-icon-button type="button" aria-label="Formula" title="Formula (dvoklik na formulu je uređuje)"
                 (click)="ubaciFormulu()"><mat-icon svgIcon="functions" /></button>
         <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
-        <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
         <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
         <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
                 [disabled]="!imaIzbor()" (click)="zOsa('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
@@ -78,6 +78,8 @@ const OBLICI: readonly StavkaOblika[] = [
         <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
                 [disabled]="!imaIzbor()" (click)="obrisi()"><mat-icon svgIcon="delete" /></button>
       }
+      <!-- van @if: otpremanje započeto pre Pregleda završava se u Pregledu i menja dokument koji se gleda (F18 m4) -->
+      <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
     </div>
   `,
   styles: `

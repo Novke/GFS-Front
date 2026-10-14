@@ -1,20 +1,29 @@
 // Režim "Pregled" editora platna (F18, odluka 22): pun dokument sa animacijama u istom prikazu koji koriste projektor
 // i konzola (`platno-prikaz`: `korak` + `animacija`), sa koracima napred i nazad i puštanjem po planu (`planPustanja`).
 // Zoneless: tajmer postavlja signale; "Zaustavi", Esc, napuštanje režima (komponenta nestaje) i uništavanje ga gase.
+// Tasteri kao u PowerPointu (`taster`): strelica desno/dole, Space, PageDown i Enter = korak napred; levo/gore, PageUp i
+// Backspace = korak nazad; Esc zaustavlja. Slušalac je na `document` (u Pregledu nema okvira platna koji drži fokus), ali
+// samo za događaj iz ovog editora ili sa `body`, koji niko pre nije obradio, van polja, menija i dijaloga.
 // Okvir koristi globalnu klasu `uz-ed-platno` (isti okvir kao bočni pregled INFO slajda), pa nema sopstvenih stilova.
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { brojKoraka } from '../data-access/platno-koraci';
 import { PlatnoPrikazComponent } from '../ui/platno-prikaz.component';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { type KorakPustanja, korakPreAnimacije, planPustanja } from './pregled';
+import { uPoljuZaUnos } from './tastatura-platna';
+
+/** Tasteri koraka u Pregledu (PowerPoint): 1 = napred, -1 = nazad. */
+const KORACI: Readonly<Record<string, 1 | -1>> = {
+  ArrowRight: 1, ArrowDown: 1, ' ': 1, PageDown: 1, Enter: 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1, Backspace: -1,
+};
 
 @Component({
   selector: 'app-pregled-platna',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule, PlatnoPrikazComponent],
-  host: { class: 'uz-ep-pregled', '(document:keydown.escape)': 'zaustavi()' },
+  host: { class: 'uz-ep-pregled', '(document:keydown)': 'taster($event)' },
   template: `
     <div class="uz-ed-platno uz-okvir">
       <div class="uz-platno rezim-dan uz-dan">
@@ -43,6 +52,7 @@ import { type KorakPustanja, korakPreAnimacije, planPustanja } from './pregled';
 })
 export class PregledPlatnaComponent {
   protected readonly store = inject(PlatnoEditorStore);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   protected readonly ukupno = computed(() => brojKoraka(this.store.platno()));
   private readonly k = signal(0);
   protected readonly korak = computed(() => Math.min(this.k(), this.ukupno()));
@@ -63,6 +73,27 @@ export class PregledPlatnaComponent {
     if (razlika < 0 ? this.korak() <= 0 : this.korak() >= this.ukupno()) return;
     this.zaustavi();
     this.idi(this.korak() + razlika, razlika > 0);
+  }
+
+  /**
+   * Tasteri Pregleda (F18 m5 i m7). Ne reaguje kad je događaj već obrađen (`defaultPrevented`, npr. Esc koji je zatvorio
+   * meni), uz Ctrl/Alt/Meta, van ovog editora (lista slajdova, beleške, dijalog i meni u CDK overlay-u) i u poljima i
+   * kontrolama sa sopstvenim tasterima (`uPoljuZaUnos`). Enter i Space na dugmetu ga pritiskaju (nisu korak).
+   */
+  protected taster(e: KeyboardEvent): void {
+    if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+    const cilj = e.target instanceof Element ? e.target : null;
+    const editor = this.host.closest('app-platno-editor') ?? this.host;
+    if (cilj && cilj !== document.body && !editor.contains(cilj)) return;
+    if (uPoljuZaUnos(cilj)) return;
+    if (e.key === 'Escape') {
+      this.zaustavi();
+      return;
+    }
+    const smer = KORACI[e.key];
+    if (!smer || ((e.key === 'Enter' || e.key === ' ') && cilj?.closest('button, a[href], [role="button"]'))) return;
+    e.preventDefault();
+    this.pomeri(smer);
   }
 
   /** Od koraka `od` (0: grupa 0 se pušta odmah, kao pri ulasku na slajd) do kraja, po planu. */

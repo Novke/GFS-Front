@@ -139,6 +139,23 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     expect(poslednji().tip).toBe('SLIKA');
   });
 
+  it('završni talas (F18 m4): otpremanje započeto pre Pregleda je vidljivo i u Pregledu, pa sloj stiže', async () => {
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.postaviRezim('PREGLED');
+    await fixture.whenStable();
+    const stanje = () => el().querySelector('.uz-ep-traka [role="status"]')!.textContent!.trim();
+    expect(dugme(el(), 'Slika')).toBeFalsy(); // alati su u Pregledu sklonjeni
+    expect(stanje()).toBe('Slika se otprema…');
+    odgovor.next(medij('m1'));
+    odgovor.complete();
+    await new Promise((r) => setTimeout(r));
+    await fixture.whenStable();
+    expect(stanje()).toBe('');
+    expect(poslednji().tip).toBe('SLIKA');
+  });
+
   it('greška otpremanja 413 sa razlogom: snackbar sa razlogom, bez sloja', async () => {
     upload.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 413, error: { reason: 'Fajl je prevelik.' } })));
     await izaberiFajl(png());

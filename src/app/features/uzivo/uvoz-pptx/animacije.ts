@@ -233,7 +233,12 @@ function preslikaj(e: EfekatPptx, u: Zbirna): Preslikano {
     case 22: return { efekat: 'BRISANJE', smer: e.klasa === 'exit' ? ZRCALO[smerIzPodtipa(e.podtip)] : smerIzPodtipa(e.podtip) };
     case 16: {
       const m = /barn\((in|out)?(vertical|horizontal)\)/i.exec(e.filter);
-      if (m?.[1]?.toLowerCase() === 'in') u.dodaj('PODELI_SMER', 'Podela ka sredini se prikazuje kao podela od sredine.');
+      // platno PODELI crta od sredine, a izlaz kao obrnut ulaz (ka sredini): poruka opisuje ono što se zaista vidi
+      if (m?.[1]?.toLowerCase() === 'in') {
+        u.dodaj('PODELI_SMER', e.klasa === 'exit'
+          ? 'Izlaz podelom od sredine se prikazuje kao izlaz podelom ka sredini.'
+          : 'Podela ka sredini se prikazuje kao podela od sredine.');
+      }
       return { efekat: 'PODELI', smer: m?.[2].toLowerCase() === 'horizontal' ? 'HORIZONTALNO' : 'VERTIKALNO' };
     }
     case 23:

@@ -141,6 +141,78 @@ describe('PregledPlatnaComponent (F18)', () => {
     expect(vi.getTimerCount()).toBe(0);
   }));
 
+  describe('završni talas (F18 m5, m7): tasteri kao u PowerPointu', () => {
+    const pritisni = (key: string, cilj: EventTarget = document.body, o: KeyboardEventInit = {}) => {
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...o });
+      cilj.dispatchEvent(e);
+      osvezi();
+      return e;
+    };
+    /** Element van editora (lista slajdova, beleške) ili u CDK overlay-u (dijalog, meni); posle testa se briše. */
+    const spolja = (html: string) => {
+      const d = document.createElement('div');
+      d.innerHTML = html;
+      document.body.append(d);
+      onTestFinished(() => d.remove());
+      return d.firstElementChild!;
+    };
+
+    it.each(['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'Enter'])('%j = korak napred (taster obrađen)', (key) => {
+      expect(pritisni(key).defaultPrevented).toBe(true);
+      expect(status()).toBe('Korak 1 / 2');
+      expect(animate).toHaveBeenCalled();
+    });
+
+    it.each(['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'])('%j = korak nazad', (key) => {
+      pritisni('ArrowRight');
+      pritisni('ArrowRight');
+      expect(status()).toBe('Korak 2 / 2');
+      expect(pritisni(key).defaultPrevented).toBe(true);
+      expect(status()).toBe('Korak 1 / 2');
+    });
+
+    it('i sa dugmeta Pregleda strelice menjaju korak, a Enter i Space ostaju dugmetu', () => {
+      const dugmeKoraka = dugme('Korak napred');
+      pritisni('ArrowRight', dugmeKoraka);
+      expect(status()).toBe('Korak 1 / 2');
+      expect(pritisni('Enter', dugme('Zaustavi')).defaultPrevented).toBe(false);
+      expect(pritisni(' ', dugme('Zaustavi')).defaultPrevented).toBe(false);
+      expect(status()).toBe('Korak 1 / 2');
+    });
+
+    it('ne reaguje: obrađen događaj, Ctrl/Alt/Meta, polje u editoru, element van editora, overlay (meni, dijalog)', () => {
+      const polje = document.createElement('input');
+      el().append(polje);
+      const slucajevi: [EventTarget, KeyboardEventInit][] = [
+        [document.body, { ctrlKey: true }], [document.body, { altKey: true }], [document.body, { metaKey: true }], [polje, {}],
+        [spolja('<button type="button">Slajd 2</button>'), {}],
+        [spolja('<div class="cdk-overlay-container"><div role="menu"><button role="menuitem">x</button></div></div>').querySelector('button')!, {}],
+      ];
+      for (const [cilj, o] of slucajevi) {
+        expect(pritisni('ArrowRight', cilj, o).defaultPrevented).toBe(false);
+      }
+      const obradjen = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+      obradjen.preventDefault();
+      document.body.dispatchEvent(obradjen);
+      osvezi();
+      expect(status()).toBe('Korak 0 / 2');
+    });
+
+    it('Esc ne zaustavlja puštanje kad ga je neko već obradio ili dolazi iz dijaloga/menija; sa body zaustavlja', saLaznimSatom(async () => {
+      klik('Pusti slajd');
+      const obradjen = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      obradjen.preventDefault();
+      document.body.dispatchEvent(obradjen);
+      pritisni('Escape', spolja('<div class="cdk-overlay-container"><div role="dialog" tabindex="-1"></div></div>').firstElementChild!);
+      await sat(900);
+      expect(status()).toBe('Korak 1 / 2');
+      pritisni('Escape');
+      await sat(5000);
+      expect(status()).toBe('Korak 1 / 2');
+      expect(vi.getTimerCount()).toBe(0);
+    }));
+  });
+
   it('Pusti od izabrane (animacija grupe 2): odmah korak 1, posle 400 ms korak 2', saLaznimSatom(async () => {
     store.izaberiAnimaciju('a2');
     osvezi();

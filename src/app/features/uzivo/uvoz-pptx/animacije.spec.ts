@@ -62,6 +62,14 @@ describe('pretvoriAnimacije: efekti', () => {
     expect(r.kodovi).toEqual(kod ? [kod] : []);
   });
 
+  it('završni talas: poruka PODELI_SMER za izlaz opisuje izlaz (od sredine -> ka sredini), za ulaz ulaz', () => {
+    const poruka = (klasa: 'entr' | 'exit') => efekti([klik({ klasa, preset: 16, podtip: 21, filter: 'barn(inVertical)' })]).upozorenja;
+    expect(poruka('entr')).toEqual([{ kod: 'PODELI_SMER', poruka: 'Podela ka sredini se prikazuje kao podela od sredine.' }]);
+    expect(poruka('exit')).toEqual([{
+      kod: 'PODELI_SMER', poruka: 'Izlaz podelom od sredine se prikazuje kao izlaz podelom ka sredini.',
+    }]);
+  });
+
   it('63 (entr) je ISCRTAJ sleva; 63 kao exit je FADE uz EFEKAT_ZAMENJEN', () => {
     const ulaz = efekti([klik({ preset: 63 })]);
     expect(ulaz.animacije[0]).toMatchObject({ efekat: 'ISCRTAJ', smer: 'LEVO', vrsta: 'ULAZ' });
