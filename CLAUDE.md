@@ -147,6 +147,8 @@ Interactive presentation with live questions (spec `docs/superpowers/specs/2026-
 in `Novke/GFS-deploy`). The server is the only source of truth: every change arrives as a whole snapshot with `verzija`
 over STOMP; teacher commands are REST.
 
+Question and option text may carry formulas as `$...$` (`ui/tekst-formule.ts`, pandoc rules; exception: a `$` right after a digit does not open a formula, because amounts like `5$` and `10$-20$` are likelier, so `2$x$` stays text). `\$` is a dollar sign.
+
 - `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
   every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock
   offset), `editor.store.ts`, `izvodjenje.store.ts`, rules (`slajd-pravila`, `izvodjenje-pravila`). Only uživo uses them.

@@ -1,5 +1,5 @@
-import { Marked } from 'marked';
-import { formulaMarked, KLASA_FORMULE, type PripremljenTekst } from './tekst-formule';
+import { Marked, type Tokens } from 'marked';
+import { formulaMarked, KLASA_FORMULE, tekstTokena, type PripremljenTekst } from './tekst-formule';
 
 /**
  * Sopstvena instanca `marked`-a (globalna ostaje netaknuta). HTML iz izvora se izbacuje u celosti (blokovi i tagovi u
@@ -21,7 +21,21 @@ export function renderMarkdown(src: string | null | undefined): string {
  * faze 5). Sirov HTML iz izvora se briše, pa niz `<span class="uz-formula">` u izlazu može doći samo iz ekstenzije.
  */
 const parserSaFormulama = new Marked({ gfm: true, breaks: true }, formulaMarked);
-parserSaFormulama.use({ renderer: { html: () => '' } });
+parserSaFormulama.use({
+  renderer: {
+    html: () => '',
+    // `alt` slike sa formulom: LaTeX izvor kao tekst (inače bi u atributu završio escape-ovan markup mesta formule).
+    image(token) {
+      const delovi = token.tokens as Tokens.Generic[] | undefined;
+      if (delovi?.some((t) => t.type === 'formula' || t.tokens)) {
+        // izvorni renderer slike sam gradi `alt` iz `tokens` (textRenderer) i escape-uje ga jednom
+        const tekst = delovi.map(tekstTokena).join('');
+        token.tokens = [{ type: 'text', raw: tekst, text: tekst }];
+      }
+      return false;
+    },
+  },
+});
 
 /** Markdown teksta pitanja sa mestima formula (`$...$`); isti HTML filter kao `renderMarkdown`. */
 export function markdownSaFormulama(src: string | null | undefined): PripremljenTekst {

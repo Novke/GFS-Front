@@ -1,7 +1,7 @@
 // Formule u tekstu pitanja i opcija (spec 16.1): `$...$` po pravilu pandoc-a (`tex_math_dollars`, odluka 2 plana
 // faze 5). Bez Angular-a i bez uvoza osim tipova iz `marked` (brišu se pri prevođenju): javni deo ga sme uvoziti
 // (DOZVOLJENO_PO_FEATURE, odluka 4). Crtanje formula je u `tekst-formule.component.ts` (kroz `ui/formula-markup.ts`).
-import type { MarkedExtension, Tokens } from 'marked';
+import type { MarkedExtension, Token, Tokens } from 'marked';
 
 /** Klasa mesta formule: `<span class="uz-formula">$izvor$</span>` (izvor je i rezervni prikaz). */
 export const KLASA_FORMULE = 'uz-formula';
@@ -14,6 +14,8 @@ export interface PripremljenTekst {
 /**
  * Formula na početku teksta: `$`, pa znak koji nije razmak ni `$`; sadržaj bez novog reda i bez neizbegnutog `$`
  * (`\$` i bilo koji `\x` su deo LaTeX-a); poslednji znak nije razmak ni `\`; posle zatvarajućeg `$` ne sledi cifra.
+ * Izuzetak od pandoc-a: otvarajući `$` koji neposredno sledi cifru ne otvara formulu (iznosi: `5$, a sa popustom 4$.`,
+ * `10$-20$`), pa je `2$x$` tekst; to proveravaju pozivaoci jer ovde nema znaka ispred (`podeliFormule`, tokenizer ekstenzije).
  * Dve grane sadržaja počinju različitim znakom (`\` ili ne-`\`), pa je pretraga linearna (bez eksplozije vraćanja).
  */
 const FORMULA = /^\$(?=[^\s$])((?:\\[^\n]|[^\\$\n])+?)(?<=[^\s\\])\$(?!\d)/;
@@ -35,7 +37,7 @@ export function podeliFormule(tekst: string | null | undefined): DeoTeksta[] {
       i += 2;
       continue;
     }
-    if (s[i] === '$') {
+    if (s[i] === '$' && !(i > 0 && /\d/.test(s[i - 1]))) {
       const f = nadjiFormulu(s.slice(i));
       if (f) {
         if (tekuci) {
@@ -78,6 +80,17 @@ export function tekstSaFormulama(tekst: string | null | undefined): PripremljenT
   };
 }
 
+/** Običan tekst tokena (za `alt` slike): formula je LaTeX izvor, ne tekst markupa mesta. */
+export function tekstTokena(t: Tokens.Generic): string {
+  if (t.type === 'formula') {
+    return (t as FormulaToken).latex;
+  }
+  if (t.tokens) {
+    return t.tokens.map((p) => tekstTokena(p as Tokens.Generic)).join('');
+  }
+  return t.type === 'escape' ? t['raw'].slice(1) : (t['raw'] as string); // `text` je već HTML-escape-ovan, `raw` je izvor
+}
+
 interface FormulaToken extends Tokens.Generic {
   type: 'formula';
   raw: string;
@@ -97,7 +110,11 @@ export const formulaMarked: MarkedExtension = {
         const m = /(?<!\\)\$/.exec(src);
         return m ? m.index : undefined;
       },
-      tokenizer(src: string) {
+      tokenizer(src: string, tokeni: Token[]) {
+        // `marked` poziva `start` nad `src.slice(1)`, pa tu nema znaka ispred; zato cifru ispred proverava tokenizer
+        if (/\d$/.test(tokeni.at(-1)?.raw ?? '')) {
+          return undefined;
+        }
         const f = nadjiFormulu(src);
         return f ? ({ type: 'formula', raw: src.slice(0, f.duzina), latex: f.latex } as FormulaToken) : undefined;
       },

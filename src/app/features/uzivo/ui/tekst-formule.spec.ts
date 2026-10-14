@@ -1,3 +1,4 @@
+import { GRANICA_ODBIJENE_MS } from './formula-vreme.testing';
 import {
   escapeHtml,
   formulaMarked,
@@ -70,8 +71,35 @@ describe('podeliFormule (Review Focus 1)', () => {
     const ulaz = '$a '.repeat(1000) + 'x\\$'.repeat(500);
     const pocetak = performance.now();
     const delovi = podeliFormule(ulaz);
-    expect(performance.now() - pocetak).toBeLessThan(100);
+    expect(performance.now() - pocetak).toBeLessThan(GRANICA_ODBIJENE_MS);
     expect(delovi.every((d: { vrsta: string }) => d.vrsta === 'TEKST')).toBe(true);
+  });
+
+  it('najgori slučaj do 2000 znakova: svaki $ otvara pokušaj koji čita do kraja, a nijedan se ne zatvara', () => {
+    // "$a" ponovljeno: svaki $ je kandidat za otvaranje, traži zatvarajući $ do kraja teksta (bez novog reda), a prvi
+    // sledeći $ ga zatvara tek kad iza njega ne bi sledila cifra; "$a1" ponavlja to uz cifru posle zatvarajućeg $.
+    const ulazi = ['$a'.repeat(1000), '$a$1'.repeat(500), '$' + 'a\\'.repeat(990) + '\n$a'.repeat(1), ('$a ' + '\\$').repeat(400)];
+    for (const ulaz of ulazi) {
+      expect(ulaz.length).toBeLessThanOrEqual(2000);
+      const pocetak = performance.now();
+      podeliFormule(ulaz);
+      tekstSaFormulama(ulaz);
+      expect(performance.now() - pocetak, ulaz.slice(0, 12)).toBeLessThan(GRANICA_ODBIJENE_MS);
+    }
+  });
+
+  it('$ neposredno posle cifre ne otvara formulu (iznosi)', () => {
+    expect(podeliFormule('Košta 5$, a sa popustom 4$.')).toEqual([T('Košta 5$, a sa popustom 4$.')]);
+    expect(podeliFormule('10$-20$')).toEqual([T('10$-20$')]);
+    expect(imaFormulu('Košta 5$, a sa popustom 4$.')).toBe(false);
+  });
+
+  it('formule ostaju: $x$, a $x^2$ b, ($x$), 2 $x$; 2$x$ NIJE formula (namerno, iznosi su verovatniji)', () => {
+    expect(podeliFormule('$x$')).toEqual([F('x')]);
+    expect(podeliFormule('a $x^2$ b')).toEqual([T('a '), F('x^2'), T(' b')]);
+    expect(podeliFormule('($x$)')).toEqual([T('('), F('x'), T(')')]);
+    expect(podeliFormule('2 $x$')).toEqual([T('2 '), F('x')]);
+    expect(podeliFormule('2$x$')).toEqual([T('2$x$')]);
   });
 
   it('formulaMarked je jedna ekstenzija u redu', () => {

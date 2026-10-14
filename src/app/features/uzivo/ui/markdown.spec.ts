@@ -1,3 +1,4 @@
+import { GRANICA_ODBIJENE_MS } from './formula-vreme.testing';
 import { markdownSaFormulama, renderMarkdown } from './markdown';
 
 describe('renderMarkdown', () => {
@@ -89,5 +90,31 @@ describe('markdownSaFormulama', () => {
   it('renderMarkdown (INFO) ne tumači $', () => {
     expect(renderMarkdown('$x$')).toContain('$x$');
     expect(renderMarkdown('$x$')).not.toContain('uz-formula');
+  });
+
+  it('$ posle cifre ne otvara formulu ni u Markdown-u (iznosi); 2$x$ namerno nije formula', () => {
+    for (const ulaz of ['Košta 5$, a sa popustom 4$.', '10$-20$', '2$x$']) {
+      expect(markdownSaFormulama(ulaz).formula, ulaz).toBe(false);
+    }
+    expect(markdownSaFormulama('Košta 5$, a sa popustom 4$.').html).toContain('Košta 5$, a sa popustom 4$.');
+    for (const ulaz of ['$x$', 'a $x^2$ b', '($x$)', '2 $x$']) {
+      expect(markdownSaFormulama(ulaz).formula, ulaz).toBe(true);
+    }
+  });
+
+  it('alt slike sa formulom je LaTeX izvor, ne tekst markupa', () => {
+    const html = markdownSaFormulama('![graf $x^2$ i &lt; "c"](http://a/b.png)').html;
+    expect(html).toContain('alt="graf x^2 i &lt; &quot;c&quot;"');
+    expect(html).not.toContain('uz-formula');
+    expect(markdownSaFormulama('![obična](http://a/b.png)').html).toContain('alt="obična"');
+  });
+
+  it('linearnost: najgori slučaj do 2000 znakova u Markdown-u', () => {
+    for (const ulaz of ['$a'.repeat(1000), '$a$1'.repeat(500), ('$a ' + '\\$').repeat(400), '![' + '$a'.repeat(995) + '](u)']) {
+      expect(ulaz.length).toBeLessThanOrEqual(2000);
+      const pocetak = performance.now();
+      markdownSaFormulama(ulaz);
+      expect(performance.now() - pocetak, ulaz.slice(0, 12)).toBeLessThan(GRANICA_ODBIJENE_MS);
+    }
   });
 });
