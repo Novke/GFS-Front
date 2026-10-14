@@ -19,6 +19,8 @@ export const IKONE = [
   'person_remove', 'pin', 'play_arrow', 'qr_code', 'quiz', 'radio_button_checked', 'remove', 'replay', 'rule', 'sensors',
   'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer', 'layers',
   'restart_alt', 'upload_file',
+  // Grupa: kontakti za telefon i WhatsApp grupa.
+  'download', 'link',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

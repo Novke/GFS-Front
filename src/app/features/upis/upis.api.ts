@@ -27,6 +27,8 @@ export interface PodnesiPrijavuCmd {
 
 export interface PodnetaPrijavaInfo {
   id: number;
+  /** Link za WhatsApp grupu generacije (`https://chat.whatsapp.com/...`) ili `null`; stiže tek posle uspešne prijave. */
+  waLink?: string | null;
 }
 
 /**

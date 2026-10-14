@@ -13,6 +13,7 @@ import {
   StudentInfo,
   UpdateGrupaCmd,
   UpdateStudentCmd,
+  WaLinkInfo,
 } from './grupe.models';
 import type { OpcijeZahteva } from './opcije-zahteva';
 
@@ -62,6 +63,19 @@ export class GrupeApi {
       params = params.set('godina', String(godina));
     }
     return this.http.get<PrisustvoMatricaInfo>(`${API_URL}/grupe/${id}/prisustvo`, { params, context: this.kontekst(o) });
+  }
+
+  /** `PATCH grupe/{id}/wa-link`: postavlja link za WhatsApp grupu; `null` ili prazno ga uklanja. */
+  postaviWaLink(id: number, waLink: string | null, o: OpcijeZahteva = {}): Observable<WaLinkInfo> {
+    return this.http.patch<WaLinkInfo>(`${API_URL}/grupe/${id}/wa-link`, { waLink }, { context: this.kontekst(o) });
+  }
+
+  /**
+   * Adresa vCard fajla sa kontaktima grupe (`GET grupe/{id}/kontakti.vcf`) za običan link sa `download`: telefon fajl
+   * preuzme i ponudi uvoz u Kontakte (zato nije HTTP poziv kroz `HttpClient`).
+   */
+  kontaktiUrl(id: number): string {
+    return `${API_URL}/grupe/${id}/kontakti.vcf`;
   }
 
   /** `POST studenti`. */

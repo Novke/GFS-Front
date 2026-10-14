@@ -169,6 +169,36 @@ describe('rute grupe', () => {
     expect(novo.getAttribute('href')).toBe('/predavanja/novo?grupa=4');
   });
 
+  it('tab Studenti: kontakti za telefon, WA link mejlom (BCC prikazanih) tek kad je link povezan', { timeout: 15_000 }, async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/grupe/4/studenti');
+    http.expectOne('api/grupe/4/pregled').flush(pregled);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+    const el = harness.fixture.nativeElement as HTMLElement;
+    const kontakti = el.querySelector('[data-kontakti]') as HTMLAnchorElement;
+    expect(kontakti.getAttribute('href')).toBe('api/grupe/4/kontakti.vcf');
+    expect(kontakti.hasAttribute('download')).toBe(true);
+    expect(el.querySelector('[data-wa-mejl]')).toBeNull();
+    expect(el.querySelector('[data-wa-podesi]')?.textContent).toContain('Poveži WhatsApp grupu');
+
+    const LINK = 'https://chat.whatsapp.com/AbCdEfGhIj1234567890Kl';
+    const store = harness.fixture.debugElement.query(By.directive(GrupaDetalj)).injector.get(GrupaStore);
+    store.osvezi();
+    http.expectOne('api/grupe/4/pregled').flush({ ...pregled, waLink: LINK, studenti: [...pregled.studenti, red(2, 'Boris', 'Bek', 'GD3', 0, 0)] });
+    await harness.navigateByUrl('/grupe/4/studenti?q=boris');
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+    const mejl = el.querySelector('[data-wa-mejl]') as HTMLAnchorElement;
+    expect(mejl.textContent).toContain('Pošalji WA link (1 adresa)');
+    const upit = new URLSearchParams(mejl.getAttribute('href')!.slice('mailto:?'.length));
+    expect(upit.get('bcc')).toBe('boris@example.com');
+    expect(upit.get('body')).toContain(LINK);
+    expect(el.querySelector('[data-wa-podesi]')?.textContent).toContain('WhatsApp link');
+  });
+
   it('mrvice nose naziv grupe i posle prelaska na drugi tab (detalj se ne pravi ponovo)', { timeout: 15_000 }, async () => {
     const mrvice = TestBed.inject(BreadcrumbService);
     const harness = await RouterTestingHarness.create();
