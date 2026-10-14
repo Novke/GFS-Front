@@ -54,6 +54,9 @@ async function novoPlatno(page: Page, mock: MockApi, raspored: 'Prazno' | 'Naslo
   await expect(page.locator('.uz-ed-stavka-dugme[aria-current="true"]')).toContainText('Uvod');
   await page.getByRole('button', { name: 'Platno', exact: true }).click();
   await page.getByRole('menuitem', { name: raspored, exact: true }).click();
+  // meni se gasi izlaznom animacijom, a njegov providni backdrop (preko celog ekrana) prima pokazivač sve dok se ne
+  // odvoji na kraju animacije: miš na koordinate bi pogodio backdrop (CI #16)
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(editor(page)).toBeVisible();
   await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST').length).toBe(1);
   const post = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST')[0];
@@ -66,6 +69,9 @@ async function novoPlatno(page: Page, mock: MockApi, raspored: 'Prazno' | 'Naslo
 async function ubaciOblik(page: Page, naziv: string): Promise<void> {
   await traka(page).getByRole('button', { name: 'Oblik', exact: true }).click();
   await page.getByRole('menuitem', { name: naziv, exact: true }).click();
+  // meni se gasi izlaznom animacijom, a njegov providni backdrop (preko celog ekrana) prima pokazivač sve dok se ne
+  // odvoji na kraju animacije: miš na koordinate bi pogodio backdrop (CI #16)
+  await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(okvir(page)).toBeFocused();
 }
 
@@ -500,8 +506,11 @@ test.describe('uživo: editor platna (4b, F19)', () => {
   const animacijeUPut = (mock: MockApi, id: number) => poslednji(mock, id)?.platno.animacije;
   /** Dvoklik na sloj (overlay je iznad prikaza, pa koordinatama): otvara uređivač teksta. */
   const uredi = async (page: Page, slojId: string) => {
+    // preko lokatora overlay-a: Playwright čeka da tačku ništa ne prekriva (npr. backdrop menija koji se gasi, CI #16)
+    const overlay = page.locator('.uz-ep-platno app-platno-overlay');
     const c = await centar(slojEditora(page, slojId));
-    await page.mouse.dblclick(c.x, c.y);
+    const o = (await overlay.boundingBox())!;
+    await overlay.dblclick({ position: { x: c.x - o.x, y: c.y - o.y } });
     await expect(uredjivac(page)).toBeFocused();
   };
   /**
