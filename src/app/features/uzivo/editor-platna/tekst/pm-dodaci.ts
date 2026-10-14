@@ -4,7 +4,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import type { Node as PmCvor } from 'prosemirror-model';
 import { type Command, type EditorState, Plugin, PluginKey, TextSelection, type Transaction } from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
-import { Decoration, DecorationSet } from 'prosemirror-view';
+import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 import { GRANICE, codePointa } from '../../data-access/platno-provera';
 import { METRIKA, type Metrika } from '../../ui/platno-metrika';
 import { prikazPasusa } from '../../ui/platno-tekst';
@@ -200,26 +200,36 @@ export function dodatakGranice(ostalo: number, prekoracenje: () => void): Plugin
   });
 }
 
+/** Prenosi izbor iz DOM-a u stanje kad je ceo u uređivaču, tekstualni, razlikuje se i oba kraja su u inline sadržaju. */
+function izborIzDoma(view: EditorView): false {
+  const d = view.dom.ownerDocument.getSelection();
+  const s = view.state.selection;
+  if (view.composing || !(s instanceof TextSelection) || !d?.anchorNode || !d.focusNode
+    || !view.dom.contains(d.anchorNode) || !view.dom.contains(d.focusNode)) return false;
+  const a = view.posAtDOM(d.anchorNode, d.anchorOffset);
+  const h = view.posAtDOM(d.focusNode, d.focusOffset);
+  const doc = view.state.doc;
+  if ((a === s.anchor && h === s.head) || !doc.resolve(a).parent.inlineContent || !doc.resolve(h).parent.inlineContent) return false;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, a, h)));
+  return false;
+}
+
 /**
  * Izbor iz DOM-a pre komande tastature (F19 fix 1). Shift/Ctrl+strelice menja izbor u DOM-u (pregledač), a ProseMirror
  * ga upisuje u stanje tek na `selectionchange` (zaseban zadatak); dok je glavna nit zauzeta sledeći taster (Backspace,
  * Ctrl+B) bi radio nad starim izborom. Zato se pre svakog tastera izbor iz DOM-a prenosi u stanje, samo kad je ceo u
  * uređivaču, razlikuje se od tekstualnog izbora stanja i ne traje kompozicija (IME). Taster ide dalje (`false`).
+ * Isto i na `keyup` (CI #16): posle prvog fokusa novog uređivača ProseMirror zakaže `setTimeout(20)` koji upisuje izbor
+ * IZ STANJA u DOM ako se DOM razlikuje od poslednjeg izbora koji je video; kad zakasni iza Shift+Home (pre
+ * `selectionchange`), poništio bi izbor tastature. Prenos na keyup izjednači njegov zapamćeni izbor sa DOM-om, pa tajmer
+ * nema šta da vrati. `selectionchange` ostaje PM-ov (ovde se ne obrađuje).
  */
 export function dodatakIzboraIzDoma(): Plugin {
   return new Plugin({
     props: {
-      handleKeyDown(view) {
-        const d = view.dom.ownerDocument.getSelection();
-        const s = view.state.selection;
-        if (view.composing || !(s instanceof TextSelection) || !d?.anchorNode || !d.focusNode
-          || !view.dom.contains(d.anchorNode) || !view.dom.contains(d.focusNode)) return false;
-        const a = view.posAtDOM(d.anchorNode, d.anchorOffset);
-        const h = view.posAtDOM(d.focusNode, d.focusOffset);
-        const doc = view.state.doc;
-        if ((a === s.anchor && h === s.head) || !doc.resolve(a).parent.inlineContent || !doc.resolve(h).parent.inlineContent) return false;
-        view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, a, h)));
-        return false;
+      handleKeyDown: (view) => izborIzDoma(view),
+      handleDOMEvents: {
+        keyup: (view, e) => (e.isComposing || e.keyCode === 229 ? false : izborIzDoma(view)),
       },
     },
   });

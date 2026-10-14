@@ -315,7 +315,10 @@ over STOMP; teacher commands are REST.
   thread is busy) acted on the old selection (without the plugin 3 of 10 e2e runs failed). The plugin copies only when both ends are
   inside the editor, the state's selection is a `TextSelection` (Ctrl+A here is `izaberiSav`, also a `TextSelection`, so it is
   covered too), they differ, both ends are in inline
-  content and no IME composition runs. Lists: bullet `•` or `ARAPSKI_TACKA` from 1, indent `18 + 36 * level`, first line `-18` (PowerPoint
+  content and no IME composition runs. It does the same on `keyup` (skipped while composing): after the first focus of a new editor
+  ProseMirror schedules a `setTimeout(20)` that writes the state's selection back into the DOM if the DOM differs from the last
+  selection it saw, so when that timer runs late (busy CI) it undid a Shift+Home made before it; copying on keyup makes them equal.
+  Lists: bullet `•` or `ARAPSKI_TACKA` from 1, indent `18 + 36 * level`, first line `-18` (PowerPoint
   body, 16:9); Tab at the start of a list paragraph (Shift+Tab) changes the level 0-8, elsewhere Tab writes `\t`. The editor does **not**
   change `METRIKA`: text typed in the editor lays out like the projector. History keys: `tekst-<field>:<selection>` (table:
   `...:<r1>-<k1>-<r2>-<k2>`), `animacija-<field>:<id>`, `tabela-sirina:<id>:<k1>-<k2>`, `tabela-visina:<id>:<r1>-<r2>`. A layer

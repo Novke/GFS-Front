@@ -250,7 +250,7 @@ describe('dodatakGranice', () => {
 });
 
 describe('dodatakIzboraIzDoma', () => {
-  it('tokom kompozicije (IME) i bez izbora u uređivaču ne dira stanje i pušta taster dalje', () => {
+  it('tokom kompozicije (IME) i bez izbora u uređivaču ne dira stanje i pušta taster dalje (keydown i keyup)', () => {
     const p = dodatakIzboraIzDoma();
     const dispatch = vi.fn();
     const koren = document.createElement('div');
@@ -263,6 +263,9 @@ describe('dodatakIzboraIzDoma', () => {
     const ev = new KeyboardEvent('keydown', { key: 'Backspace' });
     expect(p.props.handleKeyDown!.call(p, pogled(true, koren), ev)).toBe(false);
     expect(p.props.handleKeyDown!.call(p, pogled(false, document.createElement('div')), ev)).toBe(false);
+    const gore = new KeyboardEvent('keyup', { key: 'Backspace' });
+    expect(p.props.handleDOMEvents!.keyup!.call(p, pogled(true, koren), gore)).toBe(false);
+    expect(p.props.handleDOMEvents!.keyup!.call(p, pogled(false, document.createElement('div')), gore)).toBe(false);
     expect(dispatch).not.toHaveBeenCalled();
     koren.remove();
   });
