@@ -29,6 +29,7 @@ export const GrupaStore = signalStore(
     grupa: computed(() => pregled()?.grupa ?? null),
     studenti: computed(() => pregled()?.studenti ?? []),
     naziv: computed(() => pregled()?.grupa?.naziv?.trim() || 'Grupa'),
+    waLink: computed(() => pregled()?.waLink ?? null),
   })),
   withMethods(store => {
     const ucitajId = rxMethod<number>(

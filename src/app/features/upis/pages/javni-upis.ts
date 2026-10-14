@@ -30,6 +30,7 @@ import {
   Polje,
   PORUKE,
   TOKEN,
+  waLinkZaPrikaz,
 } from '../upis.pravila';
 
 type Stanje = 'ucitavanje' | 'nepostoji' | 'zatvorena' | 'forma' | 'uspeh' | 'greska';
@@ -80,6 +81,8 @@ export class JavniUpis {
   protected readonly greskaServera = signal<string | null>(null);
   /** Poslati podaci, za ekran uspeha. */
   protected readonly poslato = signal<PodnesiPrijavuCmd | null>(null);
+  /** WhatsApp grupa generacije iz odgovora na prijavu (samo kanonski link), za dugme na ekranu uspeha. */
+  protected readonly waLink = signal<string | null>(null);
 
   // Prijava čije slanje je palo na mreži ili 5xx: "Pokušaj ponovo" je šalje ponovo, sa istim podacima.
   private zaPonovno: PodnesiPrijavuCmd | null = null;
@@ -143,6 +146,7 @@ export class JavniUpis {
     this.salje.set(false);
     this.greskaServera.set(null);
     this.poslato.set(null);
+    this.waLink.set(null);
     this.zaPonovno = null;
     this.ucitaj(token);
   }
@@ -177,8 +181,9 @@ export class JavniUpis {
     this.greskaServera.set(null);
     this.zahtev?.unsubscribe();
     this.zahtev = this.api.podnesi(this.token(), cmd).subscribe({
-      next: () => {
+      next: odgovor => {
         this.salje.set(false);
+        this.waLink.set(waLinkZaPrikaz(odgovor?.waLink));
         this.poslato.set(cmd);
         this.prikazi('uspeh');
       },

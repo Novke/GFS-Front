@@ -78,3 +78,11 @@ export function greskaPolja(polje: Polje, vrednost: string | number | null | und
       return tekst.trim().length <= 100 ? null : PORUKE.opstina;
   }
 }
+
+/** Kanonski link za poziv u WhatsApp grupu (server ga tako čuva); sve drugo se ne prikazuje kao link. */
+const WA_LINK = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]{10,40}$/;
+
+/** Link za dugme posle prijave, ili `null`: odbrana i na klijentu, da `href` nikad ne bude proizvoljan URL. */
+export function waLinkZaPrikaz(link: unknown): string | null {
+  return typeof link === 'string' && WA_LINK.test(link) ? link : null;
+}

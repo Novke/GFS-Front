@@ -19,7 +19,7 @@ type StatusPrijave = 'NA_CEKANJU' | 'PRIHVACENA' | 'ODBIJENA';
 
 interface Predmet { id: number; naziv: string }
 interface TipTesta { id: number; naziv: string; predmetId: number; aktivan: boolean }
-interface Grupa { id: number; naziv: string; godinaUpisa: number | null }
+interface Grupa { id: number; naziv: string; godinaUpisa: number | null; waLink?: string | null }
 interface Student {
   id: number; ime: string; prezime: string; indeks: string; godina: number | null; email: string | null;
   brojTelefona: string | null; grupaId: number | null; datumRodjenja: string | null; opstina: string | null;
@@ -449,6 +449,7 @@ export class MockApi {
       brojStudenata: studenti.length,
       brojPredavanja: predavanja.length,
       prosecnaPrisutnost: prisutnost,
+      waLink: g.waLink ?? null,
       otvorenOnboarding: otvorena
         ? { id: otvorena.id, token: otvorena.token, istice: otvorena.istice, brojPrijava: otvorena.brojPrijava, brojNaCekanju: otvorena.brojNaCekanju, maxPrijava: otvorena.maxPrijava }
         : null,
@@ -611,6 +612,20 @@ export class MockApi {
     get('grupe/:id/pregled', (_z, p) => {
       const g = nadji(d.grupe, p['id'], 'Grupa');
       return jeOdgovor(g) ? g : ok(this.grupaPregled(g));
+    });
+    patch('grupe/:id/wa-link', (z, p) => {
+      const g = nadji(d.grupe, p['id'], 'Grupa');
+      if (jeOdgovor(g)) {
+        return g;
+      }
+      const unos = ((z.telo as { waLink?: string | null } | null)?.waLink ?? '').trim();
+      // isto pravilo kao WaLink na serveru (skraćeno): kanonski oblik ili 400
+      const m = /^(?:https?:\/\/)?(?:www\.)?chat\.whatsapp\.com\/(?:invite\/)?([A-Za-z0-9]{10,40})\/?(?:[?#].*)?$/i.exec(unos);
+      if (unos && !m) {
+        return greska(400, 'Link mora biti poziv u WhatsApp grupu (https://chat.whatsapp.com/...). U WhatsApp-u: Info grupe → Pozovi putem linka.');
+      }
+      g.waLink = m ? `https://chat.whatsapp.com/${m[1]}` : null;
+      return ok({ waLink: g.waLink });
     });
     get('grupe/:id/prisustvo', (z, p) => {
       const predmetId = Number(z.query.get('predmetId'));

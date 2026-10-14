@@ -21,6 +21,8 @@ export const IKONE = [
   'restart_alt', 'upload_file',
   // Editor platna (faza 4).
   'undo', 'redo', 'flip_to_front', 'flip_to_back', 'visibility', 'shapes',
+  // Grupa: kontakti za telefon i WhatsApp grupa.
+  'download', 'link',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];
