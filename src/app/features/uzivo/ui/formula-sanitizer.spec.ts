@@ -1,6 +1,7 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
 import { latexUMarkup as latexUMarkupZaTest } from './formula-markup';
 import { MAX_MARKUP, markupNepromenjen, ocistiMarkup, ocistiStil } from './formula-sanitizer';
+import { GRANICA_ODBIJENE_MS, GRANICA_PROLAZI_MS } from './formula-vreme.testing';
 
 const ml = (latex: string) => convertLatexToMarkup(latex, { defaultMode: 'math' });
 
@@ -43,12 +44,12 @@ describe('formula-sanitizer: markupNepromenjen (dijalog: upis u math-field samo 
 });
 
 /**
- * Katastrofalno vraćanje (F15 fix 2): najgori slučaj svakog regexa nad vrednošću iz markup-a ili LaTeX-a. Granica je
- * labava (CI je opterećen); pre popravke `points` je bio eksponencijalan (24 cifre: 61 s), a brojevi i `calc(`
- * kvadratni (`\d*\.?\d+`, `\s*[...\s]*`).
+ * Katastrofalno vraćanje (F15 fix 2): najgori slučaj svakog regexa nad vrednošću iz markup-a ili LaTeX-a. Granice su iz
+ * `formula-vreme.testing.ts` (CI je opterećen): pravi MathLive i dugi ulazi (parsiranje u jsdom-u je linearno, desetine kB)
+ * imaju granicu ulaza koji prolazi, kratke vrednosti granicu odbijenog; pre popravke `points` je bio eksponencijalan (24
+ * cifre: 61 s), a brojevi i `calc(` kvadratni (`\d*\.?\d+`, `\s*[...\s]*`).
  */
 describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', () => {
-  const GRANICA_MS = 200;
   const traje = (f: () => unknown) => {
     const t = performance.now();
     f();
@@ -60,23 +61,23 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
     // pre popravke: oko 1 s (recenzija; varijanta sa padding="0.1234567" i 1.123456789em ni posle 30 s)
     const latex = '\\enclose{updiagonalarrow}{\\rule{1em}{100000000000000000000000em}}';
     let f: DocumentFragment | null = null;
-    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_MS);
+    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_PROLAZI_MS);
     expect(f!.querySelector('polygon')!.getAttribute('points')).toMatch(/e\+\d+/);
   });
 
   it('formula iz re-recenzije (pre popravke ni posle 30 s; RED nije puštan, zamrzao bi suite) se crta brzo', () => {
     const latex = '\\enclose{updiagonalarrow}[padding="0.1234567"]{\\rule{1.123456789em}{100000000000000000000000em}}';
     let f: DocumentFragment | null = null;
-    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_MS);
+    expect(traje(() => (f = latexUMarkupZaTest(latex)))).toBeLessThan(GRANICA_PROLAZI_MS);
     expect(f!.querySelector('polygon')).not.toBeNull();
-    expect(traje(() => markupNepromenjen(convertLatexToMarkup(latex, { defaultMode: 'math' })))).toBeLessThan(GRANICA_MS);
+    expect(traje(() => markupNepromenjen(convertLatexToMarkup(latex, { defaultMode: 'math' })))).toBeLessThan(GRANICA_PROLAZI_MS);
   });
 
   it('points: niz cifara bez separatora pa nedozvoljen znak (eksponencijalno pre popravke)', () => {
     let f!: DocumentFragment;
     // posle popravke i 40 cifara (pre: 21 cifra ~3 s, 24 cifre ~61 s)
-    expect(traje(() => ocistiMarkup(`<svg><polygon points="${'1'.repeat(40)}x"></polygon></svg>`))).toBeLessThan(GRANICA_MS);
-    expect(traje(() => (f = ocistiMarkup(`<svg><polygon points="${'1'.repeat(21)}x"></polygon></svg>`)))).toBeLessThan(GRANICA_MS);
+    expect(traje(() => ocistiMarkup(`<svg><polygon points="${'1'.repeat(40)}x"></polygon></svg>`))).toBeLessThan(GRANICA_ODBIJENE_MS);
+    expect(traje(() => (f = ocistiMarkup(`<svg><polygon points="${'1'.repeat(21)}x"></polygon></svg>`)))).toBeLessThan(GRANICA_ODBIJENE_MS);
     expect(f.querySelector('polygon')!.hasAttribute('points')).toBe(false);
     // ispravne vrednosti i dalje prolaze, i sa eksponentom sa znakom
     const ok = ocistiMarkup('<svg><polygon points="1.3,0.3 -1.1999999999999997e+44,2e-3 .5 4"></polygon></svg>');
@@ -103,7 +104,7 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
     ['style color (BOJA), dug', () => ocistiStil(`color:#${'f'.repeat(30000)}`)],
     ['style opacity, dug', () => ocistiStil(`opacity:0.${'1'.repeat(30000)}x`)],
   ])('%s: najgori slučaj ispod granice', (_ime, f) => {
-    expect(traje(f)).toBeLessThan(GRANICA_MS);
+    expect(traje(f)).toBeLessThan(GRANICA_PROLAZI_MS);
   });
 
   // tik ispod granice dužine (199 / 19 999): regex se zaista pokreće (recenzija 2, m2)
@@ -119,7 +120,7 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
     ['stil calc( jedinice', () => ocistiStil(`left:calc(${'1em'.repeat(63)}x)`)],
     ['stil border', () => ocistiStil(`border:${'1'.repeat(186)}x solid`)],
   ])('%s tik ispod granice dužine: regex brz', (_ime, f) => {
-    expect(traje(f)).toBeLessThan(GRANICA_MS);
+    expect(traje(f)).toBeLessThan(GRANICA_PROLAZI_MS);
   });
 
   it('eksponent dosledno: stil i x1..y2 primaju 1e+23em / 1e-7 kao points (recenzija 2, m3)', () => {
@@ -132,8 +133,8 @@ describe('formula-sanitizer: bez katastrofalnog vraćanja (vremenska granica)', 
   it('markupNepromenjen: markup veći od MAX_MARKUP je izmena (dijalog ga ne upisuje), bez <template>', () => {
     const t = performance.now();
     expect(markupNepromenjen('<span>' + 'x'.repeat(MAX_MARKUP) + '</span>')).toBe(false);
-    expect(traje(() => markupNepromenjen('<span>x</span>'))).toBeLessThan(GRANICA_MS);
-    expect(performance.now() - t).toBeLessThan(GRANICA_MS);
+    expect(traje(() => markupNepromenjen('<span>x</span>'))).toBeLessThan(GRANICA_ODBIJENE_MS);
+    expect(performance.now() - t).toBeLessThan(GRANICA_ODBIJENE_MS);
   });
 
   it('predugačke vrednosti se odbacuju pre regexa (atribut, deklaracija stila)', () => {

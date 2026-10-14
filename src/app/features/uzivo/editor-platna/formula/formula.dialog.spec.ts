@@ -7,9 +7,10 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IKONE } from '../../../../core/layout/icons';
+import { GRANICA_PROLAZI_MS } from '../../ui/formula-vreme.testing';
 import { type MathLive, UCITAJ_MATHLIVE } from './mathlive-ucitavanje';
 import type { FormulaUnos } from './formula-pravila';
-import { OZNAKA_FORMULE_EDITORA, type FormulaPodaci, otvoriFormulu } from './formula.dialog';
+import { OZNAKA_FORMULE_EDITORA, type FormulaPodaci, type OtvorenaFormula, otvoriFormulu } from './formula.dialog';
 
 /**
  * Lažni MathLive: `\nepoznato` je greška u LaTeX-u; `<math-field>` je u testu nepoznat element; markup daje pravi
@@ -55,6 +56,7 @@ function upisiLatex(vrednost: string): void {
 describe('FormulaDialog', () => {
   let ucitaj: () => Promise<MathLive>;
   let rezultat: { vrednost: FormulaUnos | undefined; zatvoren: boolean };
+  let dijalog: OtvorenaFormula;
 
   beforeEach(() => {
     ucitaj = () => Promise.resolve(LAZNI);
@@ -78,7 +80,8 @@ describe('FormulaDialog', () => {
 
   function otvori(podaci: Partial<FormulaPodaci> = {}): void {
     rezultat = { vrednost: undefined, zatvoren: false };
-    otvoriFormulu(TestBed.inject(MatDialog), { pocetak: POCETAK, tema: 'NACRT', izSlike: false, ...podaci }).subscribe((v) => {
+    dijalog = otvoriFormulu(TestBed.inject(MatDialog), { pocetak: POCETAK, tema: 'NACRT', izSlike: false, ...podaci });
+    dijalog.ishod.subscribe((v) => {
       rezultat.vrednost = v;
       rezultat.zatvoren = true;
     });
@@ -191,7 +194,8 @@ describe('FormulaDialog', () => {
     const latex = '\\sqrt{'.repeat(700) + 'x' + '}'.repeat(700);
     const t = performance.now();
     upisiLatex(latex);
-    expect(performance.now() - t).toBeLessThan(500);
+    // odbijeno pre MathLive-a, ali sa detekcijom promena dijaloga: granica ulaza koji prolazi
+    expect(performance.now() - t).toBeLessThan(GRANICA_PROLAZI_MS);
     expect(crtaj).not.toHaveBeenCalled();
     expect(mf()!.value).toBe('x^2');
     expect(greska().textContent).toContain('previše složena');
@@ -285,6 +289,20 @@ describe('FormulaDialog', () => {
     await ucitano();
     dugme('Otkaži').click();
     await doK(() => rezultat.zatvoren, 'zatvaranje');
+    expect(rezultat.vrednost).toBeUndefined();
+  });
+
+  it('završni talas (F16 m3): zatvori() zatvara sa undefined i javlja da li je bilo izmena', async () => {
+    otvori();
+    await ucitano();
+    expect(dijalog.zatvori()).toBe(false);
+    await doK(() => rezultat.zatvoren, 'zatvaranje');
+    expect(rezultat.vrednost).toBeUndefined();
+    otvori();
+    await ucitano();
+    upisiLatex('\\frac{a}{b}');
+    expect(dijalog.zatvori()).toBe(true);
+    await doK(() => rezultat.zatvoren, 'zatvaranje posle izmene');
     expect(rezultat.vrednost).toBeUndefined();
   });
 

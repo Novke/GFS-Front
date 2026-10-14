@@ -46,6 +46,13 @@ export const MAX_KORENA_FORMULE = 32;
 /** Redovi (`\\`, `\cr`) u celoj formuli: rastegljiva zagrada ili koren oko visoke matrice crta se visine svih redova. */
 export const MAX_REDOVA_FORMULE = 100;
 export const MAX_STRUKTURE_FORMULE = 200;
+/**
+ * Kolone jednog reda matrice (`&` u istom redu najbližeg `\begin…\end`) i ćelije svih matrica formule (F15 rr4): red sa
+ * ~2400 kolona prolazi ostale granice i daje ~409 kB markup-a (506 ms u jsdom-u, 160 ms u Chromium-u). Formula iz nastave
+ * ima do ~10 kolona i par stotina ćelija (`pmatrix` 30 x 30 = 900 ćelija prolazi).
+ */
+export const MAX_KOLONA_FORMULE = 100;
+export const MAX_CELIJA_FORMULE = 2000;
 
 /** Broj obaveznih argumenata strukturnih komandi; `*` iza imena = prima i opcioni argument `[…]`. */
 const ARGUMENATA: Record<string, string> = {
@@ -75,7 +82,11 @@ const STRELICA_SA_NATPISOM = /^(?:x|long)[A-Za-z]*(?:arrows?|harpoons?(?:up|down
 /** Akcenti teksta bez slova (`\^{a}`, `` \`{a} ``, `\'{a}`, `\.{a}`, `\={a}`, `\~{a}`). */
 const AKCENTI_ZNAKOM = '^`\'.=~';
 
-export interface TrosakFormule { dubina: number; rastegljive: number; koreni: number; struktura: number; redovi: number; }
+export interface TrosakFormule {
+  dubina: number; rastegljive: number; koreni: number; struktura: number; redovi: number;
+  /** Najviše kolona u jednom redu jedne matrice; ćelije svih matrica (svaka matrica počinje jednom ćelijom). */
+  kolone: number; celije: number;
+}
 
 /** Okruženja sa rastegljivim zagradama oko sadržaja. */
 const RASTEGLJIVA_OKRUZENJA = new Set('pmatrix bmatrix Bmatrix vmatrix Vmatrix cases dcases rcases'.split(' ').flatMap(
@@ -94,6 +105,8 @@ interface Okvir {
   nivo: number;
   /** 1 = rastegljiva konstrukcija (broji se i u `rastegljive`). */
   rast: number;
+  /** Kolone tekućeg reda okruženja (`\\begin…\\end`); 0 za ostale okvire. */
+  kol: number;
 }
 
 /**
@@ -102,14 +115,14 @@ interface Okvir {
  * strukturnih komandi. `\{`, `\}` i `\\` su znakovi; višak zatvaranja se zanemaruje.
  */
 export function trosakFormule(latex: string): TrosakFormule {
-  const t: TrosakFormule = { dubina: 0, rastegljive: 0, koreni: 0, struktura: 0, redovi: 0 };
+  const t: TrosakFormule = { dubina: 0, rastegljive: 0, koreni: 0, struktura: 0, redovi: 0, kolone: 0, celije: 0 };
   const stek: Okvir[] = [];
   let d = 0;
   let r = 0;
   let preskociToken = false; // graničnik posle `\left`, `\right`, `\middle` je deo te konstrukcije
   const vrh = () => stek[stek.length - 1] as Okvir | undefined;
-  const stavi = (o: Omit<Okvir, 'nivo' | 'rast'>, nivo: number, rast = 0) => {
-    stek.push({ ...o, nivo, rast });
+  const stavi = (o: Omit<Okvir, 'nivo' | 'rast' | 'kol'>, nivo: number, rast = 0) => {
+    stek.push({ ...o, nivo, rast, kol: o.zatvara === 'end' ? 1 : 0 });
     d += nivo;
     r += rast;
     if (d > t.dubina) t.dubina = d;
@@ -138,6 +151,18 @@ export function trosakFormule(latex: string): TrosakFormule {
     while (stek.length > i) skini();
     return true;
   };
+  /** `&` (nova kolona) i `\\` / `\cr` (nov red) u najbližem okruženju; van okruženja ne broje kolone. */
+  const okruzenje = () => {
+    for (let i = stek.length - 1; i >= 0; i--) if (stek[i].zatvara === 'end') return stek[i];
+    return undefined;
+  };
+  const celija = (novRed: boolean) => {
+    const o = okruzenje();
+    if (!o) return;
+    t.celije++;
+    o.kol = novRed ? 1 : o.kol + 1;
+    if (o.kol > t.kolone) t.kolone = o.kol;
+  };
   const grupa = (zatvara: string, rast = 0) =>
     stavi({ tip: 'g', ostalo: 0, opcioni: false, zatvara }, vrh()?.tip === 'k' ? 0 : 1, rast);
   const komanda = (n: number, opcioni: boolean, rast = 0) => {
@@ -156,7 +181,10 @@ export function trosakFormule(latex: string): TrosakFormule {
   for (let i = 0; i < latex.length && t.dubina <= MAX_DUBINA_FORMULE && t.rastegljive <= MAX_RASTEGLJIVIH_FORMULE; i++) {
     const z = latex[i];
     if (z === ' ' || z === '\n' || z === '\t') continue;
-    if (z === '{') {
+    if (z === '&') {
+      celija(false);
+      token();
+    } else if (z === '{') {
       grupa('}');
     } else if (z === '}') {
       if (zatvori('}')) token();
@@ -173,7 +201,10 @@ export function trosakFormule(latex: string): TrosakFormule {
         // `\{`, `\}`, `\\`, `\,` ...: jedan znak; akcent znakom (`\^{a}`) je komanda sa jednim argumentom
         if (AKCENTI_ZNAKOM.includes(latex[i + 1] ?? ' ')) komanda(1, false);
         else {
-          if (latex[i + 1] === '\\') t.redovi++;
+          if (latex[i + 1] === '\\') {
+            t.redovi++;
+            celija(true);
+          }
           token();
         }
         i++;
@@ -207,11 +238,14 @@ export function trosakFormule(latex: string): TrosakFormule {
         const [kraj, ime] = preskociIme(j);
         i = kraj - 1;
         grupa('end', RASTEGLJIVA_OKRUZENJA.has(ime) ? 1 : 0);
+        t.celije++;
+        if (t.kolone < 1) t.kolone = 1;
       } else if (k === 'end') {
         i = preskociIme(j)[0] - 1;
         if (zatvori('end')) token();
       } else if (k === 'cr') {
         t.redovi++;
+        celija(true);
       } else if (k === 'over' || k === 'atop' || k === 'choose') {
         t.struktura++; // infiks: deli grupu u kojoj je, ne otvara nivo
       } else {
@@ -230,5 +264,6 @@ const slovo = (c: number): boolean => (c >= 65 && c <= 90) || (c >= 97 && c <= 1
 export function preTeskaFormula(latex: string): boolean {
   const t = trosakFormule(latex);
   return t.dubina > MAX_DUBINA_FORMULE || t.rastegljive > MAX_RASTEGLJIVIH_FORMULE || t.koreni > MAX_KORENA_FORMULE
-    || t.struktura > MAX_STRUKTURE_FORMULE || t.redovi > MAX_REDOVA_FORMULE;
+    || t.struktura > MAX_STRUKTURE_FORMULE || t.redovi > MAX_REDOVA_FORMULE || t.kolone > MAX_KOLONA_FORMULE
+    || t.celije > MAX_CELIJA_FORMULE;
 }

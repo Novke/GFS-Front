@@ -3,16 +3,17 @@
 // type`, koji se briše pri prevođenju), pa editor ne nosi ništa od njih. Store ne zna za dijaloge: otvara komponenta.
 import { DestroyRef, Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { type Observable, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { NotificationStore } from '../../../../core/state/notification.store';
 import { novaFormula } from '../../data-access/platno-novo';
 import type { FormulaSloj, Tema } from '../../data-access/platno.models';
 import { izmeniSlojeve, slobodnoMesto } from '../komande';
 import { PlatnoEditorStore } from '../platno-editor.store';
 import { type FormulaUnos, primeniFormulu, unosFormule } from './formula-pravila';
-import type { FormulaPodaci } from './formula.dialog';
+import type { FormulaPodaci, OtvorenaFormula } from './formula.dialog';
 
 export const PORUKA_DIJALOG_NIJE_UCITAN = 'Dijalog formule nije učitan. Osveži stranicu i pokušaj ponovo.';
+export const PORUKA_FORMULA_ODBACENA = 'Izmena formule nije sačuvana: slajd je zatvoren.';
 
 /**
  * Editori (njihov `PlatnoEditorStore`) u kojima se dijalog formule upravo otvara ili je otvoren. Jedan čuvar za sve tri
@@ -23,17 +24,21 @@ const otvoreni = new WeakSet<object>();
 
 @Injectable({ providedIn: 'root' })
 export class FormulaOtvarac {
-  /** Dinamički import dijaloga; odbijen `import()` (npr. stari chunk posle novog izdanja) je odbijen `Promise`. */
-  async otvori(dialog: MatDialog, podaci: FormulaPodaci): Promise<Observable<FormulaUnos | undefined>> {
+  /**
+   * Dinamički import dijaloga; odbijen `import()` (npr. stari chunk posle novog izdanja) je odbijen `Promise`. Kad `ziv`
+   * posle učitavanja vrati false (editor je u međuvremenu uništen), dijalog se ne otvara (null).
+   */
+  async otvori(dialog: MatDialog, podaci: FormulaPodaci, ziv: () => boolean = () => true): Promise<OtvorenaFormula | null> {
     const { otvoriFormulu } = await import('./formula.dialog');
-    return otvoriFormulu(dialog, podaci);
+    return ziv() ? otvoriFormulu(dialog, podaci) : null;
   }
 }
 
 /**
  * Formula u editoru za komponentu koja otvara dijalog (zove se u injekcionom kontekstu komponente, uz njen
- * `PlatnoEditorStore`). Jedan dijalog odjednom po editoru (zajednički čuvar `otvoreni`); posle zatvaranja ništa se ne upisuje ako je komponenta u međuvremenu
- * uništena (async put ne piše u slajd koji se više ne uređuje). Svaka izmena je jedan korak kroz `primeniFormulu`.
+ * `PlatnoEditorStore`). Jedan dijalog odjednom po editoru (zajednički čuvar `otvoreni`). Kad komponenta nestane dok je
+ * dijalog otvoren (npr. promena slajda), dijalog se zatvara, uz poruku ako je u njemu bilo izmena; dok se lenji chunk još
+ * učitava, ni ne otvara. Ništa se ne upisuje u slajd koji se više ne uređuje. Svaka izmena je jedan korak (`primeniFormulu`).
  */
 export function formulaEditora() {
   const otvarac = inject(FormulaOtvarac);
@@ -41,21 +46,28 @@ export function formulaEditora() {
   const store = inject(PlatnoEditorStore);
   const obavestenja = inject(NotificationStore);
   let ziv = true;
-  inject(DestroyRef).onDestroy(() => (ziv = false));
+  /** Dijalog koji je ova komponenta otvorila: zatvara se kad ona nestane (npr. promena slajda), ne ostaje nad praznim. */
+  let otvoren: OtvorenaFormula | null = null;
+  inject(DestroyRef).onDestroy(() => {
+    ziv = false;
+    if (otvoren?.zatvori()) obavestenja.greska(PORUKA_FORMULA_ODBACENA);
+    otvoren = null;
+  });
 
   /** Ishod dijaloga; `undefined` za Otkaži, neuspelo učitavanje (poruka), drugi dijalog u toku ili uništenu komponentu. */
   async function unos(podaci: FormulaPodaci): Promise<FormulaUnos | undefined> {
     if (otvoreni.has(store)) return undefined;
     otvoreni.add(store);
     try {
-      const zatvaranje = await otvarac.otvori(dialog, podaci);
-      if (!ziv) return undefined;
-      const u = await firstValueFrom(zatvaranje, { defaultValue: undefined });
+      otvoren = await otvarac.otvori(dialog, podaci, () => ziv);
+      if (!otvoren) return undefined;
+      const u = await firstValueFrom(otvoren.ishod, { defaultValue: undefined });
       return ziv ? u : undefined;
     } catch {
       if (ziv) obavestenja.greska(PORUKA_DIJALOG_NIJE_UCITAN);
       return undefined;
     } finally {
+      otvoren = null;
       otvoreni.delete(store);
     }
   }

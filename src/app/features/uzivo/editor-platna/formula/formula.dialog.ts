@@ -21,9 +21,8 @@ import { BrojcanoPoljeComponent } from '../brojcano-polje';
 import { IzborBojeComponent } from '../izbor-boje.component';
 import { preTeskaFormula } from '../../ui/formula-komande';
 import { markupNepromenjen } from '../../ui/formula-sanitizer';
-import {
-  type FormulaUnos, MAX_LATEX, PORUKA_PRAZNA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule,
-} from './formula-pravila';
+import type { FormulaUnos } from './formula-pravila';
+import { MAX_LATEX, PORUKA_PRAZNA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule } from './provera-formule';
 import { type MathLive, UCITAJ_MATHLIVE } from './mathlive-ucitavanje';
 
 /** Host atribut `data-oznaka` dijaloga: niz ostaje u lenjom chunk-u (e2e ga traži, odluka 26). */
@@ -37,14 +36,30 @@ export interface FormulaPodaci {
   izSlike: boolean;
 }
 
+/** Otvoren dijalog formule (`formula-otvarac`): ishod i zatvaranje kad editor koji ga je otvorio nestane. */
+export interface OtvorenaFormula {
+  /** Unos posle "Sačuvaj" ili `undefined` (Otkaži, Esc, `zatvori`). */
+  readonly ishod: Observable<FormulaUnos | undefined>;
+  /** Zatvara bez čuvanja; true kad je u dijalogu bilo izmena (one se tada gube). */
+  zatvori(): boolean;
+}
+
 /**
- * Otvara dijalog; emituje unos posle "Sačuvaj" ili `undefined` (Otkaži, Esc). `disableClose`: klik van dijaloga ne gubi
- * otkucanu formulu, a Esc obrađuje dijalog sam (u `math-field`-u ga koristi MathLive).
+ * Otvara dijalog. `disableClose`: klik van dijaloga ne gubi otkucanu formulu, a Esc obrađuje dijalog sam (u
+ * `math-field`-u ga koristi MathLive).
  */
-export function otvoriFormulu(dialog: MatDialog, podaci: FormulaPodaci): Observable<FormulaUnos | undefined> {
-  return dialog.open<FormulaDialog, FormulaPodaci, FormulaUnos>(FormulaDialog, {
+export function otvoriFormulu(dialog: MatDialog, podaci: FormulaPodaci): OtvorenaFormula {
+  const ref = dialog.open<FormulaDialog, FormulaPodaci, FormulaUnos>(FormulaDialog, {
     data: podaci, autoFocus: false, restoreFocus: true, disableClose: true, width: '560px', maxWidth: '95vw',
-  }).afterClosed();
+  });
+  return {
+    ishod: ref.afterClosed(),
+    zatvori: () => {
+      const izmenjeno = ref.componentInstance?.izmenjeno() ?? false;
+      ref.close();
+      return izmenjeno;
+    },
+  };
 }
 
 /** Deo `MathfieldElement`-a koji dijalog koristi (u testu je `<math-field>` nepoznat element). */
@@ -300,6 +315,12 @@ export class FormulaDialog {
       t.show();
     }
     this.tastaturaVidljiva.set(t.visible);
+  }
+
+  /** Da li se unos razlikuje od početka (LaTeX, boja, veličina, poravnanje). */
+  izmenjeno(): boolean {
+    const p = this.podaci.pocetak;
+    return this.latex() !== p.latex || this.boja() !== p.boja || this.velicina() !== p.velicina || this.poravnanje() !== p.poravnanje;
   }
 
   protected sacuvaj(): void {

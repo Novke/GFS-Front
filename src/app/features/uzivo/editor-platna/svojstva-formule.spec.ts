@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { MatDialog } from '@angular/material/dialog';
-import { type Observable, of } from 'rxjs';
+import { of } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
 import type { FormulaSloj } from '../data-access/platno.models';
 import { novaFormula } from '../data-access/platno-novo';
@@ -9,7 +9,8 @@ import { platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { FormulaOtvarac } from './formula/formula-otvarac';
 import type { FormulaUnos } from './formula/formula-pravila';
-import type { FormulaPodaci } from './formula/formula.dialog';
+import type { FormulaPodaci, OtvorenaFormula } from './formula/formula.dialog';
+import { otvorena } from './formula/formula.testing';
 import { OtpremanjeSlike } from './otpremanje-slike';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -30,7 +31,7 @@ describe('SvojstvaFormuleComponent (kroz panel Svojstva)', () => {
   let fixture: ComponentFixture<DomacinComponent>;
   let store: PlatnoEditorStore;
   let poruke: Poruka[];
-  let otvori: ReturnType<typeof vi.fn<(d: MatDialog, p: FormulaPodaci) => Promise<Observable<FormulaUnos | undefined>>>>;
+  let otvori: ReturnType<typeof vi.fn<(d: MatDialog, p: FormulaPodaci) => Promise<OtvorenaFormula | null>>>;
   let ishod: (p: FormulaPodaci) => FormulaUnos | undefined;
   const sat: LazniSat = { t: 0 };
   const el = () => fixture.nativeElement as HTMLElement;
@@ -56,7 +57,7 @@ describe('SvojstvaFormuleComponent (kroz panel Svojstva)', () => {
     sat.t = 0;
     localStorage.clear();
     ishod = () => undefined;
-    otvori = vi.fn((_d: MatDialog, p: FormulaPodaci) => Promise.resolve(of(ishod(p))));
+    otvori = vi.fn((_d: MatDialog, p: FormulaPodaci) => Promise.resolve(otvorena(of(ishod(p)))));
     TestBed.configureTestingModule({
       providers: [
         ...provajderiSvojstava(sat),

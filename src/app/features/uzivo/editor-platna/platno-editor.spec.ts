@@ -15,9 +15,10 @@ import { novaTabela } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, SlajdDetails } from '../data-access/uzivo.models';
 import { TEME } from '../ui/teme';
-import { FormulaOtvarac } from './formula/formula-otvarac';
+import { FormulaOtvarac, PORUKA_FORMULA_ODBACENA } from './formula/formula-otvarac';
 import type { FormulaUnos } from './formula/formula-pravila';
-import type { FormulaPodaci } from './formula/formula.dialog';
+import type { FormulaPodaci, OtvorenaFormula } from './formula/formula.dialog';
+import { otvorena } from './formula/formula.testing';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
 import { PlatnoEditorComponent } from './platno-editor.component';
 import { PlatnoEditorStore } from './platno-editor.store';
@@ -43,7 +44,7 @@ describe('PlatnoEditorComponent', () => {
   let poruke: Poruka[];
   /** Lažni otvarač dijaloga formule: ishod je `ishodFormule(podaci)` (podrazumevano Otkaži). */
   let ishodFormule: (p: FormulaPodaci) => FormulaUnos | undefined;
-  let otvoriFormulu: ReturnType<typeof vi.fn<(d: MatDialog, p: FormulaPodaci) => Promise<Observable<FormulaUnos | undefined>>>>;
+  let otvoriFormulu: ReturnType<typeof vi.fn<(d: MatDialog, p: FormulaPodaci, ziv?: () => boolean) => Promise<OtvorenaFormula | null>>>;
   const el = () => fixture.nativeElement as HTMLElement;
   const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
   const taster = (cilj: Element, key: string, o: KeyboardEventInit = {}) => {
@@ -90,7 +91,7 @@ describe('PlatnoEditorComponent', () => {
   beforeEach(async () => {
     odjava = vi.fn<() => void>();
     ishodFormule = () => undefined;
-    otvoriFormulu = vi.fn((_d: MatDialog, p: FormulaPodaci) => Promise.resolve(of(ishodFormule(p))));
+    otvoriFormulu = vi.fn((_d: MatDialog, p: FormulaPodaci) => Promise.resolve(otvorena(of(ishodFormule(p)))));
     lazni = {
       izmeniPlatno: vi.fn<(id: number, p: Platno) => void>(),
       registrujPraznjenje: vi.fn<(f: () => void, o?: () => boolean) => () => void>(() => odjava),
@@ -1328,7 +1329,7 @@ describe('PlatnoEditorComponent', () => {
     });
 
     it('završni talas: dok se dijalog učitava (lenji chunk), "Formula" iz trake pa Enter na formuli ne otvaraju drugi dijalog', async () => {
-      let ucitaj!: (o: Observable<FormulaUnos | undefined>) => void;
+      let ucitaj!: (o: OtvorenaFormula) => void;
       otvoriFormulu.mockImplementationOnce(() => new Promise((r) => (ucitaj = r)));
       dugmeTrake('Formula').click();
       await fixture.whenStable();
@@ -1336,7 +1337,7 @@ describe('PlatnoEditorComponent', () => {
       taster(okvir(), 'Enter');
       await posle();
       expect(otvoriFormulu).toHaveBeenCalledTimes(1);
-      ucitaj(of(undefined));
+      ucitaj(otvorena(of(undefined)));
       await posle();
       taster(okvir(), 'Enter');
       await posle();
@@ -1345,12 +1346,12 @@ describe('PlatnoEditorComponent', () => {
 
     it('editor nestao dok je dijalog otvoren: zakasneli "Sačuvaj" ne piše u slajd', async () => {
       let zatvori!: (u: FormulaUnos) => void;
-      otvoriFormulu.mockImplementation(() => Promise.resolve(new Observable<FormulaUnos | undefined>((s) => {
+      otvoriFormulu.mockImplementation(() => Promise.resolve(otvorena(new Observable<FormulaUnos | undefined>((s) => {
         zatvori = (u) => {
           s.next(u);
           s.complete();
         };
-      })));
+      }))));
       store.izaberi(['formula']);
       taster(okvir(), 'Enter');
       await posle();
@@ -1362,6 +1363,35 @@ describe('PlatnoEditorComponent', () => {
         slojevi: expect.arrayContaining([expect.objectContaining({ id: 'formula', latex: 'y' })]),
       }));
       expect(pocetak.latex).toBe('x^2');
+    });
+
+    it.each([
+      ['sa izmenama: poruka da izmena nije sačuvana', true, 1],
+      ['bez izmena: bez poruke', false, 0],
+    ])('završni talas (F16 m3): editor nestao dok je dijalog otvoren -> dijalog se zatvara, %s', async (_ime, izmenjeno, poruka) => {
+      const dijalog = otvorena(new Observable<FormulaUnos | undefined>(), izmenjeno);
+      otvoriFormulu.mockImplementation(() => Promise.resolve(dijalog));
+      store.izaberi(['formula']);
+      taster(okvir(), 'Enter');
+      await posle();
+      expect(dijalog.zatvoren).toBe(0);
+      fixture.destroy();
+      expect(dijalog.zatvoren).toBe(1);
+      expect(poruke.filter((m) => m.tekst === PORUKA_FORMULA_ODBACENA)).toHaveLength(poruka);
+    });
+
+    it('završni talas (F16 m3): editor nestao dok se lenji chunk dijaloga učitava -> dijalog se ni ne otvara', async () => {
+      let ziv!: () => boolean;
+      otvoriFormulu.mockImplementationOnce((_d, _p, z) => {
+        ziv = z!;
+        return new Promise(() => undefined);
+      });
+      store.izaberi(['formula']);
+      taster(okvir(), 'Enter');
+      await posle();
+      expect(ziv()).toBe(true);
+      fixture.destroy();
+      expect(ziv()).toBe(false);
     });
   });
 });

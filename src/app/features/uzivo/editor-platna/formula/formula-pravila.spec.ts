@@ -2,9 +2,9 @@
 import type { FormulaSloj } from '../../data-access/platno.models';
 import { ZABRANJENE_KOMANDE } from '../../ui/formula-markup';
 import { KOMANDE_ZABRANJENE, PORODICE_ZABRANJENE } from '../../ui/formula-komande';
-import {
-  MAX_LATEX, PORUKA_PRETESKA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule, primeniFormulu, type FormulaUnos,
-} from './formula-pravila';
+import { GRANICA_ODBIJENE_MS } from '../../ui/formula-vreme.testing';
+import { primeniFormulu, type FormulaUnos } from './formula-pravila';
+import { MAX_LATEX, PORUKA_PRETESKA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule } from './provera-formule';
 
 const ZABRANJENA = 'Formula koristi komandu koja nije dozvoljena (\\href, \\url, \\style, \\class, \\cssId, \\csname, \\html…) ' +
   'ili zapis ^^.';
@@ -125,7 +125,7 @@ describe('ZABRANJENE_KOMANDE i greskaFormule: bez katastrofalnog vraćanja (F15 
     expect(traje(() => {
       ZABRANJENE_KOMANDE_FORMULE.test(latex);
       greskaFormule(latex, () => []);
-    })).toBeLessThan(200);
+    })).toBeLessThan(GRANICA_ODBIJENE_MS);
   });
 });
 
@@ -141,7 +141,7 @@ describe('greskaFormule: preteška formula (F15 fix 3 i 4)', () => {
   });
 
   it('poruka nabraja granice iz istog izvora kao provera; formula na granici prolazi', () => {
-    for (const n of ['32', '16', '200', '100']) expect(PORUKA_PRETESKA).toContain(n);
+    for (const n of ['32', '16', '200', '100 redova', '100 kolona', '2000']) expect(PORUKA_PRETESKA).toContain(n);
     expect(greskaFormule('\\sqrt{'.repeat(16) + 'x' + '}'.repeat(16), () => [])).toBeNull();
   });
 });

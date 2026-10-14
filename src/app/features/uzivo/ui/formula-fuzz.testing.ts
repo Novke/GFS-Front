@@ -36,14 +36,33 @@ function podformula(rnd: () => number, dubina: number): string {
   return k.replace(/[XY]/g, () => podformula(rnd, dubina - 1));
 }
 
+const OKRUZENJA = ['matrix', 'pmatrix', 'bmatrix', 'vmatrix', 'cases'];
+
+/** Široka ili visoka matrica (F15 rr4 a): do 30 redova i 2500 kolona, ćelije su atomi ili male podformule. */
+function sirokaMatrica(rnd: () => number): string {
+  const okruzenje = OKRUZENJA[Math.floor(rnd() * OKRUZENJA.length)];
+  const redova = 1 + Math.floor(rnd() * 30);
+  const kolona = 1 + Math.floor(rnd() ** 2 * 2500);
+  const celija = () => (rnd() < 0.8 ? ATOMI[Math.floor(rnd() * ATOMI.length)] : podformula(rnd, 2));
+  let l = `\\begin{${okruzenje}}`;
+  for (let r = 0; r < redova && l.length < 4900; r++) {
+    if (r) l += '\\\\';
+    for (let k = 0; k < kolona && l.length < 4900; k++) l += (k ? '&' : '') + celija();
+  }
+  return l + `\\end{${okruzenje}}`;
+}
+
 /**
  * Jedna formula: mešani lanac do ~34 nivoa (najteže što prolazi proveru), lanac iste konstrukcije do 400 puta (najgori
- * slučaj ugnježdavanja), nasumično stablo zadate dubine, ili zbir više stabala (dugo, ali plitko). Uvek <= 5000 znakova.
+ * slučaj ugnježdavanja), nasumično stablo zadate dubine, zbir više stabala (dugo, ali plitko) ili široka matrica (do 2500
+ * kolona). Uvek <= 5000 znakova.
  */
 export function nasumicnaFormula(rnd: () => number): string {
   const nacin = rnd();
   let l: string;
-  if (nacin < 0.25) {
+  if (nacin < 0.15) {
+    l = sirokaMatrica(rnd);
+  } else if (nacin < 0.35) {
     // mešani lanac do granice dubine: najteži oblik koji prolazi proveru
     const n = 1 + Math.floor(rnd() * 34);
     l = 'x';
@@ -52,7 +71,7 @@ export function nasumicnaFormula(rnd: () => number): string {
       const prvi = k.search(/[XY]/);
       l = k.replace(/[XY]/g, (_, j: number) => (j === prvi ? l : ATOMI[Math.floor(rnd() * ATOMI.length)]));
     }
-  } else if (nacin < 0.5) {
+  } else if (nacin < 0.55) {
     const k = KONSTRUKCIJE[Math.floor(rnd() * KONSTRUKCIJE.length)];
     const n = 1 + Math.floor(rnd() * 400);
     l = 'x';

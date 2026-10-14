@@ -1,7 +1,14 @@
+import { Component, input } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { convertLatexToMarkup } from 'mathlive/ssr';
 import { preTeskaFormula } from './formula-komande';
 import { nasumicneFormule } from './formula-fuzz.testing';
-import { ZABRANJENE_KOMANDE, konvertuj, latexUMarkup, ocistiMarkup, ocistiStil } from './formula-markup';
+import {
+  KesFormula, MAX_KES_FORMULA, MAX_KES_ZNAKOVA, ZABRANJENE_KOMANDE, konverzija, konvertuj, latexUMarkup, ocistiMarkup, ocistiStil,
+} from './formula-markup';
+import { FormulaPrikazComponent } from './formula-prikaz.component';
+import { type ModulFormule, UCITAJ_FORMULE, UCITAJ_STIL_FORMULA } from './formula-ucitavanje';
+import { GRANICA_ODBIJENE_MS, GRANICA_PROLAZI_MS } from './formula-vreme.testing';
 import { MAX_MARKUP } from './formula-sanitizer';
 
 /** Sirov izlaz MathLive-a (bez čišćenja), parsiran kao HTML, radi poređenja sa očišćenim. */
@@ -252,18 +259,17 @@ describe('ocistiMarkup', () => {
  * odbacuje pre `<template>`.
  */
 describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska granica)', () => {
-  /** Odbijena formula: provera je linearna, MathLive se ni ne zove. */
-  const GRANICA_ODBIJENE_MS = 100;
-  /** Formula koja prolazi proveru (presuda F15 fix 4: < 300 ms u jsdom-u). */
-  const GRANICA_MS = 300;
-  /** Najveći dozvoljeni markup: jsdom parsira ~0,5 ms/kB (Chromium ~20x brže); vidi izveštaj F15 fix 4. */
-  const GRANICA_BLIZU_MAX_MARKUP_MS = 1000;
+  // granice iz `formula-vreme.testing.ts`: odbijena formula (linearna provera) i formula koja ide kroz MathLive
   const r = (s: string, n: number) => s.repeat(n);
+  /** Bez keša (`konverzija`): meri se sama konverzija, i kad je ista formula već viđena u drugom testu. */
   const meri = (latex: string) => {
     const t = performance.now();
-    const f = latexUMarkup(latex);
+    const f = konverzija(latex).fragment;
     return { ms: performance.now() - t, f };
   };
+  const matrica = (okruzenje: string, redova: number, kolona: number) =>
+    `\\begin{${okruzenje}}` + Array.from({ length: redova }, () => Array(kolona).fill('1').join('&')).join('\\\\') +
+    `\\end{${okruzenje}}`;
   const matrice = (n: number) => {
     let s = 'x';
     for (let i = 0; i < n; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
@@ -287,6 +293,10 @@ describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska grani
     ['201 strukturna komanda (x^2+)', r('x^2+', 201) + 'x'],
     ['matrica od 101 reda', visoka(101)],
     ['15 korena oko matrice od 1000 redova (14 MB pre fix-a 4)', r('\\sqrt ', 14) + '\\sqrt{' + visoka(1000) + '}'],
+    // F15 rr4 (a): red od ~2400 kolona (~550 kB markup-a, ~500 ms jsdom pre granice), 101 kolona, 2001 ćelija
+    ['pmatrix 1 x 2400', matrica('pmatrix', 1, 2400)],
+    ['matrix 1 x 101 (kolone > 100)', matrica('matrix', 1, 101)],
+    ['matrix 23 x 87 (ćelije > 2000)', matrica('matrix', 23, 87)],
   ])('preteška %s -> izvor (null), brzo', (_ime, latex) => {
     expect(latex.length).toBeLessThanOrEqual(5000);
     const { ms, f } = meri(latex);
@@ -311,11 +321,13 @@ describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska grani
     ['32 korena i 168 kvadrata', r('\\sqrt{x}+', 32) + r('x^2+', 168) + 'x'],
     ['\\ce{H2O} x200', r('\\ce{H2O}', 200)],
     ['koren oko matrice od 100 redova', '\\sqrt{' + visoka(100) + '}'],
-  ])('dozvoljeno %s -> markup, ispod 300 ms', (_ime, latex) => {
+    ['matrix 1 x 100 (najviše kolona)', matrica('matrix', 1, 100)],
+    ['matrix 20 x 100 (2000 ćelija, 342 kB markup-a)', matrica('matrix', 20, 100)],
+  ])('dozvoljeno %s -> markup, linearno', (_ime, latex) => {
     expect(latex.length).toBeLessThanOrEqual(5000);
     const { ms, f } = meri(latex);
     expect(f).not.toBeNull();
-    expect(ms).toBeLessThan(GRANICA_MS);
+    expect(ms).toBeLessThan(GRANICA_PROLAZI_MS);
   });
 
   it('najveći dozvoljeni markup (\\left x15 oko pmatrix 20x20, ~433 kB) i 5000 znakova x+ (plan): markup, linearno', () => {
@@ -326,7 +338,7 @@ describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska grani
     ]) {
       const { ms, f } = meri(latex);
       expect(f).not.toBeNull();
-      expect(ms).toBeLessThan(GRANICA_BLIZU_MAX_MARKUP_MS);
+      expect(ms).toBeLessThan(GRANICA_PROLAZI_MS);
     }
   });
 
@@ -347,13 +359,115 @@ describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska grani
     }
   });
 
-  it('fuzz: 50 nasumičnih kombinacija (fiksni seed), sve se obrade ispod 300 ms bez izuzetka', () => {
-    // veći uzorak (2 x 2000) je pušten lokalno: najgore vreme i ulaz su u izveštaju F15 fix 4
-    for (const latex of nasumicneFormule(20_261_014, 50)) {
+  it('fuzz: 60 nasumičnih kombinacija (fiksni seed, i široke matrice): odbijene brzo, ostale linearno, bez izuzetka', () => {
+    // veći uzorak je pušten lokalno: najgore vreme i ulaz su u izveštaju završnog talasa 4b (deo B)
+    let odbijenih = 0;
+    for (const latex of nasumicneFormule(20_261_014, 60)) {
       expect(latex.length).toBeLessThanOrEqual(5000);
+      const odbijena = preTeskaFormula(latex);
+      if (odbijena) odbijenih++;
       let ms = 0;
       expect(() => { ms = meri(latex).ms; }, latex.slice(0, 120)).not.toThrow();
-      expect(ms, latex.slice(0, 120)).toBeLessThan(GRANICA_MS);
+      expect(ms, latex.slice(0, 120)).toBeLessThan(odbijena ? GRANICA_ODBIJENE_MS : GRANICA_PROLAZI_MS);
     }
+    // uzorak ima obe klase (inače bi granica jedne od njih bila neproverena)
+    expect(odbijenih).toBeGreaterThan(0);
+    expect(odbijenih).toBeLessThan(60);
+  });
+});
+
+describe('KesFormula: keš LaTeX -> markup (zbirni trošak slajda, recenzija 4b B Minor 1)', () => {
+  /** Pravi MathLive sa brojačem poziva po LaTeX-u. */
+  const brojac = () => {
+    const pozivi: string[] = [];
+    const f = ((latex: string, o?: Parameters<typeof convertLatexToMarkup>[1]) => {
+      pozivi.push(latex);
+      return convertLatexToMarkup(latex, o);
+    }) as typeof convertLatexToMarkup;
+    return { pozivi, f };
+  };
+
+  it('ista formula se pretvara jednom; vraća se nezavisna kopija (izmena kopije ne kvari keš)', () => {
+    const { pozivi, f } = brojac();
+    const kes = new KesFormula((l) => konverzija(l, f));
+    const a = kes.markup('x^2')!;
+    a.replaceChildren();
+    const b = kes.markup('x^2')!;
+    expect(pozivi).toEqual(['x^2']);
+    expect(b.querySelector('.ML__latex')).not.toBeNull();
+    expect(b).not.toBe(kes.markup('x^2'));
+    // odbijena formula (null) se takođe pamti: MathLive se ne zove, provera se ne ponavlja
+    expect(kes.markup('\\href{x}{y}')).toBeNull();
+    expect(kes.markup('\\nepostoji{x}')).toBeNull();
+    expect(kes.markup('\\nepostoji{x}')).toBeNull();
+    expect(pozivi).toEqual(['x^2']);
+  });
+
+  it('LRU po broju stavki: najstarija (najdavnije korišćena) ispada', () => {
+    const { pozivi, f } = brojac();
+    const kes = new KesFormula((l) => konverzija(l, f), 2);
+    kes.markup('a');
+    kes.markup('b');
+    kes.markup('a'); // a je sada najnovija
+    kes.markup('c'); // ispada b
+    expect(kes.broj).toBe(2);
+    kes.markup('a');
+    kes.markup('b');
+    expect(pozivi).toEqual(['a', 'b', 'c', 'b']);
+  });
+
+  it('LRU po zbiru znakova markup-a; stavka veća od granice se vrati, ali ne ostaje', () => {
+    const { pozivi, f } = brojac();
+    const velicina = konverzija('x^2').velicina;
+    const kes = new KesFormula((l) => konverzija(l, f), 100, Math.floor(velicina * 2.5));
+    kes.markup('x^2');
+    kes.markup('y^2');
+    kes.markup('z^2'); // zbir ~3 x > 2,5 x: ispada x^2
+    kes.markup('x^2');
+    expect(pozivi).toEqual(['x^2', 'y^2', 'z^2', 'x^2']);
+    const mali = new KesFormula((l) => konverzija(l, f), 100, 10);
+    expect(mali.markup('\\frac{a}{b}')).not.toBeNull();
+    expect(mali.broj).toBe(0);
+  });
+
+  it('granice keša: najviše slojeva jednog slajda i 4 MB markup-a', () => {
+    expect([MAX_KES_FORMULA, MAX_KES_ZNAKOVA]).toEqual([300, 4_000_000]);
+  });
+
+  @Component({
+    imports: [FormulaPrikazComponent],
+    template: `@for (l of latexi(); track $index) { <app-formula-prikaz [latex]="l" [stil]="{}" /> }`,
+  })
+  class Slajd {
+    readonly latexi = input.required<string[]>();
+  }
+
+  it('isti slajd na projektoru i konzoli (dva prikaza, ponovljena formula) ne pretvara istu formulu dvaput', async () => {
+    const { pozivi, f } = brojac();
+    const kes = new KesFormula((l) => konverzija(l, f));
+    const modul = { latexUMarkup: (l: string) => kes.markup(l) } as unknown as ModulFormule;
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: UCITAJ_FORMULE, useValue: () => Promise.resolve(modul) },
+        { provide: UCITAJ_STIL_FORMULA, useValue: () => Promise.resolve() },
+      ],
+    });
+    const slajd = ['\\frac{a}{b}', 'x^2', '\\frac{a}{b}', '\\sqrt{x}'];
+    const prikazi = [TestBed.createComponent(Slajd), TestBed.createComponent(Slajd)];
+    for (const p of prikazi) p.componentRef.setInput('latexi', slajd);
+    for (const p of prikazi) await p.whenStable();
+    await new Promise((r) => setTimeout(r));
+    for (const p of prikazi) {
+      await p.whenStable();
+      expect((p.nativeElement as HTMLElement).querySelectorAll('.uz-pl-formula-markup .ML__latex')).toHaveLength(4);
+    }
+    expect(pozivi.sort()).toEqual(['\\frac{a}{b}', '\\sqrt{x}', 'x^2']);
+  });
+
+  it('latexUMarkup koristi deljeni keš modula (drugi poziv vraća isti markup kao kopiju)', () => {
+    const a = latexUMarkup('\\int_0^1 x\\,dx')!;
+    const b = latexUMarkup('\\int_0^1 x\\,dx')!;
+    expect(a).not.toBe(b);
+    expect(b.textContent).toBe(a.textContent);
   });
 });
