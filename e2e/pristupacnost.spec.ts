@@ -16,10 +16,10 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
-  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; pregled je uvek dnevnih boja)
+  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',
-    spremno: p => p.locator('.uz-ed-platno [data-sloj="naslov"]'),
+    spremno: p => p.locator('.uz-ep-platno [data-sloj="naslov"]'),
     pripremi: async p => {
       await p.getByRole('button', { name: /^2\s/ }).click();
       // sličica INFO slajda (sa linkom u markdown-u) je lenja (`@defer (on viewport)`): skenira se tek kad je iscrtana

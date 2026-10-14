@@ -131,6 +131,15 @@ describe('PanelAnimacijeComponent', () => {
     expect(store.izabranaAnimacija()).toBeNull();
   });
 
+  it('grupa 0 (pre prve KLIK) je u redu označena "Kreće sama" (i u imenu dugmeta); ista vrsta okidača posle KLIK nije', async () => {
+    const p = platno();
+    await pocni({ ...p, animacije: [{ ...p.animacije[1], id: 'a9' }, ...p.animacije] });
+    expect(tekstRedova().slice(0, 3)).toEqual([
+      'Slika 1 Kreće sama · Ulaz · Zum', '1 Tekst: Prvi · pasus 1 Ulaz · Postepeno', 'Slika 1 Ulaz · Zum',
+    ]);
+    expect(imeReda(redovi()[0])).toBe('Sa prethodnim Slika 1 Kreće sama · Ulaz · Zum');
+  });
+
   it('detalji: "Smer" samo za efekat sa smerom; promena efekta usklađuje smer; trajanje 1,5 -> 1500, POJAVI onemogućava trajanje', async () => {
     await pocni(bez(), ['oblik']);
     await dodaj('Dodaj ulaz', 'Postepeno');

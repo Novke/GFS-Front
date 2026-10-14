@@ -415,6 +415,41 @@ describe('PlatnoEditorComponent', () => {
     expect(store.tab()).toBe('SVOJSTVA');
   });
 
+  it('F18: "Pregled" menja okvir i sloj izbora pregledom sa koracima, onemogućava tabove i alate; "Uređivanje" ih vraća', async () => {
+    const prekidac = () => Array.from(el().querySelectorAll<HTMLButtonElement>('app-traka-alata button'))
+      .find((b) => /Pregled|Uređivanje/.test(b.textContent!))!;
+    const tabovi = () => Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).map((t) => t.getAttribute('aria-disabled') === 'true');
+    store.izaberi(['oblik']);
+    store.obrisiIzabrane();
+    await fixture.whenStable();
+    expect(prekidac().textContent!.trim()).toBe('Pregled');
+    prekidac().click();
+    await fixture.whenStable();
+    expect(store.rezim()).toBe('PREGLED');
+    expect(el().querySelector('.uz-ep-platno')).toBeNull();
+    expect(el().querySelector('app-platno-overlay')).toBeNull();
+    expect(el().querySelector('app-pregled-platna .uz-ep-korak')!.textContent!.trim()).toMatch(/^Korak 0 \/ \d+$/);
+    expect(tabovi()).toEqual([true, true, true]);
+    expect(el().querySelector('.uz-ep-paneli')!.classList).toContain('uz-ep-paneli--pregled');
+    expect(dugmeTrake('Poništi')).toBeNull();
+    expect(prekidac().textContent!.trim()).toBe('Uređivanje');
+    // u Pregledu Ctrl+Z ne menja dokument (alati su skriveni)
+    const pre = store.platno();
+    taster(prekidac(), 'z', { ctrlKey: true });
+    expect(store.platno()).toBe(pre);
+    prekidac().click();
+    await fixture.whenStable();
+    expect(store.rezim()).toBe('UREDJIVANJE');
+    expect(el().querySelector('app-pregled-platna')).toBeNull();
+    expect(tabovi()).toEqual([false, false, false]);
+    // nov okvir prima fokus posle ubacivanja (FokusPlatna prati okvir)
+    dugmeTrake('Oblik').click();
+    await fixture.whenStable();
+    (document.querySelector('.mat-mdc-menu-item') as HTMLElement).click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(okvir());
+  });
+
   describe('otpremanje slike živi koliko editor slajda', () => {
     const png = () => new File([new Uint8Array([137, 80, 78, 71])], 'slika.png', { type: 'image/png' });
     const medij = (id: string): MedijInfo => ({ id, naziv: 'slika.png', mime: 'image/png', velicina: 4 });

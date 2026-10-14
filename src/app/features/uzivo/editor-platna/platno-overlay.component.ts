@@ -7,6 +7,8 @@
 // stigne ovde je van sloja u uređivanju: prvo završava uređivanje, pa radi izbor. Tabela (F14): klik u izabranu (ili
 // upravo izabranu) tabelu bira ćeliju po nacrtanim `td[data-celija]`, Shift+klik širi opseg, dvoklik uređuje ćeliju.
 // Formula (F16): dvoklik javlja id kroz `urediFormulu`; dijalog otvara koren editora (store ne zna za dijaloge).
+// Brojevi grupa (F18): dok je tab "Animacije", uz gornji levi ugao obuhvata svakog vidljivog sloja sa animacijama stoje
+// brojevi njegovih grupa ("0" = kreće sama, pre prvog klika, kao PowerPoint); overlay je `aria-hidden`, panel nosi isto.
 import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, output, signal, untracked,
@@ -20,6 +22,7 @@ import {
   normalizujUgao, obuhvat, obuhvatSvih, prianjanje, promeniVelicinu, slojNaTacki, uLokalne, uPravougaoniku, uSvetske,
   ugaoIDuzina, ugaoRotacije,
 } from './geometrija';
+import { grupeNaSlojevima } from './animacije';
 import { izmeniSlojeve, pomeriSlojeve, postaviKutiju } from './komande';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PoKadru, RASPORED_KADRA } from './po-kadru';
@@ -143,6 +146,7 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     }
     @for (v of vodjiceStil(); track $index) { <div class="uz-ep-vodjica" [style]="v"></div> }
     @if (pravougaonik(); as r) { <div class="uz-ep-pravougaonik" [style]="r"></div> }
+    @for (z of znacke(); track z.id) { <div class="uz-ep-znacka" [style]="z.stil">{{ z.tekst }}</div> }
   `,
   styles: `
     :host {
@@ -166,6 +170,14 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
       background: color-mix(in srgb, var(--primary) 12%, transparent);
     }
     .uz-ep-vodjica { background: var(--accent); }
+    .uz-ep-znacka {
+      padding: 0 4px;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: var(--primary-ink);
+      font: 600 11px/16px var(--font);
+      white-space: nowrap;
+    }
     .uz-ep-rucka {
       position: absolute;
       width: 8px;
@@ -300,6 +312,14 @@ export class PlatnoOverlayComponent {
     return r ? stilObuhvata(r) : null;
   });
   protected readonly vodjiceStil = computed(() => this.vodjice().map(stilVodjice));
+  protected readonly znacke = computed(() => {
+    if (this.store.tab() !== 'ANIMACIJE') return [];
+    const g = grupeNaSlojevima(this.store.platno());
+    return this.store.zaPrikaz().slojevi.filter((s) => g.has(s.id)).map((s) => {
+      const o = obuhvat(kutijaSloja(s));
+      return { id: s.id, tekst: g.get(s.id)!.join(' · '), stil: { left: jedinice(Math.max(0, o.x)), top: jedinice(Math.max(0, o.y)) } };
+    });
+  });
 
   constructor() {
     const raspored = inject(RASPORED_KADRA);

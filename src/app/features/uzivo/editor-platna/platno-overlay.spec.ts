@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } fr
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OblikSloj, Platno, Sloj, TekstSloj } from '../data-access/platno.models';
 import { novaTabela, noviOblik } from '../data-access/platno-novo';
-import { pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { animacija, pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { FokusPlatna } from './fokus-platna';
 import { krajeviLinije, ugaoIDuzina } from './geometrija';
@@ -191,6 +191,32 @@ describe('PlatnoOverlayComponent', () => {
     klik(60, 60);
     expect(store.izbor()).toEqual([]);
   });
+
+  it('brojevi grupa (F18): tab Animacije -> značka uz gornji levi ugao obuhvata ("0" = kreće sama); Svojstva -> nema', async () => {
+    const znacke = () => [...el().querySelectorAll<HTMLElement>('.uz-ep-znacka')].map((z) => [z.textContent!.trim(), z.style.left, z.style.top]);
+    await pocni({
+      ...dok(),
+      animacije: [
+        animacija('x0', 'C', { okidac: 'SA_PRETHODNIM' }), animacija('x1', 'A'), animacija('x2', 'B'),
+        animacija('x3', 'A', { okidac: 'POSLE_PRETHODNOG', vrsta: 'IZLAZ' }), animacija('x4', 'A'),
+      ],
+    });
+    expect(znacke()).toEqual([]);
+    store.postaviTab('ANIMACIJE');
+    await fixture.whenStable();
+    expect(znacke()).toEqual([
+      ['1 · 2 · 3', 'calc(var(--u) * 10)', 'calc(var(--u) * 10)'],
+      ['2', 'calc(var(--u) * 300)', 'calc(var(--u) * 50)'],
+      ['0', 'calc(var(--u) * 800)', 'calc(var(--u) * 400)'],
+    ]);
+    store.prebaciSkriven('B');
+    await fixture.whenStable();
+    expect(znacke().map((z) => z[0])).toEqual(['1 · 2 · 3', '0']);
+    store.postaviTab('SVOJSTVA');
+    await fixture.whenStable();
+    expect(znacke()).toEqual([]);
+  });
+
   describe('gestovi (F5)', () => {
     it('prevlačenje sloja za (+100, +50): bira ga na pointerdown, tokom gesta 0 emitovanja, posle pointerup 1 i jedan korak', async () => {
       pokazivac('pointerdown', 60, 60);

@@ -6,7 +6,8 @@
 // tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
 // (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body.
 // Poništi/Ponovi tokom sesije teksta (sloj ili ćelija) idu prvo u istoriju uređivača, pa u istoriju platna, kao
-// Ctrl+Z iz panela; omogućeni su kad bilo koja od dve ima korak.
+// Ctrl+Z iz panela; omogućeni su kad bilo koja od dve ima korak. Prekidač "Pregled" / "Uređivanje" (F18) je uvek tu (isto
+// dugme, pa fokus ostaje na njemu); u Pregledu su ostali alati sklonjeni, jer bi menjali dokument koji se gleda.
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -41,34 +42,41 @@ const OBLICI: readonly StavkaOblika[] = [
   imports: [MatButtonModule, MatIconModule, MatMenuModule, UbaciTabeluComponent],
   template: `
     <div class="uz-ep-traka" role="group" aria-label="Alati platna">
-      <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
-              [disabled]="!mozeNazad()" (click)="ponisti()"><mat-icon svgIcon="undo" /></button>
-      <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
-              [disabled]="!mozeNapred()" (click)="ponovi()"><mat-icon svgIcon="redo" /></button>
-      <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
-      <button mat-icon-button type="button" aria-label="Tekst" title="Tekst (dvoklik na tekst ga uređuje)"
-              (click)="ubaciTekst()"><mat-icon svgIcon="text_fields" /></button>
-      <button mat-icon-button type="button" aria-label="Oblik" title="Oblik"
-              [matMenuTriggerFor]="meniOblika" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="shapes" /></button>
-      <mat-menu #meniOblika="matMenu">
-        @for (o of oblici; track o.naziv) {
-          <button mat-menu-item type="button" (click)="ubaciOblik(o)">{{ o.naziv }}</button>
-        }
-      </mat-menu>
-      <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
-              [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
-      <app-ubaci-tabelu (ubaci)="ubaciTabelu($event)" />
-      <button mat-icon-button type="button" aria-label="Formula" title="Formula (dvoklik na formulu je uređuje)"
-              (click)="ubaciFormulu()"><mat-icon svgIcon="functions" /></button>
-      <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
-      <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
-      <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
-      <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
-      <button mat-icon-button type="button" aria-label="Nazad" title="Nazad (Ctrl+[)" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
-      <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.obrisiIzabrane()"><mat-icon svgIcon="delete" /></button>
+      <!-- jedno dugme za oba režima: fokus ostaje na njemu posle prebacivanja -->
+      <button mat-stroked-button type="button" (click)="store.postaviRezim(pregled() ? 'UREDJIVANJE' : 'PREGLED')">
+        <mat-icon [svgIcon]="pregled() ? 'edit' : 'slideshow'" />{{ pregled() ? 'Uređivanje' : 'Pregled' }}
+      </button>
+      @if (!pregled()) {
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
+                [disabled]="!mozeNazad()" (click)="ponisti()"><mat-icon svgIcon="undo" /></button>
+        <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
+                [disabled]="!mozeNapred()" (click)="ponovi()"><mat-icon svgIcon="redo" /></button>
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Tekst" title="Tekst (dvoklik na tekst ga uređuje)"
+                (click)="ubaciTekst()"><mat-icon svgIcon="text_fields" /></button>
+        <button mat-icon-button type="button" aria-label="Oblik" title="Oblik"
+                [matMenuTriggerFor]="meniOblika" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="shapes" /></button>
+        <mat-menu #meniOblika="matMenu">
+          @for (o of oblici; track o.naziv) {
+            <button mat-menu-item type="button" (click)="ubaciOblik(o)">{{ o.naziv }}</button>
+          }
+        </mat-menu>
+        <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
+                [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
+        <app-ubaci-tabelu (ubaci)="ubaciTabelu($event)" />
+        <button mat-icon-button type="button" aria-label="Formula" title="Formula (dvoklik na formulu je uređuje)"
+                (click)="ubaciFormulu()"><mat-icon svgIcon="functions" /></button>
+        <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
+        <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
+        <button mat-icon-button type="button" aria-label="Nazad" title="Nazad (Ctrl+[)" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
+        <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="store.obrisiIzabrane()"><mat-icon svgIcon="delete" /></button>
+      }
     </div>
   `,
   styles: `
@@ -87,6 +95,7 @@ export class TrakaAlataComponent {
   private readonly formula = formulaEditora();
   protected readonly oblici = OBLICI;
   protected readonly prihvaceneSlike = PRIHVACENE_SLIKE;
+  protected readonly pregled = computed(() => this.store.rezim() === 'PREGLED');
 
   /** Istorija uređivača teksta dok traje sesija (TEKST sloj ili ćelija), inače null. */
   private readonly tekst = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac()?.istorija() ?? null : null));

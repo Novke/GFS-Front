@@ -65,7 +65,8 @@ const PO_PASUSIMA = -1;
                           [svgIcon]="r.a.okidac === 'SA_PRETHODNIM' ? 'animation' : 'motion_photos_on'" />
               }
               <span>{{ r.naziv }} </span>
-              <span>{{ r.a.vrsta === 'ULAZ' ? 'Ulaz' : 'Izlaz' }} · {{ efekti[r.a.efekat] }}</span>
+              <!-- grupa 0 (pre prve KLIK) se pušta sama pri ulasku na slajd (F18) -->
+              <span>{{ r.sama ? 'Kreće sama · ' : '' }}{{ r.a.vrsta === 'ULAZ' ? 'Ulaz' : 'Izlaz' }} · {{ efekti[r.a.efekat] }}</span>
             </button>
           </li>
         }
@@ -170,7 +171,7 @@ export class PanelAnimacijeComponent {
     return p.animacije.map((a) => {
       const s = p.slojevi.find((x) => x.id === a.slojId);
       const naziv = (s ? nazivSloja(p, s) : '') + (a.pasus === null ? '' : ` · pasus ${a.pasus + 1}`);
-      return { a, naziv, izabrana: a.id === izabrana, broj: a.okidac === 'KLIK' ? grupe.get(a.id) : 0 };
+      return { a, naziv, izabrana: a.id === izabrana, broj: a.okidac === 'KLIK' ? grupe.get(a.id) : 0, sama: !grupe.get(a.id) };
     });
   });
   protected readonly indeks = computed(() => this.store.platno().animacije.findIndex((a) => a.id === this.store.izabranaAnimacija()));

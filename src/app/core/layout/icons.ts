@@ -32,6 +32,8 @@ export const IKONE = [
   'functions',
   // Animacije (F17): okidači "Sa prethodnim" i "Posle prethodnog" u panelu.
   'animation', 'motion_photos_on',
+  // Pregled platna (F18): "Zaustavi".
+  'stop',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

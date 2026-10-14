@@ -36,7 +36,7 @@ const tekstUPut = (mock: MockApi, id: number, slojId: string) =>
 
 const editor = (page: Page) => page.locator('[data-oznaka="gfs-editor-platna"]');
 const okvir = (page: Page) => page.locator('.uz-ep-platno');
-/** Sloj u prikazu editora (ne u bočnom pregledu `.uz-ed-platno`). */
+/** Sloj u prikazu editora (ne u režimu "Pregled", `.uz-ep-pregled`). */
 const slojEditora = (page: Page, id: string) => page.locator(`.uz-ep-platno [data-sloj="${id}"]`);
 const traka = (page: Page) => page.getByRole('group', { name: 'Alati platna' });
 

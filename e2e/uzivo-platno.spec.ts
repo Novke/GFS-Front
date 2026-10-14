@@ -6,11 +6,14 @@ import { expect, test } from './fixture';
 const PREZENTACIJA = 5;
 const PLATNO_SLAJD = 52;
 
-const sloj = (page: Page, id: string) => page.locator(`.uz-ed-platno [data-sloj="${id}"]`);
+/** Sloj u režimu "Pregled" editora platna (F18: PLATNO slajd više nema bočni pregled stranice). */
+const sloj = (page: Page, id: string) => page.locator(`.uz-ep-pregled [data-sloj="${id}"]`);
 
+/** Izbor PLATNO slajda, pa prekidač "Pregled" u traci editora (koraci i animacije kao na projektoru). */
 async function otvoriPlatnoSlajd(page: Page, vidljiv = 'naslov'): Promise<void> {
   await page.goto(`prezentacije/${PREZENTACIJA}`);
   await page.getByRole('button', { name: /^2\s/ }).click();
+  await page.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' }).click();
   await expect(sloj(page, vidljiv)).toBeVisible();
 }
 
@@ -33,7 +36,7 @@ test.describe('uživo: lista slajdova sa sličicama', () => {
 test.describe('uživo: editor sa PLATNO slajdom', () => {
   test('pregled prikazuje slojeve, korak napred ih otkriva redom, korak nazad ih vraća', async ({ page }) => {
     await otvoriPlatnoSlajd(page);
-    const status = page.locator('.uz-ed-korak');
+    const status = page.locator('.uz-ep-korak');
     await expect(status).toHaveText('Korak 0 / 3');
     for (const id of ['naslov', 'slika', 'crtez']) {
       await expect(sloj(page, id)).toBeVisible();
@@ -60,6 +63,24 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     await expect(status).toHaveText('Korak 2 / 3');
     await expect(sloj(page, 'formula')).toBeHidden();
     await expect(sloj(page, 'tabela')).toBeVisible();
+  });
+
+  test('Pusti slajd ide sam do poslednjeg koraka (tabovi onemogućeni); u uređivanju tab Animacije crta brojeve grupa', async ({ page }) => {
+    await otvoriPlatnoSlajd(page);
+    await expect(page.locator('.uz-ed-pregled')).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Animacije' })).toBeDisabled();
+    const status = page.locator('.uz-ep-korak');
+    await page.getByRole('button', { name: 'Pusti slajd' }).click();
+    await expect(status).toHaveText('Korak 1 / 3');
+    await expect(status).toHaveText('Korak 3 / 3', { timeout: 10_000 });
+    await expect(sloj(page, 'formula')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Uređivanje' }).click();
+    await expect(page.locator('.uz-ep-pregled')).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Animacije' }).click();
+    await expect(page.locator('.uz-ep-znacka')).toHaveText(['1', '2', '3']);
+    await page.getByRole('tab', { name: 'Svojstva' }).click();
+    await expect(page.locator('.uz-ep-znacka')).toHaveCount(0);
   });
 
   test('izmena beleški šalje PUT /slajdovi/{id} sa istim platnom (slojevi se ne brišu)', async ({ page, mock }) => {
@@ -96,13 +117,13 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
       a('b6', 'slika', 'FADE', 'KLIK', { vrsta: 'IZLAZ' }),
     ];
     await otvoriPlatnoSlajd(page, 'slika');
-    const status = page.locator('.uz-ed-korak');
+    const status = page.locator('.uz-ep-korak');
     await expect(status).toHaveText('Korak 0 / 4');
 
     /** Slojevi čiji sloj ili sadržaj ne odgovara očekivanom (računski stil, isto što vidi korisnik). */
     const pogresni = (vidljivi: string[]) => page.evaluate((vidljivi) => {
       const rezultat: string[] = [];
-      for (const el of document.querySelectorAll<HTMLElement>('.uz-ed-platno .uz-pl-sloj')) {
+      for (const el of document.querySelectorAll<HTMLElement>('.uz-ep-pregled .uz-pl-sloj')) {
         const ocekivano = vidljivi.includes(el.dataset['sloj'] ?? '') ? 'visible' : 'hidden';
         const sadrzaj = el.querySelector(':scope > .uz-pl-sadrzaj')!;
         const stvarno = [getComputedStyle(el).visibility, getComputedStyle(sadrzaj).visibility];
@@ -148,7 +169,7 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
     await bezAnimacija();
     const tokomIzlaza = await page.evaluate(async () => {
       Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('Korak napred'))!.click();
-      const sadrzaj = document.querySelector('.uz-ed-platno [data-sloj="slika"] > .uz-pl-sadrzaj')!;
+      const sadrzaj = document.querySelector('.uz-ep-pregled [data-sloj="slika"] > .uz-pl-sadrzaj')!;
       const rok = performance.now() + 250; // FADE traje 500 ms: animacija mora da je počela, a još traje
       while (sadrzaj.getAnimations().length === 0 && performance.now() < rok) {
         await new Promise((r) => requestAnimationFrame(r));

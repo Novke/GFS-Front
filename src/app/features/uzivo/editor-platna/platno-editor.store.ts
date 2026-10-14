@@ -414,6 +414,11 @@ export const PlatnoEditorStore = signalStore(
       postaviTab(tab: TabPanela): void {
         patchState(store, { tab });
       },
+      /** Režim (F18): gest i sesija teksta se prvo upisuju (Pregled crta dokument); neprimljen tekst ostavlja režim. */
+      postaviRezim(rezim: RezimEditora): void {
+        zavrsiGest();
+        if (zavrsiUredjivanje()) patchState(store, { rezim });
+      },
       /** Animacija iz panela Animacije (F17) i njen sloj kao jedini izabran; nepostojeća ili null skida izbor animacije. */
       izaberiAnimaciju(id: string | null): void {
         const a = store.platno().animacije.find((x) => x.id === id);

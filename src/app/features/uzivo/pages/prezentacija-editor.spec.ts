@@ -13,7 +13,6 @@ import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
-import { brojKoraka } from '../data-access/platno-koraci';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 import { noviOblik } from '../data-access/platno-novo';
@@ -208,62 +207,22 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     vi.restoreAllMocks();
   });
 
-  const dugme = (tekst: string) =>
-    [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(b => b.textContent?.includes(tekst)) as HTMLButtonElement;
-
   it('PLATNO u listi ima ikonu layers i naziv Platno', () => {
     const ikone = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-stavka mat-icon.uz-ed-ikona')];
     expect(ikone.map(i => i.getAttribute('aria-label'))).toEqual(['Info slajd', 'Platno']);
     expect(ikone[1].getAttribute('data-mat-icon-name')).toBe('layers');
   });
 
-  it('Korak napred povećava korak do brojKoraka pa je onemogućen; promena slajda vraća na 0', () => {
-    const n = brojKoraka(platno());
-    expect(n).toBeGreaterThan(1);
+  it('F18: PLATNO slajd nema bočni pregled (koraci su u "Pregled" editora), INFO ga ima', () => {
+    const el = fixture.nativeElement as HTMLElement;
     store.izaberi(12);
     fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain(`Korak 0 / ${n}`);
-    expect(dugme('Korak nazad').disabled).toBe(true);
-    for (let i = 1; i <= n; i++) {
-      dugme('Korak napred').click();
-      fixture.detectChanges();
-      expect(el.textContent).toContain(`Korak ${i} / ${n}`);
-    }
-    expect(dugme('Korak napred').disabled).toBe(true);
-    dugme('Korak nazad').click();
-    fixture.detectChanges();
-    expect(el.textContent).toContain(`Korak ${n - 1} / ${n}`);
+    expect(el.querySelector('.uz-ed-pregled')).toBeNull();
+    expect(el.textContent).not.toContain('Korak napred');
     store.izaberi(11);
     fixture.detectChanges();
-    store.izaberi(12);
-    fixture.detectChanges();
-    expect(el.textContent).toContain(`Korak 0 / ${n}`);
-  });
-
-  it('Korak napred pušta animacije grupe (Element.animate), Korak nazad ne', () => {
-    const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise<void>(() => undefined) }));
-    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
-    try {
-      store.izaberi(12);
-      fixture.detectChanges();
-      let ukupno = 0;
-      for (let i = 1; i <= brojKoraka(platno()); i++) {
-        dugme('Korak napred').click();
-        fixture.detectChanges();
-        TestBed.tick();
-        ukupno = animate.mock.calls.length;
-        if (ukupno > 0) break;
-      }
-      expect(ukupno).toBeGreaterThan(0);
-      animate.mockClear();
-      dugme('Korak nazad').click();
-      fixture.detectChanges();
-      TestBed.tick();
-      expect(animate).not.toHaveBeenCalled();
-    } finally {
-      delete (Element.prototype as Partial<Element>).animate;
-    }
+    expect(el.querySelector('.uz-ed-pregled app-slajd-prikaz')).not.toBeNull();
+    expect(el.querySelector('.uz-ed-pregled')!.textContent).toContain('Ovako slajd izgleda na projektoru.');
   });
 
   it('beleške posle izmene platna: PUT nosi platno iz store-a (ne ono iz vremena pravljenja forme) i nove beleške', saLaznimSatom(async () => {

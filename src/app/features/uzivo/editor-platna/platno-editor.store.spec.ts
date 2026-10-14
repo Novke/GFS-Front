@@ -525,6 +525,22 @@ describe('PlatnoEditorStore', () => {
       expect(store.uredjivanje()).toBeNull();
     });
 
+    it('postaviRezim (F18): Pregled prvo upisuje sesiju teksta (jedan korak), u Pregledu nema nove; Uređivanje samo menja režim', () => {
+      pocni(sa());
+      expect(store.rezim()).toBe('UREDJIVANJE');
+      store.pocniUredjivanje('t1');
+      store.registrujUredjivac(lazni(rezultat(['A', 'novo'], [0, 1])));
+      store.postaviRezim('PREGLED');
+      expect(store.rezim()).toBe('PREGLED');
+      expect(store.uredjivanje()).toBeNull();
+      expect(tekstoviSloja(store.platno())).toEqual(['A', 'novo']);
+      expect(izlaz).toHaveBeenCalledTimes(1);
+      expect(store.pocniUredjivanje('t1')).toBe(false);
+      store.postaviRezim('UREDJIVANJE');
+      expect(store.rezim()).toBe('UREDJIVANJE');
+      expect(izlaz).toHaveBeenCalledTimes(1);
+    });
+
     it('pocniUredjivanje: sesija, izbor tog sloja, tab Svojstva; zaPrikaz nema taj sloj; imaOtvoreno true', () => {
       pocni(sa());
       store.postaviTab('SLOJEVI');

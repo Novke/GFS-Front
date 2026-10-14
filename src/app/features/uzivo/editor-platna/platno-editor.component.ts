@@ -9,8 +9,10 @@
 // meri POSLE crtanja prikaza (red koji je tekst upravo raširio), a uređivač ima samo najmanju visinu, pa raste dok se kuca.
 // Formula (F16) se uređuje u dijalogu (lenji chunk, `formulaEditora`): dvoklik na sloj i Enter/F2 na izabranoj formuli;
 // posle zatvaranja dijalog vraća fokus na okvir platna (`restoreFocus`), a zakasneo ishod ne piše u uništen editor.
+// Režim "Pregled" (F18, prekidač u traci): umesto okvira i sloja izbora `app-pregled-platna` (koraci, puštanje), tabovi
+// onemogućeni, sadržaj panela sakriven, a Ctrl+Z ne radi; "Uređivanje" pravi nov okvir, koji `FokusPlatna` odmah prati.
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterNextRender, afterRenderEffect, computed,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit, afterRenderEffect, computed,
   inject, input, signal, viewChild,
 } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -32,6 +34,7 @@ import { PanelSlojeviComponent } from './panel-slojevi.component';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore, type TabPanela } from './platno-editor.store';
 import { PlatnoOverlayComponent } from './platno-overlay.component';
+import { PregledPlatnaComponent } from './pregled-platna.component';
 import { jePonistavanje, komandaTastature, jeSnimanje, uPoljuZaUnos, zatvorenIzbornik } from './tastatura-platna';
 import { SIRINA_PLATNA } from './geometrija';
 import { PORUKA_PREVLACENJE, SlikeEditora } from './slike-editora';
@@ -49,7 +52,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI', 'ANIMACIJE'];
   providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike, SlikeEditora],
   imports: [
     MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelAnimacijeComponent, PanelSlojeviComponent,
-    PanelSvojstvaComponent, TekstUredjivacComponent, TrakaAlataComponent,
+    PanelSvojstvaComponent, PregledPlatnaComponent, TekstUredjivacComponent, TrakaAlataComponent,
   ],
   // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y slušaju se na korenu editora (i iz panela i trake); ostale prečice samo na okviru
   host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep', '(keydown)': 'tastaturaKorena($event)' },
@@ -57,28 +60,31 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI', 'ANIMACIJE'];
     <app-traka-alata [tema]="tema()" />
     <div class="uz-ep-telo">
       <div class="uz-ep-glavno">
-        <!-- okvir (fokus prsten, ivica) prati režim editora; samo platno je uvek dnevno (rezim-dan uz-dan) -->
-        <div #okvir class="uz-ep-platno uz-okvir" tabindex="0" role="group" aria-label="Platno slajda"
-             aria-describedby="uz-ep-precice" (keydown)="tastatura($event)"
-             (dragover)="preko($event)" (drop)="spusteno($event)">
-          <div class="uz-platno rezim-dan uz-dan">
-            <app-platno-prikaz [platno]="store.zaPrikaz()" />
-            <app-platno-overlay (urediFormulu)="urediFormulu($event)" />
-            <!-- nova sesija = nov uređivač (track po objektu sesije); presek teksta ne pravi nov -->
-            @for (u of sesija(); track u.uredjivanje) {
-              <div class="uz-pl-platno uz-ep-uredjivanje" [style.font-kerning]="kerning" [style.font-variant-ligatures]="ligature">
-                @if (u.celija; as c) {
-                  <!-- sloj tabele propušta pokazivač (klik u drugu ćeliju ide overlay-u); uređuje se samo ćelija -->
-                  <div class="uz-pl-sloj uz-ep-sloj-celije" [style]="u.stil">
-                    <div class="uz-ep-celija" [style]="c.stil"><app-tekst-uredjivac [sloj]="u.sloj" [celija]="c.polje" [tema]="tema()" /></div>
-                  </div>
-                } @else {
-                  <div class="uz-pl-sloj" [style]="u.stil"><app-tekst-uredjivac [sloj]="u.sloj" [tema]="tema()" /></div>
-                }
-              </div>
-            }
+        <!-- Pregled (F18): umesto okvira i sloja izbora pun dokument sa koracima; Uređivanje pravi nov okvir -->
+        @if (pregled()) { <app-pregled-platna /> } @else {
+          <!-- okvir (fokus prsten, ivica) prati režim editora; samo platno je uvek dnevno (rezim-dan uz-dan) -->
+          <div #okvir class="uz-ep-platno uz-okvir" tabindex="0" role="group" aria-label="Platno slajda"
+               aria-describedby="uz-ep-precice" (keydown)="tastatura($event)"
+               (dragover)="preko($event)" (drop)="spusteno($event)">
+            <div class="uz-platno rezim-dan uz-dan">
+              <app-platno-prikaz [platno]="store.zaPrikaz()" />
+              <app-platno-overlay (urediFormulu)="urediFormulu($event)" />
+              <!-- nova sesija = nov uređivač (track po objektu sesije); presek teksta ne pravi nov -->
+              @for (u of sesija(); track u.uredjivanje) {
+                <div class="uz-pl-platno uz-ep-uredjivanje" [style.font-kerning]="kerning" [style.font-variant-ligatures]="ligature">
+                  @if (u.celija; as c) {
+                    <!-- sloj tabele propušta pokazivač (klik u drugu ćeliju ide overlay-u); uređuje se samo ćelija -->
+                    <div class="uz-pl-sloj uz-ep-sloj-celije" [style]="u.stil">
+                      <div class="uz-ep-celija" [style]="c.stil"><app-tekst-uredjivac [sloj]="u.sloj" [celija]="c.polje" [tema]="tema()" /></div>
+                    </div>
+                  } @else {
+                    <div class="uz-pl-sloj" [style]="u.stil"><app-tekst-uredjivac [sloj]="u.sloj" [tema]="tema()" /></div>
+                  }
+                </div>
+              }
+            </div>
           </div>
-        </div>
+        }
         <p id="uz-ep-precice" class="cdk-visually-hidden">
           Strelice pomeraju izabrano (Shift: 10), Delete briše, Ctrl+Z poništava, Ctrl+Y ponavlja, Ctrl+D duplira,
           Ctrl+] i Ctrl+[ menjaju redosled, Esc poništava izbor, Enter uređuje tekst ili formulu. Ctrl+Z i Ctrl+Y rade i iz panela.
@@ -88,11 +94,12 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI', 'ANIMACIJE'];
         </p>
         <p class="cdk-visually-hidden" aria-live="polite">{{ najava() }}</p>
       </div>
+      <!-- u Pregledu su svi tabovi onemogućeni, a sadržaj panela sakriven (uz-ep-paneli--pregled, uzivo-editor.css) -->
       <mat-tab-group class="uz-ep-paneli" mat-stretch-tabs="false" [selectedIndex]="indeksTaba()"
-                     (selectedIndexChange)="promenaTaba($event)">
-        <mat-tab label="Svojstva"><app-panel-svojstva [tema]="tema()" /></mat-tab>
-        <mat-tab label="Slojevi" [disabled]="!!store.uredjivanje()"><app-panel-slojevi /></mat-tab>
-        <mat-tab label="Animacije" [disabled]="!!store.uredjivanje()"><app-panel-animacije /></mat-tab>
+                     [class.uz-ep-paneli--pregled]="pregled()" (selectedIndexChange)="promenaTaba($event)">
+        <mat-tab label="Svojstva" [disabled]="pregled()"><app-panel-svojstva [tema]="tema()" /></mat-tab>
+        <mat-tab label="Slojevi" [disabled]="zakljucano()"><app-panel-slojevi /></mat-tab>
+        <mat-tab label="Animacije" [disabled]="zakljucano()"><app-panel-animacije /></mat-tab>
       </mat-tab-group>
     </div>
   `,
@@ -137,11 +144,15 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   private readonly slike = inject(SlikeEditora);
   private readonly obavestenja = inject(NotificationStore);
   private readonly formula = formulaEditora();
-  private readonly okvir = viewChild.required<ElementRef<HTMLElement>>('okvir');
+  /** Okvir platna; nema ga u Pregledu (F18), a povratak pravi nov (FokusPlatna ga prati). */
+  private readonly okvir = viewChild<ElementRef<HTMLElement>>('okvir');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** Odjava SAMO ove registracije pražnjenja (nova instanca se može registrovati pre nego što ova nestane). */
   private odjava: (() => void) | null = null;
 
+  protected readonly pregled = computed(() => this.store.rezim() === 'PREGLED');
+  /** Slojevi i Animacije: onemogućeni tokom sesije teksta i u Pregledu. */
+  protected readonly zakljucano = computed(() => !!this.store.uredjivanje() || this.pregled());
   protected readonly indeksTaba = computed(() => Math.max(0, TABOVI.indexOf(this.store.tab())));
   protected readonly idPomoci = ID_POMOCI_TEKSTA;
   /** Kao prikaz (`platno-prikaz`): `'normal'` = ponašanje pregledača, svojstvo se ne postavlja. */
@@ -195,7 +206,7 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
-    afterNextRender(() => this.fokusPlatna.postavi(this.okvir().nativeElement));
+    afterRenderEffect(() => this.fokusPlatna.postavi(this.okvir()?.nativeElement ?? null));
     afterRenderEffect({
       read: () => {
         const c = this.store.uredjivanje()?.celija;
@@ -250,7 +261,8 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
       this.obavestenja.greska(PORUKA_PREVLACENJE);
       return;
     }
-    const rect = (this.okvir().nativeElement.querySelector('.uz-platno') ?? this.okvir().nativeElement).getBoundingClientRect();
+    const o = this.okvir()!.nativeElement;
+    const rect = (o.querySelector('.uz-platno') ?? o).getBoundingClientRect();
     const px = rect.width > 0 ? rect.width / SIRINA_PLATNA : 1;
     const centar = { x: (e.clientX - rect.left) / px, y: (e.clientY - rect.top) / px };
     void this.slike.ubaci(fajl, centar).then((id) => {
@@ -265,7 +277,8 @@ export class PlatnoEditorComponent implements OnInit, OnDestroy {
    */
   protected tastaturaKorena(e: KeyboardEvent): void {
     const k = komandaTastature(e);
-    if (!k || !jePonistavanje(k) || e.defaultPrevented) return;
+    // Pregled (F18): alati su skriveni, pa poništavanje ne menja dokument koji se gleda
+    if (!k || !jePonistavanje(k) || e.defaultPrevented || this.pregled()) return;
     if (uPoljuZaUnos(e.target)) return;
     e.preventDefault();
     this.ponistiIliPonovi(k.tip);
