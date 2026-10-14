@@ -1,5 +1,6 @@
 import { convertLatexToMarkup } from 'mathlive/ssr';
-import { MAX_DUBINA_FORMULE, dubinaFormule } from './formula-komande';
+import { preTeskaFormula } from './formula-komande';
+import { nasumicneFormule } from './formula-fuzz.testing';
 import { ZABRANJENE_KOMANDE, konvertuj, latexUMarkup, ocistiMarkup, ocistiStil } from './formula-markup';
 import { MAX_MARKUP } from './formula-sanitizer';
 
@@ -245,85 +246,114 @@ describe('ocistiMarkup', () => {
 });
 
 /**
- * F15 fix 3: MathLive kvadratno širi ugnježdene korene (`\sqrt{` x700, 4201 znak: 36 MB HTML-a, 20,8 s u Chromium-u).
- * Preduboka formula se ne pretvara (izvor), a markup veći od 1 MB se odbacuje pre `<template>`. Granica vremena labava.
+ * F15 fix 3 i 4: strukturni trošak pre MathLive-a. MathLive kvadratno širi ugnježdene korene (`\sqrt{` x700: 36 MB
+ * HTML-a, 20,8 s u Chromium-u), i to i bez zagrada (`\sqrt\sqrt…x`, `\frac1\frac1…x`, `\xrightarrow[\xrightarrow[…]]`),
+ * a `validateLatex` takve lance ne odbija. Preteška formula se ne pretvara (izvor), a markup veći od `MAX_MARKUP` se
+ * odbacuje pre `<template>`.
  */
-describe('latexUMarkup: ugnježdavanje i veličina markup-a (vremenska granica)', () => {
-  const GRANICA_MS = 500;
-  const GRANICA_JSDOM_MS = 2000;
+describe('latexUMarkup: strukturni trošak i veličina markup-a (vremenska granica)', () => {
+  /** Odbijena formula: provera je linearna, MathLive se ni ne zove. */
+  const GRANICA_ODBIJENE_MS = 100;
+  /** Formula koja prolazi proveru (presuda F15 fix 4: < 300 ms u jsdom-u). */
+  const GRANICA_MS = 300;
+  /** Najveći dozvoljeni markup: jsdom parsira ~0,5 ms/kB (Chromium ~20x brže); vidi izveštaj F15 fix 4. */
+  const GRANICA_BLIZU_MAX_MARKUP_MS = 1000;
   const r = (s: string, n: number) => s.repeat(n);
   const meri = (latex: string) => {
     const t = performance.now();
     const f = latexUMarkup(latex);
     return { ms: performance.now() - t, f };
   };
+  const matrice = (n: number) => {
+    let s = 'x';
+    for (let i = 0; i < n; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
+    return s;
+  };
+  const visoka = (redova: number) => '\\begin{matrix}' + r('1\\\\', redova) + '1\\end{matrix}';
 
   it.each([
     ['\\sqrt{ x700', r('\\sqrt{', 700) + 'x' + r('}', 700)],
-    ['\\sqrt{ x33', r('\\sqrt{', 33) + 'x' + r('}', 33)],
+    ['\\sqrt (bez zagrada) x800', r('\\sqrt ', 800) + 'x'],
+    ['\\sqrt\\bgroup x220', r('\\sqrt\\bgroup ', 220) + 'x' + r('\\egroup ', 220)],
+    ['\\sqrt (bez zagrada) x17 (rastegljive > 16)', r('\\sqrt ', 17) + 'x'],
+    ['\\frac1 lanac x700', r('\\frac1', 700) + 'x'],
+    ['\\binom1 lanac x64', r('\\binom1', 64) + 'x'],
     ['\\frac{1}{ x300', r('\\frac{1}{', 300) + 'x' + r('}', 300)],
     ['\\left( x300', r('\\left(', 300) + 'x' + r('\\right)', 300)],
     ['x^{ x500', r('x^{', 500) + 'x' + r('}', 500)],
-    ['x_{ x500', r('x_{', 500) + 'x' + r('}', 500)],
-    ['matrica u matrici, 33 nivoa', (() => {
-      let s = 'x';
-      for (let i = 0; i < 33; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
-      return s;
-    })()],
-  ])('preduboka %s -> izvor (null), brzo', (_ime, latex) => {
+    ['\\xrightarrow[ x200 (ugnježdeno kroz [ ])', r('\\xrightarrow[', 200) + 'x' + r(']{}', 200)],
+    ['matrica u matrici, 17 nivoa (rastegljive)', matrice(17)],
+    ['33 korena jedan pored drugog', r('\\sqrt{x}+', 33) + 'x'],
+    ['201 strukturna komanda (x^2+)', r('x^2+', 201) + 'x'],
+    ['matrica od 101 reda', visoka(101)],
+    ['15 korena oko matrice od 1000 redova (14 MB pre fix-a 4)', r('\\sqrt ', 14) + '\\sqrt{' + visoka(1000) + '}'],
+  ])('preteška %s -> izvor (null), brzo', (_ime, latex) => {
+    expect(latex.length).toBeLessThanOrEqual(5000);
     const { ms, f } = meri(latex);
     expect(f).toBeNull();
-    expect(ms).toBeLessThan(GRANICA_MS);
+    expect(ms).toBeLessThan(GRANICA_ODBIJENE_MS);
   });
 
   it.each([
-    ['\\sqrt{ dubina 32', r('\\sqrt{', 32) + 'x' + r('}', 32)],
+    ['\\sqrt (bez zagrada) x16', r('\\sqrt ', 16) + 'x'],
+    ['\\sqrt{ dubina 16', r('\\sqrt{', 16) + 'x' + r('}', 16)],
+    ['16 korena oko lanca 16 razlomaka', r('\\sqrt ', 16) + r('\\frac1', 16) + 'x'],
+    ['\\frac1 lanac 32', r('\\frac1', 32) + 'x'],
     ['\\frac{1}{ dubina 32', r('\\frac{1}{', 32) + 'x' + r('}', 32)],
-    ['\\left( dubina 32', r('\\left(', 32) + 'x' + r('\\right)', 32)],
+    ['\\cfrac{1}{ dubina 31', r('\\cfrac{1}{', 31) + 'x' + r('}', 31)],
+    ['\\left( dubina 16', r('\\left(', 16) + 'x' + r('\\right)', 16)],
     ['x^{ dubina 32', r('x^{', 32) + 'x' + r('}', 32)],
-    ['matrica u matrici, dubina 4', (() => {
-      let s = 'x';
-      for (let i = 0; i < 4; i++) s = `\\begin{pmatrix}${s}&1\\\\1&${s}\\end{pmatrix}`;
-      return s;
-    })()],
-    ['matrica u matrici, 12 nivoa', (() => {
-      let s = 'x';
-      for (let i = 0; i < 12; i++) s = `\\begin{pmatrix}${s}&1\\end{pmatrix}`;
-      return s;
-    })()],
+    ['\\xrightarrow[ dubina 32', r('\\xrightarrow[', 32) + 'x' + r(']{}', 32)],
+    ['matrica u matrici, 12 nivoa', matrice(12)],
+    ['matrica 16 nivoa uz lanac 16 razlomaka', r('\\frac1', 16) + matrice(16)],
     ['pmatrix 30x30', '\\begin{pmatrix}' + Array.from({ length: 30 }, () => Array(30).fill('1').join('&')).join('\\\\') + '\\end{pmatrix}'],
-    ['\\frac{1}{ dubina 32, ponovljeno do ~4800 znakova', r(r('\\frac{1}{', 32) + 'x' + r('}', 32) + '+', 14) + 'x'],
-    ['x^{ dubina 32, ponovljeno do ~4900 znakova', r(r('x^{', 32) + 'x' + r('}', 32) + '+', 37) + 'x'],
-    ['\\left( dubina 32, ponovljeno do ~4600 znakova', r(r('\\left(', 32) + 'x' + r('\\right)', 32) + '+', 11) + 'x'],
-  ])('dozvoljena dubina %s -> markup, ispod granice', (_ime, latex) => {
+    ['zbir 200 razlomaka', r('\\frac{1}{x}+', 200) + 'x'],
+    ['32 korena i 168 kvadrata', r('\\sqrt{x}+', 32) + r('x^2+', 168) + 'x'],
+    ['\\ce{H2O} x200', r('\\ce{H2O}', 200)],
+    ['koren oko matrice od 100 redova', '\\sqrt{' + visoka(100) + '}'],
+  ])('dozvoljeno %s -> markup, ispod 300 ms', (_ime, latex) => {
     expect(latex.length).toBeLessThanOrEqual(5000);
     const { ms, f } = meri(latex);
     expect(f).not.toBeNull();
-    // jsdom parsira HTML ~20x sporije od Chromium-a (izmereno u Chromium-u: najviše 78 ms, izveštaj F15 fix 3)
-    expect(ms).toBeLessThan(GRANICA_JSDOM_MS);
-  });
-
-  it('\\sqrt{ dubine 32 ponovljen do ~4500 znakova (markup ~2 MB) -> izvor, bez parsiranja u <template>', () => {
-    const latex = r(r('\\sqrt{', 32) + 'x' + r('}', 32) + '+', 20) + 'x';
-    expect(latex.length).toBeLessThanOrEqual(5000);
-    const { ms, f } = meri(latex);
-    expect(f).toBeNull();
     expect(ms).toBeLessThan(GRANICA_MS);
   });
 
+  it('najveći dozvoljeni markup (\\left x15 oko pmatrix 20x20, ~433 kB) i 5000 znakova x+ (plan): markup, linearno', () => {
+    for (const latex of [
+      r('\\left(', 15) + '\\begin{pmatrix}' + Array.from({ length: 20 }, () => Array(20).fill('1').join('&')).join('\\\\') +
+        '\\end{pmatrix}' + r('\\right)', 15),
+      r('x+', 2499) + 'xx',
+    ]) {
+      const { ms, f } = meri(latex);
+      expect(f).not.toBeNull();
+      expect(ms).toBeLessThan(GRANICA_BLIZU_MAX_MARKUP_MS);
+    }
+  });
+
   it('konvertuj: markup veći od MAX_MARKUP se odbacuje pre <template>', () => {
-    expect(MAX_MARKUP).toBe(1_000_000);
+    expect(MAX_MARKUP).toBe(450_000);
     const veliki = '<span>' + 'x'.repeat(MAX_MARKUP) + '</span>';
     const t = performance.now();
     expect(konvertuj('x', () => veliki)).toBeNull();
-    expect(performance.now() - t).toBeLessThan(GRANICA_MS);
+    expect(performance.now() - t).toBeLessThan(GRANICA_ODBIJENE_MS);
     expect(konvertuj('x', () => '<span>x</span>')).not.toBeNull();
   });
 
-  it('svaka formula iz testa "dozvoljena lista ne kvari" je ispod granice dubine', () => {
+  it('formule iz testa "dozvoljena lista ne kvari" i tipične formule iz nastave su daleko ispod granica', () => {
     for (const l of ['\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}', '\\left(\\frac{a}{b}\\right)', '\\begin{cases}x&y\\\\z&w\\end{cases}',
-      '\\sqrt{\\left(\\begin{pmatrix}\\frac{1}{\\sqrt{x}}\\end{pmatrix}\\right)}', '\\frac{1}{1+\\frac{1}{1+\\frac{1}{1+\\frac{1}{x}}}}']) {
-      expect(dubinaFormule(l), l).toBeLessThanOrEqual(MAX_DUBINA_FORMULE);
+      '\\sqrt{\\left(\\begin{pmatrix}\\frac{1}{\\sqrt{x}}\\end{pmatrix}\\right)}', '\\frac{1}{1+\\frac{1}{1+\\frac{1}{1+\\frac{1}{x}}}}',
+      '\\int_0^1 x\\,dx', '\\sum_{i=1}^n i', '\\overbrace{a+b}^{n}', '\\enclose{updiagonalarrow}{x}', '\\boxed{x}']) {
+      expect(preTeskaFormula(l), l).toBe(false);
+    }
+  });
+
+  it('fuzz: 50 nasumičnih kombinacija (fiksni seed), sve se obrade ispod 300 ms bez izuzetka', () => {
+    // veći uzorak (2 x 2000) je pušten lokalno: najgore vreme i ulaz su u izveštaju F15 fix 4
+    for (const latex of nasumicneFormule(20_261_014, 50)) {
+      expect(latex.length).toBeLessThanOrEqual(5000);
+      let ms = 0;
+      expect(() => { ms = meri(latex).ms; }, latex.slice(0, 120)).not.toThrow();
+      expect(ms, latex.slice(0, 120)).toBeLessThan(GRANICA_MS);
     }
   });
 });

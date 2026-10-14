@@ -1,5 +1,5 @@
 import { convertLatexToMarkup, validateLatex } from 'mathlive/ssr';
-import { ZABRANJENE_KOMANDE, preDubokaFormula } from './formula-komande';
+import { ZABRANJENE_KOMANDE, preTeskaFormula } from './formula-komande';
 import { MAX_MARKUP, ocistiMarkup } from './formula-sanitizer';
 
 /*
@@ -30,7 +30,7 @@ export function konvertuj(latex: string, f: typeof convertLatexToMarkup = conver
 
 /** Markup za LaTeX (prikaz "math"), očišćen; null kad LaTeX nije ispravan, ima zabranjenu komandu ili konverzija baci. */
 export function latexUMarkup(latex: string): DocumentFragment | null {
-  if (!latex.trim() || ZABRANJENE_KOMANDE.test(latex) || preDubokaFormula(latex)) return null;
+  if (!latex.trim() || ZABRANJENE_KOMANDE.test(latex) || preTeskaFormula(latex)) return null;
   try {
     if (validateLatex(latex).length > 0) return null;
   } catch {

@@ -3,7 +3,7 @@ import type { FormulaSloj } from '../../data-access/platno.models';
 import { ZABRANJENE_KOMANDE } from '../../ui/formula-markup';
 import { KOMANDE_ZABRANJENE, PORODICE_ZABRANJENE } from '../../ui/formula-komande';
 import {
-  MAX_LATEX, PORUKA_DUBOKA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule, primeniFormulu, type FormulaUnos,
+  MAX_LATEX, PORUKA_PRETESKA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule, primeniFormulu, type FormulaUnos,
 } from './formula-pravila';
 
 const ZABRANJENA = 'Formula koristi komandu koja nije dozvoljena (\\href, \\url, \\style, \\class, \\cssId, \\csname, \\html…) ' +
@@ -129,13 +129,19 @@ describe('ZABRANJENE_KOMANDE i greskaFormule: bez katastrofalnog vraćanja (F15 
   });
 });
 
-describe('greskaFormule: preduboka formula (F15 fix 3)', () => {
-  it('\\sqrt{ x700 (4201 znak) -> poruka o dubini, a provera MathLive-a se ni ne zove', () => {
+describe('greskaFormule: preteška formula (F15 fix 3 i 4)', () => {
+  it.each([
+    ['\\sqrt{ x700', '\\sqrt{'.repeat(700) + 'x' + '}'.repeat(700)],
+    ['\\sqrt bez zagrada x800', '\\sqrt '.repeat(800) + 'x'],
+    ['\\frac1 lanac x700', '\\frac1'.repeat(700) + 'x'],
+  ])('%s -> poruka o složenosti, a provera MathLive-a se ni ne zove', (_ime, latex) => {
     const provera = vi.fn(() => [] as const);
-    const latex = '\\sqrt{'.repeat(700) + 'x' + '}'.repeat(700);
-    expect(greskaFormule(latex, provera)).toBe(PORUKA_DUBOKA);
-    expect(PORUKA_DUBOKA).toContain('32');
+    expect(greskaFormule(latex, provera)).toBe(PORUKA_PRETESKA);
     expect(provera).not.toHaveBeenCalled();
-    expect(greskaFormule('\\sqrt{'.repeat(32) + 'x' + '}'.repeat(32), provera)).toBeNull();
+  });
+
+  it('poruka nabraja granice iz istog izvora kao provera; formula na granici prolazi', () => {
+    for (const n of ['32', '16', '200', '100']) expect(PORUKA_PRETESKA).toContain(n);
+    expect(greskaFormule('\\sqrt{'.repeat(16) + 'x' + '}'.repeat(16), () => [])).toBeNull();
   });
 });

@@ -46,10 +46,11 @@ const BROJ = new RegExp(`^-?${NUM}${EKS}$`);
 /** Dužina ili calc() sa brojevima i jedinicama; nijedna druga zagrada (image-set, url, var, attr, ...). */
 const DUZINA = new RegExp(String.raw`^(?:-?${NUM}${EKS}${JEDINICA}?|calc\([-+*/.\d\s]*(?:${JEDINICA}[-+*/.\d\s]*)*\))$`);
 /**
- * Najveći markup MathLive-a koji se parsira (F15 fix 3): veći se odbacuje pre `<template>` (parsiranje 36 MB markup-a
- * ugnježdenih korena trajalo je 16 s). Legitimne formule: `'x+'.repeat(2500)` 0,43 MB, `pmatrix` 30x30 0,21 MB.
+ * Najveći markup MathLive-a koji se parsira (F15 fix 3 i 4): veći se odbacuje pre `<template>` (parsiranje i čišćenje
+ * idu linearno sa veličinom: u jsdom-u ~0,5 s po MB, u Chromium-u ~20 puta brže). Legitimne formule: `'x+'.repeat(2500)`
+ * (5000 znakova) 0,43 MB, `pmatrix` 30x30 0,21 MB.
  */
-export const MAX_MARKUP = 1_000_000;
+export const MAX_MARKUP = 450_000;
 /** Najduža vrednost atributa ili deklaracije stila (MathLive piše kratke: najduži `calc(...)` oko 40 znakova). */
 const MAX_VREDNOST = 200;
 /** Najduža `d`/`points` (najduža putanja u izvoru MathLive-a je 561 znak). */

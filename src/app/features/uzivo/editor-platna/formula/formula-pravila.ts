@@ -3,7 +3,8 @@
 // (panel, traka) i u lenji chunk dijaloga bez da ijedan od njih vuče MathLive.
 import type { FormulaSloj, Poravnanje } from '../../data-access/platno.models';
 import {
-  MAX_DUBINA_FORMULE, OPIS_ZABRANJENIH_KOMANDI, ZABRANJENE_KOMANDE, preDubokaFormula,
+  MAX_DUBINA_FORMULE, MAX_KORENA_FORMULE, MAX_RASTEGLJIVIH_FORMULE, MAX_REDOVA_FORMULE, MAX_STRUKTURE_FORMULE,
+  OPIS_ZABRANJENIH_KOMANDI, ZABRANJENE_KOMANDE, preTeskaFormula,
 } from '../../ui/formula-komande';
 
 /** Najviše znakova LaTeX-a (code point-i, kao server). */
@@ -19,8 +20,9 @@ export interface FormulaUnos { latex: string; boja: string; velicina: number; po
 export const ZABRANJENE_KOMANDE_FORMULE = ZABRANJENE_KOMANDE;
 
 export const PORUKA_PRAZNA = 'Formula je prazna.';
-export const PORUKA_DUBOKA =
-  `Formula je previše ugnježdena (najviše ${MAX_DUBINA_FORMULE} nivoa zagrada { }, \\left i \\begin jedno u drugom).`;
+export const PORUKA_PRETESKA = `Formula je previše složena (najviše ${MAX_DUBINA_FORMULE} nivoa ugnježdavanja, ` +
+  `${MAX_RASTEGLJIVIH_FORMULE} korena, zagrada \\left i matrica jedno u drugom, ${MAX_KORENA_FORMULE} korena, ` +
+  `${MAX_STRUKTURE_FORMULE} razlomaka, indeksa i sličnih komandi i ${MAX_REDOVA_FORMULE} redova).`;
 export const PORUKA_ZABRANJENA = `Formula koristi komandu koja nije dozvoljena (${OPIS_ZABRANJENIH_KOMANDI}) ili zapis ^^.`;
 
 /**
@@ -31,7 +33,7 @@ export function greskaFormule(latex: string, provera: (l: string) => readonly un
   if (!latex.trim()) return PORUKA_PRAZNA;
   if ([...latex].length > MAX_LATEX) return 'Formula može imati najviše 5000 znakova.';
   if (ZABRANJENE_KOMANDE_FORMULE.test(latex)) return PORUKA_ZABRANJENA;
-  if (preDubokaFormula(latex)) return PORUKA_DUBOKA;
+  if (preTeskaFormula(latex)) return PORUKA_PRETESKA;
   try {
     if (provera(latex).length > 0) return 'Formula ima grešku u LaTeX-u.';
   } catch {

@@ -194,7 +194,7 @@ describe('FormulaDialog', () => {
     expect(performance.now() - t).toBeLessThan(500);
     expect(crtaj).not.toHaveBeenCalled();
     expect(mf()!.value).toBe('x^2');
-    expect(greska().textContent).toContain('ugnježdena');
+    expect(greska().textContent).toContain('previše složena');
     expect(dugme('Sačuvaj').disabled).toBe(true);
   });
 
