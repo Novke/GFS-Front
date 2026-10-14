@@ -4,7 +4,6 @@ import { celija, pasus, platno } from '../data-access/platno-podaci.testing';
 import {
   FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
-import { UCITAJ_FORMULE, UCITAJ_STIL_FORMULA } from './formula-ucitavanje';
 import { PlatnoPrikazComponent } from './platno-prikaz.component';
 
 async function prikazi(p: Platno, korak = 0) {
@@ -24,16 +23,7 @@ function sa<T extends Sloj>(id: string, izmena: (s: T) => T): Platno {
 
 const sloj = (el: HTMLElement, id: string) => el.querySelector<HTMLElement>(`.uz-pl-sloj[data-sloj="${id}"]`)!;
 
-// MathLive se ovde ne učitava (formula-prikaz.spec i formula-markup.spec ga proveravaju): formula ostaje LaTeX izvor,
-// pa izgled ne zavisi od toga koliko je brzo stigao lenji modul.
-beforeEach(() => {
-  TestBed.configureTestingModule({
-    providers: [
-      { provide: UCITAJ_FORMULE, useValue: () => new Promise(() => undefined) },
-      { provide: UCITAJ_STIL_FORMULA, useValue: () => new Promise(() => undefined) },
-    ],
-  });
-});
+// MathLive se ovde ne učitava (učitavači koji se ne razreše daje test-setup.ts): formula ostaje LaTeX izvor.
 
 describe('PlatnoPrikazComponent', () => {
   it('renderuje šest slojeva redom (z-osa = redosled u DOM-u), svaki sa unutrašnjim sadržajem', async () => {

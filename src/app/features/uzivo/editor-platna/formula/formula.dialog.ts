@@ -19,8 +19,9 @@ import type { Observable } from 'rxjs';
 import type { Poravnanje, Tema } from '../../data-access/platno.models';
 import { BrojcanoPoljeComponent } from '../brojcano-polje';
 import { IzborBojeComponent } from '../izbor-boje.component';
+import { markupNepromenjen } from '../../ui/formula-sanitizer';
 import {
-  type FormulaUnos, PORUKA_PRAZNA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule,
+  type FormulaUnos, MAX_LATEX, PORUKA_PRAZNA, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule,
 } from './formula-pravila';
 import { type MathLive, UCITAJ_MATHLIVE } from './mathlive-ucitavanje';
 
@@ -221,7 +222,7 @@ export class FormulaDialog {
           mf.menuItems = []; // meni MathLive-a je na engleskom; sve iz njega ima i polje LaTeX
           // uvezen LaTeX sa zabranjenom komandom ne ide u polje: MathLive bi ga nacrtao (spoljni url(...) u stilu)
           const l = this.latex();
-          if (!ZABRANJENE_KOMANDE_FORMULE.test(l)) mf.value = l;
+          if (this.smeUPolje(l)) mf.value = l;
           this.fokusPolja();
         },
       }, { injector: this.injector });
@@ -252,7 +253,23 @@ export class FormulaDialog {
     const l = (e.target as HTMLTextAreaElement).value;
     this.postaviLatex(l);
     const mf = this.mf()?.nativeElement;
-    if (mf && mf.value !== l && !ZABRANJENE_KOMANDE_FORMULE.test(l)) mf.value = l;
+    if (mf && mf.value !== l && this.smeUPolje(l)) mf.value = l;
+  }
+
+  /**
+   * `math-field` crta MathLive sam (shadow DOM), mimo sanitizera statičkog prikaza. Zato LaTeX ide u njega samo kad
+   * prolazi spisak zabranjenih komandi (i `^^`) i granicu dužine, i kad sanitizer (`ui/formula-sanitizer`, bez uvoza) ne bi
+   * promenio markup iste formule (MathLive ništa ne nacrta što projektor ne bi). Kucanje komande znak po znak u LaTeX
+   * režimu polja ovo zaobilazi (`beforeinput` vidi jedan znak): to je samoizazvano, a "Sačuvaj" ga ionako odbija.
+   */
+  private smeUPolje(l: string): boolean {
+    const m = this.modul();
+    if (!m || ZABRANJENE_KOMANDE_FORMULE.test(l) || [...l].length > MAX_LATEX) return false;
+    try {
+      return markupNepromenjen(m.convertLatexToMarkup(l, { defaultMode: 'math' }));
+    } catch {
+      return false;
+    }
   }
 
   /** `math-field` -> polje LaTeX; ista vrednost se ignoriše. */

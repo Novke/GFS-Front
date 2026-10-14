@@ -138,7 +138,7 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
 
   test('izvori statičkog prikaza formula ne sadrže niz MathLive-a (odluka 26: niz prepoznaje samo biblioteku)', () => {
     const ui = join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'ui');
-    for (const f of ['formula-markup.ts', 'formula-ucitavanje.ts', 'formula-prikaz.component.ts']) {
+    for (const f of ['formula-markup.ts', 'formula-ucitavanje.ts', 'formula-prikaz.component.ts', 'formula-sanitizer.ts', 'formula-komande.ts']) {
       expect(readFileSync(join(ui, f), 'utf8').includes(NIZ_MATHLIVE), f).toBe(false);
     }
   });

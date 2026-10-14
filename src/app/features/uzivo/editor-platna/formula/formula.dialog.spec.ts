@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { convertLatexToMarkup } from 'mathlive/ssr';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
@@ -10,9 +11,13 @@ import { type MathLive, UCITAJ_MATHLIVE } from './mathlive-ucitavanje';
 import type { FormulaUnos } from './formula-pravila';
 import { OZNAKA_FORMULE_EDITORA, type FormulaPodaci, otvoriFormulu } from './formula.dialog';
 
-/** Lažni MathLive: `\nepoznato` je greška u LaTeX-u; `<math-field>` je u testu nepoznat element. */
+/**
+ * Lažni MathLive: `\nepoznato` je greška u LaTeX-u; `<math-field>` je u testu nepoznat element; markup daje pravi
+ * `mathlive/ssr` (isti crtač kao ceo `mathlive`; spec sme da ga uveze, nije deo chunk-a).
+ */
 const LAZNI: MathLive = {
   validateLatex: (l: string) => (l.includes('\\nepoznato') ? [{}] : []),
+  convertLatexToMarkup: (l: string) => convertLatexToMarkup(l, { defaultMode: 'math' }),
   MathfieldElement: class {},
 } as unknown as MathLive;
 
@@ -159,6 +164,31 @@ describe('FormulaDialog', () => {
     expect(mf()!.value ?? '').toBe('');
     expect(polje().value).toBe('\\href{http://e.com}{x}');
     expect(dugme('Sačuvaj').disabled).toBe(true);
+  });
+
+  it('formula koju bi sanitizer promenio (\\mathtip: oblačić) ne ide u math-field, ni na početku ni iz polja LaTeX', async () => {
+    otvori({ pocetak: { ...POCETAK, latex: '\\mathtip{a}{b}' } });
+    await ucitano();
+    await doK(() => document.activeElement === mf(), 'fokus u math-field');
+    expect(mf()!.value ?? '').toBe('');
+    expect(polje().value).toBe('\\mathtip{a}{b}');
+    upisiLatex('\\frac{a}{b}');
+    expect(mf()!.value).toBe('\\frac{a}{b}');
+    upisiLatex('\\texttip{a}{b}');
+    expect(mf()!.value).toBe('\\frac{a}{b}');
+    // zaobilazni put sloja (a) (^^) se ne upisuje ni ne čuva
+    upisiLatex('\\ce{^^5chtmlClass{uz-pub}{X}}');
+    expect(mf()!.value).toBe('\\frac{a}{b}');
+    expect(dugme('Sačuvaj').disabled).toBe(true);
+  });
+
+  it('greška crtača MathLive-a (izuzetak) -> math-field ne dobija formulu, polje LaTeX radi', async () => {
+    ucitaj = () => Promise.resolve({ ...LAZNI, convertLatexToMarkup: () => { throw new Error('x'); } } as unknown as MathLive);
+    otvori();
+    await ucitano();
+    expect(mf()!.value ?? '').toBe('');
+    expect(polje().value).toBe('x^2');
+    expect(dugme('Sačuvaj').disabled).toBe(false);
   });
 
   it('prazna nova formula: "Sačuvaj" onemogućeno, poruka tek posle kucanja', async () => {

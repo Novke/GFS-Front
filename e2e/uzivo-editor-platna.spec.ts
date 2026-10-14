@@ -440,6 +440,27 @@ test.describe('uživo: formula (4b, F16)', () => {
     expect(zahtevi.filter(z => /sounds|\.wav$/.test(z.url))).toEqual([]);
   });
 
+  test('polje LaTeX -> math-field za uobičajene formule (sanitizer ne menja markup celog MathLive-a); \\mathtip ne ulazi', async ({ page, mock }) => {
+    await novoPlatno(page, mock);
+    await traka(page).getByRole('button', { name: 'Formula', exact: true }).click();
+    const mf = dijalog(page).locator('math-field');
+    await expect(mf).toBeFocused();
+    const latex = dijalog(page).getByRole('textbox', { name: 'LaTeX' });
+    const vrednost = () => mf.evaluate(el => (el as HTMLElement & { value: string }).value);
+    for (const f of [
+      '\\frac{a}{b}+\\sqrt[3]{x}', '\\int_0^1 x\\,dx', '\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}', '\\begin{array}{c|c}1&2\\end{array}',
+      '\\overrightarrow{AB}', '\\cancel{x}', '\\enclose{circle}[2px dashed red]{x}', '\\left(\\frac{a}{b}\\right)', '\\ce{H2O}',
+      '\\colorbox{yellow}{z}', '\\mathbb{R}',
+    ]) {
+      await latex.fill(f);
+      await expect.poll(vrednost, { message: f }).toBe(f);
+    }
+    // oblačić bi MathLive nacrtao, a sanitizer projektora ga briše: polje ostaje na prethodnoj formuli
+    await latex.fill('\\mathtip{a}{b}');
+    await expect(latex).toHaveValue('\\mathtip{a}{b}');
+    expect(await vrednost()).toBe('\\mathbb{R}');
+  });
+
   test('zabranjena komanda u polju LaTeX: poruka i "Sačuvaj" onemogućeno; Otkaži vraća fokus na dugme', async ({ page, mock }) => {
     await novoPlatno(page, mock);
     const dugme = traka(page).getByRole('button', { name: 'Formula', exact: true });

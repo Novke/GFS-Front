@@ -2,7 +2,7 @@
 // FORMULA sloj. Bez biblioteka: proveru sintakse (`validateLatex` MathLive-a) daje pozivalac, pa ovaj fajl ide i u editor
 // (panel, traka) i u lenji chunk dijaloga bez da ijedan od njih vuče MathLive.
 import type { FormulaSloj, Poravnanje } from '../../data-access/platno.models';
-import { ZABRANJENE_KOMANDE } from '../../ui/formula-komande';
+import { OPIS_ZABRANJENIH_KOMANDI, ZABRANJENE_KOMANDE } from '../../ui/formula-komande';
 
 /** Najviše znakova LaTeX-a (code point-i, kao server). */
 export const MAX_LATEX = 5000;
@@ -17,8 +17,7 @@ export interface FormulaUnos { latex: string; boja: string; velicina: number; po
 export const ZABRANJENE_KOMANDE_FORMULE = ZABRANJENE_KOMANDE;
 
 export const PORUKA_PRAZNA = 'Formula je prazna.';
-export const PORUKA_ZABRANJENA =
-  'Formula koristi komandu koja nije dozvoljena (\\href, \\url, \\style, \\htmlStyle, \\htmlId, \\cssId, \\class, \\htmlData, \\csname).';
+export const PORUKA_ZABRANJENA = `Formula koristi komandu koja nije dozvoljena (${OPIS_ZABRANJENIH_KOMANDI}) ili zapis ^^.`;
 
 /**
  * Greška formule ili null: prazna, preduga (granica servera), zabranjena komanda (provera se tada ni ne zove), pa

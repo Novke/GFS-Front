@@ -204,7 +204,6 @@ describe('PublikaPage', () => {
     it('formula bez slike na sledećem slajdu: unapred stil formula (MathLive) iako trenutni slajd nema formulu', async () => {
       vi.stubGlobal('Image', class { set src(v: string) { /* bez mreže */ } });
       const linkovi = () => document.head.querySelectorAll('link[data-gfs="mathlive"]');
-      linkovi().forEach((l) => l.remove()); // prethodni testovi crtaju fabričko platno (formula -> stil)
       lazniStore.stanje.set(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), sledeciSlajd: infoSlajd() }));
       const f = await prikazi();
       expect(linkovi().length).toBe(0);
@@ -213,7 +212,6 @@ describe('PublikaPage', () => {
         sledeciSlajd: platnoSlajd() }));
       await osvezi(f);
       expect(linkovi().length).toBe(1);
-      linkovi().forEach((l) => l.remove());
     });
   });
 });

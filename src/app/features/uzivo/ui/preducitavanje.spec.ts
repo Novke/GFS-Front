@@ -2,7 +2,6 @@ import { infoSlajd, pitanjeSlajd, platnoSlajd } from '../data-access/izvodjenje-
 import { platno } from '../data-access/platno-podaci.testing';
 import { FormulaSloj, SlikaSloj } from '../data-access/platno.models';
 import { MedijInfo, medijUrl } from '../data-access/uzivo.models';
-import { resetujUcitavanjeFormula } from './formula-ucitavanje';
 import {
   fontoviZaPrikaz, imaFormuluZaCrtanje, preducitajFontove, preducitajFormule, preducitajFormuleSa, preducitajSlike,
   resetujPreducitavanje, sacekajFontove, slikeSlajda,
@@ -165,13 +164,7 @@ describe('formule', () => {
   };
   const linkovi = () => document.head.querySelectorAll('link[data-gfs="mathlive"]');
 
-  const ocisti = () => {
-    // drugi specovi u istom jsdom-u crtaju formule pravim učitavačem (link ostaje u <head>)
-    linkovi().forEach((l) => l.remove());
-    resetujUcitavanjeFormula();
-  };
-  beforeEach(ocisti);
-  afterEach(ocisti);
+  // keš učitavanja formula i <link> čisti globalni afterEach u test-setup.ts
 
   it('imaFormuluZaCrtanje: PLATNO sa formulom bez slike izvora', () => {
     expect(imaFormuluZaCrtanje(saFormulom())).toBe(true);

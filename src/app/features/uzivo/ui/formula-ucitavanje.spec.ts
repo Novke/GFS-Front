@@ -1,25 +1,35 @@
-import {
-  FONTOVI_FORMULA, PUTANJA_STILA_FORMULA, resetujUcitavanjeFormula, ucitajFormule, ucitajStilFormula,
-} from './formula-ucitavanje';
+import { FONTOVI_FORMULA, PUTANJA_STILA_FORMULA, ucitajFormule, ucitajStilFormula } from './formula-ucitavanje';
 
 const linkovi = () => [...document.head.querySelectorAll<HTMLLinkElement>('link[data-gfs="mathlive"]')];
 
 describe('formula-ucitavanje', () => {
   let load: ReturnType<typeof vi.fn>;
 
+  // keš obećanja i <link> čisti globalni afterEach u test-setup.ts (posle svakog testa svakog speca)
   beforeEach(() => {
-    // drugi specovi u istom jsdom-u crtaju formule pravim učitavačem (link ostaje u <head>)
-    for (const l of linkovi()) l.remove();
-    resetujUcitavanjeFormula();
     load = vi.fn(() => Promise.resolve([]));
     Object.defineProperty(document, 'fonts', { configurable: true, value: { load } });
   });
 
   afterEach(() => {
-    for (const l of linkovi()) l.remove();
     delete (document as Partial<Document> & { fonts?: unknown }).fonts;
     vi.useRealTimers();
-    resetujUcitavanjeFormula();
+  });
+
+  describe('globalni reset (test-setup.ts)', () => {
+    let prvi: Promise<void> | null = null;
+
+    it('prvi test: obećanje stila pod lažnim tajmerom ostaje nerazrešeno, link u <head>', () => {
+      vi.useFakeTimers();
+      prvi = ucitajStilFormula();
+      expect(linkovi().length).toBe(1);
+    });
+
+    it('drugi test: nov link i novo obećanje (keš i link prvog testa su obrisani)', () => {
+      expect(linkovi().length).toBe(0);
+      expect(ucitajStilFormula()).not.toBe(prvi);
+      expect(linkovi().length).toBe(1);
+    });
   });
 
   it('ucitajStilFormula dva puta -> jedan <link data-gfs="mathlive"> sa relativnom putanjom stila', async () => {

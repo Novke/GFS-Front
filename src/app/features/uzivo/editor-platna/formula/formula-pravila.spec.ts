@@ -1,9 +1,13 @@
 // spec sme statički da uveze `ui/formula-markup` (nije deo chunk-a): dijalog koristi isti spisak kao prikaz
 import type { FormulaSloj } from '../../data-access/platno.models';
 import { ZABRANJENE_KOMANDE } from '../../ui/formula-markup';
-import { MAX_LATEX, ZABRANJENE_KOMANDE_FORMULE, greskaFormule, primeniFormulu, type FormulaUnos } from './formula-pravila';
+import { KOMANDE_ZABRANJENE, PORODICE_ZABRANJENE } from '../../ui/formula-komande';
+import {
+  MAX_LATEX, PORUKA_ZABRANJENA, ZABRANJENE_KOMANDE_FORMULE, greskaFormule, primeniFormulu, type FormulaUnos,
+} from './formula-pravila';
 
-const ZABRANJENA = 'Formula koristi komandu koja nije dozvoljena (\\href, \\url, \\style, \\htmlStyle, \\htmlId, \\cssId, \\class, \\htmlData, \\csname).';
+const ZABRANJENA = 'Formula koristi komandu koja nije dozvoljena (\\href, \\url, \\style, \\class, \\cssId, \\csname, \\html…) ' +
+  'ili zapis ^^.';
 const NEISPRAVNA = 'Formula ima grešku u LaTeX-u.';
 const bezGresaka = () => [] as const;
 
@@ -42,6 +46,9 @@ describe('greskaFormule', () => {
   it.each([
     '\\href{http://e}{x}', '\\htmlStyle{color:red}{x}', '\\url{x}', '\\cssId{a}{x}', '\\class{a}{x}', '\\htmlData{a=b}{x}',
     '\\style{position:fixed}{x}', '\\htmlId{q}{x}', '\\csname htmlStyle\\endcsname{x}{y}',
+    // F15 fix 1: \htmlClass i porodica \html…, ^^ (\ce i \pu reparsiraju argument: ^^5c = \)
+    '\\htmlClass{uz-pub}{x}', '\\htmlFoo{x}', '\\ce{^^5chtmlClass{uz-pub}{X}}', '\\ce{^^5chtmlStyle{color:#123456}{X}}',
+    '\\ce{^^5ccssId{q}{X}}', '\\ce{^^5chref{http://e}{X}}', '\\pu{^^5cclass{q}{x}}', 'x^^2',
   ])('zabranjena komanda %s -> poruka, a provera se ni ne zove', (latex) => {
     const provera = vi.fn(bezGresaka);
     expect(greskaFormule(latex, provera)).toBe(ZABRANJENA);
@@ -56,6 +63,22 @@ describe('greskaFormule', () => {
 
   it('ispravna formula -> null', () => {
     expect(greskaFormule('\\frac{a}{b} + \\sqrt{x^2}', bezGresaka)).toBeNull();
+  });
+
+  it('poruka se gradi iz istog spiska kao regex (svaka komanda i porodica je i u poruci i odbijena)', () => {
+    for (const k of KOMANDE_ZABRANJENE) {
+      expect(PORUKA_ZABRANJENA).toContain(`\\${k}`);
+      expect(greskaFormule(`\\${k}{a}{b}`, bezGresaka), k).toBe(ZABRANJENA);
+    }
+    for (const p of PORODICE_ZABRANJENE) {
+      expect(PORUKA_ZABRANJENA).toContain(`\\${p}…`);
+      expect(greskaFormule(`\\${p}Nesto{a}{b}`, bezGresaka), p).toBe(ZABRANJENA);
+    }
+  });
+
+  it('regex je bez zastavice g (stalno isti rezultat; .test ne pamti lastIndex)', () => {
+    expect(ZABRANJENE_KOMANDE.flags).toBe('');
+    for (let i = 0; i < 3; i++) expect(ZABRANJENE_KOMANDE.test('\\htmlClass{a}{b}')).toBe(true);
   });
 
   it('isti spisak kao ZABRANJENE_KOMANDE prikaza (ui/formula-markup): isti objekat, ne kopija', () => {
