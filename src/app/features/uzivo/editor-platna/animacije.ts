@@ -11,6 +11,10 @@ export const NAZIVI_EFEKATA: Record<Efekat, string> = {
 export const NAZIVI_SMEROVA: Record<Smer, string> = {
   LEVO: 'Sleva', DESNO: 'Zdesna', GORE: 'Odozgo', DOLE: 'Odozdo', HORIZONTALNO: 'Vodoravno', VERTIKALNO: 'Uspravno',
 };
+/** Smer izlaza: animacija odlazi na tu stranu (PowerPoint "To Left"; prikaz obrće kadrove ulaza). */
+export const NAZIVI_SMEROVA_IZLAZA: Record<Smer, string> = {
+  ...NAZIVI_SMEROVA, LEVO: 'Nalevo', DESNO: 'Nadesno', GORE: 'Nagore', DOLE: 'Nadole',
+};
 export const NAZIVI_OKIDACA: Record<Okidac, string> = {
   KLIK: 'Na klik', SA_PRETHODNIM: 'Sa prethodnim', POSLE_PRETHODNOG: 'Posle prethodnog',
 };

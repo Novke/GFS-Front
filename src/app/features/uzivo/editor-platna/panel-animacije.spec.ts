@@ -28,6 +28,15 @@ describe('PanelAnimacijeComponent', () => {
   const stavke = () => Array.from(document.body.querySelectorAll<HTMLElement>('.mat-mdc-menu-item'));
   const opcije = () => Array.from(document.querySelectorAll<HTMLElement>('mat-option'));
   const bez = (): Platno => ({ ...platno(), animacije: [] });
+  /** Ime za čitač ekrana (pojednostavljeno): bez aria-hidden="true", aria-label umesto sadržaja elementa. */
+  const ime = (n: Node): string => {
+    if (n.nodeType === Node.TEXT_NODE) return n.textContent!;
+    if (n.nodeType !== Node.ELEMENT_NODE) return '';
+    const e = n as Element;
+    if (e.getAttribute('aria-hidden') === 'true') return '';
+    return e.getAttribute('aria-label') ?? ` ${Array.from(e.childNodes).map(ime).join('')} `;
+  };
+  const imeReda = (r: HTMLElement) => ime(r.querySelector('button')!).replace(/\s+/g, ' ').trim();
 
   async function pocni(p: Platno, izbor: string[] = []) {
     store.inicijalizuj(p);
@@ -107,8 +116,11 @@ describe('PanelAnimacijeComponent', () => {
     ]);
     const r = redovi();
     expect(r[1].classList).toContain('uz-ep-anim--uvucena');
-    expect(r[1].querySelector('mat-icon[aria-label="Sa prethodnim"]')).toBeTruthy();
-    expect(r[2].querySelector('mat-icon[aria-label="Posle prethodnog"]')).toBeTruthy();
+    // okidač je deo imena dugmeta reda (MatIcon bez statičkog aria-hidden sam postavlja aria-hidden="true")
+    expect(r.map(imeReda)).toEqual([
+      '1 Tekst: Prvi · pasus 1 Ulaz · Postepeno', 'Sa prethodnim Slika 1 Ulaz · Zum', 'Posle prethodnog Elipsa 1 Ulaz · Pojavi',
+      '2 Elipsa 1 Izlaz · Postepeno',
+    ]);
     r[2].querySelector('button')!.click();
     await fixture.whenStable();
     expect(store.izabranaAnimacija()).toBe('a3');
@@ -153,14 +165,25 @@ describe('PanelAnimacijeComponent', () => {
     expect(store.platno().animacije[0].trajanjeMs).toBe(500);
   });
 
-  it('"Pomeri gore", "Pomeri dole" (onemogućeni na krajevima) i "Obriši" (bira sledeću)', async () => {
+  it('"Pomeri gore", "Pomeri dole" (onemogućeni na krajevima, fokus ostaje) i "Obriši" (bira sledeću)', async () => {
     await pocni(platno());
     redovi()[1].querySelector('button')!.click();
     await fixture.whenStable();
-    dugme(el(), 'Pomeri gore')!.click();
+    const gore = dugme(el(), 'Pomeri gore')!;
+    gore.focus();
+    gore.click();
     await fixture.whenStable();
     expect(store.platno().animacije.map((a) => a.id)).toEqual(['a2', 'a1', 'a3', 'a4']);
-    expect(dugme(el(), 'Pomeri gore')!.disabled).toBe(true);
+    // disabledInteractive: dugme ostaje fokusirano (nije `disabled`), a klik ne radi ništa
+    expect(gore.getAttribute('aria-disabled')).toBe('true');
+    expect(gore.disabled).toBe(false);
+    expect(document.activeElement).toBe(gore);
+    izlaz.mockClear();
+    gore.click();
+    await fixture.whenStable();
+    expect(store.platno().animacije.map((a) => a.id)).toEqual(['a2', 'a1', 'a3', 'a4']);
+    expect(izlaz).not.toHaveBeenCalled();
+    expect(store.mozeNapred()).toBe(false);
     dugme(el(), 'Pomeri dole')!.click();
     await fixture.whenStable();
     expect(store.platno().animacije.map((a) => a.id)).toEqual(['a1', 'a2', 'a3', 'a4']);
@@ -170,10 +193,59 @@ describe('PanelAnimacijeComponent', () => {
     expect(store.izabranaAnimacija()).toBe('a3');
     store.izaberiAnimaciju('a4');
     await fixture.whenStable();
-    expect(dugme(el(), 'Pomeri dole')!.disabled).toBe(true);
+    expect(dugme(el(), 'Pomeri dole')!.getAttribute('aria-disabled')).toBe('true');
+    dugme(el(), 'Pomeri dole')!.click();
+    expect(store.platno().animacije.map((a) => a.id)).toEqual(['a1', 'a3', 'a4']);
     dugme(el(), 'Obriši')!.click();
     await fixture.whenStable();
     expect(store.izabranaAnimacija()).toBe('a3');
+  });
+
+  it('brisanje poslednje animacije: fokus na "Dodaj ulaz", a kad je onemogućen na poruku praznog panela', async () => {
+    await pocni({ ...bez(), animacije: [animacija('a1', 'oblik')] });
+    store.izaberiAnimaciju('a1');
+    await fixture.whenStable();
+    dugme(el(), 'Obriši')!.focus();
+    dugme(el(), 'Obriši')!.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(dugme(el(), 'Dodaj ulaz'));
+    await pocni({ ...bez(), animacije: [animacija('a1', 'oblik')] });
+    store.izaberiAnimaciju('a1');
+    store.prebaciIzbor('slika');
+    await fixture.whenStable();
+    expect(dugme(el(), 'Dodaj ulaz')!.disabled).toBe(true);
+    dugme(el(), 'Obriši')!.focus();
+    dugme(el(), 'Obriši')!.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el().querySelector('.uz-ep-napomena'));
+    expect(document.activeElement!.textContent).toContain('Slajd nema animacija.');
+  });
+
+  it('smer: za IZLAZ "Nalevo/Nadesno/Nagore/Nadole", za ULAZ "Sleva…"', async () => {
+    await pocni({ ...bez(), animacije: [animacija('a1', 'oblik', { vrsta: 'IZLAZ', efekat: 'ULET', smer: 'DOLE' }), animacija('a2', 'oblik', { efekat: 'ULET', smer: 'DOLE' })] });
+    const smerovi = async () => {
+      const f = Array.from(el().querySelectorAll<HTMLElement>('mat-form-field')).find((x) => x.querySelector('mat-label')?.textContent?.trim() === 'Smer')!;
+      f.querySelector<HTMLElement>('.mat-mdc-select-trigger')!.click();
+      await fixture.whenStable();
+      const t = opcije().map((o) => o.textContent!.trim());
+      document.body.querySelectorAll('.cdk-overlay-container').forEach((o) => (o.innerHTML = ''));
+      return t;
+    };
+    store.izaberiAnimaciju('a1');
+    await fixture.whenStable();
+    expect(await smerovi()).toEqual(['Nalevo', 'Nadesno', 'Nagore', 'Nadole']);
+    expect(el().textContent).toContain('Nadole');
+    store.izaberiAnimaciju('a2');
+    await fixture.whenStable();
+    expect(el().textContent).toContain('Odozdo');
+  });
+
+  it('uvezen efekat koji sloj inače ne nudi (ISCRTAJ na obliku) ostaje u izboru "Efekat"', async () => {
+    await pocni({ ...bez(), animacije: [animacija('a1', 'oblik', { efekat: 'ISCRTAJ', smer: 'LEVO' })] });
+    store.izaberiAnimaciju('a1');
+    await fixture.whenStable();
+    const f = Array.from(el().querySelectorAll<HTMLElement>('mat-form-field')).find((x) => x.querySelector('mat-label')?.textContent?.trim() === 'Efekat')!;
+    expect(f.querySelector('.mat-mdc-select-value')!.textContent!.trim()).toBe('Iscrtaj');
   });
 
   it('prevlačenje reda (CdkDragDrop) -> premeštanje u dokumentu', async () => {
@@ -237,6 +309,13 @@ describe('PanelAnimacijeComponent', () => {
       await fixture.whenStable();
       await dodaj('Dodaj ulaz', 'Postepeno');
       expect(store.platno().animacije[0].pasus).toBeNull();
+    });
+
+    it('"Pasus n" nudi pasus čiji tekst počinje sa 20+ razmaka (kao "Po pasusima")', async () => {
+      await pocni(tekstSamo(bez(), [' '.repeat(24) + 'kasno', '']), ['tekst']);
+      el().querySelector<HTMLElement>('.mat-mdc-select-trigger')!.click();
+      await fixture.whenStable();
+      expect(opcije().map((o) => o.textContent!.trim())).toEqual(['Ceo sloj', 'Po pasusima', 'Pasus 1:']);
     });
 
     it('prikaz pasusa: prvih 20 znakova', async () => {

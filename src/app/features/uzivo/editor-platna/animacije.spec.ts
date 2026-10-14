@@ -2,9 +2,9 @@ import type { Animacija, Efekat, Okidac, Platno, Smer, TekstSloj } from '../data
 import { animacija, pasus, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { proveriKaoServer } from '../data-access/platno-provera';
 import {
-  NAZIVI_EFEKATA, NAZIVI_OKIDACA, NAZIVI_SMEROVA, PODRAZUMEVANO_TRAJANJE, SMEROVI, brojeviGrupa, dodajAnimaciju,
-  dodajPoPasusima, efektiZa, grupeNaSlojevima, izmeniAnimaciju, obrisiAnimaciju, podrazumevaniSmer, premestiAnimaciju,
-  trajanjeGrupe,
+  NAZIVI_EFEKATA, NAZIVI_OKIDACA, NAZIVI_SMEROVA, NAZIVI_SMEROVA_IZLAZA, PODRAZUMEVANO_TRAJANJE, SMEROVI, brojeviGrupa,
+  dodajAnimaciju, dodajPoPasusima, efektiZa, grupeNaSlojevima, izmeniAnimaciju, obrisiAnimaciju, podrazumevaniSmer,
+  premestiAnimaciju, trajanjeGrupe,
 } from './animacije';
 
 /** Platno test podataka (6 slojeva, 4 animacije) bez animacija. */
@@ -22,6 +22,8 @@ describe('animacije (F17)', () => {
       POJAVI: 'Pojavi', FADE: 'Postepeno', ULET: 'Ulet', PODELI: 'Podeli', BRISANJE: 'Brisanje', ZUM: 'Zum', ISCRTAJ: 'Iscrtaj',
     });
     expect(Object.values(NAZIVI_SMEROVA)).toEqual(['Sleva', 'Zdesna', 'Odozgo', 'Odozdo', 'Vodoravno', 'Uspravno']);
+    // izlaz odlazi na tu stranu (PowerPoint "To Left"; prikaz obrće kadrove ulaza)
+    expect(Object.values(NAZIVI_SMEROVA_IZLAZA)).toEqual(['Nalevo', 'Nadesno', 'Nagore', 'Nadole', 'Vodoravno', 'Uspravno']);
     expect(Object.values(NAZIVI_OKIDACA)).toEqual(['Na klik', 'Sa prethodnim', 'Posle prethodnog']);
     for (const e of ['ULET', 'BRISANJE', 'ISCRTAJ'] as const) expect(SMEROVI[e]).toEqual(['LEVO', 'DESNO', 'GORE', 'DOLE']);
     expect(SMEROVI.PODELI).toEqual(['HORIZONTALNO', 'VERTIKALNO']);

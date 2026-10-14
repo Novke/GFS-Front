@@ -4,7 +4,9 @@
 // (`primeni`; brojčana polja sa ključem polja i animacije), a granica od 400 animacija daje poruku iz `prekoGranica`.
 // Tab je onemogućen dok traje uređivanje teksta, pa se pasus bira ovde, ne u tekstu.
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, linkedSignal, signal, viewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -13,7 +15,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { NotificationStore } from '../../../core/state/notification.store';
 import type { Animacija, Efekat, VrstaAnimacije } from '../data-access/platno.models';
 import {
-  NAZIVI_EFEKATA, NAZIVI_OKIDACA, NAZIVI_SMEROVA, SMEROVI, brojeviGrupa, dodajAnimaciju, dodajPoPasusima, efektiZa,
+  NAZIVI_EFEKATA, NAZIVI_OKIDACA, NAZIVI_SMEROVA, NAZIVI_SMEROVA_IZLAZA, SMEROVI, brojeviGrupa, dodajAnimaciju, dodajPoPasusima, efektiZa,
   izmeniAnimaciju, obrisiAnimaciju, premestiAnimaciju,
 } from './animacije';
 import { BrojcanoPoljeComponent } from './brojcano-polje';
@@ -58,7 +60,8 @@ const PO_PASUSIMA = -1;
             <mat-icon class="uz-ep-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
             <button type="button" [attr.aria-pressed]="r.izabrana" (click)="store.izaberiAnimaciju(r.a.id)">
               @if (r.broj) { <b>{{ r.broj }} </b> } @else {
-                <mat-icon role="img" [attr.aria-label]="okidaci[r.a.okidac]"
+                <!-- statički aria-hidden="false": inače ga MatIcon sam postavlja na true, pa okidač ne bi bio u imenu reda -->
+                <mat-icon role="img" aria-hidden="false" [attr.aria-label]="okidaci[r.a.okidac]"
                           [svgIcon]="r.a.okidac === 'SA_PRETHODNIM' ? 'animation' : 'motion_photos_on'" />
               }
               <span>{{ r.naziv }} </span>
@@ -68,7 +71,7 @@ const PO_PASUSIMA = -1;
         }
       </ol>
     } @else {
-      <p class="uz-ep-napomena">Slajd nema animacija. Izaberi sloj i dodaj ulaz ili izlaz.</p>
+      <p #prazno class="uz-ep-napomena" tabindex="-1">Slajd nema animacija. Izaberi sloj i dodaj ulaz ili izlaz.</p>
     }
     @if (izabrana(); as a) {
       @let i = indeks();
@@ -82,7 +85,9 @@ const PO_PASUSIMA = -1;
         <mat-form-field subscriptSizing="dynamic">
           <mat-label>Smer</mat-label>
           <mat-select [value]="a.smer" (selectionChange)="izmeni({ smer: $event.value })">
-            @for (x of smerovi[a.efekat]; track x) { <mat-option [value]="x">{{ nazivSmera[x] }}</mat-option> }
+            @for (x of smerovi[a.efekat]; track x) {
+              <mat-option [value]="x">{{ (a.vrsta === 'IZLAZ' ? naziviIzlaza : nazivSmera)[x] }}</mat-option>
+            }
           </mat-select>
         </mat-form-field>
       }
@@ -97,8 +102,11 @@ const PO_PASUSIMA = -1;
       <app-brojcano-polje oznaka="Kašnjenje (s)" [vrednost]="a.kasnjenjeMs / 1000" [min]="0" [max]="10"
                           (promena)="izmeni({ kasnjenjeMs: $event * 1000 }, 'kasnjenje')" />
       <div class="uz-ep-anim-dodaj">
-        <button mat-button type="button" [disabled]="i === 0" (click)="pomeri(a, i - 1)">Pomeri gore</button>
-        <button mat-button type="button" [disabled]="i === redovi().length - 1" (click)="pomeri(a, i + 1)">Pomeri dole</button>
+        <!-- disabledInteractive: na kraju liste fokus ostaje na dugmetu (ne pada na body); čuvar je u pomeri() -->
+        <button mat-button type="button" disabledInteractive [disabled]="i === 0" (click)="pomeri(a, i - 1)">Pomeri gore</button>
+        <button mat-button type="button" disabledInteractive [disabled]="i === redovi().length - 1" (click)="pomeri(a, i + 1)">
+          Pomeri dole
+        </button>
         <button mat-button type="button" (click)="obrisi(a, i)">Obriši</button>
       </div>
     }
@@ -131,17 +139,23 @@ export class PanelAnimacijeComponent {
   protected readonly sviOkidaci = Object.entries(NAZIVI_OKIDACA);
   protected readonly smerovi = SMEROVI;
   protected readonly nazivSmera = NAZIVI_SMEROVA;
+  protected readonly naziviIzlaza = NAZIVI_SMEROVA_IZLAZA;
+  private readonly injector = inject(Injector);
   protected readonly efektiZa = efektiZa;
   private readonly dugmeDodaj = viewChild<string, ElementRef<HTMLButtonElement>>('dodaj', { read: ElementRef });
+  private readonly prazno = viewChild<ElementRef<HTMLElement>>('prazno');
 
   /** Vrsta za meni efekata (meni je zajednički za "Dodaj ulaz" i "Dodaj izlaz"). */
   protected readonly vrsta = signal<VrstaAnimacije>('ULAZ');
-  /** Neprazni pasusi jedinog izabranog TEKST sloja (prvih 20 znakova); null = "Cilj" se ne prikazuje. */
+  /**
+   * Neprazni pasusi jedinog izabranog TEKST sloja (ceo tekst, kao "Po pasusima"), prikazani sa prvih 20 znakova; null =
+   * "Cilj" se ne prikazuje.
+   */
   protected readonly pasusi = computed(() => {
     const s = this.store.jedan();
     if (s?.tip !== 'TEKST') return null;
-    return s.pasusi.map((p, i) => ({ i, tekst: Array.from(p.delovi.map((d) => d.tekst).join('')).slice(0, 20).join('') }))
-      .filter((x) => x.tekst.trim());
+    return s.pasusi.map((p, i) => ({ i, tekst: p.delovi.map((d) => d.tekst).join('') })).filter((x) => x.tekst.trim())
+      .map((x) => ({ i: x.i, tekst: Array.from(x.tekst).slice(0, 20).join('') }));
   });
   /** Cilj se vraća na "Ceo sloj" pri promeni sloja, a i kad izabranog pasusa više nema (npr. posle poništavanja). */
   protected readonly cilj = linkedSignal({ source: () => this.store.jedan()?.id, computation: () => CEO });
@@ -164,7 +178,9 @@ export class PanelAnimacijeComponent {
   protected readonly efektiIzabrane = computed(() => {
     const a = this.izabrana();
     const s = a && this.store.platno().slojevi.find((x) => x.id === a.slojId);
-    return s ? efektiZa(s) : [];
+    const l = s ? efektiZa(s) : [];
+    // uvezen efekat koji sloj inače ne nudi (ISCRTAJ na obliku) ostaje izabran
+    return !a || l.includes(a.efekat) ? l : [...l, a.efekat];
   });
 
   protected dodajNovu(e: Efekat): void {
@@ -193,17 +209,26 @@ export class PanelAnimacijeComponent {
     if (id) this.store.primeni((p) => izmeniAnimaciju(p, id, izmena), polje && `animacija-${polje}:${id}`);
   }
 
+  /** Čuvar: `disabledInteractive` ne blokira klik, pa indeks van liste ne radi ništa. */
   protected pomeri(a: Animacija, indeks: number): void {
-    this.store.primeni((p) => premestiAnimaciju(p, a.id, indeks));
+    if (indeks >= 0 && indeks < this.redovi().length) this.store.primeni((p) => premestiAnimaciju(p, a.id, indeks));
   }
 
-  /** Posle brisanja bira se sledeća (ili prethodna); bez ijedne fokus ide na "Dodaj ulaz". */
+  /**
+   * Posle brisanja bira se sledeća (ili prethodna); bez ijedne fokus ide na "Dodaj ulaz", a kad je ono onemogućeno (nije
+   * izabran tačno jedan sloj) na poruku praznog panela, posle crtanja.
+   */
   protected obrisi(a: Animacija, i: number): void {
     if (!this.store.primeni((p) => obrisiAnimaciju(p, a.id))) return;
     const ostale = this.store.platno().animacije;
     const sledeca = ostale[Math.min(i, ostale.length - 1)];
     if (sledeca) this.store.izaberiAnimaciju(sledeca.id);
-    else this.dugmeDodaj()?.nativeElement.focus();
+    else {
+      afterNextRender(() => {
+        const d = this.dugmeDodaj()?.nativeElement;
+        (d && !d.disabled ? d : this.prazno()?.nativeElement)?.focus();
+      }, { injector: this.injector });
+    }
   }
 
   protected spusteno(e: CdkDragDrop<unknown>): void {
