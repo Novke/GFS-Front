@@ -11,7 +11,10 @@ wrapper repo `Novke/GFS-deploy` (`CLAUDE.md`, `README.md`). This repo is **publi
 Angular 22, standalone components only, **zoneless** (`provideZonelessChangeDetection()`, no zone.js), OnPush
 everywhere, signals + NgRx SignalStore (`@ngrx/signals`), Angular Material 22 (M3) on our own tokens, STOMP over WebSocket
 (`@stomp/rx-stomp`) and `marked` for uživo, Vitest + jsdom
-through `ng test` (no browser; `src/test-setup.ts` stubs canvas `getContext`), ESLint (angular-eslint) with two project rules
+through `ng test` (no browser; `src/test-setup.ts` stubs canvas `getContext`, `Range.getClientRects` /
+`getBoundingClientRect` and `document.elementFromPoint` for ProseMirror in jsdom, and a global `beforeEach` gives every spec
+`UCITAJ_FORMULE` / `UCITAJ_STIL_FORMULA` loaders that never resolve, so a formula stays the LaTeX source unless the spec
+provides its own), ESLint (angular-eslint) with two project rules
 in `eslint-rules/`. CI runs Node 24.
 All UI text is Serbian Latin; code identifiers are Serbian too (predmet, grupa, predavanje, domaći, test, ocena).
 
@@ -171,7 +174,8 @@ over STOMP; teacher commands are REST.
   not cached). `publika-scena` counts reconnect epochs: no animation right after a reconnect or a late-opened window; it records every
   snapshot as "previous" (PRIJAVA and KRAJ too, through an effect), so → from PRIJAVA to the first slide plays group 0.
   Editor: a PLATNO slide has no side preview any more; steps and animations are watched in the editor's "Pregled" mode
-  (part 4b), the form edits only notes and the theme (radio; a note below it says that changing the theme does not recolour existing layers).
+  (part 4b). The form of a PLATNO slide edits only the notes; the theme is a presentation setting in the page's settings panel
+  (`podesi({ tema })`, radio; a note below it says that changing the theme does not recolour existing layers).
   **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (the page always sends the store's
   `platno`, never the form's (`izmenaForme`), and `slajdUCmd` copies it from the slide; omitting it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
@@ -229,7 +233,8 @@ over STOMP; teacher commands are REST.
   (`PoKadru`) and is one step on `pointerup`; Esc cancels it. After every recorded change the store calls its output
   **synchronously** (`postaviIzlaz` -> `EditorStore.izmeniPlatno(id, platno)`, which keeps the notes of the slide's last
   local command); the open gesture is flushed into the document through `EditorStore.registrujPraznjenje` before every
-  save (`sacuvajOdmah`, `sacuvajSve`, `sacuvajPreIzlaska`, page `beforeunload`) and on destroy. The PLATNO slide form only
+  save (`sacuvajOdmah`, `sacuvajSve`, `sacuvajPreIzlaska`, page `beforeunload`), on destroy, and (since 4b) in
+  `EditorStore.izaberi` before `posaljiOdmah` of the slide being left. The PLATNO slide form only
   edits notes: the page always takes `platno` from the store (`izmenaForme`), never from the form. A new PLATNO slide is a
   front-end document (`data-access/platno-novo.ts`: empty, or title and body from the theme) and is sent at once.
   `data-access/platno-provera.ts` mirrors the server's `PlatnoPP` (limits, rounding, 1 MB): `greskeSlajda` checks only
@@ -247,7 +252,11 @@ over STOMP; teacher commands are REST.
   check and still reaches the page; letters come from `key`, `[`/`]` from `code`. Inserting a layer focuses the frame. The
   keyboard path: select in the "Slojevi" panel, Shift+Tab to the frame, arrows; exact values in the "Svojstva" number
   fields. Row buttons of "Slojevi" keep fixed labels with `aria-pressed` and get the layer name through
-  `aria-describedby`. Locked layers can be selected (click, panel) and reordered but not moved, resized or deleted, and
+  `aria-describedby`. Buttons that keep focus while disabled use `disabledInteractive`, which does **not** block the click on
+  a `<button>` (Material blocks only `<a>`): every such handler checks the same condition as its `[disabled]` first and does
+  nothing (toolbar, table panel, Pregled, animation list, page actions, import dialog; e.g. "Obriši red" over all rows must not
+  report the 2880 limit, a grey "Poništi" must not end a text session); `disabledInteractive` without `[disabled]` is
+  pointless. Locked layers can be selected (click, panel) and reordered but not moved, resized or deleted, and
   Ctrl+A skips them (and hidden ones); hiding is editor-only (not saved). Layout: the panels (280 px) sit right of the canvas
   when the editor is at least 760 px wide (container query `uz-ep`); then the canvas and the tab header are sticky at
   64 px (below the shell's 56 px sticky top bar; the header rule is global in `uzivo-editor.css`), so scrolling through a
@@ -277,15 +286,27 @@ over STOMP; teacher commands are REST.
   (`zabeleziTekst`) is one history step; `zavrsiUredjivanje` returns `false` while the cut is not accepted (limit, gesture running) and
   the session then stays open; flushing (`isprazni`, called through `registrujPraznjenje` before every save) is **idempotent** (no change
   since the last cut = nothing handed over). Inside a session Ctrl+Z is ProseMirror's history, also from the panels and the toolbar
-  (`ponistiUTekstu`); the tabs "Slojevi" and "Animacije" are disabled and the panels are reached with Esc, then Tab. **The selection is
+  (`ponistiUTekstu`). **History boundary:** a cut accepted in the middle of a session (Ctrl+S, a frame change from the panel such as
+  anchor, margin or wrap, copy) is already a canvas step, so the editor closes ProseMirror's history there and remembers its depth
+  (`granica`, moved along when ProseMirror drops its oldest events past 120); no undo (in the text, panel, toolbar or root) goes
+  below it: from the text Ctrl+Z then does nothing, from the panels and the toolbar the next undo ends the session and undoes the
+  last canvas step (the frame change, then the cut). Redo during a session goes **only** to ProseMirror (nothing to redo = nothing
+  happens: the session stays open and the canvas "redo" is not wiped by a cut; the toolbar "Ponovi" shows only ProseMirror's redo
+  then). The tabs "Slojevi" and "Animacije" are disabled; **F6** (and Shift+F6) in the text or a cell moves focus to the first
+  control of the text panel ("Font") without ending the session, and F6 from the panels returns to the text with the saved
+  selection (`FokusPlatna.fokusPanela`, editor root `f6IzPanela`; announced in the editor's and the frame's `aria-describedby`);
+  panel commands act on the saved selection. **The selection is
   taken from the DOM before a key command** (`dodatakIzboraIzDoma`, first plugin): Shift/Ctrl+arrows change the browser's selection and
   ProseMirror copies it to its state only on `selectionchange`, a separate task, so Backspace or Ctrl+B right after (or while the main
   thread is busy) acted on the old selection (without the plugin 3 of 10 e2e runs failed). The plugin copies only when both ends are
-  inside the editor, the state's selection is a `TextSelection` (not the `AllSelection` of Ctrl+A), they differ, both ends are in inline
+  inside the editor, the state's selection is a `TextSelection` (Ctrl+A here is `izaberiSav`, also a `TextSelection`, so it is
+  covered too), they differ, both ends are in inline
   content and no IME composition runs. Lists: bullet `•` or `ARAPSKI_TACKA` from 1, indent `18 + 36 * level`, first line `-18` (PowerPoint
   body, 16:9); Tab at the start of a list paragraph (Shift+Tab) changes the level 0-8, elsewhere Tab writes `\t`. The editor does **not**
   change `METRIKA`: text typed in the editor lays out like the projector. History keys: `tekst-<field>:<selection>` (table:
-  `...:<r1>-<k1>-<r2>-<k2>`), `animacija-<field>:<id>`.
+  `...:<r1>-<k1>-<r2>-<k2>`), `animacija-<field>:<id>`, `tabela-sirina:<id>:<k1>-<k2>`, `tabela-visina:<id>:<r1>-<r2>`. A layer
+  with `pasusi: []` (server, import) gets a fallback paragraph that already has the key `p0`, so opening and closing it without
+  typing makes no step and no `PUT`.
   **Tables** (`tabela.ts`, pure functions tested as a table, every result passes `proveriKaoServer`): insert (popover "Tabela", 1-30 x 1-30,
   theme look resolved into cell colours), rows and columns (a row inserted through a merged cell grows it), merge (rectangular range widened
   to whole merged areas, the text of covered cells is appended to the anchor, like PowerPoint) and split, fill, borders, anchor, column
@@ -298,7 +319,8 @@ over STOMP; teacher commands are REST.
   `FormulaOtvarac`, and `formula/mathlive-ucitavanje.ts` is the **only** import of full `mathlive` (the `<math-field>`; `fontsDirectory`
   points to the local `assets/mathlive/fonts/`, sounds off, no CDN: `angular.json` copies `mathlive-static.css` and the 20 KaTeX `woff2`
   there). The `<math-field>` and the plain "LaTeX" field are kept in sync both ways (the field is also the accessible alternative);
-  "Sačuvaj" always clears `slikaIzvora`. The static view is **not** in the editor: `ui/formula-markup.ts` is the only import of
+  "Sačuvaj" always clears `slikaIzvora`. Toolbar, editor root and panel each call `formulaEditora()`, but one guard per editor
+  (`otvoreni`, keyed by its `PlatnoEditorStore`) allows one dialog at a time, also while its lazy chunk is still loading. The static view is **not** in the editor: `ui/formula-markup.ts` is the only import of
   `mathlive/ssr` (`convertLatexToMarkup`), `ui/formula-ucitavanje.ts` its only dynamic `import()` (tokens `UCITAJ_FORMULE`,
   `UCITAJ_STIL_FORMULA`: one `<link data-gfs="mathlive">` and the KaTeX fonts, 3 s at most) and `ui/formula-prikaz.component.ts` the view
   `platno-prikaz` uses for a FORMULA layer without `slikaIzvora`; projector, console and editor therefore look the same, and `publika` /
@@ -339,8 +361,7 @@ over STOMP; teacher commands are REST.
   **Two tabs editing one slide: the last `PUT` wins**, with no version check (the backend has none; adding one is out of scope).
   **Known limitations:** a tab character in a table cell has no shortcut (Tab moves the cell); banding (`tabelaTraka`) is not recomputed
   after inserting a row, because the model carries resolved colours (decision 19); a neighbour merged across the edge of the range gets the
-  border along its whole side; after a double click the caret goes to the end of the text; during a text session the panels are reached
-  only with Esc, then Tab; tab stops are not measured while typing (default 36 pt until the session ends); "Vrati 100%" (autofit) loses the
+  border along its whole side; after a double click the caret goes to the end of the text; tab stops are not measured while typing (default 36 pt until the session ends); "Vrati 100%" (autofit) loses the
   caret and the ProseMirror history of the session; pasting into the `math-field` (`preUnosa`) checks the command lists but not
   `markupNepromenjen`; "Pusti od izabrane" for group 1 plays group 0 again (by contract); the first close of a text session normalises the
   whole layer (merges parts of equal style); the formula protection above is client-only.

@@ -730,3 +730,46 @@ test.describe('uživo: editor platna (4b, F19)', () => {
     await expect(trajanje).toHaveValue('2');
   });
 });
+
+test.describe('uživo: editor platna (4b, završni talas)', () => {
+  const uredjivac = (page: Page) => page.getByRole('textbox', { name: /^Tekst sloja/ });
+
+  test('samo tastatura: izbor dela teksta Shift+strelicama, F6, font iz panela, F6 nazad, kucanje dalje', async ({ page, mock }) => {
+    const id = await novoPlatno(page, mock);
+    // "Tekst" iz trake tastaturom: nov sloj odmah u uređivanju (fokus u tekstu)
+    await traka(page).getByRole('button', { name: 'Tekst', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(uredjivac(page)).toBeFocused();
+    await expect(uredjivac(page)).toHaveAttribute('aria-describedby', 'uz-ep-tekst-pomoc');
+    await expect(page.locator('#uz-ep-tekst-pomoc')).toContainText('F6 prelazi u panel Svojstva');
+    await page.keyboard.type('Statika');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft');
+    // F6: prva kontrola panela teksta (Font), sesija ostaje (uređivač je i dalje tu)
+    await page.keyboard.press('F6');
+    const font = editor(page).getByRole('combobox', { name: 'Font' });
+    await expect(font).toBeFocused();
+    await expect(uredjivac(page)).toHaveCount(1);
+    // font tastaturom: Enter otvara, Home pa tri puta dole = Tinos (redosled kataloga), Enter bira; fokus ostaje na izboru
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox', { name: 'Font' })).toBeVisible();
+    await page.keyboard.press('Home');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('option', { name: 'Tinos', exact: true })).toHaveClass(/mat-mdc-option-active/);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox', { name: 'Font' })).toHaveCount(0);
+    await expect(font).toBeFocused();
+    await expect(font).toContainText('Tinos');
+    // F6 nazad: tekst sa sačuvanim izborom ("ika"), pa kucanje dalje sa kraja izbora
+    await page.keyboard.press('F6');
+    await expect(uredjivac(page)).toBeFocused();
+    await expect.poll(() => page.evaluate(() => document.getSelection()?.toString())).toBe('ika');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.type(' 1');
+    await page.keyboard.press('Escape');
+    await expect(okvir(page)).toBeFocused();
+    await expect.poll(() => tekstUPut(mock, id, 's1')).toEqual(['Statika 1']);
+    expect(slojUPut(mock, id, 's1')!.pasusi![0].delovi.map(d => [d.tekst, d.font])).toEqual([
+      ['Stat', 'IBM Plex Sans'], ['ika 1', 'Tinos'],
+    ]);
+  });
+});
