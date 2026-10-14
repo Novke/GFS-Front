@@ -924,4 +924,40 @@ describe('PlatnoEditorStore', () => {
       expect(store.uredjivanje()).toBe(s);
     });
   });
+  describe('izabrana animacija (F17)', () => {
+    const sa = () => dok([oblik('s1'), oblik('s2')], [animacija('a1', 's1'), animacija('a2', 's2')]);
+
+    it('izaberiAnimaciju bira animaciju i njen sloj; nepostojeća ili null skida izbor animacije', () => {
+      pocni(sa());
+      store.izaberiAnimaciju('a2');
+      expect(store.izabranaAnimacija()).toBe('a2');
+      expect(store.izbor()).toEqual(['s2']);
+      store.izaberiAnimaciju('nema');
+      expect(store.izabranaAnimacija()).toBeNull();
+      store.izaberiAnimaciju('a1');
+      store.izaberiAnimaciju(null);
+      expect(store.izabranaAnimacija()).toBeNull();
+      expect(store.izbor()).toEqual(['s1']);
+      expect(izlaz).not.toHaveBeenCalled();
+    });
+
+    it('izbor drugog sloja, nestanak animacije (brisanje, poništavanje) i nov dokument skidaju izabranu animaciju', () => {
+      pocni(sa());
+      store.izaberiAnimaciju('a1');
+      store.prebaciIzbor('s2');
+      expect(store.izabranaAnimacija()).toBe('a1');
+      store.izaberi(['s2']);
+      expect(store.izabranaAnimacija()).toBeNull();
+      store.izaberiAnimaciju('a2');
+      store.primeni((p) => ({ ...p, animacije: p.animacije.filter((a) => a.id !== 'a2') }));
+      expect(store.izabranaAnimacija()).toBeNull();
+      store.ponisti();
+      store.izaberiAnimaciju('a2');
+      store.ponovi();
+      expect(store.izabranaAnimacija()).toBeNull();
+      store.izaberiAnimaciju('a1');
+      store.inicijalizuj(sa());
+      expect(store.izabranaAnimacija()).toBeNull();
+    });
+  });
 });

@@ -395,9 +395,9 @@ describe('PlatnoEditorComponent', () => {
     expect(najava()).toBe('Izabrano slojeva: 2');
   });
 
-  it('tabovi Svojstva i Slojevi prate store; Svojstva bez izbora pokazuje svojstva slajda, sa izborom svojstva sloja', async () => {
+  it('tabovi Svojstva, Slojevi i Animacije prate store; Svojstva bez izbora pokazuje svojstva slajda, sa izborom svojstva sloja', async () => {
     const tabovi = Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).map((t) => t.textContent!.trim());
-    expect(tabovi).toEqual(['Svojstva', 'Slojevi']);
+    expect(tabovi).toEqual(['Svojstva', 'Slojevi', 'Animacije']);
     expect(el().querySelector('app-panel-svojstva app-svojstva-slajda')).not.toBeNull();
     store.izaberi(['oblik']);
     await fixture.whenStable();
@@ -406,6 +406,10 @@ describe('PlatnoEditorComponent', () => {
     store.postaviTab('SLOJEVI');
     await fixture.whenStable();
     expect(el().querySelector('app-panel-slojevi')).not.toBeNull();
+    el().querySelectorAll<HTMLElement>('[role="tab"]')[2].click();
+    await fixture.whenStable();
+    expect(store.tab()).toBe('ANIMACIJE');
+    expect(el().querySelector('app-panel-animacije')).not.toBeNull();
     el().querySelectorAll<HTMLElement>('[role="tab"]')[0].click();
     await fixture.whenStable();
     expect(store.tab()).toBe('SVOJSTVA');
@@ -851,13 +855,14 @@ describe('PlatnoEditorComponent', () => {
       expect(document.activeElement).toBe(okvir());
     });
 
-    it('tokom uređivanja: tab Slojevi je onemogućen, Svojstva ima "Završi uređivanje (Esc)" i napomenu', async () => {
-      store.postaviTab('SLOJEVI');
+    it('tokom uređivanja: tabovi Slojevi i Animacije su onemogućeni, Svojstva ima "Završi uređivanje (Esc)" i napomenu', async () => {
+      store.postaviTab('ANIMACIJE');
       await samoTekst();
       dvoklik(50, 50);
       await fixture.whenStable();
       expect(store.tab()).toBe('SVOJSTVA');
       expect(tab('Slojevi').getAttribute('aria-disabled')).toBe('true');
+      expect(tab('Animacije').getAttribute('aria-disabled')).toBe('true');
       expect(el().querySelector('app-panel-svojstva')!.textContent).toContain('Završi uređivanje teksta (Esc).');
       const zavrsi = Array.from(el().querySelectorAll<HTMLButtonElement>('app-panel-svojstva button'))
         .find((b) => b.textContent!.includes('Završi uređivanje (Esc)'))!;
@@ -865,6 +870,7 @@ describe('PlatnoEditorComponent', () => {
       await fixture.whenStable();
       expect(store.uredjivanje()).toBeNull();
       expect(tab('Slojevi').getAttribute('aria-disabled')).not.toBe('true');
+      expect(tab('Animacije').getAttribute('aria-disabled')).not.toBe('true');
       expect(document.activeElement).toBe(okvir());
     });
 

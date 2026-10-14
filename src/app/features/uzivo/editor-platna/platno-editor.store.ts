@@ -4,8 +4,8 @@
 // sa porukom kroz `NotificationStore`. Gest mišem (F5) menja dokument bez istorije dok traje i beleži se kao jedan korak
 // na kraju. Sesija teksta (F12) je takođe jedan korak: aktivni uređivač (`KomandeTeksta`) predaje presek teksta pri
 // izlasku, pre svake druge izmene (`primeni`) i pri pražnjenju; ćelija tabele (F14) koristi isti uređivač, a njen presek
-// menja samo tu ćeliju. Izbor ćelija (F14) važi dok je izabrana ista jedna tabela. F17 (animacije) i F18 (pregled) dodaju
-// svoje metode u isti store.
+// menja samo tu ćeliju. Izbor ćelija (F14) važi dok je izabrana ista jedna tabela; izabrana animacija (F17) dok je njen
+// sloj u izboru. F18 (pregled) dodaje svoje metode u isti store.
 import { computed, inject, signal } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -98,11 +98,16 @@ export const PlatnoEditorStore = signalStore(
       patchState(store, { uredjivanje: null });
       store._uredjivac.set(null);
     };
-    /** Izbor slojeva; izbor ćelija (F14) ostaje samo kad je i dalje izabrana ista jedna tabela. */
+    /**
+     * Izbor slojeva; izbor ćelija (F14) ostaje samo kad je i dalje izabrana ista jedna tabela, a izabrana animacija (F17)
+     * dok je njen sloj u izboru i dok postoji u dokumentu.
+     */
     const postaviIzbor = (izbor: readonly string[]) => {
       const pre = store.izbor();
       const ista = izbor.length === 1 && pre.length === 1 && izbor[0] === pre[0];
+      const a = store.platno().animacije.find((x) => x.id === store.izabranaAnimacija());
       patchState(store, ista ? { izbor } : { izbor, izabranaCelija: null, opsegCelija: null });
+      if (!a || !izbor.includes(a.slojId)) patchState(store, { izabranaAnimacija: null });
     };
     /** Jedina izabrana tabela (izbor ćelija); null inače. */
     const jedinaTabela = (): TabelaSloj | null => {
@@ -294,7 +299,8 @@ export const PlatnoEditorStore = signalStore(
         store._istorija.resetuj();
         store._izlaz.predato = p;
         patchState(store, {
-          platno: p, izbor: [], izabranaCelija: null, opsegCelija: null, mozeNazad: false, mozeNapred: false, gest: null,
+          platno: p, izbor: [], izabranaCelija: null, opsegCelija: null, izabranaAnimacija: null, mozeNazad: false,
+          mozeNapred: false, gest: null,
         });
         zatvoriSesiju();
       },
@@ -407,6 +413,12 @@ export const PlatnoEditorStore = signalStore(
       },
       postaviTab(tab: TabPanela): void {
         patchState(store, { tab });
+      },
+      /** Animacija iz panela Animacije (F17) i njen sloj kao jedini izabran; nepostojeća ili null skida izbor animacije. */
+      izaberiAnimaciju(id: string | null): void {
+        const a = store.platno().animacije.find((x) => x.id === id);
+        if (a) postaviIzbor([a.slojId]);
+        patchState(store, { izabranaAnimacija: a ? a.id : null });
       },
       /**
        * Nov sloj na vrh sa novim `s<n>`, izabran; null kad bi prešao granice (poruka). Otvorena sesija teksta se prvo

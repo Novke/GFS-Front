@@ -30,6 +30,8 @@ export const IKONE = [
   'table', 'cell_merge', 'border_all',
   // Formule (F16).
   'functions',
+  // Animacije (F17): okidači "Sa prethodnim" i "Posle prethodnog" u panelu.
+  'animation', 'motion_photos_on',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

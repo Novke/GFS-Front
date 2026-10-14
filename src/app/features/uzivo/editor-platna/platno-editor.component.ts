@@ -27,6 +27,7 @@ import { formulaEditora } from './formula/formula-otvarac';
 import { nazivSloja } from './komande';
 import { OtpremanjeSlike } from './otpremanje-slike';
 import { OZNAKA_EDITORA_PLATNA } from './oznake';
+import { PanelAnimacijeComponent } from './panel-animacije.component';
 import { PanelSlojeviComponent } from './panel-slojevi.component';
 import { PanelSvojstvaComponent } from './panel-svojstva.component';
 import { PlatnoEditorStore, type TabPanela } from './platno-editor.store';
@@ -38,8 +39,8 @@ import { type PravougaonikCelije, pravougaonikPolja, pravougaoniciTabele } from 
 import { ID_POMOCI_TEKSTA, TekstUredjivacComponent } from './tekst/tekst-uredjivac.component';
 import { TrakaAlataComponent } from './traka-alata.component';
 
-/** Tabovi panela redom (indeks `mat-tab-group`-a); "Animacije" dolazi u F17. */
-const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
+/** Tabovi panela redom (indeks `mat-tab-group`-a). */
+const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI', 'ANIMACIJE'];
 
 @Component({
   selector: 'app-platno-editor',
@@ -47,8 +48,8 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
   // OtpremanjeSlike živi koliko editor slajda: promena izbora ili taba ne prekida otpremanje (F6)
   providers: [PlatnoEditorStore, FokusPlatna, OtpremanjeSlike, SlikeEditora],
   imports: [
-    MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelSlojeviComponent, PanelSvojstvaComponent,
-    TekstUredjivacComponent, TrakaAlataComponent,
+    MatTabsModule, PlatnoPrikazComponent, PlatnoOverlayComponent, PanelAnimacijeComponent, PanelSlojeviComponent,
+    PanelSvojstvaComponent, TekstUredjivacComponent, TrakaAlataComponent,
   ],
   // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y slušaju se na korenu editora (i iz panela i trake); ostale prečice samo na okviru
   host: { 'data-oznaka': OZNAKA_EDITORA_PLATNA, class: 'uz-ep', '(keydown)': 'tastaturaKorena($event)' },
@@ -91,6 +92,7 @@ const TABOVI: readonly TabPanela[] = ['SVOJSTVA', 'SLOJEVI'];
                      (selectedIndexChange)="promenaTaba($event)">
         <mat-tab label="Svojstva"><app-panel-svojstva [tema]="tema()" /></mat-tab>
         <mat-tab label="Slojevi" [disabled]="!!store.uredjivanje()"><app-panel-slojevi /></mat-tab>
+        <mat-tab label="Animacije" [disabled]="!!store.uredjivanje()"><app-panel-animacije /></mat-tab>
       </mat-tab-group>
     </div>
   `,
