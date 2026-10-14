@@ -16,6 +16,9 @@ describe('stil-teksta (panel teksta nad celim slojem, F13)', () => {
   });
 
   describe('stanjeDelova', () => {
+    it('završni talas (rr m3): bez ijednog dela daje podrazumevani stil, ne "mešano"', () => {
+      expect(stanjeDelova([pasusSa([])])).toMatchObject({ font: 'Carlito', velicina: 18, boja: '#000000', polozaji: ['OBICAN'] });
+    });
     it('dva dela Carlito i Tinos -> font null; isti font -> naziv', () => {
       expect(stanjeDelova([pasusSa([deo('a'), deo('b', { font: 'Tinos' })])]).font).toBeNull();
       expect(stanjeDelova([pasusSa([deo('a', { font: 'Tinos' })]), pasusSa([deo('b', { font: 'Tinos' })])]).font).toBe('Tinos');

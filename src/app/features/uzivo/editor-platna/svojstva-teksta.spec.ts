@@ -225,6 +225,12 @@ describe('SvojstvaTekstaComponent', () => {
       expect(b!.textContent).not.toContain('Bez');
     });
 
+    it('rr m3: sloj bez ijednog dela teksta: boja nije "Različito" (podrazumevana boja, kao osnova izmene)', async () => {
+      await pocni([tekst('t1', { pasusi: [pasusSa([])] })], ['t1']);
+      expect(dugme(el(), 'Boja teksta: Različito')).toBeNull();
+      expect(el().querySelector('app-izbor-boje')!.textContent).not.toContain('Različito');
+    });
+
     it('aria-pressed mixed samo za vrednost prisutnu u izboru (OBICAN + INDEKS: Indeks mixed, Eksponent false)', async () => {
       await pocni([tekst('t1', { pasusi: [pasusSa([deo('a'), deo('b', { polozaj: 'INDEKS' })]), pasusSa([deo('c')])] })], ['t1']);
       expect(dugme(el(), 'Indeks')!.getAttribute('aria-pressed')).toBe('mixed');

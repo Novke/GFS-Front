@@ -319,16 +319,16 @@ span.uz-ed-napomena {
   }
 }
 
-/*
- * Editor platna (lenj chunk): kad je panel desno od platna (container query `uz-ep`, isti prag kao u komponenti),
- * zaglavlje tabova je lepljivo kao i platno (senka iste boje pokriva traku od 8 px iznad njega). Unutrašnjost
- * `mat-tab-group`-a je van enkapsulacije komponente, zato je pravilo ovde.
- */
 /* Režim "Pregled" editora (F18): tabovi su onemogućeni, a sadržaj panela se ne prikazuje */
 .uz-ep-paneli--pregled .mat-mdc-tab-body-wrapper {
   display: none;
 }
 
+/*
+ * Editor platna (lenj chunk): kad je panel desno od platna (container query `uz-ep`, isti prag kao u komponenti),
+ * zaglavlje tabova je lepljivo kao i platno (senka iste boje pokriva traku od 8 px iznad njega). Unutrašnjost
+ * `mat-tab-group`-a je van enkapsulacije komponente, zato je pravilo ovde.
+ */
 @container uz-ep (min-width: 760px) {
   .uz-ep-paneli .mat-mdc-tab-header {
     position: sticky;

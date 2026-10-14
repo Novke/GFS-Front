@@ -1327,6 +1327,22 @@ describe('PlatnoEditorComponent', () => {
       expect(poruke.filter((m) => m.tekst === 'Sloj je zaključan.')).toHaveLength(2);
     });
 
+    it('završni talas: dok se dijalog učitava (lenji chunk), "Formula" iz trake pa Enter na formuli ne otvaraju drugi dijalog', async () => {
+      let ucitaj!: (o: Observable<FormulaUnos | undefined>) => void;
+      otvoriFormulu.mockImplementationOnce(() => new Promise((r) => (ucitaj = r)));
+      dugmeTrake('Formula').click();
+      await fixture.whenStable();
+      store.izaberi(['formula']);
+      taster(okvir(), 'Enter');
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(1);
+      ucitaj(of(undefined));
+      await posle();
+      taster(okvir(), 'Enter');
+      await posle();
+      expect(otvoriFormulu).toHaveBeenCalledTimes(2);
+    });
+
     it('editor nestao dok je dijalog otvoren: zakasneli "Sačuvaj" ne piše u slajd', async () => {
       let zatvori!: (u: FormulaUnos) => void;
       otvoriFormulu.mockImplementation(() => Promise.resolve(new Observable<FormulaUnos | undefined>((s) => {

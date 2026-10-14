@@ -49,12 +49,13 @@ export function jedna<T>(vrednosti: readonly T[]): T | null {
 
 /**
  * Stanje celog sloja (ili više slojeva) za panel teksta kad tekst nije u uređivanju. Stil delova gleda vidljiv tekst
- * (prazni delovi ne mešaju stanje); sloj bez ijednog znaka daje stil svojih praznih delova (stil praznog reda).
+ * (prazni delovi ne mešaju stanje); sloj bez ijednog znaka daje stil svojih praznih delova (stil praznog reda), a bez
+ * ijednog dela podrazumevani stil (ne "Različito": nema šta da se razlikuje; `stilSvima` polazi od istog stila).
  */
 export function stanjeDelova(pasusi: readonly Pasus[]): StanjeSelekcije {
   const sviDelovi = pasusi.flatMap((p) => p.delovi);
   const sTekstom = sviDelovi.filter((d) => d.tekst !== '');
-  const delovi = sTekstom.length ? sTekstom : sviDelovi;
+  const delovi = sTekstom.length ? sTekstom : sviDelovi.length ? sviDelovi : [PODRAZUMEVANI_DEO];
   const deo = Object.fromEntries(POLJA_DELA.map((k) => [k, jedna(delovi.map((d) => d[k]))])) as {
     [K in (typeof POLJA_DELA)[number]]: Deo[K] | null;
   };

@@ -14,6 +14,13 @@ import type { FormulaPodaci } from './formula.dialog';
 
 export const PORUKA_DIJALOG_NIJE_UCITAN = 'Dijalog formule nije učitan. Osveži stranicu i pokušaj ponovo.';
 
+/**
+ * Editori (njihov `PlatnoEditorStore`) u kojima se dijalog formule upravo otvara ili je otvoren. Jedan čuvar za sve tri
+ * komponente istog editora (traka, koren, panel): dok se lenji chunk dijaloga još učitava (pre modala), Enter na
+ * formuli ili "Formula" iz trake ne sme da otvori drugi dijalog.
+ */
+const otvoreni = new WeakSet<object>();
+
 @Injectable({ providedIn: 'root' })
 export class FormulaOtvarac {
   /** Dinamički import dijaloga; odbijen `import()` (npr. stari chunk posle novog izdanja) je odbijen `Promise`. */
@@ -25,7 +32,7 @@ export class FormulaOtvarac {
 
 /**
  * Formula u editoru za komponentu koja otvara dijalog (zove se u injekcionom kontekstu komponente, uz njen
- * `PlatnoEditorStore`). Jedan dijalog odjednom; posle zatvaranja ništa se ne upisuje ako je komponenta u međuvremenu
+ * `PlatnoEditorStore`). Jedan dijalog odjednom po editoru (zajednički čuvar `otvoreni`); posle zatvaranja ništa se ne upisuje ako je komponenta u međuvremenu
  * uništena (async put ne piše u slajd koji se više ne uređuje). Svaka izmena je jedan korak kroz `primeniFormulu`.
  */
 export function formulaEditora() {
@@ -35,12 +42,11 @@ export function formulaEditora() {
   const obavestenja = inject(NotificationStore);
   let ziv = true;
   inject(DestroyRef).onDestroy(() => (ziv = false));
-  let otvoren = false;
 
   /** Ishod dijaloga; `undefined` za Otkaži, neuspelo učitavanje (poruka), drugi dijalog u toku ili uništenu komponentu. */
   async function unos(podaci: FormulaPodaci): Promise<FormulaUnos | undefined> {
-    if (otvoren) return undefined;
-    otvoren = true;
+    if (otvoreni.has(store)) return undefined;
+    otvoreni.add(store);
     try {
       const zatvaranje = await otvarac.otvori(dialog, podaci);
       if (!ziv) return undefined;
@@ -50,7 +56,7 @@ export function formulaEditora() {
       if (ziv) obavestenja.greska(PORUKA_DIJALOG_NIJE_UCITAN);
       return undefined;
     } finally {
-      otvoren = false;
+      otvoreni.delete(store);
     }
   }
 
