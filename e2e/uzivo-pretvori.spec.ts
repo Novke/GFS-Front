@@ -29,6 +29,8 @@ const editor = (page: Page) => page.locator('[data-oznaka="gfs-editor-platna"]')
 const naslov = (page: Page) => page.getByRole('textbox', { name: 'Naslov', exact: true });
 const sadrzaj = (page: Page) => page.getByRole('textbox', { name: 'Tekst (Markdown)' });
 const pretvori = (page: Page) => page.getByRole('button', { name: 'Pretvori u platno' });
+/** Stavka izabranog slajda u listi (fokus posle pretvaranja, kao posle uvoza). */
+const izabranaStavka = (page: Page) => page.locator('.uz-ed-stavka-dugme[aria-current="true"]');
 
 async function otvoriInfo(page: Page): Promise<void> {
   await page.goto(`prezentacije/${PREZENTACIJA}`);
@@ -54,10 +56,13 @@ test.describe('Pretvori u platno (INFO -> PLATNO)', () => {
     }).toEqual(['INFO', 'Pretvaranje', '- prvo\n- drugo', true]);
     const pre = putovi(mock).length;
 
+    // tastaturom: Enter na dugmetu; forma nestaje, a fokus ne sme da padne na body
     await expect(pretvori(page)).toBeEnabled();
-    await pretvori(page).click();
+    await pretvori(page).focus();
+    await page.keyboard.press('Enter');
     // bez gubitaka: bez dijaloga potvrde
     await expect(editor(page)).toBeVisible();
+    await expect(izabranaStavka(page)).toBeFocused();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect.poll(() => poslednji(mock)?.tip).toBe('PLATNO');
     expect(putovi(mock).length).toBe(pre + 1);
@@ -69,10 +74,12 @@ test.describe('Pretvori u platno (INFO -> PLATNO)', () => {
     await expect(page.getByText('Slajd je pretvoren u platno.')).toBeVisible();
     await expect(pretvori(page)).toHaveCount(0);
 
-    // snackbar (traka editora platna ima svoje "Poništi", onemogućeno)
-    const ponisti = page.locator('mat-snack-bar-container').getByRole('button', { name: 'Poništi', exact: true });
+    // ime se razlikuje od "Poništi" (undo) u traci editora platna
+    const ponisti = page.getByRole('button', { name: 'Poništi pretvaranje', exact: true });
     await expect(ponisti).toBeEnabled();
     await ponisti.click();
+    // nova INFO forma: fokus na "Pretvori u platno", gde je bio pre pretvaranja
+    await expect(pretvori(page)).toBeFocused();
     await expect.poll(() => poslednji(mock)?.tip).toBe('INFO');
     expect(putovi(mock).length).toBe(pre + 2);
     expect(poslednji(mock)).toMatchObject({ naslov: 'Pretvaranje', sadrzaj: '- prvo\n- drugo', postepeno: true, platno: null });
@@ -106,7 +113,11 @@ test.describe('Pretvori u platno (INFO -> PLATNO)', () => {
     await expect(potvrdi).toBeEnabled();
     await potvrdi.click();
     await expect(editor(page)).toBeVisible();
+    // posle zatvaranja dijaloga (CDK vraća fokus na dugme koje nestaje) fokus je na stavci slajda
+    await expect(izabranaStavka(page)).toBeFocused();
     await expect.poll(() => poslednji(mock)?.tip).toBe('PLATNO');
     expect(tekstSloja(poslednji(mock), 's2')).toEqual(['Vidi vezu.']);
+    // tačno jedan PUT posle upisa sadržaja: ni "Odustani" nije poslao ništa (i kasnije, posle 800 ms)
+    expect(putovi(mock).length).toBe(pre + 1);
   });
 });

@@ -51,7 +51,8 @@ const nn = { nonNullable: true } as const;
         <mat-checkbox formControlName="postepeno">Otkrivaj stavke liste jednu po jednu (tasterom →)</mat-checkbox>
         <!-- div: dugme ne zauzima celu širinu kolone forme; roditelj menja tip slajda (pretvoriUPlatno) -->
         <div>
-          <button mat-stroked-button type="button" aria-describedby="uz-ed-pretvori-opis" (click)="pretvori.emit()">
+          <button mat-stroked-button class="uz-ed-pretvori" type="button" aria-describedby="uz-ed-pretvori-opis"
+                  (click)="pretvori.emit()">
             <mat-icon svgIcon="layers" />Pretvori u platno
           </button>
           <p class="uz-ed-napomena" id="uz-ed-pretvori-opis">Slajd postaje platno sa slojevima (naslov, tekst, slika) koje uređuješ slobodno.</p>

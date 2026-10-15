@@ -894,7 +894,7 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     expect(store.izabrani()!.tip).toBe('PLATNO');
     expect(uspeh).toHaveBeenCalledTimes(1);
     expect(uspeh.mock.calls[0][0]).toBe('Slajd je pretvoren u platno.');
-    expect(uspeh.mock.calls[0][1]).toMatchObject({ label: 'Poništi' });
+    expect(uspeh.mock.calls[0][1]).toMatchObject({ label: 'Poništi pretvaranje' });
     sacuvajSve();
   });
 
@@ -910,7 +910,7 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     expect(izmeni.mock.calls[0]).toEqual([11, {
       tip: 'INFO', naslov: 'Uvod', sadrzaj: '- prvo\n- drugo', slikaId: null, beleske: 'Moje beleške', postepeno: true,
       pitanje: null, platno: null,
-    }]);
+    }, null]);
     expect(store.izabrani()!.tip).toBe('INFO');
     sacuvajSve();
   });
@@ -970,6 +970,47 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     sacuvajSve();
   });
 
+  it('I1: dvostruki klik uz gubitke (veza) otvara tačno jedan dijalog; posle "Odustani" novi klik ga otvara ponovo', async () => {
+    await ucitaj(infoSlajd({ sadrzaj: 'Vidi [vezu](https://primer.rs).' }));
+    odgovorDijaloga = false;
+    const s = store.izabrani()!;
+    await Promise.all([strana.pretvoriUPlatno(s), strana.pretvoriUPlatno(s)]);
+    expect(dijalog).toHaveBeenCalledTimes(1);
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(dijalog).toHaveBeenCalledTimes(2);
+    expect(izmeni).not.toHaveBeenCalled();
+  });
+
+  it('"Poništi pretvaranje" čuva beleške otkucane posle pretvaranja i vraća sliku sa pravim nazivom (ne "Slika")', async () => {
+    const most = { id: 'm1', naziv: 'Most.png', mime: 'image/png', velicina: 10 };
+    await ucitaj(infoSlajd({ slika: most }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    store.izmeniSlajd(11, { ...uPlatno()[0][1], beleske: 'Posle pretvaranja' });
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    const s = store.izabrani()!;
+    expect(s.tip).toBe('INFO');
+    expect(s.beleske).toBe('Posle pretvaranja');
+    expect(s.slika).toEqual(most);
+    expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', slikaId: 'm1', beleske: 'Posle pretvaranja' });
+    sacuvajSve();
+  });
+
+  it('izuzetak u pretvaranju: poruka, ErrorHandler, slajd ostaje INFO, a sledeći klik radi', async () => {
+    await ucitaj(infoSlajd());
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
+    const pravi = strana.ucitajPretvaranje;
+    strana.ucitajPretvaranje = async () => ({ infoUPlatno: () => { throw new RangeError('stek'); } });
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(handleError).toHaveBeenCalledTimes(1);
+    expect(greska).toHaveBeenCalledWith('Pretvaranje nije uspelo. Osveži stranicu i pokušaj ponovo.');
+    expect(store.izabrani()!.tip).toBe('INFO');
+    strana.ucitajPretvaranje = pravi;
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(uPlatno().length).toBe(1);
+    sacuvajSve();
+  });
+
   it('izmena dok se modul učitava: pretvara se poslednje stanje forme, i to vraća "Poništi"', async () => {
     await ucitaj(infoSlajd());
     const obecanje = strana.pretvoriUPlatno(store.izabrani()!);
@@ -999,7 +1040,7 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
     strana.ucitajPretvaranje = () => Promise.reject(new Error('chunk'));
     await strana.pretvoriUPlatno(store.izabrani()!);
-    expect(greska).toHaveBeenCalledWith('Pretvaranje nije učitano. Osveži stranicu i pokušaj ponovo.');
+    expect(greska).toHaveBeenCalledWith('Pretvaranje nije uspelo. Osveži stranicu i pokušaj ponovo.');
     expect(handleError).toHaveBeenCalledTimes(1);
     expect(izmeni).not.toHaveBeenCalled();
   });
