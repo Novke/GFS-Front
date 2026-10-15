@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, tekst, zatvorenje, zbir, zbirGzip,
 } from './chunkovi';
-import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, nizoviEditora } from './nizovi-editora';
+import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, NIZOVI_CRTEZA, nizoviEditora } from './nizovi-editora';
 
 /**
  * Studentska stranica (`javno/uzivo-student.page`, statičko zatvorenje bez početnog bundle-a). Osnova je izmerena
@@ -32,9 +32,9 @@ const BUDZET_SSR_GZIP = 105_000;
  * teme i fontovi platna stigli na telefon; lint gleda samo direktne uvoze, pa je ovo jedini čuvar tranzitivnog grafa).
  * `--uz-formula-k` je samo u `ui/mera-formule` (smanjivanje formule na nastavničkim prikazima, token `MERA_FORMULE`):
  * telefon nema ni kod merenja (~2,4 kB, manje od rezerve budžeta, pa ga granica bajtova ne bi uhvatila); u CSS-u niz
- * postoji, ali se ovde gleda samo JS.
+ * postoji, ali se ovde gleda samo JS. `NIZOVI_CRTEZA` (5b): crtež kao vektor i zahtev poteza su samo kod projektora i konzole.
  */
-const NIZOVI_PLATNA = ['tabelaZaglavlje', 'Carlito', '--uz-formula-k'] as const;
+const NIZOVI_PLATNA = ['tabelaZaglavlje', 'Carlito', '--uz-formula-k', ...NIZOVI_CRTEZA] as const;
 
 const UI = join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'ui');
 /** Uvoz paketa `mathlive` (i podputanja) u izvoru: statički, dinamički ili samo radi efekta. */

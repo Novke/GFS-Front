@@ -1,5 +1,5 @@
 {
-  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka.",
+  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka, PLATNO sa CRTEZ-om (2 poteza, ISCRTAJ 3000 ms, 5b).",
   "izvodjenje": {
     "id": 7,
     "prezentacija": { "id": 3, "naziv": "Statika · uvodni čas", "predmetId": 1 },
@@ -79,6 +79,27 @@
     {
       "id": 104, "rb": 4, "tip": "INFO", "naslov": "Za sledeći čas", "sadrzaj": "Pročitati poglavlje o momentu sile.",
       "slika": null, "beleske": null, "postepeno": false, "pitanje": null, "platno": null
+    },
+    {
+      "id": 105, "rb": 5, "tip": "PLATNO", "naslov": null, "sadrzaj": null, "slika": null, "pitanje": null, "postepeno": false,
+      "beleske": "Crtež se iscrtava potez po potez.",
+      "platno": {
+        "verzija": 1,
+        "pozadina": { "boja": "#FFFFFF", "medijId": null },
+        "slojevi": [
+          {
+            "id": "crtez2", "tip": "CRTEZ", "naziv": null, "x": 200, "y": 150, "sirina": 400, "visina": 200, "rotacija": 0,
+            "providnost": 1, "zakljucan": false, "senka": null, "medijId": "00000000-0000-4000-8000-000000000003",
+            "potezi": [
+              { "boja": "#C00000", "debljina": 4, "tacke": [20, 20, 380, 20] },
+              { "boja": "#1F4E79", "debljina": 4, "tacke": [20, 180, 200, 100, 380, 180] }
+            ]
+          }
+        ],
+        "animacije": [
+          { "id": "a1", "slojId": "crtez2", "pasus": null, "vrsta": "ULAZ", "efekat": "ISCRTAJ", "smer": "LEVO", "okidac": "KLIK", "trajanjeMs": 3000, "kasnjenjeMs": 0 }
+        ]
+      }
     }
   ],
   "ucesnici": [

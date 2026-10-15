@@ -1,6 +1,8 @@
 import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
-import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, zabranjeniJavno } from './nizovi-editora';
+import {
+  NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, nizoviCrteza, zabranjeniJavno,
+} from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
 import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
 
@@ -86,6 +88,35 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     await page.getByLabel('Kod sa table').fill('000000');
     await expect(page.getByText('Izvođenje sa tim kodom ne postoji ili je završeno.')).toBeVisible();
     await expect(page).toHaveURL(/\/uzivo$/);
+  });
+
+  // 5b (odluka 8): javni snimak nema sadržaj slajda, pa telefon na PLATNO slajdu sa crtežom ne traži poteze i ne učitava
+  // kod vektora; `dozvoljeniApi` ionako obara svaki `/api/slajdovi/...`, a ovde se proverava i tekst svih učitanih JS-ova
+  test('PLATNO slajd sa crtežom: "Gledaj u tablu", bez GET poteza i bez koda crteža kao vektora', async ({ page, mock, javnaMreza }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const tela: Promise<{ putanja: string; nizovi: string[] }>[] = [];
+    page.on('response', r => {
+      const putanja = new URL(r.url()).pathname;
+      if (putanja.endsWith('.js')) tela.push(r.text().then(t => ({ putanja, nizovi: nizoviCrteza(t) }), () => ({ putanja, nizovi: [] })));
+    });
+    const broker = await lazniBroker(
+      page, 'api/public/ws',
+      o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? pocetno('Mina') : undefined),
+      url => javnaMreza.ws.push(new URL(url).pathname),
+    );
+    await page.goto(`uzivo/${KOD}`);
+    await expect(page.getByText('Čekamo početak')).toBeVisible();
+    const tema = `/topic/izvodjenja/${IZVODJENJE}/javno`;
+    await expect.poll(() => broker.pretplate).toContain(tema);
+    broker.posalji(tema, { ...pocetno('Mina').javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PLATNO' });
+    await expect(page.getByText('Gledaj u tablu')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+
+    expect(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/')), 'samo javni GET-ovi').toEqual([]);
+    expect(mock.zahteviZa(/potezi/)).toEqual([]);
+    const procitano = await Promise.all(tela);
+    expect(procitano.some(x => /\/main-[^/]+\.js$/.test(x.putanja)), 'provera je pročitala glavni bundle').toBe(true);
+    expect(procitano.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`)).toEqual([]);
   });
 });
 
