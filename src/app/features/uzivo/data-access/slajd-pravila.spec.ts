@@ -1,6 +1,6 @@
 import {
   PORUKE, PRELAZ, greskeSlajda, greskeSlajdaZaSlanje, normalizujPrelaz, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja,
-  slajdIzCmd, slajdUCmd,
+  slajdIzCmd, slajdUCmd, trajanjeIzSekundi,
 } from './slajd-pravila';
 import { Prelaz, SlajdCmd, SlajdDetails } from './uzivo.models';
 import { platno as platnoFabrika } from './platno-podaci.testing';
@@ -175,6 +175,13 @@ describe('slajd-pravila', () => {
       ['GURANJE bez smera i trajanja', { efekat: 'GURANJE' }, P('GURANJE', 'DESNO', 500)],
     ])('normalizujPrelaz: %s', (_, ulaz, ocekivano) => {
       expect(normalizujPrelaz(ulaz as Prelaz | null | undefined)).toEqual(ocekivano);
+    });
+
+    it.each<[string, number]>([
+      ['0,8', 800], ['0.8', 800], [' 1,25 ', 1250], ['5', 5000], [',5', 500], ['2,', 2000], ['0,0004', 0], ['1,2345', 1235],
+      ['', 0], ['abc', 0], ['1,2,3', 0], ['-1', 0], ['1e3', 0], ['1 000', 0],
+    ])('trajanjeIzSekundi("%s") = %d ms (zarez ili tačka; neispravno -> 0, pa poruka)', (tekst, ms) => {
+      expect(trajanjeIzSekundi(tekst)).toBe(ms);
     });
 
     it('noviSlajd je bez prelaza za svaki tip', () => {

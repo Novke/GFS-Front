@@ -49,6 +49,12 @@ export function ulaziSlajda(s: NastavnickoStanje, sat: ServerskiSat | null, host
 /** Prelaz koji je počeo sa snimkom `kljuc` (verzija): efekat ulaznog slajda i slika odlaznog (`null`: sa prijave). */
 interface PrelazSlajda { kljuc: number; prelaz: Prelaz; odlazni: UlaziSlajda | null; }
 
+/** Omotač slajda u sceni (`.uz-scena-ulazni` ili `.uz-scena-odlazni`); `u` je `null` kad slajda više nema. */
+interface Omotac {
+  id: number | null; odlazni: boolean; pokret: PokretPrelaza | null;
+  animacija: { kljuc: number; grupa: number } | null; u: UlaziSlajda | null;
+}
+
 /**
  * Ono što projektor prikazuje, na 16:9 platnu (širinu daje roditelj): prijava, slajd, kraj (postolje ili "Hvala!"),
  * pa slojevi rang-liste (`L`), QR-a (`Q`) i crnog/belog ekrana. Ista komponenta je prikaz za publiku i umanjeni
@@ -71,6 +77,13 @@ interface PrelazSlajda { kljuc: number; prelaz: Prelaz; odlazni: UlaziSlajda | n
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
+  // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
+  // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3).
+  styles: `
+    .uz-scena-slajdovi { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+    .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
+    .uz-scena-ulazni { position: relative; z-index: 1; }
+  `,
   template: `
     @let s = stanje();
     @switch (s.prikaz) {
@@ -79,24 +92,20 @@ interface PrelazSlajda { kljuc: number; prelaz: Prelaz; odlazni: UlaziSlajda | n
       }
       @case ('SLAJD') {
         <div class="uz-scena-slajdovi">
-          @if (odlazni(); as o) {
-            <div class="uz-scena-odlazni" aria-hidden="true" [uzPrelaz]="o.pokret" [uzPrelazZadrzi]="true">
-              <app-slajd-prikaz [slajd]="o.slajd" [korak]="o.korak" [postepeno]="o.postepeno" [faza]="o.faza"
-                                [rezultat]="o.rezultat" [prikaziRezultat]="o.prikaziRezultat" [tacanPrikazan]="o.tacanPrikazan"
-                                [brojOdgovora]="o.brojOdgovora" [tajmer]="o.tajmer" [kodTraka]="o.kodTraka" [tema]="tema()" />
+          <!-- track po id-ju slajda: slajd sa ekrana postaje odlazni u ISTOJ instanci (formule, slike i potezi ostaju nacrtani) -->
+          @for (o of omotaci(); track o.id) {
+            <div [class]="o.odlazni ? 'uz-scena-odlazni' : 'uz-scena-ulazni'" [attr.aria-hidden]="o.odlazni ? 'true' : null"
+                 [appPrelaz]="o.pokret" [appPrelazZadrzi]="o.odlazni" (appPrelazKraj)="o.odlazni || krajPrelaza($event)">
+              @if (o.u; as u) {
+                <app-slajd-prikaz [slajd]="u.slajd" [korak]="u.korak" [postepeno]="u.postepeno" [faza]="u.faza"
+                                  [rezultat]="u.rezultat" [prikaziRezultat]="u.prikaziRezultat" [tacanPrikazan]="u.tacanPrikazan"
+                                  [brojOdgovora]="u.brojOdgovora" [tajmer]="u.tajmer" [kodTraka]="u.kodTraka"
+                                  [tema]="tema()" [animacija]="o.animacija" />
+              } @else {
+                <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
+              }
             </div>
           }
-          <div class="uz-scena-ulazni" [uzPrelaz]="ulazniPokret()" (uzPrelazKraj)="krajPrelaza($event)">
-            @if (trenutni(); as sl) {
-              @let u = ulazi()!;
-              <app-slajd-prikaz [slajd]="sl" [korak]="korakPrikaza()" [postepeno]="sl.postepeno" [faza]="u.faza"
-                                [rezultat]="u.rezultat" [prikaziRezultat]="u.prikaziRezultat" [tacanPrikazan]="u.tacanPrikazan"
-                                [brojOdgovora]="u.brojOdgovora" [tajmer]="u.tajmer" [kodTraka]="kodTraka()"
-                                [tema]="tema()" [animacija]="animacija()" />
-            } @else {
-              <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
-            }
-          </div>
         </div>
       }
       @case ('KRAJ') {
@@ -222,6 +231,20 @@ export class PublikaScenaComponent {
     return this.animiraj() && p.grupa !== null && !this.prelazUToku() ? { kljuc: p.stanje.verzija, grupa: p.grupa } : null;
   });
   protected readonly korakPrikaza = computed(() => (this.prelazUToku() && this.prelaz().grupa === 0 ? -1 : this.stanje().korak));
+  /**
+   * Omotači u sceni: bez prelaza samo ulazni, a dok prelaz traje [odlazni, ulazni]. `track` po id-ju slajda, pa slajd koji
+   * je bio na ekranu postaje odlazni u istoj instanci prikaza: njegove formule, slike i potezi ostaju nacrtani i u prvom
+   * kadru prelaza (nova instanca bi bar jedan kadar pokazala LaTeX izvor; recenzija F17, Minor 1).
+   */
+  protected readonly omotaci = computed<Omotac[]>(() => {
+    const sl = this.trenutni(), u = this.ulazi();
+    const ulazni: Omotac = {
+      id: sl?.id ?? null, odlazni: false, pokret: this.ulazniPokret(), animacija: this.animacija(),
+      u: sl && u ? { ...u, slajd: sl, korak: this.korakPrikaza(), postepeno: sl.postepeno, kodTraka: this.kodTraka() } : null,
+    };
+    const o = this.odlazni();
+    return o ? [{ id: o.slajd.id, odlazni: true, pokret: o.pokret, animacija: null, u: o }, ulazni] : [ulazni];
+  });
   protected readonly tema = computed(() => vazecaTema(this.stanje().tema));
 
   protected readonly host = computed(() => hostAplikacije());

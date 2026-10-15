@@ -1,5 +1,6 @@
 import { NS_DEKL } from './pptx-fabrika.testing';
 import { elementPrelaza, prelazSlajda } from './prelaz';
+import { NS } from './xml';
 
 /** Koren `p:sld` sa datim XML-om posle `p:clrMapOvr` (gde PowerPoint piše `p:transition` ili `mc:AlternateContent`). */
 function slajd(xml: string): Element {
@@ -54,6 +55,18 @@ describe('prelazSlajda (p:transition -> Prelaz)', () => {
 
   it('mc:Choice Requires="p14" se bira: p14:dur 2000 i p:push dir="d" -> GURANJE GORE 2000', () => {
     expect(prelazSlajda(alternativa('p14'))).toEqual({ prelaz: { efekat: 'GURANJE', smer: 'GORE', trajanjeMs: 2000 }, upozorenja: [] });
+  });
+
+  it('imenski prostori kao u PowerPointu (mc na mc:AlternateContent, p14 na mc:Choice, ne na korenu): Choice se bira', () => {
+    // stvaran oblik slajda PowerPointa 2010+: koren deklariše samo a, r i p
+    const xml = `<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}"><p:cSld><p:spTree/></p:cSld>`
+      + '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>'
+      + `<mc:AlternateContent xmlns:mc="${NS.mc}"><mc:Choice xmlns:p14="${NS.p14}" Requires="p14">`
+      + '<p:transition spd="slow" p14:dur="1600"><p:wipe dir="r"/></p:transition></mc:Choice>'
+      + '<mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent></p:sld>';
+    const koren = new DOMParser().parseFromString(xml, 'application/xml').documentElement;
+    expect(koren.lookupNamespaceURI('p14')).toBeNull();
+    expect(prelazSlajda(koren)).toEqual({ prelaz: { efekat: 'BRISANJE', smer: 'LEVO', trajanjeMs: 1600 }, upozorenja: [] });
   });
 
   it('mc:Choice sa nepoznatim zahtevom (p15) -> mc:Fallback: FADE 1000 (spd="slow")', () => {

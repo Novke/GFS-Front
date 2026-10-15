@@ -43,11 +43,11 @@ export function otvoriPregledPrelaza(dialog: MatDialog, podaci: PregledPrelazaPo
       }
       <div class="uz-scena-slajdovi uz-ed-prelaz-okvir rezim-dan uz-dan">
         @if (pre && uToku()) {
-          <div class="uz-scena-odlazni" aria-hidden="true" [uzPrelaz]="odlazniPokret()" [uzPrelazZadrzi]="true">
+          <div class="uz-scena-odlazni" aria-hidden="true" [appPrelaz]="odlazniPokret()" [appPrelazZadrzi]="true">
             <app-slajd-prikaz [slajd]="pre" [tema]="tema" [korak]="korakPre" />
           </div>
         }
-        <div class="uz-scena-ulazni" [uzPrelaz]="ulazniPokret()" (uzPrelazKraj)="zavrsen.set($event)">
+        <div class="uz-scena-ulazni" [appPrelaz]="ulazniPokret()" (appPrelazKraj)="zavrsen.set($event)">
           <app-slajd-prikaz [slajd]="slajd" [tema]="tema" [korak]="korak()" [animacija]="animacija()" />
         </div>
       </div>
@@ -57,7 +57,13 @@ export function otvoriPregledPrelaza(dialog: MatDialog, podaci: PregledPrelazaPo
       <button mat-flat-button type="button" mat-dialog-close>Zatvori</button>
     </mat-dialog-actions>
   `,
-  styles: `.uz-ed-prelaz-okvir { background: var(--ink); border-radius: 4px; }`,
+  // isti raspored omotača kao scena projektora (`PublikaScenaComponent`; stil je u komponentama, ne u početnom paketu)
+  styles: `
+    .uz-scena-slajdovi { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+    .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
+    .uz-scena-ulazni { position: relative; z-index: 1; }
+    .uz-ed-prelaz-okvir { background: var(--ink); border-radius: 4px; }
+  `,
 })
 export class PrelazPregledDialog {
   private readonly podaci = inject<PregledPrelazaPodaci>(MAT_DIALOG_DATA);

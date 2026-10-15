@@ -353,16 +353,17 @@ const smanjenoKretanjeUSistemu = vi.fn((q: string) => ({
  * kreće posle prelaza (dok traje, slajd se crta na koraku -1); nikad dva slajda zaglavljena na ekranu.
  */
 describe('PublikaScenaComponent (prelaz slajda)', () => {
-  interface Lazna { finished: Promise<unknown>; cancel: ReturnType<typeof vi.fn>; zavrsi(): void; }
+  /** `klasa`: klase elementa u trenutku poziva (omotač slajda menja klasu kad iz ulaznog postane odlazni, ista instanca). */
+  interface Lazna { finished: Promise<unknown>; cancel: ReturnType<typeof vi.fn>; zavrsi(): void; klasa: string; }
   let animate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    animate = vi.fn((): Lazna => {
+    animate = vi.fn(function (this: Element): Lazna {
       let zavrsi!: () => void;
       let odbij!: (e: unknown) => void;
       const finished = new Promise<unknown>((r, o) => { zavrsi = () => r(undefined); odbij = o; });
       finished.catch(() => undefined);
-      return { finished, cancel: vi.fn(() => odbij(new DOMException('Prekinuto', 'AbortError'))), zavrsi };
+      return { finished, cancel: vi.fn(() => odbij(new DOMException('Prekinuto', 'AbortError'))), zavrsi, klasa: this.className };
     });
     Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
   });
@@ -397,10 +398,10 @@ describe('PublikaScenaComponent (prelaz slajda)', () => {
       fixture.detectChanges();
       await fixture.whenStable();
     };
-    /** Pozivi `animate` na omotaču (`uz-scena-ulazni` / `uz-scena-odlazni`), ne na slojevima platna. */
+    /** Pozivi `animate` na omotaču (`uz-scena-ulazni` / `uz-scena-odlazni` u trenutku poziva), ne na slojevima platna. */
     const naOmotacu = (klasa: string) => animate.mock.calls
       .map((poziv, i) => ({ kadrovi: poziv[0] as Keyframe[], opcije: poziv[1], el: animate.mock.contexts[i] as Element, a: animate.mock.results[i].value as Lazna }))
-      .filter(p => p.el.classList.contains(klasa));
+      .filter(p => p.a.klasa.split(' ').includes(klasa));
     const zavrsiUlazni = async () => {
       const a = naOmotacu('uz-scena-ulazni').at(-1)!.a;
       a.zavrsi();
@@ -584,13 +585,39 @@ describe('PublikaScenaComponent (prelaz slajda)', () => {
     expect(t.prikazi().map(p => p.slajd().id)).toEqual([40, 50]);
   });
 
-  it('12. korak nazad tokom prelaza (slajd 2 -> 1): prelaz prekinut, bez novog, jedan prikaz', async () => {
+  it('12. korak nazad tokom prelaza (slajd 2 -> 1): prelaz prekinut, bez novog, jedan prikaz (slajd 1 u istoj instanci)', async () => {
     const t = await scena(na(slajd1, 0, 5));
+    const prvi = t.prikazi()[0];
     await t.posalji(na(slajd2, 1, 6));
+    const [od] = t.naOmotacu('uz-scena-odlazni');
     await t.posalji(na({ ...slajd1, prelaz: GURANJE }, 0, 7));
     expect(t.naOmotacu('uz-scena-ulazni').length).toBe(1);
     expect(t.prikazi().map(p => p.slajd().id)).toEqual([20]);
     expect(t.ulazni().animacija()).toBeNull();
+    // odlazni omotač slajda 1 je opet ulazni: ista instanca, krajnji kadar odlaska prekinut (bez upisanog stila)
+    expect(t.prikazi()[0]).toBe(prvi);
+    expect(od.a.cancel).toHaveBeenCalled();
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBeNull();
+    expect(t.el.querySelector('.uz-scena-ulazni')!.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('14. slajd sa ekrana postaje odlazni u istoj instanci prikaza i istom elementu (formule, slike, potezi ostaju nacrtani)', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    const prvi = t.prikazi()[0];
+    const domacin = t.el.querySelector('app-slajd-prikaz')!;
+    const omotac = t.el.querySelector('.uz-scena-ulazni')!;
+    await t.posalji(na(slajd2, 1, 6));
+    expect(t.prikazi()[0]).toBe(prvi);
+    expect(t.el.querySelector('.uz-scena-odlazni app-slajd-prikaz')).toBe(domacin);
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBe(omotac);
+    expect(omotac.getAttribute('aria-hidden')).toBe('true');
+    // odlazni je ispred ulaznog u DOM-u (ulazni iznad njega, z-index), ulazni je nov prikaz slajda 2
+    expect(omotac.nextElementSibling!.classList).toContain('uz-scena-ulazni');
+    expect(t.ulazni()).not.toBe(prvi);
+    expect(prvi.animacija()).toBeNull();
+    await t.zavrsiUlazni();
+    expect(t.prikazi().length).toBe(1);
+    expect(domacin.isConnected).toBe(false);
   });
 
   it('13. FADE: animira se samo ulazni (providnost), odlazni miruje ispod', async () => {

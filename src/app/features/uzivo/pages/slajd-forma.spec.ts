@@ -116,7 +116,7 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
   const pregled = () => [...el().querySelectorAll('button')].find(b => b.textContent?.trim() === 'Pregledaj prelaz');
   const poslednji = () => emitovano[emitovano.length - 1];
 
-  async function napravi(s: SlajdDetails): Promise<void> {
+  async function napravi(s: SlajdDetails, stanje = DeferBlockState.Complete): Promise<void> {
     TestBed.configureTestingModule({
       imports: [SlajdFormaComponent],
       providers: [provideHttpClient(), { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } }],
@@ -130,7 +130,7 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
     f.detectChanges();
     const blokovi = await f.getDeferBlocks();
     expect(blokovi.length).toBe(1);
-    await blokovi[0].render(DeferBlockState.Complete);
+    await blokovi[0].render(stanje);
     await f.whenStable();
   }
 
@@ -165,7 +165,7 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
     await napravi(slajd('INFO'));
     await izaberi('Efekat', 'Guranje');
     expect(vrednostIzbora('Smer')).toBe('Zdesna');
-    expect(polje('Trajanje (s)')!.querySelector('input')!.value).toBe('0.5');
+    expect(polje('Trajanje (s)')!.querySelector('input')!.value).toBe('0,5');
     expect(poslednji().prelaz).toEqual({ efekat: 'GURANJE', smer: 'DESNO', trajanjeMs: 500 });
     expect(poslednji().naslov).toBe('Uvod');
     await izaberi('Smer', 'Odozgo');
@@ -190,7 +190,7 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
     await napravi(slajd('INFO', p));
     expect(vrednostIzbora('Efekat')).toBe('Brisanje');
     expect(vrednostIzbora('Smer')).toBe('Sleva');
-    expect(polje('Trajanje (s)')!.querySelector('input')!.value).toBe('1.2');
+    expect(polje('Trajanje (s)')!.querySelector('input')!.value).toBe('1,2');
     const beleske = el().querySelector('textarea[formcontrolname=beleske]') as HTMLTextAreaElement;
     beleske.value = 'Nove';
     beleske.dispatchEvent(new Event('input'));
@@ -216,6 +216,51 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
     expect(el().querySelector('.uz-ed-greske')).toBeNull();
     await sekunde('5.1');
     expect(el().querySelector('.uz-ed-greske')!.textContent).toContain(PORUKE.prelaz);
+  });
+
+  it('decimalni zarez: "0,8" daje 800 ms (tekstualno polje, ne type=number), "1.25" 1250; prazno i "abc" daju 0 ms i grešku', async () => {
+    await napravi(slajd('INFO', { efekat: 'FADE', smer: null, trajanjeMs: 500 }));
+    const input = polje('Trajanje (s)')!.querySelector('input')!;
+    expect(input.type).toBe('text');
+    expect(input.inputMode).toBe('decimal');
+    await sekunde('0,8');
+    expect(poslednji().prelaz).toEqual({ efekat: 'FADE', smer: null, trajanjeMs: 800 });
+    expect(el().querySelector('.uz-ed-greske')).toBeNull();
+    await sekunde(' 1.25 ');
+    expect(poslednji().prelaz!.trajanjeMs).toBe(1250);
+    for (const v of ['', 'abc', '1,2,3', '-1']) {
+      await sekunde(v);
+      expect(poslednji().prelaz!.trajanjeMs, v).toBe(0);
+      expect(el().querySelector('.uz-ed-greske')!.textContent, v).toContain(PORUKE.prelaz);
+    }
+  });
+
+  it('greška trajanja je i na samom polju: mat-error i aria-invalid, i nestaju kad je trajanje ispravno', async () => {
+    await napravi(slajd('INFO', { efekat: 'GURANJE', smer: 'DESNO', trajanjeMs: 500 }));
+    const input = () => polje('Trajanje (s)')!.querySelector('input')!;
+    expect(input().getAttribute('aria-invalid')).toBe('false');
+    expect(polje('Trajanje (s)')!.querySelector('mat-error')).toBeNull();
+    await sekunde('9');
+    f.detectChanges();
+    expect(input().getAttribute('aria-invalid')).toBe('true');
+    expect(polje('Trajanje (s)')!.querySelector('mat-error')!.textContent).toContain('Unesi od 0,1 do 5 (npr. 0,8).');
+    await sekunde('0,1');
+    f.detectChanges();
+    expect(input().getAttribute('aria-invalid')).toBe('false');
+    expect(polje('Trajanje (s)')!.querySelector('mat-error')).toBeNull();
+  });
+
+  it('chunk polja prelaza ne stigne (@error): poruka umesto polja, a izmena beleški i dalje nosi prelaz', async () => {
+    const p: Prelaz = { efekat: 'BRISANJE', smer: 'GORE', trajanjeMs: 900 };
+    await napravi(slajd('INFO', p), DeferBlockState.Error);
+    expect(el().querySelector('fieldset.uz-ed-prelaz')).toBeNull();
+    const poruka = el().querySelector('.uz-ed-greska')!;
+    expect(poruka.getAttribute('role')).toBe('alert');
+    expect(poruka.textContent).toContain('Polja prelaza nisu učitana. Osveži stranicu i pokušaj ponovo.');
+    const beleske = el().querySelector('textarea[formcontrolname=beleske]') as HTMLTextAreaElement;
+    beleske.value = 'Nove';
+    beleske.dispatchEvent(new Event('input'));
+    expect(poslednji().prelaz).toEqual(p);
   });
 
   it('"Pregledaj prelaz" emituje pregledPrelaza, bez izmene slajda', async () => {

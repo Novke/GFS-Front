@@ -165,6 +165,15 @@ export function greskePitanja(p: PitanjeCmd): string[] {
   return greske;
 }
 
+/**
+ * Trajanje prelaza iz polja "Trajanje (s)" (tekst, ne `type="number"`: decimalni zarez bi tamo dao prazno polje): zarez ili
+ * tačka; prazan ili neispravan unos daje 0 ms, pa `PORUKE.prelaz`.
+ */
+export function trajanjeIzSekundi(tekst: string): number {
+  const t = tekst.trim().replace(',', '.');
+  return /^(\d+(\.\d*)?|\.\d+)$/.test(t) ? Math.round(Number(t) * 1000) : 0;
+}
+
 /** Isto kao `SlajdPP.normalizuj(Prelaz)`: bez efekta -> null, FADE bez smera, inače DESNO, trajanje 500. */
 export function normalizujPrelaz(p: Prelaz | null | undefined): Prelaz | null {
   if (!p?.efekat) return null;

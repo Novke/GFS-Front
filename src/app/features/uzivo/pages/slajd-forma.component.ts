@@ -7,7 +7,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { PRELAZ, greskeSlajda, novoPitanje, slajdUCmd } from '../data-access/slajd-pravila';
+import { PRELAZ, greskeSlajda, novoPitanje, slajdUCmd, trajanjeIzSekundi } from '../data-access/slajd-pravila';
 import { MedijInfo, SlajdCmd, SlajdDetails, TipPrelaza, TipSlajda } from '../data-access/uzivo.models';
 import { PitanjeForma, PitanjeFormaComponent, pitanjeForma, pitanjeIzForme } from './pitanje-forma.component';
 // samo u @defer bloku (i `import type`): polja prelaza su lenji chunk, stranica editora ne raste
@@ -66,6 +66,8 @@ const nn = { nonNullable: true } as const;
       }
       @defer (on immediate) {
         <app-prelaz-polja [kontrole]="forma.controls" [efekat]="efekatPrelaza()" (pregled)="pregledPrelaza.emit()" />
+      } @error {
+        <p class="uz-ed-greska" role="alert">Polja prelaza nisu učitana. Osveži stranicu i pokušaj ponovo.</p>
       }
       <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
         <mat-label>Beleške za predavača</mat-label>
@@ -115,7 +117,7 @@ export class SlajdFormaComponent implements OnInit {
       pitanje: pitanjeForma(cmd.pitanje ?? novoPitanje('JEDAN_TACAN')),
       prelazEfekat: new FormControl<TipPrelaza | 'NEMA'>(cmd.prelaz?.efekat ?? 'NEMA', nn),
       prelazSmer: new FormControl(cmd.prelaz?.smer ?? 'DESNO', nn),
-      prelazSekunde: new FormControl((cmd.prelaz?.trajanjeMs ?? PRELAZ.podrazumevano) / 1000, nn),
+      prelazSekunde: new FormControl(String((cmd.prelaz?.trajanjeMs ?? PRELAZ.podrazumevano) / 1000).replace('.', ','), nn),
     });
     this.efekatPrelaza.set(this.forma.controls.prelazEfekat.value);
     this.greske.set(greskeSlajda(this.cmd()));
@@ -142,9 +144,9 @@ export class SlajdFormaComponent implements OnInit {
       postepeno: v.postepeno,
       pitanje: this.tip === 'PITANJE' ? pitanjeIzForme(this.forma.controls.pitanje) : null,
       platno: this.platno,
-      // prazno polje trajanja (null) daje 0 ms, pa poruku servera ispod forme
+      // zarez ili tačka; prazno ili neispravno polje daje 0 ms, pa poruku servera ispod forme
       prelaz: v.prelazEfekat === 'NEMA' ? null : {
-        efekat: v.prelazEfekat, smer: v.prelazEfekat === 'FADE' ? null : v.prelazSmer, trajanjeMs: Math.round(v.prelazSekunde * 1000),
+        efekat: v.prelazEfekat, smer: v.prelazEfekat === 'FADE' ? null : v.prelazSmer, trajanjeMs: trajanjeIzSekundi(v.prelazSekunde),
       },
     };
   }

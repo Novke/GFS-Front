@@ -602,12 +602,17 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   }
 
   /** "Pregledaj prelaz" (F17): prethodni i izabrani slajd (lokalno, sa prelazom iz forme) u lenjom dijalogu. */
+  /** Dvoklik (ili klik dok se chunk učitava) ne otvara drugi dijalog (recenzija F17, Minor 5). */
+  private pregledSeOtvara = false;
+
   protected pregledajPrelaz(s: SlajdDetails): void {
+    if (this.pregledSeOtvara || this.dialog.openDialogs.length) return;
+    this.pregledSeOtvara = true;
     const l = this.store.slajdovi(), i = l.findIndex(x => x.id === s.id);
-    import('./prelaz-pregled.dialog').then(
-      m => m.otvoriPregledPrelaza(this.dialog, { pre: l[i - 1] ?? null, slajd: l[i] ?? s, tema: vazecaTema(this.store.prezentacija()?.tema) }),
-      () => this.obavestenja.greska('Pregled prelaza nije učitan. Osveži stranicu i pokušaj ponovo.'),
-    );
+    import('./prelaz-pregled.dialog')
+      .then(m => m.otvoriPregledPrelaza(this.dialog, { pre: l[i - 1] ?? null, slajd: l[i] ?? s, tema: vazecaTema(this.store.prezentacija()?.tema) }))
+      .catch(() => this.obavestenja.greska('Pregled prelaza nije učitan. Osveži stranicu i pokušaj ponovo.'))
+      .finally(() => (this.pregledSeOtvara = false));
   }
 
   /** Uvoz iz PDF-a (faza 5d): isti tok kao PowerPoint; dijalog i pdf.js su lenji chunk-ovi (`UvozPdfOtvarac`). */

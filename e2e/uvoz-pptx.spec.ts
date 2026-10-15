@@ -9,7 +9,10 @@ const PREZENTACIJA = 5;
 /** Prvi id koji mok dodeljuje (nova prezentacija). */
 const NOVA = 10_000;
 
-interface SlajdUvoza { tip: string; beleske: string | null; platno: { slojevi: { tip: string; medijId?: string }[]; animacije: unknown[] } }
+interface SlajdUvoza {
+  tip: string; beleske: string | null; platno: { slojevi: { tip: string; medijId?: string }[]; animacije: unknown[] };
+  prelaz: { efekat: string; smer: string | null; trajanjeMs: number } | null;
+}
 interface TeloUvoza { posle: number | null; slajdovi: SlajdUvoza[] }
 
 const dijalog = (page: Page) => page.locator('mat-dialog-container').filter({ has: page.getByRole('heading', { name: 'Uvoz iz PowerPointa' }) });
@@ -75,6 +78,8 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
       expect(s.platno.slojevi.filter(x => x.tip === 'SLIKA').map(x => x.medijId)).toEqual([medijId]);
     }
     expect(telo.slajdovi[0].platno.animacije).toHaveLength(3);
+    // prelaz (5e): `<p:transition spd="med"><p:push dir="u"/>` na drugom slajdu; prvi je bez prelaza (ključ `null`)
+    expect(telo.slajdovi.map(s => s.prelaz)).toEqual([null, { efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 750 }]);
 
     await d.getByRole('button', { name: 'Kopiraj izveštaj' }).click();
     await expect(page.getByText('Izveštaj je kopiran.')).toBeVisible();

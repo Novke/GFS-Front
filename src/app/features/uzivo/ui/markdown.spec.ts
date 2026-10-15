@@ -1,4 +1,4 @@
-import { GRANICA_PROLAZI_MS, GRANICA_ODBIJENE_MS } from './formula-vreme.testing';
+import { GRANICA_MARKDOWN_MS, GRANICA_PROLAZI_MS } from './formula-vreme.testing';
 import { MAX_TEKST_SA_FORMULAMA, markdownSaFormulama, renderMarkdown } from './markdown';
 
 describe('renderMarkdown', () => {
@@ -160,7 +160,7 @@ describe('markdownSaFormulama', () => {
       expect(ulaz.length).toBeLessThanOrEqual(2000);
       const pocetak = performance.now();
       markdownSaFormulama(ulaz);
-      expect(performance.now() - pocetak, ulaz.slice(0, 12)).toBeLessThan(GRANICA_ODBIJENE_MS);
+      expect(performance.now() - pocetak, ulaz.slice(0, 12)).toBeLessThan(GRANICA_MARKDOWN_MS);
     }
   });
 });

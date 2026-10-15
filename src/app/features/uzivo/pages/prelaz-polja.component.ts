@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { AbstractControl, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import type { ErrorStateMatcher } from '@angular/material/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { PRELAZ, trajanjeIzSekundi } from '../data-access/slajd-pravila';
 import type { SmerPrelaza, TipPrelaza } from '../data-access/uzivo.models';
 import { NAZIVI_PRELAZA, NAZIVI_SMERA_PRELAZA } from '../ui/prelaz-slajda';
 
@@ -11,7 +13,8 @@ import { NAZIVI_PRELAZA, NAZIVI_SMERA_PRELAZA } from '../ui/prelaz-slajda';
 export interface KontrolePrelaza {
   prelazEfekat: FormControl<TipPrelaza | 'NEMA'>;
   prelazSmer: FormControl<SmerPrelaza>;
-  prelazSekunde: FormControl<number>;
+  /** Tekst polja "Trajanje (s)": decimalni zarez ili tačka (`trajanjeIzSekundi`). */
+  prelazSekunde: FormControl<string>;
 }
 
 const izbor = <K extends string>(nazivi: Record<K, string>) =>
@@ -49,7 +52,9 @@ const izbor = <K extends string>(nazivi: Record<K, string>) =>
         @if (efekat() !== 'NEMA') {
           <mat-form-field class="uz-ed-polje-kratko" subscriptSizing="dynamic">
             <mat-label>Trajanje (s)</mat-label>
-            <input matInput type="number" inputmode="decimal" min="0.1" max="5" step="0.1" [formControl]="k.prelazSekunde">
+            <input matInput inputmode="decimal" autocomplete="off" spellcheck="false" [formControl]="k.prelazSekunde"
+                   [errorStateMatcher]="greskaTrajanja">
+            <mat-error>Unesi od 0,1 do 5 (npr. 0,8).</mat-error>
           </mat-form-field>
           <button mat-stroked-button type="button" (click)="pregled.emit()">Pregledaj prelaz</button>
         }
@@ -64,4 +69,14 @@ export class PrelazPoljaComponent {
 
   protected readonly efekti = izbor(NAZIVI_PRELAZA);
   protected readonly smerovi = izbor(NAZIVI_SMERA_PRELAZA);
+  /**
+   * Greška na samom polju (`mat-error`, `aria-invalid`) čim je trajanje van 0,1-5 s; ista provera kao `greskeSlajda` (poruka
+   * ostaje i u zbirnoj listi forme). Matcher, ne validator: kontrola pripada formi slajda, a pravilo važi i pre ovog chunk-a.
+   */
+  protected readonly greskaTrajanja: ErrorStateMatcher = {
+    isErrorState: (c: AbstractControl | null) => {
+      const ms = trajanjeIzSekundi(String(c?.value ?? ''));
+      return ms < PRELAZ.min || ms > PRELAZ.max;
+    },
+  };
 }

@@ -619,7 +619,8 @@ over STOMP; teacher commands are REST.
   server's text), checked in `greskeSlajda` after the notes and before the type branch (so for PLATNO too); `slajdIzCmd`
   normalises it for the local view. **`PUT /slajdovi/{id}` is a full replacement, so a command without `prelaz` deletes it**:
   `slajdUCmd` copies it (`?? null`: a response or fixture without the field gives `null`, never a missing key), the form always
-  sends its own fields, `izmeniPlatno`, duplicating and leaving the editor reuse the last command, and "Poništi pretvaranje"
+  sends its own fields, `izmeniPlatno`, duplicating a local (unsaved) copy and leaving the editor reuse the last command (a saved
+  slide is duplicated by the server, which copies the transition), and "Poništi pretvaranje"
   sends the slide's **current** transition (changed in the PLATNO form after converting), like the notes. `EditorStore` and
   page specs cover each path (block "prelaz preživi svaki PUT"); `e2e/mock-api.ts` replaces it on PUT like the server, so an
   e2e PUT without it would lose it. The PDF import (`uvoz-pdf/strane.ts`) sends `prelaz: null`. **The PPTX import (F18)**
@@ -628,10 +629,15 @@ over STOMP; teacher commands are REST.
   `p:wipe` -> BRISANJE, `p:cut`/empty -> `null`, any other effect -> FADE plus `PRELAZ_SLAJDA` on that slide; `dir` is the
   direction of motion (`l` -> DESNO, `r` -> LEVO, `u` -> DOLE, `d` -> GORE, default `l`); duration from `p14:dur`, otherwise
   `spd` (fast 500, med 750, slow 1000), clamped to 100-5000; `advTm`/`advClick="0"` and `p:sndAc` are dropped with a
-  `PRELAZ_SLAJDA` warning (no more file-wide "transitions are not imported" warning). The
+  `PRELAZ_SLAJDA` warning per slide (no more file-wide "transitions are not imported" warning; a deck with `advTm` on every
+  slide gets one warning per slide). The
   form fields ("Prelaz na ovaj slajd": Efekat with "Bez prelaza", Smer only for GURANJE/BRISANJE, "Trajanje (s)" 0.1-5,
   "Pregledaj prelaz" -> `SlajdFormaComponent.pregledPrelaza`) live in `pages/prelaz-polja.component.ts`, rendered by the form
-  in `@defer (on immediate)`, so they are a lazy chunk (~3 kB) and the editor page file grows only by the controls (~0.9 kB);
+  in `@defer (on immediate)` with an `@error` line ("Polja prelaza nisu učitana…"), so they are a lazy chunk (~3 kB) and the
+  editor page file grows only by the controls (~0.9 kB). "Trajanje (s)" is a **text** field (`inputmode="decimal"`, value
+  shown with a decimal comma): `type="number"` gives an empty value for "0,8" in many locales, which became 0 ms;
+  `slajd-pravila` `trajanjeIzSekundi` reads comma or dot (empty or invalid -> 0 ms -> `PORUKE.prelaz`), and the field itself
+  shows the error (`mat-error`, `aria-invalid`) through an `ErrorStateMatcher` with the same 100-5000 ms rule;
   the controls stay in the slide form (`[formControl]`, the child cannot use `formControlName` across the component
   boundary) and the form passes the effect as a signal. Names: `ui/prelaz-slajda.ts` (`NAZIVI_PRELAZA`, `NAZIVI_SMERA_PRELAZA`).
   Specs: the form spec renders the block with `DeferBlockBehavior.Manual` + `render(Complete)`; `prezentacija-editor.spec.ts`
@@ -641,10 +647,15 @@ over STOMP; teacher commands are REST.
   `smanjenoKretanje`, shared with `platno-prikaz`) and only for exactly one slide forward (`platno-koraci` `napredNaSlajd`, the
   same rule as group 0: PRIJAVA -> first slide or index + 1, step 0, newer version, another slide). `publika-scena` draws the
   SLAJD branch in `.uz-scena-slajdovi` (grid, both wrappers in one cell, `.uz-scena-ulazni` above with `z-index: 1`; without a
-  transition only the incoming wrapper exists, so the scene looks as before): the outgoing slide (`aria-hidden`) is drawn from the
+  transition only the incoming wrapper exists, so the scene looks as before; these three rules are in the component's `styles`
+  and copied in the preview dialog, **not** in the global `uzivo-izvodjenje.css`, so the initial bundle and the phone do not get
+  them). The wrappers are an `@for` tracked by slide id (`omotaci`): the slide on screen **becomes the outgoing one in the same
+  `app-slajd-prikaz` instance and element** (only its class, `aria-hidden` and inputs change), so its formulas, images and strokes
+  stay drawn in the first frame (a new instance showed the LaTeX source for at least one frame; e2e checks every
+  `MutationObserver` call). The outgoing slide (`aria-hidden`) is drawn from the
   **previous** snapshot's inputs (`ulaziSlajda`: phase, public result, correct answer, answer count, timer, code strip; strokes from
-  the cache), and `ui/prelaz.directive.ts` (`[uzPrelaz]`, contract name, hence the one `eslint-disable` for the `app` prefix)
-  runs one WAAPI animation per wrapper (`kadroviPrelaza`: only `transform`/`opacity`/`clip-path` of the whole wrapper, so formula
+  the cache), and `ui/prelaz.directive.ts` (`[appPrelaz]`, `appPrelazZadrzi`, `appPrelazKraj`; the plan's contract called it
+  `[uzPrelaz]`, renamed to the project's `app` prefix without an `eslint-disable`) runs one WAAPI animation per wrapper (`kadroviPrelaza`: only `transform`/`opacity`/`clip-path` of the whole wrapper, so formula
   `k` measuring, tab measuring and stroke paths inside see the same layout; translation is uniform, `getBoundingClientRect`
   differences stay the same). After the end the incoming animation is `cancel()`ed (no inline style, no animation left), the
   outgoing one keeps its last frame until its wrapper is removed. **Group 0 starts after the transition** (PowerPoint): while it
@@ -652,14 +663,27 @@ over STOMP; teacher commands are REST.
   keeps view, slide and step (participant joins, new answer) carries the transition and group 0 on; any other snapshot or a
   reconnect epoch interrupts it (end state) and **never starts a new transition while one runs** (fast
   paging); a transition is only created when it will actually play (`animiraj`, no reduced motion), so "running" cannot stick.
+  Known: three or more quick clicks alternate transition and cut (the interrupting snapshot clears the transition, so the next
+  step may start one again); never two slides stuck on screen.
   The `zavrsen` key is read `untracked` in the `linkedSignal`, otherwise the end of the transition would recompute it and
   drop group 0. Editor: "Pregledaj prelaz" -> `pregledajPrelaz` (dynamic `import()` of `pages/prelaz-pregled.dialog.ts`, a
   lazy chunk of ~3.7 kB; page file +426 B on 2026-10-15) with the previous slide, the selected slide from the store (the
   form's transition before saving) and the theme; the dialog uses the same wrappers, directive and keyframes, plays on open,
   "Ponovi" = new key, a PLATNO previous slide is drawn after all steps, group 0 of a PLATNO slide plays after the transition,
-  the form's duration is clamped to 0.1-5 s, `autoFocus: false` and focus on "Ponovi" (`afterNextRender`). Specs fake
+  the form's duration is clamped to 0.1-5 s, `autoFocus: false` and focus on "Ponovi" (`afterNextRender`); a double click (or a
+  click while the chunk loads, or with any dialog open) opens exactly one dialog (`pregledSeOtvara`, `openDialogs`). Specs fake
   `Element.prototype.animate` with a manually resolved `finished` (`cancel` rejects it, like WAAPI) and find the wrapper
-  calls through `animate.mock.contexts`; a fake `matchMedia` needs `addListener`/`removeListener` (CDK `BreakpointObserver`).
+  calls through `animate.mock.contexts`, with the wrapper's class recorded **at call time** (a wrapper changes class when it
+  becomes the outgoing one); a fake `matchMedia` needs `addListener`/`removeListener` (CDK `BreakpointObserver`).
+  **E2E (F19):** `e2e/uzivo-prelaz.spec.ts` over the live fixture (`uzivo-izvodjenje.json`: 104 GURANJE from the right 3000 ms,
+  105 FADE 3000 ms with group 0 = title FADE 2000 ms after previous; 3 s so "transition running" surely exists while the test
+  reads it). "Never two slides" reads a peak (`window.__vrhunac`, a `MutationObserver` on the scene installed **before** the
+  command), not a sample; positive checks use `expect.poll` over `document.getAnimations()` targets (`.uz-scena-ulazni`,
+  `.uz-scena-odlazni`, `.uz-pl-sloj`). Covered: forward with two wrappers then one, back (no transition), reduced motion,
+  console, group 0 only after the transition, outgoing question with formulas and an image drawn in every frame, and the editor
+  form (comma duration -> PUT 800 ms, field error, double click -> one preview dialog, focus "Ponovi", Esc). The synthetic PPTX
+  (`e2e/pptx-uzorak.ts`) has `<p:push dir="u"/>` `spd="med"` on slide 2 (`uvoz-pptx.spec.ts`: `{GURANJE, DOLE, 750}`), and
+  `pristupacnost.spec.ts` scans the transition fields (with the field error) and the preview dialog, day and night.
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and
@@ -670,7 +694,9 @@ over STOMP; teacher commands are REST.
   `uvoz-pptx/crtez.ts`) gets 50% opacity like PowerPoint's PDF export. `ui/platno-tabovi.ts` measures every paragraph with a
   tab after drawing (tab stops as in PowerPoint; CSS `tab-size` differs), so tab paragraphs use `uz-pl-tab` spans.
 - Styles are global (`uzivo-tokeni.css`, `pages/uzivo-editor.css`, `pages/uzivo-izvodjenje.css`, `javno/uzivo-javno.css`,
-  `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Colours only through
+  `@use`d from `src/styles.scss`; class prefix `uz-`), so components stay under the style budget. Exception: rules only a lazy
+  teacher screen needs (the transition wrappers of `publika-scena` and the preview dialog) go into that component's `styles`, so
+  the initial bundle (and the phone, which loads the global stylesheet) does not carry them. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the
   text colour, which is inherited as a computed value). The black/white screens (keys B/W) are deliberately pure black and
   white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared

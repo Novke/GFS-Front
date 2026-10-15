@@ -13,3 +13,9 @@ export const GRANICA_PROLAZI_MS = 1500;
  * kvadratni regex na 19 999 znakova traje ~178 ms), a linearni prolaz traje par ms, pa je rezerva za CI velika.
  */
 export const GRANICA_TIK_ISPOD_MS = 100;
+/**
+ * Ceo Markdown sa formulama (`marked` + maska formula, bez MathLive-a) za najgori ulaz do 2000 znakova: lokalno ~20-60 ms, a
+ * pod opterećenjem servera izmereno i 114 ms (F16), pa 100 ms nije bilo dovoljno za CI (2-3x sporiji). Greška koju test hvata
+ * je katastrofalno (eksponencijalno) vraćanje regexa: sekunde i više, daleko iznad ove granice.
+ */
+export const GRANICA_MARKDOWN_MS = 400;

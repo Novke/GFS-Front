@@ -319,11 +319,13 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     fixture.detectChanges();
     const open = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({} as MatDialogRef<unknown>);
     const el = fixture.nativeElement as HTMLElement;
-    const trajanje = el.querySelector('.uz-ed-prelaz input[type=number]') as HTMLInputElement;
-    trajanje.value = '1.2';
+    const trajanje = el.querySelector('.uz-ed-prelaz input[inputmode=decimal]') as HTMLInputElement;
+    trajanje.value = '1,2';
     trajanje.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     const dugme = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-prelaz button')].find(b => b.textContent?.trim() === 'Pregledaj prelaz')!;
+    // dvoklik: drugi klik stiže dok se chunk dijaloga još učitava -> tačno jedan dijalog (recenzija F17, Minor 5)
+    dugme.click();
     dugme.click();
     await isprazniMikrozadatke();
     expect(open).toHaveBeenCalledTimes(1);
@@ -334,6 +336,15 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(konfig.data.slajd.id).toBe(12);
     expect(konfig.data.slajd.prelaz).toEqual({ ...P, trajanjeMs: 1200 });
     expect(konfig.data.tema).toBe('PONOC');
+    // posle otvaranja: dok je neki dijalog otvoren, nov klik ne otvara drugi; kad se zatvori, klik opet otvara
+    const otvoreni = vi.spyOn(TestBed.inject(MatDialog), 'openDialogs', 'get').mockReturnValue([{} as MatDialogRef<unknown>]);
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(1);
+    otvoreni.mockReturnValue([]);
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(2);
     await pomeriSat(800);
     http.expectOne('api/slajdovi/12').flush({ ...platnoSlajd, prelaz: { ...P, trajanjeMs: 1200 } });
     await pomeriSat(800);
@@ -981,9 +992,8 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
   afterEach(() => http.verify());
 
   it('sličica PLATNO slajda prikazuje sve slojeve (i one sa ULAZ animacijom), a sakrivena je od čitača', async () => {
+    // svi `@defer` blokovi (sličice, polja prelaza u formi, ...); njihov broj nije predmet testa, sličice se broje ispod
     const blokovi = await fixture.getDeferBlocks();
-    // dve sličice i polja prelaza u formi izabranog slajda (F16, lenji chunk)
-    expect(blokovi.length).toBe(3);
     for (const b of blokovi) await b.render(DeferBlockState.Complete);
     await fixture.whenStable();
     const slicice = [...el().querySelectorAll<HTMLElement>('.uz-ed-slicica')];

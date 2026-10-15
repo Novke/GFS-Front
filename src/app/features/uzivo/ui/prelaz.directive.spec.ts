@@ -16,7 +16,7 @@ function laznaAnimacija(): LaznaAnimacija {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PrelazDirective],
-  template: `<div class="omotac" [uzPrelaz]="pokret()" [uzPrelazZadrzi]="zadrzi()" (uzPrelazKraj)="krajevi.push($event)"></div>`,
+  template: `<div class="omotac" [appPrelaz]="pokret()" [appPrelazZadrzi]="zadrzi()" (appPrelazKraj)="krajevi.push($event)"></div>`,
 })
 class Domacin {
   readonly pokret = signal<PokretPrelaza | null>(null);
@@ -72,7 +72,7 @@ describe('PrelazDirective', () => {
     expect(animacije[0].cancel).toHaveBeenCalledTimes(1);
   });
 
-  it('uzPrelazZadrzi: krajnji kadar ostaje (bez cancel) dok omotač ne nestane', async () => {
+  it('appPrelazZadrzi: krajnji kadar ostaje (bez cancel) dok omotač ne nestane', async () => {
     const { d, postavi, fixture } = await domacin();
     await postavi({ kljuc: 3, kadrovi, trajanjeMs: 500 }, true);
     animacije[0].zavrsi();

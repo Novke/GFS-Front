@@ -127,7 +127,7 @@ export function ucitajPodatke(): Podaci {
     prijave: onboarding.prijave,
     kontrolnaTabla: ucitaj('kontrolna-tabla.json'),
     izvodjenja: ucitaj<{ izvodjenja: UzivoIzvodjenje[] }>('uzivo.json').izvodjenja,
-    // server uvek šalje `prelaz` (i kad je null); fikstura ga navodi samo kad ga slajd ima
+    // server uvek šalje `prelaz` (i kad je null); fikstura ga ima na svakom slajdu, normalizacija je kao na serveru
     prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
       .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],

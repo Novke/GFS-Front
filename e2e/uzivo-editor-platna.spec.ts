@@ -834,7 +834,7 @@ test.describe('uživo: prelaz slajda u formi (5e, F16)', () => {
     await expect(editor(page)).toBeVisible();
     await expect(grupa.getByRole('combobox', { name: 'Efekat' })).toContainText('Guranje');
     await expect(grupa.getByRole('combobox', { name: 'Smer' })).toContainText('Sleva');
-    await expect(grupa.getByRole('spinbutton', { name: 'Trajanje (s)' })).toHaveValue('0.7');
+    await expect(grupa.getByRole('textbox', { name: 'Trajanje (s)' })).toHaveValue('0,7');
     const beleske = page.getByRole('textbox', { name: 'Beleške za predavača' });
     await beleske.fill('Posle prelaza');
     await page.keyboard.press('Control+s');
