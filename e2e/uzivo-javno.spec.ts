@@ -160,7 +160,6 @@ test.describe('javni uživo: pitanje sa formulom na telefonu (5a)', () => {
     // dugmad opcija: formula je nacrtana, a čitač ekrana dobija tekst bez `$` (`tekstZaCitac`)
     await expect(page.locator('.uz-st-opcija .uz-formula--spremna')).toHaveCount(OPCIJE_SA_FORMULOM.length);
     await expect(page.locator('button.uz-st-opcija').first()).toHaveAccessibleName(/: 11$/);
-    await page.waitForLoadState('networkidle');
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
     // 2. svi `/api/` zahtevi su GET /api/public/uzivo/..., WebSocket samo /api/public/ws, nijedan 401
@@ -170,11 +169,12 @@ test.describe('javni uživo: pitanje sa formulom na telefonu (5a)', () => {
     // 3. nijedan zahtev van porekla stranice; KaTeX fontovi samo iz assets/mathlive/fonts/
     expect(spolja, 'zahtevi van porekla stranice').toEqual([]);
     const sve = await Promise.all([...tela]);
-    // `media/*.woff2` su fontovi same aplikacije (globalni stil, npr. IBM Plex Sans 600 za tekst pitanja): stižu i za pitanje
-    // bez formule, pa nisu deo mreže formule; svaki drugi font mora biti KaTeX iz assets/mathlive/fonts/
-    const ucitano = sve.filter(x => !/^\/media\/[^/]+\.woff2$/.test(x.putanja));
+    // `media/ibm-plex-*.woff2` su fontovi same aplikacije (globalni stil, npr. IBM Plex Sans 600 za tekst pitanja): stižu i za
+    // pitanje bez formule, pa nisu deo mreže formule. Samo njih izuzimamo: fontovi platna (fontsource, isto `media/`) ne smeju
+    // na telefon i ovde bi pali kao "font van assets/mathlive/fonts/"; svaki drugi font mora biti KaTeX iz assets/mathlive/fonts/
+    const ucitano = sve.filter(x => !/^\/media\/ibm-plex-[^/]+\.woff2$/.test(x.putanja));
     const woff2 = ucitano.map(x => x.putanja).filter(x => x.endsWith('.woff2'));
-    expect(woff2.filter(x => !x.startsWith('/assets/mathlive/fonts/')), 'fontovi van assets/mathlive/fonts/ i media/').toEqual([]);
+    expect(woff2.filter(x => !x.startsWith('/assets/mathlive/fonts/')), 'fontovi van assets/mathlive/fonts/ (osim IBM Plex aplikacije)').toEqual([]);
     // lakši stil (odluka 5): KaTeX_Main i KaTeX_Math stižu, AMS i Size ne (ostalo drži granica bajtova)
     expect(woff2.some(x => x.includes('KaTeX_Main-Regular')), 'KaTeX_Main-Regular').toBe(true);
     expect(woff2.some(x => x.includes('KaTeX_Math-Italic')), 'KaTeX_Math-Italic').toBe(true);

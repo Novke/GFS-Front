@@ -405,7 +405,9 @@ over STOMP; teacher commands are REST.
   ~170 formulas plus the literals in `mathlive-ssr.min.mjs`); style declarations with checked values (length or `calc(` with numbers,
   `#hex` colours, `position` only `relative|absolute`, never `url(`); a length limit of every value (200, paths 20 000) before any regex
   (no nested quantifiers, see the comment in the file); `MAX_MARKUP` 450 kB. **When MathLive is upgraded, measure the class and SVG lists
-  again** (`formula-sanitizer.spec` "isti elementi i atributi kao sirov MathLive" shows what would be lost). In front of it:
+  again** (`formula-sanitizer.spec` "isti elementi i atributi kao sirov MathLive" shows what would be lost), and check the
+  `mathlive/ssr` budgets of `e2e/lenji-formule.spec.ts` (own closure <= 365 604 B and <= 105 000 B gzip; on 0.111.1 it is
+  348 195 / 102 932, so the gzip reserve is only ~2 kB). In front of it:
   `ui/formula-komande.ts` has the forbidden commands (the whole `\html…` family, `\href`, `\url`, `\style`, `\class`, `\cssId`, `\csname`)
   and `^^` (it can spell a backslash), one list for the regex and the dialog message; and `trosakFormule` (structural cost, one linear
   pass before MathLive): depth <= 32 (braces, `\bgroup`, `\left`, `\begin`, argument-taking commands), stretchy constructs inside each
