@@ -148,7 +148,7 @@ describe('markdownSaFormulama', () => {
     }
   });
 
-  it('linearnost: najgori slučaj do 2000 znakova u Markdown-u', () => {
+  it('bez katastrofalnog (eksponencijalnog) vraćanja regexa: najgori slučaj do 2000 znakova u Markdown-u', () => {
     // i najgori izmereni obrasci za Markdown (recenzija F1): izbegnuta kosa crta pre $ i \\ ispred svake formule
     const ulazi = [
       '$a'.repeat(1000), '$a$1'.repeat(500), ('$a ' + '\\$').repeat(400), '![' + '$a'.repeat(995) + '](u)',

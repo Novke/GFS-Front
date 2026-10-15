@@ -219,7 +219,7 @@ over STOMP; teacher commands are REST.
   incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
   example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
   every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
-  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 795 B after 5d, 114 790 B after 5c, whose lazy conversion
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 929 B after 5e (+134: warm module cache of `app-tekst-formule`), 114 795 B after 5d, 114 790 B after 5c, whose lazy conversion
   chunk adds one export to the `marked` chunk shared with the phone; 114 615 B after the fix wave of the final review 5a) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
   or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
   alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
@@ -652,7 +652,12 @@ over STOMP; teacher commands are REST.
   them). The wrappers are an `@for` tracked by slide id (`omotaci`): the slide on screen **becomes the outgoing one in the same
   `app-slajd-prikaz` instance and element** (only its class, `aria-hidden` and inputs change), so its formulas, images and strokes
   stay drawn in the first frame (a new instance showed the LaTeX source for at least one frame; e2e checks every
-  `MutationObserver` call). The outgoing slide (`aria-hidden`) is drawn from the
+  `MutationObserver` call). Every slide change therefore makes a **new** `app-slajd-prikaz` (before 5e the incoming wrapper
+  kept one instance across slides); so that a new question (PITANJE -> PITANJE without a transition) and new options never show
+  `$…$` for a frame, `app-tekst-formule` keeps the module per loader pair once module **and** style have loaded (`ucitani`,
+  `WeakMap`, reset by `resetujStilTekstaFormule`) and a new instance starts with it, so the markup goes in during the first render
+  (`uzivo-prelaz.spec.ts`, block "5e, M1"). FORMULA layers of the canvas (`formula-prikaz`) and "Ponovi" in the preview dialog
+  still load asynchronously and may show the source for one frame. The outgoing slide (`aria-hidden`) is drawn from the
   **previous** snapshot's inputs (`ulaziSlajda`: phase, public result, correct answer, answer count, timer, code strip; strokes from
   the cache), and `ui/prelaz.directive.ts` (`[appPrelaz]`, `appPrelazZadrzi`, `appPrelazKraj`; the plan's contract called it
   `[uzPrelaz]`, renamed to the project's `app` prefix without an `eslint-disable`) runs one WAAPI animation per wrapper (`kadroviPrelaza`: only `transform`/`opacity`/`clip-path` of the whole wrapper, so formula

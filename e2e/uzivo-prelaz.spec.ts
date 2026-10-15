@@ -202,6 +202,60 @@ test.describe('uživo: prelaz slajda na projektoru (5e)', () => {
   });
 });
 
+/*
+ * Završna recenzija 5e, M1: svaki slajd je nov `app-slajd-prikaz` (track po id-ju), pa PITANJE -> PITANJE bez prelaza pravi
+ * nove `app-tekst-formule`. Sa već učitanim modulom i stilom formula se crta u istom render-u: ni u jednom pozivu
+ * `MutationObserver`-a (mikrozadatak posle izmene DOM-a, pre crtanja kadra) novi tekst pitanja ni opcije nemaju izvor `$…$`.
+ */
+test.describe('uživo: formule posle promene slajda bez prelaza (5e, M1)', () => {
+  const pitanje = (id: number, tekst: string, opcije: string[], baza: number) => ({
+    id, tip: 'JEDAN_TACAN', tekst, vremeSekunde: null, slika: null,
+    opcije: opcije.map((t, i) => ({ id: baza + i, rb: i + 1, tekst: t, tacna: i === 0 })),
+    brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+    prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+  });
+
+  for (const komanda of ['SLEDECI', 'PRETHODNI'] as const) {
+    test(`publika, ${komanda}: PITANJE -> PITANJE, nijedan kadar sa izvorom formule`, async ({ page, mock }) => {
+      mock.izvodjenje.izmeniSlajd(2, { pitanje: pitanje(51, 'Koliko je $\\frac{1}{2}+\\frac{1}{3}$?', ['$\\frac{5}{6}$', '$\\frac{2}{5}$'], 1) });
+      mock.izvodjenje.izmeniSlajd(3, {
+        tip: 'PITANJE', naslov: null, sadrzaj: null, prelaz: null,
+        pitanje: pitanje(61, 'Izračunaj $\\sqrt{a^2+b^2}$ za $a=3$', ['$5$', '$\\sqrt{7}$'], 11),
+      });
+      doSlajda(mock, 10);
+      if (komanda === 'PRETHODNI') mock.izvodjenje.primeni('SLEDECI');
+      const [pre, posle] = komanda === 'SLEDECI' ? ['Koliko', 'Izračunaj'] : ['Izračunaj', 'Koliko'];
+      const broker = await nastavnickiBroker(page, mock);
+      await page.goto(`izvodjenja/${IZVODJENJE}/publika`);
+      await expect(page.locator('app-publika-scena .uz-pitanje-tekst')).toContainText(pre);
+      await expect(page.locator('app-publika-scena .uz-formula--spremna')).toHaveCount(komanda === 'SLEDECI' ? 3 : 4);
+      await page.evaluate((novi) => {
+        const w = window as unknown as { __zapisi: { izvora: number; dolar: boolean }[] };
+        w.__zapisi = [];
+        const scena = document.querySelector('app-publika-scena')!;
+        new MutationObserver(() => {
+          const tekst = scena.querySelector('.uz-pitanje-tekst');
+          if (!tekst?.textContent?.includes(novi)) return;
+          const slajd = tekst.closest('app-slajd-prikaz')!;
+          w.__zapisi.push({
+            izvora: slajd.querySelectorAll('.uz-formula:not(.uz-formula--spremna):not(.uz-formula--izvor)').length,
+            dolar: (slajd.textContent ?? '').includes('$'),
+          });
+        }).observe(scena, { childList: true, subtree: true, attributes: true, characterData: true });
+      }, posle);
+
+      const ishod = mock.izvodjenje.primeni(komanda);
+      expect(ishod.status).toBe(200);
+      broker.posalji(TEMA, ishod.telo);
+      await expect(page.locator('app-publika-scena .uz-pitanje-tekst')).toContainText(posle);
+      await expect(page.locator('app-publika-scena .uz-formula--spremna')).toHaveCount(komanda === 'SLEDECI' ? 4 : 3);
+      const zapisi = await page.evaluate(() => (window as unknown as { __zapisi: { izvora: number; dolar: boolean }[] }).__zapisi);
+      expect(zapisi.length, 'nov slajd je viđen').toBeGreaterThan(0);
+      expect(zapisi.filter(z => z.izvora > 0 || z.dolar), 'kadrovi novog pitanja sa izvorom formule').toEqual([]);
+    });
+  }
+});
+
 test.describe('uživo: prelaz slajda u editoru (5e)', () => {
   const PREZENTACIJA = 5;
   const NOV = 54;

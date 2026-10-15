@@ -99,6 +99,32 @@ describe('TekstFormuleComponent', () => {
     expect(el.textContent).toBe('Koliko je \\textstyle 1011_2?');
   });
 
+  it('topao keš (modul i stil već učitani): nova instanca crta markup u prvom render-u, nikad izvor (PITANJE -> PITANJE)', async () => {
+    const { fixture } = napravi('Koliko je $1011_2$?');
+    await stabilno(fixture);
+    // nov slajd = nova instanca u istom prozoru (isti učitavači): jedan render, bez čekanja mikrozadataka
+    const druga = TestBed.createComponent(Domacin);
+    druga.componentInstance.tekst.set('Opet $x_1$ i $1011_2$');
+    druga.detectChanges();
+    const el = (druga.nativeElement as HTMLElement).querySelector<HTMLElement>('app-tekst-formule')!;
+    expect(el.querySelectorAll('.uz-formula--spremna').length).toBe(2);
+    expect(el.textContent).not.toContain('$');
+    expect(el.querySelector('.uz-formula--spremna')!.getAttribute('aria-label')).toBe('x_1');
+    expect(ucitaj).toHaveBeenCalledTimes(1);
+  });
+
+  it('hladan keš: drugi par učitavača (drugi prozor ili test) ne nasleđuje modul, prvi render je izvor', async () => {
+    const { fixture } = napravi('Koliko je $1011_2$?');
+    await stabilno(fixture);
+    TestBed.resetTestingModule();
+    const drugi = vi.fn(() => Promise.resolve(lazniModul(pozivi)));
+    const { fixture: f2, el } = napravi('Opet $x_1$', false, drugi);
+    expect(el.querySelector('.uz-formula--spremna')).toBeNull();
+    expect(el.textContent).toBe('Opet $x_1$');
+    await stabilno(f2);
+    expect(el.querySelectorAll('.uz-formula--spremna').length).toBe(1);
+  });
+
   it('neispravna formula ostaje izvor (uz-formula--izvor), bez izuzetka (Review Focus 2)', async () => {
     const { fixture, el } = napravi('$\\nepostoji{x}$');
     await stabilno(fixture);
