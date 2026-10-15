@@ -329,7 +329,32 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
         const kratke = page.locator('.uz-formula--spremna[aria-label="13"]');
         await expect(kratke.first()).toBeVisible();
         for (const k of await kratke.all()) await expect(k).not.toHaveAttribute('tabindex');
-        await expect(page.locator('button [tabindex]')).toHaveCount(0);
+        // u dugmetu opcije: nikad tab stop (samo -1 kad formula prelazi) i bez uloge i imena (dugme ga daje)
+        await expect(page.locator('button [tabindex]:not([tabindex="-1"]), button .uz-formula[role], button .uz-formula[aria-label]'))
+          .toHaveCount(0);
+        if (!tacan) await expect(page.locator('button .uz-formula--spremna[tabindex="-1"]')).toHaveCount(1);
+        // tab red (re-recenzija B, I1): Chromium 130+ sam stavlja skrol kontejner bez fokusabilnih potomaka u tab red, pa bi
+        // široka formula u dugmetu opcije (`aria-hidden`) bila prazan stop; formula iz teksta pitanja ostaje stop
+        const stopovi: { opis: string; skriven: boolean; uDugmetu: boolean; tekstPitanja: boolean }[] = [];
+        for (let i = 0; i < 30; i++) {
+          await page.keyboard.press('Tab');
+          const s = await page.evaluate((sel) => {
+            const a = document.activeElement as HTMLElement | null;
+            if (!a || a === document.body || a.dataset['tabProba'] !== undefined) return null; // krug je završen
+            a.dataset['tabProba'] = '';
+            return {
+              opis: `${a.tagName}.${[...a.classList].join('.')}`,
+              skriven: !!a.closest('[aria-hidden="true"]'),
+              uDugmetu: a.matches('.uz-formula') && !!a.parentElement?.closest('button'),
+              tekstPitanja: a.matches('.uz-formula') && !!a.closest(sel),
+            };
+          }, okvir);
+          if (!s) break;
+          stopovi.push(s);
+        }
+        test.info().annotations.push({ type: 'tab red', description: stopovi.map(x => x.opis).join(' -> ') });
+        expect(stopovi.filter(x => x.skriven || x.uDugmetu).map(x => x.opis), 'stop u aria-hidden ili formula u dugmetu').toEqual([]);
+        expect(stopovi.some(x => x.tekstPitanja), 'široka formula iz teksta je tab stop').toBe(true);
         // tastatura: fokus na formuli, strelica je skroluje
         await siroka.focus();
         await expect(siroka).toBeFocused();

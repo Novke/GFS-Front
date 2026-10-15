@@ -15,6 +15,8 @@ const NAJDUZE_MS = 3000;
  * 300. Pitanje ili opcija sa više od 50 formula nije realno, pa granica samo čuva glavnu nit telefona.
  */
 export const MAX_FORMULA_U_TEKSTU = 50;
+/** Domaćin čiju formulu čitač ne vidi i koja nije tab stop (dugme opcije na telefonu, `aria-hidden`). */
+const SKRIVEN_DOMACIN = 'button, [aria-hidden="true"]';
 
 /** Obećanje koje se razrešava kad `p` završi (uspeh ili greška) ili posle `ms`; tajmer se uvek čisti. */
 function najvise(p: Promise<unknown>, ms: number): Promise<void> {
@@ -157,6 +159,8 @@ export class TekstFormuleComponent {
           return;
         }
         const mesta = Array.from(this.host.querySelectorAll<HTMLElement>(`span.${KLASA_FORMULE}`));
+        // u dugmetu opcije (telefon) je domaćin `aria-hidden`, a ime daje dugme (`tekstZaCitac`): formula bez uloge i imena
+        const skrivena = !!this.host.closest(SKRIVEN_DOMACIN);
         mesta.forEach((el, i) => {
           if (el.classList.contains(`${KLASA_FORMULE}--spremna`) || el.classList.contains(`${KLASA_FORMULE}--izvor`)) {
             return;
@@ -170,12 +174,12 @@ export class TekstFormuleComponent {
           }
           el.replaceChildren(fragment);
           el.classList.add(`${KLASA_FORMULE}--spremna`);
-          el.setAttribute('role', 'img');
-          el.setAttribute('aria-label', latex);
+          if (!skrivena) {
+            el.setAttribute('role', 'img');
+            el.setAttribute('aria-label', latex);
+          }
         });
-        // telefon: nikad u dugmetu opcije (`aria-hidden`, ime dugmeta iz `tekstZaCitac`; fokusabilno dete bi bilo
-        // `nested-interactive`)
-        if (this.skrol && !this.host.closest('button, [aria-hidden="true"]')) {
+        if (this.skrol) {
           this.host.querySelectorAll(`.${KLASA_FORMULE}--spremna`).forEach((el) => this.skrol!.observe(el));
         }
       },
@@ -188,8 +192,13 @@ export class TekstFormuleComponent {
       // `scrollable-region-focusable`). Tab stop dobija samo formula koja stvarno prelazi; ime je već tu (`role="img"`,
       // `aria-label` = LaTeX, deca su prezentaciona, pa se sadržaj ne čita dvaput). Prelaz preko širine uvek menja veličinu
       // kutije (`max-width: 100%`), pa `ResizeObserver` na formulama hvata i okretanje telefona i kasne fontove.
+      // U dugmetu opcije ili `aria-hidden` sadržaju široka formula dobija `tabindex="-1"`, nikad 0: fokusabilno dete dugmeta
+      // bi bilo `nested-interactive`, a Chromium 130+ skrol kontejner bez fokusabilnih potomaka sam stavlja u tab red (prazan
+      // stop u sadržaju koji čitač ne vidi; re-recenzija B, I1). Eksplicitan -1 ga vadi iz reda, skrol prstom ostaje.
       const skrol = (this.skrol = new ResizeObserver((z) => z.forEach(({ target: f }) =>
-        f.scrollWidth > f.clientWidth ? f.setAttribute('tabindex', '0') : f.removeAttribute('tabindex'))));
+        f.scrollWidth > f.clientWidth
+          ? f.setAttribute('tabindex', f.closest(SKRIVEN_DOMACIN) ? '-1' : '0')
+          : f.removeAttribute('tabindex'))));
       inject(DestroyRef).onDestroy(() => skrol.disconnect());
     }
   }

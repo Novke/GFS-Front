@@ -366,17 +366,24 @@ describe('TekstFormuleComponent na telefonu: tab stop samo za široku formulu (a
     expect(x.getAttribute('aria-label')).toBe('x');
   });
 
-  it('formula u dugmetu opcije (aria-hidden) se ne posmatra i nikad ne dobija tab stop (nested-interactive)', async () => {
+  it('formula u dugmetu opcije (aria-hidden): bez uloge i imena; široka dobija tabindex="-1" (Chromium je inače sam stavlja u tab red)', async () => {
     const fixture = napravi();
     await stabilno(fixture);
     const uDugmetu = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button .uz-formula--spremna');
     expect(uDugmetu.length).toBe(2);
-    uDugmetu.forEach((f) => sirine(f, 400, 300));
-    for (const p of LazniPosmatrac.svi) {
-      uDugmetu.forEach((f) => expect(p.posmatrani.has(f)).toBe(false));
-      p.javi();
-    }
-    uDugmetu.forEach((f) => expect(f.hasAttribute('tabindex')).toBe(false));
+    uDugmetu.forEach((f) => {
+      expect(f.hasAttribute('role')).toBe(false);
+      expect(f.hasAttribute('aria-label')).toBe(false);
+    });
+    sirine(uDugmetu[0], 400, 300);
+    sirine(uDugmetu[1], 100, 100);
+    const posmatrac = LazniPosmatrac.svi.find((p) => p.posmatrani.has(uDugmetu[0]))!;
+    posmatrac.javi();
+    expect(uDugmetu[0].getAttribute('tabindex')).toBe('-1');
+    expect(uDugmetu[1].hasAttribute('tabindex')).toBe(false);
+    sirine(uDugmetu[0], 300, 300);
+    posmatrac.javi();
+    expect(uDugmetu[0].hasAttribute('tabindex')).toBe(false);
   });
 
   it('novi tekst: staro posmatranje se prekida, posmatraju se nove formule; uništavanje odvezuje posmatrača', async () => {

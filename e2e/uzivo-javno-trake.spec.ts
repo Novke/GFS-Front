@@ -36,7 +36,8 @@ const mere = (page: Page) => page.evaluate(() =>
   [...document.querySelectorAll<HTMLElement>('.uz-formula--spremna')].map((f) => {
     const r = f.getBoundingClientRect();
     return {
-      latex: f.getAttribute('aria-label') ?? '',
+      // formula u dugmetu opcije nema ime (dugme ga daje kroz `tekstZaCitac`): tada vidljivi tekst markupa (`13`)
+      latex: f.getAttribute('aria-label') ?? (f.textContent ?? '').replace(/[\s\u200b-\u200d\u2060\ufeff]/g, ''),
       traka: f.offsetHeight - f.clientHeight,
       preliv: f.scrollWidth - f.clientWidth,
       k: getComputedStyle(f).getPropertyValue('--uz-formula-k'),
