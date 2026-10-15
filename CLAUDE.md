@@ -505,33 +505,40 @@ over STOMP; teacher commands are REST.
   (every snapshot, moving in the editor) does not rebuild `d` (~5 ms for 20 000 points); `PoteziCrteza` keeps the scaled array per
   entry and layer size for the same reason. **`CRTEZ_KAO_VEKTOR`** is the switch of the W1 gate (plan
   decision 7): `false` draws the image everywhere and ISCRTAJ as BRISANJE again (phases 1-4); it is set to `false` only if the
-  visual check against PowerPoint's PDF gets worse with vectors (CRTEZ layers out of tolerance must drop below 7). **ISCRTAJ** over a
+  visual check against PowerPoint's PDF gets worse with vectors. The whole gate (wrapper `staging/pptx-provera`, run locally with
+  B1 in the stack): (a) and (b) pass as in phase 2, (c) >= 98.5 %, and CRTEZ layers out of tolerance < 7 (goal <= 2); a line
+  "UPOZORENJE vektorski crteži" on stderr or in `izvestaj.txt` means a drawing was measured as the image, so that run does not
+  count. **ISCRTAJ** over a
   vector draws stroke by stroke (`planIscrtavanja`, `kadroviPoteza`): strokes in record order (IZLAZ in reverse), each a
   `stroke-dasharray: 1 1` animation of `stroke-dashoffset` 1 -> 0 that starts when the previous one ends, `trajanjeMs` split in
   proportion to stroke length with at least `NAJKRACI_POTEZ_MS` (16) each (an infinite or NaN length or duration never reaches
   `animate`, which would throw in the middle of `pusti`; a second animation of the same layer in the group, e.g. ISCRTAJ IZLAZ after
   ISCRTAJ ULAZ, gets `fill: forwards` like every other branch), `opacity: 0` before its part (the round cap would leave a
   dot), `smer` ignored, `prefers-reduced-motion` 0 ms; `.uz-pl-sadrzaj` itself is not animated then. The InkML times are not used
-  (the `Potez` model has no time and the phase 2 import does not keep it). A drawing without paths keeps BRISANJE through `clipPath`.
+  (the `Potez` model has no time and the phase 2 import does not keep it). A drawing shown as the image (no drawable stroke, the
+  rule above) keeps BRISANJE through `clipPath`.
   **Why the snapshot has no strokes:** a drawing may hold 20 000 points and the snapshot goes out up to 4 times a second with the
   current and the next slide (phase 1 decision 6), so the server sends every CRTEZ with `potezi: null` (`SlajdMapper.bezPoteza`).
   `data-access/potezi-crteza.ts` `PoteziCrteza` (root, so one cache per window) fetches them with `GET api/slajdovi/{id}/potezi`
   (`PrezentacijeApi.potezi`, behind basic-auth, never under `/public`): `publika-scena` calls `ucitaj` for the current and the next
   slide (once per slide), `sledece-panel` only reads the cache (`saPotezima`). The key is `slojId|medijId` (a drawing pasted onto the
   same id never gets the old strokes), stored strokes are scaled to the layer size of the snapshot (`skalirajPoteze`, linear like
-  `postaviKutiju`), and an error (404/500) keeps the image, warns once and asks again after `PONOVI_POSLE_MS` (10 s) **by itself**: the pause timer
+  `postaviKutiju`), and an error (404/500) keeps the image, warns once per failed request and asks again after `PONOVI_POSLE_MS` (10 s) **by itself**: the pause timer
   raises a signal that `ucitaj` reads, so the scene's effect runs once more even when no snapshot arrives (a quiet classroom still
   gets the vector); at most one attempt per pause, a new error starts a new pause, and after success nothing repeats (no loop). The cache has no bound (the slides this window has seen).
   **The phone gets none of it:** `javno/` does not import `potezi-crteza`, `uzivo.models` only `import type`s `Potez`, and
   `NIZOVI_CRTEZA` (`e2e/nizovi-editora.ts`) is checked in `lenji-formule.spec.ts` (build) and `uzivo-javno.spec.ts` (network).
   **Known limitation:** an ISCRTAJ that started over the image before the strokes arrived (group 0 of the first slide, or a click
   right after entering) finishes as BRISANJE over the vector: the content stays the same element on purpose, so the running
-  animation is neither cut nor restarted; the next run draws stroke by stroke.
+  animation is neither cut nor restarted; the next run draws stroke by stroke. Within one group the content box and the stroke
+  paths of the same layer are separate targets and are not chained: after a content animation of the layer (e.g. FADE IZLAZ) the
+  paths of a following ISCRTAJ get `fill: forwards` and are visible during their delay instead of starting hidden.
   E2E: slide 105 of run 7 (`uzivo-izvodjenje.json`) and slide 53 of presentation 5 (`prezentacije.json`) carry CRTEZ `crtez2` with 2
   invented strokes and one ISCRTAJ KLIK of 3000 ms; `MockIzvodjenje` strips strokes from the snapshot like the server,
   `GET slajdovi/:id/potezi` answers from the fixture, `MockApi.brojZahtevaPoteza` counts requests; `uzivo-platno.spec.ts` (block
-  "5b": vector from exactly one GET, second stroke's delay = first's delay + duration, 500 -> image and no second request, editor
-  without any GET).
+  "5b": vector from exactly one GET, second stroke's delay = first's delay + duration; 500 -> image and no second request within
+  the pause, waited on the 500 response itself (the image is also shown while the request runs); after the pause the request
+  repeats by itself, with no new snapshot (`page.clock.fastForward`), and the vector appears; editor without any GET).
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

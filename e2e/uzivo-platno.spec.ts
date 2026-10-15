@@ -361,8 +361,10 @@ test.describe('uživo: crtež kao vektor i iscrtavanje potez po potez (5b)', () 
         })
         .sort((x, y) => x.indeks - y.indeks);
     });
-    await expect.poll(async () => (await animacijePoteza()).length).toBe(2);
-    const [prva, druga] = await animacijePoteza();
+    // jedno čitanje: vrednost iz istog `evaluate` u kome su obe animacije postojale (ISCRTAJ traje 3000 ms)
+    let animacije: Awaited<ReturnType<typeof animacijePoteza>> = [];
+    await expect.poll(async () => (animacije = await animacijePoteza()).length).toBe(2);
+    const [prva, druga] = animacije;
     expect([prva.indeks, druga.indeks]).toEqual([0, 1]);
     expect(prva.delay).toBe(0);
     expect(druga.delay).toBe(prva.delay + prva.duration);
@@ -370,19 +372,27 @@ test.describe('uživo: crtež kao vektor i iscrtavanje potez po potez (5b)', () 
     // ni sloj ni sadržaj se ne brišu preko slike (BRISANJE) kad potezi već postoje
     expect(await page.evaluate(() => document.getAnimations()
       .filter(a => (a.effect as KeyframeEffect | null)?.target?.matches?.('.uz-pl-sadrzaj')).length)).toBe(0);
-    // novi snimak (korak 1) ne traži poteze ponovo
+    // novi snimak (korak 1) ne traži poteze ponovo (ponavljanje u pauzi i posle nje proveravaju testovi 500)
     expect(mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
   });
+
+  /** Odgovor 500 na `GET slajdovi/105/potezi` (registruje se pre `goto`, pa ga nijedan zahtev ne mimoiđe). */
+  const odgovor500 = (page: Page) =>
+    page.waitForResponse(r => r.url().endsWith(`/api/slajdovi/${SLAJD_CRTEZA}/potezi`) && r.status() === 500);
 
   test('projektor: GET poteza vrati 500 -> slika, a novi snimci i 2 s posle toga ne šalju nov zahtev (bez petlje)', async ({ page, mock }) => {
     mock.na('GET', 'slajdovi/:id/potezi', () => ({ status: 500, telo: { reason: 'Greška servera.', time: '' } }));
     naSlajdCrteza(mock, 1); // korak 1: crtež je vidljiv (kasno otvoren prozor ne animira)
     await nastavnickiBroker(page, mock);
+    const greska = odgovor500(page);
     await page.goto(`izvodjenja/${IZVODJENJE}/publika`);
+    // slika je i fallback dok zahtev traje, pa se prvo čeka sam odgovor 500
+    await greska;
+    const posleGreske = Date.now();
 
     await expect(page.locator('[data-crtez="slika"] img')).toBeVisible();
     await expect(vektor(page)).toHaveCount(0);
-    expect(mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
+    await expect.poll(() => mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
     // dva nova snimka u pauzi od 10 s (korak nazad pa napred): efekat scene zove `ucitaj`, a zahtev ne ide
     const komande = () => mock.zahteviZa(`izvodjenja/${IZVODJENJE}/komande`, 'POST').length;
     await page.keyboard.press('ArrowLeft');
@@ -390,17 +400,57 @@ test.describe('uživo: crtež kao vektor i iscrtavanje potez po potez (5b)', () 
     await page.keyboard.press('ArrowRight');
     await expect.poll(komande).toBe(2);
     await expect(page.locator('[data-crtez="slika"] img')).toBeVisible();
-    // namerno čekanje: meri se odsustvo zahteva (Review Focus 3)
+    // namerno čekanje: meri se odsustvo zahteva (Review Focus 3); sve mora stati u pauzu od 10 s, jer posle nje
+    // `PoteziCrteza` s pravom šalje jedan nov zahtev (sledeći test)
     await page.waitForTimeout(2000);
+    expect(Date.now() - posleGreske, 'merenje odsustva je unutar pauze od 10 s').toBeLessThan(9000);
     expect(mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
     await expect(page.locator('[data-crtez="slika"] img')).toBeVisible();
   });
 
+  test('projektor: posle pauze od 10 s potezi se traže sami, bez novog snimka (500 pa 200 -> vektor)', async ({ page, mock }) => {
+    let prvi = true;
+    mock.na('GET', 'slajdovi/:id/potezi', (_z, _p, dalje) => {
+      if (!prvi) return dalje();
+      prvi = false;
+      return { status: 500, telo: { reason: 'Greška servera.', time: '' } };
+    });
+    naSlajdCrteza(mock, 1);
+    // lažni sat stranice: vreme teče, a `fastForward` preskače pauzu (bez čekanja od 10 s); lažni broker nema heartbeat
+    await page.clock.install();
+    const broker = await nastavnickiBroker(page, mock);
+    const greska = odgovor500(page);
+    await page.goto(`izvodjenja/${IZVODJENJE}/publika`);
+    await greska;
+    await expect(page.locator('[data-crtez="slika"] img')).toBeVisible();
+    await expect.poll(() => mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
+    const pretplata = broker.pretplate.length;
+    const ostali = mock.zahtevi.filter(z => !z.putanja.endsWith('/potezi')).length;
+
+    const uspeh = page.waitForResponse(r => r.url().endsWith(`/api/slajdovi/${SLAJD_CRTEZA}/potezi`) && r.status() === 200);
+    await page.clock.fastForward(10_000);
+    await uspeh;
+    await expect(vektor(page)).toHaveCount(2);
+    await expect(page.locator('[data-crtez="slika"]')).toHaveCount(0);
+    expect(mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(2);
+    // pokušaj je došao sam: ni nova pretplata (ponovno povezivanje = nov snimak), ni komanda, ni GET stanja
+    expect(broker.pretplate.length).toBe(pretplata);
+    expect(mock.zahtevi.filter(z => !z.putanja.endsWith('/potezi')).length).toBe(ostali);
+    // posle uspeha nema daljih pokušaja
+    await page.clock.fastForward(30_000);
+    await expect(vektor(page)).toHaveCount(2);
+    expect(mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(2);
+  });
+
   test('editor (pun dokument): Uređivanje i Pregled crtaju vektor bez ijednog GET poteza', async ({ page, mock }) => {
     await page.goto(`prezentacije/${PREZENTACIJA}`);
-    await page.getByRole('button', { name: /^3\s/ }).click();
+    const slajd3 = page.getByRole('button', { name: /^3\s/ });
+    await expect(slajd3).toBeEnabled();
+    await slajd3.click();
     await expect(page.locator('app-platno-editor app-platno-prikaz [data-crtez="vektor"] path[data-potez]')).toHaveCount(2);
-    await page.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' }).click();
+    const pregled = page.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' });
+    await expect(pregled).toBeEnabled();
+    await pregled.click();
     await expect(page.locator('.uz-ep-pregled [data-crtez="vektor"] path[data-potez]')).toHaveCount(2);
     await expect(page.locator('.uz-ep-pregled [data-crtez="slika"]')).toHaveCount(0);
     expect(mock.zahteviZa(/^slajdovi\/\d+\/potezi$/)).toEqual([]);
