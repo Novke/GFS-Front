@@ -535,13 +535,17 @@
   }
 }
 
-/* Formula na telefonu (`app-tekst-formule`): smanjuje se do 0,75 (`MIN_K_FORMULE_TELEFON`), a tek šira od toga se skroluje
-   u sebi (overlay trake telefona ne pomeraju raspored). Skrol kontejner seče i po visini: indeksi MathLive-a izlaze ~0,1em
-   ispod `.ML__latex`, pa `padding-block` daje mesto, a negativna margina vraća visinu reda. */
+/* Formula na telefonu (`app-tekst-formule`): bez smanjivanja (meru daju samo nastavnički prikazi, `MERA_FORMULE`); šira od
+   mesta se skroluje u sebi (overlay trake telefona ne pomeraju raspored). `padding-inline-end` (osnovno pravilo) drži
+   prepust MathLive-a (~2 px van `.ML__latex`) u kutiji, pa kratka formula nema skrol; margina se ovde ne poništava, jer bi
+   domaćin koji se skuplja na sadržaj (dugme opcije, "tačan odgovor") bio uži od kutije formule za taj padding, a
+   `max-width: 100%` bi je onda suzio u skrol. Skrol kontejner seče i po visini: indeksi izlaze ~0,1em ispod `.ML__latex`,
+   pa `padding-block` daje mesto, a negativna margina vraća visinu reda. */
 .uz-st .uz-formula--spremna {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   padding-block: 0.25em;
   margin-block: -0.25em;
+  margin-inline-end: 0;
 }

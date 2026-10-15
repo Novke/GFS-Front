@@ -8,10 +8,11 @@ import { UzivoPutanje } from '../uzivo-putanje';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { opisVeze } from '../data-access/izvodjenje-pravila';
 import { razlogGreske } from '../data-access/razlog-greske';
+import { meriFormule } from '../ui/mera-formule';
 import { IzvodjenjeRezultati, RezultatPitanja, medijUrl } from '../data-access/uzivo.models';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
-import { TekstFormuleComponent } from '../ui/tekst-formule.component';
+import { MERA_FORMULE, TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
@@ -51,6 +52,8 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
 @Component({
   selector: 'app-izvodjenje-pregled',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
     TekstFormuleComponent],
   template: `

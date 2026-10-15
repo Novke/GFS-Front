@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { PitanjeDetails } from '../data-access/uzivo.models';
 import { decimalni } from './format';
+import { meriFormule } from './mera-formule';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
-import { TekstFormuleComponent } from './tekst-formule.component';
+import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
 /**
  * Pločice opcija na projektoru: mreža 2x2 (do 4 opcije) ili 3x2 (5-6), svaka sa oblikom, slovom i tekstom. Za broj,
@@ -13,6 +14,8 @@ import { TekstFormuleComponent } from './tekst-formule.component';
 @Component({
   selector: 'app-pitanje-plocice',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-plocice' },
   template: `

@@ -290,6 +290,13 @@ test.describe('javni uživo: dugačka formula na telefonu od 360 px', () => {
     await expect(page.locator('.uz-st-opcija .uz-formula--spremna .ML__latex')).toHaveCount(2);
     expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
     expect(await formuleUOkviru(page, '.uz-st-telo')).toEqual([true, true, true]);
+    // F2 fix 3: telefon se ne smanjuje (nema `--uz-formula-k`); kratka `$13$` nije skrol, široka se skroluje u sebi
+    const opcije = await page.locator('.uz-st-opcija .uz-formula--spremna').evaluateAll(f => f.map(e => ({
+      k: getComputedStyle(e).getPropertyValue('--uz-formula-k'), preliv: e.scrollWidth - e.clientWidth,
+    })));
+    expect(opcije.map(o => o.k)).toEqual(['', '']);
+    expect(opcije[0].preliv, 'široka opcija se skroluje u sebi').toBeGreaterThan(0);
+    expect(opcije[1].preliv, 'kratka opcija ($13$) bez skrola').toBeLessThanOrEqual(0);
   });
 
   test('ekran "tačan odgovor" (flex red sa značkom): nacrtana formula ostaje u ekranu', async ({ page }) => {

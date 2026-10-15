@@ -176,8 +176,9 @@
 
 /* Nacrtana formula se ne lomi na pola i nije skrol kontejner (projektor, konzola, pregled u editoru, pregled izvođenja:
    tu niko ne skroluje, a klasična traka od 15 px bi i kratkoj formuli podigla red). Šira od svog bloka se smanjuje:
-   `--uz-formula-k` (`app-tekst-formule`, merenje posle crtanja i na promenu veličine; markup MathLive-a je u `em`, pa se
-   smanjuje i raspored), najviše do 0,5; ispod toga je seče ivica domaćina (`overflow-x: clip`), bez trake.
+   `--uz-formula-k` (`ui/mera-formule.ts`, samo nastavnički prikazi kroz `MERA_FORMULE`; merenje posle crtanja i na promenu
+   veličine; markup MathLive-a je u `em`, pa se smanjuje i raspored), najviše do 0,5; ispod toga je seče ivica domaćina
+   (`overflow-x: clip`), bez trake. Telefon (`.uz-st`) se ne smanjuje: tamo se šira formula skroluje (`uzivo-javno.css`).
    `inline-flex`: osnovna linija formule kao u tekstu. `padding-inline-end` uvlači prepust MathLive-a (~2 px van
    `.ML__latex`) u kutiju, a jednaka negativna margina vraća raspored. `font-weight: 400`: debljina teksta oko formule
    (pitanje 600, tačna opcija 700) bi tražila bold KaTeX fontove, koje lakši učitavač stila ne čeka. */

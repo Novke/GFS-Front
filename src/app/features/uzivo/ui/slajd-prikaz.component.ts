@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, comp
 import { ServerskiSat } from '../data-access/sat';
 import { Faza, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
+import { meriFormule } from './mera-formule';
 import { renderMarkdown } from './markdown';
 import { PitanjePlociceComponent } from './pitanje-plocice.component';
 import { PlatnoPrikazComponent } from './platno-prikaz.component';
 import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
-import { TekstFormuleComponent } from './tekst-formule.component';
+import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
@@ -27,6 +28,8 @@ export interface KodTraka { host: string; kod: string; }
 @Component({
   selector: 'app-slajd-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent, TekstFormuleComponent],
   host: { class: 'uz-okvir' },
   template: `

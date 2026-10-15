@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { Rezultat, RezultatTekst, TekstPrikaz, TipPitanja } from '../data-access/uzivo.models';
 import { decimalni } from './format';
+import { meriFormule } from './mera-formule';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
-import { TekstFormuleComponent } from './tekst-formule.component';
+import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
 const MAKS_OBLAK = 60;
 const MAKS_LISTA = 50;
@@ -96,6 +97,8 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
 @Component({
   selector: 'app-rezultat-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()' },
   template: `

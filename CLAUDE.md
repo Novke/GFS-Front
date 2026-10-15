@@ -176,9 +176,16 @@ over STOMP; teacher commands are REST.
   through `tekstZaCitac` (no `$`). Used by `slajd-prikaz`, `pitanje-plocice`, `rezultat-prikaz` (bars), `izvodjenje-pregled`
   and `javno/` (question text, options, correct answer, "Detalji"). Projector and console preload the module when the current or
   next slide is a question with a formula (`imaFormuluZaCrtanje`); the phone does not know the text in advance, so a student
-  may briefly see the source. A formula never wraps; on teacher views a formula wider than its block is scaled down
-  (`--uz-formula-k`, down to 0.5, below that it is clipped at the edge, never a scrollbar); on the phone the document never
-  scrolls horizontally (e2e at 360 px). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
+  may briefly see the source. A formula never wraps (the source does, also inside long LaTeX). On teacher views a formula wider than its
+  block is scaled down (`--uz-formula-k`, down to 0.5, below that it is clipped at the edge, never a scrollbar): `ui/mera-formule.ts`
+  (`meriFormule`, after rendering reads first and writes after, again on `ResizeObserver` of the blocks and `document.fonts`
+  `loadingdone`; k only shrinks when the formula really overflows its block, otherwise it may only grow, so a frame that shrinks to
+  its content cannot spiral down) is provided through the token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
+  `rezultat-prikaz` and `izvodjenje-pregled`; its default is `null`, so the phone has neither the code nor the scaling. On the
+  phone (`.uz-st`) a wide formula scrolls inside itself (`max-width: 100%`, `overflow-x: auto`) and `padding-inline-end: 0.15em`
+  keeps MathLive's ~2 px overhang inside the box, so a short formula never gets a scrollbar; the document never scrolls
+  horizontally (e2e at 360 px; `uzivo-javno-trake.spec.ts` and `uzivo-formule-tekst.spec.ts` run without `--hide-scrollbars`,
+  so classic 15 px scrollbars would show). Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
   digit exception) and, 300 ms after typing, a non-blocking warning in `--warn` (not `--danger`: saving is not blocked, the
   server does not check formulas) for every formula the display would not draw, naming the field ("u tekstu pitanja",
   "u odgovoru B"); it runs exactly the display's check (same parser per field, lazy `latexUMarkup`, same limit of 50), so an
