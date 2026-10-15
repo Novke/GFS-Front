@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Injector, effect } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -174,6 +175,52 @@ describe('PoteziCrteza', () => {
     expect(crtezi(potezi.saPotezima(s))[0].potezi).toEqual(tacke);
     expect(PONOVI_POSLE_MS).toBe(10_000);
     upozorenje.mockRestore();
+  });
+
+  it('automatski ponovni pokušaj: posle pauze efekat koji zove ucitaj sam šalje jedan zahtev; nova greška -> opet pauza', () => {
+    const upozorenje = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const s = slajdSa(52, crtez('c1', 'm1'));
+    let pozivi = 0;
+    // Kao efekat scene: snimak se ne menja (sala bez komandi), efekat se ponovo pokreće samo kroz signal pauze.
+    effect(() => { pozivi++; potezi.ucitaj(s); }, { injector: TestBed.inject(Injector) });
+    TestBed.tick();
+    http.expectOne('api/slajdovi/52/potezi').flush({ reason: 'x' }, { status: 500, statusText: 'Internal Server Error' });
+    TestBed.tick();
+    vi.advanceTimersByTime(PONOVI_POSLE_MS - 1);
+    TestBed.tick();
+    http.expectNone('api/slajdovi/52/potezi');
+    vi.advanceTimersByTime(1);
+    TestBed.tick();
+    http.expectOne('api/slajdovi/52/potezi').flush({ reason: 'x' }, { status: 500, statusText: 'Internal Server Error' });
+    expect(upozorenje).toHaveBeenCalledTimes(2);
+    // Najviše jedan pokušaj po pauzi: ništa pre sledećih 10 s.
+    vi.advanceTimersByTime(PONOVI_POSLE_MS - 1);
+    TestBed.tick();
+    http.expectNone('api/slajdovi/52/potezi');
+    vi.advanceTimersByTime(1);
+    TestBed.tick();
+    http.expectOne('api/slajdovi/52/potezi').flush([unos('c1', 'm1', tacke)]);
+    expect(crtezi(potezi.saPotezima(s))[0].potezi).toEqual(tacke);
+    // Posle uspeha nema više zahteva ni pokretanja efekta.
+    const posleUspeha = pozivi;
+    vi.advanceTimersByTime(10 * PONOVI_POSLE_MS);
+    TestBed.tick();
+    http.expectNone('api/slajdovi/52/potezi');
+    expect(pozivi).toBe(posleUspeha);
+    expect(pozivi).toBe(3);
+    upozorenje.mockRestore();
+  });
+
+  it('skalirani potezi istog unosa i iste veličine sloja: isti niz pri svakom snimku (putanje se ne računaju ponovo)', () => {
+    const s = () => slajdSa(52, crtez('c1', 'm1', { sirina: 200, visina: 100 }));   // svaki snimak je nov JSON
+    potezi.ucitaj(s());
+    http.expectOne('api/slajdovi/52/potezi').flush([unos('c1', 'm1', tacke)]);
+    const prvi = crtezi(potezi.saPotezima(s()))[0].potezi;
+    expect(prvi).toEqual([potez([20, 10, 40, 20])]);
+    expect(crtezi(potezi.saPotezima(s()))[0].potezi).toBe(prvi);
+    const veci = crtezi(potezi.saPotezima(slajdSa(52, crtez('c1', 'm1', { sirina: 300, visina: 150 }))))[0].potezi;
+    expect(veci).toEqual([potez([30, 15, 60, 30])]);
+    expect(crtezi(potezi.saPotezima(s()))[0].potezi).toEqual(prvi);
   });
 
   it('odgovor bez traženog sloja (obrisan dok je zahtev trajao): nema novog zahteva za njega, ostaje slika', () => {

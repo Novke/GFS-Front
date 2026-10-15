@@ -497,13 +497,20 @@ over STOMP; teacher commands are REST.
 - **Drawings as vectors (phase 5b; backend GFSSystem B1).** A CRTEZ layer that has `potezi` is drawn as SVG
   (`ui/crtez-potezi.ts`; in `platno-prikaz` a `[data-crtez="vektor"]` box with one `<path data-potez pathLength="1">` per stroke,
   `putanjaPoteza`) on the projector, the console and in the editor (Uređivanje and Pregled have the whole document, so they never
-  ask for strokes). The image (`medijId`, still required by the server) is the fallback (`[data-crtez="slika"]`) when `potezi` is
-  `null` **or `[]`**, and on the projector until the strokes arrive. **`CRTEZ_KAO_VEKTOR`** is the switch of the W1 gate (plan
+  ask for strokes). The image (`medijId`, still required by the server) is the fallback (`[data-crtez="slika"]`) by **one rule:
+  there is no drawable stroke** (`putanjeCrteza` is empty): `potezi` `null` or `[]`, only empty `tacke`, or only invalid strokes
+  (`nacrtivPotez`: a coordinate not finite or beyond `MAX_KOORDINATA` 1e6, e.g. ±1e308 which the server accepts, thickness not finite
+  or <= 0, colour not `#RRGGBB`); invalid strokes among valid ones are skipped. On the projector the image also shows until the
+  strokes arrive. Paths are cached per `Potez[]` array (`putanjeCrteza`, `WeakMap`), so a new layer object with the same strokes
+  (every snapshot, moving in the editor) does not rebuild `d` (~5 ms for 20 000 points); `PoteziCrteza` keeps the scaled array per
+  entry and layer size for the same reason. **`CRTEZ_KAO_VEKTOR`** is the switch of the W1 gate (plan
   decision 7): `false` draws the image everywhere and ISCRTAJ as BRISANJE again (phases 1-4); it is set to `false` only if the
   visual check against PowerPoint's PDF gets worse with vectors (CRTEZ layers out of tolerance must drop below 7). **ISCRTAJ** over a
   vector draws stroke by stroke (`planIscrtavanja`, `kadroviPoteza`): strokes in record order (IZLAZ in reverse), each a
   `stroke-dasharray: 1 1` animation of `stroke-dashoffset` 1 -> 0 that starts when the previous one ends, `trajanjeMs` split in
-  proportion to stroke length with at least `NAJKRACI_POTEZ_MS` (16) each, `opacity: 0` before its part (the round cap would leave a
+  proportion to stroke length with at least `NAJKRACI_POTEZ_MS` (16) each (an infinite or NaN length or duration never reaches
+  `animate`, which would throw in the middle of `pusti`; a second animation of the same layer in the group, e.g. ISCRTAJ IZLAZ after
+  ISCRTAJ ULAZ, gets `fill: forwards` like every other branch), `opacity: 0` before its part (the round cap would leave a
   dot), `smer` ignored, `prefers-reduced-motion` 0 ms; `.uz-pl-sadrzaj` itself is not animated then. The InkML times are not used
   (the `Potez` model has no time and the phase 2 import does not keep it). A drawing without paths keeps BRISANJE through `clipPath`.
   **Why the snapshot has no strokes:** a drawing may hold 20 000 points and the snapshot goes out up to 4 times a second with the
@@ -512,8 +519,9 @@ over STOMP; teacher commands are REST.
   (`PrezentacijeApi.potezi`, behind basic-auth, never under `/public`): `publika-scena` calls `ucitaj` for the current and the next
   slide (once per slide), `sledece-panel` only reads the cache (`saPotezima`). The key is `slojId|medijId` (a drawing pasted onto the
   same id never gets the old strokes), stored strokes are scaled to the layer size of the snapshot (`skalirajPoteze`, linear like
-  `postaviKutiju`), and an error (404/500) keeps the image, warns once and asks again only after `PONOVI_POSLE_MS` (10 s), and then
-  only with the next snapshot (no loop, no timer of its own). The cache has no bound (the slides this window has seen).
+  `postaviKutiju`), and an error (404/500) keeps the image, warns once and asks again after `PONOVI_POSLE_MS` (10 s) **by itself**: the pause timer
+  raises a signal that `ucitaj` reads, so the scene's effect runs once more even when no snapshot arrives (a quiet classroom still
+  gets the vector); at most one attempt per pause, a new error starts a new pause, and after success nothing repeats (no loop). The cache has no bound (the slides this window has seen).
   **The phone gets none of it:** `javno/` does not import `potezi-crteza`, `uzivo.models` only `import type`s `Potez`, and
   `NIZOVI_CRTEZA` (`e2e/nizovi-editora.ts`) is checked in `lenji-formule.spec.ts` (build) and `uzivo-javno.spec.ts` (network).
   **Known limitation:** an ISCRTAJ that started over the image before the strokes arrived (group 0 of the first slide, or a click

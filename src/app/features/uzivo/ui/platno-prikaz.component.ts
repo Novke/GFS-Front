@@ -8,7 +8,7 @@ import {
   TekstSloj,
 } from '../data-access/platno.models';
 import { medijUrl } from '../data-access/uzivo.models';
-import { CRTEZ_KAO_VEKTOR, duzinaPoteza, kadroviPoteza, planIscrtavanja, putanjaPoteza } from './crtez-potezi';
+import { CRTEZ_KAO_VEKTOR, type PrikazPoteza, kadroviPoteza, planIscrtavanja, putanjeCrteza } from './crtez-potezi';
 import { FormulaPrikazComponent } from './formula-prikaz.component';
 import { cssFonta } from './platno-fontovi';
 import { METRIKA } from './platno-metrika';
@@ -35,7 +35,7 @@ interface PrikazFormule { slika: string | null; latex: string; stil: Stil; }
 /** Crtež: vektor (`potezi`, SVG u jedinicama sloja) kad ga ima, inače slika iz uvoza (`src`). */
 interface PrikazCrteza {
   src: string; alt: string; viewBox: string;
-  potezi: { d: string; boja: string; debljina: number }[] | null;
+  potezi: readonly PrikazPoteza[] | null;
 }
 
 /** Pripremljen sloj: tačno jedno od polja vrste nije null (šablon ga suzi kroz `@if (...; as x)`). */
@@ -252,16 +252,16 @@ function prikazFormule(s: FormulaSloj): PrikazFormule {
 
 /**
  * CRTEZ sa potezima se crta vektorski (odluka 7 faze 5), i bez animacije: oštar na svakoj veličini, isti kao PowerPointov
- * PDF. Slika ostaje kad poteza nema (`null`, prazno, još nisu stigli na projektor) ili kad je kapija W1 isključena.
+ * PDF. Jedno pravilo: slika kad nema nijednog nacrtivog poteza (`null`, prazno, prazne tačke, neispravni brojevi, još nisu
+ * stigli na projektor) ili kad je kapija W1 isključena. Putanje se keširaju po nizu poteza (`putanjeCrteza`).
  */
 function prikazCrteza(s: CrtezSloj): PrikazCrteza {
+  const potezi = CRTEZ_KAO_VEKTOR && s.potezi ? putanjeCrteza(s.potezi) : [];
   return {
     src: medijUrl(s.medijId),
     alt: s.naziv ?? 'Crtež',
     viewBox: `0 0 ${s.sirina} ${s.visina}`,
-    potezi: CRTEZ_KAO_VEKTOR && s.potezi?.length
-      ? s.potezi.map((pz) => ({ d: putanjaPoteza(pz.tacke), boja: pz.boja, debljina: pz.debljina }))
-      : null,
+    potezi: potezi.length > 0 ? potezi : null,
   };
 }
 
@@ -677,16 +677,20 @@ export class PlatnoPrikazComponent {
         cilj.style.setProperty('visibility', 'visible');
       }
       // ISCRTAJ nad vektorskim crtežom: svaka putanja je svoja animacija u delu trajanja (`planIscrtavanja`), sadržaj
-      // sloja se ne animira. Putanje su nacrtane iz istog objekta sloja (`platno` je isti signal), pa se indeksi poklapaju.
+      // sloja se ne animira. Putanje su nacrtane iz istog objekta sloja (`platno` je isti signal) kroz isti keš
+      // `putanjeCrteza` (samo nacrtivi potezi), pa se indeksi poklapaju. Druga animacija istog ključa (npr. ISCRTAJ IZLAZ
+      // posle ISCRTAJ ULAZ) nastavlja od prve (`forwards`), kao u opštoj grani.
       if (z.animacija.efekat === 'ISCRTAJ' && sloj.tip === 'CRTEZ') {
         const putanje = Array.from(cilj.querySelectorAll<SVGPathElement>('path[data-potez]'));
         if (putanje.length > 0) {
-          const duzine = (sloj.potezi ?? []).map((pz) => duzinaPoteza(pz.tacke));
+          const duzine = putanjeCrteza(sloj.potezi ?? []).map((pz) => pz.duzina);
+          const pocetak = Number.isFinite(z.pocetakMs) ? z.pocetakMs : 0;
+          const fillPoteza: FillMode = zapoceti.has(z.kljuc) ? 'forwards' : 'both';
           for (const d of planIscrtavanja(duzine, z.trajanjeMs, z.animacija.vrsta)) {
             const el = putanje[d.indeks];
             if (!el) continue;
             lista.push(el.animate(kadroviPoteza(z.animacija.vrsta), {
-              delay: z.pocetakMs + d.pocetakMs, duration: d.trajanjeMs, fill: 'both', easing: 'linear',
+              delay: pocetak + d.pocetakMs, duration: d.trajanjeMs, fill: fillPoteza, easing: 'linear',
             }));
           }
           zapoceti.add(z.kljuc);

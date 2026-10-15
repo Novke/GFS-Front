@@ -19,7 +19,11 @@ let animate: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   dnevnik = [];
   animacije = [];
-  animate = vi.fn(function (this: Element) {
+  animate = vi.fn(function (this: Element, _kadrovi: Keyframe[], o: KeyframeAnimationOptions) {
+    // Kao pregledač: NaN ili beskonačno trajanje/kašnjenje baca TypeError.
+    if (!Number.isFinite(o.duration as number) || !Number.isFinite(o.delay ?? 0)) {
+      throw new TypeError('Failed to execute animate: duration/delay must be finite');
+    }
     let zavrsi = () => undefined as void;
     const finished = new Promise<void>((r) => { zavrsi = r; });
     const indeks = animacije.length;
@@ -446,6 +450,47 @@ describe('PlatnoPrikazComponent: ISCRTAJ potez po potez (faza 5)', () => {
     const [p0, p1] = Array.from(cilj.querySelectorAll('path[data-potez]'));
     expect(animacije.slice(1).map((a) => a.cilj)).toEqual([p1, p0]);
     expect(cilj.style.visibility).toBe('visible');
+  });
+
+  it('ISCRTAJ ULAZ pa ISCRTAJ IZLAZ istog crteža u istoj grupi: druga dobija fill forwards (kao ostale grane)', async () => {
+    const p = crtezSaPotezima();
+    p.animacije.push(animacija('a2', 'crtez', { vrsta: 'IZLAZ', efekat: 'ISCRTAJ', smer: 'LEVO', trajanjeMs: 1000, okidac: 'POSLE_PRETHODNOG' }));
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const [p0, p1] = putanje(el);
+    expect(animacije.map((a) => a.cilj)).toEqual([p0, p1, p1, p0]);
+    expect([0, 1, 2, 3].map((i) => opcije(i).fill)).toEqual(['both', 'both', 'forwards', 'forwards']);
+    expect([0, 1, 2, 3].map((i) => [opcije(i).delay, opcije(i).duration])).toEqual([[0, 258], [258, 742], [1000, 742], [1742, 258]]);
+    expect(animate.mock.calls[2][0]).toEqual(kadroviPoteza('IZLAZ'));
+  });
+
+  it('neispravni potezi (±1e308, NaN) se preskaču: plan i indeksi idu samo preko nacrtivih, animate ne baca', async () => {
+    const p = crtezSaPotezima({}, [
+      { boja: '#FF0000', debljina: 2, tacke: [1e308, 0, -1e308, 0] },
+      { boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 0] },
+      { boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 0, 0, 0] },
+      { boja: '#0000FF', debljina: 3, tacke: [0, 10, 0, 40] },
+    ]);
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const svePutanje = putanje(el);
+    expect(svePutanje).toHaveLength(2);
+    expect(animacije.map((a) => a.cilj)).toEqual(svePutanje);
+    expect([opcije(0), opcije(1)].map((o) => [o.delay, o.duration])).toEqual([[0, 258], [258, 742]]);
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('visible');
+  });
+
+  it('nijedan nacrtiv potez: slika i ISCRTAJ kao BRISANJE (clip-path), bez izuzetka', async () => {
+    const p = crtezSaPotezima({}, [
+      { boja: '#FF0000', debljina: 2, tacke: [] }, { boja: '#FF0000', debljina: Number.NaN, tacke: [0, 0, 1, 1] },
+      { boja: '#FF0000', debljina: 2, tacke: [1e308, 1e308] },
+    ]);
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(sadrzaj(el, 'crtez').getAttribute('data-crtez')).toBe('slika');
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animacije[0].cilj).toBe(sadrzaj(el, 'crtez'));
+    expect((animate.mock.calls[0][0] as Keyframe[]).map((k) => k['clipPath'])).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
   });
 
   it('kraj grupe poteza: cancel svih i sadržaj opet nasleđuje vidljivost od sloja', async () => {

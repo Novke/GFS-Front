@@ -199,6 +199,33 @@ describe('PlatnoPrikazComponent', () => {
     expect(crtez.querySelector('img')).not.toBeNull();
   });
 
+  it('CRTEZ: neispravni potezi (NaN, ±1e308, prazne tačke) se preskaču; ostaje samo nacrtiv', async () => {
+    const { el } = await prikazi(sa<CrtezSloj>('crtez', (s) => ({
+      ...s, potezi: [
+        { boja: '#FF0000', debljina: Number.NaN, tacke: [0, 0, 1, 1] },
+        { boja: '#FF0000', debljina: 2, tacke: [1e308, -1e308, 0, 0] },
+        { boja: '#00FF00', debljina: 2, tacke: [0, 0, 10, 5] },
+        { boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 0, 1, 1] },
+        { boja: '#FF0000', debljina: 2, tacke: [] },
+      ],
+    })));
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('vektor');
+    const putanje = Array.from(crtez.querySelectorAll('path[data-potez]'));
+    expect(putanje.map((p) => [p.getAttribute('d'), p.getAttribute('stroke')])).toEqual([['M0 0 L10 5', '#00FF00']]);
+  });
+
+  it.each([
+    { naziv: 'svi potezi sa praznim tačkama', potezi: [{ boja: '#FF0000', debljina: 2, tacke: [] }, { boja: '#FF0000', debljina: 2, tacke: [] }] },
+    { naziv: 'svi potezi neispravni', potezi: [{ boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 1] }, { boja: '#FF0000', debljina: 2, tacke: [1e308, 0] }] },
+  ])('CRTEZ: $naziv -> slika (jedno pravilo: slika kad nema nijednog nacrtivog poteza)', async ({ potezi }) => {
+    const { el } = await prikazi(sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi })));
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('slika');
+    expect(crtez.querySelector('img')!.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000002');
+    expect(crtez.querySelector('svg')).toBeNull();
+  });
+
   it('CRTEZ: potezi stigli kasnije (nov objekat sloja) menjaju sliku u vektor, drugi crtež (bez poteza) opet u sliku', async () => {
     const { fixture, el } = await prikazi(platno());
     const crtez = () => sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
@@ -508,6 +535,21 @@ describe('PlatnoPrikazComponent: keš pripremljenog prikaza sloja (odluka 33)', 
     Array.from(el.querySelectorAll<HTMLElement>('[data-sloj]')).map((s) => [
       s.dataset['sloj'], Array.from(s.style).map((k) => `${k}: ${s.style.getPropertyValue(k)}`).sort(), s.innerHTML,
     ]);
+
+  it('CRTEZ: isti potezi u novom objektu sloja (snimak, pomeranje u editoru) ne računaju putanje ponovo', async () => {
+    const potezi = [{ boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 5] }];
+    const p = sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi }));
+    const { fixture } = await prikazi(p);
+    const crtezPrikaz = () => (pripremljeni(fixture).find((x) => x.id === 'crtez') as unknown as { crtez: { potezi: unknown[] } }).crtez;
+    const pre = crtezPrikaz();
+    await postavi(fixture, { ...p, slojevi: p.slojevi.map((s) => (s.id === 'crtez' ? { ...s, x: 55 } : s)) });
+    const posle = crtezPrikaz();
+    expect(posle).not.toBe(pre);              // nov sloj -> nov prikaz (položaj se promenio)
+    expect(posle.potezi).toBe(pre.potezi);    // isti niz poteza -> iste putanje, bez novog računanja
+    await postavi(fixture, { ...p, slojevi: p.slojevi.map((s) => (s.id === 'crtez' ? { ...s, potezi: [...potezi] } : s)) });
+    expect(crtezPrikaz().potezi).not.toBe(pre.potezi);
+    expect(crtezPrikaz().potezi).toEqual(pre.potezi);
+  });
 
   it('isti objekat sloja na istom indeksu daje isti objekat prikaza (nov dokument, isti slojevi)', async () => {
     const p = platno();

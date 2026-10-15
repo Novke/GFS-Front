@@ -1,6 +1,10 @@
+import type { Potez } from '../data-access/platno.models';
 import {
-  CRTEZ_KAO_VEKTOR, NAJKRACI_POTEZ_MS, duzinaPoteza, kadroviPoteza, planIscrtavanja, putanjaPoteza,
+  CRTEZ_KAO_VEKTOR, MAX_KOORDINATA, NAJKRACI_POTEZ_MS, duzinaPoteza, kadroviPoteza, nacrtivPotez, planIscrtavanja, putanjaPoteza,
+  putanjeCrteza,
 } from './crtez-potezi';
+
+const potez = (tacke: number[], deo: Partial<Potez> = {}): Potez => ({ boja: '#FF0000', debljina: 2, tacke, ...deo });
 
 describe('crtez-potezi: putanja i dužina poteza', () => {
   it('kapija W1: crtež se podrazumevano crta kao vektor', () => {
@@ -103,5 +107,68 @@ describe('crtez-potezi: kadrovi poteza (pathLength = 1)', () => {
     expect(k.at(-2)).toMatchObject({ opacity: 1, strokeDashoffset: '1' });
     expect(k.at(-1)).toMatchObject({ opacity: 0, strokeDashoffset: '1', offset: 1 });
     expect(k.every((f) => f['strokeDasharray'] === '1 1')).toBe(true);
+  });
+});
+
+describe('crtez-potezi: nacrtiv potez i keš putanja (minori F7)', () => {
+  it.each([
+    { naziv: 'ispravan', p: potez([0, 0, 10, 5]), da: true },
+    { naziv: 'jedna tačka', p: potez([3, 4]), da: true },
+    { naziv: 'granica koordinate', p: potez([MAX_KOORDINATA, -MAX_KOORDINATA]), da: true },
+    { naziv: 'prazne tačke', p: potez([]), da: false },
+    { naziv: 'pola tačke', p: potez([5]), da: false },
+    { naziv: 'NaN u tačkama', p: potez([0, 0, Number.NaN, 1]), da: false },
+    { naziv: '+1e308', p: potez([0, 0, 1e308, 1]), da: false },
+    { naziv: '-1e308', p: potez([-1e308, 0, 1, 1]), da: false },
+    { naziv: 'Infinity', p: potez([0, Number.POSITIVE_INFINITY]), da: false },
+    { naziv: 'debljina NaN', p: potez([0, 0, 1, 1], { debljina: Number.NaN }), da: false },
+    { naziv: 'debljina Infinity', p: potez([0, 0, 1, 1], { debljina: Number.POSITIVE_INFINITY }), da: false },
+    { naziv: 'debljina 0', p: potez([0, 0, 1, 1], { debljina: 0 }), da: false },
+    { naziv: 'boja nije #RRGGBB', p: potez([0, 0, 1, 1], { boja: 'url(#x)' }), da: false },
+    { naziv: 'tačke nisu niz', p: { boja: '#FF0000', debljina: 2, tacke: null } as unknown as Potez, da: false },
+  ])('nacrtivPotez: $naziv -> $da', ({ p, da }) => {
+    expect(nacrtivPotez(p)).toBe(da);
+  });
+
+  it('putanjeCrteza: samo nacrtivi potezi, redom, sa d, bojom, debljinom i dužinom', () => {
+    const r = putanjeCrteza([
+      potez([0, 0, 3, 4]), potez([]), potez([Number.NaN, 0, 1, 1]), potez([1e308, -1e308, 0, 0]), potez([7, 7], { boja: '#0000FF', debljina: 4.5 }),
+    ]);
+    expect(r).toEqual([
+      { d: 'M0 0 L3 4', boja: '#FF0000', debljina: 2, duzina: 5 },
+      { d: 'M7 7 L7 7', boja: '#0000FF', debljina: 4.5, duzina: 0 },
+    ]);
+  });
+
+  it('putanjeCrteza: nijedan nacrtiv potez -> prazno (prikaz tada crta sliku)', () => {
+    expect(putanjeCrteza([])).toEqual([]);
+    expect(putanjeCrteza([potez([]), potez([]), potez([Number.NaN, 1])])).toEqual([]);
+  });
+
+  it('putanjeCrteza: isti niz poteza -> isti rezultat (putanja se ne računa ponovo); drugi niz -> nov rezultat', () => {
+    const potezi = [potez([0, 0, 10, 5])];
+    const prvi = putanjeCrteza(potezi);
+    expect(putanjeCrteza(potezi)).toBe(prvi);
+    const kopija = [...potezi];
+    expect(putanjeCrteza(kopija)).not.toBe(prvi);
+    expect(putanjeCrteza(kopija)).toEqual(prvi);
+  });
+
+  it('planIscrtavanja: nekonačne ili NaN dužine i zbir koji prelije ne daju NaN; zbir trajanja ostaje tačan', () => {
+    for (const duzine of [[Number.POSITIVE_INFINITY, 10], [Number.NaN, 10, 30], [1e308, 1e308], [-5, 5]]) {
+      const plan = planIscrtavanja(duzine, 1000, 'ULAZ');
+      expect(plan.every((d) => Number.isFinite(d.pocetakMs) && Number.isFinite(d.trajanjeMs))).toBe(true);
+      expect(plan.reduce((a, d) => a + d.trajanjeMs, 0)).toBe(1000);
+    }
+    // 1e308 + 1e308 prelije u Infinity: ravnomerna podela.
+    expect(planIscrtavanja([1e308, 1e308], 100, 'ULAZ').map((d) => d.trajanjeMs)).toEqual([50, 50]);
+  });
+
+  it('planIscrtavanja: trajanje NaN ili Infinity -> sve nule (kao trajanje 0)', () => {
+    for (const t of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(planIscrtavanja([10, 30], t, 'ULAZ')).toEqual([
+        { indeks: 0, pocetakMs: 0, trajanjeMs: 0 }, { indeks: 1, pocetakMs: 0, trajanjeMs: 0 },
+      ]);
+    }
   });
 });

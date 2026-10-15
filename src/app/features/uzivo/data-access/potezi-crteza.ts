@@ -5,7 +5,10 @@ import type { CrtezSloj, Potez } from './platno.models';
 import { PrezentacijeApi } from './prezentacije.api';
 import type { PoteziSloja, SlajdDetails } from './uzivo.models';
 
-/** Posle greške zahtev za iste slojeve ide tek posle ovoliko (ne u petlji, Review Focus 3). */
+/**
+ * Posle greške zahtev za iste slojeve ide tek posle ovoliko (ne u petlji, Review Focus 3): tada `ucitaj` sam pokreće ponovo
+ * efekat koji ga zove (signal pauze), jedan pokušaj po pauzi, pa projektor u sali bez komandi ipak dobije vektor.
+ */
 export const PONOVI_POSLE_MS = 10_000;
 
 const naDesetinu = (v: number) => Math.round(v * 10) / 10;
@@ -21,6 +24,19 @@ export function skalirajPoteze(potezi: Potez[], iz: { sirina: number; visina: nu
 }
 
 /**
+ * Skalirani potezi unosa za veličinu sloja, zapamćeni za poslednju veličinu po unosu: snimak (do 4/s) je uvek nov JSON, a
+ * isti niz poteza znači da prikaz ne računa putanje ponovo (`putanjeCrteza` kešira po nizu).
+ */
+const skalirani = new WeakMap<PoteziSloja, { sirina: number; visina: number; potezi: Potez[] }>();
+function skaliraniPotezi(e: PoteziSloja, izvor: Potez[], u: { sirina: number; visina: number }): Potez[] {
+  const z = skalirani.get(e);
+  if (z && z.sirina === u.sirina && z.visina === u.visina) return z.potezi;
+  const potezi = skalirajPoteze(izvor, e, u);
+  skalirani.set(e, { sirina: u.sirina, visina: u.visina, potezi });
+  return potezi;
+}
+
+/**
  * Slajd iz snimka sa potezima iz keša: CRTEZ bez poteza dobija poteze unosa istog `slojId` i `medijId` (drugi crtež na
  * istom id-ju ne dobija tuđe poteze), skalirane na veličinu sloja iz snimka. Ništa za dodati -> isti objekat.
  */
@@ -33,7 +49,7 @@ export function primeniPoteze(s: SlajdDetails, kes: ReadonlyMap<string, PoteziSl
     const e = kes.get(kljucSloja(sl));
     if (!e?.potezi) return sl;
     promena = true;
-    return { ...sl, potezi: skalirajPoteze(e.potezi, e, sl) };
+    return { ...sl, potezi: skaliraniPotezi(e, e.potezi, sl) };
   });
   return promena ? { ...s, platno: { ...p, slojevi } } : s;
 }
@@ -48,9 +64,16 @@ export class PoteziCrteza {
   private readonly kes = signal<ReadonlyMap<number, ReadonlyMap<string, PoteziSloja>>>(new Map());
   /** `slajdId:slojId|medijId` za koje je zahtev poslat ili uspeo. */
   private readonly trazeno = new Set<string>();
+  /** Raste kad istekne pauza posle greške: `ucitaj` ga čita, pa efekat koji ga zove (scena) radi ponovo jednom. */
+  private readonly krajPauze = signal(0);
 
-  /** Traži poteze kad CRTEZ sloj bez poteza (id + `medijId`) još nije tražen; INFO, PITANJE i `null` ništa. */
+  /**
+   * Traži poteze kad CRTEZ sloj bez poteza (id + `medijId`) još nije tražen; INFO, PITANJE i `null` ništa. Pozvan iz
+   * efekta, efekat se ponovo pokreće kad istekne pauza posle greške (`PONOVI_POSLE_MS`): najviše jedan pokušaj po pauzi,
+   * a nova greška daje novu pauzu (bez petlje). Posle uspeha signal se više ne menja.
+   */
   ucitaj(s: SlajdDetails | null): void {
+    this.krajPauze();
     if (!s || s.tip !== 'PLATNO' || !s.platno) return;
     const fale = s.platno.slojevi
       .filter((sl): sl is CrtezSloj => sl.tip === 'CRTEZ' && !sl.potezi)
@@ -66,7 +89,10 @@ export class PoteziCrteza {
       }),
       error: (e: unknown) => {
         console.warn('Potezi crteža nisu učitani; crta se slika.', e);
-        setTimeout(() => fale.forEach((k) => this.trazeno.delete(k)), PONOVI_POSLE_MS);
+        setTimeout(() => {
+          fale.forEach((k) => this.trazeno.delete(k));
+          this.krajPauze.update((n) => n + 1);
+        }, PONOVI_POSLE_MS);
       },
     });
   }
