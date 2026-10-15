@@ -297,6 +297,44 @@ describe('PublikaScenaComponent (potezi crteža)', () => {
     http.verify();
   });
 
+  it('potezi stignu dok grupa 0 traje (PRIJAVA -> prvi slajd): isti prikaz i cilj, animacija nastavlja preko vektora', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise(() => undefined) }));
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+    try {
+      const slajd = platnoSlajd({
+        id: 30, platno: { ...platno(), animacije: [animacija('a0', 'crtez', { okidac: 'SA_PRETHODNIM', efekat: 'ISCRTAJ', smer: 'LEVO' })] },
+      });
+      const fixture = await scena(stanje({ prikaz: 'PRIJAVA', indeks: -1, trenutniSlajd: null, verzija: 5 }));
+      fixture.componentRef.setInput('animiraj', true);
+      fixture.componentRef.setInput('stanje', stanje({ prikaz: 'SLAJD', indeks: 0, korak: 0, brojStavki: 1, trenutniSlajd: slajd, verzija: 6 }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const el = fixture.nativeElement as HTMLElement;
+      const cilj = () => el.querySelector<HTMLElement>('.uz-pl-sloj[data-sloj="crtez"] > .uz-pl-sadrzaj')!;
+      const prvi = cilj();
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(prvi.getAttribute('data-crtez')).toBe('slika');
+      const platnoPrikaz = fixture.debugElement.query(By.css('app-platno-prikaz')).componentInstance;
+
+      http.expectOne('api/slajdovi/30/potezi').flush([
+        { slojId: 'crtez', medijId: '00000000-0000-0000-0000-000000000002', sirina: 200, visina: 100, potezi },
+      ]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(fixture.debugElement.query(By.css('app-platno-prikaz')).componentInstance).toBe(platnoPrikaz);
+      expect(cilj()).toBe(prvi);
+      expect(prvi.getAttribute('data-crtez')).toBe('vektor');
+      expect(animate).toHaveBeenCalledTimes(1);
+      const animacija0 = animate.mock.results[0].value as { cancel: ReturnType<typeof vi.fn> };
+      expect(animacija0.cancel).not.toHaveBeenCalled();
+      expect(prvi.style.visibility).toBe('visible');
+      http.verify();
+    } finally {
+      delete (Element.prototype as Partial<Element>).animate;
+    }
+  });
+
   it('INFO trenutni (i INFO sledeći): nijedan zahtev', async () => {
     const http = TestBed.inject(HttpTestingController);
     await scena(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() }));
