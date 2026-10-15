@@ -263,6 +263,54 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), 'axe: telefon, pitanje sa formulom').toEqual([]);
     });
+
+    /*
+     * Talas ispravki 5a (završna recenzija B, Important 2): šira formula se na telefonu skroluje u sebi, pa je skrol region
+     * (`scrollable-region-focusable`, serious) koji tastatura mora da dohvati. Tab stop (`tabindex="0"`) dobija samo
+     * nacrtana formula koja stvarno prelazi širinu; kratka ne, a formula u dugmetu opcije (`aria-hidden`, ime dugmeta iz
+     * `tekstZaCitac`) nikad (`nested-interactive`). Ime je `aria-label` = LaTeX uz `role="img"`.
+     */
+    const SIROKA = '$\\frac{a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9}{b_1+b_2+b_3+b_4+b_5+b_6+b_7+b_8+b_9}=x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8$';
+    for (const ekran of ['unos', 'tačan odgovor'] as const) {
+      test(`/uzivo/123456 (široka formula, 360 x 740, ${ekran}): bez serious/critical kršenja, skrol formule dostupan tastaturi`, async ({ page, mock }) => {
+        await page.setViewportSize({ width: 360, height: 740 });
+        mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+        const tacan = ekran === 'tačan odgovor';
+        await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno' ? {
+          javno: {
+            izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas',
+            kod: '123456', prikaz: 'SLAJD', slajdTip: 'PITANJE', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'PITANJE',
+            detaljiDozvoljeni: false, brojUcesnika: 1, rezultat: null, rangLista: null,
+            pitanje: {
+              tip: 'JEDAN_TACAN', faza: tacan ? 'ZATVORENO' : 'OTVORENO', rundaId: 31, brojOpcija: 2,
+              opcije: [{ id: 1, tekst: SIROKA }, { id: 2, tekst: '$13$' }], tekst: `Izračunaj ${SIROKA} ako je $13$.`,
+              slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+              tacneOpcije: tacan ? [1, 2] : null, tacanBroj: null, prihvatljiviOdgovori: null,
+            },
+          },
+          licno: { verzija: 1, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null },
+        } : undefined));
+        await page.goto('uzivo/123456');
+        const okvir = tacan ? '.uz-st-tacna' : '.uz-st-md';
+        const siroka = page.locator(`${okvir} .uz-formula--spremna`).first();
+        await expect(siroka.locator('.ML__latex')).toBeVisible();
+        await page.waitForLoadState('networkidle');
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+        expect(await ozbiljnaKrsenja(page), `axe: telefon, široka formula (${ekran})`).toEqual([]);
+        // široka formula: skrol region sa tab stopom; kratka ($13$) i formule u dugmadima opcija bez tab stopa
+        await expect(siroka).toHaveAttribute('tabindex', '0');
+        expect(await siroka.evaluate(f => f.scrollWidth > f.clientWidth), 'široka formula prelazi širinu').toBe(true);
+        const kratke = page.locator('.uz-formula--spremna[aria-label="13"]');
+        await expect(kratke.first()).toBeVisible();
+        for (const k of await kratke.all()) await expect(k).not.toHaveAttribute('tabindex');
+        await expect(page.locator('button [tabindex]')).toHaveCount(0);
+        // tastatura: fokus na formuli, strelica je skroluje
+        await siroka.focus();
+        await expect(siroka).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect.poll(() => siroka.evaluate(f => f.scrollLeft)).toBeGreaterThan(0);
+      });
+    }
   });
 
   test('/izvodjenja/7/publika (projektor, pitanje sa formulom): bez serious/critical kršenja', async ({ page, mock }) => {

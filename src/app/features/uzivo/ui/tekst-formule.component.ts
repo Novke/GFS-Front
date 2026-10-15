@@ -1,5 +1,6 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input,
+  signal,
 } from '@angular/core';
 import { PUTANJA_STILA_FORMULA, UCITAJ_FORMULE, type ModulFormule } from './formula-ucitavanje';
 import { markdownSaFormulama } from './markdown';
@@ -113,6 +114,8 @@ export class TekstFormuleComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly modul = signal<ModulFormule | null>(null);
   private ucitavanje = false;
+  /** Samo telefon (bez `MERA_FORMULE`): posmatra nacrtane formule, da široka (skrol u sebi) dobije tab stop. */
+  private skrol: ResizeObserver | null = null;
   protected readonly pripremljen = computed(() =>
     this.markdown() ? markdownSaFormulama(this.tekst()) : tekstSaFormulama(this.tekst()));
 
@@ -135,6 +138,7 @@ export class TekstFormuleComponent {
     afterRenderEffect({
       write: () => {
         const m = this.modul();
+        this.skrol?.disconnect();
         if (!m || !this.pripremljen().formula) {
           return;
         }
@@ -155,8 +159,24 @@ export class TekstFormuleComponent {
           el.setAttribute('role', 'img');
           el.setAttribute('aria-label', latex);
         });
+        // telefon: nikad u dugmetu opcije (`aria-hidden`, ime dugmeta iz `tekstZaCitac`; fokusabilno dete bi bilo
+        // `nested-interactive`)
+        if (this.skrol && !this.host.closest('button, [aria-hidden="true"]')) {
+          this.host.querySelectorAll(`.${KLASA_FORMULE}--spremna`).forEach((el) => this.skrol!.observe(el));
+        }
       },
     });
-    inject(MERA_FORMULE)?.(this.host, () => !!this.modul() && this.pripremljen().formula);
+    const mera = inject(MERA_FORMULE);
+    if (mera) {
+      mera(this.host, () => !!this.modul() && this.pripremljen().formula);
+    } else if (typeof ResizeObserver !== 'undefined') {
+      // Telefon: šira formula je skrol region (`uzivo-javno.css`), pa mora biti dostupna tastaturi (axe
+      // `scrollable-region-focusable`). Tab stop dobija samo formula koja stvarno prelazi; ime je već tu (`role="img"`,
+      // `aria-label` = LaTeX, deca su prezentaciona, pa se sadržaj ne čita dvaput). Prelaz preko širine uvek menja veličinu
+      // kutije (`max-width: 100%`), pa `ResizeObserver` na formulama hvata i okretanje telefona i kasne fontove.
+      const skrol = (this.skrol = new ResizeObserver((z) => z.forEach(({ target: f }) =>
+        f.scrollWidth > f.clientWidth ? f.setAttribute('tabindex', '0') : f.removeAttribute('tabindex'))));
+      inject(DestroyRef).onDestroy(() => skrol.disconnect());
+    }
   }
 }

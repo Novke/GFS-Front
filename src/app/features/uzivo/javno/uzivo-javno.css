@@ -549,3 +549,9 @@
   margin-block: -0.25em;
   margin-inline-end: 0;
 }
+
+/* Široka formula ima tab stop (`tekst-formule.component.ts`); prsten fokusa ide unutra, jer domaćin seče vodoravno
+   (`overflow-x: clip`). */
+.uz-st .uz-formula--spremna:focus-visible {
+  outline-offset: -3px;
+}

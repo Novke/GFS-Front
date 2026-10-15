@@ -1,4 +1,5 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import { MERA_FORMULE } from './tekst-formule.component';
 import { TestBed } from '@angular/core/testing';
 import { ModulFormule, UCITAJ_FORMULE, ucitajFormule } from './formula-ucitavanje';
 import {
@@ -202,6 +203,124 @@ describe('TekstFormuleComponent', () => {
       await stabilno(fixture);
       expect(el.querySelector('.uz-formula--spremna .ML__latex')).not.toBeNull();
     }, { timeout: 5000 });
+  });
+});
+
+@Component({
+  imports: [TekstFormuleComponent],
+  template: `<p class="tekst"><app-tekst-formule [tekst]="tekst()" /></p>
+    <button type="button" aria-label="A: x"><app-tekst-formule aria-hidden="true" [tekst]="tekst()" /></button>`,
+})
+class DomacinTelefona {
+  readonly tekst = signal('Izračunaj $x$ i $y$');
+}
+
+/** Lažni `ResizeObserver` (jsdom ga nema): pamti posmatrane elemente, `javi()` zove povratni poziv kao pregledač. */
+class LazniPosmatrac {
+  static svi: LazniPosmatrac[] = [];
+  readonly posmatrani = new Set<Element>();
+  odvezan = 0;
+  constructor(private readonly povratni: ResizeObserverCallback) {
+    LazniPosmatrac.svi.push(this);
+  }
+  observe(el: Element) {
+    this.posmatrani.add(el);
+  }
+  unobserve(el: Element) {
+    this.posmatrani.delete(el);
+  }
+  disconnect() {
+    this.odvezan++;
+    this.posmatrani.clear();
+  }
+  javi() {
+    this.povratni([...this.posmatrani].map((target) => ({ target }) as ResizeObserverEntry), this as unknown as ResizeObserver);
+  }
+}
+
+/** `scrollWidth`/`clientWidth` formule (jsdom nema raspored). */
+function sirine(el: Element, scroll: number, client: number) {
+  Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scroll });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, value: client });
+}
+
+describe('TekstFormuleComponent na telefonu: tab stop samo za široku formulu (axe scrollable-region-focusable)', () => {
+  beforeEach(() => {
+    LazniPosmatrac.svi = [];
+    vi.stubGlobal('ResizeObserver', LazniPosmatrac);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function napravi(mera: unknown = null) {
+    const pozivi: string[] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: UCITAJ_FORMULE, useValue: () => Promise.resolve(lazniModul(pozivi)) },
+        { provide: UCITAJ_STIL_TEKSTA_FORMULE, useValue: () => Promise.resolve() },
+        ...(mera ? [{ provide: MERA_FORMULE, useValue: mera }] : []),
+      ],
+    });
+    const fixture = TestBed.createComponent(DomacinTelefona);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('prelazi -> tabindex="0"; ne prelazi -> bez tab stopa; promena širine (okretanje) skida ga', async () => {
+    const fixture = napravi();
+    await stabilno(fixture);
+    const [x, y] = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('p.tekst .uz-formula--spremna');
+    sirine(x, 400, 300);
+    sirine(y, 100, 100);
+    const posmatrac = LazniPosmatrac.svi.find((p) => p.posmatrani.has(x))!;
+    expect(posmatrac.posmatrani.has(y)).toBe(true);
+    posmatrac.javi();
+    expect(x.getAttribute('tabindex')).toBe('0');
+    expect(y.hasAttribute('tabindex')).toBe(false);
+    sirine(x, 300, 300);
+    posmatrac.javi();
+    expect(x.hasAttribute('tabindex')).toBe(false);
+    // ime ostaje ime slike (bez duplog čitanja sadržaja)
+    expect(x.getAttribute('role')).toBe('img');
+    expect(x.getAttribute('aria-label')).toBe('x');
+  });
+
+  it('formula u dugmetu opcije (aria-hidden) se ne posmatra i nikad ne dobija tab stop (nested-interactive)', async () => {
+    const fixture = napravi();
+    await stabilno(fixture);
+    const uDugmetu = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button .uz-formula--spremna');
+    expect(uDugmetu.length).toBe(2);
+    uDugmetu.forEach((f) => sirine(f, 400, 300));
+    for (const p of LazniPosmatrac.svi) {
+      uDugmetu.forEach((f) => expect(p.posmatrani.has(f)).toBe(false));
+      p.javi();
+    }
+    uDugmetu.forEach((f) => expect(f.hasAttribute('tabindex')).toBe(false));
+  });
+
+  it('novi tekst: staro posmatranje se prekida, posmatraju se nove formule; uništavanje odvezuje posmatrača', async () => {
+    const fixture = napravi();
+    await stabilno(fixture);
+    const posmatrac = LazniPosmatrac.svi[0];
+    const pre = posmatrac.odvezan;
+    fixture.componentInstance.tekst.set('Sada $z$');
+    await stabilno(fixture);
+    expect(posmatrac.odvezan).toBeGreaterThan(pre);
+    const z = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('p.tekst .uz-formula--spremna')!;
+    expect(z.getAttribute('aria-label')).toBe('z');
+    expect(posmatrac.posmatrani.has(z)).toBe(true);
+    const odvezan = LazniPosmatrac.svi.map((p) => p.odvezan);
+    fixture.destroy();
+    LazniPosmatrac.svi.forEach((p, i) => expect(p.odvezan).toBeGreaterThan(odvezan[i]));
+  });
+
+  it('nastavnički prikaz (MERA_FORMULE dat): nema posmatrača skrola ni tab stopa (tamo formula nije skrol region)', async () => {
+    const mera = vi.fn();
+    const fixture = napravi(mera);
+    await stabilno(fixture);
+    expect(mera).toHaveBeenCalled();
+    expect(LazniPosmatrac.svi).toEqual([]);
+    expect((fixture.nativeElement as HTMLElement).querySelector('[tabindex]')).toBeNull();
   });
 });
 
