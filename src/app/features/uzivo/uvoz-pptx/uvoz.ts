@@ -17,6 +17,7 @@ import {
 } from './nasledjivanje';
 import { elementPopune, GEOMETRIJE, ivicaIz, nazivOblika, popunaIz, pretvoriOblik, rotacijaSloja, senkaIz, upozoriJednom } from './oblik';
 import { otvoriPaket } from './paket';
+import { prelazSlajda } from './prelaz';
 import { pozadinaSlajda, pretvoriSliku } from './slika';
 import { pretvoriTabelu } from './tabela';
 import { opcijeStilaOblika, pretvoriTekst, type RezultatTeksta } from './tekst';
@@ -574,6 +575,8 @@ function pretvoriSlajd(z: ZajednickoUvoza, putanja: string, indeks: number): Uve
     ctx.upozori('TEKST_PRIBLIZAN', 'Slajd nema layout ili master: tekst i položaji su uvezeni bez nasleđivanja.');
   }
   const koren = ctx.slajd.doc.documentElement;
+  const prelaz = prelazSlajda(koren);
+  prelaz.upozorenja.forEach((p) => ctx.upozori('PRELAZ_SLAJDA', p));
   const timing = dete(koren, NS.p, 'timing');
 
   const pozadina = pozadinaSlajda(ctx);
@@ -597,7 +600,7 @@ function pretvoriSlajd(z: ZajednickoUvoza, putanja: string, indeks: number): Uve
     indeks,
     cmd: {
       tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske, postepeno: false, pitanje: null, platno: uklopljeno,
-      prelaz: null, // F18: p:transition
+      prelaz: prelaz.prelaz,
     },
     mediji: medijiDokumenta(uklopljeno),
     statistika: statistika(uklopljeno, anim.efekataPptx, anim.klikoviPptx, beleske),
@@ -646,7 +649,6 @@ export async function pretvoriPptx(bajtovi: Uint8Array, imeFajla: string, o: Opc
   const ukupno = paket.slajdovi.length;
   const slajdovi: UvezenSlajd[] = [];
   const greske: GreskaSlajda[] = [];
-  let prelaz = false;
   for (let i = 0; i < ukupno; i++) {
     const indeks = i + 1;
     const putanja = paket.slajdovi[i];
@@ -664,10 +666,6 @@ export async function pretvoriPptx(bajtovi: Uint8Array, imeFajla: string, o: Opc
       if (['0', 'false'].includes(koren.getAttribute('show') ?? '')) {
         z.upozorenja.push({ slajd: indeks, kod: 'SKRIVEN_SLAJD', poruka: 'Skriven slajd nije uvezen (PowerPoint ga ne prikazuje).' });
       } else {
-        if (!prelaz && koren.getElementsByTagNameNS(NS.p, 'transition').length > 0) {
-          prelaz = true;
-          z.upozorenja.push({ slajd: null, kod: 'PRELAZ_SLAJDA', poruka: 'Prelazi između slajdova se ne prenose.' });
-        }
         const rez = pretvoriSlajd(z, putanja, indeks);
         if ('greska' in rez) neuspeh(nijeProcitan(rez.greska));
         else slajdovi.push(rez);

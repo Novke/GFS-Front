@@ -301,7 +301,7 @@ over STOMP; teacher commands are REST.
   `uzivo-daljinski` (360 x 740 long notes, double tap, 409/410/aborted command, sleep and wake).
 - **PowerPoint import (phase 2):** `uvoz-pptx/` holds the import as pure TS functions without Angular (`paket`, `xml`, `tema`,
   `preset-boje`, `tipovi`, `kontekst`, `nasledjivanje`, `tekst`, `oblik`, `slika`, `tabela`/`tabela-stilovi`, `crtez`,
-  `formula`/`omml-latex`, `png`, `animacije`, `beleske`, `granice`, `ime-fajla`, `format-slike`, `slike`, `slanje`,
+  `formula`/`omml-latex`, `png`, `animacije`, `prelaz`, `beleske`, `granice`, `ime-fajla`, `format-slike`, `slike`, `slanje`,
   `izvestaj`, `uvoz`; `slike` uses browser canvas APIs and is not loaded by the Node sample check, `format-slike` is its
   browser-free part; synthetic PPTX files for specs come from `pptx-fabrika.testing.ts`). The only
   entry from the rest of the app is `pages/uvoz-pptx-otvarac.ts` (`UvozPptxOtvarac`): a dynamic `import()` of
@@ -622,7 +622,13 @@ over STOMP; teacher commands are REST.
   sends its own fields, `izmeniPlatno`, duplicating and leaving the editor reuse the last command, and "Poništi pretvaranje"
   sends the slide's **current** transition (changed in the PLATNO form after converting), like the notes. `EditorStore` and
   page specs cover each path (block "prelaz preživi svaki PUT"); `e2e/mock-api.ts` replaces it on PUT like the server, so an
-  e2e PUT without it would lose it. Imports (`uvoz-pptx/uvoz.ts` until F18, `uvoz-pdf/strane.ts`) send `prelaz: null`. The
+  e2e PUT without it would lose it. The PDF import (`uvoz-pdf/strane.ts`) sends `prelaz: null`. **The PPTX import (F18)**
+  maps `p:transition` in `uvoz-pptx/prelaz.ts` (`elementPrelaza`, `prelazSlajda`; read directly or from `mc:AlternateContent`:
+  a `mc:Choice` only when every `Requires` prefix is p14, otherwise `mc:Fallback`): `p:fade` -> FADE, `p:push` -> GURANJE,
+  `p:wipe` -> BRISANJE, `p:cut`/empty -> `null`, any other effect -> FADE plus `PRELAZ_SLAJDA` on that slide; `dir` is the
+  direction of motion (`l` -> DESNO, `r` -> LEVO, `u` -> DOLE, `d` -> GORE, default `l`); duration from `p14:dur`, otherwise
+  `spd` (fast 500, med 750, slow 1000), clamped to 100-5000; `advTm`/`advClick="0"` and `p:sndAc` are dropped with a
+  `PRELAZ_SLAJDA` warning (no more file-wide "transitions are not imported" warning). The
   form fields ("Prelaz na ovaj slajd": Efekat with "Bez prelaza", Smer only for GURANJE/BRISANJE, "Trajanje (s)" 0.1-5,
   "Pregledaj prelaz" -> `SlajdFormaComponent.pregledPrelaza`) live in `pages/prelaz-polja.component.ts`, rendered by the form
   in `@defer (on immediate)`, so they are a lazy chunk (~3 kB) and the editor page file grows only by the controls (~0.9 kB);
