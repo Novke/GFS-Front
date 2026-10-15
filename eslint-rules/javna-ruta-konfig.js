@@ -36,7 +36,8 @@ const DOZVOLJENO_PO_FEATURE = {
     // ui/formula-prikaz.component ni ui/formula-ucitavanje direktno (testovi pravila to drže): put do mathlive/ssr je samo
     // lenji import() u ui/formula-ucitavanje, iza komponente. Tranzitivno statički (stanje posle F3 i F2 fix kruga):
     // ui/formula-ucitavanje -> @angular/core i ui/cekanje-fontova (bez uvoza; samo document.fonts), pa ui/preducitavanje,
-    // ui/teme i ui/platno-fontovi više ne stižu na telefon; nema HTTP klijenta ni /api/* van api/public/*. Lenji chunk:
+    // ui/teme i ui/platno-fontovi više ne stižu na telefon (e2e/lenji-formule.spec.ts to proverava nad buildom, jer pravilo
+    // vidi samo direktne uvoze); nema HTTP klijenta ni /api/* van api/public/*. Lenji chunk:
     // ui/formula-markup -> mathlive/ssr, ui/formula-komande, ui/formula-sanitizer (bez uvoza).
     'features/uzivo/ui/tekst-formule.component', // formule $...$: uvozi @angular/core, ui/tekst-formule, ui/markdown i ui/formula-ucitavanje; mathlive/ssr samo dinamički (ui/formula-markup), stil i fontovi iz assets/mathlive/
     'features/uzivo/ui/tekst-formule', // čiste funkcije (tekstZaCitac), samo `import type` iz marked
@@ -44,7 +45,7 @@ const DOZVOLJENO_PO_FEATURE = {
 };
 
 // npm paketi koje javni feature ne sme da uvozi (ni podputanje, npr. `fflate/esm`; "@scope/*" = ceo scope). Paketi su
-// inače slobodni (nemaju pristup `/api/*`), ali biblioteke editora i uvoza graditelja slajdova (uvoz PPTX-a,
+// inače slobodni (nemaju pristup `/api/*`), ali biblioteke editora i uvoza graditelja slajdova (uvoz PPTX-a i PDF-a,
 // ProseMirror, MathLive) su teške i nastavničke: idu ovde da nikad ne uđu u javni chunk studenta.
 // Pravilo uzima ovaj spisak i kad mu se ne prosledi opcija (fail-closed).
 const ZABRANJENI_PAKETI_JAVNO = [

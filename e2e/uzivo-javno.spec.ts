@@ -1,8 +1,8 @@
-import type { Page } from '@playwright/test';
-import { test as osnovniTest } from './fixture';
+import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
-import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA } from './nizovi-editora';
+import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, zabranjeniJavno } from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
+import { OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
 
 /** Kod aktivnog izvođenja iz `fixtures/uzivo.json` (izmišljen). */
 const KOD = '123456';
@@ -68,8 +68,10 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     expect(skripte.putanje.length, 'lenji chunk-ovi javne rute su provereni').toBeGreaterThan(1);
     expect(skripte.saUvozom).toEqual([]);
     expect(skripte.saEditorom).toEqual([]);
-    // provera nizova pokriva i biblioteke 4b (ProseMirror, MathLive), a formule se ovde ne učitavaju (ni stil ni fontovi)
+    // provera nizova pokriva i biblioteke 4b (ProseMirror, MathLive), a bez formule se ništa od formula ne učitava:
+    // nijedan JS sa `ML__latex` (ni `mathlive/ssr`), nijedan zahtev na `assets/mathlive/` (ni stil ni fontovi)
     expect(NIZOVI_EDITORA).toEqual(expect.arrayContaining([NIZ_PROSEMIRROR, NIZ_MATHLIVE]));
+    expect(skripte.saFormulom, 'JS sa ML__latex bez formule').toEqual([]);
     expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/'))).toEqual([]);
     expect(javnaMreza.zahtevi.length, 'zahtevi su zabeleženi').toBeGreaterThan(1);
     // samo odredišta koja backend dozvoljava studentu
@@ -84,6 +86,116 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     await page.getByLabel('Kod sa table').fill('000000');
     await expect(page.getByText('Izvođenje sa tim kodom ne postoji ili je završeno.')).toBeVisible();
     await expect(page).toHaveURL(/\/uzivo$/);
+  });
+});
+
+/**
+ * Granica mreže formule na telefonu (odluka 25): JS, CSS i woff2 koji stignu posle pitanja sa formulom. Izmereno
+ * 2026-10-14 (build e13cfdd, F5 Step 0): 404 112 B = `mathlive/ssr` 348 195 (dva chunk-a) + `mathlive-static.css` 13 205 +
+ * KaTeX_Main-Regular 26 272 + KaTeX_Math-Italic 16 440 (fontovi aplikacije iz `media/` se ne broje). Granica = izmereno
+ * + 10 % (444 523 B), a izmereno ne sme preći 450 000 B (inače lakši učitavač stila, `ucitajStilFormulaUTekstu`, ne radi).
+ */
+const MREZA_FORMULE_IZMERENO = 404_112;
+const GRANICA_MREZE_FORMULE = Math.min(Math.floor(MREZA_FORMULE_IZMERENO * 1.1), 450_000);
+
+test.describe('javni uživo: pitanje sa formulom na telefonu (5a)', () => {
+  const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch } = devices['iPhone 13'];
+  test.use({
+    viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, formule: true,
+    // kolačić prijave već važi (`GET ja`), pa stranica ne šalje `POST prijava`: svaki `/api/` poziv je `GET /api/public/uzivo/...`
+    dozvoljeniApi: /^GET \/api\/public\/uzivo\/\d{6}(\/ja)?$/,
+  });
+
+  test('ispravna formula se crta (mathlive/ssr), \\href i nepoznata komanda ostaju izvor; samo javna mreža, lakši stil', async ({ page, mock, javnaMreza, baseURL }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const origin = new URL(baseURL!).origin;
+    const spolja: string[] = [];
+    page.on('request', r => {
+      if (new URL(r.url()).origin !== origin) spolja.push(r.url());
+    });
+    // tela JS, CSS i woff2 odgovora koji stignu posle pitanja (mreža formule)
+    let posle = false;
+    const tela: Promise<{ putanja: string; bajtova: number }>[] = [];
+    page.on('response', r => {
+      const putanja = new URL(r.url()).pathname;
+      if (posle && /\.(js|css|woff2)$/.test(putanja)) {
+        tela.push(r.body().then(b => ({ putanja, bajtova: b.length }), () => ({ putanja, bajtova: Number.NaN })));
+      }
+    });
+    const broker = await lazniBroker(
+      page, 'api/public/ws',
+      o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? pocetno('Mina') : undefined),
+      url => javnaMreza.ws.push(new URL(url).pathname),
+    );
+
+    await page.goto(`uzivo/${KOD}`);
+    await expect(page.getByText('Čekamo početak')).toBeVisible();
+    const tema = `/topic/izvodjenja/${IZVODJENJE}/javno`;
+    await expect.poll(() => broker.pretplate).toContain(tema);
+    await page.waitForLoadState('networkidle');
+    // dotle nijedna formula: ni JS sa `ML__latex` ni `assets/mathlive/`
+    expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/')), 'MathLive pre pitanja').toEqual([]);
+    expect((await javnaMreza.skripte()).saFormulom, 'mathlive/ssr pre pitanja').toEqual([]);
+
+    posle = true;
+    const p = pocetno('Mina').javno;
+    broker.posalji(tema, {
+      ...p, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PITANJE', telefonPrikaz: 'PITANJE',
+      pitanje: {
+        tip: 'JEDAN_TACAN', faza: 'OTVORENO', rundaId: 31, brojOpcija: OPCIJE_SA_FORMULOM.length,
+        opcije: OPCIJE_SA_FORMULOM.map((tekst, i) => ({ id: i + 1, tekst })),
+        tekst: TEKST_SA_FORMULOM, slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null,
+        preostaloMs: null, tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+      },
+    });
+
+    // 1. tri ispravne formule (tekst + dve opcije) su nacrtane; \href (zabranjena komanda) i \nepostoji (MathLive je
+    //    odbija) ostaju izvor, bez veze iz formule
+    const spremne = page.locator('.uz-formula--spremna .ML__latex');
+    await expect(spremne).toHaveCount(SPREMNIH_FORMULA);
+    for (const f of await spremne.all()) await expect(f).toBeVisible();
+    await expect(page.locator('.uz-st-md .uz-formula--spremna')).toHaveAttribute('aria-label', '1011_2');
+    await expect(page.locator('.uz-formula--izvor')).toHaveText(['$\\href{http://primer.invalid}{ovde}$', '$\\nepostoji{x}$']);
+    await expect(page.locator('.uz-formula a, a[href*="primer.invalid"]')).toHaveCount(0);
+    // dugmad opcija: formula je nacrtana, a čitač ekrana dobija tekst bez `$` (`tekstZaCitac`)
+    await expect(page.locator('.uz-st-opcija .uz-formula--spremna')).toHaveCount(OPCIJE_SA_FORMULOM.length);
+    await expect(page.locator('button.uz-st-opcija').first()).toHaveAccessibleName(/: 11$/);
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+    // 2. svi `/api/` zahtevi su GET /api/public/uzivo/..., WebSocket samo /api/public/ws, nijedan 401
+    expect(javnaMreza.api).toEqual([`GET /api/public/uzivo/${KOD}`, `GET /api/public/uzivo/${KOD}/ja`]);
+    expect(javnaMreza.ws).toEqual(['/api/public/ws']);
+    expect(javnaMreza.odgovori401).toEqual([]);
+    // 3. nijedan zahtev van porekla stranice; KaTeX fontovi samo iz assets/mathlive/fonts/
+    expect(spolja, 'zahtevi van porekla stranice').toEqual([]);
+    const sve = await Promise.all([...tela]);
+    // `media/*.woff2` su fontovi same aplikacije (globalni stil, npr. IBM Plex Sans 600 za tekst pitanja): stižu i za pitanje
+    // bez formule, pa nisu deo mreže formule; svaki drugi font mora biti KaTeX iz assets/mathlive/fonts/
+    const ucitano = sve.filter(x => !/^\/media\/[^/]+\.woff2$/.test(x.putanja));
+    const woff2 = ucitano.map(x => x.putanja).filter(x => x.endsWith('.woff2'));
+    expect(woff2.filter(x => !x.startsWith('/assets/mathlive/fonts/')), 'fontovi van assets/mathlive/fonts/ i media/').toEqual([]);
+    // lakši stil (odluka 5): KaTeX_Main i KaTeX_Math stižu, AMS i Size ne (ostalo drži granica bajtova)
+    expect(woff2.some(x => x.includes('KaTeX_Main-Regular')), 'KaTeX_Main-Regular').toBe(true);
+    expect(woff2.some(x => x.includes('KaTeX_Math-Italic')), 'KaTeX_Math-Italic').toBe(true);
+    expect(woff2.filter(x => /KaTeX_(AMS|Size)/.test(x)), 'KaTeX_AMS / KaTeX_Size').toEqual([]);
+    // 4. bar jedan učitan JS ima ML__latex (mathlive/ssr), nijedan nema ceo mathlive ni kod editora
+    const skripte = await javnaMreza.skripte();
+    expect(skripte.saFormulom.length, 'JS sa ML__latex (mathlive/ssr)').toBeGreaterThan(0);
+    expect(skripte.saZabranjenim).toEqual([]);
+    // `ML__latex` nije zabranjen javnoj ruti (mathlive/ssr), ceo mathlive jeste
+    expect(NIZOVI_ZABRANJENI_JAVNO).not.toContain(NIZ_MATHLIVE);
+    expect(zabranjeniJavno('math-virtual-keyboard ML__latex')).toEqual(['math-virtual-keyboard']);
+    // 5. mreža formule: zbir tela JS, CSS i woff2 posle pitanja
+    expect(sve.filter(x => Number.isNaN(x.bajtova)), 'nepročitana tela').toEqual([]);
+    const zbir = ucitano.reduce((n, x) => n + x.bajtova, 0);
+    test.info().annotations.push({
+      type: 'mreza-formule',
+      description: `${zbir} B (${ucitano.length} fajlova: ${ucitano.map(x => `${x.putanja.split('/').pop()} ${x.bajtova}`).join(', ')}; `
+        + `van zbira, fontovi aplikacije: ${sve.filter(x => !ucitano.includes(x)).map(x => `${x.putanja.split('/').pop()} ${x.bajtova}`).join(', ') || 'nema'})`,
+    });
+    expect(zbir, 'mreža formule ispod 450 000 B (lakši stil radi)').toBeLessThanOrEqual(450_000);
+    expect(zbir, 'mreža formule (izmereno + 10 %)').toBeLessThanOrEqual(GRANICA_MREZE_FORMULE);
   });
 });
 
@@ -112,12 +224,14 @@ const saFormulom = (ime: string, ekran: Ekran360 = 'unos') => {
 };
 
 /*
- * Raspored telefona od 360 px sa dugačkom formulom (F3; napomena recenzije F2, Minor 1, ispravljeno u F2 fix krugu). Namerno na osnovnoj fiksturi,
- * ne na `javna-mreza`: ta do F5 obara svaki zahtev na `assets/mathlive/` i svaki JS sa `ML__latex`, a formula ih traži.
- * Mrežu javne rute sa formulom proverava F5 (`uzivo-javno` pod `javna-mreza`, `zabranjeniJavno`).
+ * Raspored telefona od 360 px sa dugačkom formulom (F3; napomena recenzije F2, Minor 1, ispravljeno u F2 fix krugu). Od F5
+ * pod `javna-mreza` sa `formule: true`: i ovde nijedan zahtev van javnih putanja i nijedan JS sa celim mathlive-om.
  */
-osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () => {
-  osnovniTest.use({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+test.describe('javni uživo: dugačka formula na telefonu od 360 px', () => {
+  test.use({
+    viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true, formule: true,
+    dozvoljeniApi: /^(GET \/api\/public\/uzivo\/\d{6}(\/ja)?|POST \/api\/public\/uzivo\/\d{6}\/prijava)$/,
+  });
 
   async function otvoriPitanje(page: Page, ekran: Ekran360 = 'unos'): Promise<void> {
     let ime = '';
@@ -153,7 +267,7 @@ osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () 
   const preliv = (page: Page) =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-  osnovniTest('izvor formule (modul se ne učita): dokument nema horizontalni preliv', async ({ page }) => {
+  test('izvor formule (modul se ne učita): dokument nema horizontalni preliv', async ({ page }) => {
     // Izvor se lomi i usred LaTeX-a bez razmaka (`.uz-formula`, uzivo-tokeni.css; pre F2 fix kruga preliv 893 px).
     // lenji chunk-ovi ne stižu (kao telefon bez mreže usred časa): formula ostaje izvor `$...$`
     await page.route(/\/chunk-[^/]+\.js$/, async r => {
@@ -169,7 +283,7 @@ osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () 
     expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
   });
 
-  osnovniTest('spremna formula (MathLive): dokument nema horizontalni preliv', async ({ page }) => {
+  test('spremna formula (MathLive): dokument nema horizontalni preliv', async ({ page }) => {
     // Šira formula se skroluje u sebi (`.uz-formula--spremna`, uzivo-tokeni.css; pre F2 fix kruga preliv 312 px).
     await otvoriPitanje(page);
     await expect(page.locator('.uz-st-md .uz-formula--spremna .ML__latex')).toHaveCount(1);
@@ -178,14 +292,14 @@ osnovniTest.describe('javni uživo: dugačka formula na telefonu od 360 px', () 
     expect(await formuleUOkviru(page, '.uz-st-telo')).toEqual([true, true, true]);
   });
 
-  osnovniTest('ekran "tačan odgovor" (flex red sa značkom): nacrtana formula ostaje u ekranu', async ({ page }) => {
+  test('ekran "tačan odgovor" (flex red sa značkom): nacrtana formula ostaje u ekranu', async ({ page }) => {
     await otvoriPitanje(page, 'tacan');
     await expect(page.locator('.uz-st-tacna .uz-formula--spremna .ML__latex')).toHaveCount(1);
     expect(await preliv(page), 'horizontalni preliv (px)').toBe(0);
     expect(await formuleUOkviru(page, '.uz-st-telo')).toEqual([true]);
   });
 
-  osnovniTest('panel "Detalji" (position: fixed): nema preliva panela, formule u panelu', async ({ page }) => {
+  test('panel "Detalji" (position: fixed): nema preliva panela, formule u panelu', async ({ page }) => {
     await otvoriPitanje(page, 'detalji');
     const panel = page.locator('.uz-st-detalji');
     await expect(panel.locator('.uz-formula--spremna .ML__latex')).toHaveCount(3);

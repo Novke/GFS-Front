@@ -75,9 +75,10 @@ describe('podeliFormule (Review Focus 1)', () => {
     expect(delovi.every((d: { vrsta: string }) => d.vrsta === 'TEKST')).toBe(true);
   });
 
-  it('najgori slučaj do 2000 znakova: svaki $ otvara pokušaj koji čita do kraja, a nijedan se ne zatvara', () => {
-    // "$a" ponovljeno: svaki $ je kandidat za otvaranje, traži zatvarajući $ do kraja teksta (bez novog reda), a prvi
-    // sledeći $ ga zatvara tek kad iza njega ne bi sledila cifra; "$a1" ponavlja to uz cifru posle zatvarajućeg $.
+  it('najgori slučaj do 2000 znakova: svaki $ otvara pokušaj, a nijedan se ne zatvara', () => {
+    // "$a" ponovljeno: svaki $ je kandidat za otvaranje, a pretraga zatvarajućeg $ staje na prvom sledećem $ (ili novom
+    // redu), pa je ceo prolaz linearan; "$a$1" ponavlja to uz cifru posle zatvarajućeg $. Granica vremena hvata
+    // eksponencijalnu regresiju, ne kvadratnu: na 2000 znakova i kvadratni slučaj traje ispod 3 ms (recenzija F1).
     const ulazi = ['$a'.repeat(1000), '$a$1'.repeat(500), '$' + 'a\\'.repeat(990) + '\n$a'.repeat(1), ('$a ' + '\\$').repeat(400)];
     for (const ulaz of ulazi) {
       expect(ulaz.length).toBeLessThanOrEqual(2000);

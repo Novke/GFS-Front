@@ -110,7 +110,12 @@ describe('markdownSaFormulama', () => {
   });
 
   it('linearnost: najgori slučaj do 2000 znakova u Markdown-u', () => {
-    for (const ulaz of ['$a'.repeat(1000), '$a$1'.repeat(500), ('$a ' + '\\$').repeat(400), '![' + '$a'.repeat(995) + '](u)']) {
+    // i najgori izmereni obrasci za Markdown (recenzija F1): izbegnuta kosa crta pre $ i \\ ispred svake formule
+    const ulazi = [
+      '$a'.repeat(1000), '$a$1'.repeat(500), ('$a ' + '\\$').repeat(400), '![' + '$a'.repeat(995) + '](u)',
+      '$a\\'.repeat(666), '$' + '\\a'.repeat(999), '\\\\$a'.repeat(500),
+    ];
+    for (const ulaz of ulazi) {
       expect(ulaz.length).toBeLessThanOrEqual(2000);
       const pocetak = performance.now();
       markdownSaFormulama(ulaz);

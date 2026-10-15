@@ -12,3 +12,16 @@ export const NIZOVI_EDITORA = [NIZ_EDITORA, NIZ_PROSEMIRROR, NIZ_MATHLIVE, NIZ_F
 
 /** Nizovi editora koje tekst JS fajla sadrži. */
 export const nizoviEditora = (tekst: string): string[] => NIZOVI_EDITORA.filter(n => tekst.includes(n));
+
+/** Samo ceo `mathlive` (`<math-field>` i virtuelna tastatura), ne `mathlive/ssr` (0.111.1: 2 prema 0 pojavljivanja; 5a). */
+export const NIZ_MATHLIVE_CEO = 'math-virtual-keyboard';
+/** Samo studentska stranica (`javno/uzivo-student.page.ts`, ekran "tabla"; `lenji-formule.spec.ts` proverava izvor). */
+export const NIZ_STUDENTA = 'Gledaj u tablu';
+/**
+ * Javna ruta ovo nikad ne učitava (5a): `ML__latex` sme samo kao `mathlive/ssr` (formula u tekstu pitanja ili opcije),
+ * bez `NIZ_MATHLIVE_CEO`; kod editora platna, ProseMirror i dijalog formule nikad.
+ */
+export const NIZOVI_ZABRANJENI_JAVNO = [NIZ_EDITORA, NIZ_PROSEMIRROR, NIZ_FORMULE_EDITORA, NIZ_MATHLIVE_CEO] as const;
+
+/** Nizovi iz `NIZOVI_ZABRANJENI_JAVNO` koje tekst JS fajla sadrži. */
+export const zabranjeniJavno = (tekst: string): string[] => NIZOVI_ZABRANJENI_JAVNO.filter(n => tekst.includes(n));

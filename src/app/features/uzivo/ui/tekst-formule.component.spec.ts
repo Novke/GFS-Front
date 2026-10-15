@@ -23,12 +23,15 @@ function fragment(latex: string): DocumentFragment {
   return t.content;
 }
 
-/** Lažni `formula-markup`: `\frac{1}{` bez zatvaranja je neispravan (null), sve ostalo daje markup. */
+/**
+ * Lažni `formula-markup`: nepoznata komanda `\nepostoji{...}` je neispravna (null), sve ostalo daje markup. Pravi MathLive
+ * je takođe odbija, a nepotpun `\frac{1}{` crta (prazno mesto), pa on nije primer neispravne formule.
+ */
 function lazniModul(pozivi: string[]): ModulFormule {
   return {
     latexUMarkup: (l: string) => {
       pozivi.push(l);
-      return l.includes('\\frac{1}{') && !l.includes('\\frac{1}{2}') ? null : fragment(l);
+      return l.includes('\\nepostoji{') ? null : fragment(l);
     },
   } as unknown as ModulFormule;
 }
@@ -96,10 +99,10 @@ describe('TekstFormuleComponent', () => {
   });
 
   it('neispravna formula ostaje izvor (uz-formula--izvor), bez izuzetka (Review Focus 2)', async () => {
-    const { fixture, el } = napravi('$\\frac{1}{$');
+    const { fixture, el } = napravi('$\\nepostoji{x}$');
     await stabilno(fixture);
     const izvor = el.querySelector<HTMLElement>('.uz-formula--izvor')!;
-    expect(izvor.textContent).toBe('$\\frac{1}{$');
+    expect(izvor.textContent).toBe('$\\nepostoji{x}$');
     expect(izvor.classList).not.toContain('uz-formula--spremna');
     expect(izvor.getAttribute('role')).toBeNull();
   });

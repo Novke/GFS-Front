@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
+import { lazniBroker } from './lazni-stomp';
+import { OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
 import { uzorakPptx } from './pptx-uzorak';
 import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
@@ -230,3 +232,48 @@ for (const rezim of ['dan', 'noc'] as const) {
     });
   });
 }
+
+// 5a: pitanje sa formulama (nacrtane i izvor `$...$`) na telefonu studenta i na projektoru. Javne strane i projektor su
+// uvek dnevni, pa jedan prolaz (dan).
+test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
+  test.use({ colorScheme: 'light' });
+
+  test.describe('telefon', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    test('/uzivo/123456 (pitanje sa formulom, 390 x 844): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+      await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno' ? {
+        javno: {
+          izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas',
+          kod: '123456', prikaz: 'SLAJD', slajdTip: 'PITANJE', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'PITANJE',
+          detaljiDozvoljeni: false, brojUcesnika: 1, rezultat: null, rangLista: null,
+          pitanje: {
+            tip: 'JEDAN_TACAN', faza: 'OTVORENO', rundaId: 31, brojOpcija: OPCIJE_SA_FORMULOM.length,
+            opcije: OPCIJE_SA_FORMULOM.map((tekst, i) => ({ id: i + 1, tekst })), tekst: TEKST_SA_FORMULOM, slikaId: null,
+            jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null, tacneOpcije: null,
+            tacanBroj: null, prihvatljiviOdgovori: null,
+          },
+        },
+        licno: { verzija: 1, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null },
+      } : undefined));
+      await page.goto('uzivo/123456');
+      await expect(page.locator('.uz-formula--spremna .ML__latex')).toHaveCount(SPREMNIH_FORMULA);
+      await expect(page.locator('.uz-formula--izvor')).toHaveCount(2);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), 'axe: telefon, pitanje sa formulom').toEqual([]);
+    });
+  });
+
+  test('/izvodjenja/7/publika (projektor, pitanje sa formulom): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.izvodjenje.izmeniSlajd(2, { pitanje: pitanjeSaFormulom() });
+    for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3) -> slajd 2 (3) -> slajd 3
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--spremna .ML__latex')).toHaveCount(1);
+    await expect(page.locator('.uz-plocica-tekst .uz-formula--spremna .ML__latex')).toHaveCount(OPCIJE_SA_FORMULOM.length);
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--izvor')).toHaveCount(2);
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
+  });
+});

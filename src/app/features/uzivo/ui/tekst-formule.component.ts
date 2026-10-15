@@ -31,7 +31,7 @@ function najvise(p: Promise<unknown>, ms: number): Promise<void> {
 /** Najmanji koeficijent veličine formule: nastavnički prikazi (ispod se seče na ivici okvira) i telefon (ispod: skrol). */
 export const MIN_K_FORMULE = 0.5;
 export const MIN_K_FORMULE_TELEFON = 0.75;
-/** Rezerva u em teksta oko formule: prepust MathLive-a (~2 px van `.ML__latex`) i `padding-inline-end` formule (0,15em). */
+/** Rezerva u em teksta oko formule: prepust MathLive-a (~2 px van korena markupa) i `padding-inline-end` formule (0,15em). */
 const REZERVA_EM = 0.3;
 
 /**

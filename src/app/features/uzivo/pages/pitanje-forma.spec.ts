@@ -138,12 +138,16 @@ function fragment(latex: string): DocumentFragment {
   return t.content;
 }
 
-/** Lažni `formula-markup`: `\frac{1}{` bez zatvaranja i `\bad` su neispravni (null), sve ostalo daje markup. */
+/**
+ * Lažni `formula-markup`: `\nepostoji{...}` i `\bad` su neispravni (null), sve ostalo daje markup. Isto kao pravi
+ * MathLive za nepoznatu komandu (`\nepostoji{x}`, test sa pravim `mathlive/ssr` dole); nepotpun `\frac{1}{` pravi MathLive
+ * crta (prazno mesto), pa nije primer neispravne formule.
+ */
 function lazniModul(pozivi: string[]): ModulFormule {
   return {
     latexUMarkup: (l: string) => {
       pozivi.push(l);
-      return (l.includes('\\frac{1}{') && !l.includes('\\frac{1}{2}')) || l.includes('\\bad') ? null : fragment(l);
+      return l.includes('\\nepostoji{') || l.includes('\\bad') ? null : fragment(l);
     },
   } as unknown as ModulFormule;
 }
@@ -193,6 +197,8 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     const { el } = napravi(pitanje('KRATAK_TEKST'));
     const hint = el.querySelector('mat-hint')!;
     expect(hint.textContent).toContain('Formula između znakova dolara: $1011_2$, $\\frac{1}{2}$ · znak dolara: \\$');
+    // izuzetak pravila (F1): `$` odmah posle cifre ne otvara formulu (iznos), forma za njega ne upozorava
+    expect(hint.textContent).toContain('odmah posle cifre $ ne otvara formulu (5$, 10$)');
     expect(hint.textContent).toContain('Markdown');
     const polje = el.querySelector('textarea')!;
     expect(polje.getAttribute('aria-describedby')).toContain(hint.id);
@@ -210,19 +216,19 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
 
   it('neispravna formula: upozorenje posle 300 ms (debounce), sa \\textstyle kao prikaz', async () => {
     const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: 'Koliko je 5?' }));
-    forma.controls.tekst.setValue('Koliko je $\\frac{1}{$?');
+    forma.controls.tekst.setValue('Koliko je $\\nepostoji{x}$?');
     await posle(fixture, 299);
     expect(upozorenja(el)).toEqual([]);
     expect(ucitaj).not.toHaveBeenCalled();
     await posle(fixture, 1);
-    expect(upozorenja(el)).toEqual(['Formula „\\frac{1}{“ ima grešku u LaTeX-u i prikazaće se kao tekst.']);
-    expect(pozivi).toEqual(['\\textstyle \\frac{1}{']);
+    expect(upozorenja(el)).toEqual(['Formula „\\nepostoji{x}“ u tekstu pitanja ima grešku u LaTeX-u i prikazaće se kao tekst.']);
+    expect(pozivi).toEqual(['\\textstyle \\nepostoji{x}']);
     const status = el.querySelector('p.uz-ed-upozorenje')!.closest('[role="status"]')!;
     expect(el.querySelector('textarea')!.getAttribute('aria-describedby')).toContain(status.id);
   });
 
   it('ispravna formula: nema upozorenja; ispravka briše staro upozorenje', async () => {
-    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\frac{1}{$' }));
+    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\nepostoji{x}$' }));
     await posle(fixture, 300);
     expect(upozorenja(el).length).toBe(1);
     forma.controls.tekst.setValue('Koliko je $x^2$?');
@@ -247,7 +253,11 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     }));
     await posle(fixture, 300);
     const u = upozorenja(el);
-    expect(u.slice(0, 3)).toEqual([1, 2, 3].map((i) => `Formula „\\bad${i}“ ima grešku u LaTeX-u i prikazaće se kao tekst.`));
+    expect(u.slice(0, 3)).toEqual([
+      'Formula „\\bad1“ u tekstu pitanja ima grešku u LaTeX-u i prikazaće se kao tekst.',
+      'Formula „\\bad2“ u tekstu pitanja ima grešku u LaTeX-u i prikazaće se kao tekst.',
+      'Formula „\\bad3“ u odgovoru A ima grešku u LaTeX-u i prikazaće se kao tekst.',
+    ]);
     expect(u[3]).toBe('i još 2 formule sa greškom.');
     expect(u.length).toBe(4);
   });
@@ -272,10 +282,37 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     expect(pozivi).toEqual(['\\textstyle a']);
   });
 
+  it('ista neispravna formula na više mesta: jedna poruka sa svim poljima', async () => {
+    const { fixture, el } = napravi(pitanje('JEDAN_TACAN', {
+      tekst: 'Da li je $\\bad$ tačno?', opcije: [o('$\\bad$', true), o('b'), o('$\\bad$ i $\\nepostoji{y}$')],
+    }));
+    await posle(fixture, 300);
+    expect(upozorenja(el)).toEqual([
+      'Formula „\\bad“ u tekstu pitanja, odgovoru A i odgovoru C ima grešku u LaTeX-u i prikazaće se kao tekst.',
+      'Formula „\\nepostoji{y}“ u odgovoru C ima grešku u LaTeX-u i prikazaće se kao tekst.',
+    ]);
+    expect(pozivi).toEqual(['\\textstyle \\bad', '\\textstyle \\nepostoji{y}']);
+  });
+
+  it('neuspelo učitavanje se pamti u formi: sledeće pauze ne zovu import() ponovo i ne pišu novi console.warn', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const odbij = vi.fn(() => Promise.reject(new Error('mreža')));
+    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\nepostoji{x}$' }), odbij);
+    await posle(fixture, 300);
+    forma.controls.tekst.setValue('$\\bad$ pa $x$');
+    await posle(fixture, 300);
+    forma.controls.tekst.setValue('$\\bad$');
+    await posle(fixture, 300);
+    expect(odbij).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(upozorenja(el)).toEqual([]);
+    warn.mockRestore();
+  });
+
   it('greška učitavanja: bez upozorenja, jedan console.warn', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const odbij = vi.fn(() => Promise.reject(new Error('mreža')));
-    const { fixture, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\frac{1}{$' }), odbij);
+    const { fixture, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\nepostoji{x}$' }), odbij);
     await posle(fixture, 300);
     expect(odbij).toHaveBeenCalledTimes(1);
     expect(upozorenja(el)).toEqual([]);
@@ -288,7 +325,7 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     const sporo = vi.fn()
       .mockImplementationOnce(() => new Promise<ModulFormule>((r) => { razresi = r; }))
       .mockImplementation(() => Promise.resolve(lazniModul(pozivi)));
-    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\frac{1}{$' }), sporo);
+    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\nepostoji{x}$' }), sporo);
     await posle(fixture, 300);
     forma.controls.tekst.setValue('$x$');
     await posle(fixture, 300);
@@ -298,7 +335,7 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
   });
 
   it('nova forma (drugi slajd): stara upozorenja nestaju, nova se računaju', async () => {
-    const { fixture, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\frac{1}{$' }));
+    const { fixture, el } = napravi(pitanje('KRATAK_TEKST', { tekst: '$\\nepostoji{x}$' }));
     await posle(fixture, 300);
     expect(upozorenja(el).length).toBe(1);
     fixture.componentRef.setInput('forma', pitanjeForma(pitanje('KRATAK_TEKST', { tekst: 'Bez formule' })));
@@ -306,7 +343,7 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     expect(upozorenja(el)).toEqual([]);
     fixture.componentRef.setInput('forma', pitanjeForma(pitanje('KRATAK_TEKST', { tekst: '$\\bad$' })));
     await posle(fixture, 300);
-    expect(upozorenja(el)).toEqual(['Formula „\\bad“ ima grešku u LaTeX-u i prikazaće se kao tekst.']);
+    expect(upozorenja(el)).toEqual(['Formula „\\bad“ u tekstu pitanja ima grešku u LaTeX-u i prikazaće se kao tekst.']);
   });
 
   it('dugačka formula u poruci je skraćena', async () => {
@@ -329,7 +366,8 @@ describe('PitanjeFormaComponent: upozorenje sa pravim mathlive/ssr (ista provera
         { provide: UCITAJ_FORMULE, useValue: ucitajFormule },
       ],
     });
-    // dubina 33 > MAX_DUBINA_FORMULE (trosakFormule); `\frac{1}{` MathLive crta (prazno mesto), pa ga i prikaz crta
+    // dubina 33 > MAX_DUBINA_FORMULE (trosakFormule); `\frac{1}{` MathLive crta (prazno mesto), pa ga i prikaz crta: nepotpun
+    // izraz nije primer neispravne formule (lažni modul gore zato koristi `\nepostoji{...}`)
     const tesko = `${'\\sqrt{'.repeat(33)}x${'}'.repeat(33)}`;
     registrujIkone();
     const fixture = TestBed.createComponent(PitanjeFormaComponent);
@@ -341,7 +379,10 @@ describe('PitanjeFormaComponent: upozorenje sa pravim mathlive/ssr (ista provera
     await vi.waitFor(() => {
       expect(fixture.componentInstance.neispravne().length).toBeGreaterThan(0);
     }, { timeout: 4000, interval: 50 });
-    expect(fixture.componentInstance.neispravne()).toEqual(['\\href{http://e.com}{x}', tesko, '^^5cfrac{1}{2}', '\\nepostoji{x}']);
+    expect(fixture.componentInstance.neispravne().map((n) => n.latex))
+      .toEqual(['\\href{http://e.com}{x}', tesko, '^^5cfrac{1}{2}', '\\nepostoji{x}']);
+    expect(fixture.componentInstance.neispravne().map((n) => n.gde))
+      .toEqual([['tekstu pitanja'], ['tekstu pitanja'], ['odgovoru A'], ['odgovoru B']]);
     fixture.detectChanges();
     await fixture.whenStable();
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('p.uz-ed-upozorenje').length).toBe(4);

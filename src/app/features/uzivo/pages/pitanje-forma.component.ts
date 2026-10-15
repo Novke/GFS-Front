@@ -114,13 +114,26 @@ function formuleTeksta(tekst: string | null | undefined, markdown: boolean): str
   return Array.from(t.content.querySelectorAll(`span.${KLASA_FORMULE}`), (m) => (m.textContent ?? '').slice(1, -1));
 }
 
+/** Formule jednog polja: `gde` za poruku "ima više od 50", `uPolju` za poruku o formuli ("u tekstu pitanja"). */
+interface FormulePolja { gde: string; uPolju: string; formule: string[] }
+
 /** Tekst pitanja i svaka opcija posebno (prikaz crta svaki tekst svojom komponentom, i granica formula je po tekstu). */
-function formulePoTekstu(p: Pick<PitanjeCmd, 'tekst' | 'opcije'>): { gde: string; formule: string[] }[] {
+function formulePoTekstu(p: Pick<PitanjeCmd, 'tekst' | 'opcije'>): FormulePolja[] {
   return [
-    { gde: 'Tekst pitanja', formule: formuleTeksta(p.tekst, true) },
-    ...p.opcije.map((o, i) => ({ gde: `Odgovor ${oblikOpcije(i).slovo}`, formule: formuleTeksta(o.tekst, false) })),
+    { gde: 'Tekst pitanja', uPolju: 'tekstu pitanja', formule: formuleTeksta(p.tekst, true) },
+    ...p.opcije.map((o, i) => {
+      const slovo = oblikOpcije(i).slovo;
+      return { gde: `Odgovor ${slovo}`, uPolju: `odgovoru ${slovo}`, formule: formuleTeksta(o.tekst, false) };
+    }),
   ];
 }
+
+/** Neispravna formula i polja u kojima stoji (redom polja forme), npr. `['tekstu pitanja', 'odgovoru B']`. */
+export interface NeispravnaFormula { latex: string; gde: string[] }
+
+/** "tekstu pitanja", "tekstu pitanja i odgovoru B", "tekstu pitanja, odgovoru A i odgovoru C". */
+const nabrojano = (delovi: readonly string[]): string =>
+  delovi.length < 2 ? (delovi[0] ?? '') : `${delovi.slice(0, -1).join(', ')} i ${delovi.at(-1)}`;
 
 /**
  * Sve formule iz teksta pitanja i opcija, redom, bez duplikata. Po tekstu najviše `MAX_FORMULA_U_TEKSTU` (koliko prikaz
@@ -133,6 +146,10 @@ export function formuleIzPitanja(p: Pick<PitanjeCmd, 'tekst' | 'opcije'>): strin
 
 const jedinstvene = (tekstovi: { formule: string[] }[]): string[] =>
   [...new Set(tekstovi.flatMap((t) => t.formule.slice(0, MAX_FORMULA_U_TEKSTU)))];
+
+/** Polja (redom) u kojima je `latex` među formulama koje prikaz crta (prvih `MAX_FORMULA_U_TEKSTU` po tekstu). */
+const poljaFormule = (tekstovi: readonly FormulePolja[], latex: string): string[] =>
+  tekstovi.filter((t) => t.formule.slice(0, MAX_FORMULA_U_TEKSTU).includes(latex)).map((t) => t.uPolju);
 
 /** Debounce provere formula posle izmene teksta ili opcija. */
 const CEKANJE_PROVERE_FORMULA_MS = 300;
@@ -188,9 +205,11 @@ let sledeciId = 0;
       <mat-hint>
         Markdown: **podebljano**, *kurziv*, \`kod\`<br>
         Formula između znakova dolara: $1011_2$, $\\frac&#123;1&#125;&#123;2&#125;$ · znak dolara: \\$
+        · odmah posle cifre $ ne otvara formulu (5$, 10$)
       </mat-hint>
     </mat-form-field>
-    <!-- Upozorenje ne blokira čuvanje (server ne proverava formule); region postoji uvek, da čitač ekrana najavi promenu. -->
+    <!-- Upozorenje ne blokira čuvanje (server ne proverava formule; boja --warn, ne --danger); region postoji uvek, da čitač
+         ekrana najavi promenu. -->
     <div [id]="id + '-formule'" role="status">
       @for (u of upozorenjaFormula(); track $index) {
         <p class="uz-ed-upozorenje">{{ u }}</p>
@@ -323,8 +342,8 @@ export class PitanjeFormaComponent {
   protected readonly maxVreme = MAX_VREME;
 
   private readonly ucitajFormule = inject(UCITAJ_FORMULE);
-  /** LaTeX formula (bez `$`) koje prikaz ne bi nacrtao (ista provera: `latexUMarkup`, kao `app-tekst-formule`). */
-  readonly neispravne = signal<string[]>([]);
+  /** Formule (LaTeX bez `$`) koje prikaz ne bi nacrtao (ista provera: `latexUMarkup`, kao `app-tekst-formule`), sa poljima. */
+  readonly neispravne = signal<NeispravnaFormula[]>([]);
   /** Tekstovi sa više od `MAX_FORMULA_U_TEKSTU` formula ("Tekst pitanja", "Odgovor B"). */
   protected readonly previseFormula = signal<string[]>([]);
   /** Poruke ispod teksta pitanja: tekstovi preko granice, pa najviše `MAX_UPOZORENJA` formula i "i još n". */
@@ -334,12 +353,17 @@ export class PitanjeFormaComponent {
       ...this.previseFormula().map(
         (gde) => `${gde} ima više od ${MAX_FORMULA_U_TEKSTU} formula; ostale će se prikazati kao tekst.`),
       ...this.neispravne().slice(0, MAX_UPOZORENJA).map(
-        (l) => `Formula „${skrati(l)}“ ima grešku u LaTeX-u i prikazaće se kao tekst.`),
+        (n) => `Formula „${skrati(n.latex)}“ u ${nabrojano(n.gde)} ima grešku u LaTeX-u i prikazaće se kao tekst.`),
       ...(n > 0 ? [`i još ${sRecju(n, 'formula', 'formule', 'formula')} sa greškom.`] : []),
     ];
   });
   /** Redni broj poslednje provere: odgovor starije (sporo učitavanje modula) ne prepisuje noviju. */
   private provera = 0;
+  /**
+   * Modul se nije učitao (mreža, chunk posle novog deploy-a): forma to pamti dok živi, pa sledeće pauze u kucanju ne zovu
+   * `import()` ponovo i ne pišu novi `console.warn` (`ucitajFormule` namerno ne pamti odbijanje; prikaz pokušava sam).
+   */
+  private modulNeuspeo = false;
 
   constructor() {
     // Nova forma (drugi slajd): stara upozorenja nestaju odmah, nova provera posle debounce-a, pa na svaku izmenu.
@@ -428,22 +452,30 @@ export class PitanjeFormaComponent {
    * Isti put kao prikaz (`app-tekst-formule`): bez formule se ništa ne učitava; inače lenji modul `formula-markup`
    * (`UCITAJ_FORMULE`, `mathlive/ssr` nije u stranici editora) i `latexUMarkup('\\textstyle ' + f)`: zabranjene komande i
    * `^^`, `trosakFormule`, `validateLatex`, konverzija u `try/catch` i sanitizer (keš je zajednički sa pregledom slajda).
-   * Ne blokira čuvanje. Greška učitavanja: bez upozorenja.
+   * Ne blokira čuvanje. Greška učitavanja: bez upozorenja, jedan `console.warn` po formi (`modulNeuspeo`).
    */
   private async proveriFormule(f: PitanjeForma): Promise<void> {
     const broj = ++this.provera;
     const tekstovi = formulePoTekstu(pitanjeIzForme(f));
     const previse = tekstovi.filter((t) => t.formule.length > MAX_FORMULA_U_TEKSTU).map((t) => t.gde);
     const formule = jedinstvene(tekstovi);
-    let neispravne: string[] = [];
+    let neispravne: NeispravnaFormula[] = [];
+    if (formule.length && this.modulNeuspeo) {
+      // isto kao prvi neuspeh: bez upozorenja (ni "više od 50"), bez novog import()-a
+      this.neispravne.set([]);
+      this.previseFormula.set([]);
+      return;
+    }
     if (formule.length) {
       try {
         const m = await this.ucitajFormule();
         if (broj !== this.provera) {
           return;
         }
-        neispravne = formule.filter((l) => m.latexUMarkup(`\\textstyle ${l}`) === null);
+        neispravne = formule.filter((l) => m.latexUMarkup(`\\textstyle ${l}`) === null)
+          .map((latex) => ({ latex, gde: poljaFormule(tekstovi, latex) }));
       } catch (e: unknown) {
+        this.modulNeuspeo = true;
         console.warn('Provera formula nije učitana; upozorenja se ne prikazuju.', e);
         if (broj === this.provera) {
           this.neispravne.set([]);

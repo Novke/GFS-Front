@@ -40,6 +40,9 @@ test.describe('uživo: formule u tekstu pitanja na projektoru i konzoli (klasič
       const tekst = page.locator('.uz-pitanje-tekst').first();
       await expect(tekst.locator('.uz-formula--spremna .ML__latex')).toHaveCount(2);
       await expect(page.locator('.uz-plocica').first().locator('.uz-formula--spremna .ML__latex')).toHaveCount(1);
+      // tekst pitanja i tekst opcije (pločica) kroz `app-tekst-formule` (5a): klase domaćina iz šablona slajda i pločica
+      await expect(page.locator('.uz-pitanje-tekst .ML__latex').first()).toBeVisible();
+      await expect(page.locator('.uz-plocica-tekst .ML__latex').first()).toBeVisible();
       // merenje posle crtanja: široka formula dobija koeficijent manji od 1
       await expect.poll(() => tekst.locator('.uz-formula--spremna').first()
         .evaluate(f => Number(getComputedStyle(f).getPropertyValue('--uz-formula-k') || 1))).toBeLessThan(1);

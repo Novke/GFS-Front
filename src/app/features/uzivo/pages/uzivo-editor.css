@@ -115,9 +115,13 @@ span.uz-ed-napomena {
   font-size: 13px;
 }
 
-/* Upozorenje forme pitanja (formula se crta kao izvor); boja iz `.uz-ed-upozorenje`, dugačak LaTeX se lomi. */
+/*
+ * Upozorenje forme pitanja (formula se crta kao izvor): `--warn`, ne `--danger` iz `.uz-ed-upozorenje` (ikona nesačuvanog
+ * slajda), jer ne blokira čuvanje; dugačak LaTeX se lomi.
+ */
 p.uz-ed-upozorenje {
   margin: 4px 0;
+  color: var(--warn);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
