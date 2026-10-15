@@ -1,5 +1,5 @@
 import {
-  MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda,
+  MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, Prelaz, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda,
 } from './uzivo.models';
 import type { NazivIkone } from '../../../core/layout/icons';
 import type { Platno } from './platno.models';
@@ -20,6 +20,8 @@ export const MIN_VREME = 5;
 export const MAX_VREME = 600;
 /** Podrazumevano vreme kad nastavnik uključi ograničenje. */
 export const PODRAZUMEVANO_VREME = 20;
+/** Trajanje prelaza u ms (`SlajdPP.MIN_PRELAZ_MS`, `MAX_PRELAZ_MS`, `PODRAZUMEVANO_PRELAZ_MS`). */
+export const PRELAZ = { min: 100, max: 5000, podrazumevano: 500 } as const;
 
 const MAX_NASLOV = 300;
 const MAX_SADRZAJ = 20_000;
@@ -57,6 +59,7 @@ export const PORUKE = {
   brojSlajdova: 'Prezentacija može imati najviše 200 slajdova.',
   naziv: 'Naziv je obavezan (najviše 200 znakova).',
   opis: 'Opis može imati najviše 1000 znakova.',
+  prelaz: 'Trajanje prelaza mora biti od 0,1 do 5 sekundi.',
 } as const;
 
 export interface TipPitanjaOpis { readonly tip: TipPitanja; readonly naziv: string; readonly ikona: NazivIkone; }
@@ -162,6 +165,12 @@ export function greskePitanja(p: PitanjeCmd): string[] {
   return greske;
 }
 
+/** Isto kao `SlajdPP.normalizuj(Prelaz)`: bez efekta -> null, FADE bez smera, inače DESNO, trajanje 500. */
+export function normalizujPrelaz(p: Prelaz | null | undefined): Prelaz | null {
+  if (!p?.efekat) return null;
+  return { efekat: p.efekat, smer: p.efekat === 'FADE' ? null : (p.smer ?? 'DESNO'), trajanjeMs: p.trajanjeMs ?? PRELAZ.podrazumevano };
+}
+
 /** Greške celog slajda, istim redom kao `SlajdPP.proveri(SlajdCmd)`. */
 export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (!cmd?.tip) {
@@ -171,6 +180,9 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (duzina(ociscen(cmd.naslov)) > MAX_NASLOV) greske.push(PORUKE.naslov);
   if (duzina(ociscen(cmd.sadrzaj)) > MAX_SADRZAJ) greske.push(PORUKE.sadrzaj);
   if (duzina(ociscen(cmd.beleske)) > MAX_BELESKE) greske.push(PORUKE.beleske);
+  // prelaz važi za svaki tip (server ga proverava posle beleški, pre grane po tipu)
+  const pr = normalizujPrelaz(cmd.prelaz);
+  if (pr && (!Number.isInteger(pr.trajanjeMs) || pr.trajanjeMs < PRELAZ.min || pr.trajanjeMs > PRELAZ.max)) greske.push(PORUKE.prelaz);
   if (cmd.tip === 'PLATNO') {
     // jeftino (lista slajdova je računa za svaki slajd pri svakoj izmeni): samo brojevi; puna provera je u greskeSlajdaZaSlanje
     if (!cmd.platno) return [...greske, PORUKE.bezPlatna];
@@ -239,7 +251,7 @@ export function novoPitanje(tip: TipPitanja, tekst = ''): PitanjeCmd {
 export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN', platno: Platno | null = null): SlajdCmd {
   return {
     tip, naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
-    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: tip === 'PLATNO' ? platno : null,
+    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: tip === 'PLATNO' ? platno : null, prelaz: null,
   };
 }
 
@@ -283,6 +295,8 @@ export function slajdUCmd(s: SlajdDetails): SlajdCmd {
     postepeno: s.postepeno, pitanje: s.pitanje ? pitanjeUCmd(s.pitanje) : null,
     // platno ide nazad neizmenjeno: PUT iz starog toka (beleške, naslov) ne sme da obriše slojeve PLATNO slajda
     platno: s.platno,
+    // isto za prelaz (PUT je puna zamena, odluka 10): komanda bez njega bi ga obrisala; JSON bez polja -> null
+    prelaz: s.prelaz ?? null,
   };
 }
 
@@ -311,6 +325,7 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
       skalaMinOznaka: p.skalaMinOznaka, skalaMaxOznaka: p.skalaMaxOznaka,
     } : null,
     platno: cmd.tip === 'PLATNO' ? cmd.platno : null,
+    prelaz: normalizujPrelaz(cmd.prelaz),
   };
 }
 

@@ -23,7 +23,7 @@ describe('PrezentacijeApi.uvezi', () => {
   it('šalje POST api/prezentacije/3/slajdovi/uvoz sa telom cmd i LOCAL_ERRORS', () => {
     const cmd: UvozSlajdovaCmd = {
       posle: 41,
-      slajdovi: [{ tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: 'b', postepeno: false, pitanje: null, platno: platno() }],
+      slajdovi: [{ tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: 'b', postepeno: false, pitanje: null, platno: platno(), prelaz: null }],
     };
     const rez = vi.fn();
     api.uvezi(3, cmd).subscribe(rez);

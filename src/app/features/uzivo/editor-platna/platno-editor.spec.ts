@@ -28,7 +28,7 @@ import { TekstUredjivacComponent } from './tekst/tekst-uredjivac.component';
 function platnoSlajd(): SlajdDetails {
   return {
     id: 12, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
-    platno: platno(),
+    platno: platno(), prelaz: null,
   };
 }
 

@@ -9,18 +9,18 @@ export function pitanjeSlajd(tip: TipPitanja = 'JEDAN_TACAN', izmene: Partial<Pi
     brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
     prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null, ...izmene,
   };
-  return { id: 21, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: 'Pazi na vreme.', postepeno: false, pitanje, platno: null };
+  return { id: 21, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: 'Pazi na vreme.', postepeno: false, pitanje, platno: null, prelaz: null };
 }
 
 export function infoSlajd(izmene: Partial<SlajdDetails> = {}): SlajdDetails {
-  return { id: 20, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: '- a\n- b', slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, ...izmene };
+  return { id: 20, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: '- a\n- b', slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, prelaz: null, ...izmene };
 }
 
 /** PLATNO slajd sa fabričkim platnom (`platno()`: 4 animacije, 2 KLIK koraka). */
 export function platnoSlajd(izmene: Partial<SlajdDetails> = {}): SlajdDetails {
   return {
     id: 30, rb: 1, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
-    platno: platno(), ...izmene,
+    platno: platno(), prelaz: null, ...izmene,
   };
 }
 

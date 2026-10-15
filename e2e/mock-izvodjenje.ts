@@ -13,6 +13,8 @@ interface Animacija { okidac: string }
 export interface Slajd {
   id: number; rb: number; tip: 'INFO' | 'PITANJE' | 'PLATNO'; naslov: string | null; sadrzaj: string | null;
   beleske: string | null; postepeno: boolean; pitanje: Pitanje | null; platno: { animacije: Animacija[] } | null;
+  /** Prelaz na slajd (faza 5); fikstura bez polja = bez prelaza (`null` u snimku, kao server). */
+  prelaz?: { efekat: string; smer: string | null; trajanjeMs: number } | null;
   [polje: string]: unknown;
 }
 interface IzvodjenjeInfo {
@@ -71,6 +73,12 @@ function bezPoteza(s: Slajd | null): Slajd | null {
     ...s,
     platno: { ...s.platno!, slojevi: slojevi.map(x => (x['tip'] === 'CRTEZ' ? { ...x, potezi: null } : x)) } as Slajd['platno'],
   };
+}
+
+/** Slajd u snimku: bez poteza, a `prelaz` uvek postoji (server ga šalje i kad je `null`). */
+function zaSnimak(s: Slajd | null): Slajd | null {
+  const b = bezPoteza(s);
+  return b && { ...b, prelaz: b.prelaz ?? null };
 }
 
 const imaTacan = (p: Pitanje | null): boolean =>
@@ -153,7 +161,7 @@ export class MockIzvodjenje {
     return {
       izvodjenje: { ...this.f.izvodjenje }, verzija: this.verzija, serverVremeMs: Date.now(), prikaz: this.prikaz,
       korak: this.korak, brojStavki: brojKoraka(trenutni), indeks: this.indeks, brojSlajdova: sl.length,
-      trenutniSlajd: bezPoteza(trenutni), sledeciSlajd: this.prikaz === 'KRAJ' ? null : bezPoteza(sl[this.indeks + 1] ?? null),
+      trenutniSlajd: zaSnimak(trenutni), sledeciSlajd: this.prikaz === 'KRAJ' ? null : zaSnimak(sl[this.indeks + 1] ?? null),
       faza: this.faza, runda: this.runda, rezultatiPrikazani: this.rezultatiPrikazani, tacanPrikazan: this.tacanPrikazan,
       rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: this.f.telefonPrikaz,
       detaljiDozvoljeni: this.f.detaljiDozvoljeni, takmicenje: this.f.takmicenje, tema: this.f.tema, rezultat,

@@ -818,3 +818,29 @@ test.describe('uživo: editor platna (4b, završni talas B): formula ne presreć
     await expect(svojstva(page, 'formule')).toHaveCount(0);
   });
 });
+
+test.describe('uživo: prelaz slajda u formi (5e, F16)', () => {
+  test('polja prelaza (lenji chunk) za PLATNO i INFO; PUT beleški nosi postojeći prelaz, a nikad ga ne briše', async ({ page, mock }) => {
+    const prelaz = { efekat: 'GURANJE', smer: 'LEVO', trajanjeMs: 700 };
+    mock.podaci.prezentacije.find(p => p.id === PREZENTACIJA)!.slajdovi.find(s => s.id === 52)!.prelaz = prelaz;
+    await page.goto(`prezentacije/${PREZENTACIJA}`);
+    // INFO 51 (izabran): bez prelaza
+    const grupa = page.getByRole('group', { name: 'Prelaz na ovaj slajd' });
+    await expect(grupa).toBeVisible();
+    await expect(grupa.getByRole('combobox', { name: 'Efekat' })).toContainText('Bez prelaza');
+    await expect(grupa.getByRole('combobox', { name: 'Smer' })).toHaveCount(0);
+    // PLATNO 52: prelaz iz servera u poljima
+    await page.locator('.uz-ed-stavka-dugme').nth(1).click();
+    await expect(editor(page)).toBeVisible();
+    await expect(grupa.getByRole('combobox', { name: 'Efekat' })).toContainText('Guranje');
+    await expect(grupa.getByRole('combobox', { name: 'Smer' })).toContainText('Sleva');
+    await expect(grupa.getByRole('spinbutton', { name: 'Trajanje (s)' })).toHaveValue('0.7');
+    const beleske = page.getByRole('textbox', { name: 'Beleške za predavača' });
+    await beleske.fill('Posle prelaza');
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => (poslednji(mock, 52) as unknown as { beleske: string } | undefined)?.beleske).toBe('Posle prelaza');
+    expect((poslednji(mock, 52) as unknown as { prelaz: unknown }).prelaz).toEqual(prelaz);
+    // mok je puna zamena kao server: prelaz je i posle PUT-a tu
+    expect(mock.podaci.prezentacije.find(p => p.id === PREZENTACIJA)!.slajdovi.find(s => s.id === 52)!.prelaz).toEqual(prelaz);
+  });
+});

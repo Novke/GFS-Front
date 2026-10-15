@@ -10,6 +10,12 @@ export type StatusIzvodjenja = 'AKTIVNO' | 'ZAVRSENO';
 export type Prikaz = 'PRIJAVA' | 'SLAJD' | 'KRAJ';
 export type Faza = 'CEKA' | 'OTVORENO' | 'ZATVORENO';
 export type Ekran = 'NORMALAN' | 'CRN' | 'BEO';
+/** Prelaz na slajd (faza 5, odluka 11): FADE "Postepeno", GURANJE (Push), BRISANJE (Wipe). */
+export type TipPrelaza = 'FADE' | 'GURANJE' | 'BRISANJE';
+/** Strana sa koje dolazi novi slajd (kao `smer` ULET-a); FADE nema smer. */
+export type SmerPrelaza = 'LEVO' | 'DESNO' | 'GORE' | 'DOLE';
+/** Prelaz pri ulasku na slajd bilo kog tipa (`null` = bez prelaza); `trajanjeMs` 100-5000. */
+export interface Prelaz { efekat: TipPrelaza; smer: SmerPrelaza | null; trajanjeMs: number; }
 export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' | 'REZULTATI' | 'TACAN' | 'RANG_LISTA'
   | 'PONOVI' | 'TAJMER' | 'TAJMER_PLUS' | 'TAJMER_MINUS' | 'TELEFON_PRIKAZ' | 'DETALJI' | 'EKRAN_CRN' | 'EKRAN_BEO'
   | 'QR' | 'ZAVRSI';
@@ -27,6 +33,8 @@ export interface PitanjeDetails {
 export interface SlajdDetails {
   id: number; rb: number; tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slika: MedijInfo | null;
   beleske: string | null; postepeno: boolean; pitanje: PitanjeDetails | null; platno: Platno | null;
+  /** PUT je puna zamena: komanda bez prelaza ga briše, pa svaki PUT nosi postojeći (`slajdUCmd`). */
+  prelaz: Prelaz | null;
 }
 /**
  * Potezi jednog CRTEZ sloja (`GET slajdovi/{id}/potezi`, redom slojeva). Snimak izvođenja ih ne nosi (`CrtezSloj.potezi`
@@ -47,7 +55,7 @@ export interface PitanjeCmd {
   brojTacno: number | null; brojOdstupanje: number | null; odstupanjeTip: OdstupanjeTip | null; jedinica: string | null;
   tekstPrikaz: TekstPrikaz | null; prihvatljiviOdgovori: string[]; skalaMinOznaka: string | null; skalaMaxOznaka: string | null;
 }
-export interface SlajdCmd { tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean; pitanje: PitanjeCmd | null; platno: Platno | null; }
+export interface SlajdCmd { tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean; pitanje: PitanjeCmd | null; platno: Platno | null; prelaz: Prelaz | null; }
 /** Uvoz više slajdova odjednom (PowerPoint): `posle` = id slajda posle kog se ubacuju, `null` = na kraj. */
 export interface UvozSlajdovaCmd { posle: number | null; slajdovi: SlajdCmd[]; }
 export interface PredavanjeZaPokretanje { id: number; rb: number; datum: string; tema: string | null; zavrseno: boolean | null; grupa: GrupaKratko | null; }

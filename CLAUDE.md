@@ -219,7 +219,7 @@ over STOMP; teacher commands are REST.
   incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
   example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
   every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
-  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 790 B after 5c, whose lazy conversion
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 795 B after 5d, 114 790 B after 5c, whose lazy conversion
   chunk adds one export to the `marked` chunk shared with the phone; 114 615 B after the fix wave of the final review 5a) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
   or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
   alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
@@ -612,6 +612,25 @@ over STOMP; teacher commands are REST.
   `nizoviPdf`, dialog only dynamic and its static closure without fflate or pdf.js, pdf.js file <= 520 000 B and only dynamic,
   `worker-*.js` <= 1 300 000 B and never `import`ed, student page cannot reach any of it; sizes as `velicina` annotations),
   dialog in `pristupacnost.spec.ts` (preview and sending, day and night).
+- **Slide transition (phase 5e; backend GFSSystem B2, Flyway V10).** `SlajdCmd.prelaz` / `SlajdDetails.prelaz`
+  (`Prelaz { efekat: FADE | GURANJE | BRISANJE; smer: LEVO | DESNO | GORE | DOLE | null; trajanjeMs }`, `null` = none) belongs to
+  a slide of **any** type, not to the canvas document. `slajd-pravila`: `PRELAZ` (100-5000 ms, default 500), `normalizujPrelaz`
+  (same as `SlajdPP.normalizuj(Prelaz)`: no effect -> `null`, FADE has no direction, otherwise DESNO), `PORUKE.prelaz` (the
+  server's text), checked in `greskeSlajda` after the notes and before the type branch (so for PLATNO too); `slajdIzCmd`
+  normalises it for the local view. **`PUT /slajdovi/{id}` is a full replacement, so a command without `prelaz` deletes it**:
+  `slajdUCmd` copies it (`?? null`: a response or fixture without the field gives `null`, never a missing key), the form always
+  sends its own fields, `izmeniPlatno`, duplicating and leaving the editor reuse the last command, and "Poništi pretvaranje"
+  sends the slide's **current** transition (changed in the PLATNO form after converting), like the notes. `EditorStore` and
+  page specs cover each path (block "prelaz preživi svaki PUT"); `e2e/mock-api.ts` replaces it on PUT like the server, so an
+  e2e PUT without it would lose it. Imports (`uvoz-pptx/uvoz.ts` until F18, `uvoz-pdf/strane.ts`) send `prelaz: null`. The
+  form fields ("Prelaz na ovaj slajd": Efekat with "Bez prelaza", Smer only for GURANJE/BRISANJE, "Trajanje (s)" 0.1-5,
+  "Pregledaj prelaz" -> `SlajdFormaComponent.pregledPrelaza`) live in `pages/prelaz-polja.component.ts`, rendered by the form
+  in `@defer (on immediate)`, so they are a lazy chunk (~3 kB) and the editor page file grows only by the controls (~0.9 kB);
+  the controls stay in the slide form (`[formControl]`, the child cannot use `formControlName` across the component
+  boundary) and the form passes the effect as a signal. Names: `ui/prelaz-slajda.ts` (`NAZIVI_PRELAZA`, `NAZIVI_SMERA_PRELAZA`).
+  Specs: the form spec renders the block with `DeferBlockBehavior.Manual` + `render(Complete)`; `prezentacija-editor.spec.ts`
+  imports the chunk once in `beforeAll`, otherwise its first (real) dynamic import could finish inside a `saLaznimSatom` test and
+  leave the scheduler's timers behind. The phone gets nothing (`JavnoStanje` has no slide content).
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

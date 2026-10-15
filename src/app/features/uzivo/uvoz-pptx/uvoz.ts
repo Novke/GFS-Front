@@ -595,7 +595,10 @@ function pretvoriSlajd(z: ZajednickoUvoza, putanja: string, indeks: number): Uve
 
   return {
     indeks,
-    cmd: { tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske, postepeno: false, pitanje: null, platno: uklopljeno },
+    cmd: {
+      tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske, postepeno: false, pitanje: null, platno: uklopljeno,
+      prelaz: null, // F18: p:transition
+    },
     mediji: medijiDokumenta(uklopljeno),
     statistika: statistika(uklopljeno, anim.efekataPptx, anim.klikoviPptx, beleske),
   };

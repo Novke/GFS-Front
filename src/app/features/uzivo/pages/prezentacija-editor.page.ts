@@ -467,8 +467,12 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
               return;
             }
             this.store.isprazni(); // otvoren tekst ili gest editora platna ide u dokument pre vraćanja (odluka 9c faze 4)
-            // beleške su iste u oba tipa: ostaje ono što je otkucano posle pretvaranja; slika sa pravim nazivom do odgovora
-            this.store.izmeniSlajd(t.id, { ...original, beleske: nadji()?.beleske ?? original.beleske }, t.slika);
+            // beleške i prelaz su isti u oba tipa: ostaje ono što je izmenjeno posle pretvaranja (PUT bez prelaza bi ga
+            // obrisao, a forma platna ga menja); slika sa pravim nazivom do odgovora
+            const sada = nadji();
+            this.store.izmeniSlajd(t.id, {
+              ...original, beleske: sada?.beleske ?? original.beleske, prelaz: sada ? sada.prelaz ?? null : original.prelaz,
+            }, t.slika);
             this.fokusiraj(k, 'app-slajd-forma .uz-ed-pretvori');
           },
         }, { grupa: 'uzivo-pretvori' });
