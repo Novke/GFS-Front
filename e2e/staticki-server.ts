@@ -28,6 +28,7 @@ const TIPOVI: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm', // kao nginx mime.types (pdf.js, faza 5d): inače pdf.js upozori i prevodi wasm sporije
 };
 
 if (!existsSync(INDEX)) {
