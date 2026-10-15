@@ -23,12 +23,15 @@ export interface RezultatPretvaranja { platno: Platno; gubici: Gubitak[]; }
 
 const TELO = 28;
 const PODNASLOVI = [36, 32, 30, 28, 28, 28];            // # .. ###### u tekstu (naslov slajda je 40)
-const KOD = { font: 'Cousine', velicina: 22 };
+const KOD = { font: 'Cousine', udeo: 22 / 28 };          // kod je relativan okolnom tekstu (telo 28 -> 22), kao `code` u INFO-u
 const LEVO = 48;
 const SIRINA = 864;
 const DNO = 500;                                         // isto kao "Naslov i tekst" faze 4: telo 140..500
 const KOLONA_SLIKE = { x: 592, sirina: 320 };
 const SIRINA_UZ_SLIKU = 520;
+/** Najveće uvlačenje koje pretvaranje upisuje (lista nivoa 8 = 306, plus citati; server prima do 1000). */
+const MAX_UVLACENJA = 450;
+const NASLOV = { sirina: 864, visina: 92, velicina: 40 };
 const lekser = new Marked({ gfm: true, breaks: true });
 
 interface Stil { podebljano: boolean; kurziv: boolean; precrtano: boolean; kod: boolean; }
@@ -37,19 +40,22 @@ const OBICAN: Stil = { podebljano: false, kurziv: false, precrtano: false, kod: 
 interface Stanje { tema: Tema; pasusi: Pasus[]; stavke: number[][]; gubici: Set<Gubitak>; citat: number; }
 
 /**
- * Lekser `marked`-a ne dekodira entitete, a prikaz INFO-a ih prikazuje dekodirane (`&amp;` -> `&`), pa se dekodiraju
- * osnovni imenovani i brojčani. Samo u običnom tekstu: kod u redu (`` `&amp;` ``) i `\&` prikaz ostavlja doslovno.
+ * Tekst kao u prikazu INFO-a. Lekser `marked`-a sam dekodira brojčane entitete (`&#169;` -> ©, `&#0;` -> U+FFFD), a
+ * imenovane ostavlja, pa ih pregledač dekodira (`&amp;` -> `&`); ovde se dekodiraju osnovni imenovani (ostali, npr.
+ * `&eacute;`, ostaju doslovno) i, za tekst bez tokena, brojčani. Prikaz INFO-a skuplja bele znake (`white-space: normal`),
+ * pa tab, novi red, CR i FF u tekstu (samo iz entiteta: prelom reda je `br` token) postaju razmak, a ne tab ili prelom
+ * platna. Samo u običnom tekstu: kod u redu (`` `&amp;` ``) i `\&` prikaz ostavlja doslovno.
  */
-const ENTITETI: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
-const dekodiraj = (s: string) => s.replace(/&(?:#(\d{1,7})|#[xX]([0-9A-Fa-f]{1,6})|(amp|lt|gt|quot|apos|nbsp));/g,
-  (e, dec?: string, hex?: string, ime?: string) => {
-    if (ime) return ENTITETI[ime];
-    const k = dec ? parseInt(dec, 10) : parseInt(hex!, 16);
-    return k > 0 && k <= 0x10ffff && (k < 0xd800 || k > 0xdfff) ? String.fromCodePoint(k) : e;
-  });
+const ENTITETI: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00A0' };
+const znakEntiteta = (k: number) =>
+  (k === 0 || k > 0x10ffff || (k >= 0xd800 && k <= 0xdfff) ? '\uFFFD' : String.fromCodePoint(k));
+const tekstKaoInfo = (s: string) => s
+  .replace(/&(?:#(\d+)|#[xX]([0-9A-Fa-f]+)|(amp|lt|gt|quot|apos|nbsp));/g,
+    (_e, dec?: string, hex?: string, ime?: string) => (ime ? ENTITETI[ime] : znakEntiteta(dec ? Number(dec) : parseInt(hex!, 16))))
+  .replace(/[\t\n\r\f]/g, ' ');
 
 function deo(st: Stanje, tekst: string, stil: Stil, velicina: number, naslov: boolean): Deo {
-  const d = deoTeme(st.tema, naslov ? 'naslov' : 'telo', stil.kod ? KOD.velicina : velicina, tekst);
+  const d = deoTeme(st.tema, naslov ? 'naslov' : 'telo', stil.kod ? z(velicina * KOD.udeo) : velicina, tekst);
   return { ...d, font: stil.kod ? KOD.font : d.font, podebljano: stil.podebljano || naslov, kurziv: stil.kurziv, precrtano: stil.precrtano };
 }
 
@@ -81,7 +87,7 @@ function uRedu(tokeni: Token[] | undefined, stil: Stil, st: Stanje, velicina: nu
       case 'escape': r.push(deo(st, t.text, stil, velicina, naslov)); break;
       default:
         if ('tokens' in t && t.tokens?.length) r.push(...uRedu(t.tokens, stil, st, velicina, naslov));
-        else if ('text' in t) r.push(deo(st, dekodiraj(String(t.text)), stil, velicina, naslov));
+        else if ('text' in t) r.push(deo(st, tekstKaoInfo(String(t.text)), stil, velicina, naslov));
     }
   }
   return r;
@@ -100,7 +106,7 @@ function dodaj(st: Stanje, p: Pasus, koraci: number[] | null): void {
 
 /** Blok; `nivo` > 0 je nastavak stavke liste (bez oznake, poravnat sa tekstom stavke, nivo dublje). */
 function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void {
-  const uvuceno = nivo > 0 ? { nivo: Math.min(8, nivo), uvlacenje: { levo: 18 + 36 * (nivo - 1), prviRed: 0 } } : {};
+  const uvuceno = nivo > 0 ? { nivo: Math.min(8, nivo), uvlacenje: { levo: 18 + 36 * Math.min(8, nivo - 1), prviRed: 0 } } : {};
   switch (t.type) {
     case 'heading': {
       const v = PODNASLOVI[(t as Tokens.Heading).depth - 1] ?? TELO;
@@ -110,7 +116,7 @@ function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void
     case 'paragraph':
     case 'text':
       dodaj(st, pasus(st, 'tokens' in t && t.tokens ? uRedu(t.tokens, OBICAN, st, TELO, false)
-        : [deo(st, dekodiraj(t.text), OBICAN, TELO, false)], { razmakPosle: 6, ...uvuceno }), koraci);
+        : [deo(st, tekstKaoInfo(t.text), OBICAN, TELO, false)], { razmakPosle: 6, ...uvuceno }), koraci);
       break;
     case 'list':
       lista(t as Tokens.List, st, nivo, koraci);
@@ -126,7 +132,7 @@ function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void
       st.citat--;
       for (let i = od; i < st.pasusi.length; i++) {
         const p = st.pasusi[i];
-        st.pasusi[i] = { ...p, uvlacenje: { ...p.uvlacenje, levo: p.uvlacenje.levo + 36 }, delovi: p.delovi.map((d) => ({ ...d, kurziv: true })) };
+        st.pasusi[i] = { ...p, uvlacenje: { ...p.uvlacenje, levo: Math.min(MAX_UVLACENJA, p.uvlacenje.levo + 36) }, delovi: p.delovi.map((d) => ({ ...d, kurziv: true })) };
       }
       break;
     }
@@ -153,8 +159,9 @@ function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void
 /**
  * Lista: prvi pasus stavke nosi oznaku (ZNAK `•` ili BROJ; sve stavke iste liste imaju isti `pocetak` = `start`, pa ih
  * `oznakeListe` broji redom), uvlačenje `18 + 36 * nivo`, prvi red -18 (odluka 18 faze 4). Nastavak stavke je nivo
- * dublje bez oznake, pa ne prekida numeraciju. Stavka liste najvišeg nivoa van citata je jedan korak (`postepeno`,
- * odluka 20); prazna stavka dobija prazan pasus, da broj koraka ostane isti kao kod INFO slajda.
+ * dublje bez oznake, pa ne prekida numeraciju; kad stavka počinje drugim blokom (podnaslov, kod), oznaku nosi njegov
+ * prvi pasus. Stavka liste najvišeg nivoa van citata je jedan korak (`postepeno`, odluka 20); prazna stavka dobija prazan
+ * pasus, da broj koraka ostane isti kao kod INFO slajda.
  */
 function lista(t: Tokens.List, st: Stanje, nivo: number, roditelj: number[] | null): void {
   const oznaka: Lista = t.ordered
@@ -174,7 +181,13 @@ function lista(t: Tokens.List, st: Stanje, nivo: number, roditelj: number[] | nu
       } else if (c.type === 'list') {
         lista(c as Tokens.List, st, nivo + 1, koraci);
       } else {
+        // prvi blok stavke koji nije tekst (podnaslov, kod, citat, tabela) nosi oznaku stavke, kao u INFO-u
+        const pre = st.pasusi.length;
         blok(c, st, nivo + 1, koraci);
+        if (prvi && st.pasusi.length > pre) {
+          st.pasusi[pre] = { ...st.pasusi[pre], ...izmeneStavke };
+          prvi = false;
+        }
       }
     }
     if (st.pasusi.length === od) dodaj(st, pasus(st, [], izmeneStavke), koraci);
@@ -182,23 +195,54 @@ function lista(t: Tokens.List, st: Stanje, nivo: number, roditelj: number[] | nu
   }
 }
 
-/** Gruba procena visine (pt): prosečna širina znaka 0,5 em, prored 1,2, plus razmaci pasusa. */
-export function procenaVisine(pasusi: readonly Pasus[], sirina: number): number {
+/** Prosečna širina znaka (em): Cousine (kod) je jednako širok i širi od proporcionalnih fontova. */
+const sirinaZnaka = (font: string) => (font === KOD.font ? 0.6 : 0.5);
+/** Tab: podrazumevani tab-stop platna (36 pt, `platno-tabovi`); ne zavisi od veličine slova. */
+const TAB = 36;
+
+/** Pasus izmeren pri skali 1: redovi (između `\n`) kao širina slova (pt) i broj tabova, razmaci se ne skaliraju. */
+interface MeraPasusa { razmak: number; velicina: number; dostupno: number; redovi: { slova: number; tabova: number }[]; }
+
+function meraPasusa(p: Pasus, sirina: number): MeraPasusa {
+  const redovi = [{ slova: 0, tabova: 0 }];
+  for (const d of p.delovi) {
+    const znak = sirinaZnaka(d.font) * d.velicina;
+    for (const c of d.tekst) {
+      const red = redovi[redovi.length - 1];
+      if (c === '\n') redovi.push({ slova: 0, tabova: 0 });
+      else if (c === '\t') red.tabova++;
+      else red.slova += znak;
+    }
+  }
+  return {
+    razmak: p.razmakPre + p.razmakPosle, velicina: Math.max(1, ...p.delovi.map((d) => d.velicina)),
+    dostupno: Math.max(1, sirina - p.uvlacenje.levo), redovi,
+  };
+}
+
+/**
+ * Visina pri skali `s` onako kako je prikaz primenjuje (`stilDela`: množi se samo veličina slova; širina okvira,
+ * uvlačenje, razmaci i tab ostaju), pa pri manjim slovima u red staje više znakova: visina pada približno sa s².
+ */
+function visinaPri(mere: readonly MeraPasusa[], s: number): number {
   let h = 0;
-  for (const p of pasusi) {
-    const v = Math.max(18, ...p.delovi.map((d) => d.velicina));
-    const naRed = Math.max(1, Math.floor((sirina - p.uvlacenje.levo) / (0.5 * v)));
-    const tekst = p.delovi.map((d) => d.tekst).join('');
-    const redova = tekst.split('\n').reduce((n, r) => n + Math.max(1, Math.ceil([...r].length / naRed)), 0);
-    h += p.razmakPre + p.razmakPosle + redova * v * 1.2;
+  for (const m of mere) {
+    const redova = m.redovi.reduce((n, r) => n + Math.max(1, Math.ceil((r.slova * s + r.tabova * TAB) / m.dostupno)), 0);
+    h += m.razmak + redova * m.velicina * s * 1.2;
   }
   return h;
 }
 
-/** `okvir.skala` (0,25-1, korak 0,05) da procenjen tekst stane u okvir. */
+/** Gruba procena visine (pt): prosečna širina znaka 0,5 em (Cousine 0,6), tab 36 pt, prored 1,2, plus razmaci pasusa. */
+export function procenaVisine(pasusi: readonly Pasus[], sirina: number): number {
+  return visinaPri(pasusi.map((p) => meraPasusa(p, sirina)), 1);
+}
+
+/** `okvir.skala`: najveća iz 1, 0,95, ..., 0,25 pri kojoj procenjen tekst (`visinaPri`) staje u okvir; inače 0,25. */
 export function skalaTeksta(pasusi: readonly Pasus[], sirina: number, visina: number): number {
-  const h = procenaVisine(pasusi, sirina);
-  return h <= visina ? 1 : Math.max(0.25, Math.floor((visina / h) * 20) / 20);
+  const mere = pasusi.map((p) => meraPasusa(p, sirina));
+  for (let k = 20; k > 5; k--) if (visinaPri(mere, k / 20) <= visina) return k / 20;
+  return 0.25;
 }
 
 function slikaUKutiji(id: string, sl: SlikaZaPretvaranje, k: { x: number; y: number; sirina: number; visina: number }): SlikaSloj {
@@ -225,8 +269,9 @@ function animacijeStavki(slojId: string, stavke: readonly number[][]): Animacija
 
 /**
  * INFO -> PLATNO (odluka 20): naslov `s1` (48, 28, 864 x 92, 40 pt, font i boja naslova teme), telo `s2` (od y 140, ili
- * 28 bez naslova, do 500; širina 864, ili 520 uz sliku), slika `s3` (desna kolona 592..912 uz tekst, inače ceo prostor
- * tela; contain), pozadina teme, `postepeno` -> KLIK FADE po stavci liste najvišeg nivoa.
+ * 28 bez naslova, do 500; širina 864, ili 520 uz sliku), oba sa `okvir.skala` po `skalaTeksta`; slika `s3` (desna kolona
+ * 592..912 uz tekst, inače ceo prostor tela; contain), pozadina teme, `postepeno` -> KLIK FADE po stavci liste najvišeg
+ * nivoa.
  */
 export function infoUPlatno(u: UlazPretvaranja, tema: Tema): RezultatPretvaranja {
   const st: Stanje = { tema, pasusi: [], stavke: [], gubici: new Set(), citat: 0 };
@@ -236,8 +281,13 @@ export function infoUPlatno(u: UlazPretvaranja, tema: Tema): RezultatPretvaranja
   const visina = DNO - gore;
   const slojevi: Sloj[] = [];
   if (naslov) {
-    const s1 = noviTekst('s1', tema, { x: LEVO, y: 28, sirina: SIRINA, visina: 92 }, 'naslov', 40);
-    slojevi.push({ ...s1, pasusi: [pasusSa(deoTeme(tema, 'naslov', 40, naslov))] });
+    // naslov (server: do 300 znakova) po istom pravilu skale kao telo, da se ne preliva u telo
+    const s1 = noviTekst('s1', tema, { x: LEVO, y: 28, sirina: NASLOV.sirina, visina: NASLOV.visina }, 'naslov', NASLOV.velicina);
+    const pasusi = [pasusSa(deoTeme(tema, 'naslov', NASLOV.velicina, naslov))];
+    const o = s1.okvir;
+    const skala = skalaTeksta(pasusi, NASLOV.sirina - o.unutraLevo - o.unutraDesno, NASLOV.visina - o.unutraGore - o.unutraDole);
+    if (skala < 0.5) st.gubici.add('DUGACAK_TEKST');
+    slojevi.push({ ...s1, pasusi, okvir: { ...o, skala } });
   }
   const imaTelo = st.pasusi.length > 0;
   if (imaTelo) {

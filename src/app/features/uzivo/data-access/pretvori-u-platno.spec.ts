@@ -1,4 +1,4 @@
-import type { Platno, SlikaSloj, Tema, TekstSloj } from './platno.models';
+import type { Pasus, Platno, SlikaSloj, Tema, TekstSloj } from './platno.models';
 import { deoTeme, pasusSa, ZNAK_LISTE } from './platno-novo';
 import { DUZINA_ID_MEDIJA, preslikajMedije, proveriKaoServer } from './platno-provera';
 import { brojKoraka } from './platno-koraci';
@@ -207,6 +207,85 @@ describe('procenaVisine i skalaTeksta', () => {
     expect(s).toBeLessThan(1);
     expect(Math.round(s * 20)).toBeCloseTo(s * 20, 9);
     expect(skalaTeksta([pasusSa(deoTeme('NACRT', 'telo', 28, 'x'.repeat(100_000)))], 864, 100)).toBe(0.25);
+  });
+
+  // Prikaz množi samo veličinu slova (`stilDela`): širina okvira, uvlačenje, razmaci i tab ostaju, pa pri manjim slovima
+  // u red staje više znakova. Procena pri skali s je zato `procenaVisine` dokumenta sa slovima puta s.
+  const skaliraj = (pasusi: readonly Pasus[], s: number): Pasus[] =>
+    pasusi.map((p) => ({ ...p, delovi: p.delovi.map((d) => ({ ...d, velicina: d.velicina * s })) }));
+  const OKVIR_TELA = { sirina: 864 - 14.4, visina: 360 - 7.2 };
+
+  it.each([[1500, 0.6], [800, 0.85]])('pasus od %i znakova uz naslov: skala %f, bez DUGACAK_TEKST (recenzija I1)', (n, ocekivano) => {
+    const r = infoUPlatno(ulaz({ naslov: 'N', sadrzaj: 'x'.repeat(n) }), 'NACRT');
+    const s2 = telo(r.platno);
+    expect(s2.okvir.skala).toBeCloseTo(ocekivano, 9);
+    expect(r.gubici).not.toContain('DUGACAK_TEKST');
+    expect(procenaVisine(skaliraj(s2.pasusi, s2.okvir.skala), OKVIR_TELA.sirina)).toBeLessThanOrEqual(OKVIR_TELA.visina);
+    expect(procenaVisine(skaliraj(s2.pasusi, s2.okvir.skala + 0.05), OKVIR_TELA.sirina)).toBeGreaterThan(OKVIR_TELA.visina);
+  });
+
+  it.each([300, 2000, 6000, 20_000])('skala je najveća koja staje (korak 0,05): %i znakova u rečima', (n) => {
+    const pasusi = telo(infoUPlatno(ulaz({ naslov: 'N', sadrzaj: 'reč '.repeat(n / 4) }), 'NACRT').platno).pasusi;
+    const s = skalaTeksta(pasusi, OKVIR_TELA.sirina, OKVIR_TELA.visina);
+    if (s > 0.25) expect(procenaVisine(skaliraj(pasusi, s), OKVIR_TELA.sirina)).toBeLessThanOrEqual(OKVIR_TELA.visina);
+    if (s < 1) expect(procenaVisine(skaliraj(pasusi, s + 0.05), OKVIR_TELA.sirina)).toBeGreaterThan(OKVIR_TELA.visina);
+  });
+
+  it('kod (Cousine) je širi od 0,5 em, tab je 36 pt (recenzija M6)', () => {
+    const kod = pasusSa({ ...deoTeme('NACRT', 'telo', 28, 'x'.repeat(60)), font: 'Cousine' });
+    expect(procenaVisine([kod], 864)).toBeCloseTo(2 * 33.6, 6);
+    expect(procenaVisine([pasusSa(deoTeme('NACRT', 'telo', 28, '\t'.repeat(30)))], 864)).toBeCloseTo(2 * 33.6, 6);
+    expect(procenaVisine([pasusSa(deoTeme('NACRT', 'telo', 28, 'x'.repeat(60)))], 864)).toBeCloseTo(33.6, 6);
+  });
+});
+
+describe('infoUPlatno: dorade posle recenzije', () => {
+  it('M1: dugačak naslov dobija skalu da stane u 864 x 92; kratak ostaje 1', () => {
+    const s1 = sloj(infoUPlatno(ulaz({ naslov: 'Naslov '.repeat(20).trim(), sadrzaj: 'a' }), 'NACRT').platno, 's1') as TekstSloj;
+    expect(s1.okvir.skala).toBeLessThan(1);
+    expect(s1.okvir.skala).toBeGreaterThanOrEqual(0.5);
+    const sk = s1.okvir.skala;
+    const scaled = s1.pasusi.map((p) => ({ ...p, delovi: p.delovi.map((d) => ({ ...d, velicina: d.velicina * sk })) }));
+    expect(procenaVisine(scaled, 864 - 14.4)).toBeLessThanOrEqual(92 - 7.2);
+    expect((sloj(infoUPlatno(ulaz({ naslov: 'Uvod' }), 'NACRT').platno, 's1') as TekstSloj).okvir.skala).toBe(1);
+  });
+
+  it('M2: duboki citat i nastavak duboke stavke ostaju u granicama servera', () => {
+    const citat = infoUPlatno(ulaz({ sadrzaj: '>'.repeat(40) + ' x' }), 'NACRT').platno;
+    expect(proveriKaoServer(citat)).toBeNull();
+    const dubina = 11;
+    const md = Array.from({ length: dubina }, (_, i) => `${'  '.repeat(i)}- a${i}`).join('\n')
+      + `\n\n${'  '.repeat(dubina)}nastavak`;
+    const s2 = telo(infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT').platno);
+    const poslednja = s2.pasusi[dubina - 1];
+    const nastavak = s2.pasusi[dubina];
+    expect(tekstPasusa(s2)[dubina]).toBe('nastavak');
+    expect(poslednja.uvlacenje.levo).toBe(18 + 36 * 8);
+    expect(nastavak.uvlacenje.levo).toBe(poslednja.uvlacenje.levo);
+  });
+
+  it('M3: stavka koja počinje naslovom ili kodom zadržava oznaku', () => {
+    const s2 = telo(infoUPlatno(ulaz({ sadrzaj: '1. # Naslov\n2. ```\n   kod\n   ```\n3. c' }), 'NACRT').platno);
+    expect(oznakeListe(s2.pasusi)).toEqual(['1.', '2.', '3.']);
+    expect(s2.pasusi[0].uvlacenje).toEqual({ levo: 18, prviRed: -18 });
+    expect(s2.pasusi[0].delovi[0]).toMatchObject({ tekst: 'Naslov', podebljano: true });
+  });
+
+  // `marked` sam dekodira brojčane entitete (`&#150;` -> U+0096, ne Windows-1252: pregledač dobija već dekodiran znak), a
+  // INFO skuplja bele znake: tab i novi red iz entiteta su tamo razmak, pa i na platnu (ne tab ni prelom).
+  it('M5: brojčani entiteti i beli znaci kao u prikazu INFO-a', () => {
+    const md = 'a&#10;b&#9;c&#13;d&#12;e &#0; &#xD800; &#150; &amp;#10;';
+    const ocekivano = 'a b c d e � � \u0096 &#10;';
+    expect(tekstPasusa(telo(infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT').platno))).toEqual([ocekivano]);
+    const d = document.createElement('div');
+    d.innerHTML = renderMarkdown(md);
+    expect(d.textContent!.replace(/[ \t\n\r\f]+/g, ' ').trim()).toBe(ocekivano);
+  });
+
+  it('M7: kod u redu je relativan veličini okolnog teksta (22/28)', () => {
+    const s2 = telo(infoUPlatno(ulaz({ sadrzaj: '# `k`\n\n`k`' }), 'NACRT').platno);
+    expect(s2.pasusi[0].delovi[0]).toMatchObject({ font: 'Cousine', velicina: 28.29 });
+    expect(s2.pasusi[1].delovi[0]).toMatchObject({ font: 'Cousine', velicina: 22 });
   });
 });
 
