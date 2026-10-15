@@ -226,7 +226,7 @@ over STOMP; teacher commands are REST.
   gzip (102 932); `tekst-formule*.ts` never import `mathlive` nor contain `ML__latex`. Network of one formula on the phone
   (`uzivo-javno.spec.ts`, annotation `mreza-formule`; JS, CSS and woff2 after the question, app fonts from `media/` not
   counted): 404 112 B, limit measured + 10 % and never above 450 000 B; no `KaTeX_AMS*`/`KaTeX_Size*`, nothing off-origin.
-  The editor page file is 211 166 B after 5a, about 210 450 B after 5c (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
+  The editor page file stays <= 215 000 B (current value: `velicina` annotation of `e2e/lenji-editor.spec.ts`; the form's formula check, ~1-1.4 kB, is the first candidate for a
   lazy chunk if 5b-5e need room). **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the
   sanitizer allows `#hex` colours) is unreadable on a **dark presentation theme** (TAMNA, PONOĆ: `rezim-noc` on the slide) on
   projector, console and editor preview; the app's night mode does not touch it (those views are always `rezim-dan uz-dan`); the
@@ -547,15 +547,18 @@ over STOMP; teacher commands are REST.
 - **Convert to canvas (phase 5c; backend unchanged).** The INFO form has "Pretvori u platno" (`SlajdFormaComponent.pretvori`)
   and the page's `pretvoriUPlatno` turns the slide into PLATNO with **one** `izmeniSlajd` (`PUT` after 800 ms or Ctrl+S). The
   conversion is the pure function `data-access/pretvori-u-platno.ts` (`infoUPlatno`, plan decisions 20-21: `marked` lexer plus the
-  phase 4 factories), loaded only through a dynamic `import()` on click (its own lazy chunk, ~6 kB including the loss texts
+  phase 4 factories), loaded only through a dynamic `import()` on click (its own lazy chunk, 7 173 B / 3 288 B gzip on 2026-10-15, including the loss texts
   `OPISI_GUBITAKA`; the page file did not grow, `platno-novo` moved into a chunk shared by both; `lenji-editor.spec.ts` checks
-  that the chunk is only imported dynamically and is outside the initial and page closures). Title -> TEXT `s1` (40 pt, theme title), Markdown -> TEXT `s2` (lists
-  with levels, numbering from `start`, bold, italic, strike, code in Cousine, headings, line breaks; `okvir.skala` 0.25-1 for long
+  that the chunk is only imported dynamically and is outside the initial and page closures). Title -> TEXT `s1` (40 pt bold like the INFO title, theme title font and colour, same scale rule as the body), Markdown -> TEXT `s2` (lists
+  with levels, markers in the theme's first accent like `li::marker`, numbering from `start` clamped to the server's 1-9999; a
+  numbered list gets a hanging indent from its widest number (`visecaZaBroj`: 36 for one digit, 54 for two) instead of the editor's
+  18, otherwise the number touches the text; bullets keep the phase 4 rule `18 + 36 * level` / -18; bold, italic, strike, code in Cousine, headings, line breaks; `okvir.skala` 0.25-1 for long
   text), image -> SLIKA `s3` (right column of 320 next to text, otherwise the whole area, contain; natural size through the token
   `ui/dimenzije-slike.ts` `DIMENZIJE_SLIKE`, waited for 3 s at most, 1600 x 900 when it cannot be measured), notes stay, `postepeno` -> one KLIK FADE per
   top-level list item (so the step count equals the INFO slide's), `$` stays text (INFO reads no formulas). **Lost** (`Gubitak`,
   texts `OPISI_GUBITAKA`): link addresses, images inside the text, tables (rows with tabs), horizontal rules, quotes (indented
-  italic), and very long text (letters shrunk). **`ConfirmDialog` only when something is lost** (list of losses); a document
+  italic), and very long text (letters shrunk). Colours and fonts are resolved at conversion (phase 4 factories), so a later theme
+  change no longer recolours the slide (an INFO slide follows the theme); the full list of known limitations is in the PR of 5c. **`ConfirmDialog` only when something is lost** (list of losses); a document
   `greskePlatna` (= `proveriKaoServer`) would reject (e.g. more than 400 list items with "Otkrivaj stavke") is not applied:
   a message with the server's reason, the INFO slide stays; an exception (or a chunk that does not load) goes to `ErrorHandler`
   with a message. After every conversion the 6 s snackbar "Slajd je pretvoren u platno." (group `uzivo-pretvori`) has

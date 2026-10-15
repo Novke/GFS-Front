@@ -114,7 +114,7 @@ describe('infoUPlatno: liste i koraci', () => {
     expect(oznakeListe(telo(infoUPlatno(ulaz({ sadrzaj: '3. x\n4. y' }), 'NACRT').platno).pasusi)).toEqual(['3.', '4.']);
     const s2 = telo(infoUPlatno(ulaz({ sadrzaj: '1. a\n\n   nastavak\n2. b' }), 'NACRT').platno);
     expect(oznakeListe(s2.pasusi)).toEqual(['1.', null, '2.']);
-    expect(s2.pasusi[1].uvlacenje).toEqual({ levo: 18, prviRed: 0 });
+    expect(s2.pasusi[1].uvlacenje).toEqual({ levo: s2.pasusi[0].uvlacenje.levo, prviRed: 0 }); // poravnat sa tekstom stavke
   });
 
   it.each([
@@ -260,14 +260,18 @@ describe('infoUPlatno: dorade posle recenzije', () => {
     const poslednja = s2.pasusi[dubina - 1];
     const nastavak = s2.pasusi[dubina];
     expect(tekstPasusa(s2)[dubina]).toBe('nastavak');
-    expect(poslednja.uvlacenje.levo).toBe(18 + 36 * 8);
+    // nivo staje na 8 (server), a uvlačenje i dalje raste kao u INFO-u, najviše do 450 (server prima do 1000)
+    expect(poslednja.nivo).toBe(8);
+    expect(poslednja.uvlacenje.levo).toBeGreaterThan(18 + 36 * 8);
+    expect(poslednja.uvlacenje.levo).toBeLessThanOrEqual(450);
+    expect(proveriKaoServer(infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT').platno)).toBeNull();
     expect(nastavak.uvlacenje.levo).toBe(poslednja.uvlacenje.levo);
   });
 
   it('M3: stavka koja počinje naslovom ili kodom zadržava oznaku', () => {
     const s2 = telo(infoUPlatno(ulaz({ sadrzaj: '1. # Naslov\n2. ```\n   kod\n   ```\n3. c' }), 'NACRT').platno);
     expect(oznakeListe(s2.pasusi)).toEqual(['1.', '2.', '3.']);
-    expect(s2.pasusi[0].uvlacenje).toEqual({ levo: 18, prviRed: -18 });
+    expect(s2.pasusi[0].uvlacenje).toEqual({ levo: 36, prviRed: -36 });
     expect(s2.pasusi[0].delovi[0]).toMatchObject({ tekst: 'Naslov', podebljano: true });
   });
 
@@ -307,5 +311,64 @@ describe('infoUPlatno: server prima svaki rezultat', () => {
 
   it.each(ULAZI.map((u, i) => [i, u] as const))('ulaz %i', (_i, u) => {
     for (const tema of SVE_TEME) expect(proveriKaoServer(kaoServer(infoUPlatno(u, tema).platno)), tema).toBeNull();
+  });
+});
+
+describe('infoUPlatno: posle završne recenzije 5c', () => {
+  /** Gruba širina oznake "N." u IBM Plex Sans (cifra ~0,6 em, tačka ~0,3 em) plus razmak (~0,25 em) do teksta. */
+  const potrebno = (oznaka: string, v = 28) => ([...oznaka].reduce((w, c) => w + (c === '.' ? 0.3 : 0.6), 0) + 0.25) * v;
+
+  it('I1: numerisana stavka ima viseće uvlačenje šire od oznake i razmaka (nema "1.Tekst")', () => {
+    const s2 = telo(infoUPlatno(ulaz({ sadrzaj: '1. Mešanje\n2. Ugradnja\n3. Nega' }), 'NACRT').platno);
+    const oznake = oznakeListe(s2.pasusi);
+    s2.pasusi.forEach((p, i) => {
+      expect(-p.uvlacenje.prviRed).toBeGreaterThanOrEqual(potrebno(oznake[i]!));
+      expect(p.uvlacenje.levo + p.uvlacenje.prviRed).toBe(0); // oznaka počinje na ivici, kao znak liste
+    });
+  });
+
+  it('I1: uvlačenje prati najširi broj liste (9. i 10. isto, šire od jednocifrene)', () => {
+    const md = Array.from({ length: 10 }, (_, i) => `${i + 1}. s${i + 1}`).join('\n');
+    const p = telo(infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT').platno).pasusi;
+    expect(new Set(p.map((x) => x.uvlacenje.prviRed)).size).toBe(1);
+    expect(-p[9].uvlacenje.prviRed).toBeGreaterThanOrEqual(potrebno('10.'));
+    const jedna = telo(infoUPlatno(ulaz({ sadrzaj: '1. a' }), 'NACRT').platno).pasusi[0];
+    expect(-p[0].uvlacenje.prviRed).toBeGreaterThan(-jedna.uvlacenje.prviRed);
+  });
+
+  it('I1: znak liste ostaje po pravilu faze 4 (18 + 36n / -18)', () => {
+    const p = telo(infoUPlatno(ulaz({ sadrzaj: '- a\n  - b' }), 'NACRT').platno).pasusi;
+    expect(p.map((x) => x.uvlacenje)).toEqual([{ levo: 18, prviRed: -18 }, { levo: 54, prviRed: -18 }]);
+  });
+
+  it('I1: podlista i nastavak numerisane stavke ne počinju levo od njenog teksta', () => {
+    const md = Array.from({ length: 10 }, (_, i) => `${i + 1}. s`).join('\n') + '\n    - pod\n\n    nastavak';
+    const p = telo(infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT').platno).pasusi;
+    const deseta = p[9];
+    const pod = p[10];
+    const nastavak = p[11];
+    expect(tekstPasusa({ pasusi: [pod, nastavak] } as TekstSloj)).toEqual(['pod', 'nastavak']);
+    expect(pod.uvlacenje.levo + pod.uvlacenje.prviRed).toBeGreaterThanOrEqual(deseta.uvlacenje.levo);
+    expect(nastavak.uvlacenje.levo).toBe(deseta.uvlacenje.levo);
+  });
+
+  it('početak liste van opsega servera (0, 9 cifara) se ograničava na 1..9999, server prima', () => {
+    for (const md of ['0. a\n1. b', '123456789. a']) {
+      const { platno } = infoUPlatno(ulaz({ sadrzaj: md }), 'NACRT');
+      expect(proveriKaoServer(platno), md).toBeNull();
+    }
+    expect(oznakeListe(telo(infoUPlatno(ulaz({ sadrzaj: '123456789. a' }), 'NACRT').platno).pasusi)).toEqual(['9999.']);
+  });
+
+  it.each(SVE_TEME)('m1 (%s): naslov podebljan kao INFO naslov, oznake liste u prvom akcentu teme', (tema) => {
+    const { platno } = infoUPlatno(ulaz({ naslov: 'N', sadrzaj: '- a\n\n1. b' }), tema);
+    expect((sloj(platno, 's1') as TekstSloj).pasusi[0].delovi[0].podebljano).toBe(true);
+    expect(telo(platno).pasusi.map((p) => p.lista?.boja)).toEqual([TEME[tema].akcenti[0], TEME[tema].akcenti[0]]);
+    expect(proveriKaoServer(platno)).toBeNull();
+  });
+
+  it('m1: posle tabele ostaje razmak do sledećeg pasusa', () => {
+    const p = telo(infoUPlatno(ulaz({ sadrzaj: '| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n\nKraj' }), 'NACRT').platno).pasusi;
+    expect(p.map((x) => x.razmakPosle)).toEqual([0, 0, 6, 6]);
   });
 });

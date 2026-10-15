@@ -32,19 +32,21 @@ const SIRINA_UZ_SLIKU = 520;
 /** Najveće uvlačenje koje pretvaranje upisuje (lista nivoa 8 = 306, plus citati; server prima do 1000). */
 const MAX_UVLACENJA = 450;
 const NASLOV = { sirina: 864, visina: 92, velicina: 40 };
+const MAX_POCETAK = 9999;
 const lekser = new Marked({ gfm: true, breaks: true });
 
 interface Stil { podebljano: boolean; kurziv: boolean; precrtano: boolean; kod: boolean; }
 const OBICAN: Stil = { podebljano: false, kurziv: false, precrtano: false, kod: false };
 /** `citat` = dubina citata u kojoj je blok (lista u citatu nije korak: INFO otkriva samo `:scope > ul > li`). */
-interface Stanje { tema: Tema; pasusi: Pasus[]; stavke: number[][]; gubici: Set<Gubitak>; citat: number; }
+/** `tekstStavki` = gde počinje tekst otvorenih stavki liste (stek): nastavak i podlista se ravnaju po njemu. */
+interface Stanje { tema: Tema; pasusi: Pasus[]; stavke: number[][]; gubici: Set<Gubitak>; citat: number; tekstStavki: number[]; }
 
 /**
  * Tekst kao u prikazu INFO-a. Lekser `marked`-a sam dekodira brojčane entitete (`&#169;` -> ©, `&#0;` -> U+FFFD), a
  * imenovane ostavlja, pa ih pregledač dekodira (`&amp;` -> `&`); ovde se dekodiraju osnovni imenovani (ostali, npr.
  * `&eacute;`, ostaju doslovno) i, za tekst bez tokena, brojčani. Prikaz INFO-a skuplja bele znake (`white-space: normal`),
- * pa tab, novi red, CR i FF u tekstu (samo iz entiteta: prelom reda je `br` token) postaju razmak, a ne tab ili prelom
- * platna. Samo u običnom tekstu: kod u redu (`` `&amp;` ``) i `\&` prikaz ostavlja doslovno.
+ * pa tab, novi red, CR i FF u tekstu (doslovan tab ili znak iz entiteta; prelom reda Markdown-a je `br` token) postaju
+ * razmak, a ne tab ili prelom platna. Samo u običnom tekstu: kod u redu (`` `&amp;` ``) i `\&` prikaz ostavlja doslovno.
  */
 const ENTITETI: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00A0' };
 const znakEntiteta = (k: number) =>
@@ -106,7 +108,8 @@ function dodaj(st: Stanje, p: Pasus, koraci: number[] | null): void {
 
 /** Blok; `nivo` > 0 je nastavak stavke liste (bez oznake, poravnat sa tekstom stavke, nivo dublje). */
 function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void {
-  const uvuceno = nivo > 0 ? { nivo: Math.min(8, nivo), uvlacenje: { levo: 18 + 36 * Math.min(8, nivo - 1), prviRed: 0 } } : {};
+  const levo = st.tekstStavki.at(-1) ?? 18 + 36 * Math.min(8, nivo - 1);
+  const uvuceno = nivo > 0 ? { nivo: Math.min(8, nivo), uvlacenje: { levo, prviRed: 0 } } : {};
   switch (t.type) {
     case 'heading': {
       const v = PODNASLOVI[(t as Tokens.Heading).depth - 1] ?? TELO;
@@ -144,8 +147,9 @@ function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void
         ...(i > 0 ? [deo(st, '\t', { ...OBICAN, podebljano: zaglavlje }, TELO, false)] : []),
         ...uRedu(c.tokens, { ...OBICAN, podebljano: zaglavlje }, st, TELO, false),
       ]);
-      dodaj(st, pasus(st, red(tb.header, true), { ...uvuceno }), koraci);
-      for (const r of tb.rows) dodaj(st, pasus(st, red(r, false), { ...uvuceno }), koraci);
+      const redovi = [red(tb.header, true), ...tb.rows.map((r) => red(r, false))];
+      // poslednji red nosi razmak posle, kao pasus, da se sledeći tekst ne lepi za tabelu
+      redovi.forEach((r, i) => dodaj(st, pasus(st, r, { ...uvuceno, razmakPosle: i === redovi.length - 1 ? 6 : 0 }), koraci));
       break;
     }
     case 'hr':
@@ -158,19 +162,29 @@ function blok(t: Token, st: Stanje, nivo: number, koraci: number[] | null): void
 
 /**
  * Lista: prvi pasus stavke nosi oznaku (ZNAK `•` ili BROJ; sve stavke iste liste imaju isti `pocetak` = `start`, pa ih
- * `oznakeListe` broji redom), uvlačenje `18 + 36 * nivo`, prvi red -18 (odluka 18 faze 4). Nastavak stavke je nivo
+ * `oznakeListe` broji redom) u prvom akcentu teme (kao `li::marker` INFO-a). Znak: uvlačenje `18 + 36 * nivo`, prvi red
+ * -18 (odluka 18 faze 4, isto kao lista iz editora). Broj: oznaka ("1.", "10.") je šira od 18, pa bi se tekst zalepio za
+ * nju (prikaz joj daje `min-width` = -prviRed); viseće uvlačenje je zato `visecaZaBroj` najvećeg broja liste, a oznaka
+ * počinje gde i znak tog nivoa (36 * nivo), ne levo od teksta roditeljske stavke. Nastavak stavke je nivo
  * dublje bez oznake, pa ne prekida numeraciju; kad stavka počinje drugim blokom (podnaslov, kod), oznaku nosi njegov
  * prvi pasus. Stavka liste najvišeg nivoa van citata je jedan korak (`postepeno`, odluka 20); prazna stavka dobija prazan
  * pasus, da broj koraka ostane isti kao kod INFO slajda.
  */
 function lista(t: Tokens.List, st: Stanje, nivo: number, roditelj: number[] | null): void {
+  const boja = TEME[st.tema].akcenti[0];
+  // server prima početak 1..9999 (Markdown dozvoljava 0 i do 9 cifara)
+  const pocetak = Math.min(MAX_POCETAK, Math.max(1, typeof t.start === 'number' ? t.start : 1));
   const oznaka: Lista = t.ordered
-    ? { vrsta: 'BROJ', znak: null, boja: null, format: 'ARAPSKI_TACKA', pocetak: typeof t.start === 'number' ? t.start : 1 }
-    : { vrsta: 'ZNAK', znak: ZNAK_LISTE, boja: null, format: null, pocetak: null };
+    ? { vrsta: 'BROJ', znak: null, boja, format: 'ARAPSKI_TACKA', pocetak }
+    : { vrsta: 'ZNAK', znak: ZNAK_LISTE, boja, format: null, pocetak: null };
   const n = Math.min(8, nivo);
-  const izmeneStavke = { nivo: n, lista: oznaka, uvlacenje: { levo: 18 + 36 * n, prviRed: -18 }, razmakPre: 10 };
+  const viseca = t.ordered ? visecaZaBroj(pocetak + t.items.length - 1) : 18;
+  const roditeljTekst = st.tekstStavki.at(-1) ?? 0;
+  const levo = Math.min(MAX_UVLACENJA, Math.max(36 * n, roditeljTekst) + viseca);
+  const izmeneStavke = { nivo: n, lista: oznaka, uvlacenje: { levo, prviRed: -viseca }, razmakPre: 10 };
   const koren = nivo === 0 && st.citat === 0;
   for (const stavka of t.items) {
+    st.tekstStavki.push(levo);
     const koraci = koren ? [] as number[] : roditelj;
     const od = st.pasusi.length;
     let prvi = true;
@@ -192,7 +206,17 @@ function lista(t: Tokens.List, st: Stanje, nivo: number, roditelj: number[] | nu
     }
     if (st.pasusi.length === od) dodaj(st, pasus(st, [], izmeneStavke), koraci);
     if (koren && koraci && koraci.length > 0) st.stavke.push(koraci);
+    st.tekstStavki.pop();
   }
+}
+
+/**
+ * Viseće uvlačenje numerisane liste (pt, celi korak 18): procenjena širina oznake `N.` u telu (cifra ~0,6 em, tačka
+ * ~0,3 em) plus razmak ~0,3 em do teksta, kao na INFO slajdu. Jednocifrena lista daje 36, dvocifrena 54. Merilo je telo
+ * od 28 pt; manja slova (`okvir.skala`) samo povećaju razmak.
+ */
+function visecaZaBroj(najveci: number): number {
+  return Math.ceil(((String(najveci).length * 0.6 + 0.3 + 0.3) * TELO) / 18) * 18;
 }
 
 /** Prosečna širina znaka (em): Cousine (kod) je jednako širok i širi od proporcionalnih fontova. */
@@ -274,7 +298,7 @@ function animacijeStavki(slojId: string, stavke: readonly number[][]): Animacija
  * nivoa.
  */
 export function infoUPlatno(u: UlazPretvaranja, tema: Tema): RezultatPretvaranja {
-  const st: Stanje = { tema, pasusi: [], stavke: [], gubici: new Set(), citat: 0 };
+  const st: Stanje = { tema, pasusi: [], stavke: [], gubici: new Set(), citat: 0, tekstStavki: [] };
   for (const t of lekser.lexer(u.sadrzaj ?? '')) blok(t, st, 0, null);
   const naslov = u.naslov?.trim() ?? '';
   const gore = naslov ? 140 : 28;
@@ -283,7 +307,7 @@ export function infoUPlatno(u: UlazPretvaranja, tema: Tema): RezultatPretvaranja
   if (naslov) {
     // naslov (server: do 300 znakova) po istom pravilu skale kao telo, da se ne preliva u telo
     const s1 = noviTekst('s1', tema, { x: LEVO, y: 28, sirina: NASLOV.sirina, visina: NASLOV.visina }, 'naslov', NASLOV.velicina);
-    const pasusi = [pasusSa(deoTeme(tema, 'naslov', NASLOV.velicina, naslov))];
+    const pasusi = [pasusSa({ ...deoTeme(tema, 'naslov', NASLOV.velicina, naslov), podebljano: true })]; // INFO naslov je 700
     const o = s1.okvir;
     const skala = skalaTeksta(pasusi, NASLOV.sirina - o.unutraLevo - o.unutraDesno, NASLOV.visina - o.unutraGore - o.unutraDole);
     if (skala < 0.5) st.gubici.add('DUGACAK_TEKST');
