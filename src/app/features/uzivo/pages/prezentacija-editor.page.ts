@@ -13,16 +13,18 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { distinctUntilChanged, from, map, switchMap } from 'rxjs';
+import { distinctUntilChanged, from, map, of, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
+import { greskePlatna } from '../data-access/platno-provera';
 import { razlogGreske } from '../data-access/razlog-greske';
-import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
-import { IzvodjenjeInfo, PokreniCmd, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
+import { TIPOVI_PITANJA, opisTipa, oznakaSlajda, slajdUCmd } from '../data-access/slajd-pravila';
+import { IzvodjenjeInfo, PokreniCmd, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, medijUrl } from '../data-access/uzivo.models';
 import type { Tema } from '../data-access/platno.models';
 import { kodSaRazmakom } from '../ui/format';
+import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
@@ -207,8 +209,9 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </mat-menu>
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
-            @for (s of izabraniNiz(); track store.kljuc(s.id)) {
-              <!-- jedna instanca editora po slajdu (track kljuc: ista i kad nacrt dobije pravi id); lenj chunk -->
+            @for (s of izabraniNiz(); track store.kljuc(s.id) + ':' + s.tip) {
+              <!-- jedna instanca editora po slajdu (track kljuc: ista i kad nacrt dobije pravi id); lenj chunk; promena tipa
+                   (Pretvori u platno, Poništi) pravi novu formu i editor, jer forma gradi kontrole jednom -->
               @if (s.tip === 'PLATNO' && s.platno) {
                 @defer (on immediate) {
                   <app-platno-editor [slajd]="s" [tema]="vazeca(p.tema)" />
@@ -218,7 +221,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
                 }
               }
-              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" />
+              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -260,6 +263,9 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly dimenzije = inject(DIMENZIJE_SLIKE);
+  /** Pretvaranje je zaseban lenj chunk (odluka 21): stranica editora ne raste. */
+  protected ucitajPretvaranje = () => import('../data-access/pretvori-u-platno');
 
   protected readonly rute = UzivoPutanje;
   protected readonly tipovi = TIPOVI_PITANJA;
@@ -391,6 +397,65 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected izmenaForme(id: number, cmd: SlajdCmd): void {
     const platno = cmd.tip === 'PLATNO' ? this.store.izabrani()?.platno ?? cmd.platno : cmd.platno;
     this.store.izmeniSlajd(id, { ...cmd, platno });
+  }
+
+  /**
+   * INFO -> PLATNO (odluka 20): jedna izmena slajda; potvrda samo uz gubitke; "Poništi" je druga izmena istim putem i vraća
+   * INFO komandu iz trenutka pretvaranja (i nesačuvane izmene forme, beleške). Posle čekanja na chunk važi slajd iz store-a
+   * (kucanje za to vreme, nacrt sa pravim id-jem); ako više nije INFO (drugi klik) ili je editor napušten, ništa. Dokument
+   * koji `proveriKaoServer` odbija se ne primenjuje (poruka sa razlogom).
+   */
+  protected async pretvoriUPlatno(s: SlajdDetails): Promise<void> {
+    const k = this.store.kljuc(s.id);
+    const trenutni = () => {
+      const t = this.store.slajdovi().find(x => this.store.kljuc(x.id) === k);
+      return t?.tip === 'INFO' && !this.destroyRef.destroyed ? t : null;
+    };
+    const ucitano = await Promise.all([
+      this.ucitajPretvaranje(), s.slika ? this.dimenzije(medijUrl(s.slika.id)).catch(() => null) : null,
+    ]).catch((e: unknown) => {
+      this.greske.handleError(e);
+      this.obavestenja.greska('Pretvaranje nije učitano. Osveži stranicu i pokušaj ponovo.');
+      return null;
+    });
+    const t = trenutni();
+    const p = this.store.prezentacija();
+    if (!ucitano || !t || !p) return;
+    const [modul, dim] = ucitano;
+    const original = slajdUCmd(t);
+    // veličina važi samo za sliku za koju je merena; inače (ili kad merenje ne uspe) 16:9
+    const d = t.slika?.id === s.slika?.id ? dim : null;
+    const slika = t.slika && { id: t.slika.id, naziv: t.slika.naziv, sirina: d?.sirina ?? 1600, visina: d?.visina ?? 900 };
+    const r = modul.infoUPlatno({ naslov: t.naslov, sadrzaj: t.sadrzaj, postepeno: t.postepeno, slika }, vazecaTema(p.tema));
+    // dokument koji server ne bi primio (npr. > 400 stavki uz "Otkrivaj stavke") se ne pravi: INFO ostaje netaknut
+    const odbijeno = greskePlatna(r.platno);
+    if (odbijeno) {
+      this.obavestenja.greska(`Slajd ne može da se pretvori u platno: ${odbijeno}`);
+      return;
+    }
+    const nastavi$ = r.gubici.length === 0 ? of(true) : ConfirmDialog.otvori(this.dialog, {
+      naslov: 'Pretvoriti slajd u platno?',
+      tekst: ['Deo sadržaja se ne prenosi tačno:', ...r.gubici.map(g => modul.OPISI_GUBITAKA[g]), 'Posle pretvaranja možeš da poništiš.'],
+      potvrdi: 'Pretvori',
+    });
+    nastavi$.subscribe(da => {
+      if (!da || !trenutni()) return;
+      this.store.izmeniSlajd(t.id, {
+        ...original, tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, postepeno: false, pitanje: null, platno: r.platno,
+      });
+      this.obavestenja.uspeh('Slajd je pretvoren u platno.', {
+        label: 'Poništi',
+        run: () => {
+          // uništen store više ne čuva (sesija je zatvorena pri napuštanju)
+          if (this.destroyRef.destroyed) {
+            this.obavestenja.info('Editor je zatvoren, pa pretvaranje više ne može da se poništi.');
+            return;
+          }
+          this.store.isprazni(); // otvoren tekst ili gest editora platna ide u dokument pre vraćanja (odluka 9c faze 4)
+          this.store.izmeniSlajd(t.id, original);
+        },
+      }, { grupa: 'uzivo-pretvori' });
+    });
   }
 
   protected ikona(s: SlajdDetails): NazivIkone {

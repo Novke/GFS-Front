@@ -2,8 +2,10 @@ import { TextFieldModule } from '@angular/cdk/text-field';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { greskeSlajda, novoPitanje, slajdUCmd } from '../data-access/slajd-pravila';
 import { MedijInfo, SlajdCmd, SlajdDetails, TipSlajda } from '../data-access/uzivo.models';
@@ -22,7 +24,7 @@ type SlajdForma = FormGroup<{
 const nn = { nonNullable: true } as const;
 
 /**
- * Forma izabranog slajda. Gradi se jednom iz ulaza (roditelj pravi novu instancu za svaki slajd, `track kljuc`), pa
+ * Forma izabranog slajda. Gradi se jednom iz ulaza (roditelj pravi novu instancu za svaki slajd i tip, `track kljuc:tip`), pa
  * kasnije promene ulaza (lokalni prikaz, odgovor servera sa novim id-jevima opcija) ne prepisuju ono što nastavnik kuca.
  * Svaka izmena emituje celu `SlajdCmd`; greške (ista pravila kao server) se prikazuju ispod forme.
  */
@@ -30,8 +32,8 @@ const nn = { nonNullable: true } as const;
   selector: 'app-slajd-forma',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReactiveFormsModule, TextFieldModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, PitanjeFormaComponent,
-    SlikaPoljeComponent,
+    ReactiveFormsModule, TextFieldModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatIconModule, MatInputModule,
+    PitanjeFormaComponent, SlikaPoljeComponent,
   ],
   template: `
     <form class="uz-ed-forma" [formGroup]="forma" (submit)="$event.preventDefault()">
@@ -47,6 +49,13 @@ const nn = { nonNullable: true } as const;
         </mat-form-field>
         <app-slika-polje [slikaId]="forma.controls.slikaId.value" oznaka="Slika na slajdu" (promena)="postaviSliku($event)" />
         <mat-checkbox formControlName="postepeno">Otkrivaj stavke liste jednu po jednu (tasterom →)</mat-checkbox>
+        <!-- div: dugme ne zauzima celu širinu kolone forme; roditelj menja tip slajda (pretvoriUPlatno) -->
+        <div>
+          <button mat-stroked-button type="button" aria-describedby="uz-ed-pretvori-opis" (click)="pretvori.emit()">
+            <mat-icon svgIcon="layers" />Pretvori u platno
+          </button>
+          <p class="uz-ed-napomena" id="uz-ed-pretvori-opis">Slajd postaje platno sa slojevima (naslov, tekst, slika) koje uređuješ slobodno.</p>
+        </div>
       } @else if (tip !== 'PLATNO') {
         <!-- PLATNO: slojeve uređuje editor platna iznad forme; ovde ostaju samo beleške -->
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
@@ -71,6 +80,8 @@ export class SlajdFormaComponent implements OnInit {
   /** Početno stanje slajda; čita se samo pri pravljenju forme. */
   readonly slajd = input.required<SlajdDetails>();
   readonly izmena = output<SlajdCmd>();
+  /** INFO: "Pretvori u platno" (odluka 20); forma se posle toga pravi ponovo (`track kljuc:tip`). */
+  readonly pretvori = output<void>();
 
   private readonly destroyRef = inject(DestroyRef);
 

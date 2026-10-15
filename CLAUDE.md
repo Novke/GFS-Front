@@ -544,6 +544,27 @@ over STOMP; teacher commands are REST.
   "5b": vector from exactly one GET, second stroke's delay = first's delay + duration; 500 -> image and no second request within
   the pause, waited on the 500 response itself (the image is also shown while the request runs); after the pause the request
   repeats by itself, with no new snapshot (`page.clock.fastForward`), and the vector appears; editor without any GET).
+- **Convert to canvas (phase 5c; backend unchanged).** The INFO form has "Pretvori u platno" (`SlajdFormaComponent.pretvori`)
+  and the page's `pretvoriUPlatno` turns the slide into PLATNO with **one** `izmeniSlajd` (`PUT` after 800 ms or Ctrl+S). The
+  conversion is the pure function `data-access/pretvori-u-platno.ts` (`infoUPlatno`, plan decisions 20-21: `marked` lexer plus the
+  phase 4 factories), loaded only through a dynamic `import()` on click (lazy chunk ~6 kB with the gap texts; the page file did not
+  grow, `platno-novo` moved into a chunk shared by both). Title -> TEXT `s1` (40 pt, theme title), Markdown -> TEXT `s2` (lists
+  with levels, numbering from `start`, bold, italic, strike, code in Cousine, headings, line breaks; `okvir.skala` 0.25-1 for long
+  text), image -> SLIKA `s3` (right column of 320 next to text, otherwise the whole area, contain; natural size through the token
+  `ui/dimenzije-slike.ts` `DIMENZIJE_SLIKE`, 1600 x 900 when it cannot be measured), notes stay, `postepeno` -> one KLIK FADE per
+  top-level list item (so the step count equals the INFO slide's), `$` stays text (INFO reads no formulas). **Lost** (`Gubitak`,
+  texts `OPISI_GUBITAKA`): link addresses, images inside the text, tables (rows with tabs), horizontal rules, quotes (indented
+  italic), and very long text (letters shrunk). **`ConfirmDialog` only when something is lost** (list of losses); a document
+  `greskePlatna` (= `proveriKaoServer`) would reject (e.g. more than 400 list items with "Otkrivaj stavke") is not applied:
+  a message with the server's reason, the INFO slide stays. After every conversion the 6 s snackbar "Slajd je pretvoren u
+  platno." (group `uzivo-pretvori`) has "Poništi": `isprazni()` first (an open text session or gesture of the canvas editor goes
+  into the document), then a second `izmeniSlajd` with the exact INFO command from the moment of conversion (title, text,
+  image, notes, `postepeno`, unsaved form edits). After the chunk wait the handler reads the slide again from the store (edits
+  typed meanwhile, a draft that got its real id), and does nothing if it is no longer INFO (double click) or the editor was
+  left; "Poništi" after leaving the editor only says that it is too late (the store is destroyed and no longer saves). The
+  middle column uses `@for ... track kljuc(id) + ':' + tip`, so a type change builds a new form and canvas editor (the form
+  builds its controls once). E2E `uzivo-pretvori.spec.ts` (list with steps, link with Odustani/Pretvori, "Poništi" in the
+  snackbar, not the canvas toolbar's), form and dialog in `pristupacnost.spec.ts`.
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and
