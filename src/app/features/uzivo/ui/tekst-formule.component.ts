@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, InjectionToken, afterRenderEffect, computed, effect, inject, input,
   signal,
 } from '@angular/core';
-import { PUTANJA_STILA_FORMULA, UCITAJ_FORMULE, type ModulFormule } from './formula-ucitavanje';
+import { PUTANJA_STILA_FORMULA, UCITAJ_FORMULE, upozoriFormuleNisuUcitane, type ModulFormule } from './formula-ucitavanje';
 import { markdownSaFormulama } from './markdown';
 import { KLASA_FORMULE, tekstSaFormulama } from './tekst-formule';
 
@@ -41,14 +41,17 @@ let stilTeksta: Promise<void> | null = null;
 
 /**
  * Lakši stil za formule u tekstu (telefon): isti `assets/mathlive/mathlive-static.css` kao faza 4, pa samo dva fonta
- * (najviše 3 + 3 s). Ne odbija (greška ili istek -> formula se ipak crta, fontovi stižu kasnije). Kad link faze 4
- * (`link[data-gfs="mathlive"]`, `ucitajStilFormula`: projektor i konzola posle `preducitajFormule`) već postoji, drugi se
- * ne dodaje: to je isti fajl (`PUTANJA_STILA_FORMULA`), pa bi se ista pravila samo primenila dvaput; čeka se njegov `load`
- * (slušalac, ne `onload`, koji pripada fazi 4), ili ništa ako je već učitan (`sheet`).
+ * (najviše 3 + 3 s). **Greška stila odbija** i ne pamti se (završna recenzija 5a, A M4): markup bez CSS-a (bez rasporeda
+ * `ML__vlist`, razlomci i indeksi izmešani) je lošiji od izvora `$...$`, pa komponenta ostavlja izvor, a sledeći prikaz
+ * teksta pokušava iznova (sopstveni `<link>` se uklanja). Istek (3 s bez odgovora) ne odbija: formula se crta, stil stiže
+ * kasnije. Kad link faze 4 (`link[data-gfs="mathlive"]`, `ucitajStilFormula`: projektor i konzola posle
+ * `preducitajFormule`) već postoji, drugi se ne dodaje: to je isti fajl (`PUTANJA_STILA_FORMULA`), pa bi se ista pravila samo
+ * primenila dvaput; čeka se njegov `load` (slušalac, ne `onload`, koji pripada fazi 4), ili ništa ako je već učitan (`sheet`).
  */
 export function ucitajStilFormulaUTekstu(): Promise<void> {
-  stilTeksta ??= new Promise<void>((razresi) => {
-    const postojeci = document.head.querySelector<HTMLLinkElement>('link[data-gfs="mathlive"]');
+  stilTeksta ??= new Promise<void>((razresi, odbij) => {
+    // link faze 4 čija je greška već viđena (`data-greska`) se ne čeka ponovo: tada ide sopstveni pokušaj
+    const postojeci = document.head.querySelector<HTMLLinkElement>('link[data-gfs="mathlive"]:not([data-greska])');
     if (postojeci?.sheet) {
       razresi();
       return;
@@ -58,16 +61,27 @@ export function ucitajStilFormulaUTekstu(): Promise<void> {
       clearTimeout(tajmer);
       razresi();
     };
+    const greska = () => {
+      clearTimeout(tajmer);
+      link?.remove();
+      if (postojeci) {
+        postojeci.dataset['greska'] = '';
+      }
+      stilTeksta = null;
+      odbij(new Error(`Stil formula nije učitan (${PUTANJA_STILA_FORMULA}).`));
+    };
+    let link: HTMLLinkElement | null = null;
     if (postojeci) {
       postojeci.addEventListener('load', gotovo, { once: true });
-      postojeci.addEventListener('error', gotovo, { once: true });
+      postojeci.addEventListener('error', greska, { once: true });
       return;
     }
-    const link = document.createElement('link');
+    link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = PUTANJA_STILA_FORMULA; // relativno, kao faza 4 (radi pod svakim <base href>)
     link.dataset['gfs'] = 'mathlive-tekst';
-    link.onload = link.onerror = gotovo;
+    link.onload = gotovo;
+    link.onerror = greska;
     document.head.appendChild(link);
   }).then(() => {
     const fonts = (document as Document & { fonts?: { load(f: string, t?: string): Promise<unknown> } }).fonts;
@@ -128,9 +142,9 @@ export class TekstFormuleComponent {
       Promise.all([this.ucitaj(), this.ucitajStil()]).then(
         ([m]) => this.modul.set(m),
         (e: unknown) => {
+          // projektor i telefon ne prikazuju grešku: ostaje izvor `$...$`; nov pokušaj tek sa novim tekstom (nema petlje)
           this.ucitavanje = false;
-          // projektor i telefon ne prikazuju grešku: ostaje izvor `$...$`
-          console.warn('Formule nisu učitane; prikazuje se izvor.', e);
+          upozoriFormuleNisuUcitane(e);
         },
       );
     });

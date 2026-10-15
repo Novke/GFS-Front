@@ -83,6 +83,19 @@ describe('markdownSaFormulama', () => {
     expect(markdownSaFormulama('\\\\$x$').html).toContain('\\<span class="uz-formula">$x$</span>');
   });
 
+  it('naglašavanje i precrtavanje ne seku formulu: formula ima prednost (kao pandoc; hooks.emStrongMask)', () => {
+    const f = (l: string) => `<span class="uz-formula">${l}</span>`;
+    expect(markdownSaFormulama('*x $a*b$ y*').html).toContain(`<em>x ${f('$a*b$')} y</em>`);
+    expect(markdownSaFormulama('**neka je $a**b$**').html).toContain(`<strong>neka je ${f('$a**b$')}</strong>`);
+    expect(markdownSaFormulama('~~$a~~b$~~').html).toContain(`<del>${f('$a~~b$')}</del>`);
+    expect(markdownSaFormulama('_x $z^* + y_1$ w_').html).toContain(`<em>x ${f('$z^* + y_1$')} w</em>`);
+    // izbegnut dolar i kod u redu se ne maskiraju kao formula: naglašavanje radi kao bez formula
+    expect(markdownSaFormulama('*a \\$ b* c$').html).toContain('<em>a $ b</em> c$');
+    expect(markdownSaFormulama('*a `$b*` c*').html).toContain('<em>a <code>$b*</code> c</em>');
+    // iznos (cifra pre $) nije formula, pa ni maska: `*5$ i 6$*` ostaje kurziv
+    expect(markdownSaFormulama('*5$ i 6$*').html).toContain('<em>5$ i 6$</em>');
+  });
+
   it('izvor formule je escape-ovan u mestu', () => {
     expect(markdownSaFormulama('$a<b$').html).toContain('<span class="uz-formula">$a&lt;b$</span>');
   });
@@ -114,6 +127,8 @@ describe('markdownSaFormulama', () => {
     const ulazi = [
       '$a'.repeat(1000), '$a$1'.repeat(500), ('$a ' + '\\$').repeat(400), '![' + '$a'.repeat(995) + '](u)',
       '$a\\'.repeat(666), '$' + '\\a'.repeat(999), '\\\\$a'.repeat(500),
+      // maska formula za naglašavanje (emStrongMask): mnogo `*` i `$`
+      '*$a*b$ '.repeat(285), '*$a'.repeat(666), '~~$a~~'.repeat(333),
     ];
     for (const ulaz of ulazi) {
       expect(ulaz.length).toBeLessThanOrEqual(2000);

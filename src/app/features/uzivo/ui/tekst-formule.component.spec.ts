@@ -121,6 +121,51 @@ describe('TekstFormuleComponent', () => {
     upozorenje.mockRestore();
   });
 
+  it('stil formula odbijen (CSS nije stigao): izvor ostaje i kad modul stigne; nov tekst pokušava ponovo', async () => {
+    const upozorenje = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const stil = vi.fn().mockRejectedValueOnce(new Error('css')).mockResolvedValue(undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: UCITAJ_FORMULE, useValue: ucitaj },
+        { provide: UCITAJ_STIL_TEKSTA_FORMULE, useValue: stil },
+      ],
+    });
+    const fixture = TestBed.createComponent(Domacin);
+    fixture.componentInstance.tekst.set('Koliko je $x$?');
+    fixture.detectChanges();
+    const el = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('app-tekst-formule')!;
+    await stabilno(fixture);
+    await stabilno(fixture);
+    expect(el.querySelector('.uz-formula--spremna')).toBeNull();
+    expect(el.querySelector('.uz-formula')!.textContent).toBe('$x$');
+    expect(pozivi).toEqual([]); // markup bez CSS-a se ne crta
+    expect(stil).toHaveBeenCalledTimes(1);
+    fixture.componentInstance.tekst.set('Koliko je $y$?');
+    await stabilno(fixture);
+    await stabilno(fixture);
+    expect(stil).toHaveBeenCalledTimes(2);
+    expect(el.querySelector('.uz-formula--spremna')!.getAttribute('aria-label')).toBe('y');
+    upozorenje.mockRestore();
+  });
+
+  it('modul ne stigne za dve instance i dva teksta: tačno jedan console.warn po prozoru', async () => {
+    const upozorenje = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const odbij = vi.fn(() => Promise.reject(new Error('mreža')));
+    const a = napravi('Koliko je $x$?', false, odbij);
+    await stabilno(a.fixture);
+    const b = TestBed.createComponent(Domacin);
+    b.componentInstance.tekst.set('$z$');
+    b.detectChanges();
+    await stabilno(b);
+    a.fixture.componentInstance.tekst.set('Sada $y$');
+    await stabilno(a.fixture);
+    await stabilno(a.fixture);
+    expect(odbij).toHaveBeenCalledTimes(3);
+    expect(upozorenje).toHaveBeenCalledTimes(1);
+    upozorenje.mockRestore();
+  });
+
   it('markdown: **a** $x$ -> <strong>a</strong> i jedna spremna formula; domaćin je blok', async () => {
     const { fixture, el } = napravi('**a** $x$', true);
     await stabilno(fixture);
@@ -195,6 +240,42 @@ describe('TekstFormuleComponent', () => {
     expect(el.querySelector('a')).toBeNull();
     expect(el.querySelector('[href]')).toBeNull();
     expect(el.querySelector('.uz-formula--izvor')!.textContent).toBe('$\\href{http://e.com}{x}$');
+  });
+
+  it.each([
+    '\\htmlStyle{background:url(http://primer.invalid/x.png)}{x}',
+    '\\htmlStyle{background:image-set("http://primer.invalid/a.png" 1x)}{x}',
+    '\\style{background:url(http://primer.invalid/x.png)}{x}',
+    '\\ce{^^5chtmlStyle{background:url(http://primer.invalid/x.png)}{X}}',
+  ])('pravi UCITAJ_FORMULE, put teksta: %s ostaje izvor, bez url( i bez primer.invalid u markupu (Review Focus 2)', async (latex) => {
+    const { fixture, el } = napravi(`Vidi $${latex}$ i $x$`, false, ucitajFormule);
+    await vi.waitFor(async () => {
+      await stabilno(fixture);
+      expect(el.querySelector('.uz-formula--spremna')).not.toBeNull();
+    }, { timeout: 5000 });
+    expect(el.querySelector('.uz-formula--izvor')!.textContent).toBe(`$${latex}$`);
+    const markup = [...el.querySelectorAll('.uz-formula--spremna')].map((f) => f.innerHTML).join('');
+    expect(markup).not.toContain('url(');
+    expect(markup).not.toContain('primer.invalid');
+    expect(el.querySelector('[style*="url("]')).toBeNull();
+  });
+
+  it('pravi UCITAJ_FORMULE: \\colorbox sa url( umesto boje: ni izvor ni markup ne nose url( u atributu (sanitizer stila)', async () => {
+    const { fixture, el } = napravi('Vidi $\\colorbox{url(http://primer.invalid/x.png)}{x}$', false, ucitajFormule);
+    await vi.waitFor(async () => {
+      await stabilno(fixture);
+      expect(el.querySelector('.uz-formula--spremna, .uz-formula--izvor')).not.toBeNull();
+    }, { timeout: 5000 });
+    // izvor (tekst) ili markup bez url( u stilu: nijedan atribut osim `aria-label` (LaTeX kao tekst) ne nosi url(
+    const f = el.querySelector<HTMLElement>('.uz-formula')!;
+    if (f.classList.contains('uz-formula--spremna')) {
+      expect(f.innerHTML).not.toContain('url(');
+      expect(f.getAttribute('aria-label')).toBe('\\colorbox{url(http://primer.invalid/x.png)}{x}');
+    } else {
+      expect(f.textContent).toBe('$\\colorbox{url(http://primer.invalid/x.png)}{x}$');
+    }
+    expect([...el.querySelectorAll('*')].flatMap((e) => [...e.attributes])
+      .filter((a) => a.name !== 'aria-label' && a.value.includes('url(')).map((a) => `${a.name}=${a.value}`)).toEqual([]);
   });
 
   it('pravi UCITAJ_FORMULE: ispravna formula dobija očišćen markup MathLive-a', async () => {
@@ -401,10 +482,30 @@ describe('ucitajStilFormulaUTekstu', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('onerror linka -> obećanje se razrešava (ne odbija)', async () => {
+  it('onerror linka -> odbija, link se uklanja i greška se ne pamti: sledeći poziv pravi nov link (bez petlje)', async () => {
     const p = ucitajStilFormulaUTekstu();
     linkovi()[0].dispatchEvent(new Event('error'));
-    await expect(p).resolves.toBeUndefined();
+    await expect(p).rejects.toThrow('Stil formula nije učitan');
+    expect(linkovi()).toEqual([]);
+    expect(load).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    const drugi = ucitajStilFormulaUTekstu();
+    expect(drugi).not.toBe(p);
+    expect(linkovi().length).toBe(1);
+    linkovi()[0].dispatchEvent(new Event('load'));
+    await expect(drugi).resolves.toBeUndefined();
+  });
+
+  it('greška linka faze 4 -> odbija; sledeći poziv ga ne čeka, nego pravi sopstveni link', async () => {
+    const faza4 = document.createElement('link');
+    faza4.dataset['gfs'] = 'mathlive';
+    document.head.appendChild(faza4);
+    const p = ucitajStilFormulaUTekstu();
+    faza4.dispatchEvent(new Event('error'));
+    await expect(p).rejects.toThrow();
+    expect(faza4.isConnected).toBe(true); // link faze 4 pripada fazi 4
+    void ucitajStilFormulaUTekstu();
+    expect(linkovi().length).toBe(1);
   });
 
   it('link bez odgovora: najviše 3000 ms; fonts.load koji visi: razrešenje posle još 3000 ms', async () => {

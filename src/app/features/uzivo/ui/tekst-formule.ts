@@ -20,6 +20,31 @@ export interface PripremljenTekst {
  */
 const FORMULA = /^\$(?=[^\s$])((?:\\[^\n]|[^\\$\n])+?)(?<=[^\s\\])\$(?!\d)/;
 
+/** Isti izraz bez `^`, lepljiv (`y`): proba na poziciji `lastIndex` bez sečenja niza. */
+const FORMULA_NA = new RegExp(FORMULA.source.slice(1), 'y');
+
+/**
+ * Maska za `hooks.emStrongMask` (`marked` 18): unutrašnjost svake formule postaje `a`, pa `*`, `_` i `~` u njoj nisu
+ * graničnici naglašavanja ni precrtavanja (`*x $a*b$ y*` je kurziv oko cele formule, kao u pandoc-u). `marked` je već
+ * zamenio izbegnute znakove (`\$` -> `++`) i kod u redu (`[aaa]`), pa ih maska ne vidi kao formulu; ostala pravila su ista
+ * kao u `podeliFormule` (i `$` posle cifre). Dužina ostaje ista; jedan prolaz.
+ */
+export function maskirajFormule(src: string): string {
+  let izlaz = '';
+  let i = 0;
+  while (i < src.length) {
+    const j = src.indexOf('$', i);
+    if (j < 0) {
+      break;
+    }
+    FORMULA_NA.lastIndex = j;
+    const m = j > 0 && /\d/.test(src[j - 1]) ? null : FORMULA_NA.exec(src);
+    izlaz += src.slice(i, j) + (m ? '$' + 'a'.repeat(m[0].length - 2) + '$' : '$');
+    i = j + (m ? m[0].length : 1);
+  }
+  return izlaz + src.slice(i);
+}
+
 /** Formula na POČETKU `src` (za `marked` i za `podeliFormule`); `duzina` uključuje oba `$`. */
 export function nadjiFormulu(src: string): { latex: string; duzina: number } | null {
   const m = FORMULA.exec(src);
@@ -99,9 +124,10 @@ interface FormulaToken extends Tokens.Generic {
 
 /**
  * `marked` ekstenzija za formulu u redu. Kod u redu i blokovi koda se tokenizuju pre nje (ostaju doslovni), a `\$`
- * hvata `escape` tokenizer (zato `start` preskače izbegnut `$`).
+ * hvata `escape` tokenizer (zato `start` preskače izbegnut `$`). `emStrongMask` krije formule od naglašavanja.
  */
 export const formulaMarked: MarkedExtension = {
+  hooks: { emStrongMask: maskirajFormule },
   extensions: [
     {
       name: 'formula',
