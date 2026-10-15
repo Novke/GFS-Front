@@ -66,6 +66,15 @@ const odmor = async (puta = 5) => {
   for (let i = 0; i < puta; i++) await new Promise<void>((r) => setTimeout(r, 0));
 };
 
+/** Neobrađena odbijanja obećanja (Node `unhandledRejection`) dok test traje. */
+function pratiNeobradjena() {
+  const proces = (globalThis as unknown as { process: { on(d: string, f: (e: unknown) => void): void; off(d: string, f: (e: unknown) => void): void } }).process;
+  const lista: unknown[] = [];
+  const slusalac = (e: unknown) => lista.push(e);
+  proces.on('unhandledRejection', slusalac);
+  return { lista, prestani: () => proces.off('unhandledRejection', slusalac) };
+}
+
 type Ishod = { vrednost: PrezentacijaDetails } | { greska: unknown };
 
 function pokreni(crtac: CrtacPdf, izbor: IzborStrana, deo: Partial<ZavisnostiPdf> = {}, prekid = new AbortController()) {
@@ -154,7 +163,7 @@ describe('uveziPdf', () => {
     expect(api.uploadi).toHaveLength(4);
   });
 
-  it('slanje padne i posle ponavljanja -> greška sa imenom slike, crtanje stalo, ostala slanja otkazana, nema uvoza', async () => {
+  it('slanje padne i posle ponavljanja -> greška sa brojem strane, crtanje stalo, ostala slanja otkazana, nema uvoza', async () => {
     const crtac = new LazniCrtac(6);
     const cekaj = vi.fn<(ms: number) => Observable<unknown>>(() => of(0));
     const { api, ishod } = pokreni(crtac, { od: 1, do: 6, posle: null }, { cekaj });
@@ -163,7 +172,7 @@ describe('uveziPdf', () => {
     api.uploadi.at(-1)!.odgovor.error(greska(503));
     api.uploadi.at(-1)!.odgovor.error(greska(503));
     const e = await greskaIshoda(ishod);
-    expect(e.message).toBe('Slika Predavanje - str. 1 nije poslata: server je odgovorio greškom 503.');
+    expect(e.message).toBe('Strana 1 nije poslata: server je odgovorio greškom 503.');
     expect(cekaj.mock.calls.map((c) => c[0])).toEqual([1000, 3000]);
     expect(api.uploadi.filter((u) => u.fajl.name === 'Predavanje - str. 1.png')).toHaveLength(3);
     expect(api.uvozi).toHaveLength(0);
@@ -178,7 +187,7 @@ describe('uveziPdf', () => {
     await vi.waitFor(() => expect(api.uploadi).toHaveLength(2));
     api.uploadi[0].odgovor.error(greska(400, 'Dozvoljene su samo slike.'));
     const e = await greskaIshoda(ishod);
-    expect(e.message).toBe('Slika Predavanje - str. 1 nije poslata: Dozvoljene su samo slike.');
+    expect(e.message).toBe('Strana 1 nije poslata: Dozvoljene su samo slike.');
     expect(api.slusanih).toBe(0);
     expect(api.uvozi).toHaveLength(0);
   });
@@ -207,6 +216,63 @@ describe('uveziPdf', () => {
     expect(api.slusanih).toBe(0);
     expect(api.uploadi).toHaveLength(3);
     expect(api.uvozi).toHaveLength(0);
+  });
+
+  it('"Otkaži" dok se strana crta (crtanje nikad ne završi) -> odmah OTKAZANO_PDF, bez neobrađenog odbijanja', async () => {
+    const neobradjena = pratiNeobradjena();
+    try {
+      const crtac = new LazniCrtac(3);
+      let odbijCrtanje: (e: unknown) => void = () => undefined;
+      crtac.nacrtaj = vi.fn((broj: number) => {
+        crtac.pozvane.push(broj);
+        return broj === 1
+          ? Promise.resolve({ bajtovi: new Uint8Array([...PNG, 1]), mime: 'image/png' as const, sirina: 960, visina: 540 })
+          : new Promise<CrtezStrane>((_, odbij) => (odbijCrtanje = odbij));
+      });
+      const { api, ishod, prekid } = pokreni(crtac, { od: 1, do: 3, posle: null });
+      await vi.waitFor(() => expect(crtac.pozvane).toEqual([1, 2]));
+      prekid.abort();
+      const e = await greskaIshoda(ishod);
+      expect(e.message).toBe(OTKAZANO_PDF);
+      expect(api.slusanih).toBe(0);
+      expect(api.uvozi).toHaveLength(0);
+      // Napušteno crtanje odbije kasnije (F14 `zatvori()` gasi pdf.js usred crtanja): to ne sme biti neobrađeno odbijanje.
+      odbijCrtanje(new Error('Worker was destroyed'));
+      await odmor();
+      expect(neobradjena.lista).toEqual([]);
+    } finally {
+      neobradjena.prestani();
+    }
+  });
+
+  it('greška slanja dok se strana crta -> odmah ta greška, ne čeka se crtanje', async () => {
+    const crtac = new LazniCrtac(3);
+    crtac.nacrtaj = vi.fn((broj: number) => {
+      crtac.pozvane.push(broj);
+      return broj === 1
+        ? Promise.resolve({ bajtovi: new Uint8Array([...PNG, 1]), mime: 'image/png' as const, sirina: 960, visina: 540 })
+        : new Promise<CrtezStrane>(() => undefined);
+    });
+    const { api, ishod } = pokreni(crtac, { od: 1, do: 3, posle: null });
+    await vi.waitFor(() => expect(crtac.pozvane).toEqual([1, 2]));
+    api.uploadi[0].odgovor.error(greska(400, 'Dozvoljene su samo slike.'));
+    expect((await greskaIshoda(ishod)).message).toBe('Strana 1 nije poslata: Dozvoljene su samo slike.');
+  });
+
+  it('slanja završe van redosleda -> slajdovi ostaju po stranama, svaki sa svojim id-jem', async () => {
+    const { api, napredak, ishod } = pokreni(new LazniCrtac(3), { od: 1, do: 3, posle: null });
+    await vi.waitFor(() => expect(api.uploadi).toHaveLength(3));
+    api.odgovoriUpload(2, 'treca');
+    api.odgovoriUpload(0, 'prva');
+    api.odgovoriUpload(1, 'druga');
+    await vi.waitFor(() => expect(api.uvozi).toHaveLength(1));
+    const cmd = api.uvozi[0].cmd;
+    expect([0, 1, 2].map((i) => medijSlajda(cmd, i))).toEqual(['prva', 'druga', 'treca']);
+    expect(cmd.slajdovi.map((s) => s.platno!.slojevi[0].naziv)).toEqual([1, 2, 3].map((n) => `Predavanje - str. ${n}`));
+    expect(napredak.filter((n) => n.faza === 'strane').map((n) => (n as { uradjeno: number }).uradjeno)).toEqual([0, 1, 2, 3]);
+    api.uvozi[0].odgovor.next(DETALJI);
+    api.uvozi[0].odgovor.complete();
+    expect(await ishod).toEqual({ vrednost: DETALJI });
   });
 
   it('"Otkaži" pre početka -> OTKAZANO_PDF bez ijednog crtanja', async () => {

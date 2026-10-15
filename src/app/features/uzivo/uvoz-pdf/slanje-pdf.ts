@@ -1,7 +1,7 @@
 // Uvoz izabranih strana PDF-a (faza 5d, odluka 18): crtanje i slanje slika teku zajedno, pa jedan
 // `POST /prezentacije/{id}/slajdovi/uvoz` (jedna transakcija na serveru: uvoz je ceo ili ništa). Bez pdf.js: strane crta
 // `CrtacPdf` (adapter nad pdf.js, `pdf-crtac.ts`), pa se ovde testira lažnim crtačem.
-import { firstValueFrom, fromEvent, takeUntil, type Observable } from 'rxjs';
+import { catchError, firstValueFrom, fromEvent, takeUntil, throwError, type Observable } from 'rxjs';
 
 import type { Tema } from '../data-access/platno.models';
 import type { PrezentacijaDetails, SlajdCmd } from '../data-access/uzivo.models';
@@ -87,7 +87,13 @@ async function crtajISalji(prezentacijaId: number, crtac: CrtacPdf, izbor: Izbor
   napredak({ faza: 'strane', uradjeno, ukupno });
   for (const broj of brojevi) {
     proveri();
-    const c = await crtac.nacrtaj(broj);
+    let c: CrtezStrane;
+    try {
+      c = await dokNijeStalo(crtac.nacrtaj(broj), stop.signal);
+    } catch (e) {
+      proveri(); // "Otkaži" ili greška slanja usred crtanja: ta poruka, a ne (kasnija) greška crtača
+      throw e;
+    }
     proveri();
     if (c.bajtovi.length > MAX_SLIKA_STRANE) throw new GreskaSlanja(`Strana ${broj} je i posle sažimanja veća od 10 MB.`);
     const h = await hes(c.bajtovi, broj);
@@ -105,8 +111,10 @@ async function crtajISalji(prezentacijaId: number, crtac: CrtacPdf, izbor: Izbor
     }
     // `proveri()` je upravo prošao, pa `stop` još nije okinut: pretplata (sinhrona u `firstValueFrom`) ga ne propušta.
     const id = firstValueFrom(
-      posaljiSliku(z.api, { bajtovi: c.bajtovi, imeFajla: `${naziv}.${EKSTENZIJA[c.mime]}`, mime: c.mime, ime: naziv }, z.cekaj)
-        .pipe(takeUntil(fromEvent(stop.signal, 'abort'))),
+      posaljiSliku(z.api, { bajtovi: c.bajtovi, imeFajla: `${naziv}.${EKSTENZIJA[c.mime]}`, mime: c.mime, ime: naziv }, z.cekaj).pipe(
+        catchError((e: unknown) => throwError(() => greskaSlanjaStrane(e, naziv, broj))),
+        takeUntil(fromEvent(stop.signal, 'abort')),
+      ),
     ).then((info) => info.id);
     idPoHesu.set(h, id);
     // Prva greška otkazuje i ostala slanja u toku. Otkazano slanje odbija sa `EmptyError`: tada je greška već zapamćena
@@ -128,4 +136,25 @@ async function crtajISalji(prezentacijaId: number, crtac: CrtacPdf, izbor: Izbor
   } catch (e) {
     throw greskaUvozaSlajdova(e, (n) => (brojevi[n - 1] ? `Strana ${brojevi[n - 1]}` : null));
   }
+}
+
+/**
+ * Obećanje crtanja koje odbija čim se okine `stop` ("Otkaži" ili greška slanja), da se ne čeka kraj crtanja strane.
+ * Napušteno crtanje i dalje ima obrađivač (`then`), pa njegovo kasnije odbijanje (F14 `zatvori()` gasi pdf.js usred
+ * crtanja) nije neobrađeno; ugovor `CrtacPdf` se ne menja.
+ */
+function dokNijeStalo<T>(crtanje: Promise<T>, stop: AbortSignal): Promise<T> {
+  return new Promise<T>((razresi, odbij) => {
+    const naStop = () => odbij(new GreskaSlanja(OTKAZANO_PDF));
+    if (stop.aborted) naStop();
+    else stop.addEventListener('abort', naStop, { once: true });
+    crtanje.then(razresi, odbij).finally(() => stop.removeEventListener('abort', naStop));
+  });
+}
+
+/** `Slika <naziv> nije poslata: …` (poruka faze 2, `posaljiSliku`) -> `Strana N nije poslata: …`; ostalo prolazi. */
+function greskaSlanjaStrane(e: unknown, naziv: string, broj: number): unknown {
+  const pocetak = `Slika ${naziv} nije poslata: `;
+  if (!(e instanceof GreskaSlanja) || !e.message.startsWith(pocetak)) return e;
+  return new GreskaSlanja(`Strana ${broj} nije poslata: ${e.message.slice(pocetak.length)}`, { nepoznatIshod: e.nepoznatIshod });
 }

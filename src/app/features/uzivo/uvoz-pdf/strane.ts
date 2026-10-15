@@ -12,7 +12,11 @@ export const MAX_STRANA = 200;
 export const MAX_PDF_BAJTOVA = 100 * 1024 * 1024;
 /** PNG strane veći od ovoga se kodira kao WebP (ili JPEG) 0,9. */
 export const PRAG_PNG = 3 * 1024 * 1024;
-/** Slika strane i posle sažimanja veća od ovoga je greška te strane (granica slike na serveru). */
+/**
+ * Slika strane i posle sažimanja veća od ovoga je greška te strane. Ista granica kao `MAX_SLIKA` u `uvoz-pptx/slanje.ts`
+ * (server: `spring.servlet.multipart.max-file-size=10MB`); ovde je kopija da `strane.ts` ostane bez RxJS-a i Angulara,
+ * a `strane.spec.ts` proverava da su jednake.
+ */
 export const MAX_SLIKA_STRANE = 10 * 1024 * 1024;
 
 /** `od`/`do` = brojevi strana PDF-a (od 1), uključivo; `posle` = id slajda posle kog se ubacuju (`null` = na kraj). */

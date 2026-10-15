@@ -4,7 +4,7 @@ import { proveriKaoServer } from '../data-access/platno-provera';
 import type { SlikaSloj } from '../data-access/platno.models';
 import { MAX_SLAJDOVA } from '../data-access/slajd-pravila';
 import { TEME } from '../ui/teme';
-import { zameniMedije } from '../uvoz-pptx/slanje';
+import { MAX_SLIKA, zameniMedije } from '../uvoz-pptx/slanje';
 import {
   MAX_PDF_BAJTOVA, MAX_SLIKA_STRANE, MAX_STRANA, nazivStrane, porukaOpsega, PRAG_PNG, razmeraCrtanja, slajdStrane, velicinaPlatna,
 } from './strane';
@@ -20,6 +20,7 @@ describe('granice PDF-a', () => {
     expect(MAX_PDF_BAJTOVA).toBe(100 * 1024 * 1024);
     expect(PRAG_PNG).toBe(3 * 1024 * 1024);
     expect(MAX_SLIKA_STRANE).toBe(10 * 1024 * 1024);
+    expect(MAX_SLIKA_STRANE).toBe(MAX_SLIKA);
   });
 });
 
