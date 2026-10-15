@@ -26,6 +26,12 @@ const BUDZET_DIJALOG_FORMULE = 900_000;
 const NIZ_MATH_FIELD = 'math-field';
 /** Niz koji postoji samo u šablonu stranice editora prezentacije (zaglavlje). */
 const NIZ_STRANICE = 'uz-ed-zaglavlje';
+/**
+ * Niz koji ima samo rxjs `fromEvent` (5d): operator koji niko u aplikaciji ne koristi esbuild ne pakuje, a čim ga koristi i
+ * lenji kod, ide u deljeni rxjs chunk početnog paketa (F14: +638 B zbog `uvoz-pdf/slanje-pdf.ts`). Lenji kod koristi
+ * `new Observable` sa `addEventListener`.
+ */
+const NIZ_FROM_EVENT = 'Invalid event target';
 /** Niz koji ima samo modul pretvaranja INFO -> PLATNO (`OPISI_GUBITAKA.VEZE`, 5c). */
 const NIZ_PRETVARANJA = 'Veze postaju običan tekst';
 
@@ -41,9 +47,11 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
   const pocetno = zatvorenje(skripteIndeksa());
   const stilovi = stiloviIndeksa();
 
-  test('niz provere je pravi: OZNAKA_EDITORA_PLATNA', () => {
+  test('nizovi provere su pravi: OZNAKA_EDITORA_PLATNA i niz rxjs fromEvent', () => {
     const oznake = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'editor-platna', 'oznake.ts'), 'utf8');
     expect(oznake).toContain(`export const OZNAKA_EDITORA_PLATNA = '${NIZ_EDITORA}';`);
+    expect(readFileSync(join(__dirname, '..', 'node_modules', 'rxjs', 'dist', 'esm', 'internal', 'observable', 'fromEvent.js'), 'utf8'))
+      .toContain(NIZ_FROM_EVENT);
   });
 
   test('početno zatvorenje nema kod editora i staje u budžet', () => {
@@ -51,6 +59,7 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     expect(stilovi.length, 'globalni stilovi u index.html').toBeGreaterThan(0);
     const sporni = [...pocetno].map(f => ({ f, nizovi: nizoviEditora(tekst(f)) })).filter(x => x.nizovi.length);
     expect(sporni).toEqual([]);
+    expect([...pocetno].filter(f => tekst(f).includes(NIZ_FROM_EVENT)), 'rxjs fromEvent u početnom zatvorenju').toEqual([]);
     const sve = [...pocetno, ...stilovi];
     zapisi('početno (JS zatvorenje + stilovi)', zbir(sve), zbirGzip(sve));
     expect(zbir(sve)).toBeLessThanOrEqual(BUDZET_POCETNO);

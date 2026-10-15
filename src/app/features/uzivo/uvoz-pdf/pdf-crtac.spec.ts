@@ -120,7 +120,8 @@ describe('otvoriPdf: otvaranje', () => {
     expect(crtac.brojStrana).toBe(2);
     expect(getDocument).toHaveBeenCalledTimes(1);
     expect(getDocument.mock.calls[0][0]).toEqual({
-      data: bajtovi, cMapPacked: true, enableXfa: false, useSystemFonts: false, ...PUTANJE,
+      // verbosity 0: pdf.js ne piše `console.warn("Warning: …")` za loš ili čudan PDF (korisnik dobija poruku dijaloga)
+      data: bajtovi, cMapPacked: true, enableXfa: false, useSystemFonts: false, verbosity: 0, ...PUTANJE,
     });
     expect(Object.keys(getDocument.mock.calls[0][0])).not.toContain('password');
   });

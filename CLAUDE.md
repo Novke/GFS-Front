@@ -54,7 +54,8 @@ files too, e.g. a lazy chunk) gets 401 and fails the test, as on staging; `dozvo
 By default the fixture is strict (no JS with any `NIZOVI_EDITORA` string, `ML__latex` included, and no request under
 `assets/mathlive/`: `upis` and uživo without a formula); `test.use({ formule: true })` (uživo with a formula, 5a) checks
 `zabranjeniJavno` instead (`e2e/nizovi-editora.ts`: editor, ProseMirror, formula dialog and `NIZ_MATHLIVE_CEO`, i.e. the full
-`mathlive`; `mathlive/ssr` is allowed) and lets `assets/mathlive/` through.
+`mathlive`; `mathlive/ssr` is allowed) and lets `assets/mathlive/` through. Since 5d it also fails on any JS with a `nizoviPdf` string (`e2e/nizovi-uvoza.ts`: PDF
+dialog, pdf.js, its worker) and on any request under `assets/pdfjs/`, in both modes.
 Angular 22 lazy chunks have mixed-case base64url hashes (`chunk-CtOh0Kox.js`, `chunk-_fBU7IqW.js`), so the hashed-file
 branch is `[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`.
 
@@ -574,6 +575,43 @@ over STOMP; teacher commands are REST.
   still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip`, so a type change builds a new form and canvas
   editor (the form builds its controls once). E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
   Odustani/Pretvori, focus after both, exact `PUT` counts), form and dialog in `pristupacnost.spec.ts`.
+- **PDF import (phase 5d; backend and nginx unchanged).** The editor's "PDF" button (accessible name "Uvezi iz PDF-a", next to
+  "PowerPoint") turns pages of a PDF into PLATNO slides. **The PDF never goes to the server** (only page images do) and **the app
+  never asks for a password**: `getDocument` gets no `password`/`onPassword`, so pdf.js rejects a locked file with
+  `PasswordException` -> "PDF je zaključan lozinkom…". `uvoz-pdf/` modules: `strane` (limits: PDF <= 100 MB, <= 200 pages
+  per import, presentation <= 200 slides, page image <= 10 MB (`MAX_SLIKA_STRANE` = `MAX_SLIKA` of phase 2), PNG above 3 MB ->
+  WebP 0.9 -> JPEG 0.9; contain in 1920 x 1080; slide = theme background + one locked SLIKA `s1` contain in 960 x 540, name
+  `<file> - str. N` <= 60), `slanje-pdf` (`uveziPdf`: pages are drawn one by one while images upload, at most 3 uploads and 4
+  images in memory, SHA-256 dedup, retries of phase 2 via `posaljiSliku`, then one `POST slajdovi/uvoz`; "Otkaži" works even
+  in the middle of drawing; the abort observable is a small `new Observable` with `addEventListener`, **not rxjs `fromEvent`**:
+  an rxjs operator nobody else uses lands in the shared rxjs chunk of the initial bundle as soon as lazy code uses it
+  (+638 B once; `lenji-editor.spec.ts` forbids its string `Invalid event target` in the initial closure)), `pdf-crtac`
+  (adapter over pdf.js, tested with a fake API; `verbosity: 0`, so pdf.js writes no `Warning: …` to the console for odd files;
+  `spremanRadnik` waits for the worker's first message, because pdf.js does not wait for `ready` on a `workerPort`),
+  `pdf-token` (`UCITAJ_PDFJS`, `NAPRAVI_PLATNO_PDF`), `pdf-ucitavanje` (the **only** importer of `pdfjs-dist`, once per tab),
+  `pdf.worker.ts`, `uvoz-pdf.dialog` (lazy chunk, marker `gfs-uvoz-pdf`; imports nothing of `uvoz-pptx.dialog`/`uvoz`, so no
+  `fflate`). The only entry is `pages/uvoz-pdf-otvarac.ts` (dynamic `import()`). pdf.js and the worker load only after a file is
+  chosen. **`pdfjs-dist` is exactly 6.4.299, legacy build** (the modern build needs `Map.prototype.getOrInsertComputed`; no
+  `eval` in 6.x). The worker is an **Angular web worker** (`webWorkerTsConfig`, `tsconfig.worker.json`, handed over as
+  `GlobalWorkerOptions.workerPort`), not the `.mjs` copied from assets: nginx 1.27 of the frontend image has no `mjs` in
+  `mime.types`, so a module worker would arrive as `application/octet-stream`; the hashed `worker-*.js` is already covered by the
+  long-cache rule. pdf.js data is copied by `angular.json` to `assets/pdfjs/` (`standard_fonts`, `cmaps`, `iccs`, `wasm` only
+  `jbig2*`/`openjpeg*`/`qcms*` and licences; never `quickjs-eval.*`, which is for scripts in PDFs), always same origin, never a
+  CDN. Specs use `UCITAJ_PDFJS` instead of `vi.mock` and never import `pdf-ucitavanje` (its `new Worker(new URL(...))` would
+  pull the worker into the unit-test build; `pdf-token.spec.ts` shows that importing the token is safe). pdf.js 6 shares one
+  `PDFWorker` per port, so the dialog serializes shutdowns per tab (`gasenje`, at most 5 s per document, also for a document
+  abandoned while it is still being read). `@napi-rs/canvas` comes in as an **optional** Node-only dependency of `pdfjs-dist`
+  (no install scripts, never bundled: `browser: { canvas: false }`); do not drop it with `npm ci --omit=optional`, which would
+  also drop esbuild's platform packages. The app has no CSP today; if one is added, PDF import needs `worker-src 'self'`,
+  `script-src 'self' 'wasm-unsafe-eval'` and `connect-src 'self'`. E2E: synthetic PDFs from `e2e/fixtures/pdf-fabrika.ts`
+  (no library: coloured rectangle and Helvetica "Strana N" per page; `zakljucanPdf` has an R2 `/Encrypt` whose `/U` does not
+  match the empty password), `uvoz-pdf.spec.ts` (two pages 16:9 and 4:3 -> two `image/png` uploads and one import with
+  `s1` {0, 0, 960, 540} and {120, 0, 720, 540}; nothing of PDF before the click, only the dialog after it, pdf.js and
+  `worker-*.js` after the file; same-origin `assets/pdfjs/`; locked, not-a-PDF and "Otkaži" during an upload; console without
+  warnings or errors, including the worker's), `lenji-pdf.spec.ts` (over the build: initial and editor-page closures without
+  `nizoviPdf`, dialog only dynamic and its static closure without fflate or pdf.js, pdf.js file <= 520 000 B and only dynamic,
+  `worker-*.js` <= 1 300 000 B and never `import`ed, student page cannot reach any of it; sizes as `velicina` annotations),
+  dialog in `pristupacnost.spec.ts` (preview and sending, day and night).
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

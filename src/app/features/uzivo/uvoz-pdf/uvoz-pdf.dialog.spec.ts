@@ -12,6 +12,7 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo, PrezentacijaDetails, UvozSlajdovaCmd } from '../data-access/uzivo.models';
+import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 import { TEME } from '../ui/teme';
 import { PORUKE_PDF, type PdfDokument, type PdfJs, type PdfStrana, type Platno2d } from './pdf-crtac';
 import { NAPRAVI_PLATNO_PDF, UCITAJ_PDFJS } from './pdf-token';
@@ -485,6 +486,72 @@ describe('UvozPdfDialog', () => {
     citanje.razresi(dokument(3));
     await doK(() => lazni.zadaci[0].destroy.mock.calls.length === 1, 'gašenje');
   });
+
+  for (const izlaz of ['Otkaži', 'uništenje dijaloga'] as const) {
+    it(`${izlaz} dok se PDF čita, pa nov dijalog: novi getDocument tek kad kasni dokument stigne i bude ugašen (deljen PDFWorker)`, async () => {
+      const citanje = odlozeno<PdfDokument>();
+      const gasenje = odlozeno<void>();
+      lazni.otvaranje = () => citanje.promise;
+      lazni.gasenje = () => gasenje.promise;
+      otvori();
+      izaberi(pdf());
+      await doK(() => lazni.getDocument.mock.calls.length === 1, 'getDocument');
+      if (izlaz === 'Otkaži') dugme('Otkaži').click();
+      else TestBed.inject(MatDialog).closeAll();
+      await doK(() => rezultat.zatvoren && !koren(), 'zatvaranje');
+
+      lazni.otvaranje = () => Promise.resolve(dokument(3));
+      lazni.gasenje = () => Promise.resolve();
+      otvori();
+      izaberi(pdf('Drugi.pdf'));
+      await doK(() => !!koren()?.querySelector('[data-faza="otvaranje"]'), 'otvaranje drugog');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(lazni.getDocument).toHaveBeenCalledTimes(1); // prvi dokument još nije stigao
+      citanje.razresi(dokument(3));
+      await doK(() => lazni.zadaci[0].destroy.mock.calls.length === 1, 'gašenje kasnog dokumenta');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(lazni.getDocument).toHaveBeenCalledTimes(1); // destroy kasnog još traje
+      gasenje.razresi();
+      await uPregledu();
+      expect(lazni.getDocument).toHaveBeenCalledTimes(2);
+      expect(tekst()).toContain('Drugi.pdf');
+    });
+  }
+
+  it('destroy koji visi: posle GASENJE_MS (5 s) sesija se odjavljuje i sledeće otvaranje kreće', saLaznimSatom(async () => {
+    const registar = TestBed.inject(RegistarCuvanja);
+    // snackbar uspeha ima svoj tajmer trajanja (nije predmet testa)
+    vi.spyOn(TestBed.inject(NotificationStore), 'uspeh').mockImplementation(() => undefined);
+    lazni.gasenje = () => new Promise<void>(() => undefined);
+    const doKSat = async (uslov: () => boolean, opis: string) => {
+      for (let i = 0; i < 100; i++) {
+        TestBed.tick();
+        if (uslov()) return;
+        await isprazniMikrozadatke();
+      }
+      throw new Error(`Nije ispunjeno: ${opis}. Tekst dijaloga: ${tekst()}`);
+    };
+    otvori();
+    izaberi(pdf());
+    await doKSat(() => !!koren()?.querySelector('[data-faza="pregled"]'), 'pregled');
+    dugme('Uvezi').click();
+    await doKSat(() => rezultat.zatvoren, 'zatvaranje');
+    expect(registar.zauzet('uvoz-pdf-7')).toBe(true); // `finally` čeka gašenje dokumenta
+    await pomeriSat(4999);
+    expect(registar.zauzet('uvoz-pdf-7')).toBe(true);
+    await pomeriSat(1);
+    expect(registar.zauzet('uvoz-pdf-7')).toBe(false);
+
+    lazni.gasenje = () => Promise.resolve();
+    otvori();
+    izaberi(pdf());
+    await doKSat(() => !!koren()?.querySelector('[data-faza="pregled"]'), 'pregled posle roka');
+    expect(lazni.getDocument).toHaveBeenCalledTimes(2);
+    dugme('Otkaži').click();
+    await doKSat(() => rezultat.zatvoren, 'zatvaranje drugog');
+    // kratki tajmeri Material-a posle klikova i zatvaranja dijaloga (talasić dugmeta, poreklo fokusa), nisu deo uvoza
+    await pomeriSat(100);
+  }));
 
   it('popstate (nazad u pregledaču) u pregledu je kao "Otkaži"; tokom slanja ništa', async () => {
     const router = TestBed.inject(Router) as unknown as { navigateToSyncWithBrowser(u: string, s: string, st: object, e: object): void };

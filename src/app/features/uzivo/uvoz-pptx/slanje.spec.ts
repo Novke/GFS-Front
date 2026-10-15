@@ -450,7 +450,8 @@ describe('zameniMedije', () => {
 });
 
 describe('posaljiSliku', () => {
-  const ulaz = { bajtovi: png(1), imeFajla: 'x.png', mime: 'image/png', ime: 'x.png' };
+  // `ime` (u poruci) i `imeFajla` (na uploadu) se razlikuju, da test uhvati zamenu jednog drugim
+  const ulaz = { bajtovi: png(1), imeFajla: 'a.png', mime: 'image/png', ime: 'Slika A' };
 
   it('dva puta 503 pa uspeh -> jedan MedijInfo, 3 poziva, čeka 1000 pa 3000 ms', async () => {
     let poziva = 0;
@@ -472,7 +473,7 @@ describe('posaljiSliku', () => {
     const api = new LazniApi();
     posaljiSliku(api, ulaz, () => of(0)).subscribe();
     await tik();
-    expect(api.uploadi[0].fajl.name).toBe('x.png');
+    expect(api.uploadi[0].fajl.name).toBe('a.png');
     expect(api.uploadi[0].fajl.type).toBe('image/png');
   });
 
@@ -490,7 +491,7 @@ describe('posaljiSliku', () => {
     expect(poziva).toBe(1);
     expect(cekaj).not.toHaveBeenCalled();
     expect(e).toBeInstanceOf(GreskaSlanja);
-    expect((e as GreskaSlanja).message).toBe('Slika x.png nije poslata: Dozvoljene su samo slike.');
+    expect((e as GreskaSlanja).message).toBe('Slika Slika A nije poslata: Dozvoljene su samo slike.');
   });
 });
 

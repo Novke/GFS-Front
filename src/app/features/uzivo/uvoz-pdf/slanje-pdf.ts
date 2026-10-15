@@ -1,7 +1,7 @@
 // Uvoz izabranih strana PDF-a (faza 5d, odluka 18): crtanje i slanje slika teku zajedno, pa jedan
 // `POST /prezentacije/{id}/slajdovi/uvoz` (jedna transakcija na serveru: uvoz je ceo ili ništa). Bez pdf.js: strane crta
 // `CrtacPdf` (adapter nad pdf.js, `pdf-crtac.ts`), pa se ovde testira lažnim crtačem.
-import { catchError, firstValueFrom, fromEvent, takeUntil, throwError, type Observable } from 'rxjs';
+import { catchError, firstValueFrom, Observable, takeUntil, throwError } from 'rxjs';
 
 import type { Tema } from '../data-access/platno.models';
 import type { PrezentacijaDetails, SlajdCmd } from '../data-access/uzivo.models';
@@ -113,7 +113,7 @@ async function crtajISalji(prezentacijaId: number, crtac: CrtacPdf, izbor: Izbor
     const id = firstValueFrom(
       posaljiSliku(z.api, { bajtovi: c.bajtovi, imeFajla: `${naziv}.${EKSTENZIJA[c.mime]}`, mime: c.mime, ime: naziv }, z.cekaj).pipe(
         catchError((e: unknown) => throwError(() => greskaSlanjaStrane(e, naziv, broj))),
-        takeUntil(fromEvent(stop.signal, 'abort')),
+        takeUntil(okinut(stop.signal)),
       ),
     ).then((info) => info.id);
     idPoHesu.set(h, id);
@@ -136,6 +136,18 @@ async function crtajISalji(prezentacijaId: number, crtac: CrtacPdf, izbor: Izbor
   } catch (e) {
     throw greskaUvozaSlajdova(e, (n) => (brojevi[n - 1] ? `Strana ${brojevi[n - 1]}` : null));
   }
+}
+
+/**
+ * Emituje kad se `signal` okine (pretplata posle okidanja ne emituje ništa, pa pozivalac prvo zove `proveri()`). Umesto
+ * rxjs `fromEvent`: on bi postao dostižan i završio u deljenom rxjs chunk-u početnog paketa (+638 B, F14).
+ */
+function okinut(signal: AbortSignal): Observable<void> {
+  return new Observable<void>((o) => {
+    const javi = () => o.next();
+    signal.addEventListener('abort', javi);
+    return () => signal.removeEventListener('abort', javi);
+  });
 }
 
 /**

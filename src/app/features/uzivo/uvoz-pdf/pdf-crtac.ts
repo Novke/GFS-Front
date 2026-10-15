@@ -22,9 +22,12 @@ export interface PdfDokument { numPages: number; getPage(broj: number): Promise<
 /** Zadatak učitavanja (`PDFDocumentLoadingTask`): jedino mesto za oslobađanje dokumenta i radnika (`destroy`). */
 export interface PdfZadatak { promise: Promise<PdfDokument>; destroy(): Promise<void>; }
 
-/** Deo modula `pdfjs-dist/legacy/build/pdf.mjs` koji adapter koristi. */
+/**
+ * Deo modula `pdfjs-dist/legacy/build/pdf.mjs` koji adapter koristi. `verbosity` (`VerbosityLevel`: 0 = samo greške)
+ * važi i za radnika (poruka `configure`).
+ */
 export interface PdfJs {
-  getDocument(p: { data: Uint8Array; cMapPacked: boolean; enableXfa: boolean; useSystemFonts: boolean } & PutanjePdf): PdfZadatak;
+  getDocument(p: { data: Uint8Array; cMapPacked: boolean; enableXfa: boolean; useSystemFonts: boolean; verbosity: number } & PutanjePdf): PdfZadatak;
 }
 
 /** Platno za crtanje jedne strane; `oslobodi` vraća memoriju (canvas 0 x 0). */
@@ -122,7 +125,8 @@ export function spremanRadnik<R extends EventTarget & { terminate(): void }>(rad
 export async function otvoriPdf(pdfjs: PdfJs, bajtovi: Uint8Array, putanje: PutanjePdf,
                                 napraviPlatno: (w: number, h: number) => Platno2d = platnoIzDokumenta): Promise<CrtacPdf> {
   if (bajtovi.length > MAX_PDF_BAJTOVA) throw new GreskaPdf(PORUKE_PDF.prevelik);
-  const zadatak = pdfjs.getDocument({ data: bajtovi, cMapPacked: true, enableXfa: false, useSystemFonts: false, ...putanje });
+  // verbosity 0 (ERRORS): bez `console.warn("Warning: …")` pdf.js-a za loš ili čudan PDF; korisnik dobija poruku dijaloga
+  const zadatak = pdfjs.getDocument({ data: bajtovi, cMapPacked: true, enableXfa: false, useSystemFonts: false, verbosity: 0, ...putanje });
   let zatvoren = false;
   const ugasi = () => {
     zatvoren = true;

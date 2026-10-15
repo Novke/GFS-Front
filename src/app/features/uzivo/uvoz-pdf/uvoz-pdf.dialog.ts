@@ -71,10 +71,17 @@ const GASENJE_MS = 5000;
  */
 let gasenje: Promise<unknown> = Promise.resolve();
 
-/** Gasi dokument (pdf.js prekida i crtanje koje još traje); najviše {@link GASENJE_MS}. */
-function ugasi(crtac: CrtacPdf): Promise<void> {
+/**
+ * Gasi dokument (pdf.js prekida i crtanje koje još traje); najviše {@link GASENJE_MS}. Prima i obećanje dokumenta koji
+ * se još čita ("Otkaži" ili zatvoren dijalog usred čitanja): gašenje se upisuje odmah, pa sledeće otvaranje čeka da kasni
+ * dokument stigne i bude ugašen (svi dokumenti preko `workerPort` dele jedan `PDFWorker`, a `destroy` ga gasi). Dokument
+ * koji ne stigne (odbije) je već ugašen u `otvoriPdf`.
+ */
+function ugasi(crtac: CrtacPdf | Promise<CrtacPdf>): Promise<void> {
   let tajmer: ReturnType<typeof setTimeout> | undefined;
-  const kraj = Promise.race([crtac.zatvori(), new Promise<void>((r) => (tajmer = setTimeout(r, GASENJE_MS)))])
+  const zatvaranje = Promise.resolve(crtac).then((c) => c.zatvori(), () => undefined);
+  const kraj = Promise.race([zatvaranje, new Promise<void>((r) => (tajmer = setTimeout(r, GASENJE_MS)))])
+    .catch(() => undefined)
     .finally(() => clearTimeout(tajmer));
   gasenje = Promise.all([gasenje, kraj]);
   return kraj;
@@ -235,6 +242,8 @@ export class UvozPdfDialog {
   private crtac: CrtacPdf | null = null;
   /** Broj otvaranja: zatvoren dijalog ili "Otkaži" za vreme čitanja poništava otvaranje u toku. */
   private otvaranje = 0;
+  /** `otvoriPdf` u toku (pdf.js čita fajl); napušteno čitanje se predaje {@link ugasi} odmah. */
+  private citanje: Promise<CrtacPdf> | null = null;
   private prekid: AbortController | null = null;
   /** Slanje je završeno sa nepoznatim ishodom: zatvaranje traži osvežavanje (`OSVEZI_POSLE_PDF`). */
   private nepoznatIshod = false;
@@ -268,6 +277,7 @@ export class UvozPdfDialog {
     ).subscribe(() => this.izlaz());
     inject(DestroyRef).onDestroy(() => {
       this.otvaranje++;
+      this.napustiCitanje();
       this.prekid?.abort();
       this.zatvoriCrtac();
     });
@@ -291,6 +301,7 @@ export class UvozPdfDialog {
   /** Čita fajl i otvara ga kroz pdf.js; `zadrzi` (ponovni pokušaj) ostavlja izabran opseg i mesto. */
   private async otvori(f: File, zadrzi: boolean): Promise<void> {
     this.zatvoriCrtac();
+    this.napustiCitanje();
     this.fajl = f;
     this.imeFajla.set(f.name);
     if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) return this.neuspeh(NIJE_PDF, 'izbor');
@@ -309,16 +320,20 @@ export class UvozPdfDialog {
       const bajtovi = new Uint8Array(await f.arrayBuffer());
       await gasenje;
       if (pokusaj !== this.otvaranje) return;
-      crtac = await otvoriPdf(pdfjs, bajtovi, putanjePdf(), this.napraviPlatno);
+      const citanje = otvoriPdf(pdfjs, bajtovi, putanjePdf(), this.napraviPlatno);
+      this.citanje = citanje;
+      try {
+        crtac = await citanje;
+      } finally {
+        if (this.citanje === citanje) this.citanje = null;
+      }
     } catch (e) {
       if (pokusaj !== this.otvaranje) return;
       if (!(e instanceof GreskaPdf)) this.greske.handleError(e);
       return this.neuspeh(e instanceof GreskaPdf ? e.message : PORUKE_PDF.neocekivano, 'izbor');
     }
-    if (pokusaj !== this.otvaranje) {
-      void ugasi(crtac);
-      return;
-    }
+    // napušteno otvaranje je već predato `ugasi` (`napustiCitanje`)
+    if (pokusaj !== this.otvaranje) return;
     this.crtac = crtac;
     this.brojStrana.set(crtac.brojStrana);
     if (!zadrzi) {
@@ -386,6 +401,7 @@ export class UvozPdfDialog {
   /** "Otkaži" pre slanja (i za vreme čitanja): dijalog se zatvara bez uvoza. */
   protected otkazi(): void {
     this.otvaranje++;
+    this.napustiCitanje();
     this.zatvoriCrtac();
     this.ref.close(undefined);
   }
@@ -400,6 +416,12 @@ export class UvozPdfDialog {
     if (f === 'slanje') return;
     if (f === 'greska') this.zatvori();
     else this.otkazi();
+  }
+
+  /** Čitanje u toku se napušta: kasni dokument se gasi čim stigne, a sledeće otvaranje to čeka. */
+  private napustiCitanje(): void {
+    if (this.citanje) void ugasi(this.citanje);
+    this.citanje = null;
   }
 
   private zatvoriCrtac(): void {
