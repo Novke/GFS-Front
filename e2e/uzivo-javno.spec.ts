@@ -2,7 +2,7 @@ import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
 import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, zabranjeniJavno } from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
-import { OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
+import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
 
 /** Kod aktivnog izvođenja iz `fixtures/uzivo.json` (izmišljen). */
 const KOD = '123456';
@@ -149,14 +149,18 @@ test.describe('javni uživo: pitanje sa formulom na telefonu (5a)', () => {
       },
     });
 
-    // 1. tri ispravne formule (tekst + dve opcije) su nacrtane; \href (zabranjena komanda) i \nepostoji (MathLive je
-    //    odbija) ostaju izvor, bez veze iz formule
+    // 1. tri ispravne formule (tekst + dve opcije) su nacrtane; \href i \htmlStyle (zabranjene komande) i \nepostoji
+    //    (MathLive je odbija) ostaju izvor, bez veze iz formule
     const spremne = page.locator('.uz-formula--spremna .ML__latex');
     await expect(spremne).toHaveCount(SPREMNIH_FORMULA);
     for (const f of await spremne.all()) await expect(f).toBeVisible();
     await expect(page.locator('.uz-st-md .uz-formula--spremna')).toHaveAttribute('aria-label', '1011_2');
-    await expect(page.locator('.uz-formula--izvor')).toHaveText(['$\\href{http://primer.invalid}{ovde}$', '$\\nepostoji{x}$']);
+    await expect(page.locator('.uz-formula--izvor')).toHaveText([...IZVORI_TEKSTA]);
     await expect(page.locator('.uz-formula a, a[href*="primer.invalid"]')).toHaveCount(0);
+    // \htmlStyle sa url( (Review Focus 2): izvor je samo tekst, nijedan atribut (osim `aria-label`) ne nosi url(
+    // (zahtev van porekla proverava korak 3)
+    expect(await page.locator('.uz-st').evaluate(e => [...e.querySelectorAll('*')].flatMap(x => [...x.attributes])
+      .filter(a => a.name !== 'aria-label' && a.value.includes('url(')).map(a => a.name))).toEqual([]);
     // dugmad opcija: formula je nacrtana, a čitač ekrana dobija tekst bez `$` (`tekstZaCitac`)
     await expect(page.locator('.uz-st-opcija .uz-formula--spremna')).toHaveCount(OPCIJE_SA_FORMULOM.length);
     await expect(page.locator('button.uz-st-opcija').first()).toHaveAccessibleName(/: 11$/);

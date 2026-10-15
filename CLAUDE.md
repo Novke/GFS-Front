@@ -163,7 +163,9 @@ over STOMP; teacher commands are REST.
   `Košta 5$, a sa popustom 4$.` stay text, so `2$x$` stays text too). "Digit" is the *source* character before the `$`, so
   `**2**$x$`, `2 $x$` and `(2)$x$` are formulas. Formulas are read **only** in the question text (Markdown: a `marked` inline
   extension, `markdownSaFormulama`, so code spans and blocks stay literal; `renderMarkdown` for INFO does not read `$`) and
-  in option text (plain text, `podeliFormule`). They are **not** read in student answers, acceptable answers, the unit, scale
+  in option text (plain text, `podeliFormule`). A formula takes precedence over emphasis and strike-through, as in pandoc:
+  `hooks.emStrongMask` (`maskirajFormule`) hides formula ranges from the `*`/`_`/`~` delimiter search, so `*x $a*b$ y*` is
+  italic around the whole formula (escaped `\$` and code spans are already masked by `marked` and are not formulas). They are **not** read in student answers, acceptable answers, the unit, scale
   labels, INFO slides or notes (an ordinary `$` there would suddenly become a formula). An image `alt` with a formula gets
   the LaTeX source. `app-tekst-formule` (`ui/tekst-formule.component.ts`, `[tekst]`, `[markdown]`; host `[innerHTML]` with
   Angular's sanitizer, **never** `bypassSecurityTrustHtml`, which is the only defence against `[x](javascript:...)`) renders
@@ -172,11 +174,18 @@ over STOMP; teacher commands are REST.
   italic, 3 + 3 s at most; no second `<link>` when the phase 4 one exists) each span gets `latexUMarkup('\textstyle ' + latex)`,
   `uz-formula--spremna`, `role="img"` and `aria-label` = LaTeX. Invalid, forbidden (`\href`, the `\html…` family) or too heavy
   LaTeX, more than `MAX_FORMULA_U_TEKSTU` (50) formulas in one text, or a failed load leave the source (`uz-formula--izvor`),
-  never an exception or an error on the projector or phone (one `console.warn`). Option buttons on the phone get their name
+  never an exception or an error on the projector or phone (one `console.warn` per window, `upozoriFormuleNisuUcitane` in
+  `ui/formula-ucitavanje`). A failed `mathlive-static.css` is **not** remembered as success: the light style rejects, removes
+  its `<link>` (a failed phase 4 link gets `data-greska` and is not waited for again), the formula stays the source, and the next
+  text shown tries again (no loop; a 3 s timeout still draws). Option buttons on the phone get their name
   through `tekstZaCitac` (no `$`). Used by `slajd-prikaz`, `pitanje-plocice`, `rezultat-prikaz` (bars), `izvodjenje-pregled`
   and `javno/` (question text, options, correct answer, "Detalji"). Projector and console preload the module when the current or
   next slide is a question with a formula (`imaFormuluZaCrtanje`); the phone does not know the text in advance, so a student
-  may briefly see the source. A formula never wraps (the source does, also inside long LaTeX). On teacher views a formula wider than its
+  may briefly see the source. Anything that appears **live** next to a formula (the "✓ tačno" badge after `TACAN`, the timer
+  beside the question text) must sit **outside the formula's block**, so it changes the block's width and the `ResizeObserver`
+  re-measures; inside the same block it would only shift the formula and nothing would notice (final review 5a, B I1: up to
+  188 px clipped). Results: `.uz-rez-opcija-tekst` is a flex row (badge, then `app-tekst-formule.uz-rez-opcija-formula` with
+  `flex: 1 1 0` and the ellipsis); tiles and the question header already were (`flex: 1`). A formula never wraps (the source does, also inside long LaTeX). On teacher views a formula wider than its
   block is scaled down (`--uz-formula-k`, down to 0.5, below that it is clipped at the edge, never a scrollbar): `ui/mera-formule.ts`
   (`meriFormule`, after rendering reads first and writes after, again on `ResizeObserver` of the blocks and `document.fonts`
   `loadingdone`). MathLive's markup width is **not linear** in k, so k is computed only when the formula's **input** changes
@@ -190,21 +199,34 @@ over STOMP; teacher commands are REST.
   phone (`.uz-st`) a wide formula scrolls inside itself (`max-width: 100%`, `overflow-x: auto`) and `padding-inline-end: 0.15em`
   keeps MathLive's ~2 px overhang inside the box, so a short formula never gets a scrollbar; the document never scrolls
   horizontally (e2e at 360 px; `uzivo-javno-trake.spec.ts` and `uzivo-formule-tekst.spec.ts` run without `--hide-scrollbars`,
-  so classic 15 px scrollbars would show). Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
+  so classic 15 px scrollbars would show). A scrolling formula is a scroll region, so the phone (no `MERA_FORMULE`) watches drawn
+  formulas with one `ResizeObserver` and gives `tabindex="0"` only to a formula with `scrollWidth > clientWidth` (removed again
+  when it fits, e.g. after rotating); its name stays `role="img"` + `aria-label` (children presentational, nothing read twice),
+  never inside an option button (`aria-hidden`, would be `nested-interactive`), focus ring inset (`outline-offset: -3px`, the host
+  clips); axe `scrollable-region-focusable` at 360 px in `pristupacnost.spec.ts`. Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
   digit exception) and, 300 ms after typing, a non-blocking warning in `--warn` (not `--danger`: saving is not blocked, the
   server does not check formulas) for every formula the display would not draw, naming the field ("u tekstu pitanja",
   "u odgovoru B"); it runs exactly the display's check (same parser per field, lazy `latexUMarkup`, same limit of 50), so an
   incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
   example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
   every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
-  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (115 044 B on 2026-10-14) and
-  without `ML__latex`, editor strings, `tabelaZaglavlje` or `Carlito`; `mathlive/ssr` only dynamically imported, outside the
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 515 B on 2026-10-15, after the
+  fix wave of the final review; 113 568 B after F2 fix 3) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
+  or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
+  alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
   initial and student closure, own closure <= measured + 5 % (348 195 B -> 365 604 B, never above 380 000) and <= 105 000 B
   gzip (102 932); `tekst-formule*.ts` never import `mathlive` nor contain `ML__latex`. Network of one formula on the phone
   (`uzivo-javno.spec.ts`, annotation `mreza-formule`; JS, CSS and woff2 after the question, app fonts from `media/` not
   counted): 404 112 B, limit measured + 10 % and never above 450 000 B; no `KaTeX_AMS*`/`KaTeX_Size*`, nothing off-origin.
-  **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the sanitizer allows `#hex` colours)
-  is unreadable in the night mode of the editor preview, as in phase 4; the phone may show the source until the chunk loads.
+  The editor page file is 211 172 B after 5a (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
+  lazy chunk if 5b-5e need room). **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the
+  sanitizer allows `#hex` colours) is unreadable on a **dark presentation theme** (TAMNA, PONOĆ: `rezim-noc` on the slide) on
+  projector, console and editor preview; the app's night mode does not touch it (those views are always `rezim-dan uz-dan`); the
+  phone may show the source until the chunk loads; after a rejected `import()` the browser may keep the failure for that URL in
+  its module map until reload (browser-dependent), so a retry can fail at once; inside a GFM table a `|` in a formula splits
+  the cell (write `\|` there, which the table turns back into `|`, or `\vert` / `\mid`); after `MAX_KOREKCIJA` a formula can
+  stay a few tenths of a pixel over its edge (nonlinear width); the slide list label (`oznakaSlajda`) keeps `$...$` of a
+  question as written (`_` and `*` inside stay).
 
 - `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
   every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock

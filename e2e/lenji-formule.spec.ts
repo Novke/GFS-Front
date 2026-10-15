@@ -12,7 +12,9 @@ import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, nizoviEditora } from './n
 /**
  * Studentska stranica (`javno/uzivo-student.page`, statičko zatvorenje bez početnog bundle-a). Osnova je izmerena
  * 2026-10-14 nad buildom 3aebfb8 (vrh 4b, pre 5a; skripta F1 Step 0); faza 5a sme da doda najviše 8 000 B (odluka 25:
- * `app-tekst-formule`, parser `$...$` i lakši učitavač stila). Posle F1-F4 izmereno 115 044 B (2026-10-14, e13cfdd).
+ * `app-tekst-formule`, parser `$...$` i lakši učitavač stila). Izmereno 113 568 B posle F2 fix 3 (telefon bez
+ * `mera-formule`) i 114 515 B posle talasa ispravki završne recenzije (2026-10-15: tab stop široke formule, maska formula za
+ * naglašavanje, stil koji ne pamti grešku, jedno upozorenje po prozoru).
  */
 const OSNOVA_STUDENTA = 108_218;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000;
@@ -27,8 +29,11 @@ const BUDZET_SSR_GZIP = 105_000;
 /**
  * Nizovi koda koji telefon ne sme da vuče (F3: `formula-ucitavanje` je jednom statički uvozio `preducitavanje`, pa su
  * teme i fontovi platna stigli na telefon; lint gleda samo direktne uvoze, pa je ovo jedini čuvar tranzitivnog grafa).
+ * `--uz-formula-k` je samo u `ui/mera-formule` (smanjivanje formule na nastavničkim prikazima, token `MERA_FORMULE`):
+ * telefon nema ni kod merenja (~2,4 kB, manje od rezerve budžeta, pa ga granica bajtova ne bi uhvatila); u CSS-u niz
+ * postoji, ali se ovde gleda samo JS.
  */
-const NIZOVI_PLATNA = ['tabelaZaglavlje', 'Carlito'] as const;
+const NIZOVI_PLATNA = ['tabelaZaglavlje', 'Carlito', '--uz-formula-k'] as const;
 
 const UI = join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'ui');
 /** Uvoz paketa `mathlive` (i podputanja) u izvoru: statički, dinamički ili samo radi efekta. */

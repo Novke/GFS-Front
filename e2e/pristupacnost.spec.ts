@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
 import { lazniBroker } from './lazni-stomp';
-import { OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
+import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
 import { uzorakPptx } from './pptx-uzorak';
 import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
@@ -61,6 +61,32 @@ for (const rezim of ['dan', 'noc'] as const) {
     }
 
     // Uživo za nastavnika (mok izvođenja + lažni STOMP broker): konzola je uvek svetla, daljinski prati dan/noć (`pratiRezim`).
+    // 5a: forma pitanja sa uputstvom i upozorenjem za formule (`--warn`, jedini nov element 5a koji prati noćni režim);
+    // nijedan fixture editora nema PITANJE, pa se ovde dodaje (proba recenzenta B4)
+    test('/prezentacije/5 (forma pitanja sa upozorenjem za formulu): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.prezentacije.find(x => x.id === 5)!.slajdovi.push({
+        id: 777, rb: 3, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, postepeno: false, platno: null, beleske: null,
+        pitanje: {
+          id: 551, tip: 'JEDAN_TACAN', tekst: 'Koliko je $1011_2$ i $\\nepostoji{x}$?', slika: null, vremeSekunde: null,
+          opcije: [{ id: 1, rb: 1, tekst: '$\\nepostoji{y}$', tacna: true }, { id: 2, rb: 2, tekst: '$13$', tacna: false }],
+          brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+          prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+        },
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const dugme = page.getByRole('button', { name: /^3\s/ });
+      await expect(dugme).toBeEnabled();
+      await dugme.click();
+      const upozorenja = page.locator('p.uz-ed-upozorenje');
+      await expect(upozorenja).toHaveCount(2, { timeout: 15_000 });
+      await expect(upozorenja.first()).toContainText('u tekstu pitanja');
+      await expect(page.getByText('odmah posle cifre $ ne otvara formulu', { exact: false })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma pitanja sa upozorenjem (${rezim})`).toEqual([]);
+    });
+
     test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {
       await nastavnickiBroker(page, mock);
       await page.goto('izvodjenja/7/konzola');
@@ -259,7 +285,7 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
       } : undefined));
       await page.goto('uzivo/123456');
       await expect(page.locator('.uz-formula--spremna .ML__latex')).toHaveCount(SPREMNIH_FORMULA);
-      await expect(page.locator('.uz-formula--izvor')).toHaveCount(2);
+      await expect(page.locator('.uz-formula--izvor')).toHaveCount(IZVORI_TEKSTA.length);
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), 'axe: telefon, pitanje sa formulom').toEqual([]);
     });
@@ -320,7 +346,7 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     await page.goto('izvodjenja/7/publika');
     await expect(page.locator('.uz-pitanje-tekst .uz-formula--spremna .ML__latex')).toHaveCount(1);
     await expect(page.locator('.uz-plocica-tekst .uz-formula--spremna .ML__latex')).toHaveCount(OPCIJE_SA_FORMULOM.length);
-    await expect(page.locator('.uz-pitanje-tekst .uz-formula--izvor')).toHaveCount(2);
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--izvor')).toHaveCount(IZVORI_TEKSTA.length);
     await page.waitForLoadState('networkidle');
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
   });

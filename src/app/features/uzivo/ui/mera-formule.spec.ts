@@ -68,7 +68,7 @@ class BezMere {}
 
 describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
   /** Lažni `ResizeObserver`: test sam javlja promenu veličine (kao pregledač posle svakog upisa k). */
-  const posmatraci: { cb: () => void }[] = [];
+  const posmatraci: { cb: () => void; posmatrani: Element[]; odvezan: number }[] = [];
   const javiPromenu = () => posmatraci.forEach((p) => p.cb());
 
   /**
@@ -87,9 +87,11 @@ describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
       return { left: 0, top: 0, right: w, bottom: 0, width: w, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
     });
     vi.stubGlobal('ResizeObserver', class {
+      readonly posmatrani: Element[] = [];
+      odvezan = 0;
       constructor(readonly cb: () => void) { posmatraci.push(this); }
-      observe(): void { /* lažni */ }
-      disconnect(): void { /* lažni */ }
+      observe(el: Element): void { this.posmatrani.push(el); }
+      disconnect(): void { this.odvezan++; this.posmatrani.length = 0; }
     });
     TestBed.configureTestingModule({
       providers: [
@@ -228,6 +230,40 @@ describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
     const { fixture, upisano } = napravi(BezMere, 'p', 4000, () => 400);
     await stabilno(fixture);
     expect(upisano()).toBe('');
-    expect(posmatraci).toEqual([]);
+    // telefon posmatra samo same formule (tab stop široke formule, talas 5a I2), nikad blok za merenje
+    expect(posmatraci.flatMap((p) => p.posmatrani).every((e) => e.classList.contains('uz-formula--spremna'))).toBe(true);
+  });
+
+  it('životni vek: uništavanje odvezuje ResizeObserver i skida loadingdone; kasni povratni pozivi ne upisuju', async () => {
+    const slusaoci = new Map<string, () => void>();
+    const fonts = {
+      addEventListener: vi.fn((t: string, f: () => void) => slusaoci.set(t, f)),
+      removeEventListener: vi.fn((t: string, f: () => void) => {
+        if (slusaoci.get(t) === f) slusaoci.delete(t);
+      }),
+    };
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+    try {
+      const { fixture, upisano, upisa } = napravi(NastavnickiOkvir, 'p', 800, () => 400);
+      await stabilno(fixture);
+      await merenja(fixture, 2);
+      expect(Number(upisano())).toBeLessThan(1);
+      expect(posmatraci.length).toBe(1);
+      expect(posmatraci[0].posmatrani.length).toBeGreaterThan(0);
+      const kadFontovi = slusaoci.get('loadingdone')!;
+      expect(kadFontovi).toBeTypeOf('function');
+      const pre = upisa();
+      fixture.destroy();
+      expect(posmatraci[0].odvezan).toBeGreaterThan(0);
+      expect(fonts.removeEventListener).toHaveBeenCalledWith('loadingdone', kadFontovi);
+      expect(slusaoci.has('loadingdone')).toBe(false);
+      // kasni povratni pozivi (već zakazani u pregledaču) posle uništavanja: ništa se ne meri ni ne upisuje
+      kadFontovi();
+      posmatraci[0].cb();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(upisa() - pre).toBe(0);
+    } finally {
+      delete (document as Partial<Document> & { fonts?: unknown }).fonts;
+    }
   });
 });
