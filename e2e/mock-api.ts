@@ -968,6 +968,19 @@ export class MockApi {
       const cmd = z.telo as { tip: string; vrednost?: number | null };
       return this.izvodjenje.primeni(cmd.tip, cmd.vrednost);
     });
+    // potezi CRTEZ slojeva slajda (projektor i konzola, `PoteziCrteza`): kao backend, redom slojeva iz dokumenta slajda
+    // (prvo slajd izvođenja, pa prezentacije); prazno bez crteža, 404 bez slajda
+    get('slajdovi/:id/potezi', (_z, p) => {
+      const id = Number(p['id']);
+      const sl = this.izvodjenje.slajdPoId(id) ?? d.prezentacije.flatMap(x => x.slajdovi).find(s => s.id === id);
+      if (!sl) {
+        return greska(404, 'Slajd ne postoji.');
+      }
+      const slojevi = (sl.platno as { slojevi?: Record<string, unknown>[] } | null)?.slojevi ?? [];
+      return ok(slojevi.filter(x => x['tip'] === 'CRTEZ').map(x => ({
+        slojId: x['id'], medijId: x['medijId'], sirina: x['sirina'], visina: x['visina'], potezi: x['potezi'] ?? null,
+      })));
+    });
 
     return r;
   }

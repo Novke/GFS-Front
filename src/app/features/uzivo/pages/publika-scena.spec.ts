@@ -1,7 +1,10 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { animacija, platno } from '../data-access/platno-podaci.testing';
+import type { CrtezSloj, Potez } from '../data-access/platno.models';
 import { NastavnickoStanje, Rezultat } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { PublikaScenaComponent } from './publika-scena.component';
@@ -14,6 +17,11 @@ async function prikazi(s: NastavnickoStanje) {
   await fixture.whenStable();
   return fixture.nativeElement as HTMLElement;
 }
+
+// Svaka scena traži poteze crteža (`PoteziCrteza`); fabričko platno ima CRTEZ bez poteza, pa zahtevi idu u lažni backend.
+beforeEach(() => {
+  TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+});
 
 const tekst = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
@@ -250,5 +258,48 @@ describe('PublikaScenaComponent (animacija prelaza i tema)', () => {
     delete bezTeme.tema;
     await posalji(bezTeme as NastavnickoStanje);
     expect(slajd()!.tema()).toBe('NACRT');
+  });
+});
+
+/**
+ * Potezi crteža (Review Focus 3): snimak nosi CRTEZ bez poteza, scena ih traži za trenutni i sledeći slajd
+ * (`GET slajdovi/{id}/potezi`) i slajd sa potezima iz keša daje prikazu.
+ */
+describe('PublikaScenaComponent (potezi crteža)', () => {
+  const potezi: Potez[] = [{ boja: '#C00000', debljina: 3, tacke: [10, 5, 20, 10] }];
+  const crtezSlajda = (sl: unknown) =>
+    ((sl as { platno: { slojevi: { tip: string }[] } }).platno.slojevi.find((x) => x.tip === 'CRTEZ') as CrtezSloj);
+
+  async function scena(s: NastavnickoStanje) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', s);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  it('trenutni i sledeći PLATNO sa CRTEZ-om bez poteza: dva GET; posle odgovora prikaz dobija poteze', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = await scena(stanje({
+      prikaz: 'SLAJD', indeks: 0, korak: 0, brojStavki: 2, trenutniSlajd: platnoSlajd({ id: 30 }), sledeciSlajd: platnoSlajd({ id: 31 }),
+    }));
+    const prikaz = () => fixture.debugElement.query(By.directive(SlajdPrikazComponent)).componentInstance as SlajdPrikazComponent;
+    expect(crtezSlajda(prikaz().slajd()).potezi).toBeNull();
+
+    const zahtevi = http.match((r) => /^api\/slajdovi\/\d+\/potezi$/.test(r.url));
+    expect(zahtevi.map((r) => r.request.url)).toEqual(['api/slajdovi/30/potezi', 'api/slajdovi/31/potezi']);
+    const unos = { slojId: 'crtez', medijId: '00000000-0000-0000-0000-000000000002', sirina: 200, visina: 100, potezi };
+    zahtevi.forEach((r) => r.flush([unos]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(crtezSlajda(prikaz().slajd()).potezi).toEqual(potezi);
+    http.verify();
+  });
+
+  it('INFO trenutni (i INFO sledeći): nijedan zahtev', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    await scena(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() }));
+    http.verify();
   });
 });

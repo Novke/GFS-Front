@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal } from '@angular/core';
 import { StanjePrelaza, animacijaPrelaza } from '../data-access/platno-koraci';
+import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { ServerskiSat } from '../data-access/sat';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
@@ -24,6 +25,8 @@ export function hostAplikacije(base: string = document.baseURI): string {
  * Animacija PLATNO slajda (`animiraj`, samo prozor publike): scena pamti prethodni snimak i pita `animacijaPrelaza`;
  * prvi snimak (kasno otvoren prozor, ponovo učitana stranica), skok i korak nazad crtaju krajnje stanje bez animacije.
  * Prethodni snimak se pamti za svaki prikaz (i prijavu i kraj), ne samo dok je na ekranu slajd.
+ * Snimak ne nosi poteze crteža: scena ih traži za trenutni i sledeći slajd (`PoteziCrteza`, keš prozora) i prikazu daje
+ * `trenutni()` (slajd sa potezima iz keša); dok potezi ne stignu ili posle greške CRTEZ se crta kao slika.
  */
 @Component({
   selector: 'app-publika-scena',
@@ -37,7 +40,7 @@ export function hostAplikacije(base: string = document.baseURI): string {
         <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
       }
       @case ('SLAJD') {
-        @if (s.trenutniSlajd; as sl) {
+        @if (trenutni(); as sl) {
           <app-slajd-prikaz [slajd]="sl" [korak]="s.korak" [postepeno]="sl.postepeno" [faza]="s.faza"
                             [rezultat]="rezultat()" [prikaziRezultat]="s.rezultatiPrikazani" [tacanPrikazan]="s.tacanPrikazan"
                             [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" [kodTraka]="kodTraka()"
@@ -101,6 +104,10 @@ export class PublikaScenaComponent {
    */
   readonly epohaVeze = input<number>(0);
 
+  private readonly potezi = inject(PoteziCrteza);
+  /** Trenutni slajd sa potezima crteža iz keša; `prelaz`/`animacijaPrelaza` i dalje čitaju snimak (treba im id i tip). */
+  protected readonly trenutni = computed(() => this.potezi.saPotezima(this.stanje().trenutniSlajd));
+
   private readonly izvor = computed(() => ({ stanje: this.stanje(), epoha: this.epohaVeze() }));
   /**
    * Poslednji snimak (kao `StanjePrelaza`), epoha veze u kojoj je stigao i grupa za animaciju prelaza sa prethodnog
@@ -151,6 +158,12 @@ export class PublikaScenaComponent {
     // novom snimku ili epohi, bez obzira na prikaz.
     effect(() => {
       this.prelaz();
+    });
+    // Konzola ima i umanjenu scenu i panel "Sledeće": ovde se traže trenutni i sledeći, panel samo čita keš.
+    effect(() => {
+      const s = this.stanje();
+      this.potezi.ucitaj(s.trenutniSlajd);
+      this.potezi.ucitaj(s.sledeciSlajd);
     });
   }
 }

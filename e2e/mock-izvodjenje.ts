@@ -114,6 +114,11 @@ export class MockIzvodjenje {
     Object.assign(this.f.slajdovi[indeks], izmene);
   }
 
+  /** Slajd izvođenja po id-ju (za `GET slajdovi/:id/potezi`: snimak nosi slajd bez poteza, kao server). */
+  slajdPoId(id: number): Slajd | undefined {
+    return this.f.slajdovi.find(s => s.id === id);
+  }
+
   /** Izvođenje je završeno (npr. sa laptopa): `GET stanje` pokazuje ZAVRSENO, svaka komanda dobija 410. */
   zavrsi(): void {
     this.f.izvodjenje.status = 'ZAVRSENO';

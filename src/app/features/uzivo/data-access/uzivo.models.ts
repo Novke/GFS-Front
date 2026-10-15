@@ -1,4 +1,4 @@
-import type { Platno, Tema } from './platno.models';
+import type { Platno, Potez, Tema } from './platno.models';
 
 export type { Tema } from './platno.models';
 export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO';
@@ -28,6 +28,11 @@ export interface SlajdDetails {
   id: number; rb: number; tip: TipSlajda; naslov: string | null; sadrzaj: string | null; slika: MedijInfo | null;
   beleske: string | null; postepeno: boolean; pitanje: PitanjeDetails | null; platno: Platno | null;
 }
+/**
+ * Potezi jednog CRTEZ sloja (`GET slajdovi/{id}/potezi`, redom slojeva). Snimak izvođenja ih ne nosi (`CrtezSloj.potezi`
+ * je tamo `null`); `sirina`/`visina` su veličina sloja u dokumentu, `potezi` je `null` kad crtež nema vektor (samo slika).
+ */
+export interface PoteziSloja { slojId: string; medijId: string; sirina: number; visina: number; potezi: Potez[] | null; }
 export interface PrezentacijaInfo {
   id: number; naziv: string; opis: string | null; predmet: PredmetKratko; brojSlajdova: number; brojPitanja: number;
   izmenjeno: string; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
