@@ -184,7 +184,8 @@ over STOMP; teacher commands are REST.
   there, so a frame that shrinks to its content cannot spiral), then at most `MAX_KOREKCIJA` (2) steps down while it really
   overflows, then nothing; the same input (e.g. the `ResizeObserver` callback after its own write) writes nothing. The earlier
   "grow while it fits, shrink when it overflows" rule oscillated ~60 times a second; `uzivo-formule-tekst.spec.ts` counts style
-  writes during 1 s of rest after resizing (900-1920 px, tiles and results) and expects 0 is provided through the token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
+  writes during 1 s of rest after resizing (900-1920 px, tiles and results) and expects 0. `meriFormule` is provided through the
+  token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
   `rezultat-prikaz` and `izvodjenje-pregled`; its default is `null`, so the phone has neither the code nor the scaling. On the
   phone (`.uz-st`) a wide formula scrolls inside itself (`max-width: 100%`, `overflow-x: auto`) and `padding-inline-end: 0.15em`
   keeps MathLive's ~2 px overhang inside the box, so a short formula never gets a scrollbar; the document never scrolls
