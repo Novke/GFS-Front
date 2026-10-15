@@ -224,7 +224,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
                 }
               }
-              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" />
+              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" (pregledPrelaza)="pregledajPrelaz(s)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -599,6 +599,15 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   /** Uvoz iz PowerPointa (spec 7.7). */
   protected uveziIzPowerPointa(): void {
     this.uvezi(podaci => this.otvaracUvoza.otvori(this.dialog, podaci));
+  }
+
+  /** "Pregledaj prelaz" (F17): prethodni i izabrani slajd (lokalno, sa prelazom iz forme) u lenjom dijalogu. */
+  protected pregledajPrelaz(s: SlajdDetails): void {
+    const l = this.store.slajdovi(), i = l.findIndex(x => x.id === s.id);
+    import('./prelaz-pregled.dialog').then(
+      m => m.otvoriPregledPrelaza(this.dialog, { pre: l[i - 1] ?? null, slajd: l[i] ?? s, tema: vazecaTema(this.store.prezentacija()?.tema) }),
+      () => this.obavestenja.greska('Pregled prelaza nije učitan. Osveži stranicu i pokušaj ponovo.'),
+    );
   }
 
   /** Uvoz iz PDF-a (faza 5d): isti tok kao PowerPoint; dijalog i pdf.js su lenji chunk-ovi (`UvozPdfOtvarac`). */

@@ -631,6 +631,29 @@ over STOMP; teacher commands are REST.
   Specs: the form spec renders the block with `DeferBlockBehavior.Manual` + `render(Complete)`; `prezentacija-editor.spec.ts`
   imports the chunk once in `beforeAll`, otherwise its first (real) dynamic import could finish inside a `saLaznimSatom` test and
   leave the scheduler's timers behind. The phone gets nothing (`JavnoStanje` has no slide content).
+  **Playing it (F17):** only in the audience window (`animiraj`), only without `prefers-reduced-motion` (`ui/kretanje.ts`
+  `smanjenoKretanje`, shared with `platno-prikaz`) and only for exactly one slide forward (`platno-koraci` `napredNaSlajd`, the
+  same rule as group 0: PRIJAVA -> first slide or index + 1, step 0, newer version, another slide). `publika-scena` draws the
+  SLAJD branch in `.uz-scena-slajdovi` (grid, both wrappers in one cell, `.uz-scena-ulazni` above with `z-index: 1`; without a
+  transition only the incoming wrapper exists, so the scene looks as before): the outgoing slide (`aria-hidden`) is drawn from the
+  **previous** snapshot's inputs (`ulaziSlajda`: phase, public result, correct answer, answer count, timer, code strip; strokes from
+  the cache), and `ui/prelaz.directive.ts` (`[uzPrelaz]`, contract name, hence the one `eslint-disable` for the `app` prefix)
+  runs one WAAPI animation per wrapper (`kadroviPrelaza`: only `transform`/`opacity`/`clip-path` of the whole wrapper, so formula
+  `k` measuring, tab measuring and stroke paths inside see the same layout; translation is uniform, `getBoundingClientRect`
+  differences stay the same). After the end the incoming animation is `cancel()`ed (no inline style, no animation left), the
+  outgoing one keeps its last frame until its wrapper is removed. **Group 0 starts after the transition** (PowerPoint): while it
+  runs the incoming slide is drawn at step -1 and `animacija` is `null`, then step 0 and the key arrive together. A snapshot that
+  keeps view, slide and step (participant joins, new answer) carries the transition and group 0 on; any other snapshot or a
+  reconnect epoch interrupts it (end state) and **never starts a new transition while one runs** (fast
+  paging); a transition is only created when it will actually play (`animiraj`, no reduced motion), so "running" cannot stick.
+  The `zavrsen` key is read `untracked` in the `linkedSignal`, otherwise the end of the transition would recompute it and
+  drop group 0. Editor: "Pregledaj prelaz" -> `pregledajPrelaz` (dynamic `import()` of `pages/prelaz-pregled.dialog.ts`, a
+  lazy chunk of ~3.7 kB; page file +426 B on 2026-10-15) with the previous slide, the selected slide from the store (the
+  form's transition before saving) and the theme; the dialog uses the same wrappers, directive and keyframes, plays on open,
+  "Ponovi" = new key, a PLATNO previous slide is drawn after all steps, group 0 of a PLATNO slide plays after the transition,
+  the form's duration is clamped to 0.1-5 s, `autoFocus: false` and focus on "Ponovi" (`afterNextRender`). Specs fake
+  `Element.prototype.animate` with a manually resolved `finished` (`cancel` rejects it, like WAAPI) and find the wrapper
+  calls through `animate.mock.contexts`; a fake `matchMedia` needs `addListener`/`removeListener` (CDK `BreakpointObserver`).
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

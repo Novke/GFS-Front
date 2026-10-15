@@ -11,6 +11,7 @@ import { medijUrl } from '../data-access/uzivo.models';
 import { CRTEZ_KAO_VEKTOR, type PrikazPoteza, kadroviPoteza, planIscrtavanja, putanjeCrteza } from './crtez-potezi';
 import { FormulaPrikazComponent } from './formula-prikaz.component';
 import { cssFonta } from './platno-fontovi';
+import { smanjenoKretanje } from './kretanje';
 import { METRIKA } from './platno-metrika';
 import { pasusiZaMerenje, poravnajSveTabove, prefiksCelije, prefiksSloja } from './platno-tabovi';
 import {
@@ -337,11 +338,6 @@ export function kadroviAnimacije(a: Animacija, s: Sloj, pxPoJedinici: number): K
   }
   const kadrovi = [od, ka];
   return a.vrsta === 'IZLAZ' ? kadrovi.reverse() : kadrovi;
-}
-
-/** `prefers-reduced-motion: reduce`: animacije traju 0 ms (spec 4.4); bez `matchMedia` (stari pregledač) puno kretanje. */
-function smanjenoKretanje(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /**

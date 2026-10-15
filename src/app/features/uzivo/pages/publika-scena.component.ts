@@ -1,10 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal } from '@angular/core';
-import { StanjePrelaza, animacijaPrelaza } from '../data-access/platno-koraci';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
+import { StanjePrelaza, animacijaPrelaza, napredNaSlajd } from '../data-access/platno-koraci';
 import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { ServerskiSat } from '../data-access/sat';
-import { NastavnickoStanje } from '../data-access/uzivo.models';
+import { Faza, NastavnickoStanje, Prelaz, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
+import { smanjenoKretanje } from '../ui/kretanje';
 import { PostoljeComponent } from '../ui/postolje.component';
+import { kadroviPrelaza } from '../ui/prelaz-slajda';
+import { PokretPrelaza, PrelazDirective } from '../ui/prelaz.directive';
 import { PrijavaEkranComponent } from '../ui/prijava-ekran.component';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RangListaComponent } from '../ui/rang-lista.component';
@@ -15,6 +18,36 @@ import { vazecaTema } from '../ui/teme';
 export function hostAplikacije(base: string = document.baseURI): string {
   return bezProtokola(new URL('.', base).href);
 }
+
+/** Ulazi `SlajdPrikazComponent` za slajd iz jednog snimka (ulazni slajd i zapamćena slika odlaznog). */
+export interface UlaziSlajda {
+  slajd: SlajdDetails;
+  korak: number;
+  postepeno: boolean;
+  faza: Faza | null;
+  rezultat: Rezultat | null;
+  prikaziRezultat: boolean;
+  tacanPrikazan: boolean;
+  brojOdgovora: number | null;
+  tajmer: TajmerUlaz | null;
+  kodTraka: KodTraka;
+}
+
+/** Javne projekcije snimka za prikaz slajda (`javniRezultat`, nikad nastavnički `rezultat`). */
+export function ulaziSlajda(s: NastavnickoStanje, sat: ServerskiSat | null, host: string): UlaziSlajda | null {
+  const sl = s.trenutniSlajd;
+  if (!sl) return null;
+  return {
+    slajd: sl, korak: s.korak, postepeno: sl.postepeno, faza: s.faza, rezultat: s.javniRezultat,
+    prikaziRezultat: s.rezultatiPrikazani, tacanPrikazan: s.tacanPrikazan,
+    brojOdgovora: sl.tip === 'PITANJE' && s.runda && s.faza !== 'CEKA' ? s.brojOdgovora : null,
+    tajmer: s.faza === 'OTVORENO' && s.runda && sat ? { rokMs: s.runda.rokMs, preostaloMs: s.runda.preostaloMs, sat } : null,
+    kodTraka: { host, kod: s.izvodjenje.kod },
+  };
+}
+
+/** Prelaz koji je počeo sa snimkom `kljuc` (verzija): efekat ulaznog slajda i slika odlaznog (`null`: sa prijave). */
+interface PrelazSlajda { kljuc: number; prelaz: Prelaz; odlazni: UlaziSlajda | null; }
 
 /**
  * Ono što projektor prikazuje, na 16:9 platnu (širinu daje roditelj): prijava, slajd, kraj (postolje ili "Hvala!"),
@@ -27,11 +60,16 @@ export function hostAplikacije(base: string = document.baseURI): string {
  * Prethodni snimak se pamti za svaki prikaz (i prijavu i kraj), ne samo dok je na ekranu slajd.
  * Snimak ne nosi poteze crteža: scena ih traži za trenutni i sledeći slajd (`PoteziCrteza`, keš prozora) i prikazu daje
  * `trenutni()` (slajd sa potezima iz keša); dok potezi ne stignu ili posle greške CRTEZ se crta kao slika.
+ * Prelaz slajda (faza 5, odluka 12, samo uz `animiraj` i bez smanjenog kretanja): za tačno jedan slajd napred
+ * (`napredNaSlajd`) odlazni slajd (slika iz prethodnog snimka, sa svim njegovim ulazima) i ulazni se crtaju jedan preko
+ * drugog u `uz-scena-slajdovi`, a omotači se animiraju (`PrelazDirective`, `kadroviPrelaza`). Grupa 0 PLATNO slajda
+ * kreće tek posle prelaza: dok traje, ulazni se crta na koraku -1. Snimak koji ne menja prikaz, slajd ni korak prelaz ne
+ * prekida; svaki drugi ga prekida (krajnje stanje), a nov prelaz ne počinje dok prethodni traje (brzo prelistavanje).
  */
 @Component({
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PostoljeComponent, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
+  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
   template: `
     @let s = stanje();
@@ -40,14 +78,26 @@ export function hostAplikacije(base: string = document.baseURI): string {
         <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
       }
       @case ('SLAJD') {
-        @if (trenutni(); as sl) {
-          <app-slajd-prikaz [slajd]="sl" [korak]="s.korak" [postepeno]="sl.postepeno" [faza]="s.faza"
-                            [rezultat]="rezultat()" [prikaziRezultat]="s.rezultatiPrikazani" [tacanPrikazan]="s.tacanPrikazan"
-                            [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" [kodTraka]="kodTraka()"
-                            [tema]="tema()" [animacija]="animacija()" />
-        } @else {
-          <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
-        }
+        <div class="uz-scena-slajdovi">
+          @if (odlazni(); as o) {
+            <div class="uz-scena-odlazni" aria-hidden="true" [uzPrelaz]="o.pokret" [uzPrelazZadrzi]="true">
+              <app-slajd-prikaz [slajd]="o.slajd" [korak]="o.korak" [postepeno]="o.postepeno" [faza]="o.faza"
+                                [rezultat]="o.rezultat" [prikaziRezultat]="o.prikaziRezultat" [tacanPrikazan]="o.tacanPrikazan"
+                                [brojOdgovora]="o.brojOdgovora" [tajmer]="o.tajmer" [kodTraka]="o.kodTraka" [tema]="tema()" />
+            </div>
+          }
+          <div class="uz-scena-ulazni" [uzPrelaz]="ulazniPokret()" (uzPrelazKraj)="krajPrelaza($event)">
+            @if (trenutni(); as sl) {
+              @let u = ulazi()!;
+              <app-slajd-prikaz [slajd]="sl" [korak]="korakPrikaza()" [postepeno]="sl.postepeno" [faza]="u.faza"
+                                [rezultat]="u.rezultat" [prikaziRezultat]="u.prikaziRezultat" [tacanPrikazan]="u.tacanPrikazan"
+                                [brojOdgovora]="u.brojOdgovora" [tajmer]="u.tajmer" [kodTraka]="kodTraka()"
+                                [tema]="tema()" [animacija]="animacija()" />
+            } @else {
+              <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
+            }
+          </div>
+        </div>
       }
       @case ('KRAJ') {
         <div class="uz-okvir">
@@ -109,48 +159,81 @@ export class PublikaScenaComponent {
   protected readonly trenutni = computed(() => this.potezi.saPotezima(this.stanje().trenutniSlajd));
 
   private readonly izvor = computed(() => ({ stanje: this.stanje(), epoha: this.epohaVeze() }));
+  /** Ključ (verzija) prelaza čiji je ulazni omotač javio kraj. */
+  private readonly zavrsen = signal<number | null>(null);
   /**
-   * Poslednji snimak (kao `StanjePrelaza`), epoha veze u kojoj je stigao i grupa za animaciju prelaza sa prethodnog
-   * snimka na njega (ključ je `verzija`). Promena same epohe (veza pala, snimak isti) ne menja zapamćeni snimak ni
-   * njegovu epohu, pa se prvi snimak posle ponovnog povezivanja ne poredi sa onim pre prekida.
+   * Poslednji snimak (kao `StanjePrelaza`), epoha veze u kojoj je stigao, grupa za animaciju prelaza sa prethodnog
+   * snimka na njega (ključ je `verzija`), ulazi slajda iz tog snimka (`slika`, za odlazni slajd sledećeg prelaza) i prelaz
+   * slajda koji je počeo (`prelazSlajda`). Promena same epohe (veza pala, snimak isti) ne menja zapamćeni snimak ni
+   * njegovu epohu, pa se prvi snimak posle ponovnog povezivanja ne poredi sa onim pre prekida; prelaz koji traje se tada
+   * prekida. `zavrsen` se čita `untracked`: kraj prelaza ne sme ponovo da izračuna ovo (grana "isti snimak" bi obrisala
+   * grupu 0 baš kad treba da krene).
    */
   private readonly prelaz = linkedSignal<
     { stanje: NastavnickoStanje; epoha: number },
-    { stanje: StanjePrelaza; epoha: number; grupa: number | null }
+    { stanje: StanjePrelaza; epoha: number; grupa: number | null; slika: UlaziSlajda | null; prelazSlajda: PrelazSlajda | null }
   >({
     source: this.izvor,
     computation: ({ stanje: s, epoha }, prethodni) => {
       if (prethodni && prethodni.source.stanje === s) {
-        return { ...prethodni.value, grupa: null };
+        return { ...prethodni.value, grupa: null, prelazSlajda: null };
       }
       const sada: StanjePrelaza = {
         verzija: s.verzija, prikaz: s.prikaz, indeks: s.indeks, slajdId: s.trenutniSlajd?.id ?? null,
         tip: s.trenutniSlajd?.tip ?? null, korak: s.korak,
       };
       const pre = prethodni && prethodni.value.epoha === epoha ? prethodni.value.stanje : null;
-      return { stanje: sada, epoha, grupa: animacijaPrelaza(pre, sada) };
+      const slika = s.prikaz === 'SLAJD' ? ulaziSlajda(s, untracked(this.sat), untracked(this.host)) : null;
+      const t = prethodni?.value.prelazSlajda;
+      const tece = !!t && untracked(this.zavrsen) !== t.kljuc;
+      // Nepovezan snimak usred prelaza (prijava učesnika, nov odgovor): isti prikaz, slajd i korak -> prelaz i grupa ostaju.
+      if (tece && pre && sada.prikaz === pre.prikaz && sada.slajdId === pre.slajdId && sada.korak === pre.korak) {
+        return { stanje: sada, epoha, grupa: prethodni!.value.grupa, slika, prelazSlajda: t };
+      }
+      // Prelaz se pravi samo kad će se zaista pustiti (inače bi "traje" važilo zauvek), i nikad usred drugog prelaza.
+      const p = s.trenutniSlajd?.prelaz;
+      const prelazSlajda = p && !tece && untracked(this.animiraj) && !smanjenoKretanje() && napredNaSlajd(pre, sada)
+        ? { kljuc: s.verzija, prelaz: p, odlazni: pre?.prikaz === 'SLAJD' ? prethodni!.value.slika : null }
+        : null;
+      return { stanje: sada, epoha, grupa: animacijaPrelaza(pre, sada), slika, prelazSlajda };
     },
   });
+  /** Prelaz koji upravo traje: samo prozor publike, dok ulazni omotač ne javi kraj. */
+  private readonly prelazUToku = computed(() => {
+    const t = this.prelaz().prelazSlajda;
+    return t && this.animiraj() && this.zavrsen() !== t.kljuc ? t : null;
+  });
+  protected readonly ulazniPokret = computed<PokretPrelaza | null>(() => {
+    const t = this.prelazUToku();
+    return t ? { kljuc: t.kljuc, kadrovi: kadroviPrelaza(t.prelaz).ulazni, trajanjeMs: t.prelaz.trajanjeMs } : null;
+  });
+  protected readonly odlazni = computed(() => {
+    const t = this.prelazUToku();
+    if (!t?.odlazni) return null;
+    const k = kadroviPrelaza(t.prelaz).odlazni;
+    return {
+      ...t.odlazni, slajd: this.potezi.saPotezima(t.odlazni.slajd) ?? t.odlazni.slajd,
+      pokret: k ? { kljuc: t.kljuc, kadrovi: k, trajanjeMs: t.prelaz.trajanjeMs } : null,
+    };
+  });
+  /** Grupa 0 kreće posle prelaza (odluka 12): dok traje, ključ animacije je null, a slajd se crta na koraku -1. */
   protected readonly animacija = computed(() => {
     const p = this.prelaz();
-    return this.animiraj() && p.grupa !== null ? { kljuc: p.stanje.verzija, grupa: p.grupa } : null;
+    return this.animiraj() && p.grupa !== null && !this.prelazUToku() ? { kljuc: p.stanje.verzija, grupa: p.grupa } : null;
   });
+  protected readonly korakPrikaza = computed(() => (this.prelazUToku() && this.prelaz().grupa === 0 ? -1 : this.stanje().korak));
   protected readonly tema = computed(() => vazecaTema(this.stanje().tema));
 
   protected readonly host = computed(() => hostAplikacije());
   protected readonly kod = computed(() => kodSaRazmakom(this.stanje().izvodjenje.kod));
   protected readonly imena = computed(() => this.stanje().ucesnici.map(u => u.ime));
-  protected readonly rezultat = computed(() => this.stanje().javniRezultat);
+  /** Ulazi trenutnog slajda; `kodTraka` je poseban, da ne bude nov objekat sa svakim snimkom. */
+  protected readonly ulazi = computed(() => ulaziSlajda(this.stanje(), this.sat(), this.host()));
   protected readonly kodTraka = computed<KodTraka>(() => ({ host: this.host(), kod: this.stanje().izvodjenje.kod }));
-  protected readonly brojOdgovora = computed(() => {
-    const s = this.stanje();
-    return s.trenutniSlajd?.tip === 'PITANJE' && s.runda && s.faza !== 'CEKA' ? s.brojOdgovora : null;
-  });
-  protected readonly tajmer = computed<TajmerUlaz | null>(() => {
-    const s = this.stanje();
-    const sat = this.sat();
-    return s.faza === 'OTVORENO' && s.runda && sat ? { rokMs: s.runda.rokMs, preostaloMs: s.runda.preostaloMs, sat } : null;
-  });
+
+  protected krajPrelaza(kljuc: number): void {
+    this.zavrsen.set(kljuc);
+  }
 
   constructor() {
     // `prelaz` je lenj (`linkedSignal`), a šablon ga čita samo u grani SLAJD: bez ovog čitanja snimak prijave ili kraja

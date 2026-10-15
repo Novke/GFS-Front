@@ -13,6 +13,23 @@
   overflow: hidden;
 }
 
+/* Prelaz slajda (faza 5): odlazni i ulazni slajd u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). */
+.uz-scena-slajdovi {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.uz-scena-slajdovi > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.uz-scena-ulazni {
+  position: relative;
+  z-index: 1;
+}
+
 .uz-scena-sloj {
   position: absolute;
   inset: 0;

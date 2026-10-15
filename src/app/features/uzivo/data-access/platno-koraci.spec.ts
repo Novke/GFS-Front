@@ -1,6 +1,6 @@
 import { animacija, platno, platnoSaAnimacijama } from './platno-podaci.testing';
 import {
-  animacijaPrelaza, brojKoraka, grupaZaKorak, grupe, kljucPasusa, StanjePrelaza, stanjeSlojeva,
+  animacijaPrelaza, brojKoraka, grupaZaKorak, grupe, kljucPasusa, napredNaSlajd, StanjePrelaza, stanjeSlojeva,
 } from './platno-koraci';
 import { Animacija } from './platno.models';
 
@@ -138,5 +138,32 @@ describe('animacijaPrelaza', () => {
       s({ verzija: 6, indeks: 1, slajdId: 11, korak: 0 }), null],
   ])('%s', (_n, p, sada, ocekivano) => {
     expect(animacijaPrelaza(p, sada)).toBe(ocekivano);
+  });
+});
+
+/** Prelaz slajda (faza 5, odluka 12): isto pravilo kao grupa 0, za slajd bilo kog tipa. */
+describe('napredNaSlajd', () => {
+  const s = (d: Partial<StanjePrelaza> = {}): StanjePrelaza => ({
+    verzija: 5, prikaz: 'SLAJD', indeks: 2, slajdId: 20, tip: 'INFO', korak: 0, ...d,
+  });
+  const pre = s({ korak: 1 });
+  const prijava = s({ prikaz: 'PRIJAVA', indeks: -1, slajdId: null, tip: null });
+
+  it.each<[string, StanjePrelaza | null, StanjePrelaza, boolean]>([
+    ['i -> i+1, korak 0', pre, s({ verzija: 6, indeks: 3, slajdId: 21 }), true],
+    ['i -> i+1, PLATNO', pre, s({ verzija: 6, indeks: 3, slajdId: 21, tip: 'PLATNO' }), true],
+    ['i -> i-1', pre, s({ verzija: 6, indeks: 1, slajdId: 19 }), false],
+    ['i -> i+2', pre, s({ verzija: 6, indeks: 4, slajdId: 22 }), false],
+    ['isti slajd (korak nazad na 0)', pre, s({ verzija: 6 }), false],
+    ['PRIJAVA -> 0', prijava, s({ verzija: 6, indeks: 0, slajdId: 10 }), true],
+    ['PRIJAVA -> 1', prijava, s({ verzija: 6, indeks: 1, slajdId: 11 }), false],
+    ['starija verzija', pre, s({ verzija: 4, indeks: 3, slajdId: 21 }), false],
+    ['ista verzija', pre, s({ indeks: 3, slajdId: 21 }), false],
+    ['korak 1', pre, s({ verzija: 6, indeks: 3, slajdId: 21, korak: 1 }), false],
+    ['pre null', null, s({ verzija: 6, indeks: 3, slajdId: 21 }), false],
+    ['KRAJ', pre, s({ verzija: 6, prikaz: 'KRAJ', indeks: 3, slajdId: null, tip: null }), false],
+    ['KRAJ -> slajd', s({ prikaz: 'KRAJ', indeks: 2, slajdId: null, tip: null }), s({ verzija: 6, indeks: 3, slajdId: 21 }), false],
+  ])('%s', (_n, p, sada, ocekivano) => {
+    expect(napredNaSlajd(p, sada)).toBe(ocekivano);
   });
 });

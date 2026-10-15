@@ -25,6 +25,7 @@ import type { TekstSloj } from '../data-access/platno.models';
 import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { OPISI_GUBITAKA } from '../data-access/pretvori-u-platno';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { PregledPrelazaPodaci, PrelazPregledDialog } from './prelaz-pregled.dialog';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 /** Stavka otvorenog menija (CDK overlay je u body). */
@@ -47,9 +48,10 @@ const prezentacija: PrezentacijaDetails = {
 
 // Polja prelaza u formi slajda su `@defer (on immediate)` (F16). Prvi dinamički uvoz chunk-a traje van lažnog sata, pa bi
 // njegovo iscrtavanje usred testa sa `saLaznimSatom` zakazalo tajmere scheduler-a posle provere; učitan unapred, svaki
-// sledeći uvoz se razreši u mikrozadacima.
+// sledeći uvoz se razreši u mikrozadacima. Isto važi za dijalog pregleda prelaza (F17, `import()` na klik).
 beforeAll(async () => {
   await import('./prelaz-polja.component');
+  await import('./prelaz-pregled.dialog');
 });
 
 describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
@@ -302,6 +304,38 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     const put11 = http.expectOne('api/slajdovi/11');
     expect(put11.request.body).toMatchObject({ naslov: 'Uvod 2', prelaz: F });
     put11.flush({ ...slajd(11, 1, 'Uvod 2'), prelaz: F });
+    await pomeriSat(800);
+  }));
+
+  it('F17: "Pregledaj prelaz" otvara pregled sa prethodnim i izabranim slajdom (prelaz iz forme, pre čuvanja) i temom', saLaznimSatom(async () => {
+    const P: Prelaz = { efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 600 };
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({
+      ...prezentacija, tema: 'PONOC', slajdovi: [slajd(11, 1, 'Uvod'), { ...platnoSlajd, prelaz: P }],
+    });
+    store.izaberi(12);
+    fixture.detectChanges();
+    await isprazniMikrozadatke();
+    fixture.detectChanges();
+    const open = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({} as MatDialogRef<unknown>);
+    const el = fixture.nativeElement as HTMLElement;
+    const trajanje = el.querySelector('.uz-ed-prelaz input[type=number]') as HTMLInputElement;
+    trajanje.value = '1.2';
+    trajanje.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const dugme = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-prelaz button')].find(b => b.textContent?.trim() === 'Pregledaj prelaz')!;
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(1);
+    const [komponenta, konfig] = open.mock.calls[0] as [unknown, { data: PregledPrelazaPodaci; autoFocus: unknown }];
+    expect(komponenta).toBe(PrelazPregledDialog);
+    expect(konfig.autoFocus).toBe(false);
+    expect(konfig.data.pre?.id).toBe(11);
+    expect(konfig.data.slajd.id).toBe(12);
+    expect(konfig.data.slajd.prelaz).toEqual({ ...P, trajanjeMs: 1200 });
+    expect(konfig.data.tema).toBe('PONOC');
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/12').flush({ ...platnoSlajd, prelaz: { ...P, trajanjeMs: 1200 } });
     await pomeriSat(800);
   }));
 

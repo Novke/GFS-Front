@@ -97,6 +97,16 @@ export function animacijaPrelaza(pre: StanjePrelaza | null, sada: StanjePrelaza)
   if (sada.slajdId === pre.slajdId) {
     return sada.korak === pre.korak + 1 ? sada.korak : null;
   }
-  const napred = (pre.prikaz === 'PRIJAVA' && sada.indeks === 0) || (pre.prikaz === 'SLAJD' && sada.indeks === pre.indeks + 1);
-  return sada.korak === 0 && napred ? 0 : null;
+  return napredNaSlajd(pre, sada) ? 0 : null;
+}
+
+/**
+ * Tačno jedan slajd napred (prijava -> prvi slajd ili indeks + 1), korak 0, novija verzija, drugi slajd: tada se pušta
+ * grupa 0 PLATNO slajda i prelaz slajda bilo kog tipa (faza 5, odluka 12).
+ */
+export function napredNaSlajd(pre: StanjePrelaza | null, sada: StanjePrelaza): boolean {
+  if (sada.prikaz !== 'SLAJD' || pre === null || sada.verzija <= pre.verzija || sada.slajdId === pre.slajdId || sada.korak !== 0) {
+    return false;
+  }
+  return (pre.prikaz === 'PRIJAVA' && sada.indeks === 0) || (pre.prikaz === 'SLAJD' && sada.indeks === pre.indeks + 1);
 }
