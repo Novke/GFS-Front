@@ -143,3 +143,148 @@ test.describe('uživo: smanjivanje formule se smiruje (bez oscilacije k)', () =>
     });
   }
 });
+
+/*
+ * Talas ispravki 5a (završna recenzija B, Important 1): kad nastavnik prikaže tačan odgovor dok su rezultati (ili pločice) na
+ * ekranu, uz formulu tačne opcije uživo stiže značka "✓ tačno". Formula je ranije delila blok sa značkom, pa se pomerala
+ * udesno bez ponovnog merenja (širina bloka ista, nijedan signal promenjen) i ostajala odsečena (7-188 px). Sada blok formule
+ * ima sopstvenu širinu: značka ga sužava, `ResizeObserver` to vidi i k se računa iznova (pravilo fix-a 4). Proba recenzenta:
+ * `gfs-tmp/final-5a-B/repo/e2e/proba-b.spec.ts` (B1, B2).
+ */
+test.describe('uživo: tačan odgovor stiže uživo, formula ostaje cela (rezultati i pločice)', () => {
+  /** Malo šira od ćelije rezultata, pa pri prvom crtanju dobija k ~0,65-0,70 i staje (proba recenzenta B1). */
+  const OPCIJE_REZ = [
+    '$\\frac{a_1+a_2+a_3+a_4+a_5+a_6}{b_1+b_2+b_3}=x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8+x_9+x_{10}+x_{11}+x_{12}+x_{13}+x_{14}$',
+    'Brzina je $v=\\frac{s}{t}$ izražena u metrima po sekundi kada je kretanje ravnomerno',
+    '$1011_2+0110_2=10001_2$',
+    'Vat',
+  ];
+  /**
+   * Pločica je uža od ćelije rezultata, a značka pločice šira (~30 % pločice): ova staje i pre i posle značke (k ~0,8 pa
+   * ~0,6); šira bi posle značke pala na 0,5 i bila odsečena po pravilu, nezavisno od ove ispravke.
+   */
+  const OPCIJE_PLOC = [
+    '$\\frac{a_1+a_2+a_3}{b_1+b_2}=x_1+x_2+x_3$',
+    'Brzina je $v=\\frac{s}{t}$',
+    '$1011_2+0110_2=10001_2$',
+    'Vat',
+  ];
+  /** Tačne su prva i treća (mok ne proverava tip; ispituje se samo raspored). */
+  const TACNE = [0, 2];
+
+  /** Svaka nacrtana formula prema svojoj ćeliji (`.uz-rez-opcija-tekst` ili pločica): preliv levo/desno i preliv skrola. */
+  const mere = (page: import('@playwright/test').Page, celija: string) => page.evaluate((sel) =>
+    [...document.querySelectorAll<HTMLElement>(`.uz-slajd ${sel} .uz-formula--spremna`)].map(f => {
+      const c = f.closest(sel)!.getBoundingClientRect();
+      const ml = f.querySelector('.ML__latex')!.getBoundingClientRect();
+      return {
+        latex: (f.getAttribute('aria-label') ?? '').slice(0, 14),
+        k: Number(getComputedStyle(f).getPropertyValue('--uz-formula-k') || 1),
+        desno: Math.round((ml.right - c.right) * 10) / 10,
+        levo: Math.round((c.left - ml.left) * 10) / 10,
+        skrol: f.scrollWidth - f.clientWidth,
+      };
+    }), celija);
+
+  const brojiUpise = (page: import('@playwright/test').Page) => page.evaluate(() => {
+    const w = window as unknown as { upisa: number };
+    w.upisa = 0;
+    new MutationObserver((l) => {
+      for (const z of l) if ((z.target as Element).classList.contains('uz-formula--spremna')) w.upisa++;
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style'] });
+  });
+  const upisa = (page: import('@playwright/test').Page) => page.evaluate(() => (window as unknown as { upisa: number }).upisa);
+
+  for (const prikaz of ['rezultati', 'pločice'] as const) {
+    for (const stranica of ['publika', 'konzola'] as const) {
+      for (const sirina of [1366, 1920]) {
+        test(`${prikaz}, ${stranica} ${sirina}: posle TACAN uživo svaka formula cela u ćeliji, 0 upisa u mirovanju`, async ({ page, mock }) => {
+          const opcije = prikaz === 'rezultati' ? OPCIJE_REZ : OPCIJE_PLOC;
+          mock.izvodjenje.izmeniSlajd(2, {
+            pitanje: {
+              id: 51, tip: 'JEDAN_TACAN', tekst: 'Koja je tačna? $\\frac{1}{2}+\\frac{1}{3}$', slika: null, vremeSekunde: null,
+              opcije: opcije.map((t, i) => ({ id: i + 1, rb: i + 1, tekst: t, tacna: TACNE.includes(i) })),
+              brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+              prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+            },
+          });
+          for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3) -> slajd 2 (3) -> slajd 3
+          mock.izvodjenje.primeni('OTVORI_ZATVORI');
+          mock.izvodjenje.primeni('OTVORI_ZATVORI');
+          if (prikaz === 'rezultati') mock.izvodjenje.primeni('REZULTATI');
+          const broker = await nastavnickiBroker(page, mock);
+          await page.setViewportSize({ width: sirina, height: Math.round((sirina * 9) / 16) });
+          await page.goto(`izvodjenja/7/${stranica}`);
+          const celija = prikaz === 'rezultati' ? '.uz-rez-opcija-tekst' : '.uz-plocica-tekst';
+          const okvir = prikaz === 'rezultati' ? '.uz-rez-opcija' : '.uz-plocica';
+          await expect(page.locator(`.uz-slajd ${okvir} .uz-formula--spremna .ML__latex`)).toHaveCount(3);
+          await page.waitForLoadState('networkidle');
+          await page.evaluate(() => document.fonts.ready.then(() => undefined));
+          await expect(page.locator('.uz-slajd .uz-tacno-znak, .uz-slajd .uz-plocica-tacno')).toHaveCount(0);
+          const pre = await mere(page, celija);
+          test.info().annotations.push({ type: 'k pre', description: JSON.stringify(pre) });
+          for (const f of pre) expect(f.desno, `${f.latex} (k=${f.k}): pre TACAN, preliv desno`).toBeLessThanOrEqual(0.5);
+
+          // tačan odgovor uživo (broker, bez ponovnog učitavanja)
+          broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('TACAN').telo);
+          const znak = prikaz === 'rezultati' ? '.uz-slajd .uz-tacno-znak' : '.uz-slajd .uz-plocica-tacno';
+          await expect(page.locator(znak)).toHaveCount(TACNE.length);
+          // smirivanje (nov ulaz, najviše dve korekcije), pa 1 s mirovanja bez upisa
+          await page.waitForTimeout(300);
+          await brojiUpise(page);
+          await page.waitForTimeout(1000); // mirovanje: meri se broj upisa, ne čeka se uslov
+          expect(await upisa(page), 'upisi stila formule tokom 1 s mirovanja').toBe(0);
+
+          const m = await mere(page, celija);
+          test.info().annotations.push({ type: 'k posle', description: JSON.stringify(m) });
+          expect(m.length, 'formule u opcijama (četvrta je bez formule)').toBe(3);
+          for (const f of m) {
+            expect(f.desno, `${f.latex} (k=${f.k}): preliv desno van ćelije`).toBeLessThanOrEqual(0.5);
+            expect(f.levo, `${f.latex} (k=${f.k}): preliv levo van ćelije`).toBeLessThanOrEqual(0.5);
+            expect(f.skrol, `${f.latex}: formula nije skrol kontejner`).toBeLessThanOrEqual(1);
+            expect(f.k, `${f.latex}: najmanje 0,5`).toBeGreaterThanOrEqual(0.5);
+          }
+        });
+      }
+    }
+  }
+
+  // tajmer se pojavi pored teksta pitanja kad se pitanje sa vremenom otvori uživo: tekst pitanja (`flex: 1`) se suzi
+  for (const stranica of ['publika', 'konzola'] as const) {
+    test(`tekst pitanja, ${stranica} 1366: tajmer stigne uživo (OTVORI), formula ostaje cela, 0 upisa u mirovanju`, async ({ page, mock }) => {
+      mock.izvodjenje.izmeniSlajd(2, {
+        pitanje: {
+          id: 51, tip: 'JEDAN_TACAN', tekst: `Izračunaj ${OPCIJE_REZ[0]} ako je $x_1=1$.`, slika: null, vremeSekunde: 60,
+          opcije: [{ id: 1, rb: 1, tekst: 'Da', tacna: true }, { id: 2, rb: 2, tekst: 'Ne', tacna: false }],
+          brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+          prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+        },
+      });
+      for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI');
+      const broker = await nastavnickiBroker(page, mock);
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await page.goto(`izvodjenja/7/${stranica}`);
+      await expect(page.locator('.uz-slajd .uz-pitanje-tekst .uz-formula--spremna .ML__latex')).toHaveCount(2);
+      await page.waitForLoadState('networkidle');
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      await expect(page.locator('.uz-slajd .uz-slajd-tajmer')).toHaveCount(0);
+      // mok otvara rundu bez roka; rok od 60 s kao server za pitanje sa `vremeSekunde`
+      const telo = mock.izvodjenje.primeni('OTVORI_ZATVORI').telo as { runda: { rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean } };
+      Object.assign(telo.runda, { rokMs: Date.now() + 60_000, preostaloMs: 60_000, tajmerRadi: true });
+      broker.posalji('/topic/izvodjenja/7/nastavnik', telo);
+      await expect(page.locator('.uz-slajd .uz-slajd-tajmer').first()).toBeVisible();
+      await page.waitForTimeout(300);
+      await brojiUpise(page);
+      await page.waitForTimeout(1000); // mirovanje: meri se broj upisa, ne čeka se uslov
+      expect(await upisa(page), 'upisi stila formule tokom 1 s mirovanja').toBe(0);
+      const m = await mere(page, '.uz-pitanje-tekst');
+      test.info().annotations.push({ type: 'k posle', description: JSON.stringify(m) });
+      expect(m.length).toBe(2);
+      for (const f of m) {
+        expect(f.desno, `${f.latex} (k=${f.k}): preliv desno van teksta pitanja`).toBeLessThanOrEqual(0.5);
+        expect(f.k, `${f.latex}: najmanje 0,5`).toBeGreaterThanOrEqual(0.5);
+      }
+      expect(m.some(f => f.k < 1), 'široka formula je smanjena').toBe(true);
+    });
+  }
+});

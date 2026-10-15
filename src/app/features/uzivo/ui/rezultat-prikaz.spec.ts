@@ -141,6 +141,17 @@ describe('RezultatPrikazComponent: formule', () => {
     expect(tacna.textContent).toContain('✓ tačno Deset');
   });
 
+  it('značka "✓ tačno" je van bloka formule (brat domaćina, ne u njemu): uživo stigla značka suzi blok, merenje to vidi', async () => {
+    const el = await prikazi({
+      tip: 'JEDAN_TACAN', ukupno: 2, brojevi: null, tekstovi: null, skala: null,
+      opcije: [{ id: 1, tekst: '$11$', broj: 1, tacna: true }, { id: 2, tekst: 'Deset', broj: 1, tacna: false }],
+    });
+    const znak = el.querySelector('.uz-rez-opcija--tacna .uz-tacno-znak')!;
+    expect(znak.parentElement!.classList).toContain('uz-rez-opcija-tekst');
+    expect(znak.closest('app-tekst-formule')).toBeNull();
+    expect(znak.parentElement!.querySelector(':scope > app-tekst-formule.uz-rez-opcija-formula')).not.toBeNull();
+  });
+
   it('kratki odgovori (oblak i lista) ostaju običan tekst: $x$ nije formula (odgovori studenata)', async () => {
     const tekstovi: RezultatTekst[] = [{ kljuc: 'x', tekst: '$x$', broj: 2, sakriven: false, tacan: null }];
     const rezultat: Rezultat = { tip: 'KRATAK_TEKST', ukupno: 2, opcije: null, brojevi: null, tekstovi, skala: null };

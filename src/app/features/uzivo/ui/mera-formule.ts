@@ -14,8 +14,10 @@ import type { MeraFormule } from './tekst-formule.component';
  * od mere pri k = 1 (simetrično, raste ili pada), uz najviše `MAX_KOREKCIJA` koraka nadole dok formula zaista prelazi
  * ivicu. Isti ulaz (npr. `ResizeObserver` posle sopstvenog upisa) ne upisuje ništa, osim tih koraka nadole.
  * Blok mora imati širinu koja ne zavisi od formule (provereno: tekst pitanja `flex: 1`, pločica `flex: 1` u
- * `minmax(0, 1fr)`, ćelija rezultata `minmax(0, 1fr)`, pregled izvođenja blok); i kad ne bi, formula koja pri k = 1 ne
- * prelazi ostaje na k = 1, pa okvir koji se skuplja na sadržaj ne pravi spiralu.
+ * `minmax(0, 1fr)`, blok teksta rezultata `flex: 1 1 0` posle značke u ćeliji `minmax(0, 1fr)`, pregled izvođenja blok); i
+ * kad ne bi, formula koja pri k = 1 ne prelazi ostaje na k = 1, pa okvir koji se skuplja na sadržaj ne pravi spiralu.
+ * Ono što se uz formulu pojavi uživo (značka "✓ tačno", tajmer pored teksta pitanja) mora biti van njenog bloka: tada
+ * menja širinu bloka i `ResizeObserver` je vidi; u istom bloku bi samo pomerilo formulu, a to ništa ne javlja.
  */
 
 /** Najmanji koeficijent veličine formule; ispod toga je seče ivica domaćina (`overflow-x: clip`), bez trake. */

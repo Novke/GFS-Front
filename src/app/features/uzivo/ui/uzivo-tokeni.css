@@ -605,13 +605,29 @@ p.uz-prazno {
   --uz-oblik-velicina: 1.9em;
 }
 
+/* Ćelija teksta opcije je flex red: značka "✓ tačno" (stiže uživo, `TACAN`) i blok teksta sa sopstvenom širinom
+   (`1 1 0`). Formula se meri prema bloku (`ui/mera-formule.ts`); da su značka i formula u istom bloku, značka bi formulu
+   pomerila udesno bez promene širine bloka, pa bi je odsekla ivica bez ponovnog merenja (završna recenzija 5a, B I1).
+   Ovako značka suzi blok, `ResizeObserver` to javi i k se računa iznova. Elipsa je na bloku teksta (flex kontejner je ne
+   crta). */
 .uz-rez-opcija-tekst {
   grid-area: tekst;
+  display: flex;
+  align-items: baseline;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+}
+
+.uz-rez-opcija-tekst > .uz-tacno-znak {
+  flex: none;
+}
+
+.uz-rez-opcija-formula {
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .uz-rez-opcija-vrednost {

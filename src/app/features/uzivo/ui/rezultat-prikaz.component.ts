@@ -109,10 +109,11 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
             <li class="uz-rez-opcija" [class.uz-rez-opcija--tacna]="o.tacna" [class.uz-rez-opcija--prigusena]="o.prigusena"
                 [style.--uz-boja]="o.boja">
               <app-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
+              <!-- značka je van bloka formule (flex red): kad stigne uživo, blok formule se suzi, pa ga merenje vidi -->
               <span class="uz-rez-opcija-tekst">
                 <!-- razmak kao tekst: Angular briše čvor sa samim razmakom između dva elementa -->
                 @if (o.tacna) {<span class="uz-tacno-znak">✓ tačno</span>{{ ' ' }}}
-                <app-tekst-formule [tekst]="o.tekst" />
+                <app-tekst-formule class="uz-rez-opcija-formula" [tekst]="o.tekst" />
               </span>
               <span class="uz-rez-opcija-vrednost">{{ o.broj }} · {{ o.procenat }} %</span>
               <span class="uz-rez-traka" aria-hidden="true"><span class="uz-rez-ispuna" [style.--uz-udeo]="o.procenat + '%'"></span></span>
