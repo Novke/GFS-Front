@@ -13,8 +13,9 @@ import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, nizoviEditora } from './n
  * Studentska stranica (`javno/uzivo-student.page`, statičko zatvorenje bez početnog bundle-a). Osnova je izmerena
  * 2026-10-14 nad buildom 3aebfb8 (vrh 4b, pre 5a; skripta F1 Step 0); faza 5a sme da doda najviše 8 000 B (odluka 25:
  * `app-tekst-formule`, parser `$...$` i lakši učitavač stila). Izmereno 113 568 B posle F2 fix 3 (telefon bez
- * `mera-formule`) i 114 515 B posle talasa ispravki završne recenzije (2026-10-15: tab stop široke formule, maska formula za
- * naglašavanje, stil koji ne pamti grešku, jedno upozorenje po prozoru).
+ * `mera-formule`), 114 515 B posle talasa ispravki završne recenzije (2026-10-15: tab stop široke formule, maska formula za
+ * naglašavanje, stil koji ne pamti grešku, jedno upozorenje po prozoru) i 114 615 B posle kruga 2 (tabindex -1 u dugmetu,
+ * granica dužine teksta sa formulama).
  */
 const OSNOVA_STUDENTA = 108_218;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000;

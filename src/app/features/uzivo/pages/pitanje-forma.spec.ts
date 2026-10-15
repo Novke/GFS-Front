@@ -8,6 +8,7 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { IKONE } from '../../../core/layout/icons';
 import { OpcijaCmd, PitanjeCmd, TipPitanja } from '../data-access/uzivo.models';
 import { ModulFormule, UCITAJ_FORMULE, ucitajFormule } from '../ui/formula-ucitavanje';
+import { MAX_TEKST_SA_FORMULAMA } from '../ui/markdown';
 import { MAX_FORMULA_U_TEKSTU } from '../ui/tekst-formule.component';
 import { PitanjeFormaComponent, formuleIzPitanja, greskePitanja, pitanjeForma } from './pitanje-forma.component';
 
@@ -244,6 +245,18 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     await posle(fixture, 300);
     expect(ucitaj).not.toHaveBeenCalled();
     expect(upozorenja(el)).toEqual([]);
+  });
+
+  it(`tekst pitanja duži od ${MAX_TEKST_SA_FORMULAMA} znakova: prikaz ne crta formule, pa forma ne upozorava`, async () => {
+    const { fixture, forma, el } = napravi(pitanje('KRATAK_TEKST', { tekst: 'Koliko je 5?' }));
+    const tekst = 'Koliko je $\\nepostoji{x}$? ';
+    forma.controls.tekst.setValue(tekst + 'a'.repeat(MAX_TEKST_SA_FORMULAMA - tekst.length));
+    await posle(fixture, 300);
+    expect(upozorenja(el)).toEqual(['Formula „\\nepostoji{x}“ u tekstu pitanja ima grešku u LaTeX-u i prikazaće se kao tekst.']);
+    forma.controls.tekst.setValue(tekst + 'a'.repeat(MAX_TEKST_SA_FORMULAMA - tekst.length + 1));
+    await posle(fixture, 300);
+    expect(upozorenja(el)).toEqual([]);
+    expect(formuleIzPitanja({ tekst: forma.controls.tekst.value, opcije: [] })).toEqual([]);
   });
 
   it('formula u odgovoru se proverava; najviše 3 upozorenja pa "i još n"', async () => {

@@ -37,10 +37,21 @@ parserSaFormulama.use({
   },
 });
 
+/**
+ * Najduži tekst pitanja čije se formule tumače: 2x granica servera (2000). Maska formula za naglašavanje (`emStrongMask`)
+ * se zove pri svakom `inlineTokens`, pa je oko mnogo graničnika i formula superlinearna (na ~15 500 znakova
+ * `Maximum call stack size exceeded`, završna re-recenzija 5a, A M1). Duži tekst (npr. stari podaci, uvoz) je običan
+ * Markdown, kao INFO; forma pitanja koristi istu funkciju, pa ni ne upozorava na formule koje prikaz ne crta.
+ */
+export const MAX_TEKST_SA_FORMULAMA = 4000;
+
 /** Markdown teksta pitanja sa mestima formula (`$...$`); isti HTML filter kao `renderMarkdown`. */
 export function markdownSaFormulama(src: string | null | undefined): PripremljenTekst {
   if (!src) {
     return { html: '', formula: false };
+  }
+  if (src.length > MAX_TEKST_SA_FORMULAMA) {
+    return { html: renderMarkdown(src), formula: false };
   }
   const html = parserSaFormulama.parse(src, { async: false });
   return { html, formula: html.includes(`<span class="${KLASA_FORMULE}">`) };

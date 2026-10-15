@@ -1,5 +1,5 @@
-import { GRANICA_ODBIJENE_MS } from './formula-vreme.testing';
-import { markdownSaFormulama, renderMarkdown } from './markdown';
+import { GRANICA_PROLAZI_MS, GRANICA_ODBIJENE_MS } from './formula-vreme.testing';
+import { MAX_TEKST_SA_FORMULAMA, markdownSaFormulama, renderMarkdown } from './markdown';
 
 describe('renderMarkdown', () => {
   it('stavka liste "- a" postaje <li>', () => {
@@ -120,6 +120,32 @@ describe('markdownSaFormulama', () => {
     expect(html).toContain('alt="graf x^2 i &lt; &quot;c&quot;"');
     expect(html).not.toContain('uz-formula');
     expect(markdownSaFormulama('![obična](http://a/b.png)').html).toContain('alt="obična"');
+  });
+
+  it(`granica: tekst duži od ${MAX_TEKST_SA_FORMULAMA} znakova je običan Markdown (bez formula i bez maske)`, () => {
+    expect(MAX_TEKST_SA_FORMULAMA).toBe(4000); // 2x granica servera za tekst pitanja (2000)
+    const pun = 'Koliko je $x_1$? ' + 'a'.repeat(MAX_TEKST_SA_FORMULAMA - 17);
+    expect(pun.length).toBe(MAX_TEKST_SA_FORMULAMA);
+    expect(markdownSaFormulama(pun).formula).toBe(true);
+    const preko = markdownSaFormulama(pun + 'b');
+    expect(preko.formula).toBe(false);
+    expect(preko.html).not.toContain('uz-formula');
+    expect(preko.html).toBe(renderMarkdown(pun + 'b'));
+  });
+
+  it('20 000 znakova (obrazac koji je sa maskom bacao stack overflow od ~15 500): bez izuzetka i brzo', () => {
+    const n = 20_000;
+    const ulazi = [
+      '*'.repeat(n / 4) + '$a*b$'.repeat(n / 10) + '*'.repeat(n / 4),
+      '*$a*b$ '.repeat(Math.floor(n / 7)), '_$x_$ '.repeat(n / 6), '$a'.repeat(n / 2),
+    ];
+    for (const ulaz of ulazi) {
+      const pocetak = performance.now();
+      expect(() => markdownSaFormulama(ulaz), ulaz.slice(0, 12)).not.toThrow();
+      // labava granica (`formula-vreme.testing`, CI je 2-3x sporiji); običan Markdown na 20 000 znakova je reda 10 ms
+      expect(performance.now() - pocetak, ulaz.slice(0, 12)).toBeLessThan(GRANICA_PROLAZI_MS);
+      expect(markdownSaFormulama(ulaz).formula).toBe(false);
+    }
   });
 
   it('linearnost: najgori slučaj do 2000 znakova u Markdown-u', () => {

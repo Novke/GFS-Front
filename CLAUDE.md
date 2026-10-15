@@ -165,7 +165,11 @@ over STOMP; teacher commands are REST.
   extension, `markdownSaFormulama`, so code spans and blocks stay literal; `renderMarkdown` for INFO does not read `$`) and
   in option text (plain text, `podeliFormule`). A formula takes precedence over emphasis and strike-through, as in pandoc:
   `hooks.emStrongMask` (`maskirajFormule`) hides formula ranges from the `*`/`_`/`~` delimiter search, so `*x $a*b$ y*` is
-  italic around the whole formula (escaped `\$` and code spans are already masked by `marked` and are not formulas). They are **not** read in student answers, acceptable answers, the unit, scale
+  italic around the whole formula (escaped `\$` and code spans are already masked by `marked` and are not formulas). The mask
+  runs on every `inlineTokens`, so it is superlinear around many delimiters and formulas (a stack overflow from ~15 500
+  characters): a question text longer than `MAX_TEKST_SA_FORMULAMA` (4000, twice the server limit of 2000) is plain Markdown
+  without formulas or mask (`markdown.ts`), and the question form uses the same function, so it warns about nothing the display
+  does not draw. If the server limit ever grows, the hook and `start` need a cache or one pass per block. They are **not** read in student answers, acceptable answers, the unit, scale
   labels, INFO slides or notes (an ordinary `$` there would suddenly become a formula). An image `alt` with a formula gets
   the LaTeX source. `app-tekst-formule` (`ui/tekst-formule.component.ts`, `[tekst]`, `[markdown]`; host `[innerHTML]` with
   Angular's sanitizer, **never** `bypassSecurityTrustHtml`, which is the only defence against `[x](javascript:...)`) renders
@@ -202,15 +206,19 @@ over STOMP; teacher commands are REST.
   so classic 15 px scrollbars would show). A scrolling formula is a scroll region, so the phone (no `MERA_FORMULE`) watches drawn
   formulas with one `ResizeObserver` and gives `tabindex="0"` only to a formula with `scrollWidth > clientWidth` (removed again
   when it fits, e.g. after rotating); its name stays `role="img"` + `aria-label` (children presentational, nothing read twice),
-  never inside an option button (`aria-hidden`, would be `nested-interactive`), focus ring inset (`outline-offset: -3px`, the host
-  clips); axe `scrollable-region-focusable` at 360 px in `pristupacnost.spec.ts`. Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
+  focus ring inset (`outline-offset: -3px`, the host clips). Inside an option button (or any `aria-hidden` host) a formula gets
+  **no** `role`/`aria-label` (the button is named by `tekstZaCitac`) and, when it overflows, an explicit `tabindex="-1"`, never 0:
+  Chromium 130+ puts a scroll container without focusable descendants into the tab order by itself, which made it an empty stop
+  in hidden content (re-review B, I1); `-1` takes it out, finger scrolling stays. `pristupacnost.spec.ts` (360 px): axe
+  `scrollable-region-focusable`, and a Tab walk through the page that never lands inside `aria-hidden` or on a formula in a
+  button, while the wide formula of the question text is a stop. Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
   digit exception) and, 300 ms after typing, a non-blocking warning in `--warn` (not `--danger`: saving is not blocked, the
   server does not check formulas) for every formula the display would not draw, naming the field ("u tekstu pitanja",
   "u odgovoru B"); it runs exactly the display's check (same parser per field, lazy `latexUMarkup`, same limit of 50), so an
   incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
   example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
   every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
-  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 515 B on 2026-10-15, after the
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 615 B on 2026-10-15, after the
   fix wave of the final review; 113 568 B after F2 fix 3) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
   or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
   alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
@@ -218,7 +226,7 @@ over STOMP; teacher commands are REST.
   gzip (102 932); `tekst-formule*.ts` never import `mathlive` nor contain `ML__latex`. Network of one formula on the phone
   (`uzivo-javno.spec.ts`, annotation `mreza-formule`; JS, CSS and woff2 after the question, app fonts from `media/` not
   counted): 404 112 B, limit measured + 10 % and never above 450 000 B; no `KaTeX_AMS*`/`KaTeX_Size*`, nothing off-origin.
-  The editor page file is 211 172 B after 5a (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
+  The editor page file is 211 166 B after 5a (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
   lazy chunk if 5b-5e need room). **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the
   sanitizer allows `#hex` colours) is unreadable on a **dark presentation theme** (TAMNA, PONOĆ: `rezim-noc` on the slide) on
   projector, console and editor preview; the app's night mode does not touch it (those views are always `rezim-dan uz-dan`); the

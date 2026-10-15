@@ -172,16 +172,36 @@ test.describe('uživo: tačan odgovor stiže uživo, formula ostaje cela (rezult
   /** Tačne su prva i treća (mok ne proverava tip; ispituje se samo raspored). */
   const TACNE = [0, 2];
 
-  /** Svaka nacrtana formula prema svojoj ćeliji (`.uz-rez-opcija-tekst` ili pločica): preliv levo/desno i preliv skrola. */
+  /**
+   * Svaka nacrtana formula prema svojoj ćeliji (`.uz-rez-opcija-tekst` ili pločica). Odsecanje se meri na **vidljivim glifovima**
+   * (`Range` nad tekstualnim čvorovima markupa, bez praznih i znakova nulte širine): desni kraj kutije `.ML__latex` je strut
+   * MathLive-a nulte širine, koji je na konzoli 1366 bio 0,53 px van ivice dok je najdesnija cifra bila 0,17 px van (kutija
+   * napredovanja, ne mastilo; re-recenzija B, Minor 1). Glifovi: <= 0,5 px; kutija `.ML__latex` (sa strutom): <= 1 px.
+   */
   const mere = (page: import('@playwright/test').Page, celija: string) => page.evaluate((sel) =>
     [...document.querySelectorAll<HTMLElement>(`.uz-slajd ${sel} .uz-formula--spremna`)].map(f => {
       const c = f.closest(sel)!.getBoundingClientRect();
       const ml = f.querySelector('.ML__latex')!.getBoundingClientRect();
+      const r = document.createRange();
+      let glifL = Infinity;
+      let glifD = -Infinity;
+      const setac = document.createTreeWalker(f, NodeFilter.SHOW_TEXT);
+      for (let n = setac.nextNode(); n; n = setac.nextNode()) {
+        if (/^[\s\u200b-\u200d\u2060\ufeff]*$/.test(n.textContent ?? '')) continue;
+        r.selectNodeContents(n);
+        for (const p of r.getClientRects()) {
+          if (p.width <= 0) continue;
+          glifL = Math.min(glifL, p.left);
+          glifD = Math.max(glifD, p.right);
+        }
+      }
+      const z = (x: number) => Math.round(x * 100) / 100;
       return {
         latex: (f.getAttribute('aria-label') ?? '').slice(0, 14),
         k: Number(getComputedStyle(f).getPropertyValue('--uz-formula-k') || 1),
-        desno: Math.round((ml.right - c.right) * 10) / 10,
-        levo: Math.round((c.left - ml.left) * 10) / 10,
+        desno: z(glifD - c.right),
+        levo: z(c.left - glifL),
+        kutija: z(Math.max(ml.right - c.right, c.left - ml.left)),
         skrol: f.scrollWidth - f.clientWidth,
       };
     }), celija);
@@ -239,8 +259,9 @@ test.describe('uživo: tačan odgovor stiže uživo, formula ostaje cela (rezult
           test.info().annotations.push({ type: 'k posle', description: JSON.stringify(m) });
           expect(m.length, 'formule u opcijama (četvrta je bez formule)').toBe(3);
           for (const f of m) {
-            expect(f.desno, `${f.latex} (k=${f.k}): preliv desno van ćelije`).toBeLessThanOrEqual(0.5);
-            expect(f.levo, `${f.latex} (k=${f.k}): preliv levo van ćelije`).toBeLessThanOrEqual(0.5);
+            expect(f.desno, `${f.latex} (k=${f.k}): glifovi desno van ćelije`).toBeLessThanOrEqual(0.5);
+            expect(f.levo, `${f.latex} (k=${f.k}): glifovi levo van ćelije`).toBeLessThanOrEqual(0.5);
+            expect(f.kutija, `${f.latex} (k=${f.k}): kutija .ML__latex (sa strutom nulte širine) van ćelije`).toBeLessThanOrEqual(1);
             expect(f.skrol, `${f.latex}: formula nije skrol kontejner`).toBeLessThanOrEqual(1);
             expect(f.k, `${f.latex}: najmanje 0,5`).toBeGreaterThanOrEqual(0.5);
           }
@@ -281,7 +302,8 @@ test.describe('uživo: tačan odgovor stiže uživo, formula ostaje cela (rezult
       test.info().annotations.push({ type: 'k posle', description: JSON.stringify(m) });
       expect(m.length).toBe(2);
       for (const f of m) {
-        expect(f.desno, `${f.latex} (k=${f.k}): preliv desno van teksta pitanja`).toBeLessThanOrEqual(0.5);
+        expect(f.desno, `${f.latex} (k=${f.k}): glifovi desno van teksta pitanja`).toBeLessThanOrEqual(0.5);
+        expect(f.kutija, `${f.latex} (k=${f.k}): kutija .ML__latex van teksta pitanja`).toBeLessThanOrEqual(1);
         expect(f.k, `${f.latex}: najmanje 0,5`).toBeGreaterThanOrEqual(0.5);
       }
       expect(m.some(f => f.k < 1), 'široka formula je smanjena').toBe(true);
