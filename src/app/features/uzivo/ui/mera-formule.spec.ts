@@ -1,7 +1,7 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ModulFormule, UCITAJ_FORMULE } from './formula-ucitavanje';
-import { MIN_K_FORMULE, koeficijentFormule, meriFormule, noviKoeficijent } from './mera-formule';
+import { MAX_KOREKCIJA, MIN_K_FORMULE, koeficijentFormule, korakNadole, meriFormule } from './mera-formule';
 import { MERA_FORMULE, TekstFormuleComponent, UCITAJ_STIL_TEKSTA_FORMULE } from './tekst-formule.component';
 
 describe('koeficijentFormule', () => {
@@ -23,17 +23,12 @@ describe('koeficijentFormule', () => {
   });
 });
 
-describe('noviKoeficijent', () => {
-  it('formula prelazi ivicu: smanjuje se na cilj (nikad ne raste)', () => {
-    expect(noviKoeficijent(1, 600, 400, true)).toBeCloseTo(400 / 600, 6);
-    expect(noviKoeficijent(0.6, 600, 400, true)).toBe(0.6);
-  });
-
-  it('formula ne prelazi: k sme samo da raste (veći okvir), nikad da padne', () => {
-    // okvir koji se skuplja na sadržaj: raspoloživo je manje od prirodne širine, a formula ne prelazi
-    expect(noviKoeficijent(1, 100, 94, false)).toBe(1);
-    expect(noviKoeficijent(0.6, 600, 1000, false)).toBe(1);
-    expect(noviKoeficijent(0.6, 600, 450, false)).toBeCloseTo(0.75, 6);
+describe('korakNadole', () => {
+  it('srazmerno raspoloživom, bar 0,005 manje, nikad ispod najmanjeg', () => {
+    expect(korakNadole(0.9, 334, 304, 0.5)).toBeCloseTo((0.9 * 304) / 334, 6);
+    expect(korakNadole(0.9, 304.1, 304, 0.5)).toBeCloseTo(0.895, 6); // gotovo staje: ipak korak od 0,005
+    expect(korakNadole(0.52, 2000, 304, 0.5)).toBe(0.5);
+    expect(MAX_KOREKCIJA).toBe(2);
   });
 });
 
@@ -80,13 +75,15 @@ describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
    * jsdom nema raspored. `sirinaBloka(k)` je širina sadržaja bloka formule (`p` u Markdown-u, `div.okvir` za običan tekst),
    * a markup je `prirodna * k` širok, od leve ivice bloka; `font-size` teksta je 20 px (rezerva 0,3em = 6 px).
    */
-  function napravi<T>(komponenta: new () => T, blok: string, prirodna: number, sirinaBloka: (k: number) => number) {
+  function napravi<T>(komponenta: new () => T, blok: string, prirodna: number | ((k: number) => number),
+    sirinaBloka: (k: number) => number) {
+    const markup = typeof prirodna === 'number' ? (k: number) => prirodna * k : prirodna;
     const k = () => Number(document.querySelector<HTMLElement>('.uz-formula--spremna')?.style.getPropertyValue('--uz-formula-k')) || 1;
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
       return this.matches(blok) ? sirinaBloka(k()) : 0;
     });
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      const w = this.classList.contains('ML__latex') ? prirodna * k() : 0;
+      const w = this.classList.contains('ML__latex') ? markup(k()) : 0;
       return { left: 0, top: 0, right: w, bottom: 0, width: w, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
     });
     vi.stubGlobal('ResizeObserver', class {
@@ -106,7 +103,11 @@ describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
     (fixture.nativeElement as HTMLElement).style.fontSize = '20px';
     const el = fixture.nativeElement as HTMLElement;
     const upisano = () => el.querySelector<HTMLElement>('.uz-formula--spremna')!.style.getPropertyValue('--uz-formula-k');
-    return { fixture, el, upisano };
+    /** Broj upisa stila formule (kao e2e: `MutationObserver` nad `style`). */
+    let upisa = 0;
+    new MutationObserver((l) => { upisa += l.filter((z) => (z.target as Element).classList.contains('uz-formula--spremna')).length; })
+      .observe(el, { subtree: true, attributes: true, attributeFilter: ['style'] });
+    return { fixture, el, upisano, upisa: () => upisa };
   }
 
   beforeEach(() => { posmatraci.length = 0; });
@@ -161,6 +162,66 @@ describe('meriFormule (MERA_FORMULE, nastavnički prikazi)', () => {
       await stabilno(fixture);
     }
     expect(upisano()).toBe('');
+  });
+
+  /** `n` puta `ResizeObserver` (isti ulaz, kao posle sopstvenog upisa u pregledaču), pa stabilno. */
+  async function merenja(fixture: { whenStable(): Promise<unknown>; detectChanges(): void }, n: number) {
+    for (let i = 0; i < n; i++) {
+      javiPromenu();
+      await stabilno(fixture);
+    }
+  }
+
+  it('nelinearna širina markupa (re-recenzija 3, Critical 1): najviše jedna korekcija, pa 20 merenja bez upisa', async () => {
+    // kao MathLive: oko k = 0,9 širina skače (0,904 -> 321 px, 0,917 -> 336 px); okvir 310 px, rezerva 6 px
+    const w = (k: number) => 330 * k + (k > 0.85 && k < 0.95 ? 30 : 0);
+    const { fixture, upisano, upisa } = napravi(NastavnickiOkvir, 'p', w, () => 310);
+    await stabilno(fixture);
+    expect(Number(upisano())).toBeCloseTo(304 / 330, 3); // iz mere pri k = 1
+    await merenja(fixture, 1); // ista širina okvira: formula prelazi -> jedan korak nadole
+    const posle = Number(upisano());
+    expect(posle).toBeLessThan(304 / 330);
+    expect(w(posle)).toBeLessThanOrEqual(310); // konačno stanje ne prelazi ivicu
+    const pre = upisa();
+    await merenja(fixture, 20);
+    expect(upisa() - pre, 'upisi stila u 20 merenja sa istim ulazom').toBe(0);
+    expect(Number(upisano())).toBe(posle);
+  });
+
+  it('formula koja i posle dve korekcije prelazi: kraj, bez daljih upisa (gasi se po konstrukciji)', async () => {
+    const w = (k: number) => 330 * k + (k < 1 ? 100 : 0);
+    const { fixture, upisa } = napravi(NastavnickiOkvir, 'p', w, () => 310);
+    await stabilno(fixture);
+    await merenja(fixture, MAX_KOREKCIJA);
+    const pre = upisa();
+    await merenja(fixture, 20);
+    expect(upisa() - pre).toBe(0);
+  });
+
+  it('nov ulaz posle korekcija (okvir se promeni): računa se iznova od k = 1, pa opet najviše dve korekcije', async () => {
+    let sirina = 310;
+    const w = (k: number) => 330 * k + (k > 0.85 && k < 0.95 ? 30 : 0);
+    const { fixture, upisano, upisa } = napravi(NastavnickiOkvir, 'p', w, () => sirina);
+    await stabilno(fixture);
+    await merenja(fixture, 3);
+    sirina = 1000;
+    await merenja(fixture, 1);
+    expect(upisano()).toBe('');
+    const pre = upisa();
+    await merenja(fixture, 20);
+    expect(upisa() - pre).toBe(0);
+  });
+
+  it('sakriven okvir (širina 0): ništa se ne upisuje ni ne pamti', async () => {
+    let sirina = 0;
+    const { fixture, upisano, upisa } = napravi(NastavnickiOkvir, 'p', 600, () => sirina);
+    await stabilno(fixture);
+    await merenja(fixture, 3);
+    expect(upisano()).toBe('');
+    expect(upisa()).toBe(0);
+    sirina = 400;
+    await merenja(fixture, 1);
+    expect(Number(upisano())).toBeCloseTo(394 / 600, 3);
   });
 
   it('bez MERA_FORMULE (telefon, javne rute): nema merenja ni --uz-formula-k', async () => {

@@ -80,3 +80,66 @@ test.describe('uživo: formule u tekstu pitanja na projektoru i konzoli (klasič
     });
   }
 });
+
+/*
+ * F2 fix 4 (re-recenzija 3, Critical 1): širina markupa MathLive-a nije linearna u k, pa je ranije pravilo osciliralo
+ * (~60 upisa stila u sekundi, konzola na 1366 i 1920 px, publika 900-1104 px). Sada se k računa samo na promenu ulaza
+ * (širina bloka, veličina fonta, fontovi), uz najviše dve korekcije nadole: posle promene veličine prozora i kratkog
+ * smirivanja, 1 s mirovanja ne sme imati nijedan upis stila formule. Pločice i rezultati, više formula odjednom
+ * (proba recenzenta, `gfs-tmp/f2-rereview/proba-oscilacija.spec.ts`).
+ */
+test.describe('uživo: smanjivanje formule se smiruje (bez oscilacije k)', () => {
+  const OPCIJE = ['$\\sqrt{x^2+y^2}+\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}$', '$1011_2+0110_2=10001_2$',
+    '$x_1^2+x_2^2+x_3^2+x_4^2+x_5^2+x_6^2$', '$\\frac{a_1+a_2+a_3}{b_1+b_2}=x_1+x_2+x_3+x_4$'];
+  /** Širine na kojima je fix 3 oscilovao (publika 900-1104, konzola i 1366/1920), plus par između. */
+  const SIRINE = [900, 936, 972, 1008, 1044, 1080, 1104, 1200, 1366, 1440, 1500, 1920];
+
+  for (const stranica of ['publika', 'konzola'] as const) {
+    test(`${stranica}: posle promene veličine 0 upisa stila za 1 s mirovanja (pločice i rezultati)`, async ({ page, mock }) => {
+      test.setTimeout(120_000);
+      mock.izvodjenje.izmeniSlajd(2, {
+        pitanje: {
+          id: 51, tip: 'JEDAN_TACAN', tekst: 'Koja je tačna? $\\frac{1}{2}+\\frac{1}{3}$', slika: null, vremeSekunde: null,
+          opcije: OPCIJE.map((t, i) => ({ id: i + 1, rb: i + 1, tekst: t, tacna: i === 1 })),
+          brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+          prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+        },
+      });
+      for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3) -> slajd 2 (3) -> slajd 3
+      mock.izvodjenje.primeni('OTVORI_ZATVORI');
+      const oscilacije: string[] = [];
+      for (const rezultati of [false, true]) {
+        if (rezultati) mock.izvodjenje.primeni('REZULTATI');
+        await nastavnickiBroker(page, mock);
+        await page.setViewportSize({ width: 1280, height: 720 });
+        await page.goto(`izvodjenja/7/${stranica}`);
+        const okvir = rezultati ? '.uz-rez-opcija' : '.uz-plocica';
+        await expect(page.locator(`${okvir} .uz-formula--spremna .ML__latex`).first()).toBeVisible();
+        await page.waitForLoadState('networkidle');
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+        await page.evaluate(() => {
+          const w = window as unknown as { upisa: number };
+          w.upisa = 0;
+          new MutationObserver((l) => {
+            for (const z of l) if ((z.target as Element).classList.contains('uz-formula--spremna')) w.upisa++;
+          }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['style'] });
+        });
+        const upisa = () => page.evaluate(() => (window as unknown as { upisa: number }).upisa);
+        for (const sirina of SIRINE) {
+          await page.setViewportSize({ width: sirina, height: Math.round((sirina * 9) / 16) });
+          // smirivanje: nov ulaz (jedan proračun) i najviše dve korekcije stižu u par kadrova
+          await page.waitForTimeout(300);
+          const pre = await upisa();
+          await page.waitForTimeout(1000); // mirovanje: meri se broj upisa, ne čeka se uslov
+          const razlika = (await upisa()) - pre;
+          if (razlika !== 0) oscilacije.push(`${rezultati ? 'rezultati' : 'pločice'} @${sirina}px: ${razlika}`);
+        }
+        // pri tome smanjivanje i dalje radi: nijedna formula nema traku za skrol
+        const trake = await page.locator('.uz-formula--spremna').evaluateAll(f =>
+          f.filter(e => (e as HTMLElement).offsetHeight - e.clientHeight !== 0).length);
+        expect(trake, 'formule sa trakom za skrol').toBe(0);
+      }
+      expect(oscilacije, 'upisi stila formule tokom 1 s mirovanja').toEqual([]);
+    });
+  }
+});

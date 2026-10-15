@@ -5,18 +5,31 @@ import type { MeraFormule } from './tekst-formule.component';
 /*
  * Smanjivanje formule u tekstu da stane u svoj blok, samo za nastavničke prikaze (projektor, konzola, pregled u editoru,
  * pregled izvođenja): tamo niko ne skroluje, a klasična traka od 15 px bi i kratkoj formuli podigla red. Daju ga
- * `slajd-prikaz`, `rezultat-prikaz` i `izvodjenje-pregled` kroz `providers` (`MERA_FORMULE`); javni deo ovaj fajl ne
- * uvozi, pa telefon nema ni kod ni smanjivanje (tamo se šira formula skroluje u sebi, `uzivo-javno.css`).
+ * `slajd-prikaz`, `pitanje-plocice`, `rezultat-prikaz` i `izvodjenje-pregled` kroz `providers` (`MERA_FORMULE`); javni deo
+ * ovaj fajl ne uvozi, pa telefon nema ni kod ni smanjivanje (tamo se šira formula skroluje u sebi, `uzivo-javno.css`).
+ *
+ * Gasi se po konstrukciji (re-recenzija 3, Critical 1: širina markupa MathLive-a nije linearna u k, pa je pravilo "raste dok
+ * ne prelazi, pada kad prelazi" sa `ResizeObserver`-om osciliralo ~60 puta u sekundi). Za svaku formulu se pamti **ulaz**:
+ * širina sadržaja bloka, `font-size` teksta i epoha fontova. Samo promena ulaza (>= 0,5 px, novi fontovi) računa k iznova,
+ * od mere pri k = 1 (simetrično, raste ili pada), uz najviše `MAX_KOREKCIJA` koraka nadole dok formula zaista prelazi
+ * ivicu. Isti ulaz (npr. `ResizeObserver` posle sopstvenog upisa) ne upisuje ništa, osim tih koraka nadole.
+ * Blok mora imati širinu koja ne zavisi od formule (provereno: tekst pitanja `flex: 1`, pločica `flex: 1` u
+ * `minmax(0, 1fr)`, ćelija rezultata `minmax(0, 1fr)`, pregled izvođenja blok); i kad ne bi, formula koja pri k = 1 ne
+ * prelazi ostaje na k = 1, pa okvir koji se skuplja na sadržaj ne pravi spiralu.
  */
 
 /** Najmanji koeficijent veličine formule; ispod toga je seče ivica domaćina (`overflow-x: clip`), bez trake. */
 export const MIN_K_FORMULE = 0.5;
+/** Najviše koraka nadole posle jednog računanja (nelinearna širina markupa); posle toga se ništa ne upisuje. */
+export const MAX_KOREKCIJA = 2;
 /** Rezerva u em teksta oko formule: prepust MathLive-a (~2 px van `.ML__latex`) i `padding-inline-end` formule (0,15em). */
 const REZERVA_EM = 0.3;
+/** Promena ulaza manja od ovoga (px) se ne računa (podpikseli). */
+const PRAG_ULAZA = 0.5;
 
 /**
- * Koeficijent veličine formule (`--uz-formula-k`, `font-size: k * 1em`) da prirodna širina (pri k = 1) stane u raspoloživu:
- * `clamp(min, raspolozivo / prirodna, 1)`; bez merenja (0, NaN) 1. Markup MathLive-a je u `em`, pa se širina menja linearno.
+ * Koeficijent veličine formule (`--uz-formula-k`, `font-size: k * 1em`) iz mere pri k = 1:
+ * `clamp(min, raspolozivo / prirodna, 1)`; bez merenja (0, NaN) 1.
  */
 export function koeficijentFormule(prirodna: number, raspolozivo: number, min: number): number {
   if (!(prirodna > 0) || !(raspolozivo > 0)) {
@@ -25,15 +38,17 @@ export function koeficijentFormule(prirodna: number, raspolozivo: number, min: n
   return Math.min(1, Math.max(min, raspolozivo / prirodna));
 }
 
-/**
- * Novi k iz jednog merenja. Smanjuje se **samo kad formula zaista prelazi** desnu ivicu sadržaja bloka; inače k sme samo
- * da raste (veći okvir). Zato okvir koji se skuplja na sadržaj (flex stavka široka koliko formula) ne pravi spiralu: tamo
- * formula nikad ne prelazi, a raspoloživo je uvek manje od prirodne širine, pa k ostaje.
- */
-export function noviKoeficijent(stari: number, prirodna: number, raspolozivo: number, prelazi: boolean, min = MIN_K_FORMULE): number {
-  const cilj = koeficijentFormule(prirodna, raspolozivo, min);
-  return prelazi ? Math.min(stari, cilj) : Math.max(stari, cilj);
+/** Korak nadole kad formula pri k = `stari` (širina `sirina`) prelazi raspoloživo: srazmerno, bar 0,005, najmanje `min`. */
+export function korakNadole(stari: number, sirina: number, raspolozivo: number, min: number): number {
+  const srazmerno = sirina > 0 && raspolozivo > 0 ? (stari * raspolozivo) / sirina : min;
+  return Math.max(min, Math.min(srazmerno, stari - 0.005));
 }
+
+interface Ulaz { sirina: number; fs: number; fontovi: number; }
+interface Stanje extends Ulaz { korekcija: number; }
+
+const istiUlaz = (a: Ulaz, b: Ulaz) =>
+  Math.abs(a.sirina - b.sirina) < PRAG_ULAZA && Math.abs(a.fs - b.fs) < PRAG_ULAZA && a.fontovi === b.fontovi;
 
 /** Najbliži predak koji nije u redu (`inline*`, `contents`): njegova širina sadržaja je mesto formule. */
 function blokRoditelja(el: HTMLElement): HTMLElement | null {
@@ -46,14 +61,60 @@ function blokRoditelja(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+interface Mera {
+  el: HTMLElement;
+  ml: Element;
+  blok: HTMLElement;
+  /** širina sadržaja bloka (ulaz) */
+  sirina: number;
+  /** mesto formule: širina sadržaja, ili od početka formule do ivice u redu bez preloma */
+  raspolozivo: number;
+  fs: number;
+  sirinaMarkupa: number;
+  prelazi: boolean;
+}
+
+/** Sva čitanja jedne formule (bez upisa). */
+function izmeri(el: HTMLElement): Mera | null {
+  const ml = el.firstElementChild;
+  const blok = blokRoditelja(el);
+  if (!ml || !blok) {
+    return null;
+  }
+  const sb = getComputedStyle(blok);
+  const pl = parseFloat(sb.paddingLeft) || 0;
+  const sirina = blok.clientWidth - pl - (parseFloat(sb.paddingRight) || 0);
+  const levo = blok.getBoundingClientRect().left + blok.clientLeft + pl;
+  const r = ml.getBoundingClientRect();
+  const fs = parseFloat(getComputedStyle(el.parentElement ?? blok).fontSize) || 16;
+  const bezPreloma = sb.whiteSpace === 'nowrap' || sb.whiteSpace === 'pre';
+  const raspolozivo = (bezPreloma ? levo + sirina - el.getBoundingClientRect().left : sirina) - REZERVA_EM * fs;
+  return { el, ml, blok, sirina, raspolozivo, fs, sirinaMarkupa: r.width, prelazi: r.right > levo + sirina + 0.5 };
+}
+
+const trenutniK = (el: HTMLElement) => Number(el.style.getPropertyValue('--uz-formula-k')) || 1;
+
+function upisi(el: HTMLElement, k: number): void {
+  if (Math.abs(k - trenutniK(el)) < 0.0005) {
+    return;
+  }
+  if (k >= 1) {
+    el.style.removeProperty('--uz-formula-k');
+  } else {
+    el.style.setProperty('--uz-formula-k', k.toFixed(3));
+  }
+}
+
 /**
- * Posle crtanja (faza `mixedReadWrite`, posle upisa markupa): prvo sva čitanja za sve formule domaćina, pa svi upisi.
- * Ponovo meri kad se promeni veličina bloka neke formule (`ResizeObserver`; posmatra samo trenutne blokove) ili stignu
- * fontovi (`document.fonts` `loadingdone`). Isti k ne upisuje ništa, pa nema petlje.
+ * Posle crtanja (faza `mixedReadWrite`, posle upisa markupa). Jedan prolaz: (1) čitanja za sve formule; (2) formule sa
+ * novim ulazom se vraćaju na k = 1; (3) njihova čitanja pri k = 1; (4) svi upisi. Najviše dva prinudna rasporeda po prolazu,
+ * nikad naizmenično po formuli. Ponovo meri na `ResizeObserver` trenutnih blokova i na `document.fonts` `loadingdone`.
  */
 export const meriFormule: MeraFormule = (host, spremno) => {
   const preracun = signal(0);
   const zakazi = () => preracun.update((n) => n + 1);
+  const stanja = new WeakMap<HTMLElement, Stanje>();
+  let fontovi = 0;
   let posmatrac: ResizeObserver | null = null;
   let posmatrani: Element[] = [];
 
@@ -74,41 +135,46 @@ export const meriFormule: MeraFormule = (host, spremno) => {
       if (!spremno()) {
         return;
       }
-      const mere = Array.from(host.querySelectorAll<HTMLElement>(`span.${KLASA_FORMULE}--spremna`)).map((el) => {
-        const ml = el.firstElementChild;
-        const blok = blokRoditelja(el);
-        if (!ml || !blok) {
-          return null;
-        }
-        const stari = Number(el.style.getPropertyValue('--uz-formula-k')) || 1;
-        const sb = getComputedStyle(blok);
-        const levo = blok.getBoundingClientRect().left + blok.clientLeft + (parseFloat(sb.paddingLeft) || 0);
-        const sirina = blok.clientWidth - (parseFloat(sb.paddingLeft) || 0) - (parseFloat(sb.paddingRight) || 0);
-        const r = ml.getBoundingClientRect();
-        // u redu bez preloma (ćelija rezultata) formula ne prelazi u novi red: mesto je od njenog početka do ivice
-        const raspolozivo = sb.whiteSpace === 'nowrap' || sb.whiteSpace === 'pre'
-          ? levo + sirina - el.getBoundingClientRect().left : sirina;
-        const fs = parseFloat(getComputedStyle(el.parentElement ?? blok).fontSize) || 16;
-        const k = noviKoeficijent(stari, r.width / stari, raspolozivo - REZERVA_EM * fs, r.right > levo + sirina + 0.5);
-        return { el, blok, stari, k };
+      // (1) čitanja; sakriven okvir (širina 0) se posmatra (prikaz javlja `ResizeObserver`), ali se ne meri ni ne pamti
+      const sve = Array.from(host.querySelectorAll<HTMLElement>(`span.${KLASA_FORMULE}--spremna`))
+        .map(izmeri)
+        .filter((m): m is Mera => !!m);
+      posmatraj([...new Set(sve.map((m) => m.blok))]);
+      const mere = sve.filter((m) => m.sirina > 0);
+      const nove = mere.filter((m) => {
+        const s = stanja.get(m.el);
+        return !s || !istiUlaz(s, { sirina: m.sirina, fs: m.fs, fontovi });
       });
-      posmatraj([...new Set(mere.flatMap((m) => (m ? [m.blok] : [])))]);
-      for (const m of mere) {
-        if (m && Math.abs(m.k - m.stari) > 0.005) {
-          if (m.k === 1) {
-            m.el.style.removeProperty('--uz-formula-k');
-          } else {
-            m.el.style.setProperty('--uz-formula-k', m.k.toFixed(3));
-          }
+      const iste = mere.filter((m) => !nove.includes(m));
+      // (2) + (3) nov ulaz: mera pri k = 1
+      nove.forEach((m) => m.el.style.removeProperty('--uz-formula-k'));
+      const pri1 = nove.map((m) => izmeri(m.el) ?? m);
+      // (4) upisi
+      for (const m of pri1) {
+        // formula koja pri k = 1 ne prelazi ostaje cela (i u okviru koji se skuplja na sadržaj: bez spirale)
+        const k = m.prelazi ? koeficijentFormule(m.sirinaMarkupa, m.raspolozivo, MIN_K_FORMULE) : 1;
+        stanja.set(m.el, { sirina: m.sirina, fs: m.fs, fontovi, korekcija: 0 });
+        upisi(m.el, k);
+      }
+      for (const m of iste) {
+        const s = stanja.get(m.el)!;
+        const stari = trenutniK(m.el);
+        if (m.prelazi && s.korekcija < MAX_KOREKCIJA && stari > MIN_K_FORMULE) {
+          s.korekcija++;
+          upisi(m.el, korakNadole(stari, m.sirinaMarkupa, m.raspolozivo, MIN_K_FORMULE));
         }
       }
     },
   });
 
   const fonts = (document as Document & { fonts?: EventTarget }).fonts;
-  fonts?.addEventListener?.('loadingdone', zakazi);
+  const kadFontovi = () => {
+    fontovi++;
+    zakazi();
+  };
+  fonts?.addEventListener?.('loadingdone', kadFontovi);
   inject(DestroyRef).onDestroy(() => {
-    fonts?.removeEventListener?.('loadingdone', zakazi);
+    fonts?.removeEventListener?.('loadingdone', kadFontovi);
     posmatrac?.disconnect();
   });
 };

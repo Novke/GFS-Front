@@ -179,8 +179,12 @@ over STOMP; teacher commands are REST.
   may briefly see the source. A formula never wraps (the source does, also inside long LaTeX). On teacher views a formula wider than its
   block is scaled down (`--uz-formula-k`, down to 0.5, below that it is clipped at the edge, never a scrollbar): `ui/mera-formule.ts`
   (`meriFormule`, after rendering reads first and writes after, again on `ResizeObserver` of the blocks and `document.fonts`
-  `loadingdone`; k only shrinks when the formula really overflows its block, otherwise it may only grow, so a frame that shrinks to
-  its content cannot spiral down) is provided through the token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
+  `loadingdone`). MathLive's markup width is **not linear** in k, so k is computed only when the formula's **input** changes
+  (block content width or font size by >= 0.5 px, or new fonts): from the measure at k = 1 (stays 1 when it does not overflow
+  there, so a frame that shrinks to its content cannot spiral), then at most `MAX_KOREKCIJA` (2) steps down while it really
+  overflows, then nothing; the same input (e.g. the `ResizeObserver` callback after its own write) writes nothing. The earlier
+  "grow while it fits, shrink when it overflows" rule oscillated ~60 times a second; `uzivo-formule-tekst.spec.ts` counts style
+  writes during 1 s of rest after resizing (900-1920 px, tiles and results) and expects 0 is provided through the token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
   `rezultat-prikaz` and `izvodjenje-pregled`; its default is `null`, so the phone has neither the code nor the scaling. On the
   phone (`.uz-st`) a wide formula scrolls inside itself (`max-width: 100%`, `overflow-x: auto`) and `padding-inline-end: 0.15em`
   keeps MathLive's ~2 px overhang inside the box, so a short formula never gets a scrollbar; the document never scrolls
