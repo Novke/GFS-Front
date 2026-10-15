@@ -424,6 +424,8 @@ test.describe('uživo: crtež kao vektor i iscrtavanje potez po potez (5b)', () 
     await greska;
     await expect(page.locator('[data-crtez="slika"] img')).toBeVisible();
     await expect.poll(() => mock.brojZahtevaPoteza(SLAJD_CRTEZA)).toBe(1);
+    // pretplata na početni snimak je već stigla, pa se broj pretplata ne čita usred povezivanja
+    await expect.poll(() => broker.pretplate).toContain(`/app/izvodjenja/${IZVODJENJE}/nastavnik-pocetno`);
     const pretplata = broker.pretplate.length;
     const ostali = mock.zahtevi.filter(z => !z.putanja.endsWith('/potezi')).length;
 

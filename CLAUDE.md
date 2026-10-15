@@ -496,8 +496,8 @@ over STOMP; teacher commands are REST.
   (formula on projector and console), `pristupacnost.spec.ts`, `lenji-editor.spec.ts`.
 - **Drawings as vectors (phase 5b; backend GFSSystem B1).** A CRTEZ layer that has `potezi` is drawn as SVG
   (`ui/crtez-potezi.ts`; in `platno-prikaz` a `[data-crtez="vektor"]` box with one `<path data-potez pathLength="1">` per stroke,
-  `putanjaPoteza`) on the projector, the console and in the editor (Uređivanje and Pregled have the whole document, so they never
-  ask for strokes). The image (`medijId`, still required by the server) is the fallback (`[data-crtez="slika"]`) by **one rule:
+  `putanjaPoteza`) on the projector, the console and in the editor (Uređivanje, Pregled and the slide list thumbnails, which get
+  the whole document through `slicica()`, `@defer (on viewport)` and the same path cache, so they never ask for strokes). The image (`medijId`, still required by the server) is the fallback (`[data-crtez="slika"]`) by **one rule:
   there is no drawable stroke** (`putanjeCrteza` is empty): `potezi` `null` or `[]`, only empty `tacke`, or only invalid strokes
   (`nacrtivPotez`: a coordinate not finite or beyond `MAX_KOORDINATA` 1e6, e.g. ±1e308 which the server accepts, thickness not finite
   or <= 0, colour not `#RRGGBB`); invalid strokes among valid ones are skipped. On the projector the image also shows until the
@@ -528,11 +528,16 @@ over STOMP; teacher commands are REST.
   gets the vector); at most one attempt per pause, a new error starts a new pause, and after success nothing repeats (no loop). The cache has no bound (the slides this window has seen).
   **The phone gets none of it:** `javno/` does not import `potezi-crteza`, `uzivo.models` only `import type`s `Potez`, and
   `NIZOVI_CRTEZA` (`e2e/nizovi-editora.ts`) is checked in `lenji-formule.spec.ts` (build) and `uzivo-javno.spec.ts` (network).
-  **Known limitation:** an ISCRTAJ that started over the image before the strokes arrived (group 0 of the first slide, or a click
-  right after entering) finishes as BRISANJE over the vector: the content stays the same element on purpose, so the running
+  **Known limitations:** an ISCRTAJ that started over the image before the strokes arrived (group 0 of a slide whose strokes were
+  not prefetched, e.g. a late-opened window or a GET slower than → after PRIJAVA, which otherwise prefetches the first slide; or a
+  click right after entering) finishes as BRISANJE over the vector: the content stays the same element on purpose, so the running
   animation is neither cut nor restarted; the next run draws stroke by stroke. Within one group the content box and the stroke
-  paths of the same layer are separate targets and are not chained: after a content animation of the layer (e.g. FADE IZLAZ) the
-  paths of a following ISCRTAJ get `fill: forwards` and are visible during their delay instead of starting hidden.
+  paths of the same layer are separate targets and are not chained: a FADE IZLAZ (the layer's first animation, `fill: both`)
+  keeps the content at `opacity: 0` until the group ends, so a following ISCRTAJ ULAZ of the same layer in the same group is
+  invisible and the whole drawing appears only at the end of the group (`cancel`); the other way round, after an ISCRTAJ IZLAZ
+  (paths held at `opacity: 0`) an ULAZ of the same layer in the same group shows nothing until the group ends. The combination
+  is rare, and phase 4 already had the same pattern (two animations of different properties on one target, e.g. FADE IZLAZ then
+  BRISANJE ULAZ).
   E2E: slide 105 of run 7 (`uzivo-izvodjenje.json`) and slide 53 of presentation 5 (`prezentacije.json`) carry CRTEZ `crtez2` with 2
   invented strokes and one ISCRTAJ KLIK of 3000 ms; `MockIzvodjenje` strips strokes from the snapshot like the server,
   `GET slajdovi/:id/potezi` answers from the fixture, `MockApi.brojZahtevaPoteza` counts requests; `uzivo-platno.spec.ts` (block
