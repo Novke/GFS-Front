@@ -53,7 +53,15 @@ interface Prijava {
 }
 interface UzivoSlajd {
   id: number; rb: number; tip: string; naslov: string | null; sadrzaj: string | null; slika: unknown; beleske: string | null;
-  postepeno: boolean; pitanje: unknown; platno: unknown;
+  postepeno: boolean; pitanje: unknown; platno: unknown; prelaz?: Prelaz | null;
+}
+/** Prelaz na slajd (faza 5, Ugovor 4); slajd koji test doda bez polja front čita kao `null`. */
+interface Prelaz { efekat: string; smer: string | null; trajanjeMs: number }
+
+/** Kao `SlajdPP.normalizuj(Prelaz)`: bez efekta -> null, FADE bez smera, inače DESNO, trajanje 500. */
+function normalizujPrelaz(p: Partial<Prelaz> | null | undefined): Prelaz | null {
+  if (!p?.efekat) return null;
+  return { efekat: p.efekat, smer: p.efekat === 'FADE' ? null : (p.smer ?? 'DESNO'), trajanjeMs: p.trajanjeMs ?? 500 };
 }
 interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
@@ -65,6 +73,8 @@ interface SlajdCmd {
   tip: string; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean;
   pitanje: ({ slikaId: string | null; opcije: { tekst: string; tacna: boolean }[] } & Record<string, unknown>) | null;
   platno: unknown;
+  /** Kao server: PUT je puna zamena, pa komanda bez `prelaz` briše prelaz. */
+  prelaz?: Partial<Prelaz> | null;
 }
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
@@ -117,7 +127,9 @@ export function ucitajPodatke(): Podaci {
     prijave: onboarding.prijave,
     kontrolnaTabla: ucitaj('kontrolna-tabla.json'),
     izvodjenja: ucitaj<{ izvodjenja: UzivoIzvodjenje[] }>('uzivo.json').izvodjenja,
-    prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije,
+    // server uvek šalje `prelaz` (i kad je null); fikstura ga ima na svakom slajdu, normalizacija je kao na serveru
+    prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
+      .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],
   };
 }
@@ -540,7 +552,7 @@ export class MockApi {
     const { slikaId, ...q } = cmd.pitanje ?? { slikaId: null };
     return {
       id, rb: 0, tip: cmd.tip, naslov: cmd.naslov, sadrzaj: cmd.sadrzaj, slika: medij(cmd.slikaId), beleske: cmd.beleske,
-      postepeno: cmd.postepeno, platno: cmd.platno,
+      postepeno: cmd.postepeno, platno: cmd.platno, prelaz: normalizujPrelaz(cmd.prelaz),
       pitanje: cmd.pitanje
         ? {
             ...q, id: this.sledeciId++, slika: medij(slikaId),
@@ -875,7 +887,7 @@ export class MockApi {
       const mesto = posle + 1;
       // kao backend: novi slajdovi dobijaju id, `slika` ostaje prazna (mok ne vodi medije), redni brojevi se prenumerišu
       const novi = cmd.slajdovi.map(s => {
-        const slajd = { ...s, id: this.sledeciId++, rb: 0, slika: null };
+        const slajd = { ...s, id: this.sledeciId++, rb: 0, slika: null, prelaz: normalizujPrelaz(s.prelaz) };
         delete slajd.slikaId;
         return slajd as UzivoSlajd;
       });
@@ -907,7 +919,8 @@ export class MockApi {
         if (i >= 0) {
           const cmd = { ...(z.telo as UzivoSlajd & { slikaId?: string | null }) };
           delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
-          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd };
+          // puna zamena prelaza kao na serveru: PUT bez `prelaz` ga briše (regresija F16)
+          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd, prelaz: normalizujPrelaz(cmd.prelaz) };
           return ok(pr.slajdovi[i]);
         }
       }

@@ -196,26 +196,42 @@ export class FormulaDialog {
       t?.hide();
     });
     // CDK sa `autoFocus: false` posle animacije otvaranja fokusira kontejner kad fokus "nije u njemu", a fokus u shadow
-    // DOM-u `math-field`-a ne vidi (`contains` ne prelazi granicu shadow root-a). Dok korisnik još ništa nije uradio u
-    // dijalogu, fokus kontejnera se zato vraća u polje (posle prvog pritiska ili tastera ostaje gde ga korisnik stavi).
-    // MathLive pri tome i dalje misli da ima fokus (njegov `focus()` je tada no-op dok ne obradi gubitak fokusa), pa se
-    // pokušava ponovo, kratko, dok fokus ne stigne u polje ili korisnik ne krene sam.
+    // DOM-u `math-field`-a ne vidi (`contains` ne prelazi granicu shadow root-a). Fokus koji kontejner tako uzme iz
+    // sadržaja dijaloga vraća se tamo odakle je došao, i kad je korisnik već počeo da kuca (inače bi ostatak kucanja
+    // otišao u kontejner). Kad dođe spolja, a korisnik još ništa nije uradio u dijalogu, ide na početni fokus (posle
+    // prvog pritiska ili tastera ostaje gde ga korisnik stavi). Klik ili dodir na prazan deo dijaloga (fokus u kontejner
+    // dok je pritisak u toku) ostaje u kontejneru, pa na dodirnom ekranu tastatura može da se skloni. MathLive pri tome i
+    // dalje misli da ima fokus (njegov `focus()` je tada no-op dok ne obradi gubitak fokusa), pa se pokušava ponovo,
+    // kratko, dok fokus ne stigne u polje.
     let korisnik = false;
+    let pritisak = false;
     const radi = () => (korisnik = true);
+    const pritisnuto = () => (pritisak = true);
+    const pusteno = () => (pritisak = false);
     const kontejner = () => this.host.closest('mat-dialog-container');
-    const vrati = (pokusaja: number) => {
-      if (!ziv || korisnik || document.activeElement !== kontejner()) return;
-      this.pocetniFokus();
-      if (pokusaja > 1) setTimeout(() => vrati(pokusaja - 1), 80);
+    const vrati = (pokusaja: number, cilj: () => void) => {
+      if (!ziv || document.activeElement !== kontejner()) return;
+      cilj();
+      if (pokusaja > 1) setTimeout(() => vrati(pokusaja - 1, cilj), 80);
     };
     const naFokus = (e: FocusEvent) => {
-      if (!korisnik && e.target instanceof Element && e.target === kontejner()) vrati(8);
+      if (!(e.target instanceof Element) || e.target !== kontejner()) return;
+      const odakle = e.relatedTarget;
+      if (odakle instanceof HTMLElement && this.host.contains(odakle)) {
+        if (!pritisak) vrati(8, () => odakle.focus());
+      } else if (!korisnik) vrati(8, () => !korisnik && this.pocetniFokus());
     };
     document.addEventListener('focusin', naFokus);
+    document.addEventListener('pointerdown', pritisnuto, true);
+    document.addEventListener('pointerup', pusteno, true);
+    document.addEventListener('pointercancel', pusteno, true);
     this.host.addEventListener('pointerdown', radi, true);
     this.host.addEventListener('keydown', radi, true);
     inject(DestroyRef).onDestroy(() => {
       document.removeEventListener('focusin', naFokus);
+      document.removeEventListener('pointerdown', pritisnuto, true);
+      document.removeEventListener('pointerup', pusteno, true);
+      document.removeEventListener('pointercancel', pusteno, true);
       this.host.removeEventListener('pointerdown', radi, true);
       this.host.removeEventListener('keydown', radi, true);
     });

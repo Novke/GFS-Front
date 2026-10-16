@@ -374,10 +374,34 @@ describe('pretvoriPptx: beleške, format, skriveni slajdovi, ukrasi', () => {
     expect(ima(r, 'FORMAT_SLAJDA')).toEqual([expect.objectContaining({ slajd: null })]);
   });
 
-  it('16:9 nema FORMAT_SLAJDA; prelaz slajda -> PRELAZ_SLAJDA jednom za fajl', async () => {
-    const r = await uvezi({ slajdovi: [{ spTree: okvir(5, 0, 0), prelaz: true }, { spTree: okvir(5, 0, 0), prelaz: true }] });
+  it('16:9 nema FORMAT_SLAJDA', async () => {
+    const r = await uvezi({ slajdovi: [{ spTree: okvir(5, 0, 0) }] });
     expect(ima(r, 'FORMAT_SLAJDA')).toEqual([]);
-    expect(ima(r, 'PRELAZ_SLAJDA')).toEqual([expect.objectContaining({ slajd: null })]);
+  });
+
+  it('prelaz slajda: p:transition -> cmd.prelaz po slajdu; podržan efekat bez PRELAZ_SLAJDA, slajd bez prelaza -> null', async () => {
+    const r = await uvezi({ slajdovi: [
+      { spTree: okvir(5, 0, 0), prelaz: '<p:transition spd="med"><p:push dir="u"/></p:transition>' },
+      { spTree: okvir(5, 0, 0) },
+    ] });
+    expect(r.slajdovi.map((s) => s.cmd.prelaz)).toEqual([{ efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 750 }, null]);
+    expect(ima(r, 'PRELAZ_SLAJDA')).toEqual([]);
+    expect(r.upozorenja.map((u) => u.poruka)).not.toContain('Prelazi između slajdova se ne prenose.');
+  });
+
+  it('prelaz slajda: nepodržan efekat -> FADE i PRELAZ_SLAJDA sa brojem tog slajda; mc:AlternateContent se čita', async () => {
+    const r = await uvezi({ slajdovi: [
+      { spTree: okvir(5, 0, 0), prelaz: '<p:transition><p:fade/></p:transition>' },
+      { spTree: okvir(5, 0, 0), prelaz: '<p:transition><p14:vortex/></p:transition>' },
+      { spTree: okvir(5, 0, 0), prelaz: '<mc:AlternateContent><mc:Choice Requires="p14"><p:transition p14:dur="1600"><p:wipe dir="r"/>'
+        + '</p:transition></mc:Choice><mc:Fallback><p:transition><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>' },
+    ] });
+    expect(r.slajdovi.map((s) => s.cmd.prelaz)).toEqual([
+      { efekat: 'FADE', smer: null, trajanjeMs: 500 },
+      { efekat: 'FADE', smer: null, trajanjeMs: 500 },
+      { efekat: 'BRISANJE', smer: 'LEVO', trajanjeMs: 1600 },
+    ]);
+    expect(ima(r, 'PRELAZ_SLAJDA')).toEqual([expect.objectContaining({ slajd: 2, poruka: expect.stringContaining('vortex') })]);
   });
 
   it('skrivenSlajd: nije u slajdovi, SKRIVEN_SLAJD, ukupnoSlajdova 2', async () => {

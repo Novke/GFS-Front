@@ -1,5 +1,8 @@
-import { greskeSlajda, greskeSlajdaZaSlanje, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja, slajdIzCmd, slajdUCmd } from './slajd-pravila';
-import { SlajdDetails } from './uzivo.models';
+import {
+  PORUKE, PRELAZ, greskeSlajda, greskeSlajdaZaSlanje, normalizujPrelaz, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja,
+  slajdIzCmd, slajdUCmd, trajanjeIzSekundi,
+} from './slajd-pravila';
+import { Prelaz, SlajdCmd, SlajdDetails } from './uzivo.models';
 import { platno as platnoFabrika } from './platno-podaci.testing';
 import { Platno, Sloj } from './platno.models';
 
@@ -40,7 +43,7 @@ describe('slajd-pravila', () => {
   it('SlajdDetails -> SlajdCmd -> lokalni SlajdDetails čuva sadržaj', () => {
     const s: SlajdDetails = {
       id: 4, rb: 2, tip: 'INFO', naslov: 'N', sadrzaj: 'S', slika: { id: 'u', naziv: 'x.png', mime: 'image/png', velicina: 1 },
-      beleske: 'B', postepeno: true, pitanje: null, platno: null,
+      beleske: 'B', postepeno: true, pitanje: null, platno: null, prelaz: null,
     };
     expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
   });
@@ -49,7 +52,7 @@ describe('slajd-pravila', () => {
     const platno = { verzija: 1, pozadina: { boja: '#FFFFFF', medijId: null }, slojevi: [], animacije: [] } as const;
     const s: SlajdDetails = {
       id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null,
-      platno: { ...platno, slojevi: [], animacije: [] },
+      platno: { ...platno, slojevi: [], animacije: [] }, prelaz: null,
     };
     expect(slajdUCmd(s).platno).toBe(s.platno);
     expect(slajdUCmd({ ...s, tip: 'INFO', platno: null }).platno).toBeNull();
@@ -57,14 +60,14 @@ describe('slajd-pravila', () => {
 
   it('oznaka slajda je tekst bez Markdown znakova', () => {
     const s: SlajdDetails = { id: 1, rb: 1, tip: 'INFO', naslov: null, sadrzaj: '## Sile i **momenti**\n- GD-2025',
-      slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
+      slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, prelaz: null };
     expect(oznakaSlajda(s)).toBe('Sile i momenti GD-2025');
     expect(oznakaSlajda({ ...s, sadrzaj: null })).toBe('Nov slajd');
   });
 
   it('oznaka pitanja čuva formulu: `_` i `*` unutar $...$ ostaju (1011_2 nije 10112), van formule se brišu', () => {
     const s: SlajdDetails = { id: 2, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: null,
-      postepeno: false, platno: null, pitanje: { id: 9, tip: 'JEDAN_TACAN', tekst: '**Koliko** je $1011_2$ i $z^*$?',
+      postepeno: false, platno: null, prelaz: null, pitanje: { id: 9, tip: 'JEDAN_TACAN', tekst: '**Koliko** je $1011_2$ i $z^*$?',
         slika: null, vremeSekunde: null, opcije: [], brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null,
         tekstPrikaz: null, prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null } };
     expect(oznakaSlajda(s)).toBe('Koliko je $1011_2$ i $z^*$?');
@@ -75,6 +78,7 @@ describe('slajd-pravila', () => {
   describe('PLATNO', () => {
     const platnoSlajd = (platno: Platno | null = platnoFabrika()): SlajdDetails => ({
       id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null, platno,
+      prelaz: null,
     });
 
     it('slajdUCmd daje isto platno po vrednosti, a slajdIzCmd ga vraća', () => {
@@ -144,6 +148,89 @@ describe('slajd-pravila', () => {
       expect(oznakaSlajda(platnoSlajd(p))).toBe('Drugi red');
       expect(oznakaSlajda(platnoSlajd({ ...p, slojevi: p.slojevi.filter(l => l.tip !== 'TEKST') }))).toBe('Platno');
       expect(oznakaSlajda(platnoSlajd(null))).toBe('Platno');
+    });
+  });
+  describe('prelaz (faza 5, odluke 10-11)', () => {
+    const P = (efekat: Prelaz['efekat'], smer: Prelaz['smer'], trajanjeMs: number): Prelaz => ({ efekat, smer, trajanjeMs });
+    const info = (prelaz: Prelaz | null): SlajdCmd => ({ ...noviSlajd('INFO'), naslov: 'Uvod', prelaz });
+    const platnoCmd = (prelaz: Prelaz | null): SlajdCmd => ({ ...noviSlajd('PLATNO', undefined, platnoFabrika()), prelaz });
+    const detalji = (prelaz: Prelaz | null, tip: SlajdDetails['tip'] = 'INFO'): SlajdDetails => ({
+      id: 7, rb: 1, tip, naslov: tip === 'INFO' ? 'Uvod' : null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false,
+      pitanje: null, platno: tip === 'PLATNO' ? platnoFabrika() : null, prelaz,
+    });
+
+    it('granice i poruka kao na serveru (SlajdPP)', () => {
+      expect(PRELAZ).toEqual({ min: 100, max: 5000, podrazumevano: 500 });
+      expect(PORUKE.prelaz).toBe('Trajanje prelaza mora biti od 0,1 do 5 sekundi.');
+    });
+
+    // iste tabele kao SlajdPPTest.normalizujPrelaz*
+    it.each<[string, Partial<Prelaz> | null | undefined, Prelaz | null]>([
+      ['null', null, null],
+      ['undefined (JSON bez polja)', undefined, null],
+      ['bez efekta', { efekat: undefined, smer: 'DESNO', trajanjeMs: 500 }, null],
+      ['FADE gubi smer, trajanje 500', { efekat: 'FADE', smer: 'LEVO', trajanjeMs: undefined }, P('FADE', null, 500)],
+      ['GURANJE bez smera -> DESNO', { efekat: 'GURANJE', smer: null, trajanjeMs: 700 }, P('GURANJE', 'DESNO', 700)],
+      ['BRISANJE ostaje', { efekat: 'BRISANJE', smer: 'GORE', trajanjeMs: 800 }, P('BRISANJE', 'GORE', 800)],
+      ['GURANJE bez smera i trajanja', { efekat: 'GURANJE' }, P('GURANJE', 'DESNO', 500)],
+    ])('normalizujPrelaz: %s', (_, ulaz, ocekivano) => {
+      expect(normalizujPrelaz(ulaz as Prelaz | null | undefined)).toEqual(ocekivano);
+    });
+
+    it.each<[string, number]>([
+      ['0,8', 800], ['0.8', 800], [' 1,25 ', 1250], ['5', 5000], [',5', 500], ['2,', 2000], ['0,0004', 0], ['1,2345', 1235],
+      ['', 0], ['abc', 0], ['1,2,3', 0], ['-1', 0], ['1e3', 0], ['1 000', 0],
+    ])('trajanjeIzSekundi("%s") = %d ms (zarez ili tačka; neispravno -> 0, pa poruka)', (tekst, ms) => {
+      expect(trajanjeIzSekundi(tekst)).toBe(ms);
+    });
+
+    it('noviSlajd je bez prelaza za svaki tip', () => {
+      for (const tip of ['INFO', 'PITANJE', 'PLATNO'] as const) expect(noviSlajd(tip).prelaz).toBeNull();
+    });
+
+    it('slajdUCmd čuva prelaz za svaki tip (regresija: PUT iz forme, beleški ili platna ne sme da ga obriše)', () => {
+      const p = P('BRISANJE', 'GORE', 800);
+      for (const tip of ['INFO', 'PLATNO'] as const) expect(slajdUCmd(detalji(p, tip)).prelaz).toEqual(p);
+      expect(slajdUCmd(detalji(null)).prelaz).toBeNull();
+      // fixture ili stari odgovor bez polja: null, ne undefined (JSON.stringify bi izostavio ključ)
+      const bezPolja = { ...detalji(null) } as Partial<SlajdDetails>;
+      delete bezPolja.prelaz;
+      expect(slajdUCmd(bezPolja as SlajdDetails).prelaz).toBeNull();
+    });
+
+    it('slajdIzCmd normalizuje prelaz (lokalni prikaz kao odgovor servera)', () => {
+      const osnova = { id: 7, rb: 1 };
+      expect(slajdIzCmd(info({ efekat: 'GURANJE', smer: null, trajanjeMs: 600 }), osnova).prelaz).toEqual(P('GURANJE', 'DESNO', 600));
+      expect(slajdIzCmd(info({ efekat: 'FADE', smer: 'LEVO', trajanjeMs: 300 }), osnova).prelaz).toEqual(P('FADE', null, 300));
+      expect(slajdIzCmd(info(null), osnova).prelaz).toBeNull();
+      expect(slajdIzCmd(platnoCmd(P('BRISANJE', 'DOLE', 900)), osnova).prelaz).toEqual(P('BRISANJE', 'DOLE', 900));
+      const s = detalji(P('GURANJE', 'LEVO', 1200));
+      expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
+    });
+
+    it('greskeSlajda: trajanje 50 i 5001 ms je greška za INFO, PLATNO i PITANJE; 100 i 5000 prolaze', () => {
+      const pitanje: SlajdCmd = {
+        ...noviSlajd('PITANJE'),
+        pitanje: { ...novoPitanje('JEDAN_TACAN', 'Koliko?'), opcije: [{ tekst: 'a', tacna: true }, { tekst: 'b', tacna: false }] },
+      };
+      expect(greskeSlajda(pitanje)).toEqual([]);
+      for (const ms of [50, 99, 5001, 800.5]) {
+        expect(greskeSlajda(info(P('FADE', null, ms)))).toEqual([PORUKE.prelaz]);
+        expect(greskeSlajda(platnoCmd(P('GURANJE', 'LEVO', ms)))).toEqual([PORUKE.prelaz]);
+        expect(greskeSlajdaZaSlanje(platnoCmd(P('BRISANJE', 'DOLE', ms)))).toEqual([PORUKE.prelaz]);
+        expect(greskeSlajda({ ...pitanje, prelaz: P('FADE', null, ms) })).toEqual([PORUKE.prelaz]);
+      }
+      for (const ms of [100, 5000]) {
+        expect(greskeSlajda(info(P('FADE', null, ms)))).toEqual([]);
+        expect(greskeSlajdaZaSlanje(platnoCmd(P('BRISANJE', null, ms)))).toEqual([]);
+      }
+      // bez prelaza i prelaz bez efekta (normalizuje se u null) nisu greška
+      expect(greskeSlajda(info(null))).toEqual([]);
+      expect(greskeSlajda(info({ efekat: null, smer: null, trajanjeMs: 1 } as unknown as Prelaz))).toEqual([]);
+      // redosled kao SlajdPP.proveri: posle beleški, pre grane po tipu
+      expect(greskeSlajda({ ...noviSlajd('INFO'), beleske: 'x'.repeat(20_001), prelaz: P('FADE', null, 1) }))
+        .toEqual([PORUKE.beleske, PORUKE.prelaz, PORUKE.infoPrazan]);
+      expect(greskeSlajda({ ...platnoCmd(P('FADE', null, 1)), platno: null })).toEqual([PORUKE.prelaz, PORUKE.bezPlatna]);
     });
   });
 });

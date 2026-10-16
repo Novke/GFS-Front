@@ -1,5 +1,5 @@
 {
-  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka, PLATNO sa CRTEZ-om (2 poteza, ISCRTAJ 3000 ms, 5b).",
+  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka, PLATNO sa CRTEZ-om (2 poteza, ISCRTAJ 3000 ms, 5b). Prelazi (5e): 104 GURANJE zdesna 3000 ms; 105 FADE 3000 ms i grupa 0 (naslov FADE 2000 ms posle prethodnog), da stanje 'prelaz traje' sigurno postoji dok ga test čita.",
   "izvodjenje": {
     "id": 7,
     "prezentacija": { "id": 3, "naziv": "Statika · uvodni čas", "predmetId": 1 },
@@ -78,15 +78,29 @@
     },
     {
       "id": 104, "rb": 4, "tip": "INFO", "naslov": "Za sledeći čas", "sadrzaj": "Pročitati poglavlje o momentu sile.",
-      "slika": null, "beleske": null, "postepeno": false, "pitanje": null, "platno": null
+      "slika": null, "beleske": null, "postepeno": false, "pitanje": null, "platno": null,
+      "prelaz": { "efekat": "GURANJE", "smer": "DESNO", "trajanjeMs": 3000 }
     },
     {
       "id": 105, "rb": 5, "tip": "PLATNO", "naslov": null, "sadrzaj": null, "slika": null, "pitanje": null, "postepeno": false,
       "beleske": "Crtež se iscrtava potez po potez.",
+      "prelaz": { "efekat": "FADE", "smer": null, "trajanjeMs": 3000 },
       "platno": {
         "verzija": 1,
         "pozadina": { "boja": "#FFFFFF", "medijId": null },
         "slojevi": [
+          {
+            "id": "naslov5", "tip": "TEKST", "naziv": null, "x": 60, "y": 40, "sirina": 600, "visina": 80, "rotacija": 0,
+            "providnost": 1, "zakljucan": false, "senka": null, "popuna": null, "ivica": null,
+            "okvir": { "unutraLevo": 7.2, "unutraGore": 3.6, "unutraDesno": 7.2, "unutraDole": 3.6, "sidro": "VRH", "prelom": true, "skala": 1, "skalaProreda": 1 },
+            "pasusi": [
+              {
+                "poravnanje": "LEVO", "nivo": 0, "lista": null, "uvlacenje": { "levo": 0, "prviRed": 0 }, "razmakPre": 0,
+                "razmakPosle": 0, "proredProcenat": 100, "tabulatori": [],
+                "delovi": [{ "tekst": "Sile na nosaču", "font": "Carlito", "velicina": 28, "boja": "#1F2937", "podebljano": true, "kurziv": false, "podvuceno": false, "precrtano": false, "polozaj": "OBICAN" }]
+              }
+            ]
+          },
           {
             "id": "crtez2", "tip": "CRTEZ", "naziv": null, "x": 200, "y": 150, "sirina": 400, "visina": 200, "rotacija": 0,
             "providnost": 1, "zakljucan": false, "senka": null, "medijId": "00000000-0000-4000-8000-000000000003",
@@ -97,6 +111,7 @@
           }
         ],
         "animacije": [
+          { "id": "a0", "slojId": "naslov5", "pasus": null, "vrsta": "ULAZ", "efekat": "FADE", "smer": null, "okidac": "POSLE_PRETHODNOG", "trajanjeMs": 2000, "kasnjenjeMs": 0 },
           { "id": "a1", "slojId": "crtez2", "pasus": null, "vrsta": "ULAZ", "efekat": "ISCRTAJ", "smer": "LEVO", "okidac": "KLIK", "trajanjeMs": 3000, "kasnjenjeMs": 0 }
         ]
       }

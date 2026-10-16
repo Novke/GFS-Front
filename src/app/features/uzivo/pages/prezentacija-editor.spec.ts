@@ -11,7 +11,7 @@ import type { MockInstance } from 'vitest';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
-import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
+import { Prelaz, PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
 import { UvozPdfOtvarac } from './uvoz-pdf-otvarac';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
@@ -25,6 +25,7 @@ import type { TekstSloj } from '../data-access/platno.models';
 import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { OPISI_GUBITAKA } from '../data-access/pretvori-u-platno';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { PregledPrelazaPodaci, PrelazPregledDialog } from './prelaz-pregled.dialog';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 /** Stavka otvorenog menija (CDK overlay je u body). */
@@ -32,11 +33,11 @@ const stavkaMenija = (tekst: string) =>
   [...document.body.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-item')].find(b => b.textContent?.trim() === tekst)!;
 
 function slajd(id: number, rb: number, naslov: string): SlajdDetails {
-  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
+  return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, prelaz: null };
 }
 
 function info(naslov: string): SlajdCmd {
-  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: null };
+  return { tip: 'INFO', naslov, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: null, prelaz: null };
 }
 
 const prezentacija: PrezentacijaDetails = {
@@ -44,6 +45,14 @@ const prezentacija: PrezentacijaDetails = {
   izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: true,
   brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [slajd(11, 1, 'Uvod')],
 };
+
+// Polja prelaza u formi slajda su `@defer (on immediate)` (F16). Prvi dinamički uvoz chunk-a traje van lažnog sata, pa bi
+// njegovo iscrtavanje usred testa sa `saLaznimSatom` zakazalo tajmere scheduler-a posle provere; učitan unapred, svaki
+// sledeći uvoz se razreši u mikrozadacima. Isto važi za dijalog pregleda prelaza (F17, `import()` na klik).
+beforeAll(async () => {
+  await import('./prelaz-polja.component');
+  await import('./prelaz-pregled.dialog');
+});
 
 describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
   let fixture: ComponentFixture<PrezentacijaEditorPage>;
@@ -99,7 +108,7 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     store.dodaj('PITANJE', 'TACNO_NETACNO');
     const nacrt = store.izabrani()!;
     store.izmeniSlajd(nacrt.id, {
-      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, platno: null,
+      tip: 'PITANJE', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, platno: null, prelaz: null,
       pitanje: {
         tip: 'TACNO_NETACNO', tekst: 'Zemlja je okrugla.', slikaId: null, vremeSekunde: null,
         opcije: [{ tekst: 'Tačno', tacna: true }, { tekst: 'Netačno', tacna: false }], brojTacno: null,
@@ -208,7 +217,7 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
   let store: InstanceType<typeof EditorStore>;
   const platnoSlajd: SlajdDetails = {
     id: 12, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
-    platno: platno(),
+    platno: platno(), prelaz: null,
   };
 
   beforeEach(() => {
@@ -264,6 +273,80 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(put.request.body.beleske).toBe('Nove beleške');
     expect(put.request.body.platno).toBe(P1);
     put.flush({ ...platnoSlajd, beleske: 'Nove beleške', platno: P1 });
+    await pomeriSat(800);
+  }));
+
+  it('F16: beleške PLATNO slajda i naslov INFO slajda iz forme: PUT nosi postojeći prelaz (puna zamena ga ne briše)', saLaznimSatom(async () => {
+    const P: Prelaz = { efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 600 };
+    const F: Prelaz = { efekat: 'FADE', smer: null, trajanjeMs: 400 };
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({
+      ...prezentacija, slajdovi: [{ ...slajd(11, 1, 'Uvod'), prelaz: F }, { ...platnoSlajd, prelaz: P }],
+    });
+    store.izaberi(12);
+    fixture.detectChanges();
+    await isprazniMikrozadatke();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const beleske = el.querySelector('textarea[formcontrolname=beleske]') as HTMLTextAreaElement;
+    beleske.value = 'Nove beleške';
+    beleske.dispatchEvent(new Event('input'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/12');
+    expect(put.request.body).toMatchObject({ beleske: 'Nove beleške', prelaz: P });
+    put.flush({ ...platnoSlajd, beleske: 'Nove beleške', prelaz: P });
+    store.izaberi(11);
+    fixture.detectChanges();
+    const naslov = el.querySelector('input[formcontrolname=naslov]') as HTMLInputElement;
+    naslov.value = 'Uvod 2';
+    naslov.dispatchEvent(new Event('input'));
+    await pomeriSat(800);
+    const put11 = http.expectOne('api/slajdovi/11');
+    expect(put11.request.body).toMatchObject({ naslov: 'Uvod 2', prelaz: F });
+    put11.flush({ ...slajd(11, 1, 'Uvod 2'), prelaz: F });
+    await pomeriSat(800);
+  }));
+
+  it('F17: "Pregledaj prelaz" otvara pregled sa prethodnim i izabranim slajdom (prelaz iz forme, pre čuvanja) i temom', saLaznimSatom(async () => {
+    const P: Prelaz = { efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 600 };
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({
+      ...prezentacija, tema: 'PONOC', slajdovi: [slajd(11, 1, 'Uvod'), { ...platnoSlajd, prelaz: P }],
+    });
+    store.izaberi(12);
+    fixture.detectChanges();
+    await isprazniMikrozadatke();
+    fixture.detectChanges();
+    const open = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({} as MatDialogRef<unknown>);
+    const el = fixture.nativeElement as HTMLElement;
+    const trajanje = el.querySelector('.uz-ed-prelaz input[inputmode=decimal]') as HTMLInputElement;
+    trajanje.value = '1,2';
+    trajanje.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const dugme = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-prelaz button')].find(b => b.textContent?.trim() === 'Pregledaj prelaz')!;
+    // dvoklik: drugi klik stiže dok se chunk dijaloga još učitava -> tačno jedan dijalog (recenzija F17, Minor 5)
+    dugme.click();
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(1);
+    const [komponenta, konfig] = open.mock.calls[0] as [unknown, { data: PregledPrelazaPodaci; autoFocus: unknown }];
+    expect(komponenta).toBe(PrelazPregledDialog);
+    expect(konfig.autoFocus).toBe(false);
+    expect(konfig.data.pre?.id).toBe(11);
+    expect(konfig.data.slajd.id).toBe(12);
+    expect(konfig.data.slajd.prelaz).toEqual({ ...P, trajanjeMs: 1200 });
+    expect(konfig.data.tema).toBe('PONOC');
+    // posle otvaranja: dok je neki dijalog otvoren, nov klik ne otvara drugi; kad se zatvori, klik opet otvara
+    const otvoreni = vi.spyOn(TestBed.inject(MatDialog), 'openDialogs', 'get').mockReturnValue([{} as MatDialogRef<unknown>]);
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(1);
+    otvoreni.mockReturnValue([]);
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(open).toHaveBeenCalledTimes(2);
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/12').flush({ ...platnoSlajd, prelaz: { ...P, trajanjeMs: 1200 } });
     await pomeriSat(800);
   }));
 
@@ -344,7 +427,7 @@ describe('PrezentacijaEditorPage: lenji editor platna', () => {
   let store: InstanceType<typeof EditorStore>;
   const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
     id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
-    platno: platno(),
+    platno: platno(), prelaz: null,
   });
   const el = () => fixture.nativeElement as HTMLElement;
   const editor = () => fixture.debugElement.query(By.directive(PlatnoEditorComponent));
@@ -463,6 +546,7 @@ describe('PrezentacijaEditorPage: tekst na platnu (F12, Review Focus 1)', () => 
     return {
       id: 14, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
       platno: { ...p, slojevi: p.slojevi.filter(x => x.tip === 'TEKST'), animacije: p.animacije.filter(a => a.slojId === 'tekst') },
+      prelaz: null,
     };
   };
   const el = () => fixture.nativeElement as HTMLElement;
@@ -883,7 +967,7 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
   let http: HttpTestingController;
   const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
     id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
-    platno: platno(),
+    platno: platno(), prelaz: null,
   });
   const el = () => fixture.nativeElement as HTMLElement;
 
@@ -908,8 +992,8 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
   afterEach(() => http.verify());
 
   it('sličica PLATNO slajda prikazuje sve slojeve (i one sa ULAZ animacijom), a sakrivena je od čitača', async () => {
+    // svi `@defer` blokovi (sličice, polja prelaza u formi, ...); njihov broj nije predmet testa, sličice se broje ispod
     const blokovi = await fixture.getDeferBlocks();
-    expect(blokovi.length).toBe(2);
     for (const b of blokovi) await b.render(DeferBlockState.Complete);
     await fixture.whenStable();
     const slicice = [...el().querySelectorAll<HTMLElement>('.uz-ed-slicica')];
@@ -1043,7 +1127,7 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     expect(isprazni.mock.invocationCallOrder[0]).toBeLessThan(izmeni.mock.invocationCallOrder[0]);
     expect(izmeni.mock.calls[0]).toEqual([11, {
       tip: 'INFO', naslov: 'Uvod', sadrzaj: '- prvo\n- drugo', slikaId: null, beleske: 'Moje beleške', postepeno: true,
-      pitanje: null, platno: null,
+      pitanje: null, platno: null, prelaz: null,
     }, null]);
     expect(store.izabrani()!.tip).toBe('INFO');
     sacuvajSve();
@@ -1126,6 +1210,37 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     expect(s.beleske).toBe('Posle pretvaranja');
     expect(s.slika).toEqual(most);
     expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', slikaId: 'm1', beleske: 'Posle pretvaranja' });
+    sacuvajSve();
+  });
+
+  it('F16: prelaz INFO slajda ide u PLATNO komandu; "Poništi pretvaranje" vraća prelaz kakav je sada', async () => {
+    const p: Prelaz = { efekat: 'GURANJE', smer: 'LEVO', trajanjeMs: 700 };
+    await ucitaj(infoSlajd({ prelaz: p }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(uPlatno()[0][1].prelaz).toEqual(p);
+    expect(store.izabrani()!.prelaz).toEqual(p);
+    // izmena prelaza u formi platna posle pretvaranja: Poništi je ne vraća na stari
+    const novi: Prelaz = { efekat: 'FADE', smer: null, trajanjeMs: 300 };
+    store.izmeniSlajd(11, { ...uPlatno()[0][1], prelaz: novi });
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', naslov: 'Uvod', prelaz: novi });
+    expect(store.izabrani()!.prelaz).toEqual(novi);
+    store.sacuvajOdmah();
+    const put = http.expectOne('api/slajdovi/11');
+    expect(put.request.body).toMatchObject({ tip: 'INFO', prelaz: novi });
+    put.flush({ ...slajd(11, 1, 'Uvod'), ...put.request.body, slika: null });
+  });
+
+  it('F16: "Poništi pretvaranje" bez izmene prelaza vraća prelaz INFO slajda; prelaz obrisan posle pretvaranja ostaje obrisan', async () => {
+    const p: Prelaz = { efekat: 'BRISANJE', smer: 'DOLE', trajanjeMs: 1000 };
+    await ucitaj(infoSlajd({ prelaz: p }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', prelaz: p });
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    store.izmeniSlajd(11, { ...uPlatno().at(-1)![1], prelaz: null });
+    (uspeh.mock.calls[1][1] as { run: () => void }).run();
+    expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', prelaz: null });
     sacuvajSve();
   });
 

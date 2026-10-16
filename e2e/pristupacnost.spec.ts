@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+import { posleOtvaranjaDijaloga } from './dijalog';
 import { expect, test } from './fixture';
 import { napraviPdf } from './fixtures/pdf-fabrika';
 import { lazniBroker } from './lazni-stomp';
@@ -109,6 +110,40 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(odustani).toBeEnabled();
       await odustani.click();
       await expect(dijalog).toHaveCount(0);
+    });
+
+    // 5e: polja prelaza u formi (Efekat, Smer, Trajanje sa greškom na polju, "Pregledaj prelaz") i dijalog pregleda prelaza
+    test('/prezentacije/5 (polja prelaza i dijalog "Pregled prelaza"): bez serious/critical kršenja', async ({ page, mock }) => {
+      const p = mock.podaci.prezentacije.find(x => x.id === 5)!;
+      p.slajdovi.push({
+        id: 54, rb: 4, tip: 'INFO', naslov: 'Zaključak', sadrzaj: 'Sile su u ravnoteži.', slika: null, beleske: null,
+        postepeno: false, pitanje: null, platno: null, prelaz: { efekat: 'GURANJE', smer: 'GORE', trajanjeMs: 5000 },
+      });
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^4\s/ }).click();
+      const grupa = page.getByRole('group', { name: 'Prelaz na ovaj slajd' });
+      await expect(grupa.getByRole('combobox', { name: 'Smer' })).toContainText('Odozgo');
+      // greška na samom polju (crveno, aria-invalid, mat-error) mora da ima kontrast i u noćnom režimu
+      const trajanje = grupa.getByRole('textbox', { name: 'Trajanje (s)' });
+      await trajanje.fill('9');
+      await expect(trajanje).toHaveAttribute('aria-invalid', 'true');
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page, 'app-slajd-forma'), `axe: polja prelaza sa greškom (${rezim})`).toEqual([]);
+      await trajanje.fill('5');
+      await expect(trajanje).not.toHaveAttribute('aria-invalid', 'true');
+      expect(await ozbiljnaKrsenja(page, 'app-slajd-forma'), `axe: polja prelaza (${rezim})`).toEqual([]);
+
+      await grupa.getByRole('button', { name: 'Pregledaj prelaz' }).click();
+      const dijalog = page.getByRole('dialog', { name: 'Pregled prelaza' });
+      await expect(dijalog.getByRole('button', { name: 'Ponovi' })).toBeFocused();
+      // fokus stiže pre kraja animacije otvaranja (afterNextRender), a providan kontejner daje pogrešan kontrast
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      // prelaz od 5 s: odlazni (aria-hidden) i ulazni slajd su oba u dijalogu dok axe radi
+      await expect(dijalog.locator('app-slajd-prikaz')).toHaveCount(2);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: pregled prelaza (${rezim})`).toEqual([]);
+      await dijalog.getByRole('button', { name: 'Zatvori' }).click();
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
     });
 
     test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {

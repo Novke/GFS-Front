@@ -5,7 +5,7 @@ import { By } from '@angular/platform-browser';
 import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { animacija, platno } from '../data-access/platno-podaci.testing';
 import type { CrtezSloj, Potez } from '../data-access/platno.models';
-import { NastavnickoStanje, Rezultat } from '../data-access/uzivo.models';
+import { NastavnickoStanje, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { PublikaScenaComponent } from './publika-scena.component';
 
@@ -339,5 +339,294 @@ describe('PublikaScenaComponent (potezi crteža)', () => {
     const http = TestBed.inject(HttpTestingController);
     await scena(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() }));
     http.verify();
+  });
+});
+
+/** Lažni `matchMedia` sa `prefers-reduced-motion: reduce` (i slušaocima, koje CDK `BreakpointObserver` zove). */
+const smanjenoKretanjeUSistemu = vi.fn((q: string) => ({
+  matches: q === '(prefers-reduced-motion: reduce)', media: q,
+  addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined, removeEventListener: () => undefined,
+}));
+
+/**
+ * Prelaz slajda (odluka 12, Review Focus 4): samo prozor publike, samo za tačno jedan slajd napred; grupa 0 PLATNO slajda
+ * kreće posle prelaza (dok traje, slajd se crta na koraku -1); nikad dva slajda zaglavljena na ekranu.
+ */
+describe('PublikaScenaComponent (prelaz slajda)', () => {
+  /** `klasa`: klase elementa u trenutku poziva (omotač slajda menja klasu kad iz ulaznog postane odlazni, ista instanca). */
+  interface Lazna { finished: Promise<unknown>; cancel: ReturnType<typeof vi.fn>; zavrsi(): void; klasa: string; }
+  let animate: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    animate = vi.fn(function (this: Element): Lazna {
+      let zavrsi!: () => void;
+      let odbij!: (e: unknown) => void;
+      const finished = new Promise<unknown>((r, o) => { zavrsi = () => r(undefined); odbij = o; });
+      finished.catch(() => undefined);
+      return { finished, cancel: vi.fn(() => odbij(new DOMException('Prekinuto', 'AbortError'))), zavrsi, klasa: this.className };
+    });
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+  });
+
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).animate;
+    vi.unstubAllGlobals();
+  });
+
+  const GURANJE = { efekat: 'GURANJE', smer: 'DESNO', trajanjeMs: 600 } as const;
+  const slajd1 = infoSlajd({ id: 20 });
+  const slajd2 = platnoSlajd({
+    id: 30, prelaz: GURANJE,
+    platno: { ...platno(), animacije: [animacija('a0', 'tabela', { okidac: 'SA_PRETHODNIM' }), ...platno().animacije] },
+  });
+  const slajd3 = infoSlajd({ id: 40, naslov: 'Treći', prelaz: { efekat: 'FADE', smer: null, trajanjeMs: 500 } });
+  const na = (sl: SlajdDetails, indeks: number, verzija: number, izmene: Partial<NastavnickoStanje> = {}) =>
+    stanje({ prikaz: 'SLAJD', indeks, trenutniSlajd: sl, korak: 0, brojStavki: sl.tip === 'PLATNO' ? 2 : 0, verzija, ...izmene });
+
+  async function scena(prvi: NastavnickoStanje, animiraj = true) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', prvi);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('animiraj', animiraj);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const prikazi = () => fixture.debugElement.queryAll(By.directive(SlajdPrikazComponent)).map(d => d.componentInstance as SlajdPrikazComponent);
+    const ulazni = () => prikazi().at(-1)!;
+    const posalji = async (s: NastavnickoStanje) => {
+      fixture.componentRef.setInput('stanje', s);
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+    /** Pozivi `animate` na omotaču (`uz-scena-ulazni` / `uz-scena-odlazni` u trenutku poziva), ne na slojevima platna. */
+    const naOmotacu = (klasa: string) => animate.mock.calls
+      .map((poziv, i) => ({ kadrovi: poziv[0] as Keyframe[], opcije: poziv[1], el: animate.mock.contexts[i] as Element, a: animate.mock.results[i].value as Lazna }))
+      .filter(p => p.a.klasa.split(' ').includes(klasa));
+    const zavrsiUlazni = async () => {
+      const a = naOmotacu('uz-scena-ulazni').at(-1)!.a;
+      a.zavrsi();
+      await a.finished;
+      await Promise.resolve();
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+    return { fixture, el, prikazi, ulazni, posalji, naOmotacu, zavrsiUlazni };
+  }
+
+  it('1. slajd 1 -> slajd 2 (verzija +1): odlazni i ulazni se guraju, grupa 0 tek posle prelaza', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd2, 1, 6));
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([20, 30]);
+    const [ul] = t.naOmotacu('uz-scena-ulazni');
+    expect(ul.kadrovi).toEqual([{ transform: 'translate(100%, 0)' }, { transform: 'translate(0, 0)' }]);
+    expect(ul.opcije).toEqual({ duration: 600, easing: 'ease-in-out', fill: 'both' });
+    const [od] = t.naOmotacu('uz-scena-odlazni');
+    expect(od.kadrovi).toEqual([{ transform: 'translate(0, 0)' }, { transform: 'translate(-100%, 0)' }]);
+    expect(t.el.querySelector('.uz-scena-odlazni')!.getAttribute('aria-hidden')).toBe('true');
+    // ulazni crta stanje pre grupe 0 (sloj grupe 0 sakriven), bez animacije slojeva
+    expect(t.ulazni().korak()).toBe(-1);
+    expect(t.ulazni().animacija()).toBeNull();
+    expect(t.el.querySelector<HTMLElement>('.uz-scena-ulazni .uz-pl-sloj[data-sloj="tabela"]')!.style.visibility).toBe('hidden');
+    expect(animate).toHaveBeenCalledTimes(2);
+
+    await t.zavrsiUlazni();
+    expect(t.prikazi().length).toBe(1);
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBeNull();
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 6, grupa: 0 });
+    // omotač bez zaostale animacije (cancel), odlazni prekinut pri uklanjanju; grupa 0 kreće na slojevima
+    expect(ul.a.cancel).toHaveBeenCalled();
+    expect(od.a.cancel).toHaveBeenCalled();
+    expect(animate.mock.contexts.slice(2).some(e => (e as Element).closest('.uz-pl-sloj[data-sloj="tabela"]'))).toBe(true);
+  });
+
+  it('2. slajd 2 -> slajd 1 (nazad): bez prelaza, jedan prikaz', async () => {
+    const t = await scena(na(slajd2, 1, 5));
+    await t.posalji(na({ ...slajd1, prelaz: GURANJE }, 0, 6));
+    expect(t.naOmotacu('uz-scena-ulazni')).toEqual([]);
+    expect(t.prikazi().length).toBe(1);
+  });
+
+  it('3. slajd 1 -> slajd 3 (skok): bez prelaza', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd3, 2, 6));
+    expect(animate).not.toHaveBeenCalled();
+    expect(t.prikazi().length).toBe(1);
+  });
+
+  it('4. nova epoha veze, pa slajd 2: bez prelaza (i bez grupe 0)', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    t.fixture.componentRef.setInput('epohaVeze', 1);
+    t.fixture.detectChanges();
+    await t.fixture.whenStable();
+    await t.posalji(na(slajd2, 1, 6));
+    expect(animate).not.toHaveBeenCalled();
+    expect(t.prikazi().length).toBe(1);
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toBeNull();
+  });
+
+  it('5. prvi snimak je već slajd 2 (kasno otvoren prozor): bez prelaza, grupa 0 se ne pušta', async () => {
+    const t = await scena(na(slajd2, 1, 6));
+    expect(animate).not.toHaveBeenCalled();
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toBeNull();
+  });
+
+  it('6. PRIJAVA -> slajd 2 (indeks 0): ulazni dolazi preko pozadine, odlaznog nema', async () => {
+    const t = await scena(stanje({ prikaz: 'PRIJAVA', indeks: -1, trenutniSlajd: null, verzija: 5 }));
+    await t.posalji(na(slajd2, 0, 6));
+    expect(t.naOmotacu('uz-scena-ulazni').length).toBe(1);
+    expect(t.naOmotacu('uz-scena-odlazni')).toEqual([]);
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBeNull();
+    expect(t.ulazni().korak()).toBe(-1);
+    await t.zavrsiUlazni();
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 6, grupa: 0 });
+  });
+
+  it('7. tokom prelaza stigne korak 1 istog slajda: odlazni nestaje, prelaz prekinut, animacija grupe 1', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd2, 1, 6));
+    const [ul] = t.naOmotacu('uz-scena-ulazni');
+    await t.posalji(na(slajd2, 1, 7, { korak: 1 }));
+    expect(t.prikazi().length).toBe(1);
+    expect(ul.a.cancel).toHaveBeenCalled();
+    expect(t.ulazni().korak()).toBe(1);
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 7, grupa: 1 });
+  });
+
+  it('7a. tokom prelaza snimak sa većom verzijom, a istim prikazom, slajdom i korakom: prelaz traje, grupa 0 tačno jednom', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd2, 1, 6));
+    const pre = animate.mock.calls.length;
+    await t.posalji(na(slajd2, 1, 7, { brojPovezanih: 3 }));
+    expect(t.prikazi().length).toBe(2);
+    expect(animate.mock.calls.length).toBe(pre);
+    expect(t.ulazni().korak()).toBe(-1);
+
+    await t.zavrsiUlazni();
+    expect(t.prikazi().length).toBe(1);
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 7, grupa: 0 });
+    const posleGrupe0 = animate.mock.calls.length;
+    expect(posleGrupe0).toBeGreaterThan(pre);
+
+    await t.posalji(na(slajd2, 1, 8));
+    expect(t.ulazni().animacija()).toBeNull();
+    expect(animate.mock.calls.length).toBe(posleGrupe0);
+  });
+
+  it('7b. odlazni PITANJE sa prikazanim rezultatom: prikazuje rezultat iz prethodnog snimka', async () => {
+    const rez: Rezultat = {
+      tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, tekstovi: null, skala: null,
+      opcije: [{ id: 1, tekst: '3', broj: 0, tacna: null }, { id: 2, tekst: '4', broj: 1, tacna: null }],
+    };
+    const t = await scena(naPitanju('ZATVORENO', { indeks: 0, rezultatiPrikazani: true, javniRezultat: rez, brojOdgovora: 1, verzija: 5 }));
+    await t.posalji(na(slajd2, 1, 6));
+    const [odlazni] = t.prikazi();
+    expect(odlazni.slajd().tip).toBe('PITANJE');
+    expect(odlazni.prikaziRezultat()).toBe(true);
+    expect(odlazni.rezultat()).toEqual(rez);
+    expect(odlazni.faza()).toBe('ZATVORENO');
+    expect(odlazni.brojOdgovora()).toBe(1);
+  });
+
+  it('8. prefers-reduced-motion: bez prelaza, grupa 0 odmah', async () => {
+    vi.stubGlobal('matchMedia', smanjenoKretanjeUSistemu);
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd2, 1, 6));
+    expect(t.naOmotacu('uz-scena-ulazni')).toEqual([]);
+    expect(t.prikazi().length).toBe(1);
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 6, grupa: 0 });
+    // nov snimak bez promene (prijava učesnika): grupa 0 se ne ponavlja
+    await t.posalji(na(slajd2, 1, 7));
+    expect(t.ulazni().animacija()).toBeNull();
+  });
+
+  it('9. animiraj false (konzola): bez prelaza, animacija null', async () => {
+    const t = await scena(na(slajd1, 0, 5), false);
+    await t.posalji(na(slajd2, 1, 6));
+    expect(animate).not.toHaveBeenCalled();
+    expect(t.prikazi().length).toBe(1);
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toBeNull();
+  });
+
+  it('10. slajd bez prelaza: kao pre faze 5 (grupa 0 odmah, jedan prikaz)', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na({ ...slajd2, prelaz: null }, 1, 6));
+    expect(t.naOmotacu('uz-scena-ulazni')).toEqual([]);
+    expect(t.prikazi().length).toBe(1);
+    expect(t.ulazni().korak()).toBe(0);
+    expect(t.ulazni().animacija()).toEqual({ kljuc: 6, grupa: 0 });
+  });
+
+  it('11. brzo prelistavanje: slajd 3 stigne dok prelaz 1 -> 2 traje: bez novog prelaza, jedan prikaz, bez zaostale animacije', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    await t.posalji(na(slajd2, 1, 6));
+    const [ul] = t.naOmotacu('uz-scena-ulazni');
+    const [od] = t.naOmotacu('uz-scena-odlazni');
+    await t.posalji(na(slajd3, 2, 7));
+    expect(t.naOmotacu('uz-scena-ulazni').length).toBe(1);
+    expect(ul.a.cancel).toHaveBeenCalled();
+    expect(od.a.cancel).toHaveBeenCalled();
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([40]);
+    expect(t.ulazni().korak()).toBe(0);
+    // kasno razrešen finished prekinute animacije ne sme da javi kraj ni da pomeri stanje
+    ul.a.zavrsi();
+    await Promise.resolve();
+    t.fixture.detectChanges();
+    await t.fixture.whenStable();
+    expect(t.prikazi().length).toBe(1);
+
+    // sledeći korak napred posle smirivanja opet ima prelaz (slajd 3 -> 4)
+    await t.posalji(na(infoSlajd({ id: 50, prelaz: GURANJE }), 3, 8));
+    expect(t.naOmotacu('uz-scena-ulazni').length).toBe(2);
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([40, 50]);
+  });
+
+  it('12. korak nazad tokom prelaza (slajd 2 -> 1): prelaz prekinut, bez novog, jedan prikaz (slajd 1 u istoj instanci)', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    const prvi = t.prikazi()[0];
+    await t.posalji(na(slajd2, 1, 6));
+    const [od] = t.naOmotacu('uz-scena-odlazni');
+    await t.posalji(na({ ...slajd1, prelaz: GURANJE }, 0, 7));
+    expect(t.naOmotacu('uz-scena-ulazni').length).toBe(1);
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([20]);
+    expect(t.ulazni().animacija()).toBeNull();
+    // odlazni omotač slajda 1 je opet ulazni: ista instanca, krajnji kadar odlaska prekinut (bez upisanog stila)
+    expect(t.prikazi()[0]).toBe(prvi);
+    expect(od.a.cancel).toHaveBeenCalled();
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBeNull();
+    expect(t.el.querySelector('.uz-scena-ulazni')!.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  it('14. slajd sa ekrana postaje odlazni u istoj instanci prikaza i istom elementu (formule, slike, potezi ostaju nacrtani)', async () => {
+    const t = await scena(na(slajd1, 0, 5));
+    const prvi = t.prikazi()[0];
+    const domacin = t.el.querySelector('app-slajd-prikaz')!;
+    const omotac = t.el.querySelector('.uz-scena-ulazni')!;
+    await t.posalji(na(slajd2, 1, 6));
+    expect(t.prikazi()[0]).toBe(prvi);
+    expect(t.el.querySelector('.uz-scena-odlazni app-slajd-prikaz')).toBe(domacin);
+    expect(t.el.querySelector('.uz-scena-odlazni')).toBe(omotac);
+    expect(omotac.getAttribute('aria-hidden')).toBe('true');
+    // odlazni je ispred ulaznog u DOM-u (ulazni iznad njega, z-index), ulazni je nov prikaz slajda 2
+    expect(omotac.nextElementSibling!.classList).toContain('uz-scena-ulazni');
+    expect(t.ulazni()).not.toBe(prvi);
+    expect(prvi.animacija()).toBeNull();
+    await t.zavrsiUlazni();
+    expect(t.prikazi().length).toBe(1);
+    expect(domacin.isConnected).toBe(false);
+  });
+
+  it('13. FADE: animira se samo ulazni (providnost), odlazni miruje ispod', async () => {
+    const t = await scena(na(slajd2, 1, 5));
+    await t.posalji(na(slajd3, 2, 6));
+    expect(t.naOmotacu('uz-scena-ulazni').map(p => p.kadrovi)).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
+    expect(t.naOmotacu('uz-scena-odlazni')).toEqual([]);
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([30, 40]);
+    await t.zavrsiUlazni();
+    expect(t.prikazi().map(p => p.slajd().id)).toEqual([40]);
   });
 });

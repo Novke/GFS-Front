@@ -28,6 +28,7 @@
      "slika": null,
      "beleske": null,
      "postepeno": false,
+     "prelaz": null,
      "pitanje": null,
      "platno": null
     },
@@ -40,6 +41,7 @@
      "slika": null,
      "beleske": "Stare beleške",
      "postepeno": false,
+     "prelaz": null,
      "pitanje": null,
      "platno": {
       "verzija": 1,
@@ -410,6 +412,7 @@
      "slika": null,
      "beleske": null,
      "postepeno": false,
+     "prelaz": null,
      "pitanje": null,
      "platno": {
       "verzija": 1,

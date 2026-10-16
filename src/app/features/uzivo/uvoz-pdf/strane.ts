@@ -63,6 +63,7 @@ export function slajdStrane(medijKljuc: string, strana: { sirina: number; visina
   return {
     tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null,
     platno: { verzija: 1, pozadina: { boja: TEME[tema].pozadina, medijId: null }, slojevi: [sloj], animacije: [] },
+    prelaz: null,
   };
 }
 

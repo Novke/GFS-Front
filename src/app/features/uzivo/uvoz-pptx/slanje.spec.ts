@@ -37,7 +37,7 @@ const platno = (slojevi: Sloj[], pozadina: string | null = null): Platno =>
   ({ verzija: 1, pozadina: { boja: '#FFFFFF', medijId: pozadina }, slojevi, animacije: [] });
 
 function slajd(indeks: number, slojevi: Sloj[], mediji: string[] = []): UvezenSlajd {
-  const cmd: SlajdCmd = { tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: platno(slojevi) };
+  const cmd: SlajdCmd = { tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: platno(slojevi), prelaz: null };
   return { indeks, cmd, mediji, statistika: praznaStatistika() };
 }
 

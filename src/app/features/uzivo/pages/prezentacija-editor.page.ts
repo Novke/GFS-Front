@@ -224,7 +224,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
                 }
               }
-              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" />
+              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" (pregledPrelaza)="pregledajPrelaz(s)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -467,8 +467,12 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
               return;
             }
             this.store.isprazni(); // otvoren tekst ili gest editora platna ide u dokument pre vraćanja (odluka 9c faze 4)
-            // beleške su iste u oba tipa: ostaje ono što je otkucano posle pretvaranja; slika sa pravim nazivom do odgovora
-            this.store.izmeniSlajd(t.id, { ...original, beleske: nadji()?.beleske ?? original.beleske }, t.slika);
+            // beleške i prelaz su isti u oba tipa: ostaje ono što je izmenjeno posle pretvaranja (PUT bez prelaza bi ga
+            // obrisao, a forma platna ga menja); slika sa pravim nazivom do odgovora
+            const sada = nadji();
+            this.store.izmeniSlajd(t.id, {
+              ...original, beleske: sada?.beleske ?? original.beleske, prelaz: sada ? sada.prelaz ?? null : original.prelaz,
+            }, t.slika);
             this.fokusiraj(k, 'app-slajd-forma .uz-ed-pretvori');
           },
         }, { grupa: 'uzivo-pretvori' });
@@ -595,6 +599,20 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   /** Uvoz iz PowerPointa (spec 7.7). */
   protected uveziIzPowerPointa(): void {
     this.uvezi(podaci => this.otvaracUvoza.otvori(this.dialog, podaci));
+  }
+
+  /** "Pregledaj prelaz" (F17): prethodni i izabrani slajd (lokalno, sa prelazom iz forme) u lenjom dijalogu. */
+  /** Dvoklik (ili klik dok se chunk učitava) ne otvara drugi dijalog (recenzija F17, Minor 5). */
+  private pregledSeOtvara = false;
+
+  protected pregledajPrelaz(s: SlajdDetails): void {
+    if (this.pregledSeOtvara || this.dialog.openDialogs.length) return;
+    this.pregledSeOtvara = true;
+    const l = this.store.slajdovi(), i = l.findIndex(x => x.id === s.id);
+    import('./prelaz-pregled.dialog')
+      .then(m => m.otvoriPregledPrelaza(this.dialog, { pre: l[i - 1] ?? null, slajd: l[i] ?? s, tema: vazecaTema(this.store.prezentacija()?.tema) }))
+      .catch(() => this.obavestenja.greska('Pregled prelaza nije učitan. Osveži stranicu i pokušaj ponovo.'))
+      .finally(() => (this.pregledSeOtvara = false));
   }
 
   /** Uvoz iz PDF-a (faza 5d): isti tok kao PowerPoint; dijalog i pdf.js su lenji chunk-ovi (`UvozPdfOtvarac`). */

@@ -7,12 +7,15 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { greskeSlajda, novoPitanje, slajdUCmd } from '../data-access/slajd-pravila';
-import { MedijInfo, SlajdCmd, SlajdDetails, TipSlajda } from '../data-access/uzivo.models';
+import { PRELAZ, greskeSlajda, novoPitanje, slajdUCmd, trajanjeIzSekundi } from '../data-access/slajd-pravila';
+import { MedijInfo, SlajdCmd, SlajdDetails, TipPrelaza, TipSlajda } from '../data-access/uzivo.models';
 import { PitanjeForma, PitanjeFormaComponent, pitanjeForma, pitanjeIzForme } from './pitanje-forma.component';
+// samo u @defer bloku (i `import type`): polja prelaza su lenji chunk, stranica editora ne raste
+import { PrelazPoljaComponent } from './prelaz-polja.component';
+import type { KontrolePrelaza } from './prelaz-polja.component';
 import { SlikaPoljeComponent } from './slika-polje.component';
 
-type SlajdForma = FormGroup<{
+type SlajdForma = FormGroup<KontrolePrelaza & {
   naslov: FormControl<string>;
   sadrzaj: FormControl<string>;
   slikaId: FormControl<string | null>;
@@ -33,7 +36,7 @@ const nn = { nonNullable: true } as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, TextFieldModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatIconModule, MatInputModule,
-    PitanjeFormaComponent, SlikaPoljeComponent,
+    PitanjeFormaComponent, PrelazPoljaComponent, SlikaPoljeComponent,
   ],
   template: `
     <form class="uz-ed-forma" [formGroup]="forma" (submit)="$event.preventDefault()">
@@ -61,6 +64,11 @@ const nn = { nonNullable: true } as const;
         <!-- PLATNO: slojeve uređuje editor platna iznad forme; ovde ostaju samo beleške -->
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
       }
+      @defer (on immediate) {
+        <app-prelaz-polja [kontrole]="forma.controls" [efekat]="efekatPrelaza()" (pregled)="pregledPrelaza.emit()" />
+      } @error {
+        <p class="uz-ed-greska" role="alert">Polja prelaza nisu učitana. Osveži stranicu i pokušaj ponovo.</p>
+      }
       <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
         <mat-label>Beleške za predavača</mat-label>
         <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" formControlName="beleske"></textarea>
@@ -83,6 +91,8 @@ export class SlajdFormaComponent implements OnInit {
   readonly izmena = output<SlajdCmd>();
   /** INFO: "Pretvori u platno" (odluka 20); forma se posle toga pravi ponovo (`track kljuc:tip`). */
   readonly pretvori = output<void>();
+  /** "Pregledaj prelaz" (F17: dijalog sa prethodnim slajdom); forma se ne menja. */
+  readonly pregledPrelaza = output<void>();
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -91,6 +101,8 @@ export class SlajdFormaComponent implements OnInit {
   /** Dokument platna se ne menja formom: vraća se neizmenjen (izmena beleški ne sme da obriše slojeve). */
   private platno: SlajdCmd['platno'] = null;
   protected readonly greske = signal<string[]>([]);
+  /** Vrednost kontrole efekta (polja Smer i Trajanje zavise od nje; OnPush ne vidi promenu kontrole sama). */
+  protected readonly efekatPrelaza = signal<TipPrelaza | 'NEMA'>('NEMA');
 
   ngOnInit(): void {
     const cmd = slajdUCmd(this.slajd());
@@ -103,9 +115,14 @@ export class SlajdFormaComponent implements OnInit {
       postepeno: new FormControl(cmd.postepeno, nn),
       beleske: new FormControl(cmd.beleske ?? '', nn),
       pitanje: pitanjeForma(cmd.pitanje ?? novoPitanje('JEDAN_TACAN')),
+      prelazEfekat: new FormControl<TipPrelaza | 'NEMA'>(cmd.prelaz?.efekat ?? 'NEMA', nn),
+      prelazSmer: new FormControl(cmd.prelaz?.smer ?? 'DESNO', nn),
+      prelazSekunde: new FormControl(String((cmd.prelaz?.trajanjeMs ?? PRELAZ.podrazumevano) / 1000).replace('.', ','), nn),
     });
+    this.efekatPrelaza.set(this.forma.controls.prelazEfekat.value);
     this.greske.set(greskeSlajda(this.cmd()));
     this.forma.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.efekatPrelaza.set(this.forma.controls.prelazEfekat.value);
       const novi = this.cmd();
       this.greske.set(greskeSlajda(novi));
       this.izmena.emit(novi);
@@ -127,6 +144,10 @@ export class SlajdFormaComponent implements OnInit {
       postepeno: v.postepeno,
       pitanje: this.tip === 'PITANJE' ? pitanjeIzForme(this.forma.controls.pitanje) : null,
       platno: this.platno,
+      // zarez ili tačka; prazno ili neispravno polje daje 0 ms, pa poruku servera ispod forme
+      prelaz: v.prelazEfekat === 'NEMA' ? null : {
+        efekat: v.prelazEfekat, smer: v.prelazEfekat === 'FADE' ? null : v.prelazSmer, trajanjeMs: trajanjeIzSekundi(v.prelazSekunde),
+      },
     };
   }
 }

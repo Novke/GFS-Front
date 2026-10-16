@@ -41,6 +41,14 @@ export const MERA_FORMULE = new InjectionToken<MeraFormule | null>('MERA_FORMULE
 
 let stilTeksta: Promise<void> | null = null;
 
+type Ucitaj = () => Promise<unknown>;
+/**
+ * Modul formula posle uspešnog učitavanja modula **i** stila, po paru učitavača (u aplikaciji jedan par po prozoru). Nova
+ * instanca (nov slajd PITANJE -> PITANJE, nova opcija) sa toplim kešom crta markup već u prvom render-u (`afterRenderEffect`
+ * istog ciklusa), pa nijedan kadar ne pokazuje izvor `$…$` (završna recenzija 5e, M1). Hladan keš: asinhroni put kao ranije.
+ */
+let ucitani = new WeakMap<Ucitaj, WeakMap<Ucitaj, ModulFormule>>();
+
 /**
  * Lakši stil za formule u tekstu (telefon): isti `assets/mathlive/mathlive-static.css` kao faza 4, pa samo dva fonta
  * (najviše 3 + 3 s). **Greška stila odbija** i ne pamti se (završna recenzija 5a, A M4): markup bez CSS-a (bez rasporeda
@@ -95,9 +103,10 @@ export function ucitajStilFormulaUTekstu(): Promise<void> {
   return stilTeksta;
 }
 
-/** Samo za testove: zaboravlja keširano obećanje stila (keš inače traje koliko i prozor). */
+/** Samo za testove: zaboravlja keširano obećanje stila i učitane module (keš inače traje koliko i prozor). */
 export function resetujStilTekstaFormule(): void {
   stilTeksta = null;
+  ucitani = new WeakMap();
 }
 
 export const UCITAJ_STIL_TEKSTA_FORMULE = new InjectionToken<() => Promise<void>>('UCITAJ_STIL_TEKSTA_FORMULE', {
@@ -128,7 +137,7 @@ export class TekstFormuleComponent {
   private readonly ucitaj = inject(UCITAJ_FORMULE);
   private readonly ucitajStil = inject(UCITAJ_STIL_TEKSTA_FORMULE);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-  private readonly modul = signal<ModulFormule | null>(null);
+  private readonly modul = signal<ModulFormule | null>(ucitani.get(this.ucitaj)?.get(this.ucitajStil) ?? null);
   private ucitavanje = false;
   /** Samo telefon (bez `MERA_FORMULE`): posmatra nacrtane formule, da široka (skrol u sebi) dobije tab stop. */
   private skrol: ResizeObserver | null = null;
@@ -141,8 +150,14 @@ export class TekstFormuleComponent {
         return;
       }
       this.ucitavanje = true;
-      Promise.all([this.ucitaj(), this.ucitajStil()]).then(
-        ([m]) => this.modul.set(m),
+      const [ucitaj, stil] = [this.ucitaj, this.ucitajStil];
+      Promise.all([ucitaj(), stil()]).then(
+        ([m]) => {
+          let poStilu = ucitani.get(ucitaj);
+          if (!poStilu) ucitani.set(ucitaj, (poStilu = new WeakMap()));
+          poStilu.set(stil, m);
+          this.modul.set(m);
+        },
         (e: unknown) => {
           // projektor i telefon ne prikazuju grešku: ostaje izvor `$...$`; nov pokušaj tek sa novim tekstom (nema petlje)
           this.ucitavanje = false;
