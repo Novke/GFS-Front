@@ -138,7 +138,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       const dijalog = page.getByRole('dialog', { name: 'Pregled prelaza' });
       await expect(dijalog.getByRole('button', { name: 'Ponovi' })).toBeFocused();
       // fokus stiže pre kraja animacije otvaranja (afterNextRender), a providan kontejner daje pogrešan kontrast
-      await posleOtvaranjaDijaloga(page);
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
       // prelaz od 5 s: odlazni (aria-hidden) i ulazni slajd su oba u dijalogu dok axe radi
       await expect(dijalog.locator('app-slajd-prikaz')).toHaveCount(2);
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: pregled prelaza (${rezim})`).toEqual([]);

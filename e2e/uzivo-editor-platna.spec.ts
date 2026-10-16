@@ -426,9 +426,15 @@ test.describe('uživo: formula (4b, F16)', () => {
     await expect(mf).toBeFocused();
     // MathLive je često spreman pre kraja animacije otvaranja; tasteri baš u trenutku kad CDK posle nje prebaci fokus
     // na kontejner (dijalog ga vraća) bi se izgubili
-    await posleOtvaranjaDijaloga(page);
+    const kontejner = page.locator('mat-dialog-container');
+    await posleOtvaranjaDijaloga(page, kontejner);
     await expect(mf).toBeFocused();
-    await page.keyboard.type('x^2');
+    await page.keyboard.type('x');
+    // CDK posle animacije otvaranja fokusira kontejner (fokus u shadow DOM-u ne vidi): dijalog ga vraća u math-field i kad
+    // je korisnik već počeo da kuca, pa se nastavak ne gubi
+    await kontejner.evaluate((e: HTMLElement) => e.focus());
+    await expect(mf).toBeFocused();
+    await page.keyboard.type('^2');
     const latex = dijalog(page).getByRole('textbox', { name: 'LaTeX' });
     await expect(latex).toHaveValue('x^2');
     // Esc u math-field-u pripada MathLive-u (LaTeX režim): dijalog ostaje otvoren

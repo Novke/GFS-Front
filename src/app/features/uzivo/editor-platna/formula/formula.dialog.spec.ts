@@ -142,6 +142,21 @@ describe('FormulaDialog', () => {
     expect(document.activeElement).toBe(polje());
   });
 
+  it('klik na prazan deo dijaloga (fokus u kontejner dok traje pritisak) ostavlja fokus u kontejneru', async () => {
+    otvori();
+    await ucitano();
+    const kontejner = document.querySelector<HTMLElement>('mat-dialog-container')!;
+    polje().focus();
+    kontejner.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    kontejner.focus();
+    expect(document.activeElement).toBe(kontejner);
+    // posle pritiska fokus koji CDK otme opet se vraća
+    kontejner.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    polje().focus();
+    kontejner.focus();
+    expect(document.activeElement).toBe(polje());
+  });
+
   it('odbijeno učitavanje: fokus u polju "LaTeX" i poruka u role="status"', async () => {
     ucitaj = () => Promise.reject(new Error('chunk'));
     otvori();
