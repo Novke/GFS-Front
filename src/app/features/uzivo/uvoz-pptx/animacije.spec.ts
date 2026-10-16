@@ -48,8 +48,10 @@ describe('pretvoriAnimacije: efekti', () => {
     [31, 0, undefined, 'ZUM', null, 'EFEKAT_PRIBLIZAN'],
     [6, 0, 'circle(in)', 'FADE', null, 'EFEKAT_ZAMENJEN'],
   ];
+  // BRISANJE kao IZLAZ: zrcaljen smer (vidi test "BRISANJE kao IZLAZ" ispod)
+  const izlaz = ([p, t, f, e, smer, k]: Red): Red => [p, t, f, e, e === 'BRISANJE' && smer === 'DOLE' ? 'GORE' : smer, k];
   const slucajevi: [...Red, 'entr' | 'exit', VrstaAnimacije][] = redovi.flatMap((r): [...Red, 'entr' | 'exit', VrstaAnimacije][] =>
-    [[...r, 'entr', 'ULAZ'], [...r, 'exit', 'IZLAZ']]);
+    [[...r, 'entr', 'ULAZ'], [...izlaz(r), 'exit', 'IZLAZ']]);
 
   it.each(slucajevi)('preset %i (podtip %i, filter %s) -> %s %s, upozorenje %s (%s)', (preset, podtip, filter, efekat, smer, kod, klasa, vrsta) => {
     const r = efekti([klik({ klasa, preset, podtip, filter })]);
@@ -58,6 +60,14 @@ describe('pretvoriAnimacije: efekti', () => {
       trajanjeMs: efekat === 'POJAVI' ? 0 : 500, kasnjenjeMs: 0,
     }]);
     expect(r.kodovi).toEqual(kod ? [kod] : []);
+  });
+
+  it('završni talas: poruka PODELI_SMER za izlaz opisuje izlaz (od sredine -> ka sredini), za ulaz ulaz', () => {
+    const poruka = (klasa: 'entr' | 'exit') => efekti([klik({ klasa, preset: 16, podtip: 21, filter: 'barn(inVertical)' })]).upozorenja;
+    expect(poruka('entr')).toEqual([{ kod: 'PODELI_SMER', poruka: 'Podela ka sredini se prikazuje kao podela od sredine.' }]);
+    expect(poruka('exit')).toEqual([{
+      kod: 'PODELI_SMER', poruka: 'Izlaz podelom od sredine se prikazuje kao izlaz podelom ka sredini.',
+    }]);
   });
 
   it('63 (entr) je ISCRTAJ sleva; 63 kao exit je FADE uz EFEKAT_ZAMENJEN', () => {
@@ -74,6 +84,20 @@ describe('pretvoriAnimacije: efekti', () => {
     'smer ULET-a i BRISANJA iz podtipa %i -> %s', (podtip, smer) => {
       expect(efekti([klik({ preset: 2, podtip })]).animacije[0].smer).toBe(smer);
       expect(efekti([klik({ preset: 22, podtip })]).animacije[0].smer).toBe(smer);
+    });
+
+  /*
+   * PowerPoint za izlaz "Wipe" (preset 22) zadržava natpise "From Bottom/Left/Right/Top" i isti podtip kao ulaz (bit strane
+   * sa koje brisanje kreće): kod izlaza "From Bottom" prvo nestaje DONJI deo. Platno izlaz crta kao obrnut ulaz istog smera
+   * (`kadroviAnimacije`), pa bi IZLAZ DOLE prvo sakrio gornji deo (zrcaljeno). Zato se smer izlaza obrće: "From Bottom" ->
+   * GORE (obrnut ulaz odozgo: prvo nestaje donji deo). Dokaz: LibreOffice (`sd/xml/effects.xml` ooo-exit-wipe from-bottom =
+   * isti barWipe kao ulaz from-bottom sa mode="out", a `transitionfactorytab.cxx` barWipe "out by subtraction").
+   */
+  it.each([[1, 'DOLE'], [2, 'LEVO'], [4, 'GORE'], [8, 'DESNO'], [3, 'DOLE'], [12, 'GORE'], [0, 'GORE']] as [number, Smer][])(
+    'BRISANJE kao IZLAZ: podtip %i -> zrcaljen smer %s (ULET-izlaz i ulaz bez zrcaljenja)', (podtip, smer) => {
+      expect(efekti([klik({ klasa: 'exit', preset: 22, podtip })]).animacije[0]).toMatchObject({ vrsta: 'IZLAZ', efekat: 'BRISANJE', smer });
+      const ulaz = efekti([klik({ preset: 22, podtip })]).animacije[0].smer;
+      expect(efekti([klik({ klasa: 'exit', preset: 2, podtip })]).animacije[0].smer).toBe(ulaz);
     });
 
   it('PODELI: barn(outHorizontal) je HORIZONTALNO bez upozorenja; nepoznat filter je VERTIKALNO', () => {

@@ -3,20 +3,30 @@
 // ka ivicama i centrima), prevlačenje po praznom crta pravougaonik izbora, ručke menjaju veličinu, rotaciju i krajeve
 // linije. Gest menja dokument kroz `PlatnoEditorStore.azurirajGest` najviše jednom po kadru (`PoKadru`, odluka 33) i
 // beleži se kao jedan korak na `pointerup`; Esc i `pointercancel` ga poništavaju. Sve mere idu kroz `--u` kao prikaz.
+// Tekst (F12): dvoklik na TEKST sloj počinje uređivanje; sloj za uređivanje leži IZNAD overlay-a, pa pritisak koji
+// stigne ovde je van sloja u uređivanju: prvo završava uređivanje, pa radi izbor. Tabela (F14): klik u izabranu (ili
+// upravo izabranu) tabelu bira ćeliju po nacrtanim `td[data-celija]`, Shift+klik širi opseg, dvoklik uređuje ćeliju.
+// Formula (F16): dvoklik javlja id kroz `urediFormulu`; dijalog otvara koren editora (store ne zna za dijaloge).
+// Brojevi grupa (F18): dok je tab "Animacije", uz gornji levi ugao obuhvata svakog vidljivog sloja sa animacijama stoje
+// brojevi njegovih grupa ("0" = kreće sama, pre prvog klika, kao PowerPoint); overlay je `aria-hidden`, panel nosi isto.
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
-import type { OblikSloj, Platno, Sloj, Tacka } from '../data-access/platno.models';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, computed, inject, output, signal, untracked,
+} from '@angular/core';
+import type { OblikSloj, Platno, Sloj, TabelaSloj, Tacka } from '../data-access/platno.models';
 import { stilSloja } from '../ui/platno-prikaz.component';
 import { jedinice, type Stil } from '../ui/platno-tekst';
 import { FokusPlatna } from './fokus-platna';
 import {
   type Obuhvat, type Rucka, SIRINA_PLATNA, type Vodjica, jeLinija, krajIzUgla, krajeviLinije, kutijaSloja, linijaIzKrajeva,
-  normalizujUgao, obuhvat, obuhvatSvih, prianjanje, promeniVelicinu, slojNaTacki, uPravougaoniku, uSvetske, ugaoIDuzina,
-  ugaoRotacije,
+  normalizujUgao, obuhvat, obuhvatSvih, prianjanje, promeniVelicinu, slojNaTacki, uLokalne, uPravougaoniku, uSvetske,
+  ugaoIDuzina, ugaoRotacije,
 } from './geometrija';
+import { grupeNaSlojevima } from './animacije';
 import { izmeniSlojeve, pomeriSlojeve, postaviKutiju } from './komande';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PoKadru, RASPORED_KADRA } from './po-kadru';
+import { type Polje, type PravougaonikCelije, celijaNaTacki, pravougaoniciTabele } from './tabela';
 
 /** Pomeraj pokazivača (px) do kog je pritisak pa puštanje i dalje klik (i do kog gest ne počinje). */
 const PRAG_KLIKA_PX = 3;
@@ -104,6 +114,7 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     '(pointermove)': 'pomeraj($event)',
     '(pointerup)': 'gore($event)',
     '(pointercancel)': 'prekid($event)',
+    '(dblclick)': 'dvoklik($event)',
     '(lostpointercapture)': 'prekid($event)',
   },
   template: `
@@ -120,6 +131,7 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
       </div>
     }
     @if (obuhvatIzbora(); as o) { <div class="uz-ep-obuhvat" [style]="o"></div> }
+    @if (opsegCelija(); as c) { <div class="uz-ep-celije" [style]="c.sloj"><div [style]="c.opseg"></div></div> }
     @if (rucke(); as r) {
       <div class="uz-ep-rucke" [style]="r.stil">
         @for (h of r.rucke; track h.ime) {
@@ -134,6 +146,7 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     }
     @for (v of vodjiceStil(); track $index) { <div class="uz-ep-vodjica" [style]="v"></div> }
     @if (pravougaonik(); as r) { <div class="uz-ep-pravougaonik" [style]="r"></div> }
+    @for (z of znacke(); track z.id) { <div class="uz-ep-znacka" [style]="z.stil">{{ z.tekst }}</div> }
   `,
   styles: `
     :host {
@@ -147,11 +160,24 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
     :host > div { position: absolute; box-sizing: border-box; pointer-events: none; }
     .uz-ep-izbor { outline: 1px solid var(--primary); outline-offset: 0; }
     .uz-ep-obuhvat { border: 1px dashed var(--primary); }
+    .uz-ep-celije > div {
+      position: absolute;
+      outline: 2px solid var(--primary);
+      background: color-mix(in srgb, var(--primary) 12%, transparent);
+    }
     .uz-ep-pravougaonik {
       border: 1px solid var(--primary);
       background: color-mix(in srgb, var(--primary) 12%, transparent);
     }
     .uz-ep-vodjica { background: var(--accent); }
+    .uz-ep-znacka {
+      padding: 0 4px;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: var(--primary-ink);
+      font: 600 11px/16px var(--font);
+      white-space: nowrap;
+    }
     .uz-ep-rucka {
       position: absolute;
       width: 8px;
@@ -197,6 +223,8 @@ const prazanTekst = (s: Sloj) => s.tip === 'TEKST' && s.pasusi.every((p) => p.de
   `,
 })
 export class PlatnoOverlayComponent {
+  /** Dvoklik na FORMULA sloj (F16): id sloja; koren editora otvara dijalog formule. */
+  readonly urediFormulu = output<string>();
   private readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
@@ -250,6 +278,33 @@ export class PlatnoOverlayComponent {
     if (!s || !jeLinija(s)) return [];
     return krajeviLinije(s).map((t, i) => ({ ime: i === 0 ? 'KRAJ_A' : 'KRAJ_B', left: jedinice(t.x), top: jedinice(t.y) }));
   });
+  /** Izabrane ćelije jedine izabrane tabele (ne dok se ćelija uređuje): obuhvat nacrtanih pravougaonika u sloju. */
+  protected readonly opsegCelija = computed(() => {
+    const s = this.store.jedan();
+    const o = this.store.opsegCelijaIzbora();
+    if (s?.tip !== 'TABELA' || !o || this.store.uredjivanje()) return null;
+    // izmereno posle crtanja za ovaj sadržaj tabele; do tada (i bez merenja) mere modela
+    const m = this.mereTabele();
+    const sve = m && m.id === s.id && m.celije === s.celije && m.kolone === s.kolone && m.redovi === s.redovi
+      ? m.pravougaonici : pravougaoniciTabele(null, s);
+    const u = sve
+      .filter((c) => c.polje.r >= o.r1 && c.polje.r <= o.r2 && c.polje.k >= o.k1 && c.polje.k <= o.k2);
+    if (!u.length) return null;
+    const x = Math.min(...u.map((c) => c.x));
+    const y = Math.min(...u.map((c) => c.y));
+    const sirina = Math.max(...u.map((c) => c.x + c.w)) - x;
+    const visina = Math.max(...u.map((c) => c.y + c.h)) - y;
+    return { sloj: okvirSloja(s), opseg: stilObuhvata({ x, y, sirina, visina }) };
+  });
+  /** Takt učitavanja fontova (`document.fonts` `loadingdone`): drugi font menja visine redova, pa se ćelije mere ponovo. */
+  private readonly fontovi = signal(0);
+  /**
+   * Nacrtani pravougaonici ćelija izabrane tabele, izmereni POSLE crtanja i vezani za njen sadržaj (ćelije, kolone,
+   * redovi) i takt fontova: pomeranje sloja ih ne menja, pa prevlačenje ne radi prinudni raspored po kadru (odluka 33).
+   */
+  private readonly mereTabele = signal<{
+    id: string; celije: unknown; kolone: unknown; redovi: unknown; fontovi: number; pravougaonici: PravougaonikCelije[];
+  } | null>(null);
   protected readonly prazni = computed(() =>
     this.store.zaPrikaz().slojevi.filter(prazanTekst).map((s) => ({ id: s.id, stil: okvirSloja(s) })));
   protected readonly pravougaonik = computed(() => {
@@ -257,14 +312,39 @@ export class PlatnoOverlayComponent {
     return r ? stilObuhvata(r) : null;
   });
   protected readonly vodjiceStil = computed(() => this.vodjice().map(stilVodjice));
+  protected readonly znacke = computed(() => {
+    if (this.store.tab() !== 'ANIMACIJE') return [];
+    const g = grupeNaSlojevima(this.store.platno());
+    return this.store.zaPrikaz().slojevi.filter((s) => g.has(s.id)).map((s) => {
+      const o = obuhvat(kutijaSloja(s));
+      return { id: s.id, tekst: g.get(s.id)!.join(' · '), stil: { left: jedinice(Math.max(0, o.x)), top: jedinice(Math.max(0, o.y)) } };
+    });
+  });
 
   constructor() {
     const raspored = inject(RASPORED_KADRA);
     this.kadar = new PoKadru<Pokret>((v) => this.obradi(v), (f) => raspored.zakazi(f), (id) => raspored.otkazi(id));
+    const fontovi = this.dokument.fonts as FontFaceSet | undefined;
+    const naFont = () => this.fontovi.update((n) => n + 1);
+    fontovi?.addEventListener('loadingdone', naFont);
+    afterRenderEffect({
+      read: () => {
+        const s = this.store.jedan();
+        const f = this.fontovi();
+        if (s?.tip !== 'TABELA' || !this.store.opsegCelijaIzbora() || this.store.uredjivanje()) return;
+        const m = untracked(this.mereTabele);
+        if (m && m.id === s.id && m.celije === s.celije && m.kolone === s.kolone && m.redovi === s.redovi && m.fontovi === f) return;
+        this.mereTabele.set({
+          id: s.id, celije: s.celije, kolone: s.kolone, redovi: s.redovi, fontovi: f,
+          pravougaonici: pravougaoniciTabele(this.host.closest('.uz-platno'), s),
+        });
+      },
+    });
     // uništavanje usred gesta: ono što čeka se odbacuje, a store sam završava i čuva gest (onDestroy -> isprazni)
     inject(DestroyRef).onDestroy(() => {
       this.kadar.prekini();
       this.dokument.removeEventListener('keydown', this.naEsc, true);
+      fontovi?.removeEventListener('loadingdone', naFont);
     });
   }
 
@@ -285,7 +365,33 @@ export class PlatnoOverlayComponent {
     return p.id !== null && typeof id === 'number' && id !== p.id;
   }
 
+  /**
+   * Dvoklik na TEKST sloj ili ćeliju tabele (gornji vidljivi sloj na tački): uređivanje teksta (zaključan: poruka iz
+   * store-a); na FORMULA sloj: `urediFormulu` (F16).
+   */
+  protected dvoklik(e: MouseEvent): void {
+    const { tacka, px } = this.tacka(e);
+    const s = slojNaTacki(this.store.zaPrikaz().slojevi, tacka, TOLERANCIJA_PX / px);
+    if (s?.tip === 'TEKST') this.store.pocniUredjivanje(s.id);
+    if (s?.tip === 'FORMULA') this.urediFormulu.emit(s.id);
+    const polje = s?.tip === 'TABELA' ? this.celijaNa(s, tacka) : null;
+    if (s && polje) this.store.pocniUredjivanje(s.id, polje);
+  }
+
+  /** Polje tabele na tački platna (kroz rotaciju sloja u njegove koordinate), po nacrtanim pravougaonicima ćelija. */
+  private celijaNa(t: TabelaSloj, tacka: Tacka): Polje | null {
+    const l = uLokalne(kutijaSloja(t), tacka);
+    return celijaNaTacki(pravougaoniciTabele(this.host.closest('.uz-platno'), t), { x: l.x + t.sirina / 2, y: l.y + t.visina / 2 });
+  }
+
+  private izaberiCeliju(t: TabelaSloj, p: Pritisak, siri: boolean): void {
+    const polje = this.celijaNa(t, p.tacka);
+    if (polje) this.store.izaberiCeliju(polje, siri);
+  }
+
   protected dole(e: PointerEvent): void {
+    // pritisak van sloja u uređivanju (sloj za uređivanje leži iznad overlay-a): tekst u dokument, pa izbor kao inače
+    if (this.store.uredjivanje()) this.store.zavrsiUredjivanje();
     // odluka 24: pritisak na platno fokusira okvir, pa prečice odmah rade
     this.fokusPlatna.fokus();
     if (e.button !== 0) return;
@@ -497,13 +603,23 @@ export class PlatnoOverlayComponent {
       this.store.izaberi(p.shift ? [...this.store.izbor(), ...ids] : ids);
       return;
     }
-    if (p.nacin.vrsta === 'RUCKA' || p.izabranoNaDole) return;
-    if (p.pogodak) {
-      if (p.shift) this.store.prebaciIzbor(p.pogodak.id);
-      else this.store.izaberi([p.pogodak.id]);
-    } else if (!p.shift) {
-      this.store.ponistiIzbor();
+    if (p.nacin.vrsta === 'RUCKA') return;
+    const t = p.pogodak?.tip === 'TABELA' ? p.pogodak : null;
+    // već jedina izabrana tabela: klik bira ćeliju, Shift+klik širi opseg (izbor slojeva ostaje)
+    if (t && !p.izabranoNaDole && this.store.jedan()?.id === t.id) {
+      this.izaberiCeliju(t, p, p.shift);
+      return;
     }
+    if (!p.izabranoNaDole) {
+      if (p.pogodak) {
+        if (p.shift) this.store.prebaciIzbor(p.pogodak.id);
+        else this.store.izaberi([p.pogodak.id]);
+      } else if (!p.shift) {
+        this.store.ponistiIzbor();
+      }
+    }
+    // tabela je upravo postala jedina izabrana: i ćelija pod pokazivačem
+    if (t && this.store.jedan()?.id === t.id) this.izaberiCeliju(t, p, false);
   }
 
   /** Esc, `pointercancel`, `lostpointercapture` bez `pointerup`: gest se poništava (dokument kao pre, bez koraka), izbor ostaje. */

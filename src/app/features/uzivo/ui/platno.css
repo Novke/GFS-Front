@@ -135,6 +135,23 @@
   overflow-wrap: anywhere;
 }
 
+/* `app-formula-prikaz` (izvor ili markup MathLive-a, F15): blok, da `text-align` sloja poravna formulu. */
+.uz-pl-formula > app-formula-prikaz,
+.uz-pl-formula-izvor,
+.uz-pl-formula-markup {
+  display: block;
+}
+
+/* `isolation`: MathLive za `\cancel`, `\bcancel`, `\xcancel` i `\enclose{…strike|…arrow}` piše `svg` sa `z-index: 2`.
+   Sloj bez rotacije, providnosti i senke ne pravi stacking context, pa bi se taj `z-index` takmičio sa celim platnom:
+   crtao bi se iznad kasnijih slojeva (redosled slojeva, PowerPoint) i u editoru presretao pokazivač iznad overlay-a.
+   Ovde važi samo unutar formule. Formula i dalje može da crta van kutije sloja (`\rule`, negativan `\hspace`, kao
+   LaTeX i PowerPoint); granica je `overflow: hidden` platna. */
+.uz-pl-formula-markup {
+  position: relative;
+  isolation: isolate;
+}
+
 /* ---------- Oblik ---------- */
 
 .uz-pl-oblik svg {

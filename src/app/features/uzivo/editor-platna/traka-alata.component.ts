@@ -1,17 +1,27 @@
-// Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F12 tekst, F14 tabela,
-// F16 formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na
-// okvir platna (odluka 12). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus (npr. Poništi posle
-// poslednjeg koraka), umesto da ga pregledač baci na body.
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+// Traka iznad platna (F4b: poništi/ponovi, z-osa, brisanje). Meniji ubacivanja (F7 oblik i slika, F14 tabela, F16
+// formula) idu ovde, sa `[matMenuTriggerRestoreFocus]="false"` i kroz `ubaci`, pa fokus posle ubacivanja prelazi na okvir
+// platna (odluka 12), i kad je ubacivanje odbijeno (meni sam ne vraća fokus, inače bi pao na body). "Tabela" (F14) je
+// CDK popover sa poljima (`ubaci-tabelu`), isti put kroz `ubaci`. "Formula" (F16) otvara dijalog (lenji chunk): posle
+// "Sačuvaj" nov sloj i fokus na okviru (i kad je odbijen); Otkaži vraća fokus na dugme (`restoreFocus` dijaloga). "Tekst" (F12) ubacuje
+// tekst i odmah ulazi u uređivanje (fokus u tekstu). Dugmad su `disabledInteractive`: onemogućeno dugme zadržava fokus
+// (npr. Poništi posle poslednjeg koraka), umesto da ga pregledač baci na body. `disabledInteractive` NE blokira klik
+// (Material blokira samo `<a>`), pa svaki handler na početku proverava isti uslov kao `[disabled]`.
+// Poništi tokom sesije teksta (sloj ili ćelija) ide prvo u istoriju uređivača, pa u istoriju platna, kao Ctrl+Z iz
+// panela (omogućeno kad bilo koja od dve ima korak); Ponovi tokom sesije samo u istoriju uređivača. Prekidač "Pregled" / "Uređivanje" (F18) je uvek tu (isto
+// dugme, pa fokus ostaje na njemu); u Pregledu su ostali alati sklonjeni, jer bi menjali dokument koji se gleda. Natpis
+// "Slika se otprema…" ostaje i u Pregledu (otpremanje započeto pre njega doda ili zameni sliku u dokumentu koji se gleda).
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import type { Crtica, Platno, Sloj, Tema, VrstaOblika } from '../data-access/platno.models';
-import { noviKrug, noviOblik } from '../data-access/platno-novo';
+import { novaTabela, noviKrug, noviOblik, noviTekst, uSredini } from '../data-access/platno-novo';
 import { slobodnoMesto } from './komande';
 import { FokusPlatna } from './fokus-platna';
+import { formulaEditora } from './formula/formula-otvarac';
 import { PlatnoEditorStore } from './platno-editor.store';
 import { PRIHVACENE_SLIKE, SlikeEditora } from './slike-editora';
+import { UbaciTabeluComponent, type VelicinaTabele } from './ubaci-tabelu.component';
 
 interface StavkaOblika { naziv: string; vrsta: VrstaOblika | 'KRUG'; crtica: Crtica; }
 /** Meni "Oblik", redom (odluka plana F7): isprekidana linija i strelica su LINIJA/STRELICA sa crticom ISPREKIDANA. */
@@ -31,32 +41,45 @@ const OBLICI: readonly StavkaOblika[] = [
 @Component({
   selector: 'app-traka-alata',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, UbaciTabeluComponent],
   template: `
     <div class="uz-ep-traka" role="group" aria-label="Alati platna">
-      <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
-              [disabled]="!store.mozeNazad()" (click)="store.ponisti()"><mat-icon svgIcon="undo" /></button>
-      <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
-              [disabled]="!store.mozeNapred()" (click)="store.ponovi()"><mat-icon svgIcon="redo" /></button>
-      <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
-      <button mat-icon-button type="button" aria-label="Oblik" title="Oblik"
-              [matMenuTriggerFor]="meniOblika" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="shapes" /></button>
-      <mat-menu #meniOblika="matMenu">
-        @for (o of oblici; track o.naziv) {
-          <button mat-menu-item type="button" (click)="ubaciOblik(o)">{{ o.naziv }}</button>
-        }
-      </mat-menu>
-      <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
-              [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
-      <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
+      <!-- jedno dugme za oba režima: fokus ostaje na njemu posle prebacivanja -->
+      <button mat-stroked-button type="button" (click)="store.postaviRezim(pregled() ? 'UREDJIVANJE' : 'PREGLED')">
+        <mat-icon [svgIcon]="pregled() ? 'edit' : 'slideshow'" />{{ pregled() ? 'Uređivanje' : 'Pregled' }}
+      </button>
+      @if (!pregled()) {
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Poništi" title="Poništi (Ctrl+Z)" disabledInteractive
+                [disabled]="!mozeNazad()" (click)="ponisti()"><mat-icon svgIcon="undo" /></button>
+        <button mat-icon-button type="button" aria-label="Ponovi" title="Ponovi (Ctrl+Y)" disabledInteractive
+                [disabled]="!mozeNapred()" (click)="ponovi()"><mat-icon svgIcon="redo" /></button>
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Tekst" title="Tekst (dvoklik na tekst ga uređuje)"
+                (click)="ubaciTekst()"><mat-icon svgIcon="text_fields" /></button>
+        <button mat-icon-button type="button" aria-label="Oblik" title="Oblik"
+                [matMenuTriggerFor]="meniOblika" [matMenuTriggerRestoreFocus]="false"><mat-icon svgIcon="shapes" /></button>
+        <mat-menu #meniOblika="matMenu">
+          @for (o of oblici; track o.naziv) {
+            <button mat-menu-item type="button" (click)="ubaciOblik(o)">{{ o.naziv }}</button>
+          }
+        </mat-menu>
+        <button mat-icon-button type="button" aria-label="Slika" title="Slika" disabledInteractive
+                [disabled]="slike.salje()" (click)="otvoriBiranje(fajl)"><mat-icon svgIcon="image" /></button>
+        <app-ubaci-tabelu (ubaci)="ubaciTabelu($event)" />
+        <button mat-icon-button type="button" aria-label="Formula" title="Formula (dvoklik na formulu je uređuje)"
+                (click)="ubaciFormulu()"><mat-icon svgIcon="functions" /></button>
+        <input #fajl type="file" hidden [accept]="prihvaceneSlike" (change)="izabranaSlika(fajl)">
+        <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
+        <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="zOsa('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
+        <button mat-icon-button type="button" aria-label="Nazad" title="Nazad (Ctrl+[)" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="zOsa('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
+        <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
+                [disabled]="!imaIzbor()" (click)="obrisi()"><mat-icon svgIcon="delete" /></button>
+      }
+      <!-- van @if: otpremanje započeto pre Pregleda završava se u Pregledu i menja dokument koji se gleda (F18 m4) -->
       <span role="status" class="uz-ep-traka-stanje">{{ slike.salje() ? 'Slika se otprema…' : '' }}</span>
-      <span class="uz-ep-traka-razmak" aria-hidden="true"></span>
-      <button mat-icon-button type="button" aria-label="Napred" title="Napred (Ctrl+])" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAPRED')"><mat-icon svgIcon="flip_to_front" /></button>
-      <button mat-icon-button type="button" aria-label="Nazad" title="Nazad (Ctrl+[)" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.zOsaIzabranih('NAZAD')"><mat-icon svgIcon="flip_to_back" /></button>
-      <button mat-icon-button type="button" aria-label="Obriši" title="Obriši (Delete)" disabledInteractive
-              [disabled]="!imaIzbor()" (click)="store.obrisiIzabrane()"><mat-icon svgIcon="delete" /></button>
     </div>
   `,
   styles: `
@@ -72,16 +95,72 @@ export class TrakaAlataComponent {
   protected readonly store = inject(PlatnoEditorStore);
   private readonly fokusPlatna = inject(FokusPlatna);
   protected readonly slike = inject(SlikeEditora);
+  private readonly formula = formulaEditora();
   protected readonly oblici = OBLICI;
   protected readonly prihvaceneSlike = PRIHVACENE_SLIKE;
+  protected readonly pregled = computed(() => this.store.rezim() === 'PREGLED');
+
+  /** Istorija uređivača teksta dok traje sesija (TEKST sloj ili ćelija), inače null. */
+  private readonly tekst = computed(() => (this.store.uredjivanje() ? this.store.aktivniUredjivac()?.istorija() ?? null : null));
+  protected readonly mozeNazad = computed(() => this.store.mozeNazad() || !!this.tekst()?.nazad);
+  /** Tokom sesije samo istorija uređivača (redo platna bi presek teksta obrisao). */
+  protected readonly mozeNapred = computed(() => (this.store.uredjivanje() ? !!this.tekst()?.napred : this.store.mozeNapred()));
+
+  /** Kao Ctrl+Z iz panela: tokom sesije teksta prvo istorija uređivača, pa (kad je prazna) istorija platna. */
+  protected ponisti(): void {
+    if (this.mozeNazad() && !this.store.ponistiUTekstu()) this.store.ponisti();
+  }
+
+  protected ponovi(): void {
+    if (this.mozeNapred()) this.store.ponovi();
+  }
 
   protected imaIzbor(): boolean {
     return this.store.izbor().length > 0;
   }
 
-  /** Ubacivanje iz menija trake (F7 i dalje): nov sloj je izabran, a fokus prelazi na okvir platna (odluka 12). */
+  protected zOsa(smer: 'NAPRED' | 'NAZAD'): void {
+    if (this.imaIzbor()) this.store.zOsaIzabranih(smer);
+  }
+
+  protected obrisi(): void {
+    if (this.imaIzbor()) this.store.obrisiIzabrane();
+  }
+
+  /**
+   * Ubacivanje iz menija trake (F7 i dalje): nov sloj je izabran, a fokus prelazi na okvir platna (odluka 12). I kad je
+   * odbijeno (granica, poruka): meni ima `RestoreFocus=false`, pa bi fokus inače ostao na body.
+   */
   protected ubaci(napravi: (id: string, p: Platno) => Sloj): void {
-    if (this.store.ubaci(napravi) !== null) this.fokusPlatna.fokus();
+    this.store.ubaci(napravi);
+    this.fokusPlatna.fokus();
+  }
+
+  /** "Tekst": 400 x 60 u fontu i boji tela teme, na slobodnom mestu, i odmah u uređivanju (uređivač uzima fokus). */
+  protected ubaciTekst(): void {
+    const tema = this.tema();
+    const id = this.store.ubaci((novi, p) => {
+      const s = noviTekst(novi, tema, { ...uSredini(400, 60), sirina: 400, visina: 60 });
+      return { ...s, ...slobodnoMesto(p, s.sirina, s.visina) };
+    });
+    if (id !== null) this.store.pocniUredjivanje(id);
+  }
+
+  /** "Tabela": nova tabela iz teme (`novaTabela`), na slobodnom mestu; fokus na okvir platna (i kad je odbijena). */
+  protected ubaciTabelu(v: VelicinaTabele): void {
+    const tema = this.tema();
+    this.ubaci((id, p) => {
+      const t = novaTabela(id, tema, v.redova, v.kolona);
+      return { ...t, ...slobodnoMesto(p, t.sirina, t.visina) };
+    });
+  }
+
+  /**
+   * "Formula": prazan dijalog (boja teksta teme, 28 pt, centar), pa nov izabran sloj. Posle "Sačuvaj" fokus na okvir platna
+   * (i kad je ubacivanje odbijeno granicom); posle Otkaži ostaje na dugmetu (dijalog ga vraća).
+   */
+  protected async ubaciFormulu(): Promise<void> {
+    if ((await this.formula.ubaci(this.tema())).sacuvano) this.fokusPlatna.fokus();
   }
 
   /** Dugme je `disabledInteractive` (zadržava fokus), pa klik dok otpremanje traje ovde ne otvara birač fajlova. */

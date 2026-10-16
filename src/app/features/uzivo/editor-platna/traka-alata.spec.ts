@@ -3,7 +3,8 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore, type Poruka } from '../../../core/state/notification.store';
-import type { OblikSloj, Platno, SlikaSloj } from '../data-access/platno.models';
+import type { OblikSloj, Platno, SlikaSloj, TabelaSloj, TekstSloj } from '../data-access/platno.models';
+import { TEME } from '../ui/teme';
 import { novaSlika, novoPlatno } from '../data-access/platno-novo';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import type { MedijInfo } from '../data-access/uzivo.models';
@@ -138,6 +139,23 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     expect(poslednji().tip).toBe('SLIKA');
   });
 
+  it('završni talas (F18 m4): otpremanje započeto pre Pregleda je vidljivo i u Pregledu, pa sloj stiže', async () => {
+    const odgovor = new Subject<MedijInfo>();
+    upload.mockReturnValue(odgovor);
+    await izaberiFajl(png());
+    store.postaviRezim('PREGLED');
+    await fixture.whenStable();
+    const stanje = () => el().querySelector('.uz-ep-traka [role="status"]')!.textContent!.trim();
+    expect(dugme(el(), 'Slika')).toBeFalsy(); // alati su u Pregledu sklonjeni
+    expect(stanje()).toBe('Slika se otprema…');
+    odgovor.next(medij('m1'));
+    odgovor.complete();
+    await new Promise((r) => setTimeout(r));
+    await fixture.whenStable();
+    expect(stanje()).toBe('');
+    expect(poslednji().tip).toBe('SLIKA');
+  });
+
   it('greška otpremanja 413 sa razlogom: snackbar sa razlogom, bez sloja', async () => {
     upload.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 413, error: { reason: 'Fajl je prevelik.' } })));
     await izaberiFajl(png());
@@ -152,6 +170,61 @@ describe('TrakaAlataComponent: oblici i slike (F7)', () => {
     expect(upload).not.toHaveBeenCalled();
     expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
     expect(store.platno().slojevi).toHaveLength(300);
+  });
+
+  it('meni "Oblik" odbijen (300 slojeva): poruka, a fokus je na okviru platna (ne na body)', async () => {
+    const puno = { ...novoPlatno('NACRT', 'PRAZNO'), slojevi: Array.from({ length: 300 }, (_, i) => novaSlika(`s${i + 1}`, 'x', 10, 10)) };
+    store.inicijalizuj(puno);
+    await ubaciOblik('Elipsa');
+    expect(store.platno().slojevi).toHaveLength(300);
+    expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
+    expect(document.activeElement).toBe(okvir());
+  });
+
+  async function ubaciTabelu() {
+    dugme(el(), 'Tabela')!.click();
+    await fixture.whenStable();
+    dugme(document.querySelector<HTMLElement>('.uz-ep-ubaci-tabelu')!, 'Ubaci')!.click();
+    await fixture.whenStable();
+  }
+
+  it('"Tabela" > Ubaci: TABELA 3 x 3 iz teme na slobodnom mestu, izabrana, fokus na okviru platna', async () => {
+    await ubaciTabelu();
+    const t = poslednji() as TabelaSloj;
+    expect(t).toMatchObject({ tip: 'TABELA', sirina: 640, visina: 120, x: 160, y: 210 });
+    expect(t.celije[0][0].popuna).toBe(TEME.NACRT.tabelaZaglavlje);
+    expect(store.izbor()).toEqual([t.id]);
+    expect(document.activeElement).toBe(okvir());
+    await ubaciTabelu();
+    expect(poslednji().x).toBe(172);
+  });
+
+  it('"Tabela" odbijena (300 slojeva): poruka, fokus na okviru platna (ne na body)', async () => {
+    const puno = { ...novoPlatno('NACRT', 'PRAZNO'), slojevi: Array.from({ length: 300 }, (_, i) => novaSlika(`s${i + 1}`, 'x', 10, 10)) };
+    store.inicijalizuj(puno);
+    await ubaciTabelu();
+    expect(store.platno().slojevi).toHaveLength(300);
+    expect(poruke.map((p) => p.tekst)).toEqual(['Slajd može imati najviše 300 slojeva.']);
+    expect(document.activeElement).toBe(okvir());
+  });
+
+  it('"Tekst": TEKST 400 x 60 u centru u fontu i boji teme, izabran i odmah u uređivanju', async () => {
+    dugme(el(), 'Tekst')!.click();
+    await fixture.whenStable();
+    const s = poslednji() as TekstSloj;
+    expect(s).toMatchObject({ tip: 'TEKST', sirina: 400, visina: 60, x: 280, y: 240 });
+    expect(s.pasusi[0].delovi[0]).toMatchObject({ tekst: '', font: TEME.NACRT.fontTela, boja: TEME.NACRT.tekst, velicina: 24 });
+    expect(store.izbor()).toEqual([s.id]);
+    expect(store.uredjivanje()).toEqual({ slojId: s.id, celija: null });
+    expect(izlaz).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Tekst" dvaput: drugi je pomeren za 12, a prva sesija je završena', async () => {
+    dugme(el(), 'Tekst')!.click();
+    const prvi = poslednji();
+    dugme(el(), 'Tekst')!.click();
+    expect(poslednji().x).toBe(prvi.x + 12);
+    expect(store.uredjivanje()?.slojId).toBe(poslednji().id);
   });
 
   describe('editor se zatvara usred ubacivanja slike (ispravka 1)', () => {

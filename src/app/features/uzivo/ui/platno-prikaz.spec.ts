@@ -23,6 +23,8 @@ function sa<T extends Sloj>(id: string, izmena: (s: T) => T): Platno {
 
 const sloj = (el: HTMLElement, id: string) => el.querySelector<HTMLElement>(`.uz-pl-sloj[data-sloj="${id}"]`)!;
 
+// MathLive se ovde ne učitava (učitavači koji se ne razreše daje test-setup.ts): formula ostaje LaTeX izvor.
+
 describe('PlatnoPrikazComponent', () => {
   it('renderuje šest slojeva redom (z-osa = redosled u DOM-u), svaki sa unutrašnjim sadržajem', async () => {
     const { el } = await prikazi(platno());
@@ -97,6 +99,20 @@ describe('PlatnoPrikazComponent', () => {
     expect(sloj(el, 'tabela').querySelectorAll('tr').length).toBe(2);
   });
 
+  it('tabela: td nosi data-celija="r-k" (kuka editora, F14), pokrivene ćelije nemaju td', async () => {
+    const p = sa<TabelaSloj>('tabela', (s) => ({
+      ...s, kolone: [50, 50, 100], sirina: 200, redovi: [30, 30],
+      celije: [
+        [celija('a'), celija('b', { spojDole: 1 }), celija('c')],
+        [celija('d'), celija('', { pokrivena: true }), celija('e')],
+      ],
+    }));
+    const { el } = await prikazi(p);
+    const polja = Array.from(sloj(el, 'tabela').querySelectorAll<HTMLElement>('td')).map((td) => td.dataset['celija']);
+    expect(polja).toEqual(['0-0', '0-1', '0-2', '1-0', '1-2']);
+    expect(sloj(el, 'tabela').querySelector('td[data-celija="0-1"]')!.textContent).toContain('b');
+  });
+
   it('tabela iz fabrike: dve ćelije bez spajanja', async () => {
     const { el } = await prikazi(platno());
     const tds = sloj(el, 'tabela').querySelectorAll('td');
@@ -121,10 +137,12 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.style.top).toBe('-20%');
   });
 
-  it('FORMULA: sa slikaIzvora je <img>, bez nje LaTeX izvor', async () => {
+  it('FORMULA: sa slikaIzvora je <img>, bez nje app-formula-prikaz (dok se MathLive učitava: LaTeX izvor)', async () => {
     const bez = await prikazi(platno());
     expect(sloj(bez.el, 'formula').querySelector('img')).toBeNull();
-    expect(sloj(bez.el, 'formula').querySelector('.uz-pl-formula-izvor')?.textContent).toBe('x^2');
+    const prikaz = sloj(bez.el, 'formula').querySelector('.uz-pl-formula > app-formula-prikaz')!;
+    expect(prikaz).not.toBeNull();
+    expect(prikaz.querySelector('.uz-pl-formula-izvor')?.textContent).toBe('x^2');
 
     const p = sa<FormulaSloj>('formula', (s) => ({ ...s, slikaIzvora: '00000000-0000-0000-0000-000000000003' }));
     const sa_ = await prikazi(p);
@@ -132,6 +150,7 @@ describe('PlatnoPrikazComponent', () => {
     expect(img.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000003');
     expect(img.getAttribute('alt')).toBe('x^2');
     expect(sloj(sa_.el, 'formula').querySelector('.uz-pl-formula-izvor')).toBeNull();
+    expect(sloj(sa_.el, 'formula').querySelector('app-formula-prikaz')).toBeNull();
   });
 
   it('CRTEZ: slika preko sloja, alt Crtež', async () => {

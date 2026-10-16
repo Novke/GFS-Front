@@ -430,6 +430,9 @@ export const EditorStore = signalStore(
       const trenutni = store.izabraniId();
       const novi = slajdId === null ? null : razresi(slajdId);
       if (trenutni !== null && trenutni !== novi) {
+        // otvoren tekst ili gest editora platna u dokument PRE slanja (inače bi stigao tek pri uništavanju editora, posle
+        // debounce-a); registracija pražnjenja je i dalje ona trenutnog slajda
+        isprazni();
         posaljiOdmah(trenutni);
       }
       patchState(store, { izabraniId: novi });

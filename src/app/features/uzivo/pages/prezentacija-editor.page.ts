@@ -21,7 +21,6 @@ import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
 import { IzvodjenjeInfo, PokreniCmd, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
-import { brojKoraka } from '../data-access/platno-koraci';
 import type { Tema } from '../data-access/platno.models';
 import { kodSaRazmakom } from '../ui/format';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
@@ -40,9 +39,9 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
- * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno"), u sredini
+ * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno" (meni: Prazno, Naslov i tekst)), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
- * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), a pregled je uvek ispod. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
+ * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), bez bočnog pregleda (koraci su u režimu "Pregled" editora, F18). Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
  */
 @Component({
@@ -122,7 +121,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             </mat-slide-toggle>
             <div class="uz-ed-grupa">
               <span class="uz-ed-oznaka-grupe" id="uz-ed-tema">Tema</span>
-              <mat-radio-group aria-labelledby="uz-ed-tema" [value]="vazeca(p.tema)" (change)="podesi({ tema: $event.value })">
+              <mat-radio-group aria-labelledby="uz-ed-tema" aria-describedby="uz-ed-tema-napomena" [value]="vazeca(p.tema)"
+                               (change)="podesi({ tema: $event.value })">
                 @for (t of teme; track t.tema) {
                   <mat-radio-button [value]="t.tema">
                     <span class="uz-ed-tema-naziv">{{ t.naziv }}</span>
@@ -135,6 +135,9 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 }
               </mat-radio-group>
             </div>
+            <!-- odluka 23: model nosi eksplicitne boje i fontove, pa tema ne prebojava postojeće slojeve -->
+            <p class="uz-ed-napomena" id="uz-ed-tema-napomena">Tema menja izgled Info i Pitanje slajdova i podrazumevane
+              boje i fontove novih slojeva platna; postojeći slojevi zadržavaju svoje boje i fontove.</p>
             <p class="uz-ed-napomena">Režim telefona i „Detalji“ menjaju se i uživo (tasteri M i D).</p>
           </div>
         </mat-expansion-panel>
@@ -173,7 +176,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
-              <button mat-stroked-button type="button" (click)="store.dodaj('PLATNO')"><mat-icon svgIcon="layers" />Platno</button>
+              <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPlatna"><mat-icon svgIcon="layers" />Platno</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
             </div>
@@ -185,6 +188,10 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 <mat-icon [svgIcon]="t.ikona" />{{ t.naziv }}
               </button>
             }
+          </mat-menu>
+          <mat-menu #meniPlatna="matMenu">
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO')">Prazno</button>
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO', undefined, 'NASLOV_I_TEKST')">Naslov i tekst</button>
           </mat-menu>
           <mat-menu #meniSlajda="matMenu">
             <ng-template matMenuContent let-s="s" let-i="i">
@@ -217,25 +224,15 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             }
           </section>
 
-          <aside class="uz-ed-pregled" aria-label="Pregled slajda">
-            @if (store.izabrani(); as s) {
-              <div class="rezim-dan uz-dan uz-ed-platno">
-                <app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" [korak]="korak()" [animacija]="animacijaPregleda()" />
-              </div>
-              @if (s.tip === 'PLATNO') {
-                <div class="uz-ed-koraci">
-                  <button mat-stroked-button type="button" [disabled]="korak() <= 0" (click)="pomeriKorak(-1)">
-                    <mat-icon svgIcon="arrow_back" />Korak nazad
-                  </button>
-                  <span class="uz-ed-korak" role="status">Korak {{ korak() }} / {{ ukupnoKoraka() }}</span>
-                  <button mat-stroked-button type="button" [disabled]="korak() >= ukupnoKoraka()" (click)="pomeriKorak(1)">
-                    Korak napred<mat-icon svgIcon="arrow_forward" />
-                  </button>
-                </div>
-              }
-              <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+          <!-- PLATNO: bez bočnog pregleda, koraci i animacije su u režimu "Pregled" editora platna (F18) -->
+          @if (store.izabrani(); as s) {
+            @if (s.tip !== 'PLATNO') {
+              <aside class="uz-ed-pregled" aria-label="Pregled slajda">
+                <div class="rezim-dan uz-dan uz-ed-platno"><app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" /></div>
+                <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+              </aside>
             }
-          </aside>
+          }
         </div>
       </div>
     } @else if (store.greska(); as g) {
@@ -282,21 +279,6 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   }
   protected readonly vazeca = (t: Tema | null | undefined) => vazecaTema(t);
   protected readonly promenljive = promenljiveTeme;
-  /** Korak pregleda PLATNO slajda, vezan za slajd: promena izabranog slajda ga vraća na 0. */
-  private readonly korakSlajda = signal<{ id: number; k: number } | null>(null);
-  protected readonly ukupnoKoraka = computed(() => {
-    const p = this.store.izabrani()?.platno;
-    return p ? brojKoraka(p) : 0;
-  });
-  protected readonly korak = computed(() => {
-    const s = this.store.izabrani();
-    const k = this.korakSlajda();
-    // izmena slajda može smanjiti broj koraka: korak se ograničava
-    return s && k?.id === s.id ? Math.min(k.k, this.ukupnoKoraka()) : 0;
-  });
-  /** Animacija pregleda: nov ključ pri svakom "Korak napred" (grupa = novi korak); nazad i promena slajda je gase. */
-  protected readonly animacijaPregleda = signal<{ kljuc: number; grupa: number } | null>(null);
-  private brojacAnimacije = 0;
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
   /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje, uvoz). */
   protected readonly radi = signal(false);
@@ -325,14 +307,6 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
         this.aktivno.set(null);
         if (id > 0) this.store.ucitaj(id);
       });
-    // Promena izabranog slajda vraća korak pregleda na 0 (i kad se posle vraćanja izabere isti slajd).
-    effect(() => {
-      this.store.izabraniId();
-      untracked(() => {
-        this.korakSlajda.set(null);
-        this.animacijaPregleda.set(null);
-      });
-    });
     effect(onCleanup => {
       const id = this.aktivnoZa();
       if (id === null) return;
@@ -422,14 +396,6 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected ikona(s: SlajdDetails): NazivIkone {
     if (s.tip === 'PLATNO') return 'layers';
     return s.tip === 'PITANJE' && s.pitanje ? opisTipa(s.pitanje.tip).ikona : 'article';
-  }
-
-  protected pomeriKorak(razlika: number): void {
-    const s = this.store.izabrani();
-    if (!s) return;
-    const novi = Math.max(0, Math.min(this.ukupnoKoraka(), this.korak() + razlika));
-    this.korakSlajda.set({ id: s.id, k: novi });
-    this.animacijaPregleda.set(razlika > 0 && novi > 0 ? { kljuc: ++this.brojacAnimacije, grupa: novi } : null);
   }
 
   protected nazivTipa(s: SlajdDetails): string {

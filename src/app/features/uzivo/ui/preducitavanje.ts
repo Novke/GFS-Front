@@ -1,5 +1,6 @@
 import type { Tema } from '../data-access/platno.models';
 import { SlajdDetails, medijUrl } from '../data-access/uzivo.models';
+import { ModulFormule, resetujUcitavanjeFormula, ucitajFormule, ucitajStilFormula } from './formula-ucitavanje';
 import { FONTOVI_PLATNA, fontoviPlatna } from './platno-fontovi';
 import { TEME, vazecaTema } from './teme';
 
@@ -115,9 +116,36 @@ export function preducitajFontove(fontovi: Iterable<string>): void {
   }
 }
 
-/** Samo za testove: zaboravlja učitane slike i tražene fontove (keševi traju koliko i prozor). */
+/** PLATNO slajd sa bar jednom formulom bez slike izvora: nju `platno-prikaz` crta MathLive-om (`formula-prikaz`). */
+export function imaFormuluZaCrtanje(s: SlajdDetails | null): boolean {
+  return s?.tip === 'PLATNO' && !!s.platno?.slojevi.some((sloj) => sloj.tip === 'FORMULA' && !sloj.slikaIzvora);
+}
+
+/** `preducitajFormule` sa zadatim učitavačima (testovi); stranice zovu `preducitajFormule`. */
+export function preducitajFormuleSa(
+  ucitaj: () => Promise<ModulFormule>, ucitajStil: () => Promise<void>, slajdovi: readonly (SlajdDetails | null)[],
+): void {
+  if (!slajdovi.some(imaFormuluZaCrtanje)) {
+    return;
+  }
+  // greške se gutaju: prikaz sam ponovo pokuša i, ako ne uspe, crta LaTeX izvor
+  ucitaj().catch(() => undefined);
+  ucitajStil().catch(() => undefined);
+}
+
+/**
+ * Unapred učitava `mathlive/ssr` (modul `formula-markup`), CSS i KaTeX fontove kad neki od slajdova ima formulu za
+ * crtanje (odluka 6 i 32: publika i konzola za trenutni i sledeći slajd). Keš je u `formula-ucitavanje` (jednom po
+ * prozoru), pa je poziv posle svakog snimka jeftin.
+ */
+export function preducitajFormule(...slajdovi: (SlajdDetails | null)[]): void {
+  preducitajFormuleSa(ucitajFormule, ucitajStilFormula, slajdovi);
+}
+
+/** Samo za testove: zaboravlja učitane slike, tražene fontove i učitavanje formula (keševi traju koliko i prozor). */
 export function resetujPreducitavanje(): void {
   ucitaneSlike.clear();
   trazeniFontovi.clear();
+  resetujUcitavanjeFormula();
 }
 

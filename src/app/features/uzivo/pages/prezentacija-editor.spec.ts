@@ -13,14 +13,18 @@ import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
-import { brojKoraka } from '../data-access/platno-koraci';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 import { noviOblik } from '../data-access/platno-novo';
 import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
 import { PlatnoEditorStore } from '../editor-platna/platno-editor.store';
+import { TekstUredjivacComponent } from '../editor-platna/tekst/tekst-uredjivac.component';
+import type { TekstSloj } from '../data-access/platno.models';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
+/** Stavka otvorenog menija (CDK overlay je u body). */
+const stavkaMenija = (tekst: string) =>
+  [...document.body.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-item')].find(b => b.textContent?.trim() === tekst)!;
 
 function slajd(id: number, rb: number, naslov: string): SlajdDetails {
   return { id, rb, tip: 'INFO', naslov, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null };
@@ -129,6 +133,26 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     await pomeriSat(800);
   }));
 
+  it('završni talas: dok radi (Pokreni čeka PUT), klik na onemogućena dugmad (Dupliraj, Obriši, Pokreni, PowerPoint) ne radi ništa', saLaznimSatom(async () => {
+    store.izmeniSlajd(11, info('Izmenjen uvod'));
+    strana.pokreni();
+    const put = http.expectOne('api/slajdovi/11');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dugmad = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-akcije button, .uz-ed-dodaj button[aria-label="Uvezi iz PowerPointa"]')];
+    expect(dugmad.map((b) => [b.textContent!.trim(), b.getAttribute('aria-disabled')])).toEqual([
+      ['Dupliraj prezentaciju', 'true'], ['Obriši', 'true'], ['Pokreni', 'true'], ['PowerPoint', 'true'],
+    ]);
+    dugmad.forEach((b) => b.click());
+    await isprazniMikrozadatke();
+    expect(dijalog).not.toHaveBeenCalled();
+    put.flush(slajd(11, 1, 'Izmenjen uvod'));
+    http.expectOne(POKRENI).flush({ id: 77 });
+    http.expectNone('api/prezentacije/1/dupliraj');
+    expect(navigate).toHaveBeenCalledTimes(1);
+    await pomeriSat(800);
+  }));
+
   it('Dupliraj prezentaciju čeka PUT, pa kopira', saLaznimSatom(async () => {
     store.izmeniSlajd(11, info('Poslednja izmena'));
     strana.duplirajPrezentaciju();
@@ -203,62 +227,22 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     vi.restoreAllMocks();
   });
 
-  const dugme = (tekst: string) =>
-    [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(b => b.textContent?.includes(tekst)) as HTMLButtonElement;
-
   it('PLATNO u listi ima ikonu layers i naziv Platno', () => {
     const ikone = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-stavka mat-icon.uz-ed-ikona')];
     expect(ikone.map(i => i.getAttribute('aria-label'))).toEqual(['Info slajd', 'Platno']);
     expect(ikone[1].getAttribute('data-mat-icon-name')).toBe('layers');
   });
 
-  it('Korak napred povećava korak do brojKoraka pa je onemogućen; promena slajda vraća na 0', () => {
-    const n = brojKoraka(platno());
-    expect(n).toBeGreaterThan(1);
+  it('F18: PLATNO slajd nema bočni pregled (koraci su u "Pregled" editora), INFO ga ima', () => {
+    const el = fixture.nativeElement as HTMLElement;
     store.izaberi(12);
     fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain(`Korak 0 / ${n}`);
-    expect(dugme('Korak nazad').disabled).toBe(true);
-    for (let i = 1; i <= n; i++) {
-      dugme('Korak napred').click();
-      fixture.detectChanges();
-      expect(el.textContent).toContain(`Korak ${i} / ${n}`);
-    }
-    expect(dugme('Korak napred').disabled).toBe(true);
-    dugme('Korak nazad').click();
-    fixture.detectChanges();
-    expect(el.textContent).toContain(`Korak ${n - 1} / ${n}`);
+    expect(el.querySelector('.uz-ed-pregled')).toBeNull();
+    expect(el.textContent).not.toContain('Korak napred');
     store.izaberi(11);
     fixture.detectChanges();
-    store.izaberi(12);
-    fixture.detectChanges();
-    expect(el.textContent).toContain(`Korak 0 / ${n}`);
-  });
-
-  it('Korak napred pušta animacije grupe (Element.animate), Korak nazad ne', () => {
-    const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise<void>(() => undefined) }));
-    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
-    try {
-      store.izaberi(12);
-      fixture.detectChanges();
-      let ukupno = 0;
-      for (let i = 1; i <= brojKoraka(platno()); i++) {
-        dugme('Korak napred').click();
-        fixture.detectChanges();
-        TestBed.tick();
-        ukupno = animate.mock.calls.length;
-        if (ukupno > 0) break;
-      }
-      expect(ukupno).toBeGreaterThan(0);
-      animate.mockClear();
-      dugme('Korak nazad').click();
-      fixture.detectChanges();
-      TestBed.tick();
-      expect(animate).not.toHaveBeenCalled();
-    } finally {
-      delete (Element.prototype as Partial<Element>).animate;
-    }
+    expect(el.querySelector('.uz-ed-pregled app-slajd-prikaz')).not.toBeNull();
+    expect(el.querySelector('.uz-ed-pregled')!.textContent).toContain('Ovako slajd izgleda na projektoru.');
   });
 
   it('beleške posle izmene platna: PUT nosi platno iz store-a (ne ono iz vremena pravljenja forme) i nove beleške', saLaznimSatom(async () => {
@@ -278,19 +262,38 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     await pomeriSat(800);
   }));
 
-  it('dugme "Platno" dodaje PLATNO slajd, bira ga i šalje POST', saLaznimSatom(async () => {
+  it('meni "Platno" > "Prazno" dodaje prazan PLATNO slajd, bira ga i šalje POST', saLaznimSatom(async () => {
     const dodaj = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-dodaj button')]
       .find(b => b.textContent?.trim() === 'Platno') as HTMLButtonElement;
     expect(dodaj).toBeTruthy();
+    expect(dodaj.getAttribute('aria-haspopup')).toBe('menu');
     dodaj.click();
+    fixture.detectChanges();
+    stavkaMenija('Prazno').click();
     const nacrt = store.izabrani()!;
     expect(nacrt.tip).toBe('PLATNO');
+    expect(nacrt.platno!.slojevi).toEqual([]);
     expect(nacrt.id).toBeLessThan(0);
     const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
     expect(post.request.method).toBe('POST');
     expect(post.request.body.tip).toBe('PLATNO');
     post.flush({ ...platnoSlajd, id: 30, rb: 3, platno: nacrt.platno });
     expect(store.izabraniId()).toBe(30);
+    await pomeriSat(800);
+  }));
+
+  it('meni "Platno" > "Naslov i tekst": PLATNO sa slojevima s1 (naslov) i s2 (telo)', saLaznimSatom(async () => {
+    const dodaj = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-dodaj button')]
+      .find(b => b.textContent?.trim() === 'Platno') as HTMLButtonElement;
+    dodaj.click();
+    fixture.detectChanges();
+    stavkaMenija('Naslov i tekst').click();
+    const nacrt = store.izabrani()!;
+    expect(nacrt.tip).toBe('PLATNO');
+    expect(nacrt.platno!.slojevi.map(s => [s.id, s.tip])).toEqual([['s1', 'TEKST'], ['s2', 'TEKST']]);
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    expect(post.request.body.platno.slojevi.map((s: { id: string }) => s.id)).toEqual(['s1', 's2']);
+    post.flush({ ...platnoSlajd, id: 31, rb: 3, platno: nacrt.platno });
     await pomeriSat(800);
   }));
 
@@ -309,6 +312,14 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(isprazni).toHaveBeenCalledTimes(1);
     expect(drugi.defaultPrevented).toBe(false);
     odjavi();
+  });
+
+  it('ispod izbora teme stoji napomena: tema ne prebojava postojeće slojeve platna (odluka 23)', () => {
+    const grupa = (fixture.nativeElement as HTMLElement).querySelector('mat-radio-group[aria-labelledby="uz-ed-tema"]')!;
+    const id = grupa.getAttribute('aria-describedby')!;
+    const napomena = (fixture.nativeElement as HTMLElement).querySelector(`[id="${id}"]`)!;
+    expect(napomena.textContent!.trim()).toBe('Tema menja izgled Info i Pitanje slajdova i podrazumevane boje i fontove novih '
+      + 'slojeva platna; postojeći slojevi zadržavaju svoje boje i fontove.');
   });
 
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
@@ -409,6 +420,8 @@ describe('PrezentacijaEditorPage: lenji editor platna', () => {
   it('Review Focus 3 (nacrt): + Platno, izmena, odgovor na POST -> ista instanca, mozeNazad true, sledeća izmena je PUT pravog id-ja', async () => {
     const dodaj = [...el().querySelectorAll<HTMLButtonElement>('.uz-ed-dodaj button')].find(b => b.textContent?.trim() === 'Platno')!;
     dodaj.click();
+    await fixture.whenStable();
+    stavkaMenija('Prazno').click();
     const nacrt = store.izabrani()!;
     expect(nacrt.id).toBeLessThan(0);
     const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
@@ -432,6 +445,111 @@ describe('PrezentacijaEditorPage: lenji editor platna', () => {
     expect(putevi.at(-1)!.request.body.platno).toBe(ps.platno());
     for (const r of putevi) r.flush({ ...platnoSlajd(30, 4), platno: r.request.body.platno });
     http.expectNone(r => r.url.startsWith('api/slajdovi/-'));
+  });
+});
+
+describe('PrezentacijaEditorPage: tekst na platnu (F12, Review Focus 1)', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  /** PLATNO slajd 14 sa samo TEKST slojem fiksture ("Prvi", "Drugi"; 10, 10, 200 x 100) i animacijom njegovog pasusa 0. */
+  const samoTekst = (): SlajdDetails => {
+    const p = platno();
+    return {
+      id: 14, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+      platno: { ...p, slojevi: p.slojevi.filter(x => x.tip === 'TEKST'), animacije: p.animacije.filter(a => a.slojId === 'tekst') },
+    };
+  };
+  const el = () => fixture.nativeElement as HTMLElement;
+  const uredjivac = () => fixture.debugElement.query(By.directive(TekstUredjivacComponent))?.componentInstance as
+    TekstUredjivacComponent | undefined;
+  const tekstPuta = (r: { request: { body: SlajdCmd } }) =>
+    (r.request.body.platno!.slojevi[0] as TekstSloj).pasusi.map(p => p.delovi.map(d => d.tekst).join(''));
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [slajd(11, 1, 'Uvod'), samoTekst()] });
+    await fixture.whenStable();
+    store.izaberi(14);
+    await fixture.whenStable();
+    // dvoklik na TEKST sloj (jsdom: širina 0, pa 1 px = 1 jedinica)
+    el().querySelector('app-platno-overlay')!.dispatchEvent(new MouseEvent('dblclick', { clientX: 50, clientY: 50, bubbles: true }));
+    await fixture.whenStable();
+    const v = uredjivac()!.pogled()!;
+    v.dispatch(v.state.tr.insertText('Zdravo ', 1));
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  it('kucanje pa store.sacuvajSve() bez Esc: PUT /slajdovi/14 nosi "Zdravo"; sesija ostaje otvorena', async () => {
+    expect(el().querySelector('.uz-ep-uredjivanje [contenteditable]')).not.toBeNull();
+    let gotovo = false;
+    store.sacuvajSve().subscribe(() => (gotovo = true));
+    const put = http.expectOne('api/slajdovi/14');
+    expect(put.request.method).toBe('PUT');
+    expect(tekstPuta(put)).toEqual(['Zdravo Prvi', 'Drugi']);
+    // animacija pasusa 0 je i dalje na pasusu 0 (ključ p0)
+    expect((put.request.body as SlajdCmd).platno!.animacije.map(a => a.pasus)).toEqual([0]);
+    put.flush({ ...samoTekst(), platno: put.request.body.platno });
+    await fixture.whenStable();
+    expect(gotovo).toBe(true);
+    expect(el().querySelector('.uz-ep-uredjivanje [contenteditable]')).not.toBeNull();
+  });
+
+  it('imaNesacuvano() je true dok je sesija otvorena (i posle čuvanja teksta)', async () => {
+    expect(store.imaNesacuvano()).toBe(true);
+    store.sacuvajSve().subscribe();
+    const put = http.expectOne('api/slajdovi/14');
+    put.flush({ ...samoTekst(), platno: put.request.body.platno });
+    await fixture.whenStable();
+    expect(store.imaNesacuvano()).toBe(true);
+  });
+
+  it('"Pokreni": PUT sa tekstom stiže pre pokretanja (izvođenje kreće tek posle odgovora)', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const pokreni = [...el().querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim().startsWith('Pokreni'))!;
+    expect(pokreni).toBeTruthy();
+    pokreni.click();
+    const put = http.expectOne('api/slajdovi/14');
+    expect(tekstPuta(put)).toEqual(['Zdravo Prvi', 'Drugi']);
+    http.expectNone(POKRENI);
+    put.flush({ ...samoTekst(), platno: put.request.body.platno });
+    await fixture.whenStable();
+    http.expectOne(POKRENI).flush({ id: 77 });
+    expect(navigate).toHaveBeenCalledWith(['izvodjenja', 77, 'konzola']);
+  });
+
+  it('beforeunload tokom otvorene sesije: tekst ide u PUT i kartica traži potvrdu (defaultPrevented)', async () => {
+    const dogadjaj = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dogadjaj);
+    expect(dogadjaj.defaultPrevented).toBe(true);
+    const put = http.expectOne('api/slajdovi/14');
+    expect(tekstPuta(put)).toEqual(['Zdravo Prvi', 'Drugi']);
+    put.flush({ ...samoTekst(), platno: put.request.body.platno });
+    await fixture.whenStable();
+  });
+
+  it('promena slajda usred kucanja: tekst ide odmah u PUT starog slajda (izaberi prvo prazni editor)', async () => {
+    store.izaberi(11);
+    const put = http.expectOne('api/slajdovi/14');
+    expect(tekstPuta(put)).toEqual(['Zdravo Prvi', 'Drugi']);
+    put.flush({ ...samoTekst(), platno: put.request.body.platno });
+    await fixture.whenStable();
+    expect(uredjivac()).toBeUndefined();
   });
 });
 

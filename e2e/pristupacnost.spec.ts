@@ -16,10 +16,10 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
-  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; pregled je uvek dnevnih boja)
+  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',
-    spremno: p => p.locator('.uz-ed-platno [data-sloj="naslov"]'),
+    spremno: p => p.locator('.uz-ep-platno [data-sloj="naslov"]'),
     pripremi: async p => {
       await p.getByRole('button', { name: /^2\s/ }).click();
       // sličica INFO slajda (sa linkom u markdown-u) je lenja (`@defer (on viewport)`): skenira se tek kad je iscrtana
@@ -93,7 +93,8 @@ for (const rezim of ['dan', 'noc'] as const) {
     });
 
     // editor platna (lenji chunk) nad PLATNO slajdom 52: panel Svojstva sa izabranim oblikom i slikom, otvorena paleta
-    // boja (CDK popover) i panel Slojevi
+    // boja (CDK popover), tekst, tabela (F14: popover "Tabela", panel tabele, uređivanje ćelije), formula (F16: panel i
+    // dijalog) i panel Slojevi
     test('editor platna (svojstva oblika i slike, paleta boja, slojevi): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('prezentacije/5');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
@@ -131,9 +132,82 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(editor.getByRole('heading', { name: 'Isečak' })).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva slike (${rezim})`).toEqual([]);
 
+      // F13: svojstva teksta (radiogroup poravnanja i sidra, aria-pressed), pa isto tokom uređivanja teksta
+      await izaberi('naslov');
+      await expect(editor.getByRole('radiogroup', { name: 'Poravnanje' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta (${rezim})`).toEqual([]);
+      const b = (await sloj('naslov').boundingBox())!;
+      await page.mouse.dblclick(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(editor.getByRole('textbox', { name: /^Tekst sloja/ })).toBeFocused();
+      await expect(editor.getByText('Uređuje se tekst.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta tokom uređivanja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
+      // F16: panel formule, pa dijalog formule (math-field MathLive-a u fokusu posle učitavanja)
+      await izaberi('formula');
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva formule (${rezim})`).toEqual([]);
+      await editor.getByRole('button', { name: 'Uredi formulu' }).click();
+      const formula = page.locator('[data-oznaka="gfs-formula-editor"]');
+      await expect(formula.locator('math-field')).toBeFocused();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: dijalog formule (${rezim})`).toEqual([]);
+      await formula.getByRole('button', { name: 'Otkaži' }).click();
+      await expect(formula).toHaveCount(0);
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeFocused();
+
+      // F14: "Tabela" (CDK popover sa poljima), panel tabele, pa uređivanje ćelije
+      await editor.getByRole('button', { name: 'Tabela', exact: true }).click();
+      const ubaci = page.getByRole('dialog', { name: 'Ubaci tabelu' });
+      await expect(ubaci.getByLabel('Redova')).toBeFocused();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, ubacivanje tabele (${rezim})`).toEqual([]);
+      await ubaci.getByRole('button', { name: 'Ubaci' }).click();
+      await expect(ubaci).toBeHidden();
+      await expect(editor.getByRole('group', { name: 'Ćelije' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva tabele (${rezim})`).toEqual([]);
+      const td = editor.locator('.uz-ep-platno td[data-celija="1-1"]').last();
+      await td.scrollIntoViewIfNeeded();
+      const c = (await td.boundingBox())!;
+      await page.mouse.dblclick(c.x + c.width / 2, c.y + c.height / 2);
+      await expect(editor.getByRole('textbox', { name: 'Tekst ćelije 2, 2' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
       await editor.getByRole('tab', { name: 'Slojevi' }).click();
       await expect(editor.locator('[data-sloj-panel="oblik"]')).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: editor platna, slojevi (${rezim})`).toEqual([]);
+    });
+
+    // F19: tab "Animacije" sa izabranom animacijom (detalji, značke grupa na platnu) i režim "Pregled" (koraci, tabovi
+    // onemogućeni, sadržaj panela sakriven), nad PLATNO slajdom 52 sa tri KLIK animacije
+    test('editor platna (animacije sa izabranom animacijom, režim Pregled): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      await expect(page.locator('.uz-ed-slicica a')).toHaveCount(1);
+      const editor = page.locator('[data-oznaka="gfs-editor-platna"]');
+      await expect(editor.locator('.uz-ep-platno [data-sloj="naslov"]')).toBeVisible();
+
+      await editor.getByRole('tab', { name: 'Animacije' }).click();
+      // kraj animacije tela taba pre klika u panelu (Material tada skida privremenu visinu omotača)
+      await expect(editor.locator('.mat-tab-body-animating')).toHaveCount(0);
+      const red = editor.locator('[data-animacija="a2"] > button');
+      await red.click();
+      await expect(red).toHaveAttribute('aria-pressed', 'true');
+      await expect(editor.getByRole('textbox', { name: 'Trajanje (s)' })).toBeVisible();
+      await expect(editor.locator('.uz-ep-znacka')).toHaveText(['1', '2', '3']);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, animacije (${rezim})`).toEqual([]);
+
+      await editor.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 0 / 3');
+      await editor.getByRole('button', { name: 'Korak napred' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 1 / 3');
+      await expect(editor.getByRole('tab', { name: 'Animacije' })).toBeDisabled();
+      await expect(editor.locator('app-panel-animacije')).toBeHidden();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, režim Pregled (${rezim})`).toEqual([]);
     });
 
     // dijalog uvoza iz PowerPointa (lenji chunk) u stanju pregleda i izveštaja, nad editorom prezentacije

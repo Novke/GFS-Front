@@ -1,4 +1,5 @@
 import { expect, test } from './javna-mreza';
+import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA } from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
 
 /** Kod aktivnog izvođenja iz `fixtures/uzivo.json` (izmišljen). */
@@ -65,6 +66,10 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     expect(skripte.putanje.length, 'lenji chunk-ovi javne rute su provereni').toBeGreaterThan(1);
     expect(skripte.saUvozom).toEqual([]);
     expect(skripte.saEditorom).toEqual([]);
+    // provera nizova pokriva i biblioteke 4b (ProseMirror, MathLive), a formule se ovde ne učitavaju (ni stil ni fontovi)
+    expect(NIZOVI_EDITORA).toEqual(expect.arrayContaining([NIZ_PROSEMIRROR, NIZ_MATHLIVE]));
+    expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/'))).toEqual([]);
+    expect(javnaMreza.zahtevi.length, 'zahtevi su zabeleženi').toBeGreaterThan(1);
     // samo odredišta koja backend dozvoljava studentu
     expect([...broker.pretplate].sort()).toEqual([
       `/app/izvodjenja/${IZVODJENJE}/pocetno`, `/topic/izvodjenja/${IZVODJENJE}/javno`, '/user/queue/greske', '/user/queue/licno',

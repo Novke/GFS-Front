@@ -294,14 +294,13 @@ span.uz-ed-napomena {
   }
 }
 
-/* PLATNO slajd: editor platna u sredini, pregled ispod njega (≥ 900 px), ispod 900 px jedna kolona */
+/* PLATNO slajd: editor platna u sredini, bez bočnog pregleda (koraci su u režimu "Pregled" editora, F18) */
 .uz-ed-telo.uz-ed-telo--platno {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "lista" "sredina" "pregled";
+  grid-template-areas: "lista" "sredina";
 }
 
-.uz-ed-telo--platno .uz-ed-lista,
-.uz-ed-telo--platno .uz-ed-pregled {
+.uz-ed-telo--platno .uz-ed-lista {
   position: static;
   max-height: none;
 }
@@ -310,7 +309,7 @@ span.uz-ed-napomena {
 @media (min-width: 900px) {
   .uz-ed-telo.uz-ed-telo--platno {
     grid-template-columns: 200px minmax(0, 1fr);
-    grid-template-areas: "lista sredina" "lista pregled";
+    grid-template-areas: "lista sredina";
     column-gap: 16px;
   }
 
@@ -318,6 +317,11 @@ span.uz-ed-napomena {
     position: sticky;
     max-height: calc(100vh - 16px);
   }
+}
+
+/* Režim "Pregled" editora (F18): tabovi su onemogućeni, a sadržaj panela se ne prikazuje */
+.uz-ep-paneli--pregled .mat-mdc-tab-body-wrapper {
+  display: none;
 }
 
 /*
@@ -702,7 +706,8 @@ span.uz-ed-napomena {
   margin-left: 12px;
 }
 
-.uz-ed-koraci {
+/* Koraci režima "Pregled" editora platna (F18; do tada bočni pregled stranice za PLATNO) */
+.uz-ep-koraci {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -711,7 +716,7 @@ span.uz-ed-napomena {
   margin-top: 8px;
 }
 
-.uz-ed-korak {
+.uz-ep-korak {
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }

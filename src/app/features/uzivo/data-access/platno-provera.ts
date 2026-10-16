@@ -111,7 +111,7 @@ export function bajtovaPlatna(p: Platno): number {
 }
 
 /** Broj code point-a (kao `String.codePointCount` na serveru). */
-function codePointa(s: string): number {
+export function codePointa(s: string): number {
   let n = 0;
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);

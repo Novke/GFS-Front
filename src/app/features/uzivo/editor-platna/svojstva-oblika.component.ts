@@ -1,7 +1,7 @@
 // Svojstva oblika i okvira teksta (F6): "Vrsta" (zatvoreni oblici među zatvorenim, linijski među linijskim), krajevi linije
 // (put tastaturom za krajeve: početak, kraj, dužina, ugao; svaka izmena kroz `linijaIzKrajeva`, rotacija 0), "Popuna"
-// (samo zatvoreni oblici i tekst) i "Ivica" (boja, debljina 0,25-20, crtica). TEKST u 4a ima samo popunu i ivicu okvira;
-// tekstualna svojstva dolaze u F13.
+// (samo zatvoreni oblici i tekst) i "Ivica" (boja, debljina 0,25-20, crtica). Za TEKST ovde su samo popuna i ivica
+// okvira; tekst, pasus i raspored u okviru su u `svojstva-teksta` (F13).
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';

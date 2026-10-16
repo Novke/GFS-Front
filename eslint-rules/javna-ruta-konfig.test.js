@@ -131,6 +131,55 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
     assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
   });
 
+  const PAKETI_EDITORA = [
+    'prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'prosemirror-transform', 'prosemirror-commands',
+    'prosemirror-keymap', 'prosemirror-history', 'mathlive',
+  ];
+
+  it('biblioteke editora platna su na spisku zabranjenih', () => {
+    for (const paket of PAKETI_EDITORA) {
+      assert.ok(ZABRANJENI_PAKETI_JAVNO.includes(paket), paket);
+    }
+  });
+
+  it('obara prosemirror-view/dist/index.js u javnom feature-u (podputanja)', async () => {
+    for (const feature of JAVNI_FEATURE) {
+      const m = await poruke(feature, `import * as X from 'prosemirror-view/dist/index.js';\nexport const y = X;\n`);
+      assert.equal(m.length, 1, JSON.stringify(m));
+      assert.equal(m[0].messageId, 'zabranjenPaket');
+    }
+  });
+
+  it('obara mathlive i mathlive/ssr u javnom feature-u (statički i dinamički uvoz)', async () => {
+    for (const feature of JAVNI_FEATURE) {
+      for (const kod of [
+        `import { convertLatexToMarkup } from 'mathlive/ssr';\nexport const y = convertLatexToMarkup;\n`,
+        `import { MathfieldElement } from 'mathlive';\nexport const y = MathfieldElement;\n`,
+        `export const y = () => import('mathlive/ssr');\n`,
+      ]) {
+        const m = await poruke(feature, kod);
+        assert.equal(m.length, 1, JSON.stringify(m));
+        assert.equal(m[0].messageId, 'zabranjenPaket');
+      }
+    }
+  });
+
+  it('mathlive/ssr je dozvoljen van javnih feature-a (ui/formula-markup, projektor i editor)', async () => {
+    const [r] = await eslint.lintText(`import { convertLatexToMarkup } from 'mathlive/ssr';\nexport const y = convertLatexToMarkup;\n`, {
+      filePath: path.join(KORENI, 'src/app/features/uzivo/ui/test-nejavni.ts'),
+    });
+    assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
+  });
+
+  it('prosemirror je dozvoljen van javnih feature-a (editor platna)', async () => {
+    const kod = PAKETI_EDITORA.map((p, i) => `import * as P${i} from '${p}';`).join('\n') +
+      `\nexport const y = [${PAKETI_EDITORA.map((_, i) => `P${i}`).join(', ')}];\n`;
+    const [r] = await eslint.lintText(kod, {
+      filePath: path.join(KORENI, 'src/app/features/uzivo/editor-platna/test-nejavni.ts'),
+    });
+    assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
+  });
+
   it('ne primenjuje pravilo van javnih feature-a (obim glob-a)', async () => {
     const [r] = await eslint.lintText(`import { X } from '${odStranice('core/state/reference.store')}';\nexport const y = X;\n`, {
       filePath: path.join(KORENI, 'src/app/features/domaci/pages/test-nejavni.ts'),

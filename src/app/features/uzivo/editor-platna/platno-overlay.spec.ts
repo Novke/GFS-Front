@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { OblikSloj, Platno, Sloj, TekstSloj } from '../data-access/platno.models';
-import { noviOblik } from '../data-access/platno-novo';
-import { pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { novaTabela, noviOblik } from '../data-access/platno-novo';
+import { animacija, pasus, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { FokusPlatna } from './fokus-platna';
 import { krajeviLinije, ugaoIDuzina } from './geometrija';
@@ -56,6 +56,9 @@ function lazniKadrovi() {
 interface Tasteri { shift?: boolean; alt?: boolean; ctrl?: boolean; pointerId?: number; }
 
 describe('PlatnoOverlayComponent', () => {
+  // jsdom nema `document.fonts`: lažni izvor događaja učitavanja fontova (overlay ponovo meri ćelije na `loadingdone`)
+  beforeAll(() => Object.defineProperty(document, 'fonts', { value: new EventTarget(), configurable: true }));
+  afterAll(() => Reflect.deleteProperty(document, 'fonts'));
   let fixture: ComponentFixture<DomacinComponent>;
   let store: InstanceType<typeof PlatnoEditorStore>;
   let izlaz: ReturnType<typeof vi.fn<(p: Platno) => void>>;
@@ -188,6 +191,32 @@ describe('PlatnoOverlayComponent', () => {
     klik(60, 60);
     expect(store.izbor()).toEqual([]);
   });
+
+  it('brojevi grupa (F18): tab Animacije -> značka uz gornji levi ugao obuhvata ("0" = kreće sama); Svojstva -> nema', async () => {
+    const znacke = () => [...el().querySelectorAll<HTMLElement>('.uz-ep-znacka')].map((z) => [z.textContent!.trim(), z.style.left, z.style.top]);
+    await pocni({
+      ...dok(),
+      animacije: [
+        animacija('x0', 'C', { okidac: 'SA_PRETHODNIM' }), animacija('x1', 'A'), animacija('x2', 'B'),
+        animacija('x3', 'A', { okidac: 'POSLE_PRETHODNOG', vrsta: 'IZLAZ' }), animacija('x4', 'A'),
+      ],
+    });
+    expect(znacke()).toEqual([]);
+    store.postaviTab('ANIMACIJE');
+    await fixture.whenStable();
+    expect(znacke()).toEqual([
+      ['1 · 2 · 3', 'calc(var(--u) * 10)', 'calc(var(--u) * 10)'],
+      ['2', 'calc(var(--u) * 300)', 'calc(var(--u) * 50)'],
+      ['0', 'calc(var(--u) * 800)', 'calc(var(--u) * 400)'],
+    ]);
+    store.prebaciSkriven('B');
+    await fixture.whenStable();
+    expect(znacke().map((z) => z[0])).toEqual(['1 · 2 · 3', '0']);
+    store.postaviTab('SVOJSTVA');
+    await fixture.whenStable();
+    expect(znacke()).toEqual([]);
+  });
+
   describe('gestovi (F5)', () => {
     it('prevlačenje sloja za (+100, +50): bira ga na pointerdown, tokom gesta 0 emitovanja, posle pointerup 1 i jedan korak', async () => {
       pokazivac('pointerdown', 60, 60);
@@ -612,6 +641,127 @@ describe('PlatnoOverlayComponent', () => {
       store.ponisti();
       expect(store.platno()).toBe(pocetak);
       expect(store.mozeNazad()).toBe(false);
+    });
+  });
+  describe('uređivanje teksta (F12)', () => {
+    it('dvoklik na TEKST sloj počinje uređivanje tog sloja; na oblik ne', async () => {
+      await pocni(dok());
+      pokazivac('dblclick', 60, 60);
+      expect(store.uredjivanje()).toBeNull();
+      pokazivac('dblclick', 550, 320);
+      expect(store.uredjivanje()).toEqual({ slojId: 'P', celija: null });
+      expect(store.izbor()).toEqual(['P']);
+    });
+
+    it('dvoklik na zaključan TEKST: poruka, bez uređivanja', async () => {
+      const p = dok();
+      await pocni({ ...p, slojevi: p.slojevi.map((s) => (s.id === 'P' ? { ...s, zakljucan: true } : s)) });
+      pokazivac('dblclick', 550, 320);
+      expect(store.uredjivanje()).toBeNull();
+      expect(obavestenja.greska).toHaveBeenCalledWith('Sloj je zaključan.');
+    });
+
+    it('pointerdown van sloja u uređivanju završava uređivanje, pa radi izbor', async () => {
+      await pocni(dok());
+      store.pocniUredjivanje('P');
+      await fixture.whenStable();
+      const zavrsi = vi.spyOn(store, 'zavrsiUredjivanje');
+      klik(350, 100);
+      expect(zavrsi).toHaveBeenCalledTimes(1);
+      expect(store.uredjivanje()).toBeNull();
+      expect(store.izbor()).toEqual(['B']);
+      expect(document.activeElement).toBe(okvir());
+    });
+
+    it('prazan sloj u uređivanju nema natpis "Dvoklik za tekst"', async () => {
+      await pocni(dok());
+      expect(el().querySelectorAll('.uz-ep-prazan')).toHaveLength(1);
+      store.pocniUredjivanje('P');
+      await fixture.whenStable();
+      expect(el().querySelectorAll('.uz-ep-prazan')).toHaveLength(0);
+    });
+  });
+
+  describe('ćelije tabele (F14)', () => {
+    /** Tabela T (100, 100) 2 x 2, kolone 100, redovi 40 (model). */
+    const tabela = () => ({ ...novaTabela('T', 'NACRT', 2, 2), x: 100, y: 100, kolone: [100, 100], sirina: 200, redovi: [40, 40], visina: 80 });
+    /**
+     * Lažni nacrtani `td[data-celija]` sloja T: red 0 je u DOM-u visok 60 (tekst ga je raširio), red 1 od 60 do 80. Klik na
+     * lokalnu tačku (50, 50) je po DOM-u ćelija (0, 0), a po modelu bi bila (1, 0).
+     */
+    let mere: Record<string, [number, number, number, number]>;
+    /** Broj čitanja `offset*` lažnih `td` (prinudni raspored u pregledaču). */
+    let citanja = 0;
+    function lazniTd() {
+      mere = { '0-0': [0, 0, 100, 60], '0-1': [100, 0, 100, 60], '1-0': [0, 60, 100, 20], '1-1': [100, 60, 100, 20] };
+      citanja = 0;
+      const sloj = document.createElement('div');
+      sloj.dataset['sloj'] = 'T';
+      const tabelaEl = document.createElement('table');
+      for (const polje of Object.keys(mere)) {
+        const td = document.createElement('td');
+        td.dataset['celija'] = polje;
+        (['offsetLeft', 'offsetTop', 'offsetWidth', 'offsetHeight'] as const).forEach((k, i) => {
+          Object.defineProperty(td, k, { get: () => (citanja++, mere[polje][i]) });
+        });
+        tabelaEl.appendChild(td);
+      }
+      sloj.appendChild(tabelaEl);
+      el().querySelector('.uz-platno')!.prepend(sloj);
+    }
+
+    beforeEach(async () => {
+      await pocni(platnoSaAnimacijama([], [tabela()]));
+      lazniTd();
+    });
+
+    it('klik u tabelu bira nju i ćeliju po nacrtanim pravougaonicima; Shift+klik širi opseg', async () => {
+      klik(150, 150);
+      expect(store.izbor()).toEqual(['T']);
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+      klik(250, 175);
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 1 });
+      klik(150, 110, true);
+      expect(store.izbor()).toEqual(['T']);
+      expect(store.izabranaCelija()).toEqual({ r: 1, k: 1 });
+      expect(store.opsegCelijaIzbora()).toEqual({ r1: 0, k1: 0, r2: 1, k2: 1 });
+      await fixture.whenStable();
+      const opseg = el().querySelector<HTMLElement>('.uz-ep-celije > div')!;
+      expect(opseg.style.height).toBe('calc(var(--u) * 80)');
+    });
+
+    it('prevlačenje izabrane tabele je i dalje pomeranje (ne bira ćeliju)', () => {
+      klik(150, 150);
+      prevuci(150, 150, 170, 150);
+      expect((store.platno().slojevi[0] as { x: number }).x).toBe(120);
+      expect(store.izabranaCelija()).toEqual({ r: 0, k: 0 });
+    });
+
+    it('Fix m1: okvir opsega se osvežava posle učitavanja fontova (red je viši), a prevlačenje tabele ne meri ćelije', async () => {
+      klik(150, 150);
+      await fixture.whenStable();
+      const opseg = () => el().querySelector<HTMLElement>('.uz-ep-celije > div')!;
+      expect(opseg().style.height).toBe('calc(var(--u) * 60)');
+      mere['0-0'][3] = 75;
+      (document as unknown as { fonts: EventTarget }).fonts.dispatchEvent(new Event('loadingdone'));
+      await fixture.whenStable();
+      expect(opseg().style.height).toBe('calc(var(--u) * 75)');
+      citanja = 0;
+      vuci(150, 150, 190, 150, {}, 4);
+      kadrovi.kadar();
+      await fixture.whenStable();
+      pokazivac('pointermove', 200, 150);
+      kadrovi.kadar();
+      await fixture.whenStable();
+      pokazivac('pointerup', 200, 150);
+      await fixture.whenStable();
+      expect((store.platno().slojevi[0] as { x: number }).x).toBe(150);
+      expect(citanja).toBe(0);
+    });
+
+    it('dvoklik u ćeliju počinje uređivanje te ćelije', () => {
+      overlay().dispatchEvent(new MouseEvent('dblclick', { clientX: 250, clientY: 175, bubbles: true }));
+      expect(store.uredjivanje()).toEqual({ slojId: 'T', celija: { r: 1, k: 1 } });
     });
   });
 });

@@ -34,23 +34,51 @@ describe('PanelSvojstvaComponent', () => {
   it.each([
     [[], ['app-svojstva-slajda']],
     [['oblik'], ['app-svojstva-oblika', 'app-svojstva-sloja']],
-    [['tekst'], ['app-svojstva-oblika', 'app-svojstva-sloja']],
+    [['tekst'], ['app-svojstva-oblika', 'app-svojstva-sloja', 'app-svojstva-teksta']],
     [['slika'], ['app-svojstva-slike', 'app-svojstva-sloja']],
-    [['tabela'], ['app-svojstva-sloja']],
+    [['tabela'], ['app-svojstva-sloja', 'app-svojstva-tabele', 'app-svojstva-teksta']],
     [['formula'], ['app-svojstva-sloja']],
     [['crtez'], ['app-svojstva-sloja']],
     [['oblik', 'slika'], ['app-svojstva-sloja']],
   ])('izbor %j -> %j', async (izbor, delovi) => {
     store.izaberi(izbor);
     await fixture.whenStable();
-    const svi = ['app-svojstva-slajda', 'app-svojstva-sloja', 'app-svojstva-oblika', 'app-svojstva-slike'];
+    const svi = [
+      'app-svojstva-slajda', 'app-svojstva-sloja', 'app-svojstva-oblika', 'app-svojstva-slike', 'app-svojstva-teksta', 'app-svojstva-tabele',
+    ];
     expect(svi.filter(ima)).toEqual(svi.filter((s) => delovi.includes(s)));
   });
 
-  it('CRTEZ, TABELA i FORMULA u 4a: samo zajednička polja', async () => {
-    store.izaberi(['formula']);
+  it('CRTEZ: samo zajednička polja; FORMULA (F16): zajednička plus svojstva formule (TABELA ima svoj panel, F14)', async () => {
+    store.izaberi(['crtez']);
     await fixture.whenStable();
     expect(oznakePolja(el())).toEqual(['X', 'Y', 'Širina', 'Visina', 'Rotacija', 'Providnost']);
+    expect(ima('app-svojstva-formule')).toBe(false);
+    store.izaberi(['formula']);
+    await fixture.whenStable();
+    expect(oznakePolja(el())).toEqual(['X', 'Y', 'Širina', 'Visina', 'Rotacija', 'Providnost', 'Veličina']);
+    expect(ima('app-svojstva-formule')).toBe(true);
+  });
+
+  it('dva TEKST sloja: svojstva teksta (za oba); TEKST i OBLIK zajedno: bez njih', async () => {
+    const p = platno();
+    const tekst = p.slojevi.find((s) => s.id === 'tekst')!;
+    store.inicijalizuj({ ...p, slojevi: [...p.slojevi, { ...tekst, id: 'tekst2' }] });
+    store.izaberi(['tekst', 'tekst2']);
+    await fixture.whenStable();
+    expect(ima('app-svojstva-teksta')).toBe(true);
+    store.izaberi(['tekst', 'oblik']);
+    await fixture.whenStable();
+    expect(ima('app-svojstva-teksta')).toBe(false);
+  });
+
+  it('tokom uređivanja teksta: napomena, "Završi uređivanje" i svojstva teksta; bez polja sloja', async () => {
+    store.pocniUredjivanje('tekst');
+    await fixture.whenStable();
+    expect(el().textContent).toContain('Uređuje se tekst.');
+    expect(ima('app-svojstva-teksta')).toBe(true);
+    expect(ima('app-svojstva-sloja')).toBe(false);
+    expect(ima('app-svojstva-oblika')).toBe(false);
   });
 
   it('izbor sloja pa poništen izbor vraća svojstva slajda', async () => {

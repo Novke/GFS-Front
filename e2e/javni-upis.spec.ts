@@ -1,4 +1,5 @@
 import { expect, test } from './javna-mreza';
+import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA } from './nizovi-editora';
 
 /** Token otvorene sesije iz `fixtures/onboarding.json` (izmišljen). */
 const TOKEN = 'e2eTokenZaUpis_0123456789abcdefg';
@@ -36,6 +37,10 @@ test.describe('javni upis (telefon studenta, bez basic-auth-a)', () => {
     expect(skripte.putanje.some(p => /\/main-[^/]+\.js$/.test(p)), 'provera je pročitala glavni bundle').toBe(true);
     expect(skripte.saUvozom).toEqual([]);
     expect(skripte.saEditorom).toEqual([]);
+    // provera nizova pokriva i biblioteke 4b (ProseMirror, MathLive), a formule se ovde ne učitavaju (ni stil ni fontovi)
+    expect(NIZOVI_EDITORA).toEqual(expect.arrayContaining([NIZ_PROSEMIRROR, NIZ_MATHLIVE]));
+    expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/'))).toEqual([]);
+    expect(javnaMreza.zahtevi.length, 'zahtevi su zabeleženi').toBeGreaterThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 

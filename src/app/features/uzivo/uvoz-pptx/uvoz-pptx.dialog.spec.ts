@@ -238,6 +238,24 @@ describe('UvozPptxDialog', () => {
     expect(api.obrisi).toHaveBeenCalledTimes(1);
   });
 
+  it('završni talas: "Zatvori" dok brisanje traje je onemogućeno (aria-disabled) i klik ne zatvara dijalog', async () => {
+    const brisanje = new Subject<void>();
+    api.uveziOdgovor = () => throwError(() => new HttpErrorResponse({ status: 400, error: { reason: 'Ne.', time: '' } }));
+    api.obrisiOdgovor = () => brisanje;
+    otvori({ fajl: fajl(dvaSlajda()), nova: true, brojSlajdova: 0, izabraniId: null, izabraniRb: null });
+    await uPregledu();
+    dugme('Uvezi').click();
+    await doK(() => api.obrisi.mock.calls.length === 1 && dugme('Zatvori').getAttribute('aria-disabled') === 'true', 'brisanje u toku');
+    dugme('Zatvori').click();
+    TestBed.tick();
+    expect(rezultat.zatvoren).toBe(false);
+    brisanje.next();
+    brisanje.complete();
+    await doK(() => dugme('Zatvori').getAttribute('aria-disabled') !== 'true', 'kraj brisanja');
+    dugme('Zatvori').click();
+    await doK(() => rezultat.zatvoren, 'zatvaranje');
+  });
+
   it('nova: neuspelo brisanje -> poruka da se obriše ručno', async () => {
     api.uveziOdgovor = () => throwError(() => new HttpErrorResponse({ status: 400, error: { reason: 'Ne.', time: '' } }));
     api.obrisiOdgovor = () => throwError(() => new HttpErrorResponse({ status: 500 }));

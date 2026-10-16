@@ -14,7 +14,8 @@ import type { Tema } from '../data-access/platno.models';
 import { TEME } from '../ui/teme';
 
 const HEKS = /^#[0-9A-Fa-f]{6}$/;
-const POLOZAJI: ConnectedPosition[] = [
+/** Položaji CDK popovera ispod (ili iznad) dugmeta; deli ih i "Tabela" (F14). */
+export const POLOZAJI: ConnectedPosition[] = [
   { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
   { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -4 },
   { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 4 },
@@ -28,9 +29,10 @@ const POLOZAJI: ConnectedPosition[] = [
     <span class="uz-ep-boja-oznaka" aria-hidden="true">{{ oznaka() }}</span>
     <button #dugme type="button" class="uz-ep-boja" cdkOverlayOrigin #izvor="cdkOverlayOrigin"
             [disabled]="onemoguceno()" (click)="otvoreno() ? zatvori() : otvori()"
-            [attr.aria-label]="oznaka() + ': ' + (vrednost() ?? 'Bez')" aria-haspopup="dialog" [attr.aria-expanded]="otvoreno()">
-      <span class="uz-ep-uzorak" [class.uz-ep-uzorak--bez]="!vrednost()" [style.background-color]="vrednost()"></span>
-      <span class="uz-ep-boja-tekst">{{ vrednost() ?? 'Bez' }}</span>
+            [attr.aria-label]="oznaka() + ': ' + natpis()" aria-haspopup="dialog" [attr.aria-expanded]="otvoreno()">
+      <span class="uz-ep-uzorak" [class.uz-ep-uzorak--bez]="!vrednost() && !mesano()"
+            [class.uz-ep-uzorak--mesano]="!vrednost() && mesano()" [style.background-color]="vrednost()"></span>
+      <span class="uz-ep-boja-tekst" [class.uz-ep-boja-tekst--mesano]="!vrednost() && mesano()">{{ natpis() }}</span>
     </button>
     <ng-template cdkConnectedOverlay [cdkConnectedOverlayOrigin]="izvor" [cdkConnectedOverlayOpen]="otvoreno()"
                  [cdkConnectedOverlayPositions]="polozaji" [cdkConnectedOverlayHasBackdrop]="true"
@@ -87,6 +89,8 @@ const POLOZAJI: ConnectedPosition[] = [
       display: block; width: 20px; height: 20px; box-sizing: border-box;
       border: 1px solid var(--muted); border-radius: var(--radius-sm);
     }
+    .uz-ep-uzorak--mesano { background: linear-gradient(135deg, var(--ink-2) 50%, var(--surface) 50%); }
+    .uz-ep-boja-tekst--mesano { font-family: inherit; }
     .uz-ep-uzorak--bez {
       background: linear-gradient(to top right, transparent 45%, var(--danger) 45% 55%, transparent 55%);
     }
@@ -122,6 +126,13 @@ export class IzborBojeComponent {
   /** Dugme "Bez" -> null (popuna, ivica). */
   readonly dozvoliPrazno = input(false);
   readonly onemoguceno = input(false);
+  /** null znači "različite boje" (izbor obuhvata više boja), ne "bez boje": natpis "Različito" (F13). */
+  readonly mesano = input(false);
+  /**
+   * Posle IZBORA boje: true = pozivalac je sam premestio fokus (npr. nazad u tekst posle izbora mišem, F13), pa se fokus
+   * ne vraća na dugme. Bez nje (i za Esc / klik van) fokus se vraća na dugme.
+   */
+  readonly fokusPosleIzbora = input<(() => boolean) | null>(null);
   readonly izbor = output<string | null>();
 
   private readonly prefs = inject(PreferencesStore);
@@ -138,6 +149,7 @@ export class IzborBojeComponent {
   /** `<input type="color">` traži `#rrggbb` malim slovima. */
   protected readonly izbornik = computed(() => (this.ispravna() ? this.heks() : this.vrednost() ?? '#000000').toLowerCase());
   protected readonly poslednje = this.prefs.poslednjeBoje;
+  protected readonly natpis = computed(() => this.vrednost() ?? (this.mesano() ? 'Različito' : 'Bez'));
   protected readonly uzorciTeme = computed(() => {
     const t = TEME[this.tema()];
     return [
@@ -153,20 +165,27 @@ export class IzborBojeComponent {
     this.otvoreno.set(true);
   }
 
-  /** Gasi popover i vraća fokus na dugme (i posle crtanja: zamka fokusa pri nestanku vraća fokus na element pre nje). */
-  protected zatvori(): void {
+  /**
+   * Gasi popover i vraća fokus na dugme (i posle crtanja: zamka fokusa pri nestanku vraća fokus na element pre nje).
+   * Posle izbora pozivalac može da preuzme fokus (`fokusPosleIzbora`), isto i posle crtanja.
+   */
+  protected zatvori(posleIzbora = false): void {
     if (!this.otvoreno()) return;
     this.otvoreno.set(false);
     const dugme = this.dugme().nativeElement;
-    dugme.focus();
-    afterNextRender(() => dugme.focus(), { injector: this.injector });
+    const drugde = posleIzbora ? this.fokusPosleIzbora() : null;
+    const fokus = () => {
+      if (!drugde?.()) dugme.focus();
+    };
+    fokus();
+    afterNextRender(fokus, { injector: this.injector });
   }
 
   protected izaberi(boja: string): void {
     const b = boja.toUpperCase();
     this.prefs.zapamtiBoju(b);
     this.izbor.emit(b);
-    this.zatvori();
+    this.zatvori(true);
   }
 
   protected primeni(): void {
@@ -175,6 +194,6 @@ export class IzborBojeComponent {
 
   protected izaberiPrazno(): void {
     this.izbor.emit(null);
-    this.zatvori();
+    this.zatvori(true);
   }
 }

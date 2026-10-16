@@ -20,7 +20,20 @@ export const IKONE = [
   'short_text', 'stop_circle', 'tv', 'visibility_off', 'timer', 'article', 'mobile', 'computer', 'layers',
   'restart_alt', 'upload_file',
   // Editor platna (faza 4).
-  'undo', 'redo', 'flip_to_front', 'flip_to_back', 'visibility', 'shapes',
+  'undo', 'redo', 'flip_to_front', 'flip_to_back', 'visibility', 'shapes', 'text_fields',
+  // Panel teksta (F13).
+  'format_bold', 'format_italic', 'format_underlined', 'format_strikethrough', 'subscript', 'superscript',
+  'format_align_left', 'format_align_center', 'format_align_right', 'format_align_justify', 'format_list_bulleted',
+  'format_list_numbered', 'format_indent_increase', 'format_indent_decrease', 'vertical_align_top',
+  'vertical_align_center', 'vertical_align_bottom',
+  // Tabele (F14).
+  'table', 'cell_merge', 'border_all',
+  // Formule (F16).
+  'functions',
+  // Animacije (F17): okidači "Sa prethodnim" i "Posle prethodnog" u panelu.
+  'animation', 'motion_photos_on',
+  // Pregled platna (F18): "Zaustavi".
+  'stop',
   // Grupa: kontakti za telefon i WhatsApp grupa.
   'download', 'link',
 ] as const;
