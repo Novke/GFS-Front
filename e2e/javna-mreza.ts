@@ -1,7 +1,7 @@
 import { expect, test as osnova } from './fixture';
 import { JAVNA_PUTANJA } from './javne-putanje';
 import { NIZ_MATHLIVE, nizoviEditora, zabranjeniJavno } from './nizovi-editora';
-import { nizoviUvoza } from './nizovi-uvoza';
+import { nizoviPdf, nizoviUvoza } from './nizovi-uvoza';
 
 export { expect } from './fixture';
 
@@ -22,9 +22,12 @@ export interface JavnaMreza {
    * platna koje telo sadrži, npr. `/chunk-X.js: invalid zip data`). Javna ruta ne sme da učita fflate, kod uvoza ni kod
    * editora platna (i njegove biblioteke); teardown proverava isto, a spec ga zove da potvrdi da provera nije prazna.
    * `saEditorom`: svi `NIZOVI_EDITORA` (i `ML__latex`); `saZabranjenim`: `NIZOVI_ZABRANJENI_JAVNO` (bez `ML__latex`);
-   * `saFormulom`: putanje JS-a sa `ML__latex` (`mathlive/ssr`).
+   * `saFormulom`: putanje JS-a sa `ML__latex` (`mathlive/ssr`); `saPdf`: JS sa nizovima uvoza PDF-a (`nizoviPdf`: dijalog,
+   * pdf.js, radnik), koji javna ruta nikad ne učitava.
    */
-  skripte(): Promise<{ putanje: string[]; saUvozom: string[]; saEditorom: string[]; saZabranjenim: string[]; saFormulom: string[] }>;
+  skripte(): Promise<{
+    putanje: string[]; saUvozom: string[]; saEditorom: string[]; saZabranjenim: string[]; saFormulom: string[]; saPdf: string[];
+  }>;
 }
 
 interface Opcije {
@@ -52,7 +55,7 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
     async ({ page, mock, baseURL, dozvoljeniApi, formule }, use) => {
       void mock; // mok mora biti instaliran pre ove rute: `route.fallback()` ide na njega
       const origin = new URL(baseURL!).origin;
-      interface Procitano { putanja: string; nizovi: string[]; editor: string[]; zabranjeni: string[] }
+      interface Procitano { putanja: string; nizovi: string[]; editor: string[]; zabranjeni: string[]; pdf: string[] }
       const citanja: Promise<Procitano>[] = [];
       const mreza: JavnaMreza = {
         api: [], zahtevi: [], odgovori401: [], ws: [],
@@ -68,6 +71,7 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
             saEditorom: procitane.filter(x => x.editor.length).map(x => `${x.putanja}: ${x.editor.join(', ')}`),
             saZabranjenim: procitane.filter(x => x.zabranjeni.length).map(x => `${x.putanja}: ${x.zabranjeni.join(', ')}`),
             saFormulom: procitane.filter(x => x.editor.includes(NIZ_MATHLIVE)).map(x => x.putanja),
+            saPdf: procitane.filter(x => x.pdf.length).map(x => `${x.putanja}: ${x.pdf.join(', ')}`),
           };
         },
       };
@@ -87,8 +91,8 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
           // telo se čita odmah (posle zatvaranja stranice ga nema); nepročitano telo obara proveru (fail-closed)
           const necitano = ['telo nije pročitano'];
           citanja.push(r.text().then(
-            t => ({ putanja, nizovi: nizoviUvoza(t), editor: nizoviEditora(t), zabranjeni: zabranjeniJavno(t) }),
-            () => ({ putanja, nizovi: necitano, editor: necitano, zabranjeni: necitano }),
+            t => ({ putanja, nizovi: nizoviUvoza(t), editor: nizoviEditora(t), zabranjeni: zabranjeniJavno(t), pdf: nizoviPdf(t) }),
+            () => ({ putanja, nizovi: necitano, editor: necitano, zabranjeni: necitano, pdf: necitano }),
           ));
         }
       });
@@ -105,6 +109,9 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       expect(mreza.ws.filter(p => !JAVNA_PUTANJA.test(p)), 'WebSocket van javnih putanja').toEqual([]);
       const skripte = await mreza.skripte();
       expect(skripte.saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);
+      // 5d: telefon nikad ne dobija uvoz PDF-a (dijalog, pdf.js, radnik) ni podatke pdf.js-a (fontovi, cmaps, wasm)
+      expect(skripte.saPdf, 'JS uvoza PDF-a ili pdf.js na javnoj ruti').toEqual([]);
+      expect(mreza.zahtevi.filter(p => p.includes('/assets/pdfjs/')), 'pdf.js assets na javnoj ruti').toEqual([]);
       if (formule) {
         // formula u tekstu (5a): samo `mathlive/ssr` (lenji chunk), nikad ceo mathlive, editor platna ni ProseMirror
         expect(skripte.saZabranjenim, 'JS sa kodom editora ili celim mathlive-om na javnoj ruti').toEqual([]);

@@ -13,7 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { distinctUntilChanged, finalize, from, map, of, switchMap } from 'rxjs';
+import { Observable, distinctUntilChanged, finalize, from, map, of, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
@@ -21,7 +21,7 @@ import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { greskePlatna } from '../data-access/platno-provera';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { TIPOVI_PITANJA, opisTipa, oznakaSlajda, slajdUCmd } from '../data-access/slajd-pravila';
-import { IzvodjenjeInfo, PokreniCmd, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, medijUrl } from '../data-access/uzivo.models';
+import { IzvodjenjeInfo, PokreniCmd, PrezentacijaDetails, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, medijUrl } from '../data-access/uzivo.models';
 import type { Tema } from '../data-access/platno.models';
 import { kodSaRazmakom } from '../ui/format';
 import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
@@ -30,6 +30,7 @@ import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
 import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
+import { UvozPdfOtvarac } from './uvoz-pdf-otvarac';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -181,6 +182,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPlatna"><mat-icon svgIcon="layers" />Platno</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
+              <button mat-stroked-button type="button" aria-label="Uvezi iz PDF-a" title="Uvezi iz PDF-a"
+                      [disabled]="radi()" disabledInteractive (click)="uveziIzPdf()"><mat-icon svgIcon="picture_as_pdf" />PDF</button>
             </div>
           </nav>
 
@@ -258,6 +261,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly obavestenja = inject(NotificationStore);
   private readonly mrvice = inject(BreadcrumbService);
   private readonly otvaracUvoza = inject(UvozPptxOtvarac);
+  private readonly otvaracPdf = inject(UvozPdfOtvarac);
   private readonly greske = inject(ErrorHandler);
   private readonly registar = inject(RegistarCuvanja);
   private readonly destroyRef = inject(DestroyRef);
@@ -346,21 +350,23 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     return novi + postojeci;
   }
 
-  /** Dijalog uvoza upravo šalje slike ili slajdove (sesija `uvoz-<id>` u `RegistarCuvanja`). */
-  private uvozUToku(): boolean {
+  /** Dijalog uvoza upravo šalje (sesija `uvoz-<id>` ili `uvoz-pdf-<id>` u `RegistarCuvanja`): odakle je uvoz, ili `null`. */
+  private uvozUToku(): string | null {
     const p = this.store.prezentacija();
-    return !!p && this.registar.zauzet(`uvoz-${p.id}`);
+    if (!p) return null;
+    return this.registar.zauzet(`uvoz-${p.id}`) ? 'PowerPointa' : this.registar.zauzet(`uvoz-pdf-${p.id}`) ? 'PDF-a' : null;
   }
 
   /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
   imaNesacuvanihIzmena(): boolean {
-    return this.nesacuvaniSlajdovi() > 0 || this.uvozUToku();
+    return this.nesacuvaniSlajdovi() > 0 || !!this.uvozUToku();
   }
 
   tekstNapustanja(): string {
     const delovi: string[] = [];
-    if (this.uvozUToku()) {
-      delovi.push('Uvoz iz PowerPointa još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
+    const uvoz = this.uvozUToku();
+    if (uvoz) {
+      delovi.push(`Uvoz iz ${uvoz} još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.`);
     }
     const { novi, postojeci } = this.nepotpuni();
     if (novi + postojeci > 0) {
@@ -586,19 +592,30 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     });
   }
 
-  /**
-   * Uvoz iz PowerPointa (spec 7.7): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan
-   * dijalog sa izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store i fokus na prvi uvezen slajd, a
-   * nepoznat ishod slanja (`'osvezi'`) ponovo učitava prezentaciju, pa lista nikad ne ostaje zastarela.
-   */
+  /** Uvoz iz PowerPointa (spec 7.7). */
   protected uveziIzPowerPointa(): void {
+    this.uvezi(podaci => this.otvaracUvoza.otvori(this.dialog, podaci));
+  }
+
+  /** Uvoz iz PDF-a (faza 5d): isti tok kao PowerPoint; dijalog i pdf.js su lenji chunk-ovi (`UvozPdfOtvarac`). */
+  protected uveziIzPdf(): void {
+    this.uvezi(podaci => this.otvaracPdf.otvori(this.dialog, { ...podaci, tema: vazecaTema(this.store.prezentacija()?.tema) }));
+  }
+
+  /**
+   * Uvoz (PowerPoint, PDF): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan dijalog sa
+   * izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store i fokus na prvi uvezen slajd, a nepoznat ishod
+   * slanja (`'osvezi'`) ponovo učitava prezentaciju, pa lista nikad ne ostaje zastarela.
+   */
+  private uvezi(otvori: (podaci: { prezentacijaId: number; brojSlajdova: number; izabraniId: number | null; izabraniRb: number | null })
+    => Promise<Observable<PrezentacijaDetails | 'osvezi' | undefined>>): void {
     const p = this.store.prezentacija();
     if (!p || this.radi()) return;
     this.radi.set(true);
     this.store.sacuvajSve().pipe(
       switchMap(() => {
         const s = this.store.izabrani();
-        return from(this.otvaracUvoza.otvori(this.dialog, {
+        return from(otvori({
           prezentacijaId: p.id, brojSlajdova: this.store.slajdovi().length, izabraniId: s?.id ?? null, izabraniRb: s?.rb ?? null,
         }));
       }),
@@ -608,7 +625,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
       next: rezultat => {
         if (rezultat === 'osvezi') {
           // nepoznat ishod slanja: slajdovi su možda upisani, lista se čita ponovo sa servera (prikazana prezentacija
-          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu "PowerPoint" ostaju)
+          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu uvoza ostaju)
           this.store.ucitaj(p.id);
         } else if (rezultat) {
           this.store.primeniUvoz(rezultat);

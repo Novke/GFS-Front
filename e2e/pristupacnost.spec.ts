@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixture';
+import { napraviPdf } from './fixtures/pdf-fabrika';
 import { lazniBroker } from './lazni-stomp';
 import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
 import { uzorakPptx } from './pptx-uzorak';
@@ -278,6 +279,36 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(dijalog.locator('[data-faza="izvestaj"]')).toBeVisible();
       await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog uvoza, izveštaj (${rezim})`).toEqual([]);
+    });
+
+    // dijalog uvoza iz PDF-a (5d, lenji chunk + pdf.js) u stanju pregleda i slanja (slika strane zadržana u moku)
+    test('dijalog uvoza iz PDF-a (pregled, slanje): bez serious/critical kršenja', async ({ page, mock }) => {
+      const zadrzan = mock.zadrzi('POST', 'mediji');
+      try {
+        await page.goto('prezentacije/5');
+        await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+        const pdf = page.getByRole('button', { name: 'Uvezi iz PDF-a' });
+        await expect(pdf).toBeEnabled();
+        await pdf.click();
+        const dijalog = page.locator('mat-dialog-container');
+        await expect(dijalog.getByRole('heading', { name: 'Uvoz iz PDF-a' })).toBeVisible();
+        await dijalog.locator('input[type=file]').setInputFiles({ name: 'Sinteticki.pdf', mimeType: 'application/pdf', buffer: napraviPdf([{ sirina: 960, visina: 540 }]) });
+
+        await expect(dijalog.locator('[data-faza="pregled"]')).toBeVisible();
+        await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog PDF-a, pregled (${rezim})`).toEqual([]);
+
+        const uvezi = dijalog.getByRole('button', { name: 'Uvezi' });
+        await expect(uvezi).toBeEnabled();
+        await uvezi.click();
+        await expect(dijalog.locator('[data-faza="slanje"]')).toBeVisible();
+        await zadrzan.stigao;
+        await expect(dijalog.locator('.uz-uv-status')).toBeFocused();
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog PDF-a, slanje (${rezim})`).toEqual([]);
+      } finally {
+        zadrzan.pusti();
+      }
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
     });
   });
 }

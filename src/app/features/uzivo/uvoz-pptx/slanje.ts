@@ -118,7 +118,7 @@ const bezTacke = (s: string) => s.replace(/[.\s]+$/, '');
 const NEBEZBEDNA_VEZA = 'Pregledač ne dozvoljava proveru slika na nebezbednoj vezi (http). Otvori aplikaciju preko https i pokušaj ponovo.';
 
 /** SHA-256, hex. `crypto.subtle` postoji samo u bezbednom kontekstu (https, localhost): bez njega -> `GreskaSlanja`. */
-async function sha256(b: Uint8Array): Promise<string> {
+export async function sha256(b: Uint8Array): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new GreskaSlanja(NEBEZBEDNA_VEZA);
   const h = await subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>);
@@ -199,6 +199,17 @@ async function pripremi(r: RezultatUvoza, izabrani: readonly UvezenSlajd[], z: Z
   return { slike: [...slike.values()], hesPoKljucu, upozorenja };
 }
 
+/** Jedna slika na `POST /mediji`, do 2 ponavljanja privremene greške (1 s, 3 s); greška je `GreskaSlanja` sa imenom slike. */
+export function posaljiSliku(
+  api: ApiUvoza, s: { bajtovi: Uint8Array; imeFajla: string; mime: string; ime: string },
+  cekaj: (ms: number) => Observable<unknown> = (ms) => timer(ms),
+): Observable<MedijInfo> {
+  return defer(() => api.upload(new File([s.bajtovi as Uint8Array<ArrayBuffer>], s.imeFajla, { type: s.mime }))).pipe(
+    retry({ count: 2, delay: (e: unknown, i: number) => (privremena(e) ? cekaj(i === 1 ? 1000 : 3000) : throwError(() => e)) }),
+    catchError((e: unknown) => throwError(() => new GreskaSlanja(`Slika ${s.ime} nije poslata: ${bezTacke(razlogGreske(e, porukaStatusa(e)))}.`))),
+  );
+}
+
 /** Šalje jedinstvene slike (najviše 3 istovremeno, do 2 ponavljanja privremene greške); rezultat: heš -> id servera. */
 function posaljiSlike(slike: readonly SlikaZaSlanje[], z: ZavisnostiSlanja, napredak: (n: Napredak) => void): Observable<Map<string, string>> {
   const cekaj = z.cekaj ?? ((ms: number) => timer(ms));
@@ -207,9 +218,7 @@ function posaljiSlike(slike: readonly SlikaZaSlanje[], z: ZavisnostiSlanja, napr
     let poslato = 0;
     napredak({ faza: 'slike', poslato, ukupno });
     return from(slike).pipe(
-      mergeMap((s) => defer(() => z.api.upload(new File([s.bajtovi as Uint8Array<ArrayBuffer>], s.imeFajla, { type: s.mime }))).pipe(
-        retry({ count: 2, delay: (e: unknown, i: number) => (privremena(e) ? cekaj(i === 1 ? 1000 : 3000) : throwError(() => e)) }),
-        catchError((e: unknown) => throwError(() => new GreskaSlanja(`Slika ${s.ime} nije poslata: ${bezTacke(razlogGreske(e, porukaStatusa(e)))}.`))),
+      mergeMap((s) => posaljiSliku(z.api, s, cekaj).pipe(
         map((info): [string, string] => {
           poslato++;
           napredak({ faza: 'slike', poslato, ukupno });
@@ -227,20 +236,25 @@ const porukaStatusa = (e: unknown) => (e instanceof HttpErrorResponse ? `server 
 /**
  * Greška `POST slajdovi/uvoz` za korisnika. Uvoz se nikad ne ponavlja sam (nije idempotentan): bez odgovora servera
  * (veza, 502/503/504 bez poruke) ili sa nepročitanim uspešnim odgovorom (2xx) slajdovi su možda već dodati, pa poruka
- * to kaže. `Slajd N: …` se preslikava na redni broj u PPTX-u bez obzira na status.
+ * to kaže. `Slajd N: …` se preslikava kroz `oznakaSlajda(N)` ("PowerPoint slajd 7", "Strana 7"; `null` = bez preslikavanja)
+ * bez obzira na status.
  */
-function greskaUvoza(e: unknown, izabrani: readonly UvezenSlajd[]): GreskaSlanja {
+export function greskaUvozaSlajdova(e: unknown, oznakaSlajda: (redniBroj: number) => string | null): GreskaSlanja {
   if (!(e instanceof HttpErrorResponse)) return e instanceof GreskaSlanja ? e : new GreskaSlanja('Slajdovi nisu uvezeni: neočekivana greška.');
   if (e.status >= 200 && e.status < 300) return new GreskaSlanja(NEPROCITAN_ODGOVOR, { nepoznatIshod: true });
   const reason = e.status === 0 ? '' : razlogGreske(e, '');
   const m = /^Slajd (\d+): ([\s\S]*)$/.exec(reason);
-  const s = m ? izabrani[Number(m[1]) - 1] : undefined;
-  if (m && s) return new GreskaSlanja(`PowerPoint slajd ${s.indeks}: ${m[2]}`);
+  const oznaka = m ? oznakaSlajda(Number(m[1])) : null;
+  if (m && oznaka) return new GreskaSlanja(`${oznaka}: ${m[2]}`);
   if (e.status === 413) return new GreskaSlanja(reason || PREVELIK_UVOZ);
   if (e.status === 429) return new GreskaSlanja(PREVISE_ZAHTEVA);
   if (!reason && (e.status === 0 || e.status >= 500)) return new GreskaSlanja(PREKINUTA_VEZA, { nepoznatIshod: true });
   if (e.status >= 500) return new GreskaSlanja(`Slajdovi nisu uvezeni: ${reason}`);
   return new GreskaSlanja(reason || `Slajdovi nisu uvezeni (greška ${e.status}).`);
+}
+
+function greskaUvoza(e: unknown, izabrani: readonly UvezenSlajd[]): GreskaSlanja {
+  return greskaUvozaSlajdova(e, (n) => (izabrani[n - 1] ? `PowerPoint slajd ${izabrani[n - 1].indeks}` : null));
 }
 
 /**

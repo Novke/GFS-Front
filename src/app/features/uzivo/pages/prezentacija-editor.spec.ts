@@ -13,6 +13,7 @@ import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { PrezentacijaDetails, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
 import { PrezentacijaEditorPage } from './prezentacija-editor.page';
+import { UvozPdfOtvarac } from './uvoz-pdf-otvarac';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
@@ -137,15 +138,15 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     await pomeriSat(800);
   }));
 
-  it('završni talas: dok radi (Pokreni čeka PUT), klik na onemogućena dugmad (Dupliraj, Obriši, Pokreni, PowerPoint) ne radi ništa', saLaznimSatom(async () => {
+  it('završni talas: dok radi (Pokreni čeka PUT), klik na onemogućena dugmad (Dupliraj, Obriši, Pokreni, PowerPoint, PDF) ne radi ništa', saLaznimSatom(async () => {
     store.izmeniSlajd(11, info('Izmenjen uvod'));
     strana.pokreni();
     const put = http.expectOne('api/slajdovi/11');
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    const dugmad = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-akcije button, .uz-ed-dodaj button[aria-label="Uvezi iz PowerPointa"]')];
+    const dugmad = [...el.querySelectorAll<HTMLButtonElement>('.uz-ed-akcije button, .uz-ed-dodaj button[aria-label^="Uvezi iz "]')];
     expect(dugmad.map((b) => [b.textContent!.trim(), b.getAttribute('aria-disabled')])).toEqual([
-      ['Dupliraj prezentaciju', 'true'], ['Obriši', 'true'], ['Pokreni', 'true'], ['PowerPoint', 'true'],
+      ['Dupliraj prezentaciju', 'true'], ['Obriši', 'true'], ['Pokreni', 'true'], ['PowerPoint', 'true'], ['PDF', 'true'],
     ]);
     dugmad.forEach((b) => b.click());
     await isprazniMikrozadatke();
@@ -741,6 +742,139 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     expect(zatvaranje.observed).toBe(false);
     zatvaranje.next(posleUvoza);
     expect(primeniUvoz).not.toHaveBeenCalled();
+  });
+});
+
+describe('PrezentacijaEditorPage: uvoz iz PDF-a', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let store: InstanceType<typeof EditorStore>;
+  let http: HttpTestingController;
+  let otvori: ReturnType<typeof vi.fn>;
+  let otvoriPptx: ReturnType<typeof vi.fn>;
+  let poruka: ReturnType<typeof vi.spyOn>;
+  const posleUvoza: PrezentacijaDetails = {
+    ...prezentacija, tema: 'TAMNA', brojSlajdova: 3,
+    slajdovi: [slajd(11, 1, 'Uvod'), slajd(12, 2, 'Drugi'), { ...slajd(30, 3, ''), tip: 'PLATNO', naslov: null, platno: platno() }],
+  };
+
+  beforeEach(() => {
+    otvori = vi.fn().mockResolvedValue(of(posleUvoza));
+    otvoriPptx = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: UvozPdfOtvarac, useValue: { otvori } },
+        { provide: UvozPptxOtvarac, useValue: { otvori: otvoriPptx } },
+        { provide: ErrorHandler, useValue: { handleError: vi.fn() } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    poruka = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({
+      ...prezentacija, tema: 'TAMNA', brojSlajdova: 2, slajdovi: [slajd(11, 1, 'Uvod'), slajd(12, 2, 'Drugi')],
+    });
+    store.izaberi(12);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  const dugmeUvoza = () => [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')]
+    .find(b => b.getAttribute('aria-label') === 'Uvezi iz PDF-a') as HTMLButtonElement;
+
+  it('dugme "PDF" (ime Uvezi iz PDF-a) pored "PowerPoint" čuva sve, otvara uvoz sa izabranim slajdom i temom, primenjuje rezultat', async () => {
+    const dugme = dugmeUvoza();
+    expect(dugme).toBeDefined();
+    expect(dugme.textContent?.trim()).toBe('PDF');
+    expect(dugme.title).toBe('Uvezi iz PDF-a');
+    expect(dugme.querySelector('mat-icon')?.getAttribute('svgicon')).toBe('picture_as_pdf');
+    expect(dugme.closest('.uz-ed-dodaj')).not.toBeNull();
+    expect(dugme.previousElementSibling?.getAttribute('aria-label')).toBe('Uvezi iz PowerPointa');
+    const sacuvajSve = vi.spyOn(store, 'sacuvajSve');
+    const primeniUvoz = vi.spyOn(store, 'primeniUvoz');
+    dugme.click();
+    await isprazniMikrozadatke();
+    expect(sacuvajSve).toHaveBeenCalledTimes(1);
+    expect(otvori).toHaveBeenCalledTimes(1);
+    expect(sacuvajSve.mock.invocationCallOrder[0]).toBeLessThan(otvori.mock.invocationCallOrder[0]);
+    expect(otvori.mock.calls[0][1]).toEqual({ prezentacijaId: 1, brojSlajdova: 2, izabraniId: 12, izabraniRb: 2, tema: 'TAMNA' });
+    expect(primeniUvoz).toHaveBeenCalledWith(posleUvoza);
+    expect(store.izabraniId()).toBe(30);
+    expect(otvoriPptx).not.toHaveBeenCalled();
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+  });
+
+  it('sacuvajSve baci NijeSacuvano -> poruka, dijalog PDF-a se ne otvara', async () => {
+    vi.spyOn(store, 'sacuvajSve').mockReturnValue(throwError(() => new NijeSacuvano('Slajd 2 nije potpun.')));
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(otvori).not.toHaveBeenCalled();
+    expect(poruka).toHaveBeenCalledWith('Uvoz nije pokrenut: Slajd 2 nije potpun.');
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+  });
+
+  it('lenji chunk dijaloga se ne učita -> poruka, bez sirove greške', async () => {
+    otvori.mockRejectedValue(new TypeError('Failed to fetch dynamically imported module'));
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(poruka).toHaveBeenCalledTimes(1);
+    expect(poruka.mock.calls[0][0]).toMatch(/^Uvoz nije pokrenut: /);
+    expect(poruka.mock.calls[0][0]).not.toContain('TypeError');
+    expect(TestBed.inject(ErrorHandler).handleError).toHaveBeenCalledWith(expect.any(TypeError));
+  });
+
+  it('ishod "osvezi" ponovo učitava prezentaciju; zatvaranje bez uvoza ne primenjuje ništa', async () => {
+    otvori.mockResolvedValue(of('osvezi'));
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    http.expectOne('api/prezentacije/1').flush(posleUvoza);
+    expect(store.slajdovi().map(s => s.id)).toEqual([11, 12, 30]);
+
+    otvori.mockResolvedValue(of(undefined));
+    const primeniUvoz = vi.spyOn(store, 'primeniUvoz');
+    dugmeUvoza().click();
+    await isprazniMikrozadatke();
+    expect(otvori).toHaveBeenCalledTimes(2);
+    expect(primeniUvoz).not.toHaveBeenCalled();
+  });
+
+  it('dok je dijalog PDF-a otvoren, "PDF" i "PowerPoint" su aria-disabled i klik ne otvara ništa', async () => {
+    const zatvaranje = new Subject<PrezentacijaDetails | undefined>();
+    otvori.mockResolvedValue(zatvaranje);
+    dugmeUvoza().click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const dugme = dugmeUvoza();
+    expect(dugme.getAttribute('aria-disabled')).toBe('true');
+    dugme.click();
+    const pptx = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')]
+      .find(b => b.getAttribute('aria-label') === 'Uvezi iz PowerPointa') as HTMLButtonElement;
+    expect(pptx.getAttribute('aria-disabled')).toBe('true');
+    pptx.click();
+    await fixture.whenStable();
+    expect(otvori).toHaveBeenCalledTimes(1);
+    expect(otvoriPptx).not.toHaveBeenCalled();
+    zatvaranje.next(undefined);
+    zatvaranje.complete();
+  });
+
+  it('dok uvoz PDF-a šalje, napuštanje editora traži potvrdu sa tekstom o uvozu iz PDF-a', () => {
+    const editor = fixture.componentInstance;
+    const sesija = { kljuc: 'uvoz-pdf-1', uToku: 1, mirovanje: new Subject<void>(), nesacuvano: () => 1 };
+    TestBed.inject(RegistarCuvanja).prijavi(sesija);
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toContain('Uvoz iz PDF-a još traje');
+    expect(editor.tekstNapustanja()).not.toContain('PowerPoint');
+    TestBed.inject(RegistarCuvanja).odjavi(sesija);
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
   });
 });
 

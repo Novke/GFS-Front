@@ -36,6 +36,8 @@ export const IKONE = [
   'stop',
   // Grupa: kontakti za telefon i WhatsApp grupa.
   'download', 'link',
+  // Uvoz iz PDF-a (faza 5d).
+  'picture_as_pdf',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];
