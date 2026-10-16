@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import type { Platno as PlatnoModel } from '../src/app/features/uzivo/data-access/platno.models';
 import { proveriKaoServer } from '../src/app/features/uzivo/data-access/platno-provera';
+import { posleOtvaranjaDijaloga } from './dijalog';
 import { expect, test } from './fixture';
 import type { MockApi } from './mock-api';
 
@@ -422,6 +423,10 @@ test.describe('uživo: formula (4b, F16)', () => {
     await expect(dijalog(page)).toBeVisible();
     const mf = dijalog(page).locator('math-field');
     // dijalog sam fokusira math-field posle učitavanja MathLive-a (autoFocus: false, odluka 20)
+    await expect(mf).toBeFocused();
+    // MathLive je često spreman pre kraja animacije otvaranja; tasteri baš u trenutku kad CDK posle nje prebaci fokus
+    // na kontejner (dijalog ga vraća) bi se izgubili
+    await posleOtvaranjaDijaloga(page);
     await expect(mf).toBeFocused();
     await page.keyboard.type('x^2');
     const latex = dijalog(page).getByRole('textbox', { name: 'LaTeX' });

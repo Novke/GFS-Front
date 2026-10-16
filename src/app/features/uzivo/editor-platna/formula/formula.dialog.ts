@@ -196,20 +196,24 @@ export class FormulaDialog {
       t?.hide();
     });
     // CDK sa `autoFocus: false` posle animacije otvaranja fokusira kontejner kad fokus "nije u njemu", a fokus u shadow
-    // DOM-u `math-field`-a ne vidi (`contains` ne prelazi granicu shadow root-a). Dok korisnik još ništa nije uradio u
-    // dijalogu, fokus kontejnera se zato vraća u polje (posle prvog pritiska ili tastera ostaje gde ga korisnik stavi).
-    // MathLive pri tome i dalje misli da ima fokus (njegov `focus()` je tada no-op dok ne obradi gubitak fokusa), pa se
-    // pokušava ponovo, kratko, dok fokus ne stigne u polje ili korisnik ne krene sam.
+    // DOM-u `math-field`-a ne vidi (`contains` ne prelazi granicu shadow root-a). Fokus koji kontejner tako uzme iz
+    // sadržaja dijaloga vraća se tamo odakle je došao, i kad je korisnik već počeo da kuca (inače bi ostatak kucanja
+    // otišao u kontejner). Kad dođe spolja, a korisnik još ništa nije uradio u dijalogu, ide na početni fokus (posle
+    // prvog pritiska ili tastera ostaje gde ga korisnik stavi). MathLive pri tome i dalje misli da ima fokus (njegov
+    // `focus()` je tada no-op dok ne obradi gubitak fokusa), pa se pokušava ponovo, kratko, dok fokus ne stigne u polje.
     let korisnik = false;
     const radi = () => (korisnik = true);
     const kontejner = () => this.host.closest('mat-dialog-container');
-    const vrati = (pokusaja: number) => {
-      if (!ziv || korisnik || document.activeElement !== kontejner()) return;
-      this.pocetniFokus();
-      if (pokusaja > 1) setTimeout(() => vrati(pokusaja - 1), 80);
+    const vrati = (pokusaja: number, cilj: () => void) => {
+      if (!ziv || document.activeElement !== kontejner()) return;
+      cilj();
+      if (pokusaja > 1) setTimeout(() => vrati(pokusaja - 1, cilj), 80);
     };
     const naFokus = (e: FocusEvent) => {
-      if (!korisnik && e.target instanceof Element && e.target === kontejner()) vrati(8);
+      if (!(e.target instanceof Element) || e.target !== kontejner()) return;
+      const odakle = e.relatedTarget;
+      if (odakle instanceof HTMLElement && this.host.contains(odakle)) vrati(8, () => odakle.focus());
+      else if (!korisnik) vrati(8, () => !korisnik && this.pocetniFokus());
     };
     document.addEventListener('focusin', naFokus);
     this.host.addEventListener('pointerdown', radi, true);

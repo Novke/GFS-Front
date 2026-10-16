@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+import { posleOtvaranjaDijaloga } from './dijalog';
 import { expect, test } from './fixture';
 import { napraviPdf } from './fixtures/pdf-fabrika';
 import { lazniBroker } from './lazni-stomp';
@@ -136,6 +137,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       await grupa.getByRole('button', { name: 'Pregledaj prelaz' }).click();
       const dijalog = page.getByRole('dialog', { name: 'Pregled prelaza' });
       await expect(dijalog.getByRole('button', { name: 'Ponovi' })).toBeFocused();
+      // fokus stiže pre kraja animacije otvaranja (afterNextRender), a providan kontejner daje pogrešan kontrast
+      await posleOtvaranjaDijaloga(page);
       // prelaz od 5 s: odlazni (aria-hidden) i ulazni slajd su oba u dijalogu dok axe radi
       await expect(dijalog.locator('app-slajd-prikaz')).toHaveCount(2);
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: pregled prelaza (${rezim})`).toEqual([]);
