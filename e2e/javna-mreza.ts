@@ -1,5 +1,6 @@
 import { expect, test as osnova } from './fixture';
 import { JAVNA_PUTANJA } from './javne-putanje';
+import { nizoviEditora } from './nizovi-editora';
 import { nizoviUvoza } from './nizovi-uvoza';
 
 export { expect } from './fixture';
@@ -15,11 +16,11 @@ export interface JavnaMreza {
    */
   ws: string[];
   /**
-   * Čeka da se pročitaju sva tela JS odgovora stranice i vraća njihove putanje (sa nizovima uvoza PPTX-a koje telo
-   * sadrži, npr. `/chunk-X.js: invalid zip data`). Javna ruta ne sme da učita fflate ni kod uvoza; teardown proverava
-   * isto, a spec ga zove da potvrdi da provera nije prazna.
+   * Čeka da se pročitaju sva tela JS odgovora stranice i vraća njihove putanje (sa nizovima uvoza PPTX-a ili editora
+   * platna koje telo sadrži, npr. `/chunk-X.js: invalid zip data`). Javna ruta ne sme da učita fflate, kod uvoza ni kod
+   * editora platna (i njegove biblioteke); teardown proverava isto, a spec ga zove da potvrdi da provera nije prazna.
    */
-  skripte(): Promise<{ putanje: string[]; saUvozom: string[] }>;
+  skripte(): Promise<{ putanje: string[]; saUvozom: string[]; saEditorom: string[] }>;
 }
 
 interface Opcije {
@@ -39,18 +40,19 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
     async ({ page, mock, baseURL, dozvoljeniApi }, use) => {
       void mock; // mok mora biti instaliran pre ove rute: `route.fallback()` ide na njega
       const origin = new URL(baseURL!).origin;
-      const citanja: Promise<{ putanja: string; nizovi: string[] }>[] = [];
+      const citanja: Promise<{ putanja: string; nizovi: string[]; editor: string[] }>[] = [];
       const mreza: JavnaMreza = {
         api: [], odgovori401: [], ws: [],
         skripte: async () => {
           // čeka i čitanja koja počnu dok se raniji odgovori čitaju (broj se ustali)
-          let procitane: { putanja: string; nizovi: string[] }[];
+          let procitane: { putanja: string; nizovi: string[]; editor: string[] }[];
           do {
             procitane = await Promise.all([...citanja]);
           } while (procitane.length < citanja.length);
           return {
             putanje: procitane.map(x => x.putanja),
             saUvozom: procitane.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`),
+            saEditorom: procitane.filter(x => x.editor.length).map(x => `${x.putanja}: ${x.editor.join(', ')}`),
           };
         },
       };
@@ -68,8 +70,8 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
         if (putanja.endsWith('.js')) {
           // telo se čita odmah (posle zatvaranja stranice ga nema); nepročitano telo obara proveru (fail-closed)
           citanja.push(r.text().then(
-            t => ({ putanja, nizovi: nizoviUvoza(t) }),
-            () => ({ putanja, nizovi: ['telo nije pročitano'] }),
+            t => ({ putanja, nizovi: nizoviUvoza(t), editor: nizoviEditora(t) }),
+            () => ({ putanja, nizovi: ['telo nije pročitano'], editor: ['telo nije pročitano'] }),
           ));
         }
       });
@@ -84,7 +86,9 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       expect(mreza.api.filter(z => !dozvoljeniApi.test(z)), 'pozivi van dozvoljenih javnih putanja').toEqual([]);
       expect(mreza.odgovori401, 'odgovori 401 (zaključana putanja)').toEqual([]);
       expect(mreza.ws.filter(p => !JAVNA_PUTANJA.test(p)), 'WebSocket van javnih putanja').toEqual([]);
-      expect((await mreza.skripte()).saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);
+      const skripte = await mreza.skripte();
+      expect(skripte.saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);
+      expect(skripte.saEditorom, 'JS sa kodom editora platna na javnoj ruti').toEqual([]);
     },
     { auto: true },
   ],

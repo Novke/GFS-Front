@@ -1,48 +1,14 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // bez pregledača: proverava pravi produkcioni build, pa ne treba `page` ni mok iz `./fixture`
 import { expect, test } from '@playwright/test';
 
+import { dinamickiUvozi, jsFajlovi, skripteIndeksa, statickiUvozi, tekst, zatvorenje } from './chunkovi';
 import { NIZ_FFLATE, NIZ_UVOZA, nizoviUvoza } from './nizovi-uvoza';
 
-const KOREN = join(__dirname, '..', 'dist', 'gfs-front', 'browser');
-const tekst = (f: string) => readFileSync(join(KOREN, f), 'utf8');
-
-/** Statički uvozi JS fajla (`import ... from "./x.js"`, `import "./x.js"`), bez dinamičkog `import("./x.js")`. */
-function statickiUvozi(sadrzaj: string): string[] {
-  return [...sadrzaj.matchAll(/(?:\bfrom|\bimport)\s*["']\.\/([^"']+\.js)["']/g)].map(m => m[1]);
-}
-
-/** Dinamički uvozi (`import("./x.js")`; esbuild piše i `import(\`./x.js\`)`). */
-function dinamickiUvozi(sadrzaj: string): string[] {
-  return [...sadrzaj.matchAll(/\bimport\(\s*["'`]\.\/([^"'`]+\.js)["'`]\s*\)/g)].map(m => m[1]);
-}
-
-/** Skripte koje `index.html` učitava odmah (`<script src>`, `modulepreload`). */
-function skripteIndeksa(): string[] {
-  const html = tekst('index.html');
-  return [
-    ...[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+\.js)"/g)].map(m => m[1]),
-    ...[...html.matchAll(/<link\b[^>]*\brel="modulepreload"[^>]*\bhref="([^"]+\.js)"/g)].map(m => m[1]),
-  ];
-}
-
-/** Svi fajlovi do kojih se iz `pocetak` stiže statičkim uvozima (ono što pregledač mora da učita pre pokretanja). */
-function zatvorenje(pocetak: readonly string[]): Set<string> {
-  const vidjeno = new Set<string>();
-  const red = [...pocetak];
-  while (red.length) {
-    const f = red.pop()!;
-    if (vidjeno.has(f)) continue;
-    vidjeno.add(f);
-    red.push(...statickiUvozi(tekst(f)));
-  }
-  return vidjeno;
-}
-
 test.describe('fflate i kod uvoza PPTX-a samo u lenjom chunk-u (produkcioni build)', () => {
-  const js = readdirSync(KOREN).filter(f => f.endsWith('.js'));
+  const js = jsFajlovi();
 
   test('nizovi provere su pravi: OZNAKA_UVOZA dijaloga i poruka greške fflate-a', () => {
     const dijalog = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'uvoz-pptx', 'uvoz-pptx.dialog.ts'), 'utf8');

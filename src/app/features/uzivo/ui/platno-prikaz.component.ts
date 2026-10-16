@@ -41,7 +41,8 @@ interface PrikazSloja {
   crtez: PrikazSlike | null;
 }
 
-function stilSloja(s: Sloj): Stil {
+/** Položaj, veličina, rotacija, providnost i senka sloja (inline stil `.uz-pl-sloj`; editor iz njega crta okvir izbora). */
+export function stilSloja(s: Sloj): Stil {
   const stil: Stil = {
     left: jedinice(s.x),
     top: jedinice(s.y),
@@ -437,7 +438,18 @@ export class PlatnoPrikazComponent {
   readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 
   protected readonly url = medijUrl;
-  protected readonly slojevi = computed(() => this.platno().slojevi.map((s, i) => prikazSloja(s, i)));
+  /**
+   * Pripremljen prikaz po paru (objekat sloja, indeks) (odluka 33): pomeren sloj u editoru ponovo pravi samo svoj prikaz.
+   * Indeks je deo ključa jer ključevi merenja tabova zavise od položaja sloja na z-osi.
+   */
+  private readonly kesPrikaza = new WeakMap<Sloj, { indeks: number; prikaz: PrikazSloja }>();
+  protected readonly slojevi = computed(() => this.platno().slojevi.map((s, i) => {
+    const k = this.kesPrikaza.get(s);
+    if (k && k.indeks === i) return k.prikaz;
+    const prikaz = prikazSloja(s, i);
+    this.kesPrikaza.set(s, { indeks: i, prikaz });
+    return prikaz;
+  }));
   private readonly vidljivost = computed(() => stanjeSlojeva(this.platno(), this.korak()));
   /** Mereni pasusi (ključevi zavise od z-ose, pa se čitaju sveži) i potpis njihovog rasporeda (okidač merenja). */
   private readonly merenje = computed(() => pasusiZaMerenje(this.platno().slojevi));

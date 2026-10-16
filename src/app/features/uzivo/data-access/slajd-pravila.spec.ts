@@ -1,7 +1,7 @@
-import { greskeSlajda, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja, slajdIzCmd, slajdUCmd } from './slajd-pravila';
+import { greskeSlajda, greskeSlajdaZaSlanje, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja, slajdIzCmd, slajdUCmd } from './slajd-pravila';
 import { SlajdDetails } from './uzivo.models';
 import { platno as platnoFabrika } from './platno-podaci.testing';
-import { Platno } from './platno.models';
+import { Platno, Sloj } from './platno.models';
 
 describe('slajd-pravila', () => {
   it('novo pitanje izbora ima dve prazne opcije, bez tačne', () => {
@@ -79,6 +79,44 @@ describe('slajd-pravila', () => {
       expect(greskeSlajda({ ...cmd, beleske: 'x'.repeat(20_000) })).toEqual([]);
       expect(greskeSlajda({ ...cmd, beleske: 'x'.repeat(20_001) })).toEqual(['Beleške mogu imati najviše 20000 znakova.']);
       expect(greskeSlajda({ ...cmd, platno: null })).toEqual(['Platno slajd mora imati dokument platna.']);
+    });
+
+    it('greskeSlajda za PLATNO proverava brojeve (jeftino): 301 sloj je greška, ispravan dokument nije', () => {
+      const p = platnoFabrika();
+      const sloj = p.slojevi.find(l => l.tip === 'TEKST')!;
+      const slojevi: Sloj[] = Array.from({ length: 301 }, (_, i) => ({ ...sloj, id: `s${i}` }));
+      expect(greskeSlajda(slajdUCmd(platnoSlajd({ ...p, slojevi, animacije: [] })))).toContain('Slajd može imati najviše 300 slojeva.');
+      expect(greskeSlajda(slajdUCmd(platnoSlajd()))).toEqual([]);
+      expect(greskeSlajdaZaSlanje(slajdUCmd(platnoSlajd()))).toEqual([]);
+    });
+
+    it('dokument koji prolazi brojeve a ne server (#ggg): greskeSlajda [], greskeSlajdaZaSlanje poruka servera', () => {
+      const cmd = slajdUCmd(platnoSlajd({ ...platnoFabrika(), pozadina: { boja: '#ggg', medijId: null } }));
+      expect(greskeSlajda(cmd)).toEqual([]);
+      expect(greskeSlajdaZaSlanje(cmd)).toEqual(['Boja nije ispravna (#RRGGBB).']);
+    });
+
+    it('greskeSlajdaZaSlanje vraća greške greskeSlajda bez pune provere; za INFO je isto što i greskeSlajda', () => {
+      expect(greskeSlajdaZaSlanje({ ...slajdUCmd(platnoSlajd()), platno: null })).toEqual(['Platno slajd mora imati dokument platna.']);
+      expect(greskeSlajdaZaSlanje(noviSlajd('INFO'))).toEqual(greskeSlajda(noviSlajd('INFO')));
+    });
+
+    it('greskeSlajda za PLATNO ne serijalizuje dokument (JSON.stringify se ne zove)', () => {
+      const cmd = slajdUCmd(platnoSlajd());
+      const stringify = vi.spyOn(JSON, 'stringify');
+      try {
+        greskeSlajda(cmd);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    it('noviSlajd nosi platno samo za PLATNO', () => {
+      const p = platnoFabrika();
+      expect(noviSlajd('PLATNO', undefined, p).platno).toBe(p);
+      expect(noviSlajd('INFO', undefined, p).platno).toBeNull();
+      expect(noviSlajd('PLATNO').platno).toBeNull();
     });
 
     it('beleške INFO slajda imaju istu granicu kao server (20000)', () => {

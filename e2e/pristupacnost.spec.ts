@@ -20,7 +20,12 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   {
     putanja: 'prezentacije/5',
     spremno: p => p.locator('.uz-ed-platno [data-sloj="naslov"]'),
-    pripremi: async p => { await p.getByRole('button', { name: /^2\s/ }).click(); },
+    pripremi: async p => {
+      await p.getByRole('button', { name: /^2\s/ }).click();
+      // sličica INFO slajda (sa linkom u markdown-u) je lenja (`@defer (on viewport)`): skenira se tek kad je iscrtana
+      await expect(p.locator('.uz-ed-slicica a')).toHaveCount(1);
+      await expect(p.locator('[data-oznaka="gfs-editor-platna"]')).toBeVisible();
+    },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
 ];
@@ -85,6 +90,50 @@ for (const rezim of ['dan', 'noc'] as const) {
         await expect(page.getByRole('group', { name: 'Pitanje' }).getByText('Odgovorili 0/2')).toBeVisible();
         expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/daljinski, pitanje (${rezim})`).toEqual([]);
       });
+    });
+
+    // editor platna (lenji chunk) nad PLATNO slajdom 52: panel Svojstva sa izabranim oblikom i slikom, otvorena paleta
+    // boja (CDK popover) i panel Slojevi
+    test('editor platna (svojstva oblika i slike, paleta boja, slojevi): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      await expect(page.locator('.uz-ed-slicica a')).toHaveCount(1);
+      const editor = page.locator('[data-oznaka="gfs-editor-platna"]');
+      const sloj = (id: string) => editor.locator(`.uz-ep-platno [data-sloj="${id}"]`);
+      // sloj izbora (overlay) leži preko prikaza i prima pokazivač: klik mišem u centar sloja
+      const izaberi = async (id: string) => {
+        await sloj(id).scrollIntoViewIfNeeded(); // fokus u panelu (paleta) može da pomeri stranu: mere tek posle
+        const b = (await sloj(id).boundingBox())!;
+        await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      };
+      await expect(sloj('oblik')).toBeVisible();
+
+      await izaberi('oblik');
+      await expect(editor.getByText('Izabrano: Elipsa 1')).toBeAttached();
+      const popuna = editor.getByRole('button', { name: /^Popuna:/ });
+      await expect(popuna).toBeVisible();
+      // kao i ostali testovi ovog fajla: axe tek kad stanu zahtevi (slike i fontovi platna, lenji chunk-ovi panela), jer
+      // nema jednog vidljivog stanja koje bi pokazalo da su svi stigli (slika sloja može da stigne posle teksta)
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva oblika (${rezim})`).toEqual([]);
+
+      await popuna.click();
+      const paleta = page.getByRole('dialog', { name: 'Popuna' });
+      await expect(paleta).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, paleta boja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(paleta).toBeHidden();
+      await expect(popuna).toBeFocused();
+
+      await izaberi('slika');
+      await expect(editor.getByText('Izabrano: Slika 1')).toBeAttached();
+      await expect(editor.getByRole('heading', { name: 'Isečak' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva slike (${rezim})`).toEqual([]);
+
+      await editor.getByRole('tab', { name: 'Slojevi' }).click();
+      await expect(editor.locator('[data-sloj-panel="oblik"]')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, slojevi (${rezim})`).toEqual([]);
     });
 
     // dijalog uvoza iz PowerPointa (lenji chunk) u stanju pregleda i izveštaja, nad editorom prezentacije

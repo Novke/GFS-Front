@@ -60,6 +60,12 @@ interface UzivoPrezentacija {
   telefonPrikaz: string; detaljiDozvoljeni: boolean; slajdovi: UzivoSlajd[]; [ostalo: string]: unknown;
 }
 interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
+/** `SlajdCmd` (telo `POST prezentacije/:id/slajdovi` i `PUT slajdovi/:id`); pitanje samo sa poljima koja mok čita. */
+interface SlajdCmd {
+  tip: string; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean;
+  pitanje: ({ slikaId: string | null; opcije: { tekst: string; tacna: boolean }[] } & Record<string, unknown>) | null;
+  platno: unknown;
+}
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
@@ -517,6 +523,25 @@ export class MockApi {
     });
   }
 
+  /**
+   * `SlajdDetails` iz `SlajdCmd` (kao `SlajdMapper.uDetails`): `slika` je otpremljen medij sa `slikaId` (ili null),
+   * pitanje dobija id-jeve (svoj i opcija) i redne brojeve opcija.
+   */
+  private slajdIzCmd(cmd: SlajdCmd, id: number): UzivoSlajd {
+    const medij = (medijId: string | null) => this.mediji.find(m => m.id === medijId) ?? null;
+    const { slikaId, ...q } = cmd.pitanje ?? { slikaId: null };
+    return {
+      id, rb: 0, tip: cmd.tip, naslov: cmd.naslov, sadrzaj: cmd.sadrzaj, slika: medij(cmd.slikaId), beleske: cmd.beleske,
+      postepeno: cmd.postepeno, platno: cmd.platno,
+      pitanje: cmd.pitanje
+        ? {
+            ...q, id: this.sledeciId++, slika: medij(slikaId),
+            opcije: cmd.pitanje.opcije.map((o, i) => ({ id: this.sledeciId++, rb: i + 1, tekst: o.tekst, tacna: o.tacna })),
+          }
+        : null,
+    };
+  }
+
   private kontrolnaTabla() {
     const k = this.podaci.kontrolnaTabla;
     const g = this.grupa(k.sledece.grupaId);
@@ -871,6 +896,36 @@ export class MockApi {
           delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
           pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd };
           return ok(pr.slajdovi[i]);
+        }
+      }
+      return greska(404, 'Slajd ne postoji.');
+    });
+    // nov slajd (editor: "+ Info", "+ Pitanje", "+ Platno"): kao backend, na kraj ili odmah posle `?posle=`, prenumeracija
+    post('prezentacije/:id/slajdovi', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      if (x.slajdovi.length >= 200) {
+        return greska(400, 'Prezentacija može imati najviše 200 slajdova.');
+      }
+      const posle = z.query.get('posle');
+      const i = posle === null ? x.slajdovi.length - 1 : x.slajdovi.findIndex(s => s.id === Number(posle));
+      if (posle !== null && i < 0) {
+        return greska(400, 'Slajd posle kog se dodaje nije u ovoj prezentaciji.');
+      }
+      const slajd = this.slajdIzCmd(z.telo as SlajdCmd, this.sledeciId++);
+      x.slajdovi.splice(i + 1, 0, slajd);
+      x.slajdovi.forEach((s, rb) => (s.rb = rb + 1));
+      return { status: 201, telo: slajd };
+    });
+    del('slajdovi/:id', (_z, p) => {
+      for (const pr of d.prezentacije) {
+        const i = pr.slajdovi.findIndex(s => s.id === Number(p['id']));
+        if (i >= 0) {
+          pr.slajdovi.splice(i, 1);
+          pr.slajdovi.forEach((s, rb) => (s.rb = rb + 1));
+          return { status: 204 };
         }
       }
       return greska(404, 'Slajd ne postoji.');

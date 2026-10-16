@@ -1,9 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ErrorHandler } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -15,6 +16,9 @@ import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import { brojKoraka } from '../data-access/platno-koraci';
 import { platno } from '../data-access/platno-podaci.testing';
 import { isprazniMikrozadatke, pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
+import { noviOblik } from '../data-access/platno-novo';
+import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
+import { PlatnoEditorStore } from '../editor-platna/platno-editor.store';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 
@@ -142,7 +146,31 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
     store.dodaj('INFO');
     expect(editor.imaNesacuvanihIzmena()).toBe(true);
     expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+    expect(editor.tekstNapustanja()).toContain('Ako napustiš editor, novi slajd se ne pravi.');
+    expect(editor.tekstNapustanja()).not.toContain('odbacuj');
   });
+
+  it('napuštanje: ispravan nacrt čiji POST traje (i izmena stigla za to vreme) se ne broji, jer ga store šalje i posle napuštanja; nepotpuna izmena sačuvanog slajda se broji', saLaznimSatom(async () => {
+    const editor = fixture.componentInstance;
+    store.dodaj('INFO');
+    const nacrt = store.izabraniId()!;
+    store.izmeniSlajd(nacrt, info('Nov'));
+    store.sacuvajOdmah();
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    store.izmeniSlajd(nacrt, info('Nov 2'));
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+    store.izmeniSlajd(11, info(''));
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toContain('Nesačuvanih slajdova: 1');
+    expect(editor.tekstNapustanja()).toContain('Ako napustiš editor, slajd ostaje u poslednjoj sačuvanoj verziji.');
+    expect(editor.tekstNapustanja()).not.toContain('ne pravi');
+    post.flush(slajd(30, 2, 'Nov'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/30');
+    expect(put.request.body.naslov).toBe('Nov 2');
+    put.flush(slajd(30, 2, 'Nov 2'));
+    await pomeriSat(800);
+  }));
 });
 
 describe('PrezentacijaEditorPage: PLATNO i tema', () => {
@@ -233,6 +261,56 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     }
   });
 
+  it('beleške posle izmene platna: PUT nosi platno iz store-a (ne ono iz vremena pravljenja forme) i nove beleške', saLaznimSatom(async () => {
+    store.izaberi(12);
+    fixture.detectChanges();
+    const P1 = { ...platno(), pozadina: { boja: '#EEEEEE', medijId: null } };
+    store.izmeniPlatno(12, P1);
+    const beleske = (fixture.nativeElement as HTMLElement).querySelector('textarea[formcontrolname=beleske]') as HTMLTextAreaElement;
+    expect(beleske).not.toBeNull();
+    beleske.value = 'Nove beleške';
+    beleske.dispatchEvent(new Event('input'));
+    await pomeriSat(800);
+    const put = http.expectOne('api/slajdovi/12');
+    expect(put.request.body.beleske).toBe('Nove beleške');
+    expect(put.request.body.platno).toBe(P1);
+    put.flush({ ...platnoSlajd, beleske: 'Nove beleške', platno: P1 });
+    await pomeriSat(800);
+  }));
+
+  it('dugme "Platno" dodaje PLATNO slajd, bira ga i šalje POST', saLaznimSatom(async () => {
+    const dodaj = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.uz-ed-dodaj button')]
+      .find(b => b.textContent?.trim() === 'Platno') as HTMLButtonElement;
+    expect(dodaj).toBeTruthy();
+    dodaj.click();
+    const nacrt = store.izabrani()!;
+    expect(nacrt.tip).toBe('PLATNO');
+    expect(nacrt.id).toBeLessThan(0);
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body.tip).toBe('PLATNO');
+    post.flush({ ...platnoSlajd, id: 30, rb: 3, platno: nacrt.platno });
+    expect(store.izabraniId()).toBe(30);
+    await pomeriSat(800);
+  }));
+
+  it('beforeunload prvo zove pražnjenje editora platna, pa traži potvrdu dok je nešto otvoreno', () => {
+    const isprazni = vi.fn();
+    let otvoreno = true;
+    const odjavi = store.registrujPraznjenje(isprazni, () => otvoreno);
+    const dogadjaj = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dogadjaj);
+    expect(isprazni).toHaveBeenCalled();
+    expect(dogadjaj.defaultPrevented).toBe(true);
+    otvoreno = false;
+    isprazni.mockClear();
+    const drugi = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(drugi);
+    expect(isprazni).toHaveBeenCalledTimes(1);
+    expect(drugi.defaultPrevented).toBe(false);
+    odjavi();
+  });
+
   it('izbor teme PAPIR šalje PUT sa tema: PAPIR', () => {
     const radio = (fixture.nativeElement as HTMLElement).querySelector('input[type=radio][value=PAPIR]') as HTMLInputElement;
     expect(radio).not.toBeNull();
@@ -241,6 +319,119 @@ describe('PrezentacijaEditorPage: PLATNO i tema', () => {
     expect(zahtev.request.method).toBe('PUT');
     expect(zahtev.request.body.tema).toBe('PAPIR');
     zahtev.flush({ ...prezentacija, tema: 'PAPIR' });
+  });
+});
+
+describe('PrezentacijaEditorPage: lenji editor platna', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
+    id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(),
+  });
+  const el = () => fixture.nativeElement as HTMLElement;
+  const editor = () => fixture.debugElement.query(By.directive(PlatnoEditorComponent));
+  const okvir = () => el().querySelector<HTMLElement>('.uz-ep-platno')!;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1')
+      .flush({ ...prezentacija, brojSlajdova: 3, slajdovi: [slajd(11, 1, 'Uvod'), platnoSlajd(12, 2), platnoSlajd(13, 3)] });
+    await fixture.whenStable();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  it('PLATNO slajd ima editor platna i raspored strane za platno; INFO nema', async () => {
+    expect(editor()).toBeNull();
+    store.izaberi(12);
+    await fixture.whenStable();
+    expect(el().querySelector('app-platno-editor')).not.toBeNull();
+    expect(el().querySelector('.uz-ed-telo')!.classList).toContain('uz-ed-telo--platno');
+    expect(el().textContent).not.toContain('se za sada ne uređuju ovde');
+    store.izaberi(11);
+    await fixture.whenStable();
+    expect(el().querySelector('app-platno-editor')).toBeNull();
+    expect(el().querySelector('.uz-ed-telo')!.classList).not.toContain('uz-ed-telo--platno');
+  });
+
+  it('izmena u editoru (Delete) ide u store.izmeniPlatno sa id-jem slajda', async () => {
+    store.izaberi(12);
+    await fixture.whenStable();
+    const izmeni = vi.spyOn(store, 'izmeniPlatno');
+    editor().injector.get(PlatnoEditorStore).izaberi(['oblik']);
+    okvir().dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+    expect(izmeni).toHaveBeenCalledTimes(1);
+    expect(izmeni.mock.calls[0][0]).toBe(12);
+    expect(izmeni.mock.calls[0][1].slojevi.map(s => s.id)).not.toContain('oblik');
+    expect(store.izabrani()!.platno!.slojevi.map(s => s.id)).not.toContain('oblik');
+    store.sacuvajOdmah();
+    const put = http.expectOne('api/slajdovi/12');
+    expect(put.request.body.platno.slojevi.map((s: { id: string }) => s.id)).not.toContain('oblik');
+    put.flush({ ...platnoSlajd(12, 2), platno: put.request.body.platno });
+  });
+
+  it('promena izabranog slajda pravi novu instancu editora (prazna istorija), a pražnjenje je registrovala nova', async () => {
+    store.izaberi(12);
+    await fixture.whenStable();
+    const prvi = editor().componentInstance;
+    const prviStore = editor().injector.get(PlatnoEditorStore);
+    prviStore.izaberi(['oblik']);
+    prviStore.obrisiIzabrane();
+    expect(prviStore.mozeNazad()).toBe(true);
+    store.izaberi(13);
+    http.expectOne('api/slajdovi/12').flush({ ...platnoSlajd(12, 2), platno: prviStore.platno() });
+    await fixture.whenStable();
+    expect(editor().componentInstance).not.toBe(prvi);
+    const drugiStore = editor().injector.get(PlatnoEditorStore);
+    expect(drugiStore.mozeNazad()).toBe(false);
+    expect(drugiStore.platno().slojevi.map(s => s.id)).toContain('oblik');
+    const isprazni = vi.spyOn(drugiStore, 'isprazni');
+    store.isprazni();
+    expect(isprazni).toHaveBeenCalledTimes(1);
+  });
+
+  it('Review Focus 3 (nacrt): + Platno, izmena, odgovor na POST -> ista instanca, mozeNazad true, sledeća izmena je PUT pravog id-ja', async () => {
+    const dodaj = [...el().querySelectorAll<HTMLButtonElement>('.uz-ed-dodaj button')].find(b => b.textContent?.trim() === 'Platno')!;
+    dodaj.click();
+    const nacrt = store.izabrani()!;
+    expect(nacrt.id).toBeLessThan(0);
+    const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+    await fixture.whenStable();
+    const komponenta = editor().componentInstance;
+    const ps = editor().injector.get(PlatnoEditorStore);
+    expect(ps.ubaci(id => noviOblik(id, 'NACRT', 'PRAVOUGAONIK'))).not.toBeNull();
+    expect(ps.mozeNazad()).toBe(true);
+
+    post.flush({ ...platnoSlajd(30, 4), platno: nacrt.platno });
+    await fixture.whenStable();
+    expect(store.izabraniId()).toBe(30);
+    expect(editor().componentInstance).toBe(komponenta);
+    expect(ps.mozeNazad()).toBe(true);
+
+    ps.pomeriIzabrane(5, 0);
+    store.sacuvajOdmah();
+    const putevi = http.match('api/slajdovi/30');
+    expect(putevi.length).toBeGreaterThan(0);
+    expect(putevi.every(r => r.request.method === 'PUT')).toBe(true);
+    expect(putevi.at(-1)!.request.body.platno).toBe(ps.platno());
+    for (const r of putevi) r.flush({ ...platnoSlajd(30, 4), platno: r.request.body.platno });
+    http.expectNone(r => r.url.startsWith('api/slajdovi/-'));
   });
 });
 
@@ -428,5 +619,73 @@ describe('PrezentacijaEditorPage: uvoz iz PowerPointa', () => {
     expect(zatvaranje.observed).toBe(false);
     zatvaranje.next(posleUvoza);
     expect(primeniUvoz).not.toHaveBeenCalled();
+  });
+});
+
+describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  const platnoSlajd = (id: number, rb: number): SlajdDetails => ({
+    id, rb, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: platno(),
+  });
+  const el = () => fixture.nativeElement as HTMLElement;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+      // jsdom nema IntersectionObserver: `@defer (on viewport)` se iscrtava ručno.
+      deferBlockBehavior: DeferBlockBehavior.Manual,
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    fixture.debugElement.injector.get(EditorStore).ucitaj(1);
+    http.expectOne('api/prezentacije/1')
+      .flush({ ...prezentacija, brojSlajdova: 2, slajdovi: [{ ...slajd(11, 1, 'Uvod'), sadrzaj: 'Materijal: https://example.com' }, platnoSlajd(12, 2)] });
+    await fixture.whenStable();
+  });
+
+  afterEach(() => http.verify());
+
+  it('sličica PLATNO slajda prikazuje sve slojeve (i one sa ULAZ animacijom), a sakrivena je od čitača', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    expect(blokovi.length).toBe(2);
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const slicice = [...el().querySelectorAll<HTMLElement>('.uz-ed-slicica')];
+    expect(slicice.length).toBe(2);
+    for (const s of slicice) expect(s.getAttribute('aria-hidden')).toBe('true');
+    const slojevi = [...slicice[1].querySelectorAll<HTMLElement>('.uz-pl-sloj')];
+    expect(slojevi.length).toBeGreaterThan(0);
+    for (const sl of slojevi) expect(sl.style.visibility).toBe('');
+    expect(slicice[1].querySelectorAll('.uz-pl-sloj[style*="hidden"]').length).toBe(0);
+  });
+
+  it('ime dugmeta stavke i dalje počinje rednim brojem; sličica nema fokusabilnih elemenata', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const dugme = el().querySelectorAll<HTMLElement>('.uz-ed-stavka-dugme')[1];
+    // Ime iz sadržaja bez `aria-hidden` potomaka: delovi redom (jsdom nema raspored, pa nema razmaka između flex stavki).
+    const ime = dugme.cloneNode(true) as HTMLElement;
+    ime.querySelectorAll('[aria-hidden="true"]').forEach(n => n.remove());
+    expect([...ime.querySelectorAll('.uz-ed-rb, .uz-ed-oznaka')].map(n => n.textContent!.trim())).toEqual(['2', 'Prvi']);
+    expect(ime.textContent!.trim()).toBe('2Prvi');
+    expect(dugme.querySelectorAll('.uz-ed-slicica button, .uz-ed-slicica a, .uz-ed-slicica [tabindex]').length).toBe(0);
+  });
+
+  it('sličica INFO slajda sa linkom je inert: link u njoj ne dobija fokus (Tab ga preskače)', async () => {
+    const blokovi = await fixture.getDeferBlocks();
+    for (const b of blokovi) await b.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    const slicica = el().querySelector<HTMLElement>('.uz-ed-slicica')!;
+    const link = slicica.querySelector('a[href]');
+    expect(link).not.toBeNull();
+    expect(slicica.hasAttribute('inert')).toBe(true);
+    expect(link!.closest('[inert]')).toBe(slicica);
   });
 });
