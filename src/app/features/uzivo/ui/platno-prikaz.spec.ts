@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { celija, pasus, platno } from '../data-access/platno-podaci.testing';
 import {
-  FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
+  CrtezSloj, FormulaSloj, OblikSloj, Pasus, Platno, Sloj, TabelaSloj, TekstSloj,
 } from '../data-access/platno.models';
 import { PlatnoPrikazComponent } from './platno-prikaz.component';
 
@@ -153,11 +153,94 @@ describe('PlatnoPrikazComponent', () => {
     expect(sloj(sa_.el, 'formula').querySelector('app-formula-prikaz')).toBeNull();
   });
 
-  it('CRTEZ: slika preko sloja, alt Crtež', async () => {
+  it('CRTEZ bez poteza (potezi: null): slika medija preko sloja, alt Crtež, data-crtez="slika"', async () => {
     const { el } = await prikazi(platno());
-    const img = sloj(el, 'crtez').querySelector('img')!;
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('slika');
+    const img = crtez.querySelector('img')!;
     expect(img.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000002');
     expect(img.getAttribute('alt')).toBe('Crtež');
+    expect(crtez.querySelector('svg')).toBeNull();
+  });
+
+  it('CRTEZ sa potezima: SVG u jedinicama sloja, putanja po potezu (pathLength 1, okrugli krajevi), bez slike', async () => {
+    const p = sa<CrtezSloj>('crtez', (s) => ({
+      ...s, sirina: 160, visina: 100, naziv: 'Skica',
+      potezi: [{ boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 5] }, { boja: '#0000FF', debljina: 4.5, tacke: [3, 4] }],
+    }));
+    const { el } = await prikazi(p);
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-sadrzaj.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('vektor');
+    expect(crtez.querySelector('img')).toBeNull();
+    const svg = crtez.querySelector('svg.uz-pl-crtez-vektor')!;
+    expect(svg.getAttribute('viewBox')).toBe('0 0 160 100');
+    expect(svg.getAttribute('preserveAspectRatio')).toBe('none');
+    expect(svg.getAttribute('role')).toBe('img');
+    expect(svg.getAttribute('aria-label')).toBe('Skica');
+    const putanje = Array.from(el.querySelectorAll('.uz-pl-crtez[data-crtez="vektor"] path[data-potez]'));
+    expect(putanje).toHaveLength(2);
+    expect(putanje[0].namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(putanje[0].getAttribute('d')).toBe('M0 0 L10 5');
+    expect(putanje[0].getAttribute('stroke')).toBe('#FF0000');
+    expect(putanje[0].getAttribute('stroke-width')).toBe('2');
+    expect(putanje[0].getAttribute('pathLength')).toBe('1');
+    expect(putanje[0].getAttribute('fill')).toBe('none');
+    expect(putanje[0].getAttribute('stroke-linecap')).toBe('round');
+    expect(putanje[0].getAttribute('stroke-linejoin')).toBe('round');
+    expect(putanje[1].getAttribute('d')).toBe('M3 4 L3 4');
+    expect(putanje[1].getAttribute('stroke')).toBe('#0000FF');
+    expect(putanje[1].getAttribute('stroke-width')).toBe('4.5');
+  });
+
+  it('CRTEZ sa praznim nizom poteza ostaje slika (nema šta da se crta vektorski)', async () => {
+    const { el } = await prikazi(sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi: [] })));
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('slika');
+    expect(crtez.querySelector('img')).not.toBeNull();
+  });
+
+  it('CRTEZ: neispravni potezi (NaN, ±1e308, prazne tačke) se preskaču; ostaje samo nacrtiv', async () => {
+    const { el } = await prikazi(sa<CrtezSloj>('crtez', (s) => ({
+      ...s, potezi: [
+        { boja: '#FF0000', debljina: Number.NaN, tacke: [0, 0, 1, 1] },
+        { boja: '#FF0000', debljina: 2, tacke: [1e308, -1e308, 0, 0] },
+        { boja: '#00FF00', debljina: 2, tacke: [0, 0, 10, 5] },
+        { boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 0, 1, 1] },
+        { boja: '#FF0000', debljina: 2, tacke: [] },
+      ],
+    })));
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('vektor');
+    const putanje = Array.from(crtez.querySelectorAll('path[data-potez]'));
+    expect(putanje.map((p) => [p.getAttribute('d'), p.getAttribute('stroke')])).toEqual([['M0 0 L10 5', '#00FF00']]);
+  });
+
+  it.each([
+    { naziv: 'svi potezi sa praznim tačkama', potezi: [{ boja: '#FF0000', debljina: 2, tacke: [] }, { boja: '#FF0000', debljina: 2, tacke: [] }] },
+    { naziv: 'svi potezi neispravni', potezi: [{ boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 1] }, { boja: '#FF0000', debljina: 2, tacke: [1e308, 0] }] },
+  ])('CRTEZ: $naziv -> slika (jedno pravilo: slika kad nema nijednog nacrtivog poteza)', async ({ potezi }) => {
+    const { el } = await prikazi(sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi })));
+    const crtez = sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez.getAttribute('data-crtez')).toBe('slika');
+    expect(crtez.querySelector('img')!.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000002');
+    expect(crtez.querySelector('svg')).toBeNull();
+  });
+
+  it('CRTEZ: potezi stigli kasnije (nov objekat sloja) menjaju sliku u vektor, drugi crtež (bez poteza) opet u sliku', async () => {
+    const { fixture, el } = await prikazi(platno());
+    const crtez = () => sloj(el, 'crtez').querySelector<HTMLElement>('.uz-pl-crtez')!;
+    expect(crtez().getAttribute('data-crtez')).toBe('slika');
+    fixture.componentRef.setInput('platno', sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi: [{ boja: '#000000', debljina: 1, tacke: [1, 1, 2, 2] }] })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(crtez().getAttribute('data-crtez')).toBe('vektor');
+    expect(crtez().querySelectorAll('path[data-potez]')).toHaveLength(1);
+    fixture.componentRef.setInput('platno', sa<CrtezSloj>('crtez', (s) => ({ ...s, medijId: '00000000-0000-0000-0000-000000000009' })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(crtez().getAttribute('data-crtez')).toBe('slika');
+    expect(crtez().querySelector('img')!.getAttribute('src')).toBe('api/public/mediji/00000000-0000-0000-0000-000000000009');
+    expect(crtez().querySelector('path')).toBeNull();
   });
 
   it('OBLIK: SVG u jedinicama sloja; vrh strelice je trougao (3 x 3 debljine), linija staje na osnovi vrha', async () => {
@@ -452,6 +535,21 @@ describe('PlatnoPrikazComponent: keš pripremljenog prikaza sloja (odluka 33)', 
     Array.from(el.querySelectorAll<HTMLElement>('[data-sloj]')).map((s) => [
       s.dataset['sloj'], Array.from(s.style).map((k) => `${k}: ${s.style.getPropertyValue(k)}`).sort(), s.innerHTML,
     ]);
+
+  it('CRTEZ: isti potezi u novom objektu sloja (snimak, pomeranje u editoru) ne računaju putanje ponovo', async () => {
+    const potezi = [{ boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 5] }];
+    const p = sa<CrtezSloj>('crtez', (s) => ({ ...s, potezi }));
+    const { fixture } = await prikazi(p);
+    const crtezPrikaz = () => (pripremljeni(fixture).find((x) => x.id === 'crtez') as unknown as { crtez: { potezi: unknown[] } }).crtez;
+    const pre = crtezPrikaz();
+    await postavi(fixture, { ...p, slojevi: p.slojevi.map((s) => (s.id === 'crtez' ? { ...s, x: 55 } : s)) });
+    const posle = crtezPrikaz();
+    expect(posle).not.toBe(pre);              // nov sloj -> nov prikaz (položaj se promenio)
+    expect(posle.potezi).toBe(pre.potezi);    // isti niz poteza -> iste putanje, bez novog računanja
+    await postavi(fixture, { ...p, slojevi: p.slojevi.map((s) => (s.id === 'crtez' ? { ...s, potezi: [...potezi] } : s)) });
+    expect(crtezPrikaz().potezi).not.toBe(pre.potezi);
+    expect(crtezPrikaz().potezi).toEqual(pre.potezi);
+  });
 
   it('isti objekat sloja na istom indeksu daje isti objekat prikaza (nov dokument, isti slojevi)', async () => {
     const p = platno();

@@ -60,6 +60,19 @@ export function brojKoraka(s: Slajd | null | undefined): number {
   return 0;
 }
 
+/**
+ * Slajd u snimku kao na serveru (`SlajdMapper.bezPoteza`, plan faze 5 odluka 8): svaki CRTEZ sloj dobija `potezi: null`,
+ * a potezi stižu samo kroz `GET slajdovi/:id/potezi`. Kopija, pa fikstura (koju ruta poteza čita) ostaje netaknuta.
+ */
+function bezPoteza(s: Slajd | null): Slajd | null {
+  const slojevi = (s?.platno as { slojevi?: Record<string, unknown>[] } | null | undefined)?.slojevi;
+  if (!s || !slojevi?.some(x => x['tip'] === 'CRTEZ')) return s;
+  return {
+    ...s,
+    platno: { ...s.platno!, slojevi: slojevi.map(x => (x['tip'] === 'CRTEZ' ? { ...x, potezi: null } : x)) } as Slajd['platno'],
+  };
+}
+
 const imaTacan = (p: Pitanje | null): boolean =>
   !!p && (['JEDAN_TACAN', 'VISE_TACNIH', 'TACNO_NETACNO'].includes(p.tip)
     || (p.tip === 'BROJ' && p.brojTacno !== null) || (p.tip === 'KRATAK_TEKST' && !!p.prihvatljiviOdgovori?.length));
@@ -114,6 +127,11 @@ export class MockIzvodjenje {
     Object.assign(this.f.slajdovi[indeks], izmene);
   }
 
+  /** Slajd izvođenja po id-ju, sa potezima (za `GET slajdovi/:id/potezi`; snimak nosi slajd bez poteza, `bezPoteza`). */
+  slajdPoId(id: number): Slajd | undefined {
+    return this.f.slajdovi.find(s => s.id === id);
+  }
+
   /** Izvođenje je završeno (npr. sa laptopa): `GET stanje` pokazuje ZAVRSENO, svaka komanda dobija 410. */
   zavrsi(): void {
     this.f.izvodjenje.status = 'ZAVRSENO';
@@ -135,7 +153,7 @@ export class MockIzvodjenje {
     return {
       izvodjenje: { ...this.f.izvodjenje }, verzija: this.verzija, serverVremeMs: Date.now(), prikaz: this.prikaz,
       korak: this.korak, brojStavki: brojKoraka(trenutni), indeks: this.indeks, brojSlajdova: sl.length,
-      trenutniSlajd: trenutni, sledeciSlajd: this.prikaz === 'KRAJ' ? null : (sl[this.indeks + 1] ?? null),
+      trenutniSlajd: bezPoteza(trenutni), sledeciSlajd: this.prikaz === 'KRAJ' ? null : bezPoteza(sl[this.indeks + 1] ?? null),
       faza: this.faza, runda: this.runda, rezultatiPrikazani: this.rezultatiPrikazani, tacanPrikazan: this.tacanPrikazan,
       rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: this.f.telefonPrikaz,
       detaljiDozvoljeni: this.f.detaljiDozvoljeni, takmicenje: this.f.takmicenje, tema: this.f.tema, rezultat,

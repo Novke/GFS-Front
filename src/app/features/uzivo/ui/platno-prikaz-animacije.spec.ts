@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { animacija, platno } from '../data-access/platno-podaci.testing';
-import { Animacija, Platno, Sloj } from '../data-access/platno.models';
+import { animacija, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
+import { Animacija, CrtezSloj, Platno, Potez, Sloj } from '../data-access/platno.models';
+import { kadroviPoteza } from './crtez-potezi';
 import { PlatnoPrikazComponent, kadroviAnimacije } from './platno-prikaz.component';
 
 /*
@@ -18,7 +19,11 @@ let animate: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   dnevnik = [];
   animacije = [];
-  animate = vi.fn(function (this: Element) {
+  animate = vi.fn(function (this: Element, _kadrovi: Keyframe[], o: KeyframeAnimationOptions) {
+    // Kao pregledač: NaN ili beskonačno trajanje/kašnjenje baca TypeError.
+    if (!Number.isFinite(o.duration as number) || !Number.isFinite(o.delay ?? 0)) {
+      throw new TypeError('Failed to execute animate: duration/delay must be finite');
+    }
     let zavrsi = () => undefined as void;
     const finished = new Promise<void>((r) => { zavrsi = r; });
     const indeks = animacije.length;
@@ -290,6 +295,211 @@ describe('PlatnoPrikazComponent: animacije koraka', () => {
     fixture.destroy();
     expect(animacije.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
     expect(animacije.every((a) => (a.cilj as HTMLElement).style.visibility === '')).toBe(true);
+  });
+});
+
+/** Crtež 200 x 100 sa dva poteza dužine 10 i 30 (plan u 1000 ms: 258 + 742) i jednom ISCRTAJ animacijom. */
+function crtezSaPotezima(deo: Partial<Animacija> = {}, potezi: Potez[] | null = [
+  { boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 0] },
+  { boja: '#0000FF', debljina: 3, tacke: [0, 10, 0, 40] },
+]): Platno {
+  const crtez = platno().slojevi.find((s) => s.id === 'crtez')! as CrtezSloj;
+  return platnoSaAnimacijama(
+    [animacija('a1', 'crtez', { efekat: 'ISCRTAJ', smer: 'LEVO', trajanjeMs: 1000, ...deo })],
+    [{ ...crtez, potezi }],
+  );
+}
+
+describe('PlatnoPrikazComponent: ISCRTAJ potez po potez (faza 5)', () => {
+  const putanje = (el: HTMLElement) => Array.from(sloj(el, 'crtez').querySelectorAll('path[data-potez]'));
+
+  it('ULAZ: svaki potez je svoja animacija redom zapisa (delay i trajanje iz plana), sadržaj sloja se ne animira', async () => {
+    const { el, postavi } = await prikazi(crtezSaPotezima(), 0);
+    expect(sloj(el, 'crtez').style.visibility).toBe('hidden');
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const [p0, p1] = putanje(el);
+    expect(animate).toHaveBeenCalledTimes(2);
+    expect(animacije.map((a) => a.cilj)).toEqual([p0, p1]);
+    expect(opcije(0)).toEqual({ delay: 0, duration: 258, fill: 'both', easing: 'linear' });
+    expect(opcije(1)).toEqual({ delay: 258, duration: 742, fill: 'both', easing: 'linear' });
+    expect(animate.mock.calls[0][0]).toEqual(kadroviPoteza('ULAZ'));
+    expect(animacije.some((a) => a.cilj === sadrzaj(el, 'crtez'))).toBe(false);
+    expect(animate.mock.calls.some(([k]) => (k as Keyframe[]).some((f) => 'clipPath' in f))).toBe(false);
+    // Sloj je vidljiv u krajnjem stanju koraka 1; sadržaj je vidljiv dok grupa traje.
+    expect(sloj(el, 'crtez').style.visibility).toBe('');
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('visible');
+  });
+
+  it('kašnjenje animacije pomera ceo plan (delay = početak animacije + početak dela)', async () => {
+    const { postavi } = await prikazi(crtezSaPotezima({ kasnjenjeMs: 200 }), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(opcije(0).delay).toBe(200);
+    expect(opcije(1).delay).toBe(458);
+  });
+
+  it('IZLAZ: potezi se brišu obrnutim redom (poslednji prvi), kadrovi IZLAZ-a', async () => {
+    const { el, postavi } = await prikazi(crtezSaPotezima({ vrsta: 'IZLAZ' }), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const [p0, p1] = putanje(el);
+    expect(animacije.map((a) => a.cilj)).toEqual([p1, p0]);
+    expect(opcije(0)).toMatchObject({ delay: 0, duration: 742 });
+    expect(opcije(1)).toMatchObject({ delay: 742, duration: 258 });
+    expect(animate.mock.calls[0][0]).toEqual(kadroviPoteza('IZLAZ'));
+    // Sloj je u krajnjem stanju već skriven, a sadržaj vidljiv dok se potezi brišu.
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('visible');
+  });
+
+  it('ISCRTAJ nad crtežom bez poteza (slika) se crta kao BRISANJE: clip-path na sadržaju sloja', async () => {
+    const { el, postavi } = await prikazi(crtezSaPotezima({}, null), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animacije[0].cilj).toBe(sadrzaj(el, 'crtez'));
+    expect((animate.mock.calls[0][0] as Keyframe[]).map((k) => k['clipPath'])).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
+    expect(opcije(0)).toMatchObject({ delay: 0, duration: 1000, easing: 'ease-out' });
+  });
+
+  it('prefers-reduced-motion: reduce -> svi delovi 0 ms', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((upit: string) => ({ matches: upit === '(prefers-reduced-motion: reduce)' }) as MediaQueryList));
+    const { postavi } = await prikazi(crtezSaPotezima({ kasnjenjeMs: 300 }), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(animate).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 2; i++) {
+      expect(opcije(i).duration).toBe(0);
+      expect(opcije(i).delay).toBe(300);
+    }
+  });
+
+  it('brz drugi korak prekida sve poteze (cancel), a kraj grupe vraća krajnje stanje', async () => {
+    const p = crtezSaPotezima();
+    p.animacije.push(animacija('a2', 'crtez', { vrsta: 'IZLAZ', efekat: 'FADE' }));
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(animacije).toHaveLength(2);
+    await postavi(2, { kljuc: 3, grupa: 2 });
+    expect(animacije[0].cancel).toHaveBeenCalledTimes(1);
+    expect(animacije[1].cancel).toHaveBeenCalledTimes(1);
+    // Grupa 2 (FADE IZLAZ) ide kroz sadržaj sloja, kao i do sada.
+    expect(animacije[2].cilj).toBe(sadrzaj(el, 'crtez'));
+    animacije[2].zavrsi();
+    await new Promise((r) => setTimeout(r));
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('');
+    expect(sloj(el, 'crtez').style.visibility).toBe('hidden');
+  });
+
+  /*
+   * Potezi stignu usred grupe (recenzija F6): projektor je počeo grupu nad slikom, pa `PoteziCrteza` donese nov objekat
+   * sloja sa potezima. Sadržaj sloja (cilj animacije) ostaje isti element, pa animacija koja traje (i ISCRTAJ koji je
+   * počeo kao BRISANJE) nastavlja preko vektora, bez nove animacije i bez prekida; kraj grupe vraća krajnje stanje.
+   */
+  const stiglaPotezima = (p: Platno): Platno => ({
+    ...p,
+    slojevi: p.slojevi.map((x) => (x.tip === 'CRTEZ' ? { ...x, potezi: [
+      { boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 0] }, { boja: '#0000FF', debljina: 3, tacke: [0, 10, 0, 40] },
+    ] } : x)),
+  });
+
+  it.each([
+    { naziv: 'FADE ULAZ', deo: { efekat: 'FADE', smer: null } as Partial<Animacija>, skrivenNaKraju: false },
+    { naziv: 'ISCRTAJ ULAZ (počeo kao BRISANJE)', deo: {}, skrivenNaKraju: false },
+    { naziv: 'ISCRTAJ IZLAZ (počeo kao BRISANJE)', deo: { vrsta: 'IZLAZ' } as Partial<Animacija>, skrivenNaKraju: true },
+  ])('potezi stignu usred grupe ($naziv): isti cilj nastavlja, vidljiv dok traje, krajnje stanje posle', async ({ deo, skrivenNaKraju }) => {
+    const pre = crtezSaPotezima(deo, null);
+    const { fixture, el, postavi } = await prikazi(pre, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(animacije).toHaveLength(1);
+    const cilj = sadrzaj(el, 'crtez');
+    expect(animacije[0].cilj).toBe(cilj);
+    expect(cilj.getAttribute('data-crtez')).toBe('slika');
+
+    fixture.componentRef.setInput('platno', stiglaPotezima(pre));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(sadrzaj(el, 'crtez')).toBe(cilj);
+    expect(cilj.getAttribute('data-crtez')).toBe('vektor');
+    expect(cilj.querySelectorAll('path[data-potez]')).toHaveLength(2);
+    expect(cilj.querySelector('img')).toBeNull();
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animacije[0].cancel).not.toHaveBeenCalled();
+    expect(cilj.style.visibility).toBe('visible');
+    expect(sloj(el, 'crtez').style.visibility).toBe(skrivenNaKraju ? 'hidden' : '');
+
+    animacije[0].zavrsi();
+    await new Promise((r) => setTimeout(r));
+    expect(animacije[0].cancel).toHaveBeenCalledTimes(1);
+    expect(cilj.style.visibility).toBe('');
+    expect(sloj(el, 'crtez').style.visibility).toBe(skrivenNaKraju ? 'hidden' : '');
+  });
+
+  it('potezi stignu usred grupe 0 (prvi prikaz sa ključem): ista animacija nastavlja, sledeći klik iscrtava potez po potez', async () => {
+    const pre = crtezSaPotezima({ okidac: 'SA_PRETHODNIM' }, null);
+    pre.animacije.push(animacija('a2', 'crtez', { vrsta: 'IZLAZ', efekat: 'ISCRTAJ', smer: 'LEVO', trajanjeMs: 1000 }));
+    const { fixture, el, postavi } = await prikazi(pre, 0, { kljuc: 1, grupa: 0 });
+    expect(animacije).toHaveLength(1);
+    const cilj = sadrzaj(el, 'crtez');
+    fixture.componentRef.setInput('platno', stiglaPotezima(pre));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(sadrzaj(el, 'crtez')).toBe(cilj);
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(cilj.style.visibility).toBe('visible');
+    expect(sloj(el, 'crtez').style.visibility).toBe('');
+
+    // Sledeći klik (grupa 1) prekida grupu 0 i briše vektorske poteze jedan po jedan.
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(animacije[0].cancel).toHaveBeenCalledTimes(1);
+    const [p0, p1] = Array.from(cilj.querySelectorAll('path[data-potez]'));
+    expect(animacije.slice(1).map((a) => a.cilj)).toEqual([p1, p0]);
+    expect(cilj.style.visibility).toBe('visible');
+  });
+
+  it('ISCRTAJ ULAZ pa ISCRTAJ IZLAZ istog crteža u istoj grupi: druga dobija fill forwards (kao ostale grane)', async () => {
+    const p = crtezSaPotezima();
+    p.animacije.push(animacija('a2', 'crtez', { vrsta: 'IZLAZ', efekat: 'ISCRTAJ', smer: 'LEVO', trajanjeMs: 1000, okidac: 'POSLE_PRETHODNOG' }));
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const [p0, p1] = putanje(el);
+    expect(animacije.map((a) => a.cilj)).toEqual([p0, p1, p1, p0]);
+    expect([0, 1, 2, 3].map((i) => opcije(i).fill)).toEqual(['both', 'both', 'forwards', 'forwards']);
+    expect([0, 1, 2, 3].map((i) => [opcije(i).delay, opcije(i).duration])).toEqual([[0, 258], [258, 742], [1000, 742], [1742, 258]]);
+    expect(animate.mock.calls[2][0]).toEqual(kadroviPoteza('IZLAZ'));
+  });
+
+  it('neispravni potezi (±1e308, NaN) se preskaču: plan i indeksi idu samo preko nacrtivih, animate ne baca', async () => {
+    const p = crtezSaPotezima({}, [
+      { boja: '#FF0000', debljina: 2, tacke: [1e308, 0, -1e308, 0] },
+      { boja: '#FF0000', debljina: 2, tacke: [0, 0, 10, 0] },
+      { boja: '#FF0000', debljina: 2, tacke: [Number.NaN, 0, 0, 0] },
+      { boja: '#0000FF', debljina: 3, tacke: [0, 10, 0, 40] },
+    ]);
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    const svePutanje = putanje(el);
+    expect(svePutanje).toHaveLength(2);
+    expect(animacije.map((a) => a.cilj)).toEqual(svePutanje);
+    expect([opcije(0), opcije(1)].map((o) => [o.delay, o.duration])).toEqual([[0, 258], [258, 742]]);
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('visible');
+  });
+
+  it('nijedan nacrtiv potez: slika i ISCRTAJ kao BRISANJE (clip-path), bez izuzetka', async () => {
+    const p = crtezSaPotezima({}, [
+      { boja: '#FF0000', debljina: 2, tacke: [] }, { boja: '#FF0000', debljina: Number.NaN, tacke: [0, 0, 1, 1] },
+      { boja: '#FF0000', debljina: 2, tacke: [1e308, 1e308] },
+    ]);
+    const { el, postavi } = await prikazi(p, 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    expect(sadrzaj(el, 'crtez').getAttribute('data-crtez')).toBe('slika');
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animacije[0].cilj).toBe(sadrzaj(el, 'crtez'));
+    expect((animate.mock.calls[0][0] as Keyframe[]).map((k) => k['clipPath'])).toEqual(['inset(-50% 100% -50% 0)', 'inset(-50%)']);
+  });
+
+  it('kraj grupe poteza: cancel svih i sadržaj opet nasleđuje vidljivost od sloja', async () => {
+    const { el, postavi } = await prikazi(crtezSaPotezima(), 0);
+    await postavi(1, { kljuc: 2, grupa: 1 });
+    animacije.forEach((a) => a.zavrsi());
+    await new Promise((r) => setTimeout(r));
+    expect(animacije.every((a) => a.cancel.mock.calls.length === 1)).toBe(true);
+    expect(sadrzaj(el, 'crtez').style.visibility).toBe('');
   });
 });
 

@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -31,7 +33,9 @@ describe('KonzolaPage: sledeći slajd', () => {
 
   async function prikazi() {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
     });
     TestBed.overrideComponent(KonzolaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
     const fixture = TestBed.createComponent(KonzolaPage);
@@ -85,7 +89,9 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
 
   async function prikazi() {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
     });
     TestBed.overrideComponent(KonzolaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
     const fixture = TestBed.createComponent(KonzolaPage);

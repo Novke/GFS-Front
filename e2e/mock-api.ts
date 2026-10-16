@@ -238,6 +238,14 @@ export class MockApi {
     );
   }
 
+  /**
+   * Brojač zahteva `GET slajdovi/:id/potezi` za jedan slajd (projektor i konzola traže poteze jednom po slajdu, pa
+   * posle greške tek za 10 s; plan faze 5 odluka 8). Broji i zahteve na koje je test odgovorio zamenom (`na`).
+   */
+  brojZahtevaPoteza(slajdId: number): number {
+    return this.zahteviZa(`slajdovi/${slajdId}/potezi`, 'GET').length;
+  }
+
   async instaliraj(page: Page): Promise<void> {
     // okruženje (Dockerfile ga pravi u slici; lokalni dist ga nema): bez oznake STAGING
     await page.route('**/assets/env.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"env":"prod"}' }));
@@ -967,6 +975,20 @@ export class MockApi {
       }
       const cmd = z.telo as { tip: string; vrednost?: number | null };
       return this.izvodjenje.primeni(cmd.tip, cmd.vrednost);
+    });
+    // potezi CRTEZ slojeva slajda (projektor i konzola, `PoteziCrteza`): kao backend, redom slojeva iz dokumenta slajda u
+    // fiksturi (prvo slajd izvođenja, pa prezentacije; snimak izvođenja ih nema, `bezPoteza`); prazno bez crteža, 404 bez
+    // slajda; broj zahteva: `brojZahtevaPoteza`
+    get('slajdovi/:id/potezi', (_z, p) => {
+      const id = Number(p['id']);
+      const sl = this.izvodjenje.slajdPoId(id) ?? d.prezentacije.flatMap(x => x.slajdovi).find(s => s.id === id);
+      if (!sl) {
+        return greska(404, 'Slajd ne postoji.');
+      }
+      const slojevi = (sl.platno as { slojevi?: Record<string, unknown>[] } | null)?.slojevi ?? [];
+      return ok(slojevi.filter(x => x['tip'] === 'CRTEZ').map(x => ({
+        slojId: x['id'], medijId: x['medijId'], sirina: x['sirina'], visina: x['visina'], potezi: x['potezi'] ?? null,
+      })));
     });
 
     return r;

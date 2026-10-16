@@ -130,6 +130,15 @@
   object-fit: fill;
 }
 
+/* Vektorski crtež (faza 5): `viewBox` = kutija sloja u jedinicama, pa je razmera ista po obe ose. Debeo potez uz ivicu
+   kutije se ne seče (okvir slike iz uvoza je ionako nešto veći od poteza, faza 2 odluka 15). */
+.uz-pl-crtez-vektor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 .uz-pl-formula-izvor {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

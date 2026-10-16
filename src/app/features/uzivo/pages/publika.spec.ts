@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -58,7 +60,9 @@ describe('PublikaPage', () => {
 
   async function prikazi() {
     TestBed.configureTestingModule({
-      providers: [{ provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+      providers: [
+        provideHttpClient(), provideHttpClientTesting(),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
     });
     TestBed.overrideComponent(PublikaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
     const fixture = TestBed.createComponent(PublikaPage);
@@ -166,7 +170,9 @@ describe('PublikaPage', () => {
         sledeciSlajd: platnoSlajd({ id: 31 }),
       }));
       TestBed.configureTestingModule({
-        providers: [{ provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+        providers: [
+          provideHttpClient(), provideHttpClientTesting(),
+          { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
       });
       TestBed.overrideComponent(PublikaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
       const f = TestBed.createComponent(PublikaPage);

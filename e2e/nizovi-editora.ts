@@ -25,3 +25,12 @@ export const NIZOVI_ZABRANJENI_JAVNO = [NIZ_EDITORA, NIZ_PROSEMIRROR, NIZ_FORMUL
 
 /** Nizovi iz `NIZOVI_ZABRANJENI_JAVNO` koje tekst JS fajla sadrži. */
 export const zabranjeniJavno = (tekst: string): string[] => NIZOVI_ZABRANJENI_JAVNO.filter(n => tekst.includes(n));
+
+/**
+ * Kod crteža kao vektora (5b): klasa SVG-a u šablonu `ui/platno-prikaz` i kraj putanje `GET slajdovi/{id}/potezi`
+ * (`PrezentacijeApi.potezi`). Projektor i konzola ga imaju, telefon nikad (`lenji-formule.spec.ts`, `uzivo-javno.spec.ts`).
+ */
+export const NIZOVI_CRTEZA = ['uz-pl-crtez-vektor', '/potezi'] as const;
+
+/** Nizovi iz `NIZOVI_CRTEZA` koje tekst JS fajla sadrži. */
+export const nizoviCrteza = (tekst: string): string[] => NIZOVI_CRTEZA.filter(n => tekst.includes(n));

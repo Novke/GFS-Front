@@ -1,8 +1,12 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { animacija } from '../data-access/platno-podaci.testing';
 import { infoSlajd, naPitanju, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
-import { NastavnickoStanje } from '../data-access/uzivo.models';
+import type { CrtezSloj, Potez } from '../data-access/platno.models';
+import { PoteziCrteza } from '../data-access/potezi-crteza';
+import { NastavnickoStanje, SlajdDetails } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { SledecePanelComponent } from './sledece-panel.component';
 
@@ -74,5 +78,57 @@ describe('SledecePanelComponent', () => {
     expect(tekst(f)).toContain('Sledeći klik prikazuje kraj');
     const g = await prikazi(stanje({ prikaz: 'KRAJ', sledeciSlajd: null }));
     expect(tekst(g)).toContain('Završi izvođenje dugmetom „Završi“.');
+  });
+});
+
+/** Panel čita keš poteza prozora (konzola: publika-scena ga puni za trenutni i sledeći), a sam ništa ne traži. */
+describe('SledecePanelComponent (potezi crteža iz keša)', () => {
+  const potezi: Potez[] = [{ boja: '#C00000', debljina: 3, tacke: [10, 5, 20, 10] }];
+  const crtezSlajda = (sl: SlajdDetails) => sl.platno!.slojevi.find((x) => x.tip === 'CRTEZ') as CrtezSloj;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  /** Puni keš kao publika-scena konzole (jedan GET po slajdu, odgovor sa potezima crteža). */
+  function napuni(...slajdovi: SlajdDetails[]) {
+    const kes = TestBed.inject(PoteziCrteza);
+    for (const sl of slajdovi) {
+      kes.ucitaj(sl);
+      http.expectOne(`api/slajdovi/${sl.id}/potezi`)
+        .flush([{ slojId: 'crtez', medijId: crtezSlajda(sl).medijId, sirina: 200, visina: 100, potezi }]);
+    }
+  }
+
+  it('bez keša: slajd iz snimka (slika), panel ne šalje zahtev', async () => {
+    const sl = platnoSlajd({ id: 31 });
+    const f = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), sledeciSlajd: sl }));
+    expect(prikazi1(f)[0].slajd()).toBe(sl);
+  });
+
+  it('SLAJD (sledeći PLATNO): potezi iz keša', async () => {
+    const sl = platnoSlajd({ id: 31 });
+    napuni(sl);
+    const f = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), sledeciSlajd: sl }));
+    expect(crtezSlajda(prikazi1(f)[0].slajd()).potezi).toEqual(potezi);
+  });
+
+  it('KORAK (isti PLATNO slajd, korak 1): potezi iz keša', async () => {
+    const sl = platnoSlajd({ id: 30 });
+    napuni(sl);
+    const f = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: sl, korak: 0, brojStavki: 2 }));
+    expect(prikazi1(f)[0].korak()).toBe(1);
+    expect(crtezSlajda(prikazi1(f)[0].slajd()).potezi).toEqual(potezi);
+  });
+
+  it('PITANJE pa "Zatim" PLATNO: potezi iz keša', async () => {
+    const sl = platnoSlajd({ id: 32 });
+    napuni(sl);
+    const f = await prikazi(naPitanju('CEKA', { sledeciSlajd: sl }));
+    expect(crtezSlajda(prikazi1(f)[0].slajd()).potezi).toEqual(potezi);
   });
 });

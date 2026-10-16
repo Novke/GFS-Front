@@ -29,7 +29,7 @@ test.describe('konzola (1280 x 800)', () => {
     await expect(page.locator('.uz-kon-meta')).toContainText('Prijava');
 
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
-    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 1/4 · korak 2/3');
+    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 1/5 · korak 2/3');
     await expect(sledece(page).getByRole('heading', { level: 2 })).toHaveText('Sledeće · korak 3/3');
     expect(mock.zahteviZa('izvodjenja/7/komande', 'POST').map(z => z.telo)).toEqual(
       Array.from({ length: 3 }, () => ({ tip: 'SLEDECI', vrednost: null })));
@@ -38,18 +38,18 @@ test.describe('konzola (1280 x 800)', () => {
   test('PLATNO: "Sledeće" je isti slajd na koraku 1 (prvi sloj vidljiv, drugi još sakriven)', async ({ page, mock }) => {
     pomeriServer(mock, 5); // prijava -> slajd 1 (3 koraka) -> slajd 2 na koraku 0
     await otvori(page, mock);
-    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 2/4 · korak 0/2');
+    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 2/5 · korak 0/2');
     await expect(sledece(page).getByRole('heading', { level: 2 })).toHaveText('Sledeće · korak 1/2');
     await expect(sledece(page).locator('[data-sloj="t1"]')).toBeVisible();
     await expect(sledece(page).locator('[data-sloj="t2"]')).toBeHidden();
   });
 
-  test('pitanje u CEKA: "Sledeći klik otvara pitanje" i "Zatim: slajd 4/4"', async ({ page, mock }) => {
+  test('pitanje u CEKA: "Sledeći klik otvara pitanje" i "Zatim: slajd 4/5"', async ({ page, mock }) => {
     pomeriServer(mock, 8);
     await otvori(page, mock);
-    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 3/4');
+    await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 3/5');
     await expect(sledece(page)).toContainText('Sledeći klik otvara pitanje');
-    await expect(sledece(page)).toContainText('Zatim: slajd 4/4');
+    await expect(sledece(page)).toContainText('Zatim: slajd 4/5');
   });
 
   test('A+ menja veličinu beležaka i pamti se posle ponovnog učitavanja', async ({ page, mock }) => {

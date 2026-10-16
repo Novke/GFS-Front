@@ -83,11 +83,11 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
 
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
-    // lista editora: 1, dva nova PLATNO slajda, pa stari drugi; izabran je prvi uvezeni
+    // lista editora: 1, dva nova PLATNO slajda, pa stari drugi i treći; izabran je prvi uvezeni
     const stavke = page.locator('.uz-ed-stavka-dugme');
-    await expect(stavke).toHaveCount(4);
+    await expect(stavke).toHaveCount(5);
     const tipovi = await stavke.locator('.uz-ed-ikona').evaluateAll(el => el.map(e => e.getAttribute('aria-label')));
-    expect(tipovi).toEqual(['Info slajd', 'Platno', 'Platno', 'Platno']);
+    expect(tipovi).toEqual(['Info slajd', 'Platno', 'Platno', 'Platno', 'Platno']);
     await expect(stavke.nth(1)).toHaveAttribute('aria-current', 'true');
     await expect(stavke.nth(1)).toBeFocused();
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
@@ -167,7 +167,7 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
     await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}`, 'GET').length).toBe(citanja + 1);
-    await expect(page.locator('.uz-ed-stavka-dugme')).toHaveCount(2);
+    await expect(page.locator('.uz-ed-stavka-dugme')).toHaveCount(3);
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
   });
 });

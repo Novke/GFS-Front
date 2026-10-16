@@ -65,7 +65,7 @@ for (const rezim of ['dan', 'noc'] as const) {
     // nijedan fixture editora nema PITANJE, pa se ovde dodaje (proba recenzenta B4)
     test('/prezentacije/5 (forma pitanja sa upozorenjem za formulu): bez serious/critical kršenja', async ({ page, mock }) => {
       mock.podaci.prezentacije.find(x => x.id === 5)!.slajdovi.push({
-        id: 777, rb: 3, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, postepeno: false, platno: null, beleske: null,
+        id: 777, rb: 4, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, postepeno: false, platno: null, beleske: null,
         pitanje: {
           id: 551, tip: 'JEDAN_TACAN', tekst: 'Koliko je $1011_2$ i $\\nepostoji{x}$?', slika: null, vremeSekunde: null,
           opcije: [{ id: 1, rb: 1, tekst: '$\\nepostoji{y}$', tacna: true }, { id: 2, rb: 2, tekst: '$13$', tacna: false }],
@@ -76,7 +76,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto('prezentacije/5');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
-      const dugme = page.getByRole('button', { name: /^3\s/ });
+      const dugme = page.getByRole('button', { name: /^4\s/ });
       await expect(dugme).toBeEnabled();
       await dugme.click();
       const upozorenja = page.locator('p.uz-ed-upozorenje');
