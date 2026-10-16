@@ -89,6 +89,29 @@ describe('OdgovorUnosComponent', () => {
     expect(dugmad()[1].getAttribute('aria-label')).toBe('B, plavi romb');
   });
 
+  it('režim A: tekst opcije ide kroz app-tekst-formule (aria-hidden), a aria-label je bez $ (tekstZaCitac)', () => {
+    napravi(pitanje('JEDAN_TACAN', {
+      opcije: [{ id: 11, tekst: '$11$' }, { id: 12, tekst: '$13$' }, { id: 13, tekst: 'Cena 5$, a \\$x' }],
+    }), true);
+    const tekstovi = Array.from(fixture.nativeElement.querySelectorAll('app-tekst-formule.uz-st-opcija-tekst')) as HTMLElement[];
+    expect(tekstovi.length).toBe(3);
+    expect(tekstovi.every(t => t.getAttribute('aria-hidden') === 'true')).toBe(true);
+    expect(tekstovi[0].closest('button')).toBe(dugmad()[0]);
+    // učitavač iz test-setup-a se nikad ne razreši: vidi se izvor u mestu formule
+    expect(tekstovi[0].querySelector('span.uz-formula')?.textContent).toBe('$11$');
+    expect(dugmad()[0].getAttribute('aria-label')).toBe('A, crveni trougao: 11');
+    expect(dugmad()[1].getAttribute('aria-label')).toBe('B, plavi romb: 13');
+    expect(dugmad()[2].getAttribute('aria-label')).toBe('C, žuti krug: Cena 5$, a $x');
+  });
+
+  it('režim B (JEDAN_TACAN): nijedan app-tekst-formule; tačno/netačno i dalje ima tekst na dugmetu', () => {
+    napravi(pitanje('JEDAN_TACAN', { opcije: [{ id: 11, tekst: '$11$' }, { id: 12, tekst: '$13$' }] }), false);
+    expect(fixture.nativeElement.querySelectorAll('app-tekst-formule').length).toBe(0);
+    napravi(pitanje('TACNO_NETACNO', { opcije: [{ id: 11, tekst: null }, { id: 12, tekst: null }] }), false);
+    const tekstovi = Array.from(fixture.nativeElement.querySelectorAll('app-tekst-formule.uz-st-opcija-tekst')) as HTMLElement[];
+    expect(tekstovi.map(t => t.textContent)).toEqual(['Tačno', 'Netačno']);
+  });
+
   it('VISE_TACNIH: "Pošalji" onemogućen bez izbora, pa šalje izabrane jednom', () => {
     napravi(pitanje('VISE_TACNIH'));
     expect(dugme('Pošalji').disabled).toBe(true);

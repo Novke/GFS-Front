@@ -13,8 +13,8 @@ everywhere, signals + NgRx SignalStore (`@ngrx/signals`), Angular Material 22 (M
 (`@stomp/rx-stomp`) and `marked` for uživo, Vitest + jsdom
 through `ng test` (no browser; `src/test-setup.ts` stubs canvas `getContext`, `Range.getClientRects` /
 `getBoundingClientRect` and `document.elementFromPoint` for ProseMirror in jsdom, and a global `beforeEach` gives every spec
-`UCITAJ_FORMULE` / `UCITAJ_STIL_FORMULA` loaders that never resolve, so a formula stays the LaTeX source unless the spec
-provides its own), ESLint (angular-eslint) with two project rules
+`UCITAJ_FORMULE` / `UCITAJ_STIL_FORMULA` / `UCITAJ_STIL_TEKSTA_FORMULE` loaders that never resolve, so a formula stays the
+LaTeX source unless the spec provides its own; `afterEach` resets the text-formula style cache and removes its `<link>`), ESLint (angular-eslint) with two project rules
 in `eslint-rules/`. CI runs Node 24.
 All UI text is Serbian Latin; code identifiers are Serbian too (predmet, grupa, predavanje, domaći, test, ocena).
 
@@ -51,6 +51,10 @@ long-cache regex of `docker/nginx.conf` (`DUGI_KES_IZRAZ`, also used by the e2e 
 `media/`) is long-cached, `assets/` never is, and `nginx.conf` uses the same string. Public-route specs (`javni-upis`,
 `uzivo-javno`) import `test` from `e2e/javna-mreza.ts`: every request whose path does not match the public regex (static
 files too, e.g. a lazy chunk) gets 401 and fails the test, as on staging; `dozvoljeniApi` lists the allowed `/api/` calls.
+By default the fixture is strict (no JS with any `NIZOVI_EDITORA` string, `ML__latex` included, and no request under
+`assets/mathlive/`: `upis` and uživo without a formula); `test.use({ formule: true })` (uživo with a formula, 5a) checks
+`zabranjeniJavno` instead (`e2e/nizovi-editora.ts`: editor, ProseMirror, formula dialog and `NIZ_MATHLIVE_CEO`, i.e. the full
+`mathlive`; `mathlive/ssr` is allowed) and lets `assets/mathlive/` through.
 Angular 22 lazy chunks have mixed-case base64url hashes (`chunk-CtOh0Kox.js`, `chunk-_fBU7IqW.js`), so the hashed-file
 branch is `[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`.
 
@@ -126,12 +130,17 @@ this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
 own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
 shell, teacher API clients) to it. npm packages are free for public features except `ZABRANJENI_PAKETI_JAVNO` in the same
-file (heavy slide-builder editor/import libraries, today `fflate`, the seven `prosemirror-*` packages and `mathlive`, with
-`mathlive/ssr`; subpaths such as `fflate/esm` count too): the rule reports them as `zabranjenPaket`. The public part imports
-nothing of the slide editor, the formula view or the PPTX import. Path for phase 5 (formulas on the phone): `DOZVOLJENO_PO_FEATURE['features/uzivo/javno']`
-would get `ui/formula-prikaz.component`, `ui/formula-ucitavanje` and `ui/formula-markup` after reading their imports; `mathlive`
-stays forbidden (the rule sees direct imports only, so the full `<math-field>` build can never enter public code that way);
-the CSS and KaTeX fonts already sit under `assets/mathlive/`. On the backend, anything mapped under `/public/**` is reachable from the internet
+file (heavy slide-builder editor/import libraries, today `fflate`, the seven `prosemirror-*` packages, `mathlive` (with
+`mathlive/ssr`) and `pdfjs-dist`; subpaths such as `fflate/esm` count too): the rule reports them as `zabranjenPaket`. The
+public part imports nothing of the slide editor, the canvas, the PDF or the PPTX import. **Formulas on the phone (phase 5a):**
+the only entry is `DOZVOLJENO_PO_FEATURE['features/uzivo/javno']` += `ui/tekst-formule.component` and `ui/tekst-formule`
+(not `ui/formula-prikaz.component`, `ui/formula-ucitavanje` or `ui/formula-markup`: the public files never import them
+directly, the rule tests keep it). Transitively the component statically reaches `ui/markdown`, `ui/tekst-formule` and
+`ui/formula-ucitavanje` -> `ui/cekanje-fontova` (no imports, `document.fonts`), **never** `ui/preducitavanje`, `ui/teme` or
+`ui/platno-*` (canvas data and fonts; once they did arrive through a static import and cost ~5 kB on the phone). The
+`mathlive/ssr` chunk may reach a public route **only through the dynamic `import()`** in `ui/formula-ucitavanje` and only when
+the text has a formula; its CSS and the KaTeX fonts come from `assets/mathlive/`, so nginx and the public regex need no change.
+The rule sees direct imports only, so `e2e/lenji-formule.spec.ts` guards the graph over the build (below, "Uživo"). On the backend, anything mapped under `/public/**` is reachable from the internet
 without auth.
 
 After a successful submit `upis` shows "Pridruži se WhatsApp grupi" when the `POST` response carries `waLink`; it renders
@@ -147,6 +156,86 @@ Interactive presentation with live questions (spec `docs/superpowers/specs/2026-
 in `Novke/GFS-deploy`). The server is the only source of truth: every change arrives as a whole snapshot with `verzija`
 over STOMP; teacher commands are REST.
 
+- **Formulas in question and option text (phase 5a).** Syntax `$...$` by pandoc's `tex_math_dollars` (`ui/tekst-formule.ts`):
+  after the opening `$` a character that is neither a space nor `$`; no newline and no unescaped `$` inside; the last character
+  before the closing `$` is not a space or `\`; no digit right after the closing `$`; `\$` is always a dollar sign; no `$$...$$`.
+  **Exception (not pandoc):** a `$` right after a digit does not open a formula, because amounts are likelier (`5$`, `10$-20$`,
+  `Košta 5$, a sa popustom 4$.` stay text, so `2$x$` stays text too). "Digit" is the *source* character before the `$`, so
+  `**2**$x$`, `2 $x$` and `(2)$x$` are formulas. Formulas are read **only** in the question text (Markdown: a `marked` inline
+  extension, `markdownSaFormulama`, so code spans and blocks stay literal; `renderMarkdown` for INFO does not read `$`) and
+  in option text (plain text, `podeliFormule`). A formula takes precedence over emphasis and strike-through, as in pandoc:
+  `hooks.emStrongMask` (`maskirajFormule`) hides formula ranges from the `*`/`_`/`~` delimiter search, so `*x $a*b$ y*` is
+  italic around the whole formula (escaped `\$` and code spans are already masked by `marked` and are not formulas). The mask
+  runs on every `inlineTokens`, so it is superlinear around many delimiters and formulas (a stack overflow from ~15 500
+  characters): a question text longer than `MAX_TEKST_SA_FORMULAMA` (4000, twice the server limit of 2000) is plain Markdown
+  without formulas or mask (`markdown.ts`), and the question form uses the same function, so it warns about nothing the display
+  does not draw. If the server limit ever grows, the hook and `start` need a cache or one pass per block. They are **not** read in student answers, acceptable answers, the unit, scale
+  labels, INFO slides or notes (an ordinary `$` there would suddenly become a formula). An image `alt` with a formula gets
+  the LaTeX source. `app-tekst-formule` (`ui/tekst-formule.component.ts`, `[tekst]`, `[markdown]`; host `[innerHTML]` with
+  Angular's sanitizer, **never** `bypassSecurityTrustHtml`, which is the only defence against `[x](javascript:...)`) renders
+  every formula as `span.uz-formula` holding the source; after the module (`UCITAJ_FORMULE`, the phase 4 path) and the light
+  style (`UCITAJ_STIL_TEKSTA_FORMULE`: the same `mathlive-static.css`, waiting only for `KaTeX_Main` 400 and `KaTeX_Math`
+  italic, 3 + 3 s at most; no second `<link>` when the phase 4 one exists) each span gets `latexUMarkup('\textstyle ' + latex)`,
+  `uz-formula--spremna`, `role="img"` and `aria-label` = LaTeX. Invalid, forbidden (`\href`, the `\html…` family) or too heavy
+  LaTeX, more than `MAX_FORMULA_U_TEKSTU` (50) formulas in one text, or a failed load leave the source (`uz-formula--izvor`),
+  never an exception or an error on the projector or phone (one `console.warn` per window, `upozoriFormuleNisuUcitane` in
+  `ui/formula-ucitavanje`). A failed `mathlive-static.css` is **not** remembered as success: the light style rejects, removes
+  its `<link>` (a failed phase 4 link gets `data-greska` and is not waited for again), the formula stays the source, and the next
+  text shown tries again (no loop; a 3 s timeout still draws). Option buttons on the phone get their name
+  through `tekstZaCitac` (no `$`). Used by `slajd-prikaz`, `pitanje-plocice`, `rezultat-prikaz` (bars), `izvodjenje-pregled`
+  and `javno/` (question text, options, correct answer, "Detalji"). Projector and console preload the module when the current or
+  next slide is a question with a formula (`imaFormuluZaCrtanje`); the phone does not know the text in advance, so a student
+  may briefly see the source. Anything that appears **live** next to a formula (the "✓ tačno" badge after `TACAN`, the timer
+  beside the question text) must sit **outside the formula's block**, so it changes the block's width and the `ResizeObserver`
+  re-measures; inside the same block it would only shift the formula and nothing would notice (final review 5a, B I1: up to
+  188 px clipped). Results: `.uz-rez-opcija-tekst` is a flex row (badge, then `app-tekst-formule.uz-rez-opcija-formula` with
+  `flex: 1 1 0` and the ellipsis); tiles and the question header already were (`flex: 1`). A formula never wraps (the source does, also inside long LaTeX). On teacher views a formula wider than its
+  block is scaled down (`--uz-formula-k`, down to 0.5, below that it is clipped at the edge, never a scrollbar): `ui/mera-formule.ts`
+  (`meriFormule`, after rendering reads first and writes after, again on `ResizeObserver` of the blocks and `document.fonts`
+  `loadingdone`). MathLive's markup width is **not linear** in k, so k is computed only when the formula's **input** changes
+  (block content width or font size by >= 0.5 px, or new fonts): from the measure at k = 1 (stays 1 when it does not overflow
+  there, so a frame that shrinks to its content cannot spiral), then at most `MAX_KOREKCIJA` (2) steps down while it really
+  overflows, then nothing; the same input (e.g. the `ResizeObserver` callback after its own write) writes nothing. The earlier
+  "grow while it fits, shrink when it overflows" rule oscillated ~60 times a second; `uzivo-formule-tekst.spec.ts` counts style
+  writes during 1 s of rest after resizing (900-1920 px, tiles and results) and expects 0. `meriFormule` is provided through the
+  token `MERA_FORMULE` **only** by `slajd-prikaz`, `pitanje-plocice`,
+  `rezultat-prikaz` and `izvodjenje-pregled`; its default is `null`, so the phone has neither the code nor the scaling. On the
+  phone (`.uz-st`) a wide formula scrolls inside itself (`max-width: 100%`, `overflow-x: auto`) and `padding-inline-end: 0.15em`
+  keeps MathLive's ~2 px overhang inside the box, so a short formula never gets a scrollbar; the document never scrolls
+  horizontally (e2e at 360 px; `uzivo-javno-trake.spec.ts` and `uzivo-formule-tekst.spec.ts` run without `--hide-scrollbars`,
+  so classic 15 px scrollbars would show). A scrolling formula is a scroll region, so the phone (no `MERA_FORMULE`) watches drawn
+  formulas with one `ResizeObserver` and gives `tabindex="0"` only to a formula with `scrollWidth > clientWidth` (removed again
+  when it fits, e.g. after rotating); its name stays `role="img"` + `aria-label` (children presentational, nothing read twice),
+  focus ring inset (`outline-offset: -3px`, the host clips). Inside an option button (or any `aria-hidden` host) a formula gets
+  **no** `role`/`aria-label` (the button is named by `tekstZaCitac`) and, when it overflows, an explicit `tabindex="-1"`, never 0:
+  Chromium 130+ puts a scroll container without focusable descendants into the tab order by itself, which made it an empty stop
+  in hidden content (re-review B, I1); `-1` takes it out, finger scrolling stays. `pristupacnost.spec.ts` (360 px): axe
+  `scrollable-region-focusable`, and a Tab walk through the page that never lands inside `aria-hidden` or on a formula in a
+  button, while the wide formula of the question text is a stop. Formulas are `font-weight: 400` (bold KaTeX fonts are not loaded). **The question form** (`pages/pitanje-forma.component.ts`) shows a hint (including the
+  digit exception) and, 300 ms after typing, a non-blocking warning in `--warn` (not `--danger`: saving is not blocked, the
+  server does not check formulas) for every formula the display would not draw, naming the field ("u tekstu pitanja",
+  "u odgovoru B"); it runs exactly the display's check (same parser per field, lazy `latexUMarkup`, same limit of 50), so an
+  incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
+  example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
+  every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 615 B on 2026-10-15, after the
+  fix wave of the final review; 113 568 B after F2 fix 3) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
+  or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
+  alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
+  initial and student closure, own closure <= measured + 5 % (348 195 B -> 365 604 B, never above 380 000) and <= 105 000 B
+  gzip (102 932); `tekst-formule*.ts` never import `mathlive` nor contain `ML__latex`. Network of one formula on the phone
+  (`uzivo-javno.spec.ts`, annotation `mreza-formule`; JS, CSS and woff2 after the question, app fonts from `media/` not
+  counted): 404 112 B, limit measured + 10 % and never above 450 000 B; no `KaTeX_AMS*`/`KaTeX_Size*`, nothing off-origin.
+  The editor page file is 211 166 B after 5a (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
+  lazy chunk if 5b-5e need room). **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the
+  sanitizer allows `#hex` colours) is unreadable on a **dark presentation theme** (TAMNA, PONOĆ: `rezim-noc` on the slide) on
+  projector, console and editor preview; the app's night mode does not touch it (those views are always `rezim-dan uz-dan`); the
+  phone may show the source until the chunk loads; after a rejected `import()` the browser may keep the failure for that URL in
+  its module map until reload (browser-dependent), so a retry can fail at once; inside a GFM table a `|` in a formula splits
+  the cell (write `\|` there, which the table turns back into `|`, or `\vert` / `\mid`); after `MAX_KOREKCIJA` a formula can
+  stay a few tenths of a pixel over its edge (nonlinear width); the slide list label (`oznakaSlajda`) keeps `$...$` of a
+  question as written (`_` and `*` inside stay).
+
 - `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
   every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock
   offset), `editor.store.ts`, `izvodjenje.store.ts`, rules (`slajd-pravila`, `izvodjenje-pravila`). Only uživo uses them.
@@ -160,7 +249,7 @@ over STOMP; teacher commands are REST.
   (`ProjectorLayout` then drops `.rezim-dan`, so the phone follows day/night); projector and console stay day.
 - `javno/` may import exactly: `uzivo-putanje`, `data-access/uzivo.models`, `data-access/stomp`, `data-access/sat`,
   `data-access/razlog-greske`, `ui/format`, `ui/markdown`, `ui/opcija-oblik`, `ui/rang-lista.component`,
-  `ui/tajmer.component` (and `lazni-sat.testing` in specs). Never `prezentacije.api`, `izvodjenja.api`, the stores,
+  `ui/tajmer.component`, `ui/tekst-formule.component`, `ui/tekst-formule` (and `lazni-sat.testing` in specs). Never `prezentacije.api`, `izvodjenja.api`, the stores,
   `pages/` or `core/state`. After touching `javno/` or the routes, check that `uzivo/<kod>` makes no `/api/` call outside
   `/api/public/` (`e2e/uzivo-javno.spec.ts` checks it with a fake STOMP broker; the wrapper's `staging/e2e/uzivo_e2e.py`
   against a real backend).
@@ -276,7 +365,7 @@ over STOMP; teacher commands are REST.
   instance and from a panel, last `PUT` after Ctrl+S carries both canvas and notes with the page clock paused so the
   debounce cannot send it, layout at 1280/1366/1440/390 px), editor panels and the colour popover in `pristupacnost.spec.ts`.
 - **Slide editor, part 4b (text, tables, formulas, animations, preview):** all of it lives in the lazy editor chunk except the formula
-  view in `ui/`. **Text** (`editor-platna/tekst/`): ProseMirror directly (not TipTap); the schema (`pm-sema.ts`) has `pasus` (paragraph
+  view in `ui/` (phase 5a reuses it for `$...$` in question text, above). **Text** (`editor-platna/tekst/`): ProseMirror directly (not TipTap); the schema (`pm-sema.ts`) has `pasus` (paragraph
   attributes plus `prazanDeo` and `kljuc`), `prelom` (`\n`, PowerPoint's `a:br`) and **one** mark `stil` carrying all 8 attributes of a
   part; a tab stays the character `\t`. `pm-konverzija.ts` maps both ways without loss up to normalisation (empty parts of a non-empty
   paragraph dropped, neighbours of equal style merged). `prazanDeo` keeps the style of an empty paragraph, but only for paragraphs the
@@ -351,7 +440,9 @@ over STOMP; teacher commands are REST.
   ~170 formulas plus the literals in `mathlive-ssr.min.mjs`); style declarations with checked values (length or `calc(` with numbers,
   `#hex` colours, `position` only `relative|absolute`, never `url(`); a length limit of every value (200, paths 20 000) before any regex
   (no nested quantifiers, see the comment in the file); `MAX_MARKUP` 450 kB. **When MathLive is upgraded, measure the class and SVG lists
-  again** (`formula-sanitizer.spec` "isti elementi i atributi kao sirov MathLive" shows what would be lost). In front of it:
+  again** (`formula-sanitizer.spec` "isti elementi i atributi kao sirov MathLive" shows what would be lost), and check the
+  `mathlive/ssr` budgets of `e2e/lenji-formule.spec.ts` (own closure <= 365 604 B and <= 105 000 B gzip; on 0.111.1 it is
+  348 195 / 102 932, so the gzip reserve is only ~2 kB). In front of it:
   `ui/formula-komande.ts` has the forbidden commands (the whole `\html…` family, `\href`, `\url`, `\style`, `\class`, `\cssId`, `\csname`)
   and `^^` (it can spell a backslash), one list for the regex and the dialog message; and `trosakFormule` (structural cost, one linear
   pass before MathLive): depth <= 32 (braces, `\bgroup`, `\left`, `\begin`, argument-taking commands), stretchy constructs inside each
@@ -389,7 +480,8 @@ over STOMP; teacher commands are REST.
   (<= 215 000), the editor's own closure 444 088 B / 131 002 B gzip (<= 450 000 / 140 000), `mathlive/ssr` 348 195 B (<= 380 000; it now
   also carries `ui/formula-komande`, which left the editor), the formula dialog 844 170 B (<= 900 000, counted with a "fence" in `potpunoZatvorenje`: files of initial + page + editor are neither counted nor followed,
   otherwise the dialog would drag in the editor's lazy chunks). Nothing of ProseMirror or MathLive is in the initial closure or the page
-  file, and public routes load none of it (`NIZOVI_EDITORA`; `JavnaMreza` fails a public test on any `/assets/mathlive/` request).
+  file, and public routes load none of it (`NIZOVI_EDITORA`; `JavnaMreza` fails a public test on any `/assets/mathlive/` request
+  unless the test sets `formule: true`, and then only `mathlive/ssr` may arrive, phase 5a).
   **Two tabs editing one slide: the last `PUT` wins**, with no version check (the backend has none; adding one is out of scope).
   **Known limitations:** a tab character in a table cell has no shortcut (Tab moves the cell); banding (`tabelaTraka`) is not recomputed
   after inserting a row, because the model carries resolved colours (decision 19); a neighbour merged across the edge of the range gets the

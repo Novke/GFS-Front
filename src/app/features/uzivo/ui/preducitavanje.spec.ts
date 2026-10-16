@@ -174,6 +174,23 @@ describe('formule', () => {
     expect(imaFormuluZaCrtanje(null)).toBe(false);
   });
 
+  it('imaFormuluZaCrtanje: PITANJE sa formulom u tekstu ili u opciji; INFO sa $x$ ne', () => {
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { tekst: 'Koliko je $x$?' }))).toBe(true);
+    const opcije = [{ id: 1, rb: 1, tekst: '$11$', tacna: true }, { id: 2, rb: 2, tekst: '3', tacna: false }];
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { opcije }))).toBe(true);
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { tekst: 'Cena je 5$ i 10$' }))).toBe(false);
+    expect(imaFormuluZaCrtanje(pitanjeSlajd())).toBe(false);
+    expect(imaFormuluZaCrtanje(infoSlajd({ sadrzaj: 'Formula $x$', naslov: '$y$' }))).toBe(false);
+  });
+
+  it('preducitajFormule: PITANJE sa formulom učitava modul i stil', () => {
+    const ucitaj = vi.fn(() => Promise.resolve({} as never));
+    const stil = vi.fn(() => Promise.resolve());
+    preducitajFormuleSa(ucitaj, stil, [pitanjeSlajd('JEDAN_TACAN', { tekst: '$1011_2$' })]);
+    expect(ucitaj).toHaveBeenCalledTimes(1);
+    expect(stil).toHaveBeenCalledTimes(1);
+  });
+
   it('preducitajFormule: bez formule ništa; kad bar jedan slajd ima formulu, modul i stil po jednom', async () => {
     const ucitaj = vi.fn(() => Promise.resolve({} as never));
     const stil = vi.fn(() => Promise.resolve());

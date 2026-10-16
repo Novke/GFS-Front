@@ -314,17 +314,21 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
   };
 }
 
-/** Kratka oznaka slajda za listu: naslov ili početak teksta (bez Markdown znakova). */
+/**
+ * Kratka oznaka slajda za listu: naslov ili početak teksta (bez Markdown znakova). U tekstu pitanja `$...$` je formula
+ * (5a), pa `_` i `*` u njoj ostaju (`$1011_2$`, ne `$10112$`); INFO ne tumači `$` (kao `renderMarkdown`).
+ */
 export function oznakaSlajda(s: SlajdDetails, max = 60): string {
   if (s.tip === 'PLATNO') {
     return platnoOznaka(s, max);
   }
-  const izvor = s.tip === 'PITANJE' ? s.pitanje?.tekst : s.naslov || s.sadrzaj;
+  const pitanje = s.tip === 'PITANJE';
+  const izvor = pitanje ? s.pitanje?.tekst : s.naslov || s.sadrzaj;
   const tekst = (izvor ?? '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')            // slike
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')         // veze -> tekst
     .replace(/^\s*(?:#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '') // naslovi, citati, stavke liste
-    .replace(/[*_`~]+/g, '')
+    .replace(/(\$[^$\n]+\$)|[*_`~]+/g, (_, f?: string) => (!f ? '' : pitanje ? f : f.replace(/[*_`~]+/g, '')))
     .replace(/\s+/g, ' ')
     .trim();
   if (!tekst) {

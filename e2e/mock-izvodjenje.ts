@@ -64,6 +64,30 @@ const imaTacan = (p: Pitanje | null): boolean =>
   !!p && (['JEDAN_TACAN', 'VISE_TACNIH', 'TACNO_NETACNO'].includes(p.tip)
     || (p.tip === 'BROJ' && p.brojTacno !== null) || (p.tip === 'KRATAK_TEKST' && !!p.prihvatljiviOdgovori?.length));
 
+/**
+ * Pitanje sa formulama (5a, izmišljeno): u tekstu ispravna formula, dve zabranjene komande (`ZABRANJENE_KOMANDE`: `\href`
+ * i `\htmlStyle` sa CSS `url(`, Review Focus 2: ni veza ni zahtev van porekla) i nepoznata komanda (`\nepostoji{x}`:
+ * MathLive je stvarno odbija; `\frac{1}{` bi nacrtao), u opcijama dve formule. Isto pitanje vidi telefon studenta
+ * (`uzivo-javno.spec.ts`), projektor i axe (`pristupacnost.spec.ts`).
+ */
+export const TEKST_SA_FORMULOM = 'Koliko je $1011_2$ dekadno? Vidi $\\href{http://primer.invalid}{ovde}$, '
+  + '$\\htmlStyle{background:url(http://primer.invalid/x.png)}{x}$ i $\\nepostoji{x}$.';
+/** Formula teksta pitanja koje ostaju izvor `$...$` (redom). */
+export const IZVORI_TEKSTA = [
+  '$\\href{http://primer.invalid}{ovde}$', '$\\htmlStyle{background:url(http://primer.invalid/x.png)}{x}$', '$\\nepostoji{x}$',
+] as const;
+export const OPCIJE_SA_FORMULOM = ['$11$', '$13$'] as const;
+/** Ispravnih formula (tekst + opcije), koje se crtaju MathLive-om; ostale (`IZVORI_TEKSTA`) ostaju izvor `$...$`. */
+export const SPREMNIH_FORMULA = 3;
+
+/** `pitanje` nastavničkog slajda sa `TEKST_SA_FORMULOM` (za `MockIzvodjenje.izmeniSlajd(2, { pitanje })`). */
+export const pitanjeSaFormulom = (): Pitanje & Record<string, unknown> => ({
+  id: 51, tip: 'JEDAN_TACAN', tekst: TEKST_SA_FORMULOM, slika: null, vremeSekunde: null,
+  opcije: OPCIJE_SA_FORMULOM.map((tekst, i) => ({ id: i + 1, rb: i + 1, tekst, tacna: i === 0 })),
+  brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+  prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+});
+
 export class MockIzvodjenje {
   private readonly f: FiksturaIzvodjenja;
   private readonly pocetakMs = Date.now() - (12 * 60 + 2) * 1000;

@@ -165,6 +165,42 @@
   border-top: 1px solid var(--line);
 }
 
+/* Formula u tekstu pitanja i opcije (`app-tekst-formule`). Izvor (`$...$` dok se modul učitava ili kad formula nije
+   ispravna) se lomi kao tekst, i usred dugačkog LaTeX-a bez razmaka (`anywhere`), da telefon od 360 px nema
+   horizontalni skrol. `isolation` kao `.uz-pl-formula-markup` (platno.css): `svg` MathLive-a za `\cancel` i `\enclose` ima
+   `z-index: 2`, koji tako važi samo unutar formule. */
+.uz-formula {
+  overflow-wrap: anywhere;
+  isolation: isolate;
+}
+
+/* Nacrtana formula se ne lomi na pola i nije skrol kontejner (projektor, konzola, pregled u editoru, pregled izvođenja:
+   tu niko ne skroluje, a klasična traka od 15 px bi i kratkoj formuli podigla red). Šira od svog bloka se smanjuje:
+   `--uz-formula-k` (`ui/mera-formule.ts`, samo nastavnički prikazi kroz `MERA_FORMULE`; merenje posle crtanja i na promenu
+   veličine; markup MathLive-a je u `em`, pa se smanjuje i raspored), najviše do 0,5; ispod toga je seče ivica domaćina
+   (`overflow-x: clip`), bez trake. Telefon (`.uz-st`) se ne smanjuje: tamo se šira formula skroluje (`uzivo-javno.css`).
+   `inline-flex`: osnovna linija formule kao u tekstu. `padding-inline-end` uvlači prepust MathLive-a (~2 px van
+   `.ML__latex`) u kutiju, a jednaka negativna margina vraća raspored. `font-weight: 400`: debljina teksta oko formule
+   (pitanje 600, tačna opcija 700) bi tražila bold KaTeX fontove, koje lakši učitavač stila ne čeka. */
+.uz-formula--spremna {
+  display: inline-flex;
+  box-sizing: border-box;
+  padding-inline-end: 0.15em;
+  margin-inline-end: -0.15em;
+  font-size: calc(var(--uz-formula-k, 1) * 1em);
+  font-weight: 400;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* Domaćin: kao flex stavka (pločica, opcija na telefonu, ekran "tačan odgovor", Detalji) bez `min-width: 0` je najmanja
+   širina cela formula, pa bi blok formule (mesto za merenje) bio raširen i strana bi dobila horizontalni skrol.
+   `overflow-x: clip`: formula koja ni sa k = 0,5 ne staje seče se na ivici, bez skrol kontejnera i trake. */
+app-tekst-formule {
+  min-width: 0;
+  overflow-x: clip;
+}
+
 /* ---------- Slajd: INFO ---------- */
 
 .uz-platno .uz-slajd-naslov {
@@ -569,13 +605,29 @@ p.uz-prazno {
   --uz-oblik-velicina: 1.9em;
 }
 
+/* Ćelija teksta opcije je flex red: značka "✓ tačno" (stiže uživo, `TACAN`) i blok teksta sa sopstvenom širinom
+   (`1 1 0`). Formula se meri prema bloku (`ui/mera-formule.ts`); da su značka i formula u istom bloku, značka bi formulu
+   pomerila udesno bez promene širine bloka, pa bi je odsekla ivica bez ponovnog merenja (završna recenzija 5a, B I1).
+   Ovako značka suzi blok, `ResizeObserver` to javi i k se računa iznova. Elipsa je na bloku teksta (flex kontejner je ne
+   crta). */
 .uz-rez-opcija-tekst {
   grid-area: tekst;
+  display: flex;
+  align-items: baseline;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+}
+
+.uz-rez-opcija-tekst > .uz-tacno-znak {
+  flex: none;
+}
+
+.uz-rez-opcija-formula {
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .uz-rez-opcija-vrednost {

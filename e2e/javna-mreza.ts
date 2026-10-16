@@ -1,6 +1,6 @@
 import { expect, test as osnova } from './fixture';
 import { JAVNA_PUTANJA } from './javne-putanje';
-import { nizoviEditora } from './nizovi-editora';
+import { NIZ_MATHLIVE, nizoviEditora, zabranjeniJavno } from './nizovi-editora';
 import { nizoviUvoza } from './nizovi-uvoza';
 
 export { expect } from './fixture';
@@ -21,13 +21,22 @@ export interface JavnaMreza {
    * Čeka da se pročitaju sva tela JS odgovora stranice i vraća njihove putanje (sa nizovima uvoza PPTX-a ili editora
    * platna koje telo sadrži, npr. `/chunk-X.js: invalid zip data`). Javna ruta ne sme da učita fflate, kod uvoza ni kod
    * editora platna (i njegove biblioteke); teardown proverava isto, a spec ga zove da potvrdi da provera nije prazna.
+   * `saEditorom`: svi `NIZOVI_EDITORA` (i `ML__latex`); `saZabranjenim`: `NIZOVI_ZABRANJENI_JAVNO` (bez `ML__latex`);
+   * `saFormulom`: putanje JS-a sa `ML__latex` (`mathlive/ssr`).
    */
-  skripte(): Promise<{ putanje: string[]; saUvozom: string[]; saEditorom: string[] }>;
+  skripte(): Promise<{ putanje: string[]; saUvozom: string[]; saEditorom: string[]; saZabranjenim: string[]; saFormulom: string[] }>;
 }
 
 interface Opcije {
   /** Dozvoljeni `/api/` pozivi ove javne stranice (`METOD /api/...`); sve ostalo obara test. */
   dozvoljeniApi: RegExp;
+  /**
+   * Stranica sme da crta formule (5a: uživo sa formulom u tekstu pitanja ili opcije). Tada teardown umesto svih nizova
+   * editora proverava `zabranjeniJavno` (`ML__latex` sme samo bez `NIZ_MATHLIVE_CEO`) i pušta `assets/mathlive/`.
+   * Podrazumevano `false`: upis i uživo bez formule ostaju strogi (nijedan JS sa `ML__latex`, nijedan zahtev na
+   * `assets/mathlive/`).
+   */
+  formule: boolean;
 }
 
 /**
@@ -38,16 +47,18 @@ interface Opcije {
  */
 export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
   dozvoljeniApi: [/^$/, { option: true }],
+  formule: [false, { option: true }],
   javnaMreza: [
-    async ({ page, mock, baseURL, dozvoljeniApi }, use) => {
+    async ({ page, mock, baseURL, dozvoljeniApi, formule }, use) => {
       void mock; // mok mora biti instaliran pre ove rute: `route.fallback()` ide na njega
       const origin = new URL(baseURL!).origin;
-      const citanja: Promise<{ putanja: string; nizovi: string[]; editor: string[] }>[] = [];
+      interface Procitano { putanja: string; nizovi: string[]; editor: string[]; zabranjeni: string[] }
+      const citanja: Promise<Procitano>[] = [];
       const mreza: JavnaMreza = {
         api: [], zahtevi: [], odgovori401: [], ws: [],
         skripte: async () => {
           // čeka i čitanja koja počnu dok se raniji odgovori čitaju (broj se ustali)
-          let procitane: { putanja: string; nizovi: string[]; editor: string[] }[];
+          let procitane: Procitano[];
           do {
             procitane = await Promise.all([...citanja]);
           } while (procitane.length < citanja.length);
@@ -55,6 +66,8 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
             putanje: procitane.map(x => x.putanja),
             saUvozom: procitane.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`),
             saEditorom: procitane.filter(x => x.editor.length).map(x => `${x.putanja}: ${x.editor.join(', ')}`),
+            saZabranjenim: procitane.filter(x => x.zabranjeni.length).map(x => `${x.putanja}: ${x.zabranjeni.join(', ')}`),
+            saFormulom: procitane.filter(x => x.editor.includes(NIZ_MATHLIVE)).map(x => x.putanja),
           };
         },
       };
@@ -72,9 +85,10 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
         }
         if (putanja.endsWith('.js')) {
           // telo se čita odmah (posle zatvaranja stranice ga nema); nepročitano telo obara proveru (fail-closed)
+          const necitano = ['telo nije pročitano'];
           citanja.push(r.text().then(
-            t => ({ putanja, nizovi: nizoviUvoza(t), editor: nizoviEditora(t) }),
-            () => ({ putanja, nizovi: ['telo nije pročitano'], editor: ['telo nije pročitano'] }),
+            t => ({ putanja, nizovi: nizoviUvoza(t), editor: nizoviEditora(t), zabranjeni: zabranjeniJavno(t) }),
+            () => ({ putanja, nizovi: necitano, editor: necitano, zabranjeni: necitano }),
           ));
         }
       });
@@ -91,9 +105,14 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       expect(mreza.ws.filter(p => !JAVNA_PUTANJA.test(p)), 'WebSocket van javnih putanja').toEqual([]);
       const skripte = await mreza.skripte();
       expect(skripte.saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);
-      expect(skripte.saEditorom, 'JS sa kodom editora platna na javnoj ruti').toEqual([]);
-      // javne strane ne crtaju formule (faza 4): ni stil ni KaTeX fontovi MathLive-a
-      expect(mreza.zahtevi.filter(p => p.includes('/assets/mathlive/')), 'MathLive assets na javnoj ruti').toEqual([]);
+      if (formule) {
+        // formula u tekstu (5a): samo `mathlive/ssr` (lenji chunk), nikad ceo mathlive, editor platna ni ProseMirror
+        expect(skripte.saZabranjenim, 'JS sa kodom editora ili celim mathlive-om na javnoj ruti').toEqual([]);
+      } else {
+        expect(skripte.saEditorom, 'JS sa kodom editora platna ili MathLive-om na javnoj ruti').toEqual([]);
+        // strana bez formule ne učitava ni stil ni KaTeX fontove MathLive-a
+        expect(mreza.zahtevi.filter(p => p.includes('/assets/mathlive/')), 'MathLive assets na javnoj ruti').toEqual([]);
+      }
     },
     { auto: true },
   ],

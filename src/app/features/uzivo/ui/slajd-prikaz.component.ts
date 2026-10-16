@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, comp
 import { ServerskiSat } from '../data-access/sat';
 import { Faza, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
+import { meriFormule } from './mera-formule';
 import { renderMarkdown } from './markdown';
 import { PitanjePlociceComponent } from './pitanje-plocice.component';
 import { PlatnoPrikazComponent } from './platno-prikaz.component';
 import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
+import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
@@ -17,6 +19,7 @@ export interface KodTraka { host: string; kod: string; }
  * `container-type: inline-size`, pa su sve veličine u `cqw` i slajd izgleda isto u svakoj širini; širinu daje roditelj.
  * INFO: naslov, Markdown, slika; uz `postepeno` su sakrivene stavke liste najvišeg nivoa sa indeksom ≥ `korak`.
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
+ * Tekst pitanja i opcija može imati formule `$...$` (`app-tekst-formule`); INFO ih ne tumači.
  * PLATNO: `app-platno-prikaz` preko celog okvira (slojevi posle koraka `korak`, animacija prelaza `animacija`), bez
  * trake "host/uzivo · kod" (pokrila bi sadržaj uvezenog slajda; kasni studenti imaju QR).
  * Tema prezentacije: CSS promenljive `--uz-tema-*` na korenu `uz-platno` (pozadina, tekst, naslov, fontovi INFO i
@@ -25,7 +28,9 @@ export interface KodTraka { host: string; kod: string; }
 @Component({
   selector: 'app-slajd-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent],
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
+  imports: [PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent, TekstFormuleComponent],
   host: { class: 'uz-okvir' },
   template: `
     <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'" [class.rezim-noc]="tamna()"
@@ -42,7 +47,7 @@ export interface KodTraka { host: string; kod: string; }
         </div>
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
-          <div class="uz-md uz-pitanje-tekst" [innerHTML]="pitanjeHtml()"></div>
+          <app-tekst-formule class="uz-md uz-pitanje-tekst" [tekst]="p.tekst" [markdown]="true" />
           @if (aktivanTajmer(); as t) {
             <app-tajmer class="uz-slajd-tajmer" [rokMs]="t.rokMs" [preostaloMs]="t.preostaloMs" [sat]="t.sat"
                         [ukupnoMs]="p.vremeSekunde ? p.vremeSekunde * 1000 : null" />
@@ -102,7 +107,6 @@ export class SlajdPrikazComponent {
   protected readonly traka = computed(() => (this.slajd().tip === 'PLATNO' ? null : this.kodTraka()));
   protected readonly kod = kodSaRazmakom;
   protected readonly html = computed(() => (this.slajd().tip === 'INFO' ? renderMarkdown(this.slajd().sadrzaj) : ''));
-  protected readonly pitanjeHtml = computed(() => renderMarkdown(this.slajd().pitanje?.tekst));
   protected readonly prikazanRezultat = computed(() => (this.prikaziRezultat() ? this.rezultat() : null));
   protected readonly aktivanTajmer = computed(() => {
     const t = this.tajmer();

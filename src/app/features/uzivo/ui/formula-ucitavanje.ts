@@ -1,10 +1,12 @@
 import { InjectionToken } from '@angular/core';
-import { sacekajFontove } from './preducitavanje';
+import { sacekajFontove } from './cekanje-fontova';
 
 /*
  * Lenjo učitavanje statičkog prikaza formula (odluka 6 i 7): jedini dinamički `import()` modula `formula-markup` (u njemu
  * je `mathlive/ssr`, ~350 kB, sopstveni chunk), plus lokalni CSS MathLive-a i KaTeX fontovi iz `assets/mathlive/`
- * (`angular.json`). Projektor, konzola i editor ga traže tek kad slajd ima formulu bez slike izvora.
+ * (`angular.json`). Traže ga tek kad zatreba: projektor, konzola i editor za FORMULA sloj bez slike izvora i za pitanje sa
+ * formulom (`preducitajFormule`), `app-tekst-formule` (i na telefonu) za tekst pitanja ili opcije sa `$...$`, a forma
+ * pitanja za proveru formula. Ovaj fajl statički uvozi samo `cekanje-fontova` (javna ruta ga dobija tranzitivno).
  */
 
 export type ModulFormule = typeof import('./formula-markup');
@@ -51,10 +53,24 @@ export function ucitajStilFormula(): Promise<void> {
   return stil;
 }
 
-/** Samo za testove: zaboravlja keširana obećanja (keš inače traje koliko i prozor). */
+let upozoreno = false;
+
+/**
+ * Jedno upozorenje po prozoru kad modul ili stil formula ne stignu (svaka instanca `app-tekst-formule` na istom ekranu i
+ * svako sledeće pitanje bi inače pisali svoje); prikaz ostaje izvor `$...$`.
+ */
+export function upozoriFormuleNisuUcitane(e: unknown): void {
+  if (!upozoreno) {
+    upozoreno = true;
+    console.warn('Formule nisu učitane; prikazuje se izvor.', e);
+  }
+}
+
+/** Samo za testove: zaboravlja keširana obećanja i upozorenje (keš inače traje koliko i prozor). */
 export function resetujUcitavanjeFormula(): void {
   modul = null;
   stil = null;
+  upozoreno = false;
 }
 
 export const UCITAJ_FORMULE = new InjectionToken<() => Promise<ModulFormule>>('UCITAJ_FORMULE', {

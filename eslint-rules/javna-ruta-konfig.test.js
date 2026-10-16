@@ -124,6 +124,63 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
     }
   });
 
+  describe('features/uzivo/javno: formule u tekstu (faza 5, odluka 4)', () => {
+    const javni = 'features/uzivo/javno/x.ts';
+    /** Poruke pravila za uvoz iz `src/app/features/uzivo/javno/x.ts`. */
+    const izJavnog = izvor => eslint.lintText(`import * as X from '${izvor}';\nexport const y = X;\n`, {
+      filePath: path.join(KORENI, 'src/app', javni),
+    }).then(([r]) => r.messages.filter(m => m.ruleId === RULE_ID));
+
+    it('javno sme tekst-formule, ali ne formula-markup, formula-prikaz ni formula-ucitavanje', async () => {
+      assert.deepEqual(await izJavnog('../ui/tekst-formule.component'), []);
+      assert.deepEqual(await izJavnog('../ui/tekst-formule'), []);
+      // fail-closed (Review Focus 2): put do mathlive/ssr ide samo kroz tekst-formule.component, nikad direktno
+      for (const zabranjen of ['../ui/formula-markup', '../ui/formula-prikaz.component', '../ui/formula-ucitavanje']) {
+        const m = await izJavnog(zabranjen);
+        assert.equal(m.length, 1, `${zabranjen}: ${JSON.stringify(m)}`);
+        assert.equal(m[0].messageId, 'zabranjen');
+      }
+    });
+
+    it('tačno dve nove stavke za formule, bez modula formula-* faze 4', () => {
+      const dodatak = DOZVOLJENO_PO_FEATURE['features/uzivo/javno'];
+      assert.ok(dodatak.includes('features/uzivo/ui/tekst-formule.component'));
+      assert.ok(dodatak.includes('features/uzivo/ui/tekst-formule'));
+      assert.deepEqual(dodatak.filter(d => /\/formula-/.test(d)), []);
+    });
+
+    it('mathlive ostaje zabranjen i uz dozvoljenu komponentu (statički i dinamički)', async () => {
+      const kod = `import { TekstFormuleComponent } from '../ui/tekst-formule.component';\n` +
+        `export const y = [TekstFormuleComponent, () => import('mathlive/ssr'), () => import('mathlive')];\n`;
+      const [r] = await eslint.lintText(kod, { filePath: path.join(KORENI, 'src/app', javni) });
+      const m = r.messages.filter(x => x.ruleId === RULE_ID);
+      assert.equal(m.length, 2, JSON.stringify(m));
+      assert.ok(m.every(x => x.messageId === 'zabranjenPaket'), JSON.stringify(m));
+    });
+  });
+
+  it('pdfjs-dist je zabranjen javnom delu', async () => {
+    assert.ok(ZABRANJENI_PAKETI_JAVNO.includes('pdfjs-dist'));
+    for (const feature of JAVNI_FEATURE) {
+      for (const kod of [
+        `import 'pdfjs-dist/legacy/build/pdf.mjs';\n`,
+        `import * as P from 'pdfjs-dist';\nexport const y = P;\n`,
+        `export const y = () => import('pdfjs-dist/legacy/build/pdf.mjs');\n`,
+      ]) {
+        const m = await poruke(feature, kod);
+        assert.equal(m.length, 1, `${feature}: ${JSON.stringify(m)}`);
+        assert.equal(m[0].messageId, 'zabranjenPaket');
+      }
+    }
+  });
+
+  it('pdfjs-dist je dozvoljen van javnih feature-a (uvoz PDF-a, faza 5)', async () => {
+    const [r] = await eslint.lintText(`export const y = () => import('pdfjs-dist/legacy/build/pdf.mjs');\n`, {
+      filePath: path.join(KORENI, 'src/app/features/uzivo/uvoz-pdf/test-nejavni.ts'),
+    });
+    assert.deepEqual(r.messages.filter(m => m.ruleId === RULE_ID), []);
+  });
+
   it('fflate je dozvoljen van javnih feature-a (uvoz PPTX-a)', async () => {
     const [r] = await eslint.lintText(`import { unzipSync } from 'fflate';\nexport const y = unzipSync;\n`, {
       filePath: path.join(KORENI, 'src/app/features/uzivo/uvoz-pptx/test-nejavni.ts'),

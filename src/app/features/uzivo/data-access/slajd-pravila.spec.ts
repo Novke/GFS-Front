@@ -62,6 +62,16 @@ describe('slajd-pravila', () => {
     expect(oznakaSlajda({ ...s, sadrzaj: null })).toBe('Nov slajd');
   });
 
+  it('oznaka pitanja čuva formulu: `_` i `*` unutar $...$ ostaju (1011_2 nije 10112), van formule se brišu', () => {
+    const s: SlajdDetails = { id: 2, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, beleske: null,
+      postepeno: false, platno: null, pitanje: { id: 9, tip: 'JEDAN_TACAN', tekst: '**Koliko** je $1011_2$ i $z^*$?',
+        slika: null, vremeSekunde: null, opcije: [], brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null,
+        tekstPrikaz: null, prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null } };
+    expect(oznakaSlajda(s)).toBe('Koliko je $1011_2$ i $z^*$?');
+    // INFO ne tumači $ (kao renderMarkdown): Markdown znaci se brišu svuda
+    expect(oznakaSlajda({ ...s, tip: 'INFO', pitanje: null, sadrzaj: 'Cena $a_b$ **x**' })).toBe('Cena $ab$ x');
+  });
+
   describe('PLATNO', () => {
     const platnoSlajd = (platno: Platno | null = platnoFabrika()): SlajdDetails => ({
       id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null, platno,
