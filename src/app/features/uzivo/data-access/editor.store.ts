@@ -17,7 +17,7 @@ import { novoPlatno, type RasporedNovogPlatna } from './platno-novo';
 import type { Platno } from './platno.models';
 import { vazecaTema } from '../ui/teme';
 import {
-  PrezentacijaDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda, UpdatePrezentacijaCmd,
+  MedijInfo, PrezentacijaDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda, UpdatePrezentacijaCmd,
 } from './uzivo.models';
 
 export type StanjeCuvanja = 'miruje' | 'cuva' | 'sacuvano' | 'greska';
@@ -467,12 +467,16 @@ export const EditorStore = signalStore(
       praznjenje?.isprazni();
     }
 
-    function izmeniSlajd(id: number, cmd: SlajdCmd): void {
+    /**
+     * `slika`: podaci slike za lokalni prikaz do odgovora servera (komanda nosi samo `slikaId`; bez ovoga nova slika je
+     * "Slika"), npr. "Poništi" pretvaranja u platno vraća INFO sa njegovom slikom.
+     */
+    function izmeniSlajd(id: number, cmd: SlajdCmd, slika?: MedijInfo | null): void {
       const kljuc = razresi(id);
       if (obrisani.has(kljuc) || !store.slajdovi().some(s => s.id === kljuc)) return;
       cmdovi.set(kljuc, cmd);
       izmena.set(kljuc, (izmena.get(kljuc) ?? 0) + 1);
-      zameni(kljuc, s => slajdIzCmd(cmd, s));
+      zameni(kljuc, s => slajdIzCmd(cmd, slika ? { ...s, slika } : s));
       javi();
       cuvaj(kljuc);
     }

@@ -7,6 +7,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
+import type { MockInstance } from 'vitest';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
@@ -20,6 +21,9 @@ import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component'
 import { PlatnoEditorStore } from '../editor-platna/platno-editor.store';
 import { TekstUredjivacComponent } from '../editor-platna/tekst/tekst-uredjivac.component';
 import type { TekstSloj } from '../data-access/platno.models';
+import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
+import { OPISI_GUBITAKA } from '../data-access/pretvori-u-platno';
+import { SlajdFormaComponent } from './slajd-forma.component';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 /** Stavka otvorenog menija (CDK overlay je u body). */
@@ -805,5 +809,251 @@ describe('PrezentacijaEditorPage: sličice slajdova u listi', () => {
     expect(link).not.toBeNull();
     expect(slicica.hasAttribute('inert')).toBe(true);
     expect(link!.closest('[inert]')).toBe(slicica);
+  });
+});
+
+describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  let strana: {
+    pretvoriUPlatno(s: SlajdDetails): Promise<void>;
+    ucitajPretvaranje: () => Promise<unknown>;
+  };
+  let dimenzije: ReturnType<typeof vi.fn>;
+  let dijalog: ReturnType<typeof vi.spyOn>;
+  let odgovorDijaloga: boolean;
+  let uspeh: ReturnType<typeof vi.spyOn>;
+  let izmeni: MockInstance<(id: number, cmd: SlajdCmd) => void>;
+  const el = () => fixture.nativeElement as HTMLElement;
+  const infoSlajd = (izmena: Partial<SlajdDetails> = {}): SlajdDetails => ({
+    ...slajd(11, 1, 'Uvod'), sadrzaj: '- prvo\n- drugo', beleske: 'Moje beleške', postepeno: true, ...izmena,
+  });
+  const tekstSloja = (cmd: SlajdCmd, id: string) =>
+    (cmd.platno!.slojevi.find(x => x.id === id) as TekstSloj | undefined)?.pasusi.map(p => p.delovi.map(d => d.tekst).join(''));
+  /** Pozivi `izmeniSlajd` sa PLATNO komandom (pretvaranje), redom. */
+  const uPlatno = () => izmeni.mock.calls.filter(c => c[1].tip === 'PLATNO');
+  const dugmePretvori = () =>
+    [...el().querySelectorAll<HTMLButtonElement>('app-slajd-forma button')].find(b => b.textContent?.trim() === 'Pretvori u platno');
+
+  async function ucitaj(s: SlajdDetails): Promise<void> {
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, slajdovi: [s] });
+    await fixture.whenStable();
+  }
+
+  /** Šalje sve (Ctrl+S) i odgovara na sve PUT-ove slajda 11 telom zahteva (kao server). */
+  function sacuvajSve(): void {
+    store.sacuvajOdmah();
+    for (const r of http.match('api/slajdovi/11')) {
+      const b = r.request.body as SlajdCmd;
+      r.flush({ ...slajd(11, 1, ''), ...b, slika: null });
+    }
+  }
+
+  beforeEach(() => {
+    dimenzije = vi.fn(async () => ({ sirina: 1600, visina: 900 }));
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: DIMENZIJE_SLIKE, useValue: dimenzije },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
+    });
+    http = TestBed.inject(HttpTestingController);
+    odgovorDijaloga = true;
+    dijalog = vi.spyOn(TestBed.inject(MatDialog), 'open')
+      .mockImplementation(() => ({ afterClosed: () => of(odgovorDijaloga) }) as unknown as MatDialogRef<unknown>);
+    uspeh = vi.spyOn(TestBed.inject(NotificationStore), 'uspeh');
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    strana = fixture.componentInstance as unknown as typeof strana;
+    store = fixture.debugElement.injector.get(EditorStore);
+    izmeni = vi.spyOn(store, 'izmeniSlajd');
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  it('INFO bez gubitaka: klik na dugme, bez dijaloga, jedna PLATNO izmena (naslov s1, lista s2 sa 2 KLIK), beleške ostaju, "Poništi"', async () => {
+    await ucitaj(infoSlajd());
+    dugmePretvori()!.click();
+    await vi.waitFor(() => expect(uPlatno().length).toBe(1));
+    expect(dijalog).not.toHaveBeenCalled();
+    const [id, cmd] = uPlatno()[0] as [number, SlajdCmd];
+    expect(id).toBe(11);
+    expect(cmd).toMatchObject({
+      tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, postepeno: false, pitanje: null, beleske: 'Moje beleške',
+    });
+    expect(tekstSloja(cmd, 's1')).toEqual(['Uvod']);
+    expect(tekstSloja(cmd, 's2')).toEqual(['prvo', 'drugo']);
+    expect(cmd.platno!.animacije.map(a => [a.slojId, a.pasus, a.okidac])).toEqual([['s2', 0, 'KLIK'], ['s2', 1, 'KLIK']]);
+    expect(store.izabrani()!.tip).toBe('PLATNO');
+    expect(uspeh).toHaveBeenCalledTimes(1);
+    expect(uspeh.mock.calls[0][0]).toBe('Slajd je pretvoren u platno.');
+    expect(uspeh.mock.calls[0][1]).toMatchObject({ label: 'Poništi pretvaranje' });
+    sacuvajSve();
+  });
+
+  it('"Poništi": prvo pražnjenje editora platna, pa INFO komanda iz trenutka pre pretvaranja (naslov, sadržaj, beleške, postepeno)', async () => {
+    await ucitaj(infoSlajd());
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    const isprazni = vi.spyOn(store, 'isprazni');
+    izmeni.mockClear();
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    expect(isprazni).toHaveBeenCalledTimes(1);
+    expect(izmeni).toHaveBeenCalledTimes(1);
+    expect(isprazni.mock.invocationCallOrder[0]).toBeLessThan(izmeni.mock.invocationCallOrder[0]);
+    expect(izmeni.mock.calls[0]).toEqual([11, {
+      tip: 'INFO', naslov: 'Uvod', sadrzaj: '- prvo\n- drugo', slikaId: null, beleske: 'Moje beleške', postepeno: true,
+      pitanje: null, platno: null,
+    }, null]);
+    expect(store.izabrani()!.tip).toBe('INFO');
+    sacuvajSve();
+  });
+
+  it('INFO sa vezom: ConfirmDialog sa tekstom gubitka veza; "Odustani" -> slajd ostaje INFO, bez poruke', async () => {
+    await ucitaj(infoSlajd({ sadrzaj: 'Vidi [vezu](https://primer.rs).' }));
+    odgovorDijaloga = false;
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(dijalog).toHaveBeenCalledTimes(1);
+    const cfg = (dijalog.mock.calls[0][1] as { data: { naslov: string; tekst: string[]; potvrdi: string } }).data;
+    expect(cfg.naslov).toBe('Pretvoriti slajd u platno?');
+    expect(cfg.potvrdi).toBe('Pretvori');
+    expect(cfg.tekst).toContain(OPISI_GUBITAKA.VEZE);
+    expect(cfg.tekst.at(-1)).toBe('Posle pretvaranja možeš da poništiš.');
+    expect(izmeni).not.toHaveBeenCalled();
+    expect(uspeh).not.toHaveBeenCalled();
+    expect(store.izabrani()!.tip).toBe('INFO');
+  });
+
+  it('INFO sa vezom: "Pretvori" u dijalogu -> PLATNO (tekst veze ostaje, adresa ne)', async () => {
+    await ucitaj(infoSlajd({ sadrzaj: 'Vidi [vezu](https://primer.rs).' }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(uPlatno().length).toBe(1);
+    expect(tekstSloja(uPlatno()[0][1] as SlajdCmd, 's2')).toEqual(['Vidi vezu.']);
+    expect(uspeh).toHaveBeenCalledTimes(1);
+    sacuvajSve();
+  });
+
+  it('slika slajda: veličina iz DIMENZIJE_SLIKE (medijUrl), SLIKA sloj s3 sa istim medijem', async () => {
+    await ucitaj(infoSlajd({ slika: { id: 'm1', naziv: 'Most.png', mime: 'image/png', velicina: 10 } }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(dimenzije).toHaveBeenCalledWith('api/public/mediji/m1');
+    const s3 = uPlatno()[0][1].platno!.slojevi.find((x: { id: string }) => x.id === 's3') as { tip: string; medijId: string };
+    expect(s3).toMatchObject({ tip: 'SLIKA', medijId: 'm1' });
+    sacuvajSve();
+  });
+
+  it('posle pretvaranja: editor platna umesto INFO forme, nova instanca forme (track kljuc:tip)', async () => {
+    await ucitaj(infoSlajd());
+    const prva = fixture.debugElement.query(By.directive(SlajdFormaComponent)).componentInstance;
+    expect(el().querySelector('app-platno-editor')).toBeNull();
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    await fixture.whenStable();
+    expect(el().querySelector('app-platno-editor')).not.toBeNull();
+    expect(fixture.debugElement.query(By.directive(SlajdFormaComponent)).componentInstance).not.toBe(prva);
+    expect(dugmePretvori()).toBeUndefined();
+    expect(el().querySelector('app-slajd-forma input')).toBeNull();
+    sacuvajSve();
+  });
+
+  it('dvostruki klik: drugi poziv ne pretvara ponovo (slajd više nije INFO), jedna poruka', async () => {
+    await ucitaj(infoSlajd());
+    const s = store.izabrani()!;
+    await Promise.all([strana.pretvoriUPlatno(s), strana.pretvoriUPlatno(s)]);
+    expect(uPlatno().length).toBe(1);
+    expect(uspeh).toHaveBeenCalledTimes(1);
+    sacuvajSve();
+  });
+
+  it('I1: dvostruki klik uz gubitke (veza) otvara tačno jedan dijalog; posle "Odustani" novi klik ga otvara ponovo', async () => {
+    await ucitaj(infoSlajd({ sadrzaj: 'Vidi [vezu](https://primer.rs).' }));
+    odgovorDijaloga = false;
+    const s = store.izabrani()!;
+    await Promise.all([strana.pretvoriUPlatno(s), strana.pretvoriUPlatno(s)]);
+    expect(dijalog).toHaveBeenCalledTimes(1);
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(dijalog).toHaveBeenCalledTimes(2);
+    expect(izmeni).not.toHaveBeenCalled();
+  });
+
+  it('"Poništi pretvaranje" čuva beleške otkucane posle pretvaranja i vraća sliku sa pravim nazivom (ne "Slika")', async () => {
+    const most = { id: 'm1', naziv: 'Most.png', mime: 'image/png', velicina: 10 };
+    await ucitaj(infoSlajd({ slika: most }));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    store.izmeniSlajd(11, { ...uPlatno()[0][1], beleske: 'Posle pretvaranja' });
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    const s = store.izabrani()!;
+    expect(s.tip).toBe('INFO');
+    expect(s.beleske).toBe('Posle pretvaranja');
+    expect(s.slika).toEqual(most);
+    expect(izmeni.mock.calls.at(-1)![1]).toMatchObject({ tip: 'INFO', slikaId: 'm1', beleske: 'Posle pretvaranja' });
+    sacuvajSve();
+  });
+
+  it('izuzetak u pretvaranju: poruka, ErrorHandler, slajd ostaje INFO, a sledeći klik radi', async () => {
+    await ucitaj(infoSlajd());
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
+    const pravi = strana.ucitajPretvaranje;
+    strana.ucitajPretvaranje = async () => ({ infoUPlatno: () => { throw new RangeError('stek'); } });
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(handleError).toHaveBeenCalledTimes(1);
+    expect(greska).toHaveBeenCalledWith('Pretvaranje nije uspelo. Osveži stranicu i pokušaj ponovo.');
+    expect(store.izabrani()!.tip).toBe('INFO');
+    strana.ucitajPretvaranje = pravi;
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(uPlatno().length).toBe(1);
+    sacuvajSve();
+  });
+
+  it('izmena dok se modul učitava: pretvara se poslednje stanje forme, i to vraća "Poništi"', async () => {
+    await ucitaj(infoSlajd());
+    const obecanje = strana.pretvoriUPlatno(store.izabrani()!);
+    store.izmeniSlajd(11, { ...info('Kasnije'), beleske: 'Moje beleške' });
+    await obecanje;
+    expect(tekstSloja(uPlatno()[0][1] as SlajdCmd, 's1')).toEqual(['Kasnije']);
+    izmeni.mockClear();
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    expect((izmeni.mock.calls[0][1] as SlajdCmd).naslov).toBe('Kasnije');
+    sacuvajSve();
+  });
+
+  it('dokument koji server ne bi primio (401 stavka -> 401 animacija): bez dijaloga i izmene, poruka sa razlogom, slajd ostaje INFO', async () => {
+    await ucitaj(infoSlajd({ sadrzaj: Array.from({ length: 401 }, (_, i) => `- s${i}`).join('\n') }));
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(dijalog).not.toHaveBeenCalled();
+    expect(izmeni).not.toHaveBeenCalled();
+    expect(uspeh).not.toHaveBeenCalled();
+    expect(greska).toHaveBeenCalledWith('Slajd ne može da se pretvori u platno: Slajd može imati najviše 400 animacija.');
+    expect(store.izabrani()!.tip).toBe('INFO');
+  });
+
+  it('modul pretvaranja se ne učita: poruka greške, slajd ostaje INFO', async () => {
+    await ucitaj(infoSlajd());
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    const handleError = vi.spyOn(TestBed.inject(ErrorHandler), 'handleError').mockImplementation(() => undefined);
+    strana.ucitajPretvaranje = () => Promise.reject(new Error('chunk'));
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    expect(greska).toHaveBeenCalledWith('Pretvaranje nije uspelo. Osveži stranicu i pokušaj ponovo.');
+    expect(handleError).toHaveBeenCalledTimes(1);
+    expect(izmeni).not.toHaveBeenCalled();
+  });
+
+  it('"Poništi" posle napuštanja editora ne dira uništen store i kaže zašto', async () => {
+    await ucitaj(infoSlajd());
+    await strana.pretvoriUPlatno(store.izabrani()!);
+    sacuvajSve();
+    const info = vi.spyOn(TestBed.inject(NotificationStore), 'info');
+    fixture.destroy();
+    izmeni.mockClear();
+    (uspeh.mock.calls[0][1] as { run: () => void }).run();
+    expect(izmeni).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith('Editor je zatvoren, pa pretvaranje više ne može da se poništi.');
   });
 });

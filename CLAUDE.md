@@ -218,15 +218,15 @@ over STOMP; teacher commands are REST.
   incomplete `\frac{1}{`, which MathLive draws with an empty box, gets **no** warning (use `\nepostoji{x}` as the invalid
   example in specs and fakes). A failed module load is remembered per form instance (no new `import()` or `console.warn` on
   every pause). **Budgets** (`e2e/lenji-formule.spec.ts`, build only, annotations `velicina`): the student page's own closure
-  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 615 B on 2026-10-15, after the
-  fix wave of the final review; 113 568 B after F2 fix 3) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
+  (file with `NIZ_STUDENTA` minus the initial closure) <= `OSNOVA_STUDENTA` 108 218 + 8 000 B (114 790 B after 5c, whose lazy conversion
+  chunk adds one export to the `marked` chunk shared with the phone; 114 615 B after the fix wave of the final review 5a) and without `ML__latex`, editor strings, `tabelaZaglavlje`, `Carlito`
   or `--uz-formula-k` (only in `mera-formule`: the phone has no measuring code; ~2.4 kB, below the reserve, so the byte limit
   alone would not catch it); `mathlive/ssr` only dynamically imported, outside the
   initial and student closure, own closure <= measured + 5 % (348 195 B -> 365 604 B, never above 380 000) and <= 105 000 B
   gzip (102 932); `tekst-formule*.ts` never import `mathlive` nor contain `ML__latex`. Network of one formula on the phone
   (`uzivo-javno.spec.ts`, annotation `mreza-formule`; JS, CSS and woff2 after the question, app fonts from `media/` not
   counted): 404 112 B, limit measured + 10 % and never above 450 000 B; no `KaTeX_AMS*`/`KaTeX_Size*`, nothing off-origin.
-  The editor page file is 211 166 B after 5a (<= 215 000; the form's formula check, ~1-1.4 kB, is the first candidate for a
+  The editor page file stays <= 215 000 B (current value: `velicina` annotation of `e2e/lenji-editor.spec.ts`; the form's formula check, ~1-1.4 kB, is the first candidate for a
   lazy chunk if 5b-5e need room). **Known limitations:** `aria-label` is raw LaTeX (no spoken form); `\color{black}` (the
   sanitizer allows `#hex` colours) is unreadable on a **dark presentation theme** (TAMNA, PONOĆ: `rezim-noc` on the slide) on
   projector, console and editor preview; the app's night mode does not touch it (those views are always `rezim-dan uz-dan`); the
@@ -315,7 +315,7 @@ over STOMP; teacher commands are REST.
   samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
 - **Slide editor, part 4a (phase 4: layers, shapes, images, properties, undo):** `editor-platna/` is the canvas editor
   of a PLATNO slide. The editor page renders it only inside `@defer (on immediate)` (one instance per slide, `@for ... track
-  kljuc`), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
+  kljuc` (since 5c `kljuc:tip`)), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
   `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
   (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
@@ -544,6 +544,36 @@ over STOMP; teacher commands are REST.
   "5b": vector from exactly one GET, second stroke's delay = first's delay + duration; 500 -> image and no second request within
   the pause, waited on the 500 response itself (the image is also shown while the request runs); after the pause the request
   repeats by itself, with no new snapshot (`page.clock.fastForward`), and the vector appears; editor without any GET).
+- **Convert to canvas (phase 5c; backend unchanged).** The INFO form has "Pretvori u platno" (`SlajdFormaComponent.pretvori`)
+  and the page's `pretvoriUPlatno` turns the slide into PLATNO with **one** `izmeniSlajd` (`PUT` after 800 ms or Ctrl+S). The
+  conversion is the pure function `data-access/pretvori-u-platno.ts` (`infoUPlatno`, plan decisions 20-21: `marked` lexer plus the
+  phase 4 factories), loaded only through a dynamic `import()` on click (its own lazy chunk, 7 173 B / 3 288 B gzip on 2026-10-15, including the loss texts
+  `OPISI_GUBITAKA`; the page file did not grow, `platno-novo` moved into a chunk shared by both; `lenji-editor.spec.ts` checks
+  that the chunk is only imported dynamically and is outside the initial and page closures). Title -> TEXT `s1` (40 pt bold like the INFO title, theme title font and colour, same scale rule as the body), Markdown -> TEXT `s2` (lists
+  with levels, markers in the theme's first accent like `li::marker`, numbering from `start` clamped to the server's 1-9999; a
+  numbered list gets a hanging indent from its widest number (`visecaZaBroj`: 36 for one digit, 54 for two) instead of the editor's
+  18, otherwise the number touches the text; bullets keep the phase 4 rule `18 + 36 * level` / -18; bold, italic, strike, code in Cousine, headings, line breaks; `okvir.skala` 0.25-1 for long
+  text), image -> SLIKA `s3` (right column of 320 next to text, otherwise the whole area, contain; natural size through the token
+  `ui/dimenzije-slike.ts` `DIMENZIJE_SLIKE`, waited for 3 s at most, 1600 x 900 when it cannot be measured), notes stay, `postepeno` -> one KLIK FADE per
+  top-level list item (so the step count equals the INFO slide's), `$` stays text (INFO reads no formulas). **Lost** (`Gubitak`,
+  texts `OPISI_GUBITAKA`): link addresses, images inside the text, tables (rows with tabs), horizontal rules, quotes (indented
+  italic), and very long text (letters shrunk). Colours and fonts are resolved at conversion (phase 4 factories), so a later theme
+  change no longer recolours the slide (an INFO slide follows the theme); the full list of known limitations is in the PR of 5c. **`ConfirmDialog` only when something is lost** (list of losses); a document
+  `greskePlatna` (= `proveriKaoServer`) would reject (e.g. more than 400 list items with "Otkrivaj stavke") is not applied:
+  a message with the server's reason, the INFO slide stays; an exception (or a chunk that does not load) goes to `ErrorHandler`
+  with a message. After every conversion the 6 s snackbar "Slajd je pretvoren u platno." (group `uzivo-pretvori`) has
+  **"Poništi pretvaranje"** (not "Poništi", which is the canvas toolbar's undo): `isprazni()` first (an open text session or
+  gesture of the canvas editor goes into the document), then a second `izmeniSlajd` with the INFO command from the moment of
+  conversion (title, text, image, `postepeno`, unsaved form edits) plus the notes as they are now; the image keeps its real name
+  in the local view (`izmeniSlajd(id, cmd, slika)`). Canvas edits made in those 6 s are lost by design. One conversion per slide
+  at a time (`pretvaranja`, from the click to confirm, cancel or error), so a double click never opens a second dialog; after the
+  chunk wait the handler reads the slide again from the store (edits typed meanwhile, a draft that got its real id) and does
+  nothing if it is no longer INFO or the editor was left; "Poništi pretvaranje" after leaving the editor only says that it is too
+  late (the store is destroyed and no longer saves). Focus never falls to `body`: after the conversion it goes to the selected
+  slide in the list (as after the PPTX import), after undo to "Pretvori u platno" of the new form (only while that slide is
+  still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip`, so a type change builds a new form and canvas
+  editor (the form builds its controls once). E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
+  Odustani/Pretvori, focus after both, exact `PUT` counts), form and dialog in `pristupacnost.spec.ts`.
 - **The canvas renderer intentionally follows PowerPoint** (calibrated in F19 against PowerPoint's PDF export; measured on
   Linux Chromium), not CSS defaults. A future slide editor must not "fix" these back: `ui/platno-metrika.ts` (`METRIKA`, the
   only place for these values) has no space-before on the first paragraph of a text box (`razmakPrePrvogPasusa: false`) and

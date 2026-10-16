@@ -87,6 +87,29 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page), `axe: forma pitanja sa upozorenjem (${rezim})`).toEqual([]);
     });
 
+    // 5c: forma INFO slajda sa dugmetom "Pretvori u platno" i potvrda pretvaranja uz gubitke (veza)
+    test('/prezentacije/5 (forma INFO sa "Pretvori u platno" i dijalog potvrde): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const pretvori = page.getByRole('button', { name: 'Pretvori u platno' });
+      await expect(pretvori).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma INFO sa dugmetom (${rezim})`).toEqual([]);
+
+      await page.getByRole('textbox', { name: 'Tekst (Markdown)' }).fill('Vidi [vezu](https://primer.rs).');
+      await expect(pretvori).toBeEnabled();
+      await pretvori.click();
+      const dijalog = page.getByRole('alertdialog', { name: 'Pretvoriti slajd u platno?' });
+      await expect(dijalog).toContainText('Veze postaju običan tekst');
+      // fokus na potvrdi postavlja CDK posle animacije otvaranja (ConfirmDialog, autoFocus '[data-potvrdi]')
+      await expect(dijalog.getByRole('button', { name: 'Pretvori' })).toBeFocused();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: potvrda pretvaranja (${rezim})`).toEqual([]);
+      const odustani = dijalog.getByRole('button', { name: 'Odustani' });
+      await expect(odustani).toBeEnabled();
+      await odustani.click();
+      await expect(dijalog).toHaveCount(0);
+    });
+
     test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {
       await nastavnickiBroker(page, mock);
       await page.goto('izvodjenja/7/konzola');

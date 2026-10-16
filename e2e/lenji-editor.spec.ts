@@ -26,6 +26,8 @@ const BUDZET_DIJALOG_FORMULE = 900_000;
 const NIZ_MATH_FIELD = 'math-field';
 /** Niz koji postoji samo u šablonu stranice editora prezentacije (zaglavlje). */
 const NIZ_STRANICE = 'uz-ed-zaglavlje';
+/** Niz koji ima samo modul pretvaranja INFO -> PLATNO (`OPISI_GUBITAKA.VEZE`, 5c). */
+const NIZ_PRETVARANJA = 'Veze postaju običan tekst';
 
 /** Izmerena vrednost ide u izveštaj testa (i u opis PR-a). */
 function zapisi(opis: string, bajtova: number, gzip?: number): void {
@@ -59,6 +61,18 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     zapisi('fajl stranice editora', zbir([stranica]));
     expect(zbir([stranica])).toBeLessThanOrEqual(BUDZET_STRANICA);
     expect(nizoviEditora(tekst(stranica))).toEqual([]);
+  });
+
+  test('pretvaranje u platno (5c): samo dinamički uvoz iz stranice, van početnog zatvorenja i zatvorenja stranice', () => {
+    const izvor = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'data-access', 'pretvori-u-platno.ts'), 'utf8');
+    expect(izvor).toContain(`VEZE: '${NIZ_PRETVARANJA}`);
+    const pretvaranje = fajlSa(NIZ_PRETVARANJA, js);
+    const stranica = fajlSa(NIZ_STRANICE, js);
+    expect(js.filter(f => tekst(f).includes(NIZ_PRETVARANJA)), 'niz pretvaranja samo u jednom chunk-u').toEqual([pretvaranje]);
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(pretvaranje)), `${pretvaranje}: statički uvoz`).toEqual([]);
+    expect(dinamickiUvozi(tekst(stranica)), 'stranica ga uvozi dinamički').toContain(pretvaranje);
+    expect(new Set([...pocetno, ...zatvorenje([stranica])]).has(pretvaranje)).toBe(false);
+    zapisi('fajl chunk-a pretvaranja u platno', zbir([pretvaranje]));
   });
 
   test('editor platna: samo dinamički uvoz, sopstveno zatvorenje (sa ProseMirror-om) staje u budžet 4b', () => {
