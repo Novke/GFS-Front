@@ -180,6 +180,39 @@ describe('BankaStore', () => {
       expect(store.grupa()).toBeNull();
       expect(store.izabranaGrupaId()).toBeNull();
     });
+
+    it('izmena koja se završi dok se novo stablo prvi put učitava ne ostavlja status "loading" (trka sa ucitaj)', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      const odobrenje = kasni<VarijantaDetails>();
+      api.odobri.mockImplementationOnce(() => odobrenje);
+      store.odobri(11);
+      api.stablo.mockImplementationOnce(() => kasni<GrupaCvor[]>());
+      store.ucitaj(8, 'TEST', 40);
+      api.stablo.mockImplementation(() => of([cvor(41, 'Druga'), cvor(40, 'Test grupa')]));
+
+      // osvežavanje posle izmene prekida prvo učitavanje novog stabla, pa mora samo da ga završi (i izbor iz `ucitaj`)
+      odobrenje.stigni({} as VarijantaDetails);
+
+      expect(api.stablo).toHaveBeenLastCalledWith(8, 'TEST', { tiho: true });
+      expect(store.status()).toBe('loaded');
+      expect(store.stablo().map(c => c.id)).toEqual([41, 40]);
+      expect(store.izabranaGrupaId()).toBe(40);
+    });
+
+    it('neuspelo osvežavanje usred prvog učitavanja daje status "error"', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      const odobrenje = kasni<VarijantaDetails>();
+      api.odobri.mockImplementationOnce(() => odobrenje);
+      store.odobri(11);
+      api.stablo.mockImplementationOnce(() => kasni<GrupaCvor[]>());
+      store.ucitaj(8, 'TEST');
+      api.stablo.mockImplementation(() => greskaServera(404, 'Predmet nije pronađen.'));
+
+      odobrenje.stigni({} as VarijantaDetails);
+
+      expect(store.status()).toBe('error');
+      expect(store.greska()).toBe('Predmet nije pronađen.');
+    });
   });
 
   describe('izaberi', () => {
@@ -230,6 +263,28 @@ describe('BankaStore', () => {
       expect(store.grupa()).toBeNull();
       expect(store.varijante()).toEqual([]);
       expect(store.status()).toBe('loaded');
+      expect(store.greskaGrupe()).toBe('Grupa zadataka ne postoji.');
+    });
+
+    it('greskaGrupe se briše sa novim izborom i sa uspelim ponovnim učitavanjem', () => {
+      expect(store.greskaGrupe()).toBeNull();
+      api.varijante.mockImplementationOnce(() => greskaServera(500, 'Interna greška.'));
+      store.izaberi(3);
+      expect(store.greskaGrupe()).toBe('Sistemska greška. Pokušaj ponovo.');
+
+      const kasna = kasni<GrupaDetails>();
+      api.grupa.mockImplementationOnce(() => kasna);
+      store.izaberi(2);
+      expect(store.greskaGrupe()).toBeNull();
+      kasna.stigni(detalji(2));
+      expect(store.grupa()?.id).toBe(2);
+
+      api.varijante.mockImplementationOnce(() => greskaServera(500, 'Interna greška.'));
+      store.osveziStablo();
+      expect(store.greskaGrupe()).not.toBeNull();
+      store.osveziStablo();
+      expect(store.greskaGrupe()).toBeNull();
+      expect(store.varijante()).toEqual(VARIJANTE_2);
     });
   });
 
@@ -357,6 +412,43 @@ describe('BankaStore', () => {
       expect(store.izabranaGrupaId()).toBe(2);
     });
 
+    it.each([
+      ['dupliraj', 'dupliraj', 11],
+      ['obrisiVarijantu', 'obrisiVarijantu', 13],
+    ] as const)('%s: zauzeto dok zahtev traje (dvostruki klik ne pravi dva zahteva), posle uspeha i greške slobodno', (metoda, apiMetoda, id) => {
+      expect(store.zauzeto()).toBe(false);
+      const odgovor = kasni<unknown>();
+      api[apiMetoda].mockImplementationOnce(() => odgovor);
+      store[metoda](id);
+      expect(store.zauzeto()).toBe(true);
+      odgovor.stigni({});
+      expect(store.zauzeto()).toBe(false);
+
+      api[apiMetoda].mockImplementationOnce(() => greskaServera(409, 'Korišćeno na času; arhiviraj.'));
+      store[metoda](id);
+      expect(store.zauzeto()).toBe(false);
+    });
+
+    it('odobri, arhiviraj i vratiUNacrt (idempotentne) ne zauzimaju stranicu', () => {
+      const odgovor = kasni<VarijantaDetails>();
+      api.odobri.mockImplementationOnce(() => odgovor);
+      store.odobri(11);
+      expect(store.zauzeto()).toBe(false);
+      odgovor.stigni({} as VarijantaDetails);
+    });
+
+    it('dve zauzimajuće izmene: slobodno tek kad se obe završe', () => {
+      const prva = kasni<VarijantaDetails>();
+      const druga = kasni<VarijantaDetails>();
+      api.dupliraj.mockImplementationOnce(() => prva).mockImplementationOnce(() => druga);
+      store.dupliraj(11);
+      store.dupliraj(12);
+      prva.stigni({} as VarijantaDetails);
+      expect(store.zauzeto()).toBe(true);
+      druga.stigni({} as VarijantaDetails);
+      expect(store.zauzeto()).toBe(false);
+    });
+
     it('server greška 5xx prikazuje opštu poruku, ne detalje servera', () => {
       api.dupliraj.mockImplementation(() => greskaServera(503, 'Render servis nije dostupan.'));
       store.dupliraj(11);
@@ -397,6 +489,39 @@ describe('BankaStore', () => {
       expect(api.grupa).toHaveBeenCalledTimes(1);
       expect(api.grupa.mock.invocationCallOrder[0]).toBeGreaterThan(api.izmeniGrupu.mock.invocationCallOrder[0]);
       expect(api.stablo).toHaveBeenCalledTimes(1);
+    });
+
+    it('preimenuj sa težinom šalje novu težinu (null briše), bez nje ostaje učitana', () => {
+      api.izmeniGrupu.mockImplementation(() => of(detalji(2)));
+      store.preimenuj(2, '2 → 10', 4);
+      expect(api.izmeniGrupu).toHaveBeenLastCalledWith(
+        2, { naziv: '2 → 10', tezina: 4, opis: 'Opis grupe', uputstvo: 'Uputstvo za Claude-a', polja: null }, { tiho: true });
+      store.preimenuj(2, '2 → 10', null);
+      expect(api.izmeniGrupu.mock.lastCall?.[1].tezina).toBeNull();
+    });
+
+    it.each([
+      ['kreirajGrupu', 'kreirajGrupu'],
+      ['obrisiGrupu', 'obrisiGrupu'],
+    ] as const)('%s: zauzeto dok zahtev traje', (metoda, apiMetoda) => {
+      const odgovor = kasni<unknown>();
+      api[apiMetoda].mockImplementationOnce(() => odgovor);
+      if (metoda === 'kreirajGrupu') {
+        store.kreirajGrupu({ predmetId: 7, namena: 'PREDAVANJE', roditeljId: null, naziv: 'Nova', opis: null, tezina: null, uputstvo: null, polja: null });
+      } else {
+        store.obrisiGrupu(4);
+      }
+      expect(store.zauzeto()).toBe(true);
+      odgovor.stigni(metoda === 'kreirajGrupu' ? detalji(50) : undefined);
+      expect(store.zauzeto()).toBe(false);
+    });
+
+    it('preimenuj i premesti ne zauzimaju stranicu', () => {
+      api.izmeniGrupu.mockImplementationOnce(() => kasni<GrupaDetails>());
+      store.preimenuj(2, 'Novo ime');
+      api.premesti.mockImplementationOnce(() => kasni<GrupaDetails>());
+      store.premesti(3, { roditeljId: null, rb: null });
+      expect(store.zauzeto()).toBe(false);
     });
 
     it('preimenuj druge grupe prvo čita njene podatke', () => {

@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { catchError, EMPTY, forkJoin, map, mergeMap, Observable, of, pipe, switchMap, tap } from 'rxjs';
+import { catchError, EMPTY, finalize, forkJoin, map, mergeMap, Observable, of, pipe, switchMap, tap } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -25,6 +25,10 @@ interface BankaState {
   /** Sve varijante izabrane grupe; `filterStatusa` se primenjuje u `filtriraneVarijante`. */
   varijante: VarijantaInfo[];
   filterStatusa: FilterStatusa;
+  /** Razlog neuspelog učitavanja izabrane grupe (stablo ostaje); briše se sa novim izborom i uspelim učitavanjem. */
+  greskaGrupe: string | null;
+  /** Broj neidempotentnih izmena u letu (kreiranje, dupliranje, brisanje): dok nije 0, njihova dugmad su onemogućena. */
+  _zauzetih: number;
 }
 
 /** Brojači jednog čvora stabla (za unutrašnji čvor zbir podstabla). */
@@ -55,7 +59,8 @@ interface ZahtevStabla {
  * Stranica banke (`/banka`): stablo grupa jednog predmeta i namene, izabrana grupa sa varijantama i izmene grupa i varijanti.
  * Feature store: provajduje ga rutirana stranica. Ne zna ništa o prikazu. Posle svake izmene ponovo učitava stablo i izabranu
  * grupu sa varijantama (brojači stabla i kartice ostaju tačni), uz isti izbor i isti filter statusa. Greške idu u
- * `NotificationStore` (razlog servera, a 5xx opšta poruka); uz to prvo učitavanje (`ucitaj`) postavlja status `error`.
+ * `NotificationStore` (razlog servera, a 5xx opšta poruka); uz to prvo učitavanje (`ucitaj`) postavlja status `error`, a
+ * neuspelo učitavanje izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
  */
 export const BankaStore = signalStore(
   withState<BankaState>({
@@ -66,13 +71,17 @@ export const BankaStore = signalStore(
     grupa: null,
     varijante: [],
     filterStatusa: 'SVE',
+    greskaGrupe: null,
+    _zauzetih: 0,
   }),
   withRequestStatus(),
   withProps(() => ({
     _api: inject(BankaApi),
     _obavestenja: inject(NotificationStore),
   })),
-  withComputed(({ stablo, izabranaGrupaId, grupa, varijante, filterStatusa }) => ({
+  withComputed(({ stablo, izabranaGrupaId, grupa, varijante, filterStatusa, _zauzetih }) => ({
+    /** Kreiranje, dupliranje ili brisanje je u toku (dvostruki klik ne sme da napravi dva zahteva). */
+    zauzeto: computed(() => _zauzetih() > 0),
     /** Od korena do izabrane grupe (iz stabla, pa je odmah tačna posle izbora i posle preimenovanja). */
     putanja: computed<GrupaPutanja[]>(() => {
       const izStabla = putanjaDo(stablo(), izabranaGrupaId());
@@ -97,9 +106,9 @@ export const BankaStore = signalStore(
             return EMPTY;
           }
           return forkJoin({ grupa: store._api.grupa(id, TIHO), varijante: store._api.varijante(id, undefined, TIHO) }).pipe(
-            tap(({ grupa, varijante }) => patchState(store, { grupa, varijante })),
+            tap(({ grupa, varijante }) => patchState(store, { grupa, varijante, greskaGrupe: null })),
             catchError((e: unknown) => {
-              patchState(store, { grupa: null, varijante: [] });
+              patchState(store, { grupa: null, varijante: [], greskaGrupe: razlog(e) });
               prijavi(e);
               return EMPTY;
             }),
@@ -111,10 +120,13 @@ export const BankaStore = signalStore(
     /** Menja izbor (brišući tuđu grupu i varijante do odgovora) i učitava grupu; isti izbor samo osvežava. */
     const postaviIzbor = (id: number | null): void => {
       if (id !== store.izabranaGrupaId()) {
-        patchState(store, { izabranaGrupaId: id, grupa: null, varijante: [] });
+        patchState(store, { izabranaGrupaId: id, grupa: null, varijante: [], greskaGrupe: null });
       }
       ucitajGrupu(id);
     };
+
+    /** Izbor koji je tražio poslednji `ucitaj`; važi dok prvo stablo ne stigne (i kad osvežavanje prekine to učitavanje). */
+    let trazenaGrupa: number | null = null;
 
     const ucitajStablo = rxMethod<ZahtevStabla>(
       pipe(
@@ -136,29 +148,43 @@ export const BankaStore = signalStore(
       ),
     );
 
-    /** Ponovo učitava stablo (bez ekrana učitavanja) i grupu: izbor je `grupaId`, a ako ga nema u stablu, prvi list. */
+    /**
+     * Ponovo učitava stablo (bez ekrana učitavanja) i grupu: izbor je `grupaId`, a ako ga nema u stablu, prvi list. Ako prvo
+     * učitavanje još traje (izmena prethodnog predmeta se završila posle `ucitaj`), ovaj zahtev ga prekida, pa ga i završava:
+     * postavlja status i bira grupu koju je tražio `ucitaj`.
+     */
     const osvezi = (grupaId: number | null): void => {
       const predmetId = store.predmetId();
       if (predmetId !== null) {
-        ucitajStablo({ predmetId, namena: store.namena(), grupaId, prvo: false });
+        const prvo = store.status() === 'loading';
+        ucitajStablo({ predmetId, namena: store.namena(), grupaId: prvo ? (grupaId ?? trazenaGrupa) : grupaId, prvo });
       }
     };
 
     /**
      * Izmena na serveru: emitovana vrednost je grupa koja se bira posle (`undefined` = ostaje izabrana). Izmene idu paralelno
-     * (server ih serijalizuje), a ponovno učitavanje posle njih prekida prethodno, pa važi poslednje.
+     * (server ih serijalizuje), a ponovno učitavanje posle njih prekida prethodno, pa važi poslednje. `zauzima`: neidempotentna
+     * izmena (ponovljen zahtev pravi duplikat ili 404), `zauzeto` je `true` dok njen zahtev traje.
      */
-    const izmena = rxMethod<{ poziv: Observable<number | null | undefined> }>(
+    const izmena = rxMethod<{ poziv: Observable<number | null | undefined>; zauzima?: boolean }>(
       pipe(
-        mergeMap(({ poziv }) =>
-          poziv.pipe(
+        mergeMap(({ poziv, zauzima }) => {
+          if (zauzima) {
+            patchState(store, s => ({ _zauzetih: s._zauzetih + 1 }));
+          }
+          return poziv.pipe(
             tap(izbor => osvezi(izbor === undefined ? store.izabranaGrupaId() : izbor)),
             catchError((e: unknown) => {
               prijavi(e);
               return EMPTY;
             }),
-          ),
-        ),
+            finalize(() => {
+              if (zauzima) {
+                patchState(store, s => ({ _zauzetih: s._zauzetih - 1 }));
+              }
+            }),
+          );
+        }),
       ),
     );
     const bezIzbora = map((): undefined => undefined);
@@ -169,7 +195,8 @@ export const BankaStore = signalStore(
        * stablo, izbor i varijante se brišu odmah, pa se nikad ne vidi tuđe.
        */
       ucitaj(predmetId: number, namena: Namena, grupaId: number | null = null): void {
-        patchState(store, { predmetId, namena, stablo: [], izabranaGrupaId: null, grupa: null, varijante: [] }, setLoading());
+        patchState(store, { predmetId, namena, stablo: [], izabranaGrupaId: null, grupa: null, varijante: [], greskaGrupe: null }, setLoading());
+        trazenaGrupa = grupaId;
         ucitajGrupu(null);
         ucitajStablo({ predmetId, namena, grupaId, prvo: true });
       },
@@ -186,17 +213,18 @@ export const BankaStore = signalStore(
 
       /** Nova grupa (koren ili podgrupa); posle uspeha je izabrana. */
       kreirajGrupu(cmd: GrupaCmd): void {
-        izmena({ poziv: store._api.kreirajGrupu(cmd, TIHO).pipe(map(nova => nova.id)) });
+        izmena({ poziv: store._api.kreirajGrupu(cmd, TIHO).pipe(map(nova => nova.id)), zauzima: true });
       },
       /**
-       * Preimenuje grupu. `PUT` je puna zamena, pa nosi postojeći opis, težinu i uputstvo (iz učitane grupe, a za drugu grupu
-       * iz njenog čitanja) i `polja: null`, što ostavlja šemu i odgovore varijanti.
+       * Preimenuje grupu (i menja težinu kad je data; `null` je briše). `PUT` je puna zamena, pa nosi postojeći opis, težinu i
+       * uputstvo (iz učitane grupe, a za drugu grupu iz njenog čitanja) i `polja: null`, što ostavlja šemu i odgovore varijanti.
        */
-      preimenuj(id: number, naziv: string): void {
+      preimenuj(id: number, naziv: string, tezina?: number | null): void {
         const trenutna = store.grupa();
         const izvor = trenutna?.id === id ? of(trenutna) : store._api.grupa(id, TIHO);
         const poziv = izvor.pipe(
-          switchMap(g => store._api.izmeniGrupu(id, { naziv: naziv.trim(), tezina: g.tezina, opis: g.opis, uputstvo: g.uputstvo, polja: null }, TIHO)),
+          switchMap(g => store._api.izmeniGrupu(
+            id, { naziv: naziv.trim(), tezina: tezina === undefined ? g.tezina : tezina, opis: g.opis, uputstvo: g.uputstvo, polja: null }, TIHO)),
           bezIzbora,
         );
         izmena({ poziv });
@@ -205,7 +233,7 @@ export const BankaStore = signalStore(
       obrisiGrupu(id: number): void {
         const bila = store.izabranaGrupaId() === id;
         const roditelj = putanjaDo(store.stablo(), id).at(-2)?.id ?? null;
-        izmena({ poziv: store._api.obrisiGrupu(id, TIHO).pipe(map(() => (bila ? roditelj : undefined))) });
+        izmena({ poziv: store._api.obrisiGrupu(id, TIHO).pipe(map(() => (bila ? roditelj : undefined))), zauzima: true });
       },
       premesti(id: number, cmd: PremestiCmd): void {
         izmena({ poziv: store._api.premesti(id, cmd, TIHO).pipe(bezIzbora) });
@@ -221,10 +249,10 @@ export const BankaStore = signalStore(
         izmena({ poziv: store._api.vratiUNacrt(id, TIHO).pipe(bezIzbora) });
       },
       obrisiVarijantu(id: number): void {
-        izmena({ poziv: store._api.obrisiVarijantu(id, TIHO).pipe(bezIzbora) });
+        izmena({ poziv: store._api.obrisiVarijantu(id, TIHO).pipe(bezIzbora), zauzima: true });
       },
       dupliraj(id: number): void {
-        izmena({ poziv: store._api.dupliraj(id, TIHO).pipe(bezIzbora) });
+        izmena({ poziv: store._api.dupliraj(id, TIHO).pipe(bezIzbora), zauzima: true });
       },
     };
   }),
