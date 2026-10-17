@@ -21,6 +21,9 @@ import { GrupaDetaljPage } from './grupa-detalj.page';
 class Druga {}
 
 const POLJE_A: Polje = { ...novoPolje('BROJ', []), kljuc: 'a', oznaka: 'Vrednost u dekadnom sistemu' };
+const POLJE_B: Polje = {
+  ...novoPolje('JEDAN_TACAN', []), kljuc: 'b', oznaka: 'Broj cifara', opcije: [{ id: 1, tekst: '4' }, { id: 2, tekst: '8' }, { id: 3, tekst: '12' }],
+};
 
 /** List "2 → 10" (2) u "Konverzije brojeva" (1): težina 2, polje `a`, tri varijante (jedna aktivna). */
 function list(izmena: Partial<GrupaDetails> = {}): GrupaDetails {
@@ -175,6 +178,47 @@ describe('GrupaDetaljPage', () => {
     await klik(sacuvaj());
     expect(telo().polja).toEqual([POLJE_A, { ...novoPolje('BROJ', [POLJE_A]), oznaka: 'Broj jedinica' }]);
     expect(telo()).toMatchObject({ naziv: '2 → 10', tezina: 2 });
+  });
+
+  it('izmena samo u šemi je nesačuvana izmena; izmena pa vraćanje nije, i uz drugu izmenu šalje "polja": null', async () => {
+    const e = await otvori('/banka/grupe/2');
+    const oznaka = '[data-polje="a"] input[data-oznaka]';
+    await unesi(oznaka, 'Dekadno');
+    expect(stranica().imaNesacuvanihIzmena()).toBe(true);
+    expect(onemoguceno(sacuvaj())).toBe(false);
+
+    await unesi(oznaka, POLJE_A.oznaka);
+    expect(stranica().imaNesacuvanihIzmena()).toBe(false);
+    expect(onemoguceno(sacuvaj())).toBe(true);
+    await unesi('input[data-naziv]', 'Novo');
+    await klik(sacuvaj());
+    expect(telo().polja).toBeNull();
+    expect(e.querySelector('[data-posledice]')!.textContent!.trim()).toBe('');
+  });
+
+  it('samo preuređenje polja šalje ceo niz novim redom', async () => {
+    api.grupa.mockReturnValue(of(list({ polja: [POLJE_A, POLJE_B] })));
+    const e = await otvori('/banka/grupe/2');
+    await klik(e.querySelector<HTMLElement>('[data-polje="b"] [data-gore]')!);
+    expect(stranica().imaNesacuvanihIzmena()).toBe(true);
+    await klik(sacuvaj());
+    expect(telo().polja.map((p: Polje) => p.kljuc)).toEqual(['b', 'a']);
+    expect(telo().polja).toEqual([POLJE_B, POLJE_A]);
+  });
+
+  it('obrisana sačuvana opcija pa nova: nov id (ne id obrisane) i upozorenje o obrisanoj opciji', async () => {
+    api.grupa.mockReturnValue(of(list({ polja: [POLJE_A, POLJE_B] })));
+    const e = await otvori('/banka/grupe/2');
+    await klik(e.querySelectorAll<HTMLElement>('[data-polje="b"] [data-obrisi-opciju]')[2]);
+    await klik(e.querySelector<HTMLElement>('[data-polje="b"] [data-dodaj-opciju]')!);
+    const nova = [...e.querySelectorAll<HTMLInputElement>('[data-polje="b"] input[data-opcija]')][2];
+    nova.value = '16';
+    nova.dispatchEvent(new Event('input', { bubbles: true }));
+    await stabilno();
+    expect(e.querySelector('[data-posledice]')!.textContent).toContain(
+      'Tačni odgovori koji biraju obrisanu opciju se brišu iz varijanti; takva aktivna varijanta postaje nacrt.');
+    await klik(sacuvaj());
+    expect(telo().polja[1].opcije).toEqual([{ id: 1, tekst: '4' }, { id: 2, tekst: '8' }, { id: 4, tekst: '16' }]);
   });
 
   it('brisanje polja: upozorenje o brisanju odgovora; "polja": [] briše šemu; Odbaci vraća sačuvano', async () => {

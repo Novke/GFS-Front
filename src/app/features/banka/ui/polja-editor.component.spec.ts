@@ -141,6 +141,24 @@ describe('PoljaEditorComponent', () => {
     expect(dodaj.getAttribute('aria-disabled') === 'true' || dodaj.disabled).toBe(true);
   });
 
+  it('id nove opcije je iznad svakog id-ja sačuvanog polja: obrisana sačuvana opcija se ne vraća pod istim id-jem', async () => {
+    const sacuvano: Polje = { ...izbor('a'), opcije: [{ id: 1, tekst: '4' }, { id: 2, tekst: '8' }, { id: 3, tekst: '12' }] };
+    const { h, red, klik } = await napravi({ polja: [sacuvano], sacuvana: [sacuvano] });
+    await klik(red('a').querySelectorAll<HTMLElement>('[data-obrisi-opciju]')[2]);
+    expect(h.polja()[0].opcije!.map(o => o.id)).toEqual([1, 2]);
+    await klik(red('a').querySelector<HTMLElement>('[data-dodaj-opciju]')!);
+    expect(h.polja()[0].opcije).toEqual([{ id: 1, tekst: '4' }, { id: 2, tekst: '8' }, { id: 4, tekst: '' }]);
+  });
+
+  it('tip tamo-nazad (izbor -> BROJ -> izbor) daje sveže id-jeve opcija, ne 1 i 2 sačuvanog polja', async () => {
+    const sacuvano: Polje = { ...izbor('a'), opcije: [{ id: 1, tekst: '4' }, { id: 2, tekst: '8' }, { id: 3, tekst: '12' }] };
+    const { h, izaberiTip } = await napravi({ polja: [sacuvano], sacuvana: [sacuvano] });
+    await izaberiTip('a', 'Broj');
+    expect(h.polja()[0].opcije).toBeNull();
+    await izaberiTip('a', 'Više tačnih');
+    expect(h.polja()[0].opcije).toEqual([{ id: 4, tekst: '' }, { id: 5, tekst: '' }]);
+  });
+
   it('TEKST: prekidači velikih slova i razmaka', async () => {
     const { h, red, izaberiTip, klik } = await napravi();
     await izaberiTip('a', 'Tekst');

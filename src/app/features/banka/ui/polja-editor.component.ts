@@ -6,7 +6,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 
-import { OdstupanjeTip, Polje, TipPolja } from '../data-access/banka.models';
+import { OdstupanjeTip, Polje, PoljeOpcija, TipPolja } from '../data-access/banka.models';
 import {
   imaOpcije, MAX_JEDINICA, MAX_OPCIJA, MAX_OZNAKA, MAX_POLJA, MAX_TEKST_OPCIJE, MIN_OPCIJA, novaOpcija, novoPolje, proveriPolja,
 } from '../data-access/polja';
@@ -47,7 +47,8 @@ export function prikazBroja(v: number | null): string {
  * roditelj je vraća kroz `polja`. Ispod liste je poruka prve prekršene provere (`proveriPolja`, iste poruke kao server).
  *
  * `tipZakljucan` (grupa ima aktivne varijante): tip polja iz `sacuvanaPolja` se ne menja (server bi odbio, 409); novo polje
- * bira tip slobodno. Novo polje nikad ne dobija ključ sačuvanog polja, ni obrisanog: server bi ga smatrao istim poljem.
+ * bira tip slobodno. Novo polje nikad ne dobija ključ sačuvanog polja, ni obrisanog: server bi ga smatrao istim poljem; iz
+ * istog razloga nova opcija nikad ne dobija id nijedne opcije sačuvanog polja (server poredi opcije po id-ju).
  * Dugmad koja mogu postati onemogućena dok imaju fokus (pomeranje na kraj, granice broja polja i opcija) su
  * `disabledInteractive`, pa rukovaoci proveravaju isti uslov.
  */
@@ -214,14 +215,21 @@ export class PoljaEditorComponent {
     this.promeni(i, { odstupanje: brojIzUnosa(tekst) });
   }
 
-  /** Nov tip: izbor (JEDAN_TACAN, VISE_TACNIH) zadržava postojeće opcije ili dobija dve prazne; ostali tipovi nemaju opcije. */
+  /**
+   * Nov tip: izbor (JEDAN_TACAN, VISE_TACNIH) zadržava postojeće opcije ili dobija dve prazne sa id-jevima iznad sačuvanih
+   * (`novaOpcija` preko `zauzeteOpcije`); ostali tipovi nemaju opcije.
+   */
   protected promeniTip(i: number, tip: TipPolja): void {
     const p = this.polja()[i];
     if (!p || p.tip === tip || this.zakljucan(p)) {
       return;
     }
-    const opcije = imaOpcije(tip) ? (p.opcije?.length ? p.opcije : novoPolje(tip, []).opcije) : null;
-    this.promeni(i, { tip, opcije });
+    let opcije = p.opcije?.length ? p.opcije : null;
+    if (imaOpcije(tip) && !opcije) {
+      const prva = novaOpcija(this.zauzeteOpcije(p));
+      opcije = [prva, novaOpcija([...this.zauzeteOpcije(p), prva])];
+    }
+    this.promeni(i, { tip, opcije: imaOpcije(tip) ? opcije : null });
   }
 
   protected dodajPolje(): void {
@@ -265,7 +273,7 @@ export class PoljaEditorComponent {
     if (!p || opcije.length >= MAX_OPCIJA) {
       return;
     }
-    this.promeni(i, { opcije: [...opcije, novaOpcija(opcije)] });
+    this.promeni(i, { opcije: [...opcije, novaOpcija(this.zauzeteOpcije(p))] });
     this.fokusiraj(`[data-polje="${p.kljuc}"] [data-opcija]`, opcije.length);
   }
 
@@ -277,6 +285,15 @@ export class PoljaEditorComponent {
     }
     this.promeni(i, { opcije: opcije.filter((_, k) => k !== j) });
     this.fokusiraj(`[data-polje="${p.kljuc}"] [data-opcija]`, Math.min(j, opcije.length - 2));
+  }
+
+  /**
+   * Id-jevi koje nova opcija polja ne sme da dobije: trenutne opcije i sve opcije sačuvanog polja sa istim ključem. Server
+   * poredi opcije po id-ju, pa bi nova opcija pod id-jem obrisane sačuvane preuzela tačne odgovore varijanti koji je biraju.
+   */
+  private zauzeteOpcije(p: Polje): PoljeOpcija[] {
+    const sacuvano = this.sacuvanaPolja().find(s => s.kljuc === p.kljuc);
+    return [...(p.opcije ?? []), ...(sacuvano?.opcije ?? [])];
   }
 
   private emituj(polja: Polje[]): void {

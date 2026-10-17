@@ -27,15 +27,13 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { PageHeader } from '../../../shared/ui/page-header';
 import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from '../data-access/banka.api';
-import { GrupaCmd, GrupaDetails, Polje, VarijantaInfo } from '../data-access/banka.models';
+import {
+  GrupaCmd, GrupaDetails, MAX_NAZIV_GRUPE, MAX_OPIS_GRUPE, MAX_UPUTSTVO_GRUPE, Polje, TEZINE, VarijantaInfo,
+} from '../data-access/banka.models';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
-import { MAX_NAZIV_GRUPE, TEZINE } from '../ui/grupa-dialog';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
 
-/** Najduži opis i uputstvo grupe (`GrupaZadatakaService.MAX_OPIS`, `BankaPP.MAX_UPUTSTVO`). */
-const MAX_OPIS = 5000;
-const MAX_UPUTSTVO = 5000;
 /** Greške stranica prikazuje sama (traka forme, panel, `NotificationStore`), pa globalni snackbar ne sme da ih udvostruči. */
 const TIHO = { tiho: true } as const;
 
@@ -238,8 +236,8 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
 
   protected readonly tezine = TEZINE;
   protected readonly maxNaziv = MAX_NAZIV_GRUPE;
-  protected readonly maxOpis = MAX_OPIS;
-  protected readonly maxUputstvo = MAX_UPUTSTVO;
+  protected readonly maxOpis = MAX_OPIS_GRUPE;
+  protected readonly maxUputstvo = MAX_UPUTSTVO_GRUPE;
 
   /** Poslednje stanje grupe sa servera (GET, posle čuvanja odgovor `PUT`-a): osnova za izmene, "Odbaci" i upozorenja. */
   protected readonly osnova = signal<GrupaDetails | null>(null);
@@ -259,8 +257,8 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   protected readonly forma = new FormGroup({
     naziv: new FormControl('', { nonNullable: true, validators: [Validators.required, neprazan, Validators.maxLength(MAX_NAZIV_GRUPE)] }),
     tezina: new FormControl<number | null>(null),
-    opis: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(MAX_OPIS)] }),
-    uputstvo: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(MAX_UPUTSTVO)] }),
+    opis: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(MAX_OPIS_GRUPE)] }),
+    uputstvo: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(MAX_UPUTSTVO_GRUPE)] }),
   });
   /**
    * Svaki događaj forme (vrednost, ispravnost, dodir) kao signal: forma nije signal, a OnPush šablon i `computed` treba da vide

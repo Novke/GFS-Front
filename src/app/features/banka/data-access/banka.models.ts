@@ -67,6 +67,13 @@ export interface OdgovorPolja {
 
 // ------------------------------------------------------------------------------------------------ grupe
 
+/** Granice grupe kao na serveru (`BankaPP.MAX_NAZIV_GRUPE`, `GrupaZadatakaService.MAX_OPIS`, `BankaPP.MAX_UPUTSTVO`). */
+export const MAX_NAZIV_GRUPE = 120;
+export const MAX_OPIS_GRUPE = 5000;
+export const MAX_UPUTSTVO_GRUPE = 5000;
+/** Težina lista (zajednička svim varijantama grupe). */
+export const TEZINE = [1, 2, 3, 4, 5] as const;
+
 /** Jedan korak putanje grupe (od korena do same grupe). */
 export interface GrupaPutanja {
   id: number;

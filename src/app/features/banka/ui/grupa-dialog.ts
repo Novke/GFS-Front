@@ -8,10 +8,8 @@ import { MatOption, MatSelect } from '@angular/material/select';
 import { Observable } from 'rxjs';
 
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
+import { MAX_NAZIV_GRUPE, TEZINE } from '../data-access/banka.models';
 
-/** Najduži naziv grupe (`BankaPP.MAX_NAZIV_GRUPE`). */
-export const MAX_NAZIV_GRUPE = 120;
-export const TEZINE = [1, 2, 3, 4, 5] as const;
 
 export interface GrupaDialogPodaci {
   naslov: string;
