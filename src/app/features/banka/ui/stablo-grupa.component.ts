@@ -1,13 +1,14 @@
 import { NgTemplateOutlet } from '@angular/common';
 import {
-  afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, Injector, input, output, signal, untracked,
+  afterNextRender, ChangeDetectionStrategy, Component, computed, DOCUMENT, effect, ElementRef, inject, Injector, input, output, signal,
+  untracked,
 } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuContent, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 
 import { sRecju } from '../../../shared/util/mnozina';
-import { GrupaCvor, putanjaDo } from '../data-access/banka.models';
+import { GrupaCvor, nadjiCvor, putanjaDo } from '../data-access/banka.models';
 
 /** Najveća dubina stabla (koren = 1), kao `GrupaZadatakaService.MAX_DUBINA`. */
 export const MAX_DUBINA_STABLA = 6;
@@ -121,6 +122,7 @@ export class StabloGrupaComponent {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
 
   protected readonly mozePodgrupu = mozePodgrupu;
   /** Stavka koja je poslednja imala fokus (Tab se vraća na nju). */
@@ -129,6 +131,8 @@ export class StabloGrupaComponent {
   private readonly skupljeni = signal<ReadonlySet<number>>(new Set());
   /** "Preimenuj" iz menija: polje se otvara tek kad se meni zatvori (meni vraća fokus na svoje dugme). */
   protected cekaPreimenovanje: number | null = null;
+  /** "Obriši" iz menija: kad grupa nestane iz stabla, fokus (ostao na nestalom dugmetu menija) ide njenom roditelju. */
+  private brisanje: { id: number; roditeljId: number | null } | null = null;
 
   /** Vidljive stavke redom prikaza (deca sklopljenih čvorova se preskaču). */
   private readonly vidljive = computed<Vidljiva[]>(() => {
@@ -162,6 +166,24 @@ export class StabloGrupaComponent {
       untracked(() => {
         if (preci.some(id => this.skupljeni().has(id))) {
           this.skupljeni.update(s => new Set([...s].filter(id => !preci.includes(id))));
+        }
+      });
+    });
+
+    // posle brisanja (novo stablo bez grupe) fokus na roditelja, ili na stavku u Tab redu za grupu u korenu; otkazano ili
+    // neuspelo brisanje (grupa je i dalje tu) ne pomera ništa
+    effect(() => {
+      const cvorovi = this.cvorovi();
+      untracked(() => {
+        const b = this.brisanje;
+        this.brisanje = null;
+        if (b && !nadjiCvor(cvorovi, b.id)) {
+          afterNextRender(() => {
+            const id = b.roditeljId ?? this.tabStop();
+            if (id !== null && this.fokusIzgubljen()) {
+              this.fokusiraj(id);
+            }
+          }, { injector: this.injector });
         }
       });
     });
@@ -268,6 +290,7 @@ export class StabloGrupaComponent {
 
   protected brisi(c: GrupaCvor): void {
     if (!this.zauzeto() && c.deca.length === 0) {
+      this.brisanje = { id: c.id, roditeljId: putanjaDo(this.cvorovi(), c.id).at(-2)?.id ?? null };
       this.obrisi.emit(c.id);
     }
   }
@@ -315,6 +338,12 @@ export class StabloGrupaComponent {
     } else {
       afterNextRender(() => this.stavka(id)?.focus(), { injector: this.injector });
     }
+  }
+
+  /** Fokus je nestao sa stranice (fokusiran element je uklonjen), pa ga niko neće vratiti; korisnikov novi fokus se ne dira. */
+  private fokusIzgubljen(): boolean {
+    const aktivni = this.document.activeElement;
+    return !aktivni || aktivni === this.document.body;
   }
 
   private stavka(id: number): HTMLElement | null {

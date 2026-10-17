@@ -3,9 +3,10 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatIconRegistry } from '@angular/material/icon';
-import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
+import { NavigationEnd, provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { filter, of, Subject, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReferenceApi } from '../../../core/api/reference.api';
@@ -56,6 +57,8 @@ describe('BankaPage', () => {
     varijante: vi.fn(),
     kreirajGrupu: vi.fn(),
     izmeniGrupu: vi.fn(),
+    odobri: vi.fn(),
+    obrisiVarijantu: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 7, naziv: 'Statika' }, { id: 3, naziv: 'Beton' }])),
@@ -103,6 +106,29 @@ describe('BankaPage', () => {
   });
 
   afterEach(() => localStorage.clear());
+
+  const overlay = () => TestBed.inject(OverlayContainer).getContainerElement();
+  /** Otvara meni dugmetom i vraća stanje stavki poslednjeg otvorenog menija (`naziv -> onemogućena`). */
+  async function meni(dugme: HTMLElement): Promise<Record<string, boolean>> {
+    dugme.click();
+    await stabilno();
+    const panel = [...overlay().querySelectorAll('.mat-mdc-menu-panel')].at(-1)!;
+    return Object.fromEntries([...panel.querySelectorAll<HTMLElement>('[role=menuitem]')]
+      .map(s => [s.textContent!.trim(), s.getAttribute('aria-disabled') === 'true' || s.hasAttribute('disabled')]));
+  }
+  async function zatvoriMeni(): Promise<void> {
+    overlay().querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+    await stabilno();
+  }
+  async function stavkaMenija(dugme: HTMLElement, naziv: string): Promise<void> {
+    dugme.click();
+    await stabilno();
+    const panel = [...overlay().querySelectorAll('.mat-mdc-menu-panel')].at(-1)!;
+    [...panel.querySelectorAll<HTMLElement>('[role=menuitem]')].find(s => s.textContent!.trim() === naziv)!.click();
+    await stabilno();
+  }
+  const karticaMeni = (e: HTMLElement, id: number) => e.querySelector<HTMLElement>(`app-varijanta-kartica[data-varijanta="${id}"] button[data-meni]`)!;
+  const stabloMeni = (e: HTMLElement, id: number) => e.querySelector<HTMLElement>(`[role=treeitem][data-id="${id}"] button.bk-meni-dugme`)!;
 
   it('bez ?predmet vraća zapamćen predmet i namenu (bez novog unosa u istoriji) i učitava njihovo stablo', async () => {
     // Statika (7) nije prva po nazivu (Beton, 3): bira se zapamćen
@@ -240,6 +266,121 @@ describe('BankaPage', () => {
     expect(api.stablo).toHaveBeenLastCalledWith(7, 'TEST', { tiho: true });
     expect(router.url).toContain('namena=TEST');
     expect(router.url).toContain('grupa=2');
+  });
+
+  it('?grupa promenjen spolja (link, istorija) bira tu grupu bez novog stabla i bez povratnog upisa u URL', async () => {
+    const e = await otvori('/banka?predmet=7&grupa=2');
+    expect(e.querySelector('#bk-naslov-grupe')!.textContent).toBe('2 → 10');
+    const navigacije: string[] = [];
+    router.events.pipe(filter((d): d is NavigationEnd => d instanceof NavigationEnd)).subscribe(d => navigacije.push(d.urlAfterRedirects));
+
+    await router.navigate(['/banka'], { queryParams: { predmet: 7, grupa: 3 } });
+    await stabilno();
+
+    expect(e.querySelector('#bk-naslov-grupe')!.textContent).toBe('16 → 2');
+    expect(e.querySelector('[role=treeitem][data-id="3"]')!.getAttribute('aria-selected')).toBe('true');
+    expect(api.stablo).toHaveBeenCalledTimes(1);
+    expect(api.grupa).toHaveBeenLastCalledWith(3, { tiho: true });
+    expect(navigacije).toEqual(['/banka?predmet=7&grupa=3']);
+
+    // grupe nema u stablu: izbor ostaje, URL se ne dira
+    await router.navigate(['/banka'], { queryParams: { predmet: 7, grupa: 99 } });
+    await stabilno();
+    expect(e.querySelector('#bk-naslov-grupe')!.textContent).toBe('16 → 2');
+    expect(api.stablo).toHaveBeenCalledTimes(1);
+  });
+
+  it('zauzeto (kreiranje u toku): Nova grupa, Nova podgrupa, brisanje i dupliranje u menijima onemogućeni, posle odgovora opet ne', async () => {
+    const odgovor = new Subject<GrupaDetails>();
+    api.kreirajGrupu.mockReturnValue(odgovor);
+    const e = await otvori('/banka?predmet=7&grupa=1');
+    const dugme = (sel: string) => e.querySelector<HTMLButtonElement>(sel)!;
+    dugme('[data-nova-podgrupa]').click();
+    await stabilno();
+    const naziv = overlay().querySelector<HTMLInputElement>('[data-naziv]')!;
+    naziv.value = 'Nova';
+    naziv.dispatchEvent(new Event('input'));
+    overlay().querySelector<HTMLButtonElement>('[data-sacuvaj]')!.click();
+    await stabilno();
+    expect(api.kreirajGrupu).toHaveBeenCalledOnce();
+
+    expect(dugme('[data-nova-grupa]').disabled).toBe(true);
+    expect(dugme('[data-nova-podgrupa]').disabled).toBe(true);
+    expect(await meni(stabloMeni(e, 4))).toEqual({ 'Dodaj podgrupu': true, Preimenuj: false, 'Premesti u…': false, Obriši: true });
+    await zatvoriMeni();
+    e.querySelector<HTMLElement>('[role=treeitem][data-id="2"] .bk-naziv')!.click();
+    await stabilno();
+    expect(await meni(karticaMeni(e, 11))).toEqual({ Uredi: false, Odobri: false, Dupliraj: true, Obriši: true });
+    await zatvoriMeni();
+
+    odgovor.next(detalji(50));
+    odgovor.complete();
+    await stabilno();
+
+    expect(dugme('[data-nova-grupa]').disabled).toBe(false);
+    expect(await meni(karticaMeni(e, 11))).toEqual({ Uredi: false, Odobri: false, Dupliraj: false, Obriši: false });
+    await zatvoriMeni();
+    expect(await meni(stabloMeni(e, 4))).toEqual({ 'Dodaj podgrupu': false, Preimenuj: false, 'Premesti u…': false, Obriši: false });
+    await zatvoriMeni();
+    e.querySelector<HTMLElement>('[role=treeitem][data-id="1"] .bk-naziv')!.click();
+    await stabilno();
+    expect(dugme('[data-nova-podgrupa]').disabled).toBe(false);
+  });
+
+  it('greška učitavanja grupe: panel greške, aria-busy nije "true"', async () => {
+    api.varijante.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 404, error: { reason: 'Grupa nije pronađena.' } })));
+    const e = await otvori('/banka?predmet=7&grupa=3');
+    const panel = e.querySelector('[data-grupa-panel]')!;
+    expect(panel.querySelector('app-error-panel')!.textContent).toContain('Grupa nije pronađena.');
+    expect(panel.getAttribute('aria-busy')).toBe('false');
+  });
+
+  it('kartica koja nestane posle Odobri (filter "Nacrt") predaje fokus sledećoj, poslednja traci filtera', async () => {
+    let lista = [varijanta(11, 'NACRT'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT', 'GRESKA')];
+    api.varijante.mockImplementation((id: number) => of(id === 2 ? lista : []));
+    api.odobri.mockImplementation(() => of({}));
+    api.obrisiVarijantu.mockImplementation(() => of(undefined));
+    const e = await otvori('/banka?predmet=7&grupa=2');
+    e.querySelector<HTMLButtonElement>('app-chip-select [data-otvori]')!.click();
+    await stabilno();
+    [...overlay().querySelectorAll<HTMLElement>('[role=menuitemradio]')].find(s => s.textContent!.includes('Nacrt'))!.click();
+    await stabilno();
+
+    lista = [varijanta(11, 'AKTIVNA'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT', 'GRESKA')];
+    await stavkaMenija(karticaMeni(e, 11), 'Odobri');
+    expect(api.odobri).toHaveBeenCalledWith(11, { tiho: true });
+    expect([...e.querySelectorAll<HTMLElement>('app-varijanta-kartica')].map(k => k.dataset['varijanta'])).toEqual(['13']);
+    expect(document.activeElement).toBe(e.querySelector('app-varijanta-kartica[data-varijanta="13"] .bk-kartica-veza'));
+
+    lista = [varijanta(11, 'AKTIVNA'), varijanta(12, 'AKTIVNA')];
+    await stavkaMenija(karticaMeni(e, 13), 'Obriši');
+    overlay().querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+    await stabilno();
+    expect(api.obrisiVarijantu).toHaveBeenCalledWith(13, { tiho: true });
+    expect(e.querySelectorAll('app-varijanta-kartica')).toHaveLength(0);
+    expect(document.activeElement).toBe(e.querySelector('app-filter-bar button'));
+  });
+
+  it('"Zadaj težinu": posle čuvanja fokus ide na link "Nova varijanta" (dugme i upozorenje nestaju)', async () => {
+    let tezina: number | null = null;
+    api.stablo.mockImplementation(() => of([...STABLO.slice(0, 1), cvor(4, 'Osnove', [], { tezina })]));
+    api.izmeniGrupu.mockImplementation((_id: number, cmd: { tezina: number | null }) => {
+      tezina = cmd.tezina;
+      return of(detalji(4));
+    });
+    const e = await otvori('/banka?predmet=7&grupa=4');
+    e.querySelector<HTMLButtonElement>('[data-bez-tezine] button')!.click();
+    await stabilno();
+    overlay().querySelector<HTMLElement>('mat-select[data-tezina] .mat-mdc-select-trigger')!.click();
+    await stabilno();
+    [...overlay().querySelectorAll<HTMLElement>('mat-option')].find(o => o.textContent!.trim() === '4')!.click();
+    await stabilno();
+    overlay().querySelector<HTMLButtonElement>('[data-sacuvaj]')!.click();
+    await stabilno();
+
+    expect(api.izmeniGrupu.mock.lastCall?.[1].tezina).toBe(4);
+    expect(e.querySelector('[data-bez-tezine]')).toBeNull();
+    expect(document.activeElement).toBe(e.querySelector('a[data-nova-varijanta]'));
   });
 
   it('nepoznat id u putanji ide na 404, bez poziva API-ja', async () => {

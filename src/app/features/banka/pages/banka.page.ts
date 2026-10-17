@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import {
+  afterNextRender, ChangeDetectionStrategy, Component, computed, DOCUMENT, effect, ElementRef, inject, Injector, input, untracked,
+} from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
@@ -124,7 +126,7 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
             (premesti)="premesti($event)" (obrisi)="obrisiGrupu($event)" />
         </section>
 
-        <section class="lista-kartica bk-panel-grupe" aria-labelledby="bk-naslov-grupe" [attr.aria-busy]="!grupaUcitana()" data-grupa-panel>
+        <section class="lista-kartica bk-panel-grupe" aria-labelledby="bk-naslov-grupe" [attr.aria-busy]="!grupaUcitana() && !store.greskaGrupe()" data-grupa-panel>
           @if (cvor(); as c) {
             <header class="bk-zaglavlje-grupe">
               @if (store.putanja().length > 1) {
@@ -176,7 +178,7 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
                 <div class="bk-upozorenje" data-bez-tezine>
                   <mat-icon svgIcon="info" aria-hidden="true" />
                   <span>Grupa nema težinu, pa još ne prima varijante. Težina (1-5) je zajednička svim varijantama grupe.</span>
-                  <button matButton="outlined" type="button" (click)="izmeniGrupu(c)">Zadaj težinu</button>
+                  <button matButton="outlined" type="button" (click)="izmeniGrupu(c, true)">Zadaj težinu</button>
                 </div>
               }
               <app-filter-bar [imaFiltera]="store.filterStatusa() !== 'SVE'" (ocisti)="store.postaviFilter('SVE')">
@@ -197,9 +199,9 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
                 <ul class="bk-mreza" aria-label="Varijante grupe">
                   @for (v of store.filtriraneVarijante(); track v.id) {
                     <li>
-                      <app-varijanta-kartica [varijanta]="v" [zauzeto]="store.zauzeto()" (odobri)="store.odobri(v.id)"
-                        (arhiviraj)="store.arhiviraj(v.id)" (vratiUNacrt)="store.vratiUNacrt(v.id)" (dupliraj)="store.dupliraj(v.id)"
-                        (obrisi)="obrisiVarijantu(v)" />
+                      <app-varijanta-kartica [varijanta]="v" [zauzeto]="store.zauzeto()" (odobri)="promenaStatusa(v, 'odobri')"
+                        (arhiviraj)="promenaStatusa(v, 'arhiviraj')" (vratiUNacrt)="promenaStatusa(v, 'vratiUNacrt')"
+                        (dupliraj)="store.dupliraj(v.id)" (obrisi)="obrisiVarijantu(v)" />
                     </li>
                   }
                 </ul>
@@ -239,6 +241,13 @@ export class BankaPage {
   private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
+  /** Kartica posle čije radnje može da nestane (filter ili brisanje): njen indeks za fokus na sledeću. */
+  private nestajeKartica: { grupaId: number | null; id: number; indeks: number } | null = null;
+  /** "Zadaj težinu": kad grupa dobije težinu, dugme i upozorenje nestaju, pa fokus ide na "Nova varijanta". */
+  private tezinaZaGrupu: number | null = null;
 
   /** Query parametri (`withComponentInputBinding`). */
   readonly predmet = input<string>();
@@ -296,6 +305,42 @@ export class BankaPage {
       });
     });
 
+    // prva nova lista posle radnje nad karticom: ako je kartica nestala (filter statusa ili brisanje), fokus na karticu na
+    // njenom mestu, inače na traku filtera; ako je još tu (ili je izabrana druga grupa), fokus se ne dira
+    effect(() => {
+      const lista = this.store.filtriraneVarijante();
+      untracked(() => {
+        const k = this.nestajeKartica;
+        if (!k) {
+          return;
+        }
+        this.nestajeKartica = null;
+        if (k.grupaId === this.store.izabranaGrupaId() && !lista.some(v => v.id === k.id)) {
+          this.posleCrtanja(() => {
+            const veze = this.host.nativeElement.querySelectorAll<HTMLElement>('app-varijanta-kartica .bk-kartica-veza');
+            return veze[Math.min(k.indeks, veze.length - 1)] ?? this.host.nativeElement.querySelector<HTMLElement>('app-filter-bar button');
+          });
+        }
+      });
+    });
+
+    // "Zadaj težinu" uspelo: fokus na link "Nova varijanta" (dugme koje je imalo fokus je nestalo)
+    effect(() => {
+      const c = this.cvor();
+      untracked(() => {
+        const id = this.tezinaZaGrupu;
+        if (id === null || !c) {
+          return;
+        }
+        if (c.id !== id) {
+          this.tezinaZaGrupu = null;
+        } else if (c.tezina !== null) {
+          this.tezinaZaGrupu = null;
+          this.posleCrtanja(() => this.host.nativeElement.querySelector<HTMLElement>('a[data-nova-varijanta]'));
+        }
+      });
+    });
+
     // izbor u store-u (klik, prvi list, nova ili obrisana grupa) -> ?grupa, bez novog unosa u istoriji
     effect(() => {
       const izabrana = this.store.izabranaGrupaId();
@@ -344,8 +389,17 @@ export class BankaPage {
       });
   }
 
-  /** Naziv i težina (list); unutrašnji čvor samo naziv. Šema i uputstvo su na detalju grupe. */
-  protected izmeniGrupu(c: GrupaCvor): void {
+  /** Odobri, arhiviraj, vrati u nacrt; kartica može da nestane zbog filtera statusa. */
+  protected promenaStatusa(v: VarijantaInfo, radnja: 'odobri' | 'arhiviraj' | 'vratiUNacrt'): void {
+    this.zapamtiKarticu(v);
+    this.store[radnja](v.id);
+  }
+
+  /**
+   * Naziv i težina (list); unutrašnji čvor samo naziv. Šema i uputstvo su na detalju grupe. `zadajTezinu`: poziv iz upozorenja
+   * "Zadaj težinu" (posle uspeha fokus ide na "Nova varijanta").
+   */
+  protected izmeniGrupu(c: GrupaCvor, zadajTezinu = false): void {
     const stablo = this.store.stablo();
     const roditelj = nadjiCvor(stablo, putanjaDo(stablo, c.id).at(-2)?.id ?? null);
     GrupaDialog.otvori(this.dialog, {
@@ -359,6 +413,7 @@ export class BankaPage {
       .pipe(filter(Boolean))
       .subscribe(r => {
         if (r.naziv !== c.naziv || (c.list && r.tezina !== c.tezina)) {
+          this.tezinaZaGrupu = zadajTezinu && r.tezina !== null ? c.id : null;
           this.store.preimenuj(c.id, r.naziv, c.list ? r.tezina : undefined);
         }
       });
@@ -392,7 +447,10 @@ export class BankaPage {
       destruktivno: true,
     })
       .pipe(filter(Boolean))
-      .subscribe(() => this.store.obrisiVarijantu(v.id));
+      .subscribe(() => {
+        this.zapamtiKarticu(v);
+        this.store.obrisiVarijantu(v.id);
+      });
   }
 
   protected podesavanja(): void {
@@ -409,6 +467,25 @@ export class BankaPage {
           : `Preambula je sačuvana. Renderovano varijanti: ${r.renderovano}.`);
         this.store.osveziStablo();
       });
+  }
+
+  private zapamtiKarticu(v: VarijantaInfo): void {
+    this.nestajeKartica = {
+      grupaId: this.store.izabranaGrupaId(), id: v.id, indeks: this.store.filtriraneVarijante().findIndex(x => x.id === v.id),
+    };
+  }
+
+  /**
+   * Posle sledećeg crtanja fokus na `cilj()`, ali samo ako je fokus nestao (fokusiran element je uklonjen); korisnikov novi
+   * fokus se ne dira.
+   */
+  private posleCrtanja(cilj: () => HTMLElement | null | undefined): void {
+    afterNextRender(() => {
+      const aktivni = this.document.activeElement;
+      if (!aktivni || aktivni === this.document.body) {
+        cilj()?.focus();
+      }
+    }, { injector: this.injector });
   }
 
   private navigiraj(queryParams: Record<string, string | number | null>, replaceUrl: boolean): void {

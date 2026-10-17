@@ -49,6 +49,8 @@ test.describe('banka zadataka', () => {
     await expect.poll(() => mock.zahteviZa('banka/varijante/11/odobri', 'POST').length).toBe(1);
     // posle ponovnog učitavanja: 11 je aktivna (filter "Nacrt" je skriva), brojači u stablu prate
     await expect(kartice).toHaveCount(1);
+    // kartica 11 je nestala zajedno sa svojim dugmetom menija: fokus je na kartici koja je došla na njeno mesto
+    await expect(page.getByRole('link', { name: '3. 100111 u dekadni' })).toBeFocused();
     await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 2 aktivne, 1 nacrt, 1 greška');
   });
 
@@ -136,7 +138,9 @@ test.describe('banka zadataka', () => {
     await expect.poll(() => mock.zahteviZa('banka/grupe/9', 'PUT').map(z => z.telo)).toEqual([
       { naziv: 'Osnove', tezina: 4, opis: 'Uvodni zadaci.', uputstvo: null, polja: null },
     ]);
-    await expect(page.getByRole('link', { name: 'Nova varijanta' })).toHaveAttribute('href', '/banka/varijante/nova?grupa=9');
+    const link = page.getByRole('link', { name: 'Nova varijanta' });
+    await expect(link).toHaveAttribute('href', '/banka/varijante/nova?grupa=9');
+    await expect(link).toBeFocused();
   });
 
   test('Testovi: prazno stablo sa pozivom na prvu grupu; izbor se pamti', async ({ page, mock }) => {

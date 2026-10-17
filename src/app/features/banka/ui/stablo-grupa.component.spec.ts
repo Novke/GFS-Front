@@ -228,6 +228,33 @@ describe('StabloGrupaComponent', () => {
     expect(document.activeElement).toBe(stavka(4).querySelector('input'));
   });
 
+  it('posle brisanja (stavka nestane iz stabla) fokus ide na roditeljsku stavku; otkazano brisanje ne pomera fokus', async () => {
+    const { h, stavka, f } = await napravi();
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    const brisi = async (id: number) => {
+      stavka(id).querySelector<HTMLButtonElement>('button.bk-meni-dugme')!.click();
+      await f.whenStable();
+      [...overlay.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(s => s.textContent!.includes('Obriši'))!.click();
+      await f.whenStable();
+    };
+
+    // otkazano: stablo se osveži (npr. posle druge izmene), grupa je još tu, fokus ostaje na dugmetu menija
+    await brisi(3);
+    const dugme = stavka(3).querySelector<HTMLButtonElement>('button.bk-meni-dugme')!;
+    dugme.focus();
+    h.cvorovi.set(structuredClone(STABLO));
+    await f.whenStable();
+    expect(document.activeElement).toBe(stavka(3).querySelector('button.bk-meni-dugme'));
+
+    // obrisana: stranica osveži stablo bez nje
+    await brisi(3);
+    stavka(3).querySelector<HTMLButtonElement>('button.bk-meni-dugme')!.focus();
+    h.cvorovi.set([cvor(1, 'Konverzije brojeva', [STABLO[0].deca[0]]), STABLO[1]]);
+    await f.whenStable();
+    expect(stavka(3)).toBeNull();
+    expect(document.activeElement).toBe(stavka(1));
+  });
+
   it('zauzeto onemogućava dodavanje i brisanje u meniju', async () => {
     const { h, stavka, f } = await napravi();
     h.zauzeto.set(true);
