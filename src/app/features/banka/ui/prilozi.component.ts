@@ -82,9 +82,10 @@ function proveriFajl(f: File): string | null {
 /**
  * Prilozi varijante (slike i PDF za LaTeX): lista sa imenom kojim ga LaTeX zove (`\includegraphics{ime}`; proverava se kao
  * na serveru: regex, `dokument`, ponavljanje), nazivom i veličinom fajla, "Ubaci u tekst" (emituje `ubaci(ime)`, stranica
- * umeće `\includegraphics{ime}` na kursor aktivnog editora) i "Ukloni". "Dodaj prilog" otprema PNG, JPEG ili PDF do 10 MB
- * (`POST banka/prilozi`, tiho; greška ostaje ispod dugmeta), pa dodaje red sa imenom iz naziva fajla. Kontrolisana
- * komponenta: emituje novu listu (`priloziPromena`); `postojeci` (sačuvani prilozi) daju naziv i veličinu za već sačuvane.
+ * umeće `\includegraphics[width=\linewidth]{ime}` na kursor aktivnog editora) i "Ukloni". "Dodaj prilog" otprema PNG, JPEG
+ * ili PDF do 10 MB (`POST banka/prilozi`, tiho; greška ostaje ispod dugmeta), pa dodaje red sa imenom iz naziva fajla; dok
+ * otpremanje traje, `otpremaUToku` je `true`. Kontrolisana komponenta: emituje novu listu (`priloziPromena`); `postojeci`
+ * (sačuvani prilozi) daju naziv i veličinu za već sačuvane.
  */
 @Component({
   selector: 'app-prilozi',
@@ -92,8 +93,9 @@ function proveriFajl(f: File): string | null {
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './prilozi.component.css',
   template: `
-    <p class="bk-pr-uputstvo">Slika ili PDF za LaTeX; u tekstu <code>\\includegraphics{{ '{' }}ime{{ '}' }}</code>, sa širinom npr.
-      <code>\\includegraphics[width=0.6\\linewidth]{{ '{' }}ime{{ '}' }}</code>.</p>
+    <p class="bk-pr-uputstvo">Slika ili PDF za LaTeX. „Ubaci u tekst“ umeće
+      <code>\\includegraphics[width=\\linewidth]{{ '{' }}ime{{ '}' }}</code> (širina telefona); za manju sliku promeni širinu, npr.
+      <code>width=0.6\\linewidth</code>.</p>
     @if (prilozi().length > 0) {
       <ul class="bk-pr-lista" aria-label="Prilozi varijante">
         @for (p of prilozi(); track $index; let i = $index) {
@@ -151,6 +153,8 @@ export class PriloziComponent {
   readonly onemoguceno = input(false);
   readonly priloziPromena = output<PrilogCmd[]>();
   readonly ubaci = output<string>();
+  /** Otpremanje u toku (`true` na početku, `false` na kraju): stranica dotle ne čuva, jer prilog još nije u listi. */
+  readonly otpremaUToku = output<boolean>();
 
   protected readonly maxIme = MAX_IME;
   protected readonly maxPriloga = MAX_PRILOGA;
@@ -165,7 +169,11 @@ export class PriloziComponent {
   private readonly matcheri: ErrorStateMatcher[] = [];
   private readonly imena = viewChildren(MatInput);
 
+  /** Komponenta je uništena: kraj otpremanja se tada više ne javlja (izlaz posle uništenja je greška). */
+  private unisten = false;
+
   constructor() {
+    this.destroyRef.onDestroy(() => (this.unisten = true));
     // `MatInput` bez `ngControl` ne računa grešku sam: posle svake promene imena, iz `greske`
     afterRenderEffect(() => {
       this.greske();
@@ -195,8 +203,13 @@ export class PriloziComponent {
     }
   }
 
+  /** Izbacuje prilog; fokus prelazi na ime sledećeg reda ili, kad ga nema, na "Dodaj prilog" (dugme nestaje sa redom). */
   protected ukloni(i: number): void {
     this.priloziPromena.emit(this.prilozi().filter((_, j) => j !== i));
+    afterNextRender(() => {
+      const koren = this.host.nativeElement;
+      (koren.querySelectorAll<HTMLElement>('input[data-ime]')[i] ?? koren.querySelector<HTMLElement>('[data-dodaj-prilog]'))?.focus();
+    }, { injector: this.injector });
   }
 
   protected izabran(e: Event): void {
@@ -212,9 +225,18 @@ export class PriloziComponent {
       return;
     }
     this.otprema.set(fajl.name);
+    this.otpremaUToku.emit(true);
     this.api
       .prilog(fajl, { tiho: true })
-      .pipe(finalize(() => this.otprema.set(null)), takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        finalize(() => {
+          this.otprema.set(null);
+          if (!this.unisten) {
+            this.otpremaUToku.emit(false);
+          }
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
         next: m => {
           this.otpremljeni.update(o => ({ ...o, [m.id]: m }));

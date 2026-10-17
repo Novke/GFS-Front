@@ -15,8 +15,9 @@ const VISINA_LINIJE = 20;
  * u vidno polje; `opisId` (id poruke greške, npr. u pregledu) ide u `aria-describedby` uz uputstvo ispod polja.
  *
  * Tastatura: Tab ubacuje dva razmaka (Shift+Tab i Tab odmah posle Esc ostaju pregledaču, pa polje nije zamka za tastaturu),
- * Ctrl+Enter (Cmd+Enter) emituje `pregled`. Umetanje (Tab, `ubaci`) ide kroz `execCommand('insertText')` kad ga pregledač
- * ima, da Ctrl+Z pregledača ostane ispravan; inače direktno u vrednost.
+ * Ctrl+Enter (Cmd+Enter) emituje `pregled`, jednom po pritisku (ponavljanje držanog tastera se ne broji). Umetanje (Tab,
+ * `ubaci`) ide kroz `execCommand('insertText')` kad ga pregledač ima, da Ctrl+Z pregledača ostane ispravan; inače direktno u
+ * vrednost.
  */
 @Component({
   selector: 'app-latex-editor',
@@ -139,7 +140,10 @@ export class LatexEditorComponent implements ControlValueAccessor {
       }
     } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      this.pregled.emit();
+      // držanje tastera ponavlja događaj: jedan pregled po pritisku, ne rafal render-proba
+      if (!e.repeat) {
+        this.pregled.emit();
+      }
     }
   }
 

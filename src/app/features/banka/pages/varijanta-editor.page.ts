@@ -103,6 +103,43 @@ function opisGreske(v: VarijantaDetails): string {
   return g.linija === null ? `${deo}${g.poruka}` : `${deo}linija ${g.linija}: ${g.poruka}`;
 }
 
+/** Ishod uspelog `POST`/`PUT` (i, uz "Sačuvaj i odobri", `odobri`). */
+interface IshodCuvanja {
+  varijanta: VarijantaDetails;
+  odobrena: boolean;
+  /** Razlog odbijenog odobravanja (posle uspelog čuvanja). */
+  greskaOdobravanja: string | null;
+}
+
+/**
+ * Poruka posle uspelog čuvanja i da li je sve uspelo (`uspeh`: render OK i, uz odobravanje, odobrena; tada nazad u banku),
+ * inače korisnik ostaje na varijanti. `aktivnaPre`: server aktivnu varijantu sa neuspelim renderom vraća u nacrt.
+ */
+function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, promenjena: boolean): { uspeh: boolean; poruka: string } {
+  const v = i.varijanta;
+  const kaoNacrt = v.status === 'NACRT' ? ' kao nacrt' : '';
+  if (v.renderStatus !== 'OK') {
+    if (aktivnaPre && v.status === 'NACRT') {
+      return { uspeh: false, poruka: `Izmene su sačuvane. Render nije uspeo, varijanta je vraćena u nacrt (${opisGreske(v)}).` };
+    }
+    const razlogRendera = `render nije uspeo (${opisGreske(v)})`;
+    return {
+      uspeh: false,
+      poruka: odobri ? `Varijanta je sačuvana${kaoNacrt}, ali nije odobrena: ${razlogRendera}.` : `Varijanta je sačuvana${kaoNacrt}, ali ${razlogRendera}.`,
+    };
+  }
+  if (odobri && !i.odobrena) {
+    return { uspeh: false, poruka: `Varijanta je sačuvana${kaoNacrt}, ali nije odobrena: ${i.greskaOdobravanja ?? 'pokušaj ponovo.'}` };
+  }
+  if (i.odobrena) {
+    return { uspeh: true, poruka: promenjena ? 'Varijanta je sačuvana i odobrena.' : 'Varijanta je odobrena.' };
+  }
+  return { uspeh: true, poruka: kaoNacrt ? 'Varijanta je sačuvana kao nacrt.' : 'Varijanta je sačuvana.' };
+}
+
+/** Ključ stanja navigacije sa porukom za novu varijantu koja posle čuvanja prelazi na svoj editor. */
+const PORUKA_CUVANJA = 'porukaCuvanja';
+
 /**
  * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`). Tri kolone na širokom ekranu: LaTeX
  * (kartice Tekst i Rešenje, svaka sa svojim `app-latex-editor`), živi pregled (`pregledUzivo` nad `render-proba`, zadatak i
@@ -110,11 +147,13 @@ function opisGreske(v: VarijantaDetails): string {
  * render-probu, šemu polja, putanju i težinu; nova varijanta u grupi bez težine se ne može sačuvati (server: 409), pa to
  * stranica kaže odmah, sa vezom na grupu.
  *
- * Čuvanje (`POST`/`PUT`, renderuje sinhrono, do minut) drži formu onemogućenom uz traku napretka. "Sačuvaj i odobri" posle
- * uspelog rendera zove `odobri`; kad render padne, varijanta ostaje nacrt i stranica ostaje na njoj (nova prelazi na svoj
- * editor) sa porukom i istaknutom linijom u kartici dela sa greškom (`renderGreska` + `renderDeo`). Posle uspeha nazad na
- * `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera (tekst, rešenje, prilozi) isti kao sačuvani; živi
- * pregled ima prednost čim stigne. Izmenjeno = drugačije od poslednjeg stanja sa servera; napuštanje tada pita.
+ * Čuvanje (`POST`/`PUT`, renderuje sinhrono, do minut) drži formu onemogućenom uz traku napretka; dok se prilog otprema, ne
+ * čuva se. "Sačuvaj i odobri" posle uspelog rendera zove `odobri`. Svako čuvanje čiji render nije uspeo (ili odobravanje
+ * odbijeno) ostavlja korisnika na varijanti, sa porukom u traci i istaknutom linijom u kartici dela sa greškom
+ * (`renderGreska` + `renderDeo`); nova varijanta tada prelazi na svoj editor (bez novog unosa u istoriji), a poruku nosi
+ * stanje navigacije. Samo uspeo render vodi nazad na `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera
+ * (tekst, rešenje, prilozi) isti kao sačuvani; živi pregled ima prednost čim stigne. Izmenjeno = drugačije od poslednjeg
+ * stanja sa servera; napuštanje tada pita.
  */
 @Component({
   selector: 'app-varijanta-editor-page',
@@ -158,9 +197,8 @@ function opisGreske(v: VarijantaDetails): string {
           }
         </div>
         <div akcije class="bk-ve-akcije">
-          <button matButton type="button" disabledInteractive [disabled]="!izmenjeno() || zauzeto() !== null" (click)="odbaci()" data-odbaci>
-            Odbaci izmene
-          </button>
+          <button matButton type="button" disabledInteractive [disabled]="!izmenjeno() || zauzeto() !== null || otpremaPriloga()"
+            (click)="odbaci()" data-odbaci>Odbaci izmene</button>
           @if (v) {
             <button matButton="outlined" type="button" disabledInteractive [disabled]="!mozeRenderovati()" (click)="renderujPonovo()" data-renderuj>
               <mat-icon svgIcon="refresh" aria-hidden="true" />Renderuj ponovo
@@ -190,11 +228,11 @@ function opisGreske(v: VarijantaDetails): string {
         </p>
       }
       @if (zauzeto(); as z) {
-        <div class="bk-ve-zauzeto" role="status">
-          <mat-progress-bar mode="indeterminate" [attr.aria-label]="z === 'cuva' ? 'Čuvanje varijante' : 'Renderovanje varijante'" />
-          <span>{{ z === 'cuva' ? 'Čuva se i renderuje…' : 'Renderuje se…' }} Renderovanje može potrajati do minut.</span>
-        </div>
-      } @else if (nedostaje().length > 0) {
+        <mat-progress-bar class="bk-ve-napredak" mode="indeterminate" [attr.aria-label]="z === 'cuva' ? 'Čuvanje varijante' : 'Renderovanje varijante'" />
+      }
+      <!-- živa oblast je uvek u DOM-u (menja se samo tekst), da bi čitač ekrana najavio početak čuvanja -->
+      <p class="bk-ve-status" role="status" data-status>{{ tekstZauzeca() }}</p>
+      @if (zauzeto() === null && nedostaje().length > 0) {
         <p class="bk-ve-nedostaje" data-nedostaje>Za čuvanje nedostaje: {{ nedostaje().join(', ') }}.</p>
       }
 
@@ -239,7 +277,7 @@ function opisGreske(v: VarijantaDetails): string {
           <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-priloga">
             <h2 id="bk-ve-naslov-priloga" class="bk-ve-podnaslov">Prilozi</h2>
             <app-prilozi [prilozi]="prilozi()" [postojeci]="v?.prilozi ?? []" [onemoguceno]="zauzeto() !== null"
-              (priloziPromena)="prilozi.set($event)" (ubaci)="ubaci($event)" />
+              (priloziPromena)="prilozi.set($event)" (ubaci)="ubaci($event)" (otpremaUToku)="otpremaPriloga.set($event)" />
           </section>
         </div>
       </div>
@@ -286,6 +324,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   protected readonly kartica = signal(0);
   protected readonly odgovori = signal<Record<string, OdgovorPolja>>({});
   protected readonly prilozi = signal<PrilogCmd[]>([]);
+  /** Prilog se otprema: dotle se ne čuva (posle čuvanja forma preuzima priloge iz odgovora, pa bi se novi izgubio). */
+  protected readonly otpremaPriloga = signal(false);
   /** Ctrl+Enter u editoru: pregled odmah. */
   protected readonly odmah = new Subject<void>();
 
@@ -379,18 +419,29 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     if (greskePriloga(s.prilozi).some(g => g !== null)) {
       razlozi.push('ispravna imena priloga');
     }
+    if (this.otpremaPriloga()) {
+      razlozi.push('kraj otpremanja priloga');
+    }
     return razlozi;
   });
   private readonly mozeSlati = computed(() => !!this.detaljiGrupe() && this.zauzeto() === null && !this.bezTezine() && this.nedostaje().length === 0);
   protected readonly mozeNacrt = computed(() => this.mozeSlati() && (this.jeNova() || this.izmenjeno()));
   protected readonly mozeOdobriti = computed(() => this.mozeSlati() && this.osnova()?.status !== 'AKTIVNA');
+  protected readonly tekstZauzeca = computed(() => {
+    const z = this.zauzeto();
+    return z === null ? '' : `${z === 'cuva' ? 'Čuva se i renderuje…' : 'Renderuje se…'} Renderovanje može potrajati do minut.`;
+  });
   protected readonly mozeRenderovati = computed(() => !!this.osnova() && !this.izmenjeno() && this.zauzeto() === null);
 
   private readonly zahtevi = new Subject<Zahtev>();
   private unisten = false;
+  /** Poruka koju je nova varijanta poslala svom editoru (neuspeo render posle prvog čuvanja); prikazuje se posle učitavanja. */
+  private porukaPosleCuvanja: string | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => (this.unisten = true));
+    const stanje = this.router.currentNavigation()?.extras.state?.[PORUKA_CUVANJA];
+    this.porukaPosleCuvanja = typeof stanje === 'string' ? stanje : null;
 
     this.zahtevi
       .pipe(
@@ -406,6 +457,10 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
         this.postaviOsnovu(u.v);
         this.postaviFormu(u.v, u.g.polja);
         this.kartica.set(u.v?.renderGreska && u.v.renderDeo === 'resenje' ? KARTICA.resenje : KARTICA.tekst);
+        if (this.porukaPosleCuvanja) {
+          this.greska.set(this.porukaPosleCuvanja);
+          this.porukaPosleCuvanja = null;
+        }
       });
 
     effect(() => {
@@ -439,16 +494,19 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
 
   protected odbaci(): void {
     const g = this.detaljiGrupe();
-    if (g && this.izmenjeno() && this.zauzeto() === null) {
+    if (g && this.izmenjeno() && this.zauzeto() === null && !this.otpremaPriloga()) {
       this.postaviFormu(this.osnova(), g.polja);
       this.greska.set(null);
     }
   }
 
-  /** `\includegraphics{ime}` na kursor editora izabrane kartice. */
+  /**
+   * `\includegraphics[width=\linewidth]{ime}` na kursor editora izabrane kartice: omot je `varwidth=84mm`, pa slika bez širine
+   * veća od telefona izlazi iz okvira.
+   */
   protected ubaci(ime: string): void {
     const editor = this.kartica() === KARTICA.resenje ? this.edResenje() : this.edTekst();
-    editor?.ubaci(`\\includegraphics{${ime}}`);
+    editor?.ubaci(`\\includegraphics[width=\\linewidth]{${ime}}`);
   }
 
   /**
@@ -468,6 +526,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       ? this.api.kreirajVarijantu(g.id, { ...cmd, izvor: 'RUCNO' }, TIHO)
       : this.izmenjeno() || v.renderStatus !== 'OK' ? this.api.izmeniVarijantu(v.id, cmd, TIHO) : of(v);
     const promenjena = !v || this.izmenjeno();
+    const aktivnaPre = v?.status === 'AKTIVNA';
     this.zauzmi('cuva');
     sacuvana$
       .pipe(switchMap(sacuvana => (odobri && sacuvana.renderStatus === 'OK'
@@ -475,11 +534,11 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
           map(odobrena => ({ varijanta: odobrena, odobrena: true, greskaOdobravanja: null })),
           catchError((e: unknown) => of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: razlog(e) })),
         )
-        : of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: null }))))
+        : of<IshodCuvanja>({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: null }))))
       .subscribe({
         next: ishod => {
           this.oslobodi();
-          this.posleCuvanja(g, !v, odobri, promenjena, ishod);
+          this.posleCuvanja(g, !v, ishod, porukaCuvanja(ishod, odobri, aktivnaPre, promenjena));
         },
         error: (e: unknown) => {
           this.oslobodi();
@@ -532,39 +591,32 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   }
 
   /**
-   * Posle uspelog čuvanja: neuspeo render (ili odbijeno odobravanje) uz "Sačuvaj i odobri" ostavlja korisnika na varijanti
-   * (nova prelazi na svoj editor, bez novog unosa u istoriji), inače nazad u banku na grupu.
+   * Posle uspelog čuvanja: uspeh (render OK, odobrena ako je traženo) vodi nazad u banku na grupu; inače korisnik ostaje na
+   * varijanti sa porukom u traci (fokus na nju), karticom dela sa greškom i istaknutom linijom. Nova varijanta tada prelazi na
+   * svoj editor (`replaceUrl`, poruka u stanju navigacije), jer postoji kao nacrt. Ako je korisnik u međuvremenu otišao,
+   * ishod je samo obaveštenje.
    */
-  private posleCuvanja(g: GrupaDetails, nova: boolean, odobri: boolean, promenjena: boolean,
-    ishod: { varijanta: VarijantaDetails; odobrena: boolean; greskaOdobravanja: string | null }): void {
+  private posleCuvanja(g: GrupaDetails, nova: boolean, ishod: IshodCuvanja, p: { uspeh: boolean; poruka: string }): void {
     const v = ishod.varijanta;
     if (this.unisten) {
-      this.obavestenja.uspeh(nova ? 'Varijanta je sačuvana.' : 'Izmene varijante su sačuvane.');
+      if (p.uspeh) {
+        this.obavestenja.uspeh(p.poruka);
+      } else {
+        this.obavestenja.greska(p.poruka);
+      }
       return;
     }
     this.postaviOsnovu(v);
     this.postaviFormu(v, g.polja);
-    if (odobri && !ishod.odobrena) {
-      const poruka = ishod.greskaOdobravanja
-        ? `Varijanta je sačuvana kao nacrt, ali nije odobrena: ${ishod.greskaOdobravanja}`
-        : `Varijanta je sačuvana kao nacrt, ali nije odobrena: render nije uspeo (${opisGreske(v)}).`;
-      if (nova) {
-        this.obavestenja.greska(poruka);
-        void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true });
-      } else {
-        this.greska.set(poruka);
-        this.izaberiKarticu(v);
-      }
-      return;
-    }
-    if (ishod.odobrena) {
-      this.obavestenja.uspeh(promenjena ? 'Varijanta je sačuvana i odobrena.' : 'Varijanta je odobrena.');
-    } else if (v.renderStatus !== 'OK') {
-      this.obavestenja.greska(`Varijanta je sačuvana kao nacrt, ali render nije uspeo (${opisGreske(v)}).`);
+    if (p.uspeh) {
+      this.obavestenja.uspeh(p.poruka);
+      void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id } });
+    } else if (nova) {
+      void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true, state: { [PORUKA_CUVANJA]: p.poruka } });
     } else {
-      this.obavestenja.uspeh(v.status === 'NACRT' ? 'Varijanta je sačuvana kao nacrt.' : 'Varijanta je sačuvana.');
+      this.greska.set(p.poruka);
+      this.izaberiKarticu(v);
     }
-    void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id } });
   }
 
   private izaberiKarticu(v: VarijantaDetails): void {

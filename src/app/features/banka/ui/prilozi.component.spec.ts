@@ -42,13 +42,15 @@ const medij = (id: string, naziv: string, velicina = 2048, mime = 'image/png'): 
 
 @Component({
   imports: [PriloziComponent],
-  template: `<app-prilozi [prilozi]="prilozi()" [postojeci]="postojeci()" (priloziPromena)="promena($event)" (ubaci)="ubaceno.push($event)" />`,
+  template: `<app-prilozi [prilozi]="prilozi()" [postojeci]="postojeci()" (priloziPromena)="promena($event)" (ubaci)="ubaceno.push($event)"
+    (otpremaUToku)="otpreme.push($event)" />`,
 })
 class Host {
   prilozi = signal<PrilogCmd[]>([]);
   postojeci = signal<PrilogInfo[]>([]);
   emitovano: PrilogCmd[][] = [];
   ubaceno: string[] = [];
+  otpreme: boolean[] = [];
   promena(p: PrilogCmd[]): void {
     this.emitovano.push(p);
     this.prilozi.set(p);
@@ -97,7 +99,7 @@ describe('PriloziComponent', () => {
     expect(redovi()[0].querySelector<HTMLInputElement>('input[data-ime]')!.value).toBe('graf');
     expect(redovi()[0].textContent).toContain('graf.png');
     expect(redovi()[0].textContent).toContain('2 kB');
-    expect(el.textContent).toContain('\\includegraphics{ime}');
+    expect(el.textContent).toContain('\\includegraphics[width=\\linewidth]{ime}');
     expect(el.querySelector('input[type=file]')!.getAttribute('accept')).toBe('.png,.jpg,.jpeg,.pdf');
   });
 
@@ -108,6 +110,7 @@ describe('PriloziComponent', () => {
     const f = fajl('Graf.png', 'image/png');
     await izaberi(f);
     expect(api.prilog).toHaveBeenCalledWith(f, { tiho: true });
+    expect(h.otpreme).toEqual([true]);
     expect(el.querySelector('[data-otprema]')!.textContent).toContain('Graf.png');
     expect(el.querySelector<HTMLButtonElement>('button[data-dodaj-prilog]')!.getAttribute('aria-disabled')).toBe('true');
 
@@ -115,6 +118,8 @@ describe('PriloziComponent', () => {
     odgovor.complete();
     await stabilno();
     expect(el.querySelector('[data-otprema]')).toBeNull();
+    // prilog je u listi pre nego što otpremanje javi kraj (stranica tek tada sme da čuva)
+    expect(h.otpreme).toEqual([true, false]);
     expect(h.emitovano.at(-1)).toEqual([{ ime: 'graf', medijId: 'm1' }, { ime: 'graf-2', medijId: 'm2' }]);
     expect(redovi()[1].textContent).toContain('3 MB');
     expect(document.activeElement).toBe(redovi()[1].querySelector('input[data-ime]'));
@@ -160,13 +165,27 @@ describe('PriloziComponent', () => {
     expect(redovi()[0].textContent).toContain("Ime 'dokument' je rezervisano.");
   });
 
-  it('"Ubaci u tekst" emituje ime, "Ukloni" izbacuje prilog', async () => {
-    const { redovi, h, stabilno } = await napravi([{ ime: 'graf', medijId: 'm1' }, { ime: 'slika', medijId: 'm2' }]);
+  it('"Ubaci u tekst" emituje ime, "Ukloni" izbacuje prilog; fokus na ime sledećeg reda, pa na "Dodaj prilog"', async () => {
+    const { redovi, h, stabilno, el } = await napravi([{ ime: 'graf', medijId: 'm1' }, { ime: 'slika', medijId: 'm2' }]);
     redovi()[1].querySelector<HTMLButtonElement>('button[data-ubaci]')!.click();
     expect(h.ubaceno).toEqual(['slika']);
     redovi()[0].querySelector<HTMLButtonElement>('button[data-ukloni]')!.click();
     await stabilno();
     expect(h.emitovano.at(-1)).toEqual([{ ime: 'slika', medijId: 'm2' }]);
+    expect(document.activeElement).toBe(redovi()[0].querySelector('input[data-ime]'));
+    expect((document.activeElement as HTMLInputElement).value).toBe('slika');
+
+    redovi()[0].querySelector<HTMLButtonElement>('button[data-ukloni]')!.click();
+    await stabilno();
+    expect(redovi().length).toBe(0);
+    expect(document.activeElement).toBe(el.querySelector('button[data-dodaj-prilog]'));
+  });
+
+  it('greška otpremanja takođe javlja kraj otpremanja', async () => {
+    api.prilog.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 400, error: { reason: 'Prilog mora biti PNG, JPEG ili PDF.' } })));
+    const { izaberi, h } = await napravi();
+    await izaberi(fajl('x.png', 'image/png'));
+    expect(h.otpreme).toEqual([true, false]);
   });
 
   it(`najviše ${MAX_PRILOGA} priloga`, async () => {

@@ -50,14 +50,16 @@
 
 .bk-ve-upozorenje > .mat-icon { flex: none; color: var(--warn); }
 
-.bk-ve-zauzeto {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.bk-ve-napredak { margin-bottom: 6px; }
+
+/* živa oblast ostaje u DOM-u i kad je prazna, samo bez razmaka */
+.bk-ve-status {
   margin: 0 0 16px;
   color: var(--muted);
   font-size: 13px;
 }
+
+.bk-ve-status:empty { margin: 0; }
 
 .bk-ve-nedostaje {
   margin: 0 0 16px;

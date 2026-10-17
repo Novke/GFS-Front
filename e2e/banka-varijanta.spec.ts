@@ -64,6 +64,27 @@ test.describe('banka zadataka: editor varijante', () => {
     await expect(editor(page, 'tekst')).toHaveValue('Prvi red\nDrugi red\nTreći red');
   });
 
+  test('nova varijanta, "Sačuvaj kao nacrt" sa neuspelim renderom: postaje izmena sa trakom i istaknutom linijom', async ({ page, mock }) => {
+    await page.goto('banka/varijante/nova?grupa=2');
+    await editor(page, 'tekst').fill('Prvi red\nDrugi \\foo red');
+    await page.getByLabel('Tačan broj').fill('7');
+    await page.getByRole('button', { name: 'Sačuvaj kao nacrt' }).click();
+
+    await expect.poll(() => mock.zahteviZa('banka/grupe/2/varijante', 'POST').length).toBe(1);
+    const nova = mock.podaci.bankaVarijante.at(-1)!;
+    expect(nova).toMatchObject({ tekst: 'Prvi red\nDrugi \\foo red', status: 'NACRT', renderStatus: 'GRESKA' });
+    await expect(page).toHaveURL(new RegExp(`banka/varijante/${nova.id}$`));
+    const traka = page.locator('app-form-error-banner [role=alert]');
+    await expect(traka).toHaveText('Varijanta je sačuvana kao nacrt, ali render nije uspeo (tekst, linija 2: Undefined control sequence \\foo).');
+    await expect(traka).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: `Zadatak ${nova.rb}` })).toBeVisible();
+    await expect(istaknuta(page, 'tekst')).toHaveText('2');
+    // stranica je sad izmena: "Renderuj ponovo" postoji, nema nesačuvanih izmena (veza u banku ne pita)
+    await expect(page.getByRole('button', { name: 'Renderuj ponovo' })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Putanja grupe' }).getByRole('link', { name: '2 → 10' }).click();
+    await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);
+  });
+
   test('izmena varijante 13: otvara se sa istaknutom linijom greške; ispravka i "Sačuvaj i odobri"', async ({ page, mock }) => {
     await page.goto('banka/varijante/13');
     await expect(page.getByRole('heading', { level: 1, name: '100111 u dekadni' })).toBeVisible();
@@ -116,17 +137,17 @@ test.describe('banka zadataka: editor varijante', () => {
     const medijId = mock.mediji.at(-1)!.id;
 
     await page.getByRole('button', { name: 'Ubaci u tekst' }).click();
-    await expect(editor(page, 'tekst')).toHaveValue('Pročitaj vrednost sa grafa:\n\\includegraphics{graf-funkcije}');
+    await expect(editor(page, 'tekst')).toHaveValue('Pročitaj vrednost sa grafa:\n\\includegraphics[width=\\linewidth]{graf-funkcije}');
     await expect(editor(page, 'tekst')).toBeFocused();
     await expect.poll(() => (mock.zahteviZa('banka/render-proba', 'POST').at(-1)?.telo as { tekst: string; prilozi: unknown })).toEqual({
-      predmetId: 1, tekst: 'Pročitaj vrednost sa grafa:\n\\includegraphics{graf-funkcije}', resenje: null,
+      predmetId: 1, tekst: 'Pročitaj vrednost sa grafa:\n\\includegraphics[width=\\linewidth]{graf-funkcije}', resenje: null,
       prilozi: [{ ime: 'graf-funkcije', medijId }],
     });
 
     await page.getByLabel('Tačan broj').fill('2,5');
     await page.getByRole('button', { name: 'Sačuvaj kao nacrt' }).click();
     await expect.poll(() => mock.zahteviZa('banka/grupe/2/varijante', 'POST').map(z => z.telo)).toEqual([{
-      naziv: null, tekst: 'Pročitaj vrednost sa grafa:\n\\includegraphics{graf-funkcije}', resenje: null,
+      naziv: null, tekst: 'Pročitaj vrednost sa grafa:\n\\includegraphics[width=\\linewidth]{graf-funkcije}', resenje: null,
       odgovori: { a: { broj: 2.5, ...BEZ_ODGOVORA } }, prilozi: [{ ime: 'graf-funkcije', medijId }], izvor: 'RUCNO',
     }]);
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);

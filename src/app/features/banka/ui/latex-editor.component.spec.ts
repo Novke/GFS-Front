@@ -100,6 +100,14 @@ describe('LatexEditorComponent', () => {
     expect(f.componentInstance.pregledi).toBe(2);
   });
 
+  it('držan Ctrl+Enter (ponavljanje tastera) ne emituje ponovo, niti dodaje novi red', () => {
+    taster('Enter', { ctrlKey: true });
+    for (let i = 0; i < 5; i++) {
+      expect(taster('Enter', { ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
+    }
+    expect(f.componentInstance.pregledi).toBe(1);
+  });
+
   it('greskaLinija ističe liniju u gutter-u i tekstu, polje je aria-invalid, opisano porukom greške', async () => {
     f.componentInstance.c.setValue('a\nb\nc\nd');
     f.componentInstance.linija.set(3);

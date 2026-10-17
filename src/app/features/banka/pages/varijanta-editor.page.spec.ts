@@ -5,7 +5,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { NEVER, of, throwError } from 'rxjs';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -158,9 +158,13 @@ describe('VarijantaEditorPage', () => {
     await otvori('/banka/varijante/nova?grupa=2');
     await unesi(editor('tekst'), 'x');
     await unesi(brojOdgovora(), '1');
+    // živa oblast postoji i pre čuvanja (prazna), pa čitač ekrana najavi kad dobije tekst
+    const status = el().querySelector('[role="status"][data-status]')!;
+    expect(status.textContent!.trim()).toBe('');
     await klik(dugme('data-sacuvaj'));
     expect(el().querySelector('mat-progress-bar')).not.toBeNull();
-    expect(el().textContent).toContain('Renderovanje može potrajati do minut');
+    expect(el().querySelector('[role="status"][data-status]')).toBe(status);
+    expect(status.textContent).toContain('Čuva se i renderuje… Renderovanje može potrajati do minut.');
     expect(editor('tekst').disabled).toBe(true);
     expect(brojOdgovora().disabled).toBe(true);
     expect(onemoguceno(dugme('data-sacuvaj'))).toBe(true);
@@ -253,16 +257,128 @@ describe('VarijantaEditorPage', () => {
     expect(stranica().imaNesacuvanihIzmena()).toBe(false);
   });
 
-  it('nova varijanta sa neuspelim renderom: prelazi na njen editor (bez novog unosa u istoriji) i javlja grešku', async () => {
-    api.kreirajVarijantu.mockImplementation((_g: number, cmd: VarijantaCmd) => of(varijanta({ ...izCmd(cmd), id: 15 })));
-    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+  /** Nova varijanta 15 sa greškom u liniji 3 teksta, kako je server čuva (i vraća pri učitavanju njenog editora). */
+  function novaSaGreskom(): void {
+    let sacuvana: VarijantaDetails | null = null;
+    api.kreirajVarijantu.mockImplementation((_g: number, cmd: VarijantaCmd) => of(sacuvana = varijanta({ ...izCmd(cmd), id: 15, naziv: null })));
+    api.varijanta.mockImplementation((id: number) => of(id === 15 && sacuvana ? sacuvana : varijanta()));
+  }
+
+  for (const [dugmeCuvanja, deo] of [['data-sacuvaj-odobri', 'ali nije odobrena: render nije uspeo'], ['data-sacuvaj', 'ali render nije uspeo']] as const) {
+    it(`nova varijanta sa neuspelim renderom (${dugmeCuvanja}): postaje izmena (bez novog unosa u istoriji), traka i istaknuta linija`, async () => {
+      novaSaGreskom();
+      const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+      await otvori('/banka/varijante/nova?grupa=2');
+      await unesi(editor('tekst'), 'a\nb\n\\foo');
+      await unesi(brojOdgovora(), '1');
+      await klik(dugme(dugmeCuvanja));
+      await stabilno();
+      expect(api.odobri).not.toHaveBeenCalled();
+      expect(router.url).toBe('/banka/varijante/15');
+      const traka = el().querySelector('app-form-error-banner [role="alert"]')!;
+      expect(traka.textContent).toContain(`Varijanta je sačuvana kao nacrt, ${deo} (tekst, linija 3: Undefined control sequence \\foo)`);
+      expect(document.activeElement).toBe(traka);
+      expect(aktivniTab()).toContain('Tekst');
+      expect(istaknute('tekst')).toEqual(['3']);
+      expect(editor('tekst').value).toBe('a\nb\n\\foo');
+      expect(greska).not.toHaveBeenCalled();
+      expect(stranica().imaNesacuvanihIzmena()).toBe(false);
+    });
+  }
+
+  it('"Sačuvaj kao nacrt" izmene sa neuspelim renderom: ostaje na varijanti, kartica dela sa greškom', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak', resenje: 'r' })));
+    api.izmeniVarijantu.mockImplementation((id: number, cmd: VarijantaCmd) =>
+      of(varijanta({ id, ...izCmd(cmd), renderGreska: { linija: 1, poruka: 'X' }, renderDeo: 'resenje' })));
+    await otvori('/banka/varijante/13');
+    await unesi(editor('tekst'), 'Zadatak 2');
+    await klik(dugme('data-sacuvaj'));
+    expect(router.url).toBe('/banka/varijante/13');
+    expect(el().querySelector('app-form-error-banner')!.textContent).toContain('Varijanta je sačuvana kao nacrt, ali render nije uspeo (rešenje, linija 1: X).');
+    expect(aktivniTab()).toContain('Rešenje');
+    expect(istaknute('resenje')).toEqual(['1']);
+  });
+
+  it('"Sačuvaj" aktivne varijante sa neuspelim renderom: ostaje, traka kaže da je vraćena u nacrt', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'AKTIVNA', tekst: 'Zadatak' })));
+    api.izmeniVarijantu.mockImplementation((id: number, cmd: VarijantaCmd) => of(varijanta({ id, ...izCmd(cmd), status: 'NACRT' })));
+    await otvori('/banka/varijante/13');
+    await unesi(editor('tekst'), 'Zadatak\nb\n\\foo');
+    await klik(dugme('data-sacuvaj'));
+    expect(router.url).toBe('/banka/varijante/13');
+    expect(el().querySelector('app-form-error-banner')!.textContent)
+      .toContain('Izmene su sačuvane. Render nije uspeo, varijanta je vraćena u nacrt (tekst, linija 3: Undefined control sequence \\foo).');
+    expect(istaknute('tekst')).toEqual(['3']);
+    // sad je nacrt: dugmad nacrta
+    expect(dugme('data-sacuvaj').textContent!.trim()).toBe('Sačuvaj kao nacrt');
+    expect(el().querySelector('[data-sacuvaj-odobri]')).not.toBeNull();
+  });
+
+  it('korisnik ode dok se čuva: obaveštenje kaže pravi ishod (render nije uspeo), bez navigacije', async () => {
+    const odgovor = new Subject<VarijantaDetails>();
+    api.kreirajVarijantu.mockReturnValue(odgovor);
+    const obavestenja = TestBed.inject(NotificationStore);
+    const greska = vi.spyOn(obavestenja, 'greska');
+    const uspeh = vi.spyOn(obavestenja, 'uspeh');
     await otvori('/banka/varijante/nova?grupa=2');
     await unesi(editor('tekst'), 'a\nb\n\\foo');
     await unesi(brojOdgovora(), '1');
-    await klik(dugme('data-sacuvaj-odobri'));
-    expect(api.odobri).not.toHaveBeenCalled();
-    expect(router.url).toBe('/banka/varijante/15');
-    expect(greska.mock.calls[0][0]).toContain('linija 3');
+    await klik(dugme('data-sacuvaj'));
+    harness.fixture.destroy();
+    odgovor.next(varijanta({ id: 15, tekst: 'a\nb\n\\foo' }));
+    odgovor.complete();
+    expect(uspeh).not.toHaveBeenCalled();
+    expect(greska).toHaveBeenCalledExactlyOnceWith('Varijanta je sačuvana kao nacrt, ali render nije uspeo (tekst, linija 3: Undefined control sequence \\foo).');
+    expect(router.url).toBe('/banka/varijante/nova?grupa=2');
+  });
+
+  it('dok se prilog otprema, čuvanje i "Odbaci izmene" čekaju; posle otpremanja prilog ide u komandu', async () => {
+    const otprema = new Subject<{ id: string; naziv: string; mime: string; velicina: number }>();
+    api.prilog.mockReturnValue(otprema);
+    await otvori('/banka/varijante/nova?grupa=2');
+    await unesi(editor('tekst'), 'x');
+    await unesi(brojOdgovora(), '1');
+    const input = el().querySelector<HTMLInputElement>('app-prilozi input[type=file]')!;
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'Graf.png', { type: 'image/png' })], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await stabilno();
+    expect(onemoguceno(dugme('data-sacuvaj'))).toBe(true);
+    expect(onemoguceno(dugme('data-sacuvaj-odobri'))).toBe(true);
+    expect(onemoguceno(dugme('data-odbaci'))).toBe(true);
+    expect(el().querySelector('[data-nedostaje]')!.textContent).toContain('kraj otpremanja priloga');
+    await klik(dugme('data-sacuvaj'));
+    expect(api.kreirajVarijantu).not.toHaveBeenCalled();
+
+    otprema.next({ id: 'm9', naziv: 'Graf.png', mime: 'image/png', velicina: 1 });
+    otprema.complete();
+    await stabilno();
+    await klik(dugme('data-sacuvaj'));
+    expect(api.kreirajVarijantu.mock.calls[0][1].prilozi).toEqual([{ ime: 'graf', medijId: 'm9' }]);
+  });
+
+  it('"Odbaci izmene" vraća formu na učitanu varijantu (tekst, rešenje, naziv, odgovor, prilozi) i briše oznaku izmena', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({
+      ...OK, tekst: 'Zadatak', resenje: 'Rešenje', prilozi: [{ ime: 'graf', medij: { id: 'm1', naziv: 'graf.png', mime: 'image/png', velicina: 10 } }],
+    })));
+    await otvori('/banka/varijante/13');
+    expect(onemoguceno(dugme('data-odbaci'))).toBe(true);
+    await unesi(editor('tekst'), 'Drugi zadatak');
+    await unesi(el().querySelector<HTMLInputElement>('input[data-naziv]')!, 'Novi naziv');
+    await unesi(brojOdgovora(), '40');
+    await klik(el().querySelector<HTMLButtonElement>('app-prilozi button[data-ukloni]')!);
+    expect(stranica().imaNesacuvanihIzmena()).toBe(true);
+    expect(onemoguceno(dugme('data-renderuj'))).toBe(true);
+
+    await klik(dugme('data-odbaci'));
+    expect(editor('tekst').value).toBe('Zadatak');
+    expect(el().querySelector<HTMLInputElement>('input[data-naziv]')!.value).toBe('100111 u dekadni');
+    expect(brojOdgovora().value).toBe('39');
+    expect([...el().querySelectorAll<HTMLInputElement>('app-prilozi input[data-ime]')].map(i => i.value)).toEqual(['graf']);
+    expect(stranica().imaNesacuvanihIzmena()).toBe(false);
+    expect(onemoguceno(dugme('data-odbaci'))).toBe(true);
+    expect(onemoguceno(dugme('data-renderuj'))).toBe(false);
+    await klik(kartica('Rešenje'));
+    expect(editor('resenje').value).toBe('Rešenje');
   });
 
   it('greška servera ide u traku; 503 kaže da render servis ne radi i da ništa nije sačuvano', async () => {
@@ -300,7 +416,7 @@ describe('VarijantaEditorPage', () => {
     await otvori('/banka/varijante/13');
     editor('tekst').setSelectionRange(9, 9);
     await klik(el().querySelector<HTMLButtonElement>('app-prilozi button[data-ubaci]')!);
-    expect(editor('tekst').value).toBe('Prvi red\n\\includegraphics{graf}Drugi red');
+    expect(editor('tekst').value).toBe('Prvi red\n\\includegraphics[width=\\linewidth]{graf}Drugi red');
     expect(document.activeElement).toBe(editor('tekst'));
   });
 
@@ -312,7 +428,7 @@ describe('VarijantaEditorPage', () => {
     await klik(kartica('Rešenje'));
     editor('resenje').setSelectionRange(12, 12);
     await klik(el().querySelector<HTMLButtonElement>('app-prilozi button[data-ubaci]')!);
-    expect(editor('resenje').value).toBe('Vidi sliku: \\includegraphics{graf}');
+    expect(editor('resenje').value).toBe('Vidi sliku: \\includegraphics[width=\\linewidth]{graf}');
     expect(editor('tekst').value).toBe('Zadatak');
     expect(stranica().imaNesacuvanihIzmena()).toBe(true);
   });
