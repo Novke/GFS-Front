@@ -40,6 +40,11 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'banka/grupe/2', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka/grupe/3', spremno: p => p.locator('app-polja-editor input[data-opcija]').first() },
   { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
+  // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
+  // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
+  { putanja: 'banka/varijante/nova?grupa=2', spremno: p => p.locator('[data-nedostaje]') },
+  { putanja: 'banka/varijante/13', spremno: p => p.locator('#bk-ve-greska-tekst') },
+  { putanja: 'banka/varijante/14', spremno: p => p.getByRole('img', { name: 'Pregled: Zadatak' }) },
 ];
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];

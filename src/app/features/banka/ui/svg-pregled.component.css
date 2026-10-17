@@ -1,0 +1,69 @@
+/*
+ * Pregled render-probe: zaglavlje (naslov, čekanje, "Puna širina"), poruka stanja i okvir sa SVG-om, 84 mm kao na
+ * telefonu ili preko cele kolone. Okvir je uvek dnevni (`.rezim-dan`): LaTeX je crn na providnom. Boje samo kroz tokene.
+ * Globalno (`ViewEncapsulation.None`, jer SVG stiže kroz `innerHTML` bez atributa enkapsulacije): svako pravilo počinje
+ * sa `app-svg-pregled` ili `.bk-sp`.
+ */
+
+app-svg-pregled { display: block; }
+
+.bk-sp { display: flex; flex-direction: column; gap: 8px; }
+
+.bk-sp-zaglavlje {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.bk-sp-naslov { margin: 0; font-size: 15px; }
+
+.bk-sp-ceka {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-sp-sirina { margin-left: auto; }
+
+.bk-sp-poruka,
+.bk-sp-napomena { margin: 0; color: var(--muted); font-size: 13px; }
+
+.bk-sp-greska {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bk-sp-okvir {
+  box-sizing: border-box;
+  width: 84mm;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  overflow: hidden;
+  transition: opacity .15s;
+}
+
+.bk-sp-puna { width: 100%; }
+.bk-sp-zastarelo { opacity: .45; }
+
+.bk-sp-svg > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-sp-okvir { transition: none; }
+}
