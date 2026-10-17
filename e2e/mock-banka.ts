@@ -189,7 +189,30 @@ export class MockBanka {
     return { status: 201, telo: this.details(g) };
   }
 
-  /** Puna zamena naziva, opisa, težine i uputstva; `polja: null` ostavlja šemu. */
+  /**
+   * Nova šema nad varijantama grupe (kao `prilagodiVarijante` na serveru): promena tipa postojećeg polja je 409 dok ima
+   * aktivnih; inače odgovor ostaje samo za polje koje i dalje postoji sa istim tipom (i opcijom koja postoji), a aktivna
+   * varijanta kojoj zatim fali odgovor postaje nacrt.
+   */
+  private prilagodiVarijante(g: BankaGrupa, nova: Polje[]): Ishod | null {
+    const varijante = this.varijanteGrupe(g.id);
+    const stara = new Map(g.polja.map(p => [p.kljuc, p]));
+    const promenjen = nova.find(p => stara.has(p.kljuc) && stara.get(p.kljuc)!.tip !== p.tip);
+    if (promenjen && varijante.some(v => v.status === 'AKTIVNA')) {
+      return greska(409, `Tip polja '${promenjen.kljuc}' se ne menja dok grupa ima aktivne varijante.`);
+    }
+    for (const v of varijante) {
+      const vazeci = Object.fromEntries(nova.flatMap(p => {
+        const o = v.odgovori[p.kljuc];
+        return o && stara.get(p.kljuc)?.tip === p.tip && this.proveriOdgovore([p], { [p.kljuc]: o }) === null ? [[p.kljuc, o]] : [];
+      }));
+      v.odgovori = vazeci;
+      if (Object.keys(vazeci).length < nova.length && v.status === 'AKTIVNA') v.status = 'NACRT';
+    }
+    return null;
+  }
+
+  /** Puna zamena naziva, opisa, težine i uputstva; `polja: null` ostavlja šemu (i odgovore varijanti). */
   izmeniGrupu(id: number, cmd: GrupaCmd): Ishod {
     const g = this.grupa(id);
     if (!g) return greska(404, 'Grupa nije pronađena.');
@@ -200,6 +223,10 @@ export class MockBanka {
     }
     if ((cmd.tezina ?? null) === null && this.varijanteGrupe(id).length > 0) {
       return greska(400, 'Težina je obavezna za grupu sa varijantama.');
+    }
+    if (cmd.polja != null) {
+      const odbijeno = this.prilagodiVarijante(g, cmd.polja);
+      if (odbijeno) return odbijeno;
     }
     g.naziv = cmd.naziv.trim();
     g.opis = cmd.opis ?? null;

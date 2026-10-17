@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { OdgovorPolja, Polje } from './banka.models';
-import { novaOpcija, novoPolje, odgovorPopunjen, prazanOdgovor, prazniOdgovori, proveriPolja } from './polja';
+import {
+  istaPolja, novaOpcija, normalizujPolja, novoPolje, odgovorPopunjen, posledicePromene, prazanOdgovor, prazniOdgovori, proveriPolja,
+} from './polja';
 
 /** Ispravno polje tipa BROJ; `izmena` menja samo ono što test proverava. */
 function broj(kljuc: string, izmena: Partial<Polje> = {}): Polje {
@@ -184,5 +186,83 @@ describe('odgovorPopunjen', () => {
     expect(odgovorPopunjen(p, odgovor({ tacne: [] }))).toBe(false);
     expect(odgovorPopunjen(p, odgovor({ tacne: [1, 9] }))).toBe(false);
     expect(odgovorPopunjen(p, odgovor({ tacne: null }))).toBe(false);
+  });
+});
+
+describe('normalizujPolja i istaPolja', () => {
+  it('normalizuje kao server: razmaci sa krajeva, prazna jedinica null, podrazumevane vrednosti, opcije samo za izbor', () => {
+    const p: Polje = {
+      kljuc: ' a ', oznaka: '  Rezultat ', tip: 'BROJ', odstupanje: null, odstupanjeTip: null, jedinica: '  ', zanemariVelicinu: null,
+      zanemariRazmake: null, opcije: [{ id: 1, tekst: 'x' }],
+    };
+    expect(normalizujPolja([p])).toEqual([{
+      kljuc: 'a', oznaka: 'Rezultat', tip: 'BROJ', odstupanje: 0, odstupanjeTip: 'APSOLUTNO', jedinica: null, zanemariVelicinu: true,
+      zanemariRazmake: true, opcije: null,
+    }]);
+    expect(normalizujPolja([{ ...izbor('JEDAN_TACAN'), opcije: [{ id: 3, tekst: ' Prva ' }, { id: 1, tekst: 'Druga' }] }])[0].opcije)
+      .toEqual([{ id: 3, tekst: 'Prva' }, { id: 1, tekst: 'Druga' }]);
+    expect(normalizujPolja([broj('a', { jedinica: ' m ' })])[0].jedinica).toBe('m');
+  });
+
+  it('istaPolja poredi posle normalizacije, nezavisno od redosleda svojstava; redosled polja i opcija se računa', () => {
+    const sacuvano = normalizujPolja([broj('a'), izbor('VISE_TACNIH', 'b')]);
+    // isto polje sa svojstvima drugim redom (JSON sa servera) i bez podrazumevanih vrednosti
+    const izServera = JSON.parse(JSON.stringify(sacuvano.map(p => Object.fromEntries(Object.entries(p).reverse())))) as Polje[];
+    expect(istaPolja(izServera, sacuvano)).toBe(true);
+    expect(istaPolja([{ ...broj('a'), oznaka: ' Rezultat a ', odstupanje: null }, sacuvano[1]], sacuvano)).toBe(true);
+    expect(istaPolja([broj('a', { oznaka: 'Drugo' }), sacuvano[1]], sacuvano)).toBe(false);
+    expect(istaPolja([sacuvano[1], sacuvano[0]], sacuvano)).toBe(false);
+    expect(istaPolja([sacuvano[0], { ...sacuvano[1], opcije: [...sacuvano[1].opcije!].reverse() }], sacuvano)).toBe(false);
+    expect(istaPolja([], [])).toBe(true);
+  });
+
+  it('neispravno odstupanje (NaN iz neispravnog unosa) nije isto što i 0', () => {
+    expect(istaPolja([broj('a', { odstupanje: Number.NaN })], [broj('a')])).toBe(false);
+  });
+});
+
+describe('posledicePromene', () => {
+  const sacuvana = [broj('a'), izbor('JEDAN_TACAN', 'b')];
+  const bez = { brojVarijanti: 0, brojAktivnih: 0 };
+  const saNacrtima = { brojVarijanti: 2, brojAktivnih: 0 };
+  const saAktivnim = { brojVarijanti: 2, brojAktivnih: 1 };
+
+  it('bez izmene ili bez varijanti nema posledica', () => {
+    expect(posledicePromene(sacuvana, sacuvana, saAktivnim)).toEqual([]);
+    expect(posledicePromene(sacuvana, [broj('c')], bez)).toEqual([]);
+  });
+
+  it('dodato polje: aktivne varijante postaju nacrti (samo kad ih ima)', () => {
+    const nova = [...sacuvana, broj('c')];
+    expect(posledicePromene(sacuvana, nova, saAktivnim)).toEqual(['Aktivne varijante će postati nacrti dok ne dobiju odgovor za novo polje.']);
+    expect(posledicePromene(sacuvana, nova, saNacrtima)).toEqual([]);
+  });
+
+  it('obrisano polje: odgovori se brišu iz svih varijanti', () => {
+    expect(posledicePromene(sacuvana, [sacuvana[1]], saNacrtima)).toEqual(['Odgovori za obrisano polje se brišu iz svih varijanti.']);
+  });
+
+  it('promenjen tip postojećeg polja: njegovi odgovori se brišu', () => {
+    const nova = [{ ...sacuvana[0], tip: 'TEKST' as const }, sacuvana[1]];
+    expect(posledicePromene(sacuvana, nova, saNacrtima)).toEqual(['Odgovori za polje sa promenjenim tipom se brišu iz svih varijanti.']);
+  });
+
+  it('obrisana opcija: odgovori koji je biraju se brišu, a aktivna varijanta sa takvim odgovorom postaje nacrt', () => {
+    const nova = [sacuvana[0], { ...sacuvana[1], opcije: sacuvana[1].opcije!.slice(0, 2) }];
+    expect(posledicePromene(sacuvana, nova, saNacrtima)).toEqual(['Tačni odgovori koji biraju obrisanu opciju se brišu iz varijanti.']);
+    expect(posledicePromene(sacuvana, nova, saAktivnim)).toEqual([
+      'Tačni odgovori koji biraju obrisanu opciju se brišu iz varijanti; takva aktivna varijanta postaje nacrt.',
+    ]);
+    // izmenjen tekst opcije (isti id) nije brisanje
+    const preimenovana = [sacuvana[0], { ...sacuvana[1], opcije: sacuvana[1].opcije!.map(o => ({ ...o, tekst: o.tekst + '!' })) }];
+    expect(posledicePromene(sacuvana, preimenovana, saAktivnim)).toEqual([]);
+  });
+
+  it('više vrsta izmena odjednom daje sve poruke, redom', () => {
+    const nova = [{ ...sacuvana[1], tip: 'VISE_TACNIH' as const }, broj('c')];
+    expect(posledicePromene(sacuvana, nova, { brojVarijanti: 3, brojAktivnih: 0 })).toEqual([
+      'Odgovori za obrisano polje se brišu iz svih varijanti.',
+      'Odgovori za polje sa promenjenim tipom se brišu iz svih varijanti.',
+    ]);
   });
 });

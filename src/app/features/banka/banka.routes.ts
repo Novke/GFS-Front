@@ -2,11 +2,13 @@ import { Route } from '@angular/router';
 
 import { mrvica as m } from '../../core/layout/mrvica';
 import { putanjaSaId } from '../../core/route-matchers';
+import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
 
 /*
  * Rute banke zadataka (deca rute `banka` u ljusci; roditelj daje naslov "Banka zadataka" i mrvice "Nastava > Banka
  * zadataka"). Filteri stranice su query parametri (`?predmet&namena&grupa`). Id u putanji mora biti broj (`putanjaSaId`),
- * inače 404 bez poziva API-ja. Sve je iza basic-auth-a (ništa pod `/public`).
+ * inače 404 bez poziva API-ja. Sve je iza basic-auth-a (ništa pod `/public`). Detalj grupe pita pre napuštanja sa nesačuvanim
+ * izmenama (`unsavedChangesGuard`).
  */
 export const BANKA_RUTE: Route[] = [
   {
@@ -19,6 +21,7 @@ export const BANKA_RUTE: Route[] = [
     matcher: putanjaSaId('grupe/:id'),
     title: 'Grupa zadataka',
     data: { mrvice: () => [m('Banka zadataka', '/banka'), m('Grupa zadataka')] },
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () => import('./pages/grupa-detalj.page').then(x => x.GrupaDetaljPage),
   },
   {

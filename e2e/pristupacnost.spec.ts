@@ -35,6 +35,11 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   // banka zadataka: list sa karticama (i greškom rendera) i unutrašnji čvor sa zbirom
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
+  // detalj grupe: list sa poljem BROJ (tip zaključan aktivnom varijantom) i karticama, list sa poljima TEKST i JEDAN_TACAN,
+  // unutrašnji čvor (samo naziv i opis)
+  { putanja: 'banka/grupe/2', spremno: p => p.locator('app-varijanta-kartica').first() },
+  { putanja: 'banka/grupe/3', spremno: p => p.locator('app-polja-editor input[data-opcija]').first() },
+  { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
 ];
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
@@ -114,6 +119,18 @@ for (const rezim of ['dan', 'noc'] as const) {
       await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
       await expect(page.getByRole('textbox', { name: 'Preambula' })).toBeVisible();
       await proveri('preambula');
+    });
+
+    // detalj grupe banke: dodato polje daje upozorenje (aktivne varijante postaju nacrti) i poruku provere šeme
+    test('/banka/grupe/2 (dodato polje: upozorenje i poruka provere šeme): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka/grupe/2');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('app-varijanta-kartica').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Dodaj polje' }).click();
+      await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti');
+      await expect(page.locator('[data-greska-polja]')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: detalj grupe sa dodatim poljem (${rezim})`).toEqual([]);
     });
 
     // 5c: forma INFO slajda sa dugmetom "Pretvori u platno" i potvrda pretvaranja uz gubitke (veza)

@@ -5,16 +5,17 @@ import type { OdgovorPolja, Polje, PoljeOpcija, TipPolja } from './banka.models'
  * redosled provera); server je jedini sud i proverava sve ponovo, ovde je samo ono što korisnik može da pogreši u formi.
  */
 
-const MAX_POLJA = 10;
-const MAX_OZNAKA = 200;
-const MIN_OPCIJA = 2;
-const MAX_OPCIJA = 6;
-const MAX_TEKST_OPCIJE = 200;
-const MAX_JEDINICA = 30;
+export const MAX_POLJA = 10;
+export const MAX_OZNAKA = 200;
+export const MIN_OPCIJA = 2;
+export const MAX_OPCIJA = 6;
+export const MAX_TEKST_OPCIJE = 200;
+export const MAX_JEDINICA = 30;
 const KLJUC = /^[a-z][a-z0-9]{0,9}$/;
 const SLOVA = 'abcdefghijklmnopqrstuvwxyz';
 
-const imaOpcije = (tip: TipPolja) => tip === 'JEDAN_TACAN' || tip === 'VISE_TACNIH';
+/** JEDAN_TACAN i VISE_TACNIH imaju ponuđene odgovore (`opcije`). */
+export const imaOpcije = (tip: TipPolja) => tip === 'JEDAN_TACAN' || tip === 'VISE_TACNIH';
 /** Dužina u znakovima (code point), kao u MySQL koloni i `BankaPP`. */
 const duzina = (s: string | null | undefined) => (s === null || s === undefined ? 0 : [...s].length);
 const prazan = (s: string | null | undefined) => !s || s.trim() === '';
@@ -118,4 +119,70 @@ export function odgovorPopunjen(p: Polje, o: OdgovorPolja): boolean {
     case 'VISE_TACNIH':
       return !!o.tacne && o.tacne.length > 0 && o.tacne.every(id => ids.has(id));
   }
+}
+
+/**
+ * Kopija šeme kako bi je server upisao (`BankaPP.normalizujPolja`): ključ, oznaka i tekst opcije bez razmaka na krajevima,
+ * prazna jedinica `null`, odstupanje 0 `APSOLUTNO` i oba "zanemari" `true` kad nisu data, opcije samo za JEDAN_TACAN i
+ * VISE_TACNIH. Svojstva su uvek istim redom (poređenje kroz JSON). Ne proverava pravila (to je `proveriPolja`).
+ */
+export function normalizujPolja(polja: readonly Polje[]): Polje[] {
+  return polja.map(p => {
+    const jedinica = p.jedinica?.trim();
+    return {
+      kljuc: p.kljuc.trim(),
+      oznaka: p.oznaka.trim(),
+      tip: p.tip,
+      odstupanje: p.odstupanje ?? 0,
+      odstupanjeTip: p.odstupanjeTip ?? 'APSOLUTNO',
+      jedinica: jedinica ? jedinica : null,
+      zanemariVelicinu: p.zanemariVelicinu ?? true,
+      zanemariRazmake: p.zanemariRazmake ?? true,
+      opcije: imaOpcije(p.tip) ? (p.opcije ?? []).map(o => ({ id: o.id, tekst: o.tekst.trim() })) : null,
+    };
+  });
+}
+
+/** Iste šeme posle normalizacije (redosled polja i opcija se računa); server ih tada ne smatra novom šemom. */
+export function istaPolja(a: readonly Polje[], b: readonly Polje[]): boolean {
+  return JSON.stringify(normalizujPolja(a)) === JSON.stringify(normalizujPolja(b));
+}
+
+/** Brojači grupe od kojih zavise posledice nove šeme. */
+export interface BrojaciSeme {
+  brojVarijanti: number;
+  brojAktivnih: number;
+}
+
+/**
+ * Šta nova šema radi postojećim varijantama (kao `prilagodiVarijante` na serveru), za upozorenje pre čuvanja: dodato polje
+ * vraća aktivne varijante u nacrt (fali im odgovor), a obrisano polje, promenjen tip i obrisana opcija brišu odgovore. Bez
+ * varijanti nema posledica. Poređenje je po ključu; promenu tipa dok ima aktivnih server odbija (409), pa to nije posledica.
+ */
+export function posledicePromene(stara: readonly Polje[], nova: readonly Polje[], b: BrojaciSeme): string[] {
+  if (b.brojVarijanti === 0) {
+    return [];
+  }
+  const stare = new Map(stara.map(p => [p.kljuc.trim(), p]));
+  const nove = new Map(nova.map(p => [p.kljuc.trim(), p]));
+  const parovi = [...nove].flatMap(([k, p]) => (stare.has(k) ? [[stare.get(k)!, p] as const] : []));
+  const promenjenTip = parovi.some(([s, n]) => s.tip !== n.tip);
+  const obrisanaOpcija = parovi.some(([s, n]) => s.tip === n.tip && imaOpcije(n.tip)
+    && (s.opcije ?? []).some(o => !(n.opcije ?? []).some(x => x.id === o.id)));
+  const poruke: string[] = [];
+  if (b.brojAktivnih > 0 && [...nove.keys()].some(k => !stare.has(k))) {
+    poruke.push('Aktivne varijante će postati nacrti dok ne dobiju odgovor za novo polje.');
+  }
+  if ([...stare.keys()].some(k => !nove.has(k))) {
+    poruke.push('Odgovori za obrisano polje se brišu iz svih varijanti.');
+  }
+  if (promenjenTip) {
+    poruke.push('Odgovori za polje sa promenjenim tipom se brišu iz svih varijanti.');
+  }
+  if (obrisanaOpcija) {
+    poruke.push(b.brojAktivnih > 0
+      ? 'Tačni odgovori koji biraju obrisanu opciju se brišu iz varijanti; takva aktivna varijanta postaje nacrt.'
+      : 'Tačni odgovori koji biraju obrisanu opciju se brišu iz varijanti.');
+  }
+  return poruke;
 }

@@ -193,3 +193,107 @@ test.describe('banka zadataka', () => {
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(2);
   });
 });
+
+/** Polje šeme po rednom broju (fieldset "Polje N ključ k" u editoru polja). */
+const poljeSeme = (page: Page, n: number) => page.getByRole('group', { name: new RegExp(`^Polje ${n}\\b`) });
+
+test.describe('banka zadataka: detalj grupe', () => {
+  test('izmena oznake polja šalje PUT sa celom šemom; samo preimenovanje šalje "polja": null', async ({ page, mock }) => {
+    await page.goto('banka?predmet=1&grupa=2');
+    await page.getByRole('link', { name: 'Šema i uputstvo' }).click();
+    await expect(page).toHaveURL(/banka\/grupe\/2$/);
+    await expect(page.getByRole('heading', { level: 1, name: '2 → 10' })).toBeVisible();
+    const sacuvaj = page.getByRole('button', { name: 'Sačuvaj' });
+    await expect(sacuvaj).toHaveAttribute('aria-disabled', 'true');
+
+    await poljeSeme(page, 1).getByLabel('Oznaka', { exact: true }).fill('Dekadna vrednost');
+    await sacuvaj.click();
+    await expect.poll(() => mock.zahteviZa('banka/grupe/2', 'PUT').map(z => z.telo)).toEqual([{
+      naziv: '2 → 10', opis: 'Binarni broj u dekadni.', tezina: 2, uputstvo: 'Kratki zadaci sa jednim binarnim brojem do 8 cifara.',
+      polja: [{
+        kljuc: 'a', oznaka: 'Dekadna vrednost', tip: 'BROJ', odstupanje: 0, odstupanjeTip: 'APSOLUTNO', jedinica: null,
+        zanemariVelicinu: true, zanemariRazmake: true, opcije: null,
+      }],
+    }]);
+    await expect(page.getByText('Grupa je sačuvana.')).toBeVisible();
+    // posle čuvanja nema izmena: dugme je onemogućeno, a fokus ostaje na njemu
+    await expect(sacuvaj).toHaveAttribute('aria-disabled', 'true');
+    await expect(sacuvaj).toBeFocused();
+
+    await page.getByLabel('Naziv', { exact: true }).fill('Binarno u dekadno');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => mock.zahteviZa('banka/grupe/2', 'PUT').at(-1)?.telo).toEqual({
+      naziv: 'Binarno u dekadno', opis: 'Binarni broj u dekadni.', tezina: 2,
+      uputstvo: 'Kratki zadaci sa jednim binarnim brojem do 8 cifara.', polja: null,
+    });
+    await expect(page.getByRole('heading', { level: 1, name: 'Binarno u dekadno' })).toBeVisible();
+    expect(mock.podaci.bankaGrupe.find(g => g.id === 2)!.polja[0].oznaka).toBe('Dekadna vrednost');
+  });
+
+  test('dodato polje uz aktivne varijante: upozorenje pre čuvanja, posle čuvanja aktivna je nacrt i tip se otključava', async ({ page, mock }) => {
+    await page.goto('banka/grupe/2');
+    await expect(page.locator('app-varijanta-kartica[data-varijanta="12"]')).toContainText('Aktivna');
+    const tipA = poljeSeme(page, 1).getByRole('combobox', { name: 'Tip' });
+    await expect(tipA).toHaveAttribute('aria-disabled', 'true');
+    await expect(poljeSeme(page, 1)).toContainText('Grupa ima aktivne varijante: tip polja se ne menja');
+
+    await page.getByRole('button', { name: 'Dodaj polje' }).click();
+    await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti dok ne dobiju odgovor za novo polje.');
+    await expect(page.locator('[data-greska-polja]')).toHaveText('Oznaka polja mora imati 1 do 200 znakova.');
+    const oznakaB = poljeSeme(page, 2).getByLabel('Oznaka', { exact: true });
+    await expect(oznakaB).toBeFocused();
+    await page.keyboard.type('Zapis bez vodećih nula');
+    await expect(page.locator('[data-greska-polja]')).toHaveCount(0);
+    await poljeSeme(page, 2).getByRole('combobox', { name: 'Tip' }).click();
+    await page.getByRole('option', { name: 'Tekst' }).click();
+
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect.poll(() => mock.zahteviZa('banka/grupe/2', 'PUT').map(z => (z.telo as { polja: { kljuc: string; tip: string }[] }).polja
+      .map(p => `${p.kljuc}:${p.tip}`))).toEqual([['a:BROJ', 'b:TEKST']]);
+    // mok kao server: aktivnoj varijanti fali odgovor za "b", pa je nacrt; bez aktivnih tip polja "a" više nije zaključan
+    await expect(page.locator('app-varijanta-kartica[data-varijanta="12"]')).toContainText('Nacrt');
+    await expect(tipA).toHaveAttribute('aria-disabled', 'false');
+    await expect(page.locator('[data-posledice]')).toBeEmpty();
+  });
+
+  test('greška servera ide u traku iznad forme i dobija fokus', async ({ page, mock }) => {
+    await page.goto('banka/grupe/2');
+    await page.getByLabel('Naziv', { exact: true }).fill('16 → 2');
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    const traka = page.locator('app-form-error-banner [role=alert]');
+    await expect(traka).toHaveText('Grupa sa tim nazivom već postoji.');
+    await expect(traka).toBeFocused();
+    expect(mock.podaci.bankaGrupe.find(g => g.id === 2)!.naziv).toBe('2 → 10');
+  });
+
+  test('napuštanje sa nesačuvanim izmenama traži potvrdu; putanja vodi nazad u banku na tu grupu', async ({ page }) => {
+    await page.goto('banka/grupe/2');
+    await page.getByLabel('Opis (opciono)').fill('Novi opis');
+    await page.getByRole('navigation', { name: 'Putanja grupe' }).getByRole('link', { name: 'Konverzije brojeva' }).click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Napustiti stranicu?' });
+    await expect(potvrda).toBeVisible();
+    await potvrda.getByRole('button', { name: 'Odustani' }).click();
+    await expect(potvrda).toBeHidden();
+    await expect(page).toHaveURL(/banka\/grupe\/2$/);
+    await expect(page.getByLabel('Opis (opciono)')).toHaveValue('Novi opis');
+
+    await page.getByRole('navigation', { name: 'Putanja grupe' }).getByRole('link', { name: 'Konverzije brojeva' }).click();
+    await potvrda.getByRole('button', { name: 'Napusti' }).click();
+    await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=1$/);
+    await expect(stavka(page, 'Konverzije brojeva')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('unutrašnji čvor: samo naziv i opis; PUT zadržava težinu i uputstvo', async ({ page, mock }) => {
+    await page.goto('banka/grupe/1');
+    await expect(page.getByRole('heading', { level: 1, name: 'Konverzije brojeva' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Težina' })).toHaveCount(0);
+    await expect(page.locator('app-polja-editor')).toHaveCount(0);
+    await expect(page.locator('textarea[data-uputstvo]')).toHaveCount(0);
+    await page.getByLabel('Opis (opciono)').fill('Sve konverzije.');
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect.poll(() => mock.zahteviZa('banka/grupe/1', 'PUT').map(z => z.telo)).toEqual([
+      { naziv: 'Konverzije brojeva', opis: 'Sve konverzije.', tezina: null, uputstvo: null, polja: null },
+    ]);
+  });
+});
+
