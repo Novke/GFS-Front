@@ -10,7 +10,7 @@ import {
   GrupaCmd, GrupaCvor, GrupaDetails, GrupaPutanja, Namena, nadjiCvor, PremestiCmd, prviList, putanjaDo, StatusVarijante,
   VarijantaInfo,
 } from './banka.models';
-import { razlogBanke, TIHO } from './greske';
+import { OpcijeRazloga, razlogBanke, TIHO, UPIS } from './greske';
 
 export type FilterStatusa = StatusVarijante | 'SVE';
 
@@ -52,8 +52,9 @@ interface ZahtevStabla {
  * Stranica banke (`/banka`): stablo grupa jednog predmeta i namene, izabrana grupa sa varijantama i izmene grupa i varijanti.
  * Feature store: provajduje ga rutirana stranica. Ne zna ništa o prikazu. Posle svake izmene ponovo učitava stablo i izabranu
  * grupu sa varijantama (brojači stabla i kartice ostaju tačni), uz isti izbor i isti filter statusa. Greške idu u
- * `NotificationStore` (`razlogBanke`: razlog servera, 503 render servis, 504 istek, ostali 5xx opšta poruka); uz to prvo
- * učitavanje (`ucitaj`) postavlja status `error`, a neuspelo učitavanje izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
+ * `NotificationStore` (`razlogBanke`: razlog servera, 503 render servis, 504 istek, kod izmena uz proveru banke pre ponovnog
+ * pokušaja, ostali 5xx opšta poruka); uz to prvo učitavanje (`ucitaj`) postavlja status `error`, a neuspelo učitavanje
+ * izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
  */
 export const BankaStore = signalStore(
   withState<BankaState>({
@@ -89,7 +90,7 @@ export const BankaStore = signalStore(
     filtriraneVarijante: computed(() => varijante().filter(v => filterStatusa() === 'SVE' || v.status === filterStatusa())),
   })),
   withMethods(store => {
-    const prijavi = (e: unknown): void => store._obavestenja.greska(razlogBanke(e));
+    const prijavi = (e: unknown, o: OpcijeRazloga = {}): void => store._obavestenja.greska(razlogBanke(e, o));
 
     /** Grupa i varijante izabrane grupe; `null` samo prekida zahtev u letu (stari odgovor ne sme na novo stanje). */
     const ucitajGrupu = rxMethod<number | null>(
@@ -168,7 +169,7 @@ export const BankaStore = signalStore(
           return poziv.pipe(
             tap(izbor => osvezi(izbor === undefined ? store.izabranaGrupaId() : izbor)),
             catchError((e: unknown) => {
-              prijavi(e);
+              prijavi(e, UPIS);
               return EMPTY;
             }),
             finalize(() => {

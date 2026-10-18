@@ -183,6 +183,27 @@ describe('GrupaDetaljPage', () => {
     expect(telo()).toMatchObject({ naziv: '2 → 10', tezina: 2 });
   });
 
+  it('klik na onemogućeno "Sačuvaj" (neispravna šema) otkriva poruku i bez izlaska iz polja, bez PUT-a', async () => {
+    const e = await otvori('/banka/grupe/2');
+    await klik(e.querySelector<HTMLElement>('[data-dodaj-polje]')!);
+    const poruka = () => e.querySelector('[data-greska-polja]')!.textContent!.trim();
+    expect(poruka()).toBe('');
+    expect(sacuvaj().getAttribute('aria-disabled')).toBe('true');
+    expect(sacuvaj().disabled).toBe(false);
+    await klik(sacuvaj());
+    expect(poruka()).toBe('Oznaka polja mora imati 1 do 200 znakova.');
+    expect(e.querySelector('[data-polje="b"] input[data-oznaka]')!.getAttribute('aria-invalid')).toBe('true');
+    expect(api.izmeniGrupu).not.toHaveBeenCalled();
+  });
+
+  it('fokus na onemogućenom "Sačuvaj" takođe otkriva poruku šeme', async () => {
+    const e = await otvori('/banka/grupe/2');
+    await klik(e.querySelector<HTMLElement>('[data-dodaj-polje]')!);
+    sacuvaj().dispatchEvent(new FocusEvent('focus'));
+    await stabilno();
+    expect(e.querySelector('[data-greska-polja]')!.textContent).toContain('Oznaka polja mora imati 1 do 200 znakova.');
+  });
+
   it('izmena samo u šemi je nesačuvana izmena; izmena pa vraćanje nije, i uz drugu izmenu šalje "polja": null', async () => {
     const e = await otvori('/banka/grupe/2');
     const oznaka = '[data-polje="a"] input[data-oznaka]';
@@ -351,15 +372,19 @@ describe('GrupaDetaljPage', () => {
   });
 
   it('zatvaranje kartice ili osvežavanje (beforeunload) traži potvrdu samo dok ima nesačuvanih izmena', async () => {
+    /** `returnValue` kao obično svojstvo (na običnom `Event`-u je zastareli boolean); `preventDefault` špijuniran. */
+    const beforeunload = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      Object.defineProperty(e, 'returnValue', { value: undefined, writable: true });
+      const preventDefault = vi.spyOn(e, 'preventDefault');
+      window.dispatchEvent(e);
+      return { pita: e.defaultPrevented, preventDefault: preventDefault.mock.calls.length > 0, returnValue: (e as BeforeUnloadEvent).returnValue };
+    };
     await otvori('/banka/grupe/2');
-    const pre = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(pre);
-    expect(pre.defaultPrevented).toBe(false);
+    expect(beforeunload()).toEqual({ pita: false, preventDefault: false, returnValue: undefined });
 
     await unesi('textarea[data-opis]', 'Novi opis');
-    const posle = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(posle);
-    expect(posle.defaultPrevented).toBe(true);
+    expect(beforeunload()).toEqual({ pita: true, preventDefault: true, returnValue: '' });
   });
 
   it('napuštanje sa nesačuvanim izmenama traži potvrdu (unsavedChangesGuard)', async () => {

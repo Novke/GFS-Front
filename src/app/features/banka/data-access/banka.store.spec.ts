@@ -151,6 +151,13 @@ describe('BankaStore', () => {
       expect(api.grupa).not.toHaveBeenCalled();
     });
 
+    it('istek (504) učitavanja: "pokušaj ponovo" (čitanje), bez provere banke', () => {
+      api.stablo.mockImplementation(() => greskaServera(504, 'Gateway Timeout'));
+      store.ucitaj(7, 'PREDAVANJE');
+      expect(store.greska()).toBe('Zahtev je istekao, pokušaj ponovo.');
+      expect(poruke.map(p => p.tekst)).toEqual(['Zahtev je istekao, pokušaj ponovo.']);
+    });
+
     it('drugi predmet ili namena odmah brišu tuđe stablo, izbor i varijante, pa stari odgovori ne stižu', () => {
       store.ucitaj(7, 'PREDAVANJE');
       const novoStablo = kasni<GrupaCvor[]>();
@@ -264,6 +271,12 @@ describe('BankaStore', () => {
       expect(store.varijante()).toEqual([]);
       expect(store.status()).toBe('loaded');
       expect(store.greskaGrupe()).toBe('Grupa zadataka ne postoji.');
+    });
+
+    it('istek (504) učitavanja grupe: "pokušaj ponovo"', () => {
+      api.grupa.mockImplementationOnce(() => greskaServera(504, 'Gateway Timeout'));
+      store.izaberi(3);
+      expect(store.greskaGrupe()).toBe('Zahtev je istekao, pokušaj ponovo.');
     });
 
     it('greskaGrupe se briše sa novim izborom i sa uspelim ponovnim učitavanjem', () => {

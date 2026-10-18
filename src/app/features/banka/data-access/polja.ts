@@ -63,44 +63,50 @@ const prekrsaj = (poruka: string, kljuc: string | null = null, unos: UnosPolja |
   ({ poruka, kljuc, unos, opcija });
 
 /**
- * Prvo prekršeno pravilo šeme (kao `BankaPP.proveriPolja`, posle skidanja razmaka sa krajeva ključa, oznake i teksta
- * opcije, kako ih server normalizuje), sa poljem i unosom na koji se odnosi, ili `null`.
+ * Sva prekršena pravila šeme, redom kojim ih proverava `BankaPP.proveriPolja` (posle skidanja razmaka sa krajeva ključa,
+ * oznake i teksta opcije, kako ih server normalizuje), svako sa poljem i unosom na koji se odnosi. Prvo je ono koje bi server
+ * prijavio ({@link prekrsajPolja}); ostala služe editoru polja, koji prikazuje prvo među unosima koje je korisnik već dodirnuo.
  */
-export function prekrsajPolja(polja: readonly Polje[]): PrekrsajPolja | null {
+export function prekrsajiPolja(polja: readonly Polje[]): PrekrsajPolja[] {
+  const lista: PrekrsajPolja[] = [];
   if (polja.length > MAX_POLJA) {
-    return prekrsaj('Najviše 10 polja.');
+    lista.push(prekrsaj('Najviše 10 polja.'));
   }
   const kljucevi = new Set<string>();
   for (const p of polja) {
     const k = p.kljuc.trim();
     if (!KLJUC.test(k)) {
-      return prekrsaj('Ključ polja mora biti 1-10 malih slova i cifara i počinjati slovom.', p.kljuc);
-    }
-    if (kljucevi.has(k)) {
-      return prekrsaj(`Ključ polja '${k}' se ponavlja.`, p.kljuc);
+      lista.push(prekrsaj('Ključ polja mora biti 1-10 malih slova i cifara i počinjati slovom.', p.kljuc));
+    } else if (kljucevi.has(k)) {
+      lista.push(prekrsaj(`Ključ polja '${k}' se ponavlja.`, p.kljuc));
     }
     kljucevi.add(k);
     if (prazan(p.oznaka) || duzina(p.oznaka.trim()) > MAX_OZNAKA) {
-      return prekrsaj('Oznaka polja mora imati 1 do 200 znakova.', p.kljuc, 'oznaka');
+      lista.push(prekrsaj('Oznaka polja mora imati 1 do 200 znakova.', p.kljuc, 'oznaka'));
     }
     if (p.odstupanje !== null && (!Number.isFinite(p.odstupanje) || p.odstupanje < 0)) {
-      return prekrsaj(`Odstupanje polja '${k}' mora biti nenegativan broj.`, p.kljuc, 'odstupanje');
+      lista.push(prekrsaj(`Odstupanje polja '${k}' mora biti nenegativan broj.`, p.kljuc, 'odstupanje'));
     }
     if (duzina(p.jedinica?.trim()) > MAX_JEDINICA) {
-      return prekrsaj(`Jedinica polja '${k}' može imati najviše 30 znakova.`, p.kljuc, 'jedinica');
+      lista.push(prekrsaj(`Jedinica polja '${k}' može imati najviše 30 znakova.`, p.kljuc, 'jedinica'));
     }
     if (imaOpcije(p.tip)) {
       const opcije = p.opcije;
       if (!opcije || opcije.length < MIN_OPCIJA || opcije.length > MAX_OPCIJA) {
-        return prekrsaj(`Polje '${k}' mora imati 2 do 6 opcija.`, p.kljuc);
-      }
-      const losa = opcije.find(o => prazan(o.tekst) || duzina(o.tekst.trim()) > MAX_TEKST_OPCIJE);
-      if (losa) {
-        return prekrsaj(`Tekst opcije polja '${k}' mora imati 1 do 200 znakova.`, p.kljuc, 'opcija', losa.id);
+        lista.push(prekrsaj(`Polje '${k}' mora imati 2 do 6 opcija.`, p.kljuc));
+      } else {
+        for (const o of opcije.filter(x => prazan(x.tekst) || duzina(x.tekst.trim()) > MAX_TEKST_OPCIJE)) {
+          lista.push(prekrsaj(`Tekst opcije polja '${k}' mora imati 1 do 200 znakova.`, p.kljuc, 'opcija', o.id));
+        }
       }
     }
   }
-  return null;
+  return lista;
+}
+
+/** Prvo prekršeno pravilo šeme (ono koje server prijavljuje), sa poljem i unosom, ili `null`. */
+export function prekrsajPolja(polja: readonly Polje[]): PrekrsajPolja | null {
+  return prekrsajiPolja(polja)[0] ?? null;
 }
 
 /** Poruka prvog prekršenog pravila šeme ({@link prekrsajPolja}) ili `null`. */

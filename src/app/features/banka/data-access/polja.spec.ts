@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { OdgovorPolja, Polje } from './banka.models';
 import {
-  istaPolja, novaOpcija, normalizujPolja, novoPolje, odgovorPopunjen, posledicePromene, prazanOdgovor, prazniOdgovori, prekrsajPolja,
-  proveriPolja,
+  istaPolja, novaOpcija, normalizujPolja, novoPolje, odgovorPopunjen, posledicePromene, prazanOdgovor, prazniOdgovori, prekrsajiPolja,
+  prekrsajPolja, proveriPolja,
 } from './polja';
 
 /** Ispravno polje tipa BROJ; `izmena` menja samo ono što test proverava. */
@@ -146,6 +146,21 @@ describe('prekrsajPolja', () => {
     expect(prekrsajPolja([broj('a'), broj('a')])).toEqual({ poruka: "Ključ polja 'a' se ponavlja.", kljuc: 'a', unos: null, opcija: null });
     expect(prekrsajPolja('abcdefghijk'.split('').map(k => broj(k))))
       .toEqual({ poruka: 'Najviše 10 polja.', kljuc: null, unos: null, opcija: null });
+  });
+});
+
+describe('prekrsajiPolja', () => {
+  it('sva prekršena pravila redom servera; prvo je ono koje prijavljuje proveriPolja', () => {
+    const polja: Polje[] = [
+      broj('a', { oznaka: '', odstupanje: -1 }),
+      broj('b'),
+      { ...izbor('JEDAN_TACAN', 'c'), opcije: [{ id: 1, tekst: '' }, { id: 2, tekst: 'Druga' }, { id: 7, tekst: ' ' }] },
+    ];
+    expect(prekrsajiPolja(polja).map(p => [p.kljuc, p.unos, p.opcija])).toEqual([
+      ['a', 'oznaka', null], ['a', 'odstupanje', null], ['c', 'opcija', 1], ['c', 'opcija', 7],
+    ]);
+    expect(prekrsajiPolja(polja)[0].poruka).toBe(proveriPolja(polja));
+    expect(prekrsajiPolja([broj('a')])).toEqual([]);
   });
 });
 

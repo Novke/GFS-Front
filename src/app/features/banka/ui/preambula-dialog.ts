@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import {
+  afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, Injector, signal, viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
@@ -12,7 +14,7 @@ import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from '../data-access/banka.api';
 import { PreambulaInfo, RenderujSveInfo } from '../data-access/banka.models';
-import { razlogBanke, TIHO } from '../data-access/greske';
+import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 
 /** Najduža preambula (`LatexPreambulaService.MAX_ZNAKOVA`). */
 export const MAX_PREAMBULA = 50_000;
@@ -71,7 +73,7 @@ type Faza = 'ucitava' | 'neucitano' | 'spremna' | 'cuva' | 'renderuje';
         }
         <mat-form-field appearance="outline" class="bk-preambula-polje">
           <mat-label>Preambula</mat-label>
-          <textarea matInput [formControl]="tekst" rows="14" spellcheck="false" autocapitalize="off" autocomplete="off"
+          <textarea #polje matInput [formControl]="tekst" rows="14" spellcheck="false" autocapitalize="off" autocomplete="off"
             maxlength="50000" class="bk-mono" data-preambula></textarea>
           @if (tekst.hasError('maxlength')) {
             <mat-error>Preambula može imati najviše 50 000 znakova.</mat-error>
@@ -83,8 +85,8 @@ type Faza = 'ucitava' | 'neucitano' | 'spremna' | 'cuva' | 'renderuje';
         <p class="bk-napredak" role="status">Renderovano {{ n.renderovano }}, preostalo {{ n.preostalo }}{{ n.neuspelo ? ', nije uspelo ' + n.neuspelo : '' }}</p>
         @if (!radi() && n.neuspelo > 0) {
           <div class="bk-upozorenje-preambule" role="alert" data-neuspelo>
-            {{ opisNeuspelih(n.neuspelo) }} (greška u preambuli?). Status varijanti je sačuvan, pregled na telefonu koristi poslednji uspeo
-            render dok se ne ispravi.
+            {{ opisNeuspelih(n.neuspelo) }} (greška u preambuli ili u samoj varijanti). Status varijanti je sačuvan, pregled na
+            telefonu koristi poslednji uspeo render dok se ne ispravi.
           </div>
         }
       } @else if (faza() === 'renderuje' || faza() === 'cuva') {
@@ -121,6 +123,8 @@ export class PreambulaDialog {
   private readonly ref = inject<MatDialogRef<PreambulaDialog, PreambulaDialogRezultat>>(MatDialogRef);
   private readonly api = inject(BankaApi);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly polje = viewChild<ElementRef<HTMLTextAreaElement>>('polje');
 
   protected readonly faza = signal<Faza>('ucitava');
   protected readonly greska = signal<string | null>(null);
@@ -196,7 +200,7 @@ export class PreambulaDialog {
         this.renderujSve();
       },
       error: (e: unknown) => {
-        this.greska.set(razlogBanke(e));
+        this.greska.set(razlogBanke(e, UPIS));
         this.faza.set('spremna');
       },
     });
@@ -229,6 +233,9 @@ export class PreambulaDialog {
         this.faza.set('spremna');
         if (r.preostalo === 0 && this.napredak()?.neuspelo === 0) {
           this.zatvori();
+        } else if ((this.napredak()?.neuspelo ?? 0) > 0) {
+          // "Sačuvaj" (fokus) je sad onemogućeno, pa bi fokus pao na body: na preambulu, za ispravku (upozorenje se najavljuje)
+          afterNextRender(() => this.polje()?.nativeElement.focus(), { injector: this.injector });
         }
       },
       error: (e: unknown) => {

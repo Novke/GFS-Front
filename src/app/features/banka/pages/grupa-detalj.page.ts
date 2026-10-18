@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   afterNextRender, ChangeDetectionStrategy, Component, computed, DOCUMENT, effect, ElementRef, inject, Injector, input, signal, untracked,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
@@ -29,7 +30,7 @@ import { BankaApi } from '../data-access/banka.api';
 import {
   GrupaCmd, GrupaDetails, MAX_NAZIV_GRUPE, MAX_OPIS_GRUPE, MAX_UPUTSTVO_GRUPE, Polje, TEZINE, VarijantaInfo,
 } from '../data-access/banka.models';
-import { razlogBanke, TIHO } from '../data-access/greske';
+import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
@@ -162,7 +163,8 @@ interface GreskaUcitavanja {
 
         <div class="bk-gd-akcije">
           <button matButton type="button" disabledInteractive [disabled]="!izmenjeno() || cuva()" (click)="odbaci()" data-odbaci>Odbaci izmene</button>
-          <button matButton="filled" type="submit" disabledInteractive [disabled]="!mozeSacuvati()" data-sacuvaj>
+          <!-- disabledInteractive: klik i fokus i na onemogućenom dugmetu otkrivaju greške (zašto se ne čuva) -->
+          <button matButton="filled" type="submit" disabledInteractive [disabled]="!mozeSacuvati()" (focus)="otkrijGreske()" data-sacuvaj>
             @if (cuva()) {
               <mat-progress-spinner mode="indeterminate" diameter="18" aria-label="Čuvanje" />
             }
@@ -224,6 +226,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
+  private readonly poljaEditor = viewChild(PoljaEditorComponent);
 
   /** Id iz putanje (`withComponentInputBinding`; matcher rute propušta samo ceo pozitivan broj). */
   readonly id = input<string>();
@@ -415,6 +418,15 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
     }
   }
 
+  /**
+   * Pokušaj čuvanja (klik ili fokus na "Sačuvaj", i kad je onemogućeno): sve greške forme i šeme postaju vidljive, i one iz
+   * polja koja korisnik još nije napustio, da se vidi zašto se ne čuva.
+   */
+  protected otkrijGreske(): void {
+    this.forma.markAllAsTouched();
+    this.poljaEditor()?.otkrijGreske();
+  }
+
   protected poruka(ime: 'naziv' | 'opis' | 'uputstvo', labela: string): string | null {
     this.promenaForme();
     const c = this.forma.controls[ime];
@@ -437,7 +449,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   protected sacuvaj(): void {
     const g = this.osnova();
     if (!g || !this.mozeSacuvati()) {
-      this.forma.markAllAsTouched();
+      this.otkrijGreske();
       return;
     }
     const v = this.forma.getRawValue();
@@ -470,9 +482,9 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
         },
         error: (e: unknown) => {
           if (this.osnova()?.id === g.id) {
-            this.greska.set(razlogBanke(e));
+            this.greska.set(razlogBanke(e, UPIS));
           } else {
-            this.obavestenja.greska(`Grupa „${cmd.naziv}“ nije sačuvana: ${razlogBanke(e)}`);
+            this.obavestenja.greska(`Grupa „${cmd.naziv}“ nije sačuvana: ${razlogBanke(e, UPIS)}`);
           }
         },
       });
@@ -517,7 +529,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
           this.zauzetih.update(n => n - 1);
         }
       }))
-      .subscribe({ next: () => this.osveziVarijante(), error: (e: unknown) => this.obavestenja.greska(razlogBanke(e)) });
+      .subscribe({ next: () => this.osveziVarijante(), error: (e: unknown) => this.obavestenja.greska(razlogBanke(e, UPIS)) });
   }
 
   /** Fokus je pao na body posle dijaloga iz menija kartice: na dugme menija te kartice. */

@@ -23,7 +23,7 @@ import { BankaApi } from '../data-access/banka.api';
 import {
   GrupaDetails, OdgovorPolja, Polje, PrilogCmd, RenderDeo, RenderProbaCmd, VarijantaCmd, VarijantaDetails,
 } from '../data-access/banka.models';
-import { razlogBanke, TIHO } from '../data-access/greske';
+import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 import { odgovorPopunjen, prazanOdgovor } from '../data-access/polja';
 import { PorukaPosleCuvanja } from '../data-access/poruka-posle-cuvanja';
 import {
@@ -562,7 +562,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       .pipe(switchMap(sacuvana => (odobri && sacuvana.renderStatus === 'OK'
         ? this.api.odobri(sacuvana.id, TIHO).pipe(
           map(odobrena => ({ varijanta: odobrena, odobrena: true, greskaOdobravanja: null })),
-          catchError((e: unknown) => of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: razlogBanke(e) })),
+          catchError((e: unknown) => of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: razlogBanke(e, UPIS) })),
         )
         : of<IshodCuvanja>({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: null }))))
       .subscribe({
@@ -574,7 +574,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
           this.oslobodi();
           const poruka = e instanceof HttpErrorResponse && e.status === 503
             ? `${razlogBanke(e)} Varijanta nije sačuvana, pokušaj ponovo za koji minut.`
-            : razlogBanke(e);
+            : razlogBanke(e, UPIS);
           if (this.unisten) {
             this.obavestenja.greska(`Varijanta nije sačuvana: ${poruka}`);
           } else {

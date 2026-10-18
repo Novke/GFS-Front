@@ -8,8 +8,8 @@ import type {
  * Mok banke zadataka za e2e: stablo grupa i varijante u memoriji (`Podaci.bankaGrupe`, `bankaVarijante`, `preambule` iz
  * `fixtures/banka.json`), pojednostavljena kopija pravila servera (`GrupaZadatakaService`, `VarijantaService`, uvek sa
  * istim porukama greške) samo za ono što e2e proverava. LaTeX se ne prevodi: render uspeva uvek, osim kad tekst (ili
- * rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog teksta, ili kad ga sadrži preambula
- * predmeta (tada pada svaki render predmeta, bez linije). Rute registruje `mock-api.ts`.
+ * rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog teksta. Preambulu sa `\foo` `PUT` odbija
+ * (400 "Preambula se ne kompajlira (linija N): ...", kao probni render servera) i ništa ne upisuje. Rute registruje `mock-api.ts`.
  */
 
 export interface BankaGrupa {
@@ -46,7 +46,7 @@ export interface Ishod {
 }
 
 /**
- * Podrazumevana preambula predmeta, skraćena kopija `LatexDokument.PODRAZUMEVANA_PREAMBULA`: bez `\\documentclass` (omot je
+ * Podrazumevana preambula predmeta, skraćena kopija `LatexDokument.PODRAZUMEVANA_PREAMBULA`: bez `\documentclass` (omot je
  * serverov, a preambula ga ne sme imati).
  */
 export const PODRAZUMEVANA_PREAMBULA = '\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath,amssymb}\n\\usepackage{tikz}';
@@ -355,18 +355,12 @@ export class MockBanka {
     return rezultat;
   }
 
-  /** Preambula predmeta kako je server ubacuje u dokument (bez upisane: podrazumevana). */
-  private preambulaPredmeta(predmetId: number | undefined): string {
-    return (predmetId === undefined ? null : this.d.preambule[predmetId]) ?? PODRAZUMEVANA_PREAMBULA;
-  }
-
   /**
-   * "Prevodi" tekst i rešenje uz preambulu predmeta: `\foo` u preambuli obara render (deo `tekst`, bez linije), a u tekstu ili
-   * rešenju je nepoznata komanda u liniji u kojoj stoji (tekst ima prednost; uz grešku u rešenju zadatak ima SVG).
+   * "Prevodi" tekst i rešenje: `\foo` je nepoznata komanda u liniji u kojoj stoji (tekst ima prednost; uz grešku u rešenju
+   * zadatak ima SVG). Preambula ne može da obori render: neispravnu `PUT` ne upisuje.
    */
-  private prevedi(tekst: string, resenje: string | null, preambula: string): Render {
+  private prevedi(tekst: string, resenje: string | null): Render {
     const foo = 'Undefined control sequence \\foo';
-    if (preambula.includes('\\foo')) return { ok: false, greska: { linija: null, poruka: foo }, deo: 'tekst', svg: null };
     const svg = probniSvg(tekst.replace(/[$\\]/g, ''));
     for (const [deo, izvor] of [['tekst', tekst], ['resenje', resenje ?? '']] as const) {
       const linija = izvor.split('\n').findIndex(l => l.includes('\\foo'));
@@ -387,7 +381,7 @@ export class MockBanka {
    * je uspeo.
    */
   private renderuj(v: BankaVarijanta, vratiUNacrt = true): boolean {
-    const r = this.prevedi(v.tekst, v.resenje, this.preambulaPredmeta(this.grupa(v.grupaId)?.predmetId));
+    const r = this.prevedi(v.tekst, v.resenje);
     v.zastareo = false;
     if (r.ok) {
       v.renderStatus = 'OK';
@@ -498,7 +492,7 @@ export class MockBanka {
   renderProba(cmd: { predmetId: number; tekst: string; resenje?: string | null }): Ishod {
     if (!this.predmetPostoji(cmd.predmetId)) return greska(404, 'Predmet nije pronađen.');
     if (!cmd.tekst?.trim()) return greska(400, 'Tekst zadatka mora imati 1 do 20 000 znakova.');
-    const r = this.prevedi(cmd.tekst, cmd.resenje ?? null, this.preambulaPredmeta(cmd.predmetId));
+    const r = this.prevedi(cmd.tekst, cmd.resenje ?? null);
     const telo: RenderProbaInfo = r.ok
       ? { ok: true, svg: r.svg, resenjeSvg: r.resenjeSvg, greska: null, deo: null }
       : { ok: false, svg: r.svg, resenjeSvg: null, greska: r.greska, deo: r.deo };
@@ -513,12 +507,15 @@ export class MockBanka {
   }
 
   /**
-   * Prazan tekst je podrazumevana; promena poništava render svih varijanti predmeta (`renderuj-sve` ih ponovo prevodi i
-   * broji uspele i neuspele; neuspela zadržava status i poslednji uspeo SVG).
+   * Prazan tekst je podrazumevana; preambula sa `\foo` je 400 bez upisa; promena poništava render svih varijanti predmeta
+   * (`renderuj-sve` ih ponovo prevodi i broji uspele i neuspele; neuspela zadržava status i poslednji uspeo SVG).
    */
   postaviPreambulu(predmetId: number, cmd: { preambula?: string | null } | null): Ishod {
     if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const tekst = cmd?.preambula?.trim() ? cmd.preambula : null;
+    // probni render pre upisa (kao `LatexPreambulaService`): linija u preambuli bez razmaka na krajevima
+    const linija = (tekst?.trim() ?? '').split('\n').findIndex(l => l.includes('\\foo'));
+    if (linija >= 0) return greska(400, `Preambula se ne kompajlira (linija ${linija + 1}): Undefined control sequence \\foo`);
     this.d.preambule[predmetId] = tekst;
     for (const v of this.d.bankaVarijante) {
       if (this.grupa(v.grupaId)?.predmetId === predmetId) v.zastareo = true;

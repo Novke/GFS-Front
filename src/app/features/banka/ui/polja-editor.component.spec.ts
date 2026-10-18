@@ -237,6 +237,23 @@ describe('PoljaEditorComponent', () => {
     expect(red('a').querySelector('input[data-oznaka]')!.getAttribute('aria-invalid')).toBe('false');
   });
 
+  it('prikazuje se prva greška među dodirnutim unosima, ne prva u šemi; otkrijGreske otkriva prvu od svih', async () => {
+    const { f, red, unesi, poruka, stabilno } = await napravi({ polja: [broj('a', ''), broj('b')] });
+    const odstupanjeB = red('b').querySelector<HTMLInputElement>('input[data-odstupanje]')!;
+    await unesi(odstupanjeB, '-1');
+    odstupanjeB.dispatchEvent(new FocusEvent('blur'));
+    await stabilno();
+    // prva u šemi je prazna oznaka polja a, ali iz nje korisnik još nije izašao
+    expect(poruka()!.textContent).toContain("Odstupanje polja 'b' mora biti nenegativan broj.");
+    expect(odstupanjeB.getAttribute('aria-invalid')).toBe('true');
+
+    f.debugElement.query(e => e.name === 'app-polja-editor').componentInstance.otkrijGreske();
+    await stabilno();
+    expect(poruka()!.textContent).toContain('Oznaka polja mora imati 1 do 200 znakova.');
+    expect(red('a').querySelector('input[data-oznaka]')!.getAttribute('aria-invalid')).toBe('true');
+    expect(odstupanjeB.getAttribute('aria-invalid')).toBe('false');
+  });
+
   it('greška opcije je na toj opciji (aria-invalid i aria-describedby)', async () => {
     const { red, unesi, poruka, stabilno } = await napravi({ polja: [izbor('a')], sacuvana: [izbor('a')] });
     const opcije = () => [...red('a').querySelectorAll<HTMLInputElement>('input[data-opcija]')];

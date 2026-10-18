@@ -140,8 +140,12 @@ describe('PreambulaDialog', () => {
     expect(ref.close).not.toHaveBeenCalled();
     const upozorenje = el.querySelector('[data-neuspelo]')!;
     expect(upozorenje.getAttribute('role')).toBe('alert');
-    expect(upozorenje.textContent!.replace(/\s+/g, ' ').trim()).toBe('12 varijanti nije renderovano (greška u preambuli?). Status varijanti je '
-      + 'sačuvan, pregled na telefonu koristi poslednji uspeo render dok se ne ispravi.');
+    expect(upozorenje.textContent!.replace(/\s+/g, ' ').trim()).toBe('12 varijanti nije renderovano (greška u preambuli ili u samoj '
+      + 'varijanti). Status varijanti je sačuvan, pregled na telefonu koristi poslednji uspeo render dok se ne ispravi.');
+    // "Sačuvaj" je onemogućeno: fokus ostaje u dijalogu, na preambuli (za ispravku), ne pada na body
+    await f.whenStable();
+    expect(el.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(polje(el));
     expect(el.querySelector('[role=status]')!.textContent).toContain('Renderovano 3, preostalo 0');
     // ponovni krug bi isti neuspeh brojao još jednom: ispravka ide kroz Sačuvaj
     expect(el.querySelector('[data-nastavi]')).toBeNull();
@@ -153,7 +157,7 @@ describe('PreambulaDialog', () => {
     api.renderujSve.mockReturnValue(of({ renderovano: 3, neuspelo: 1, preostalo: 0 }));
     const el = await napravi();
     await sacuvaj(el);
-    expect(el.querySelector('[data-neuspelo]')!.textContent).toContain('1 varijanta nije renderovana (greška u preambuli?)');
+    expect(el.querySelector('[data-neuspelo]')!.textContent).toContain('1 varijanta nije renderovana (greška u preambuli ili u samoj varijanti)');
   });
 
   it('posle čuvanja: Sačuvaj čeka novu izmenu teksta; ispravljena preambula se čuva ponovo i brojanje kreće iz početka', async () => {

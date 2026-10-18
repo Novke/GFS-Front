@@ -221,30 +221,43 @@ test.describe('banka zadataka', () => {
     await expect(page.getByText('Preambula je sačuvana. Renderovano varijanti: 4.')).toBeVisible();
   });
 
-  test('preambula sa greškom (\\foo): dijalog ostaje sa upozorenjem, statusi varijanti ostaju, stranica javlja grešku', async ({ page, mock }) => {
+  test('preambula: neprevodiva se ne čuva (400); ispravna, a varijante sa svojom greškom: upozorenje, statusi ostaju', async ({ page, mock }) => {
+    // aktivna varijanta 12 sada ima svoju grešku u tekstu (13 je ima u fixture-u): obe padaju na renderuj-sve
+    mock.podaci.bankaVarijante.find(v => v.id === 12)!.tekst += '\n\\foo';
     await page.goto('banka?predmet=1&grupa=2');
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
     await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
     const d = await dijalog(page, /Podešavanja LaTeX-a/);
-    await d.getByRole('textbox', { name: 'Preambula' }).fill('\\usepackage{tikz}\n\\foo');
-    await d.getByRole('button', { name: 'Sačuvaj' }).click();
+    const polje = d.getByRole('textbox', { name: 'Preambula' });
 
+    // server probno prevodi preambulu pre upisa: neispravna je 400, ništa se ne upisuje i ne renderuje
+    await polje.fill('\\usepackage{tikz}\n\\foo');
+    await d.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(d.locator('app-form-error-banner [role=alert]')).toHaveText('Preambula se ne kompajlira (linija 2): Undefined control sequence \\foo');
+    expect(mock.podaci.preambule[1] ?? null).toBeNull();
+    expect(mock.zahteviZa('banka/predmeti/1/renderuj-sve', 'POST')).toHaveLength(0);
+
+    await polje.fill('\\usepackage{tikz}\n\\newcommand{\\R}{\\mathbb{R}}');
+    await d.getByRole('button', { name: 'Sačuvaj' }).click();
     const upozorenje = d.locator('[data-neuspelo]');
-    await expect(upozorenje).toHaveText('4 varijante nisu renderovane (greška u preambuli?). Status varijanti je sačuvan, pregled na '
-      + 'telefonu koristi poslednji uspeo render dok se ne ispravi.');
+    await expect(upozorenje).toHaveText('2 varijante nisu renderovane (greška u preambuli ili u samoj varijanti). Status varijanti je '
+      + 'sačuvan, pregled na telefonu koristi poslednji uspeo render dok se ne ispravi.');
     await expect(d).toBeVisible();
     await expect(d.getByRole('button', { name: 'Nastavi renderovanje' })).toHaveCount(0);
-    // ništa se ne vraća u nacrt (renderuj-sve ne menja status), samo render je GRESKA
-    expect(mock.podaci.bankaVarijante.filter(v => v.status === 'AKTIVNA').map(v => v.id)).toEqual([12, 14]);
-    expect(mock.podaci.bankaVarijante.every(v => v.renderStatus === 'GRESKA')).toBe(true);
-    // ista preambula se ne čuva ponovo: Sačuvaj čeka ispravku
+    // "Sačuvaj" je onemogućeno (ista preambula se ne čuva ponovo), pa je fokus na preambuli, ne na body
     await expect(d.getByRole('button', { name: 'Sačuvaj' })).toBeDisabled();
+    await expect(polje).toBeFocused();
+    // ništa se ne vraća u nacrt (renderuj-sve ne menja status), samo render je GRESKA
+    const v12 = mock.podaci.bankaVarijante.find(v => v.id === 12)!;
+    expect([v12.status, v12.renderStatus]).toEqual(['AKTIVNA', 'GRESKA']);
+    expect(mock.podaci.bankaVarijante.filter(v => v.status === 'AKTIVNA').map(v => v.id)).toEqual([12, 14]);
 
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toBeHidden();
-    await expect(page.getByText('Preambula je sačuvana, ali 4 varijante nisu renderovane (greška u preambuli?). Renderovano 0.')).toBeVisible();
+    await expect(page.getByText('Preambula je sačuvana, ali 2 varijante nisu renderovane (greška u preambuli ili u samoj varijanti). '
+      + 'Renderovano 2.')).toBeVisible();
     await expect(page.getByText(/Preambula je sačuvana\. Renderovano/)).toHaveCount(0);
-    await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 1 aktivna, 2 nacrta, 3 greške');
+    await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 1 aktivna, 2 nacrta, 2 greške');
   });
 
   test('brisanje varijante traži potvrdu', async ({ page, mock }) => {

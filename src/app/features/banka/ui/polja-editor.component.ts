@@ -12,7 +12,7 @@ import { MatOption, MatSelect } from '@angular/material/select';
 
 import { OdstupanjeTip, Polje, PoljeOpcija, TipPolja } from '../data-access/banka.models';
 import {
-  imaOpcije, MAX_JEDINICA, MAX_OPCIJA, MAX_OZNAKA, MAX_POLJA, MAX_TEKST_OPCIJE, MIN_OPCIJA, novaOpcija, novoPolje, prekrsajPolja, UnosPolja,
+  imaOpcije, MAX_JEDINICA, MAX_OPCIJA, MAX_OZNAKA, MAX_POLJA, MAX_TEKST_OPCIJE, MIN_OPCIJA, novaOpcija, novoPolje, prekrsajiPolja, UnosPolja,
 } from '../data-access/polja';
 
 const TIPOVI: readonly { vrednost: TipPolja; labela: string }[] = [
@@ -53,9 +53,10 @@ export function prikazBroja(v: number | null): string {
  * Šema odgovora grupe banke: polja redom, svako sa ključem (dodeljuje ga `novoPolje`, posle se ne menja), oznakom i tipom,
  * i po tipu: odstupanje, vrsta odstupanja i jedinica (BROJ), zanemarivanje velikih slova i razmaka (TEKST), 2 do 6 opcija
  * (JEDAN_TACAN, VISE_TACNIH). Kontrolisana komponenta: ne čuva listu, svaka izmena emituje novu (`poljaPromena`), a
- * roditelj je vraća kroz `polja`. Ispod liste je poruka prve prekršene provere (`prekrsajPolja`, iste poruke kao server), u
- * učtivoj živoj oblasti (`role="status"`), tek kad korisnik izađe iz unosa na koji se odnosi (kucanje ne prekida, ni nova
- * prazna oznaka posle "+ polje"); taj unos tada ima `aria-invalid` i `aria-describedby` na poruku.
+ * roditelj je vraća kroz `polja`. Ispod liste je poruka prekršene provere (`prekrsajiPolja`, iste poruke kao server), u
+ * učtivoj živoj oblasti (`role="status"`): prve među unosima iz kojih je korisnik izašao (kucanje ne prekida, ni nova prazna
+ * oznaka posle "+ polje"), a posle pokušaja čuvanja (`otkrijGreske`) prve od svih; taj unos ima `aria-invalid` i
+ * `aria-describedby` na poruku.
  *
  * `tipZakljucan` (grupa ima aktivne varijante): tip polja iz `sacuvanaPolja` se ne menja (server bi odbio, 409); novo polje
  * bira tip slobodno. Novo polje nikad ne dobija ključ sačuvanog polja, ni obrisanog: server bi ga smatrao istim poljem; iz
@@ -202,13 +203,19 @@ export class PoljaEditorComponent {
   protected readonly maxOpcija = MAX_OPCIJA;
 
   protected readonly idGreske = `bk-pe-${++sledeci}-greska`;
-  private readonly prekrsaj = computed(() => prekrsajPolja(this.polja()));
+  private readonly prekrsaji = computed(() => prekrsajiPolja(this.polja()));
   /** Unosi iz kojih je korisnik izašao (blur): njihova greška se prikazuje, i dalje prati kucanje. */
   private readonly dodirnuti = signal<ReadonlySet<string>>(new Set());
-  /** Prekršaj koji se prikazuje: pravilo bez svog unosa odmah, ostala tek kad je njihov unos dodirnut. */
+  /** Pokušaj čuvanja (`otkrijGreske`): sve greške su vidljive, kao da je svaki unos dodirnut. */
+  private readonly otkriveno = signal(false);
+  /**
+   * Prekršaj koji se prikazuje: prvi (redom servera) među onima čiji je unos dodirnut, i pravila bez svog unosa odmah; posle
+   * `otkrijGreske` prvi od svih.
+   */
   protected readonly prikazanPrekrsaj = computed(() => {
-    const p = this.prekrsaj();
-    return p && (p.unos === null || p.kljuc === null || this.dodirnuti().has(kljucUnosa(p.kljuc, p.unos, p.opcija))) ? p : null;
+    const dodirnuti = this.dodirnuti();
+    const sve = this.otkriveno();
+    return this.prekrsaji().find(p => sve || p.unos === null || p.kljuc === null || dodirnuti.has(kljucUnosa(p.kljuc, p.unos, p.opcija))) ?? null;
   });
   private readonly matcheri = new Map<string, ErrorStateMatcher>();
   private readonly unosi = viewChildren(MatInput);
@@ -227,6 +234,11 @@ export class PoljaEditorComponent {
         i.updateErrorState();
       }
     });
+  }
+
+  /** Pokušaj čuvanja neispravne šeme: poruka prve greške se prikazuje i kad korisnik još nije izašao iz tog unosa. */
+  otkrijGreske(): void {
+    this.otkriveno.set(true);
   }
 
   protected dodirni(kljuc: string, unos: UnosPolja, opcija: number | null = null): void {

@@ -575,20 +575,35 @@ describe('VarijantaEditorPage', () => {
     expect(el().querySelector('[data-putanja]')!.parentElement!.textContent).toContain('Aktivna');
   });
 
-  it('zatvaranje kartice ili osvežavanje (beforeunload) traži potvrdu dok ima izmena ili dok se čuva', async () => {
-    const beforeunload = () => {
-      const e = new Event('beforeunload', { cancelable: true });
-      window.dispatchEvent(e);
-      return e.defaultPrevented;
-    };
-    api.kreirajVarijantu.mockReturnValue(NEVER);
+  /**
+   * `beforeunload` kao iz pregledača: `returnValue` je obično svojstvo (na običnom `Event`-u je zastareli boolean), pa se vidi
+   * šta mu je stranica upisala; `preventDefault` je špijuniran.
+   */
+  function beforeunload(): { pita: boolean; preventDefault: boolean; returnValue: unknown } {
+    const e = new Event('beforeunload', { cancelable: true });
+    Object.defineProperty(e, 'returnValue', { value: undefined, writable: true });
+    const preventDefault = vi.spyOn(e, 'preventDefault');
+    window.dispatchEvent(e);
+    return { pita: e.defaultPrevented, preventDefault: preventDefault.mock.calls.length > 0, returnValue: (e as BeforeUnloadEvent).returnValue };
+  }
+
+  it('zatvaranje kartice ili osvežavanje (beforeunload) traži potvrdu samo dok ima izmena', async () => {
     await otvori('/banka/varijante/nova?grupa=2');
-    expect(beforeunload()).toBe(false);
+    expect(beforeunload()).toEqual({ pita: false, preventDefault: false, returnValue: undefined });
     await unesi(editor('tekst'), 'x');
-    expect(beforeunload()).toBe(true);
-    await unesi(brojOdgovora(), '1');
-    await klik(dugme('data-sacuvaj'));
-    expect(beforeunload()).toBe(true);
+    expect(beforeunload()).toEqual({ pita: true, preventDefault: true, returnValue: '' });
+  });
+
+  it('beforeunload pita i bez izmena dok se čuva ("Sačuvaj i odobri" sačuvane varijante, odobravanje u toku)', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak' })));
+    api.odobri.mockReturnValue(NEVER);
+    await otvori('/banka/varijante/13');
+    expect(beforeunload().pita).toBe(false);
+    await klik(dugme('data-sacuvaj-odobri'));
+    expect(api.izmeniVarijantu).not.toHaveBeenCalled();
+    expect(api.odobri).toHaveBeenCalledTimes(1);
+    // forma je ista kao sačuvana (bez izmena), ali čuvanje traje
+    expect(beforeunload()).toEqual({ pita: true, preventDefault: true, returnValue: '' });
   });
 
   it('obe rute editora pitaju pre napuštanja sa nesačuvanim izmenama', () => {

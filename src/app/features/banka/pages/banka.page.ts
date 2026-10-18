@@ -504,7 +504,7 @@ export class BankaPage {
       .subscribe(r => {
         const preostalo = r.preostalo > 0 ? `, preostalo ${r.preostalo}` : '';
         if (r.neuspelo > 0) {
-          this.obavestenja.greska(`Preambula je sačuvana, ali ${opisNeuspelih(r.neuspelo)} (greška u preambuli?). `
+          this.obavestenja.greska(`Preambula je sačuvana, ali ${opisNeuspelih(r.neuspelo)} (greška u preambuli ili u samoj varijanti). `
             + `Renderovano ${r.renderovano}${preostalo}.`);
         } else {
           this.obavestenja.uspeh(r.preostalo > 0

@@ -21,7 +21,7 @@ export interface StranaPretrage {
 /**
  * Banka zadataka (`GrupaZadatakaRest`, `VarijantaRest`, `PrilogRest`, preambula i pretraga). Sve putanje su relativne na
  * `<base href>`. Greške: 409 (grupa bez težine ne prima varijante, aktivacija bez uspelog rendera), 429 (render-proba:
- * najviše 4 istovremeno) i 503 (render servis ne radi); `{ tiho: true }` ostavlja poruku pozivaocu.
+ * najviše 3 istovremeno, `MAX_PROBA` na serveru) i 503 (render servis ne radi); `{ tiho: true }` ostavlja poruku pozivaocu.
  */
 @Injectable({ providedIn: 'root' })
 export class BankaApi {
