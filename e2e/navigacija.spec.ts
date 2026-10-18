@@ -6,6 +6,8 @@ const STAVKE: { link: RegExp; url: RegExp; h1: RegExp; naslov: string }[] = [
   { link: /^Domaći/, url: /\/domaci$/, h1: /^Domaći$/, naslov: 'Domaći · GFS' },
   { link: /^Testovi/, url: /\/testovi$/, h1: /^Testovi$/, naslov: 'Testovi · GFS' },
   { link: /^Ocene/, url: /\/ocene$/, h1: /^Ocene$/, naslov: 'Ocene · GFS' },
+  // bez zapamćenog izbora: prvi predmet po nazivu (Primenjena informatika, u banci prazan)
+  { link: /^Banka zadataka/, url: /\/banka\?predmet=2&namena=PREDAVANJE$/, h1: /^Banka zadataka$/, naslov: 'Banka zadataka · GFS' },
   { link: /^Grupe/, url: /\/grupe$/, h1: /^Grupe$/, naslov: 'Grupe · GFS' },
   { link: /^Studenti/, url: /\/studenti$/, h1: /^Studenti$/, naslov: 'Studenti · GFS' },
   { link: /^Programiranje u građevinarstvu/, url: /\/predmeti\/1\/pregled$/, h1: /^Programiranje u građevinarstvu$/, naslov: 'Predmet · GFS' },

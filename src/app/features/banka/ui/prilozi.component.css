@@ -1,0 +1,68 @@
+/* Prilozi varijante: uputstvo, red po prilogu (ime, fajl, dugmad), otpremanje ispod. Boje samo kroz tokene. */
+
+:host { display: block; }
+
+.bk-pr-uputstvo,
+.bk-pr-broj { margin: 0; color: var(--muted); font-size: 13px; }
+
+.bk-pr-uputstvo code { color: var(--ink); overflow-wrap: anywhere; }
+
+.bk-pr-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bk-pr-red {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.bk-pr-red:first-child { border-top: 0; padding-top: 0; }
+.bk-pr-ime { flex: 1 1 180px; min-width: 0; }
+
+.bk-pr-meta {
+  display: inline-flex;
+  flex: 1 1 100%;
+  align-items: center;
+  gap: 6px;
+  order: 3;
+  margin: 2px 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.bk-pr-meta .mat-icon { flex: none; width: 18px; height: 18px; }
+.bk-pr-dugmad { display: inline-flex; align-items: center; }
+
+.bk-pr-dno {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.bk-pr-otprema {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-pr-greska {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--ink);
+}

@@ -7,6 +7,7 @@ import { ProjectorLayout } from './core/layout/projector-layout';
 import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
+import { BANKA_RUTE } from './features/banka/banka.routes';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
@@ -84,6 +85,13 @@ const nastavnickeRute: Routes = [
     title: 'Prezentacije',
     data: stalne(m('Nastava'), m('Prezentacije')),
     children: PREZENTACIJE_RUTE,
+  },
+  // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe i editor varijante
+  {
+    path: 'banka',
+    title: 'Banka zadataka',
+    data: stalne(m('Nastava'), m('Banka zadataka')),
+    children: BANKA_RUTE,
   },
   {
     path: 'izvodjenja',

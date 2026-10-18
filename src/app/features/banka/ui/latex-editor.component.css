@@ -1,0 +1,114 @@
+/*
+ * LaTeX polje sa brojevima linija: okvir (gutter + polje) kao jedno polje forme, tekst bez prelamanja, istaknuta linija
+ * greške u gutter-u i iza teksta. Gutter i traka se pomeraju sa skrolom kroz `--bk-le-pomak` (piše ga komponenta).
+ * Boje samo kroz tokene.
+ */
+
+:host {
+  --bk-le-visina: 20px;
+  --bk-le-pad: 8px;
+  display: block;
+}
+
+.bk-le-oznaka {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bk-le-okvir {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.bk-le-okvir:hover { border-color: var(--muted); }
+
+.bk-le-okvir:focus-within {
+  border-color: var(--primary);
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bk-le-onemoguceno { opacity: .7; }
+
+.bk-le-brojevi {
+  flex: none;
+  min-width: calc(var(--bk-le-cifre, 1) * 1ch + 20px);
+  padding: var(--bk-le-pad) 0;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: var(--bk-le-visina);
+  text-align: right;
+  user-select: none;
+}
+
+.bk-le-pomeri { transform: translateY(var(--bk-le-pomak, 0px)); }
+
+.bk-le-broj {
+  display: block;
+  height: var(--bk-le-visina);
+  padding: 0 8px 0 10px;
+}
+
+.bk-le-istaknuta {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.bk-le-telo {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bk-le-traka {
+  position: absolute;
+  top: calc(var(--bk-le-pad) + var(--bk-le-linija, 0) * var(--bk-le-visina));
+  right: 0;
+  left: 0;
+  height: var(--bk-le-visina);
+  background: var(--danger-soft);
+  transform: translateY(var(--bk-le-pomak, 0px));
+  pointer-events: none;
+}
+
+.bk-le-polje {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(6 * var(--bk-le-visina) + 2 * var(--bk-le-pad));
+  margin: 0;
+  padding: var(--bk-le-pad) 10px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: var(--bk-le-visina);
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.bk-le-polje:focus-visible { outline: none; }
+
+.bk-le-uputstvo {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}

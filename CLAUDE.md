@@ -710,6 +710,103 @@ over STOMP; teacher commands are REST.
   specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
   `animationsDisabled: true`, otherwise MatFormField leaves 300 ms timers behind.
 
+## Banka zadataka (`features/banka`)
+
+Bank of tasks (zadaci) per subject, written in LaTeX and rendered to SVG by the backend; teacher only, **nothing in it is public**
+(no `javno/`, no public route, no backend endpoint under `/public` of its own; the only `api/public/` URL it reads is the existing
+`api/public/mediji/{uuid}` for the rendered SVGs, unguessable UUIDs like the Uživo media, see `svgUrl`). Backend detail: `GFSSystem/CLAUDE.md`.
+
+- **Routes** (`banka.routes.ts`, children of `banka` under the shell, side nav entry "Banka zadataka", breadcrumbs "Nastava > Banka
+  zadataka"): `banka?predmet&namena&grupa` (tree + variants), `banka/grupe/:id` (group detail), `banka/varijante/nova?grupa=` and
+  `banka/varijante/:id` (the same `VarijantaEditorPage`). Ids must be numeric (`putanjaSaId`, otherwise 404 without an API call); the
+  last two routes and `grupe/:id` carry `unsavedChangesGuard`.
+- **`data-access/`**: `banka.models.ts` mirrors the backend `dto/banka/*` (same keys; commands are full-replacement `PUT`s, so nullable
+  fields are always sent); `banka.api.ts` (`BankaApi`, all calls accept `{ tiho: true }`); `banka.store.ts` (`BankaStore`, NgRx
+  SignalStore provided by the `banka` page: tree, selected group, its variants, status filter; every change reloads the tree and the
+  group, and while a create, duplicate or delete is in flight `zauzeto` disables those buttons); `polja.ts` (pure field-schema and answer rules,
+  mirror of the server `BankaPP`: same messages, same order; `prekrsajiPolja` lists every broken rule with its field and input,
+  `prekrsajPolja` is the first); `greske.ts` (`TIHO` and `razlogBanke`, the one error-to-text mapping of the feature: 503 = the
+  server's render-service message; 504 of a write (`razlogBanke(e, UPIS)`: create, save, status change, duplicate, delete, preamble
+  `PUT`) = "Zahtev je istekao. Proveri u banci da li je sačuvano pre ponovnog pokušaja." because create and duplicate are not
+  idempotent, 504 of a load or a re-render = "Zahtev je istekao, pokušaj ponovo."; anything else as `toApiError`); `render-proba.ts` (live preview, below); `poruka-posle-cuvanja.ts`
+  (`PorukaPosleCuvanja`: one-shot, in-memory message a new variant leaves for its own edit page, keyed by variant id; not in
+  `history.state`, which would resurface on reload and Back/Forward).
+- **Pages**: `banka.page` (subject + Predavanja/Testovi toggle, `PreferencesStore` key `banka` remembers the choice; left tree, right
+  variant cards; "Nova varijanta" only for a leaf with a difficulty `tezina`), `grupa-detalj.page` (name, description, difficulty,
+  instructions and the **field schema** editor; a type of a field stays locked while the group has active variants, adding a field to such
+  a group warns first and turns them into drafts), `varijanta-editor.page` (three columns: LaTeX tabs Tekst / Rešenje, live preview,
+  answers + attachments). Both editing pages also ask on tab close and reload (`(window:beforeunload)` with the same condition as
+  `unsavedChangesGuard`). A dialog opened from a ⋮ menu (tree or card) would restore focus to the removed menu item, so the pages put it
+  back on that ⋮ button (cancel) or on the new/moved tree item (success), only when focus fell to `<body>`.
+- **`ui/`**: `stablo-grupa` (WAI-ARIA tree, roving tabindex, F2 rename, context menu), `varijanta-kartica`, `polja-editor`,
+  `odgovori-forma`, `latex-editor` (textarea with line-number gutter, error line highlight, Tab = two spaces, Ctrl+Enter = preview now),
+  `svg-pregled`, `prilozi`, and the dialogs `grupa-dialog`, `premesti-dialog`, `preambula-dialog` (per-subject LaTeX preamble; after
+  saving it calls `renderuj-sve` until `preostalo` is 0, at most 10 rounds, then offers "Nastavi renderovanje", as after an error;
+  `renderovano` and `neuspelo` are summed over the rounds). `renderuj-sve` never demotes: a failed variant keeps its status and its last
+  good SVG (the phone keeps using it), only `renderStatus` becomes `GRESKA`. So the dialog closes itself only when nothing failed;
+  with `neuspelo > 0` it stays open with a warning ("N varijanti nije renderovano (greška u preambuli ili u samoj varijanti) ...")
+  and focus moves to the preamble text, "Sačuvaj" saves a corrected preamble again (after a save it waits for a text change),
+  and on close the page shows an error toast instead of success. The server counts each failed variant once per flow (it
+  retries failed ones only when nothing is stale), so the dialog sums the rounds; there is no "Nastavi" after a complete round
+  with failures. A preamble that does not compile is refused by `PUT` itself (400 "Preambula se ne kompajlira (linija N): ...",
+  nothing saved, shown in the dialog's error strip).
+  Field-schema errors in `polja-editor` sit in a polite live region (`role="status"`, always in the DOM): the first violation among
+  the inputs the user has left (blur), and after a save attempt (click or focus on the `disabledInteractive` "Sačuvaj" of
+  `grupa-detalj`, `otkrijGreske`) the first of all; the input it names gets `aria-invalid` and `aria-describedby` (through
+  `MatInput`, not `attr.`).
+- **Live preview**: `pregledUzivo` turns the form content into `POST api/banka/render-proba` (always `tiho`, errors are a state, never a
+  snackbar). 800 ms of quiet before a request (`KASNJENJE_PREGLEDA`), the same content (JSON key) is not sent again, new content
+  cancels both the wait and the request in flight (`switchMap` over `timer`). States `prazno | ceka | ok | greska | zauzet | nedostupan`;
+  429 (busy: at most 3 at once per backend, `MAX_PROBA`, shared with MCP) is `zauzet` ("Render servis je zauzet, pokušaj za koji
+  trenutak"), 503, 504 and no connection are `nedostupan` ("trenutno nije dostupan"), never a toast; any other error (e.g. 400 for a denied LaTeX command) is
+  `greska` **without a line**; a real LaTeX error carries `linija` (relative to the part) and `deo` (`tekst | resenje`). When only the
+  solution fails, the task SVG stays (the server sends it in `svg`; without it the last one shown is kept). **A saved variant does not
+  spend a probe on open**: while text, solution and attachments equal the saved ones, the preview is the saved render
+  (`SadrzajPregleda.sacuvan`: `svgId`/`resenjeSvgId` fetched as text through `BankaApi.svg`, i.e. `api/public/mediji/{id}`, falling back
+  to a probe if that fails; a saved error in the text shows that error without a probe, while an error only in the solution still
+  probes, so the task preview stays visible). The first edit (or Ctrl+Enter) starts probing.
+  `vazecaGreska` gives the saved render error until the live one arrives, `panelZadatka`/`panelResenja` pick what each panel shows.
+  The frame is 84 mm wide at most; in a narrower column (about 1100-1410 px viewports) the caption says "Umanjeno" instead of
+  claiming phone width (a `ResizeObserver` on the frame).
+- **SVG preview is never HTML.** `ocistiSvg` (in `svg-pregled.component.ts`) parses the server SVG with `DOMParser` and keeps only
+  the elements and attributes `pdftocairo` emits (element allow-list, **attribute allow-list** `ATRIBUTI` plus `xlink:href`,
+  `xmlns`/`xmlns:xlink`, `xml:space`, so `class`, `cursor`, `tabindex`, `data-*` and foreign namespaces are dropped: `class` plus the
+  global CSS of `ViewEncapsulation.None` could stretch the SVG over the page; `style` property allow-list, `href` only `#id` or raster
+  `data:image/*`, `url(#id)` / `rgb()` / transform functions only, no comments, PI or CDATA, no `on*`). The lists were checked
+  against full real output of cairo 1.16 (render container) and 1.18 (TikZ automata, opacity, shadings, fadings, transparency
+  groups, PNG: `mask`, `filter` + `feColorMatrix`, `radialGradient`); ids and their references
+  get a per-panel prefix (text and solution share glyph ids). The result goes in with `importNode`; **never `innerHTML` or
+  `bypassSecurityTrustHtml`**. Keep new SVG elements/properties out unless the render really needs them.
+- **Attachments**: PNG, JPEG or PDF up to 10 MB through `POST api/banka/prilozi` (multipart `fajl`); the name LaTeX uses matches
+  `^[a-z0-9_-]{1,60}$`, is not `dokument` and unique; "Ubaci u tekst" inserts `\includegraphics[width=\linewidth]{ime}` at the cursor of
+  the active tab (the wrapper is `varwidth=84mm`, a bare image would overflow the phone). A PDF attachment is not served publicly.
+- **Answers follow the group schema** (`odgovori`, one entry per field key, only the property of the field's type is set, the rest
+  `null`): BROJ `{broj}` (decimal comma or point accepted, an invalid entry is `NaN` and counts as missing), TEKST `{prihvatljivi[]}`
+  (1-10 answers of 1-200 chars; a chip is added by Enter or leaving the input, **never by a comma**: `(1,0)` or `q0, q1` are one
+  answer), JEDAN_TACAN `{tacna}` (option id), VISE_TACNIH `{tacne[]}`. Option ids are stable and **never
+  reused**: a new option gets an id above every option the field has or had when saved (the server matches options by id, so a reused
+  id would silently become another answer); a new field's key likewise never equals a key of a saved field, even one removed in the form.
+- **Save semantics** (`VarijantaEditorPage.sacuvaj`): `POST`/`PUT` render synchronously (up to 2 x 30 s), so the form is disabled with
+  a progress bar meanwhile. Only `renderStatus === 'OK'` (and, for "Sačuvaj i odobri", a successful `odobri`) navigates back to
+  `/banka?predmet&namena&grupa`; anything else **stays on the page**, shows the message in the error strip and highlights the line
+  of the part with the error (`renderGreska` + `renderDeo`). A new variant that fails to render already exists as a draft, so the page
+  moves to `banka/varijante/:id` with `replaceUrl` (message via `PorukaPosleCuvanja`); a new variant that succeeds goes back to
+  `/banka` with `replaceUrl` too, so Back does not reopen an empty "Nova varijanta" form. Buttons by status: NACRT "Sačuvaj kao nacrt"
+  + "Sačuvaj i odobri", ARHIVIRANA "Sačuvaj" + "Sačuvaj i odobri", AKTIVNA only "Sačuvaj" (the server turns an active variant with
+  a failed render back into a draft and the message says so; only `renderuj-sve` keeps the status). 503 on save = the server's
+  "Render servis nije dostupan." plus "Varijanta nije sačuvana, pokušaj ponovo za koji minut."; 504 = the `razlogBanke` timeout text.
+- **Proxy timeout**: `docker/nginx.conf` `location ^~ /api/` sets `proxy_read_timeout` / `proxy_send_timeout` to **120s** (default
+  60 s would cut a save of two slow renders plus upload). Create and duplicate are not idempotent, so a 504 followed by a retry would
+  duplicate the variant. The WebSocket locations keep 3600s; the host nginx snippet has 300s.
+- **Tests**: Vitest next to each file; subset `npx ng test --watch=false --include 'src/app/features/banka/**/*.spec.ts'`. Playwright
+  `e2e/banka.spec.ts` (tree, groups, field schema, preamble, leave guard) and `e2e/banka-varijanta.spec.ts` (editor: live preview,
+  save/approve, error line, attachments) run against the in-memory mock `e2e/mock-banka.ts` (routes registered in `e2e/mock-api.ts`,
+  data `e2e/fixtures/banka.json`: subject 1, PREDAVANJE "Konverzije brojeva"). The mock renders everything except text containing
+  `\foo` (error "Undefined control sequence \foo" on that line) or a subject preamble containing `\foo` (every render of the subject
+  fails, without a line); like the server, `renderuj-sve` counts only successful renders in `renderovano`, reports `neuspelo` and
+  keeps statuses, render-proba sends the task SVG when only the solution fails, and the default preamble has no `\documentclass`. It
+  does not compile LaTeX, so the real renderer never runs in these specs.
+
 ## Routes and paths
 
 - Old routes (`predavanje/...`, `domaci/new`, `test/...`, ...) redirect to the new ones in

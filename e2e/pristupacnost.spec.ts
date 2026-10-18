@@ -32,6 +32,19 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
     },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
+  // banka zadataka: list sa karticama (i greškom rendera) i unutrašnji čvor sa zbirom
+  { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
+  { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
+  // detalj grupe: list sa poljem BROJ (tip zaključan aktivnom varijantom) i karticama, list sa poljima TEKST i JEDAN_TACAN,
+  // unutrašnji čvor (samo naziv i opis)
+  { putanja: 'banka/grupe/2', spremno: p => p.locator('app-varijanta-kartica').first() },
+  { putanja: 'banka/grupe/3', spremno: p => p.locator('app-polja-editor input[data-opcija]').first() },
+  { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
+  // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
+  // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
+  { putanja: 'banka/varijante/nova?grupa=2', spremno: p => p.locator('[data-nedostaje]') },
+  { putanja: 'banka/varijante/13', spremno: p => p.locator('#bk-ve-greska-tekst') },
+  { putanja: 'banka/varijante/14', spremno: p => p.getByRole('img', { name: 'Pregled: Zadatak' }) },
 ];
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
@@ -87,6 +100,44 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.getByText('odmah posle cifre $ ne otvara formulu', { exact: false })).toBeVisible();
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), `axe: forma pitanja sa upozorenjem (${rezim})`).toEqual([]);
+    });
+
+    // banka zadataka: dijalozi nove grupe (naziv, težina), premeštanja (radio stablo sa onemogućenim mestima) i preambule
+    test('/banka (dijalozi nove grupe, premeštanja i preambule): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka?predmet=1');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
+      const kontejner = page.locator('mat-dialog-container');
+      const proveri = async (naziv: string) => {
+        await expect(kontejner).toBeVisible();
+        await posleOtvaranjaDijaloga(page, kontejner);
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: ${naziv} (${rezim})`).toEqual([]);
+        await page.getByRole('button', { name: 'Odustani' }).click();
+        await expect(kontejner).toHaveCount(0);
+      };
+
+      await page.getByRole('button', { name: 'Nova grupa' }).click();
+      await proveri('nova grupa');
+      await page.getByRole('button', { name: 'Radnje za grupu 2 → 10' }).click();
+      await page.getByRole('menuitem', { name: 'Premesti u…' }).click();
+      await proveri('premesti');
+      await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
+      await expect(page.getByRole('textbox', { name: 'Preambula' })).toBeVisible();
+      await proveri('preambula');
+    });
+
+    // detalj grupe banke: dodato polje daje upozorenje (aktivne varijante postaju nacrti) i poruku provere šeme
+    test('/banka/grupe/2 (dodato polje: upozorenje i poruka provere šeme): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka/grupe/2');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('app-varijanta-kartica').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Dodaj polje' }).click();
+      await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti');
+      // poruka provere stiže kad se izađe iz prazne oznake (sa aria-invalid na njoj)
+      await page.keyboard.press('Tab');
+      await expect(page.locator('[data-greska-polja]')).toHaveText(/Oznaka polja/);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: detalj grupe sa dodatim poljem (${rezim})`).toEqual([]);
     });
 
     // 5c: forma INFO slajda sa dugmetom "Pretvori u platno" i potvrda pretvaranja uz gubitke (veza)

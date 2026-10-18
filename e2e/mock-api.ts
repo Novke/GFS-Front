@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import type { Page, Request, Route } from '@playwright/test';
 
+import type { BankaPretragaStavka, GrupaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd } from '../src/app/features/banka/data-access/banka.models';
+import { type BankaGrupa, type BankaPodaci, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 
 /*
@@ -84,7 +86,7 @@ interface KontrolnaTablaPodesavanje {
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
 }
 
-export interface Podaci {
+export interface Podaci extends BankaPodaci {
   predmeti: Predmet[];
   tipoviTesta: TipTesta[];
   grupe: Grupa[];
@@ -101,6 +103,7 @@ export interface Podaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
+  // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
 /** PNG 1 x 1, providan. */
@@ -114,6 +117,7 @@ export function ucitajPodatke(): Podaci {
   const predmeti = ucitaj<{ predmeti: Predmet[]; tipoviTesta: TipTesta[] }>('predmeti.json');
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
+  const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -131,6 +135,9 @@ export function ucitajPodatke(): Podaci {
     prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
       .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],
+    bankaGrupe: banka.grupe,
+    bankaVarijante: banka.varijante,
+    preambule: banka.preambule,
   };
 }
 
@@ -211,6 +218,8 @@ export class MockApi {
   readonly nepoznati: string[] = [];
   /** Slike otpremljene kroz `POST mediji`, redom (id-jevi su UUID-i iz brojača, isti u svakom pokretanju). */
   readonly mediji: Medij[] = [];
+  /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
+  readonly banka = new MockBanka(this.podaci, id => this.predmet(id) !== null, this.mediji);
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -262,8 +271,15 @@ export class MockApi {
     // okruženje (Dockerfile ga pravi u slici; lokalni dist ga nema): bez oznake STAGING
     await page.route('**/assets/env.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"env":"prod"}' }));
     await page.route('**/api/**', (route, request) => this.obradi(route, request));
-    // slike slojeva platna: jedan providan piksel za svaki medij (ruta je kasnije dodata, pa ima prednost pred `api/**`)
-    await page.route('**/api/public/mediji/*', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIKSEL_PNG }));
+    // slike slojeva platna: jedan providan piksel za svaki medij, a za SVG rendera banke njegov (probni) SVG (ruta je kasnije
+    // dodata, pa ima prednost pred `api/**`)
+    await page.route('**/api/public/mediji/*', route => {
+      const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+      const svg = this.banka.svgovi.get(id);
+      return svg === undefined
+        ? route.fulfill({ status: 200, contentType: 'image/png', body: PIKSEL_PNG })
+        : route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg });
+    });
   }
 
   private async obradi(route: Route, request: Request): Promise<void> {
@@ -856,17 +872,18 @@ export class MockApi {
       d.prezentacije.splice(i, 1);
       return { status: 204 };
     });
-    post('mediji', z => {
-      // multipart: mok ne raspakuje telo, samo ime fajla iz zaglavlja dela (`filename="..."`)
+    // multipart: mok ne raspakuje telo, samo ime fajla i tip iz zaglavlja dela (`filename="..."`, `Content-Type`)
+    const otpremi = (z: Zahtev, tipovi: string): Odgovor => {
       const telo = typeof z.telo === 'string' ? z.telo : '';
       const m: Medij = {
         id: `00000000-0000-4000-8000-${(this.mediji.length + 1).toString(16).padStart(12, '0')}`,
-        naziv: /filename="([^"]*)"/.exec(telo)?.[1] ?? 'slika', mime: /Content-Type: (image\/[a-z]+)/i.exec(telo)?.[1] ?? 'image/png',
+        naziv: /filename="([^"]*)"/.exec(telo)?.[1] ?? 'slika', mime: new RegExp(`Content-Type: (${tipovi})`, 'i').exec(telo)?.[1] ?? 'image/png',
         velicina: telo.length,
       };
       this.mediji.push(m);
       return { status: 201, telo: m };
-    });
+    };
+    post('mediji', z => otpremi(z, 'image/[a-z]+'));
     post('prezentacije/:id/slajdovi/uvoz', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
       if (jeOdgovor(x)) {
@@ -955,6 +972,39 @@ export class MockApi {
         }
       }
       return greska(404, 'Slajd ne postoji.');
+    });
+
+    // banka zadataka (nastavnik, iza basic-auth-a): stablo i grupe, varijante, render, prilozi, preambula i pretraga (`mock-banka.ts`)
+    const b = this.banka;
+    get('banka/stablo', z => b.stablo(Number(z.query.get('predmetId')), z.query.get('namena')));
+    post('banka/grupe', z => b.kreirajGrupu(z.telo as GrupaCmd));
+    put('banka/grupe/redosled', z => {
+      const roditelj = z.query.get('roditeljId');
+      return b.redosled(Number(z.query.get('predmetId')), z.query.get('namena'), roditelj === null ? null : Number(roditelj), z.telo);
+    });
+    get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
+    put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
+    del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
+    post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
+    get('banka/grupe/:id/varijante', (z, p) => b.lista(Number(p['id']), z.query.get('status')));
+    post('banka/grupe/:id/varijante', (z, p) => b.kreirajVarijantu(Number(p['id']), z.telo as VarijantaCmd));
+    get('banka/varijante/:id', (_z, p) => b.varijantaDetalji(Number(p['id'])));
+    put('banka/varijante/:id', (z, p) => b.izmeniVarijantu(Number(p['id']), z.telo as VarijantaCmd));
+    del('banka/varijante/:id', (_z, p) => b.obrisiVarijantu(Number(p['id'])));
+    post('banka/varijante/:id/odobri', (_z, p) => b.promeniStatus(Number(p['id']), 'AKTIVNA'));
+    post('banka/varijante/:id/arhiviraj', (_z, p) => b.promeniStatus(Number(p['id']), 'ARHIVIRANA'));
+    post('banka/varijante/:id/vrati-u-nacrt', (_z, p) => b.promeniStatus(Number(p['id']), 'NACRT'));
+    post('banka/varijante/:id/render', (_z, p) => b.renderVarijante(Number(p['id'])));
+    post('banka/varijante/:id/dupliraj', (_z, p) => b.dupliraj(Number(p['id'])));
+    // živi pregled u editoru: `\foo` u tekstu ili rešenju je greška sa linijom, sve ostalo uspeva; 429/503 zamenom (`na`)
+    post('banka/render-proba', z => b.renderProba(z.telo as RenderProbaCmd));
+    post('banka/prilozi', z => otpremi(z, 'image/[a-z]+|application/pdf'));
+    get('predmeti/:id/latex-preambula', (_z, p) => b.preambula(Number(p['id'])));
+    put('predmeti/:id/latex-preambula', (z, p) => b.postaviPreambulu(Number(p['id']), z.telo as { preambula?: string | null } | null));
+    post('banka/predmeti/:id/renderuj-sve', (_z, p) => b.renderujSve(Number(p['id'])));
+    get('banka/pretraga', z => {
+      const r = b.pretraga(z.query);
+      return r.status ? r : strana(r.telo as BankaPretragaStavka[], z.query);
     });
 
     // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec

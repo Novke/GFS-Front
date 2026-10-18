@@ -1,0 +1,42 @@
+/* Odgovori varijante po poljima šeme: svako polje kao uokvirena grupa (oznaka, ključ, bedž). Boje samo kroz tokene. */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bk-of-prazno { margin: 0; color: var(--muted); }
+
+.bk-of-polje {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 14px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.bk-of-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 0 4px;
+}
+
+.bk-of-naziv { font-weight: 600; overflow-wrap: anywhere; }
+.bk-of-kljuc { color: var(--muted); font-size: 13px; }
+.bk-of-kljuc code { color: var(--ink); }
+
+.bk-of-broj,
+.bk-of-siroko { width: 100%; margin-top: 8px; }
+
+/* polje za nov prihvatljiv odgovor je ispod čipova (van `mat-chip-grid`), preko cele širine */
+.bk-of-siroko .bk-of-unos { width: 100%; margin: 0; }
+
+.bk-of-izbor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 4px 0 6px;
+}
