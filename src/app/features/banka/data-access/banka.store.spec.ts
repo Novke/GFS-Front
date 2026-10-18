@@ -449,10 +449,18 @@ describe('BankaStore', () => {
       expect(store.zauzeto()).toBe(false);
     });
 
-    it('server greška 5xx prikazuje opštu poruku, ne detalje servera', () => {
-      api.dupliraj.mockImplementation(() => greskaServera(503, 'Render servis nije dostupan.'));
+    it('5xx: 500 opšta poruka (bez detalja servera), 503 render servis, 504 istek bez poziva na ponovni pokušaj', () => {
+      api.dupliraj.mockImplementationOnce(() => greskaServera(500, 'NullPointerException'))
+        .mockImplementationOnce(() => greskaServera(503, 'Render servis nije dostupan.'))
+        .mockImplementationOnce(() => greskaServera(504, 'Gateway Timeout'));
       store.dupliraj(11);
-      expect(poruke).toEqual([{ tip: 'greska', tekst: 'Sistemska greška. Pokušaj ponovo.', akcija: undefined }]);
+      store.dupliraj(11);
+      store.dupliraj(11);
+      expect(poruke.map(p => p.tekst)).toEqual([
+        'Sistemska greška. Pokušaj ponovo.',
+        'Render servis nije dostupan.',
+        'Zahtev je istekao. Proveri u banci da li je sačuvano pre ponovnog pokušaja.',
+      ]);
     });
   });
 

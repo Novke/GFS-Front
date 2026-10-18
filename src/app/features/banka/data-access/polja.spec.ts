@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { OdgovorPolja, Polje } from './banka.models';
 import {
-  istaPolja, novaOpcija, normalizujPolja, novoPolje, odgovorPopunjen, posledicePromene, prazanOdgovor, prazniOdgovori, proveriPolja,
+  istaPolja, novaOpcija, normalizujPolja, novoPolje, odgovorPopunjen, posledicePromene, prazanOdgovor, prazniOdgovori, prekrsajPolja,
+  proveriPolja,
 } from './polja';
 
 /** Ispravno polje tipa BROJ; `izmena` menja samo ono što test proverava. */
@@ -127,6 +128,24 @@ describe('proveriPolja', () => {
   it('vraća prvu povredu po redosledu polja', () => {
     expect(proveriPolja([broj('a', { oznaka: '' }), broj('A')])).toBe('Oznaka polja mora imati 1 do 200 znakova.');
     expect(proveriPolja([broj('A'), broj('a', { oznaka: '' })])).toMatch(/^Ključ polja mora biti/);
+  });
+});
+
+describe('prekrsajPolja', () => {
+  it('kaže i polje i unos prvog prekršenog pravila (za aria-invalid), istom porukom kao proveriPolja', () => {
+    expect(prekrsajPolja([broj('a')])).toBeNull();
+    expect(prekrsajPolja([broj('a'), broj('b', { oznaka: ' ' })]))
+      .toEqual({ poruka: 'Oznaka polja mora imati 1 do 200 znakova.', kljuc: 'b', unos: 'oznaka', opcija: null });
+    expect(prekrsajPolja([broj('a', { odstupanje: Number.NaN })]))
+      .toEqual({ poruka: "Odstupanje polja 'a' mora biti nenegativan broj.", kljuc: 'a', unos: 'odstupanje', opcija: null });
+    expect(prekrsajPolja([broj('a', { jedinica: 'x'.repeat(31) })]))
+      .toEqual({ poruka: "Jedinica polja 'a' može imati najviše 30 znakova.", kljuc: 'a', unos: 'jedinica', opcija: null });
+    expect(prekrsajPolja([{ ...izbor('JEDAN_TACAN'), opcije: [{ id: 1, tekst: 'Prva' }, { id: 5, tekst: '' }] }]))
+      .toEqual({ poruka: "Tekst opcije polja 'a' mora imati 1 do 200 znakova.", kljuc: 'a', unos: 'opcija', opcija: 5 });
+    // pravila bez svog polja za unos (ključ, broj opcija, broj polja)
+    expect(prekrsajPolja([broj('a'), broj('a')])).toEqual({ poruka: "Ključ polja 'a' se ponavlja.", kljuc: 'a', unos: null, opcija: null });
+    expect(prekrsajPolja('abcdefghijk'.split('').map(k => broj(k))))
+      .toEqual({ poruka: 'Najviše 10 polja.', kljuc: null, unos: null, opcija: null });
   });
 });
 

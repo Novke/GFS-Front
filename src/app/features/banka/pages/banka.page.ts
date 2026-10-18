@@ -9,7 +9,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { filter } from 'rxjs';
+import { filter, tap } from 'rxjs';
 
 import { PredmetInfo } from '../../../core/api/reference.api';
 import { JE_ID } from '../../../core/route-matchers';
@@ -26,7 +26,7 @@ import { sRecju } from '../../../shared/util/mnozina';
 import { GrupaCvor, Namena, nadjiCvor, putanjaDo, StatusVarijante, VarijantaInfo } from '../data-access/banka.models';
 import { BankaStore } from '../data-access/banka.store';
 import { GrupaDialog } from '../ui/grupa-dialog';
-import { PreambulaDialog } from '../ui/preambula-dialog';
+import { opisNeuspelih, PreambulaDialog } from '../ui/preambula-dialog';
 import { PremestiDialog } from '../ui/premesti-dialog';
 import { opisBrojaca, StabloGrupaComponent } from '../ui/stablo-grupa.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
@@ -122,7 +122,7 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
         <section class="lista-kartica bk-panel-stabla" aria-labelledby="bk-naslov-stabla">
           <h2 id="bk-naslov-stabla" class="bk-panel-naslov">Grupe</h2>
           <app-stablo-grupa [cvorovi]="store.stablo()" [izabrano]="store.izabranaGrupaId()" [zauzeto]="store.zauzeto()"
-            (izaberi)="store.izaberi($event)" (dodajPodgrupu)="novaGrupa($event)" (preimenuj)="store.preimenuj($event.id, $event.naziv)"
+            (izaberi)="store.izaberi($event)" (dodajPodgrupu)="novaGrupa($event, true)" (preimenuj)="store.preimenuj($event.id, $event.naziv)"
             (premesti)="premesti($event)" (obrisi)="obrisiGrupu($event)" />
         </section>
 
@@ -248,6 +248,14 @@ export class BankaPage {
   private nestajeKartica: { grupaId: number | null; id: number; indeks: number } | null = null;
   /** "Zadaj težinu": kad grupa dobije težinu, dugme i upozorenje nestaju, pa fokus ide na "Nova varijanta". */
   private tezinaZaGrupu: number | null = null;
+  /**
+   * Nova ili premeštena grupa iz dijaloga: kad se pojavi u novom stablu, fokus ide na njenu stavku, ali samo ako je fokus
+   * pao na body ili je još na dugmetu menija na koje ga je stranica vratila (`privremeni`).
+   */
+  private fokusPosleIzmene:
+    | { vrsta: 'nova'; roditeljId: number | null; naziv: string; privremeni: HTMLElement | null }
+    | { vrsta: 'premestena'; id: number; roditeljId: number | null; privremeni: HTMLElement | null }
+    | null = null;
 
   /** Query parametri (`withComponentInputBinding`). */
   readonly predmet = input<string>();
@@ -341,6 +349,29 @@ export class BankaPage {
       });
     });
 
+    // nova ili premeštena grupa iz dijaloga: fokus na njenu stavku u novom stablu (nova se traži dok kreiranje traje)
+    effect(() => {
+      const stablo = this.store.stablo();
+      untracked(() => {
+        const f = this.fokusPosleIzmene;
+        if (!f) {
+          return;
+        }
+        const id = f.vrsta === 'premestena' ? f.id : this.novaGrupaU(f.roditeljId, f.naziv);
+        const stigla = id !== null && (putanjaDo(stablo, id).at(-2)?.id ?? null) === f.roditeljId;
+        if (stigla || f.vrsta === 'premestena' || !this.store.zauzeto()) {
+          this.fokusPosleIzmene = null;
+        }
+        if (stigla) {
+          afterNextRender(() => {
+            if (this.fokusIzgubljen() || this.document.activeElement === f.privremeni) {
+              this.najblizaStavka(id)?.focus();
+            }
+          }, { injector: this.injector });
+        }
+      });
+    });
+
     // izbor u store-u (klik, prvi list, nova ili obrisana grupa) -> ?grupa, bez novog unosa u istoriji
     effect(() => {
       const izabrana = this.store.izabranaGrupaId();
@@ -369,8 +400,12 @@ export class BankaPage {
     return c.list ? opis || 'bez varijanti' : `${sRecju(c.deca.length, 'podgrupa', 'podgrupe', 'podgrupa')}${opis ? ' · ' + opis : ''}`;
   }
 
-  /** Nova grupa u korenu (`null`) ili podgrupa; nova grupa je posle uspeha izabrana. */
-  protected novaGrupa(roditeljId: number | null): void {
+  /**
+   * Nova grupa u korenu (`null`) ili podgrupa; posle uspeha je izabrana, a njena stavka u stablu dobija fokus kad je dugme
+   * koje ga je imalo nestalo (prazno stanje, "Nova podgrupa" grupe koja postaje list). `izMenija` ("Dodaj podgrupu" u meniju
+   * stabla): posle zatvaranja fokus ide na dugme menija roditelja, a posle uspeha na novu stavku.
+   */
+  protected novaGrupa(roditeljId: number | null, izMenija = false): void {
     const predmetId = this.store.predmetId();
     const roditelj = nadjiCvor(this.store.stablo(), roditeljId);
     if (predmetId === null || this.store.zauzeto() || (roditeljId !== null && !roditelj)) {
@@ -382,9 +417,10 @@ export class BankaPage {
       zauzetiNazivi: braca.map(b => b.naziv),
       potvrdi: 'Napravi grupu',
     })
-      .pipe(filter(Boolean))
+      .pipe(tap(() => izMenija && roditelj && this.vratiFokus(this.dugmeMenijaGrupe(roditelj.id))), filter(Boolean))
       .subscribe(r => {
         const sadrzaj = { naziv: r.naziv, tezina: r.tezina, opis: null, uputstvo: null, polja: null };
+        this.fokusPosleIzmene = { vrsta: 'nova', roditeljId: roditelj?.id ?? null, naziv: r.naziv, privremeni: izMenija ? this.aktivni() : null };
         this.store.kreirajGrupu(roditelj ? { roditeljId: roditelj.id, ...sadrzaj } : { predmetId, namena: this.store.namena(), roditeljId: null, ...sadrzaj });
       });
   }
@@ -421,8 +457,11 @@ export class BankaPage {
 
   protected premesti(id: number): void {
     PremestiDialog.otvori(this.dialog, { stablo: this.store.stablo(), id })
-      .pipe(filter((r): r is number | null => r !== undefined))
-      .subscribe(roditeljId => this.store.premesti(id, { roditeljId, rb: null }));
+      .pipe(tap(() => this.vratiFokus(this.dugmeMenijaGrupe(id))), filter((r): r is number | null => r !== undefined))
+      .subscribe(roditeljId => {
+        this.fokusPosleIzmene = { vrsta: 'premestena', id, roditeljId, privremeni: this.aktivni() };
+        this.store.premesti(id, { roditeljId, rb: null });
+      });
   }
 
   protected obrisiGrupu(id: number): void {
@@ -434,8 +473,9 @@ export class BankaPage {
       ? [`Briše se i ${sRecju(c.brojVarijanti, 'varijanta', 'varijante', 'varijanti')} ove grupe, trajno.`,
         'Grupa čije su varijante korišćene na času se ne briše; njih arhiviraj.']
       : 'Grupa nema varijanti.';
+    // fokus na dugme menija i posle potvrde: kad grupa nestane, stablo ga prebacuje na roditelja
     ConfirmDialog.otvori(this.dialog, { naslov: `Obrisati grupu „${c.naziv}“?`, tekst, potvrdi: 'Obriši grupu', destruktivno: true })
-      .pipe(filter(Boolean))
+      .pipe(tap(() => this.vratiFokus(this.dugmeMenijaGrupe(id))), filter(Boolean))
       .subscribe(() => this.store.obrisiGrupu(id));
   }
 
@@ -446,7 +486,7 @@ export class BankaPage {
       potvrdi: 'Obriši varijantu',
       destruktivno: true,
     })
-      .pipe(filter(Boolean))
+      .pipe(tap(() => this.vratiFokus(this.dugmeMenijaKartice(v.id))), filter(Boolean))
       .subscribe(() => {
         this.zapamtiKarticu(v);
         this.store.obrisiVarijantu(v.id);
@@ -462,9 +502,15 @@ export class BankaPage {
     PreambulaDialog.otvori(this.dialog, { predmetId, predmet })
       .pipe(filter(Boolean))
       .subscribe(r => {
-        this.obavestenja.uspeh(r.preostalo > 0
-          ? `Preambula je sačuvana. Renderovano ${r.renderovano}, preostalo ${r.preostalo}.`
-          : `Preambula je sačuvana. Renderovano varijanti: ${r.renderovano}.`);
+        const preostalo = r.preostalo > 0 ? `, preostalo ${r.preostalo}` : '';
+        if (r.neuspelo > 0) {
+          this.obavestenja.greska(`Preambula je sačuvana, ali ${opisNeuspelih(r.neuspelo)} (greška u preambuli?). `
+            + `Renderovano ${r.renderovano}${preostalo}.`);
+        } else {
+          this.obavestenja.uspeh(r.preostalo > 0
+            ? `Preambula je sačuvana. Renderovano ${r.renderovano}${preostalo}.`
+            : `Preambula je sačuvana. Renderovano varijanti: ${r.renderovano}.`);
+        }
         this.store.osveziStablo();
       });
   }
@@ -481,11 +527,57 @@ export class BankaPage {
    */
   private posleCrtanja(cilj: () => HTMLElement | null | undefined): void {
     afterNextRender(() => {
-      const aktivni = this.document.activeElement;
-      if (!aktivni || aktivni === this.document.body) {
+      if (this.fokusIzgubljen()) {
         cilj()?.focus();
       }
     }, { injector: this.injector });
+  }
+
+  /** Fokus je pao na body (fokusiran element je uklonjen), pa ga niko neće vratiti. */
+  private fokusIzgubljen(): boolean {
+    const aktivni = this.document.activeElement;
+    return !aktivni || aktivni === this.document.body;
+  }
+
+  private aktivni(): HTMLElement | null {
+    return this.document.activeElement instanceof HTMLElement ? this.document.activeElement : null;
+  }
+
+  /**
+   * Dijalog otvoren iz menija (⋮) se zatvorio: dijalog vraća fokus na stavku menija, koje više nema, pa fokus pada na body.
+   * Tada ide na `cilj` (dugme menija, i dalje u stranici); korisnikov fokus se ne dira.
+   */
+  private vratiFokus(cilj: HTMLElement | null): void {
+    if (this.fokusIzgubljen()) {
+      cilj?.focus();
+    }
+  }
+
+  /** Dugme menija (⋮) grupe u stablu (ne njenih podgrupa). */
+  private dugmeMenijaGrupe(id: number): HTMLElement | null {
+    return this.host.nativeElement.querySelector<HTMLElement>(`[role=treeitem][data-id="${id}"] > .bk-red .bk-meni-dugme`);
+  }
+
+  private dugmeMenijaKartice(id: number): HTMLElement | null {
+    return this.host.nativeElement.querySelector<HTMLElement>(`app-varijanta-kartica[data-varijanta="${id}"] [data-meni]`);
+  }
+
+  /** Stavka stabla grupe, a kad je u sklopljenom čvoru (nije nacrtana), najbliži nacrtan predak. */
+  private najblizaStavka(id: number): HTMLElement | null {
+    for (const p of putanjaDo(this.store.stablo(), id).reverse()) {
+      const stavka = this.host.nativeElement.querySelector<HTMLElement>(`[role=treeitem][data-id="${p.id}"]`);
+      if (stavka) {
+        return stavka;
+      }
+    }
+    return null;
+  }
+
+  /** Id podgrupe `roditeljId` (`null` = koren) sa nazivom `naziv` (bez razmaka na krajevima i velikih slova), ili `null`. */
+  private novaGrupaU(roditeljId: number | null, naziv: string): number | null {
+    const braca = roditeljId === null ? this.store.stablo() : (nadjiCvor(this.store.stablo(), roditeljId)?.deca ?? []);
+    const trazen = naziv.trim().toLowerCase();
+    return braca.find(b => b.naziv.trim().toLowerCase() === trazen)?.id ?? null;
   }
 
   private navigiraj(queryParams: Record<string, string | number | null>, replaceUrl: boolean): void {

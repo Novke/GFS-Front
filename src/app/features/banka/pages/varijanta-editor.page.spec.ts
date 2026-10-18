@@ -15,6 +15,7 @@ import { BANKA_RUTE } from '../banka.routes';
 import { BankaApi } from '../data-access/banka.api';
 import { GrupaDetails, OdgovorPolja, Polje, VarijantaCmd, VarijantaDetails } from '../data-access/banka.models';
 import { novoPolje } from '../data-access/polja';
+import { KASNJENJE_PREGLEDA } from '../data-access/render-proba';
 import { VarijantaEditorPage } from './varijanta-editor.page';
 
 @Component({ template: 'druga' })
@@ -56,6 +57,7 @@ describe('VarijantaEditorPage', () => {
     odobri: vi.fn(),
     render: vi.fn(),
     renderProba: vi.fn(),
+    svg: vi.fn(),
     prilog: vi.fn(),
   };
   const el = () => harness.routeNativeElement as HTMLElement;
@@ -98,6 +100,7 @@ describe('VarijantaEditorPage', () => {
     api.grupa.mockImplementation(() => of(grupa()));
     api.varijanta.mockImplementation(() => of(varijanta()));
     api.renderProba.mockReturnValue(NEVER);
+    api.svg.mockImplementation((id: string) => of(`<svg xmlns="http://www.w3.org/2000/svg"><path id="${id}" d="M0 0"/></svg>`));
     api.kreirajVarijantu.mockImplementation((_g: number, cmd: VarijantaCmd) => of(varijanta({ ...OK, id: 15, ...izCmd(cmd) })));
     api.izmeniVarijantu.mockImplementation((id: number, cmd: VarijantaCmd) => of(varijanta({ ...OK, id, ...izCmd(cmd) })));
     api.odobri.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: 'AKTIVNA' })));
@@ -152,6 +155,20 @@ describe('VarijantaEditorPage', () => {
     expect(api.odobri).not.toHaveBeenCalled();
     expect(uspeh).toHaveBeenCalledWith('Varijanta je sačuvana kao nacrt.');
     expect(router.url).toBe('/banka?predmet=7&namena=PREDAVANJE&grupa=2');
+  });
+
+  it('posle uspelog čuvanja nove varijante Nazad ne otvara opet praznu formu (replaceUrl)', async () => {
+    const lokacija = TestBed.inject(Location);
+    router.setUpLocationChangeListener();
+    await harness.navigateByUrl('/pre');
+    await otvori('/banka/varijante/nova?grupa=2');
+    await unesi(editor('tekst'), 'Zadatak');
+    await unesi(brojOdgovora(), '1');
+    await klik(dugme('data-sacuvaj'));
+    expect(router.url).toBe('/banka?predmet=7&namena=PREDAVANJE&grupa=2');
+    lokacija.back();
+    await stabilno();
+    expect(router.url).toBe('/pre');
   });
 
   it('dok se čuva: forma je onemogućena, traka napretka i napomena o trajanju rendera', async () => {
@@ -427,7 +444,7 @@ describe('VarijantaEditorPage', () => {
     expect(editor('resenje').value).toBe('Rešenje');
   });
 
-  it('greška servera ide u traku; 503 kaže da render servis ne radi i da ništa nije sačuvano', async () => {
+  it('greška servera ide u traku; 503 kaže da render servis ne radi i da ništa nije sačuvano, 504 da se proveri banka', async () => {
     await otvori('/banka/varijante/nova?grupa=2');
     await unesi(editor('tekst'), '\\input{x}');
     await unesi(brojOdgovora(), '1');
@@ -438,9 +455,14 @@ describe('VarijantaEditorPage', () => {
 
     api.kreirajVarijantu.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503, error: { reason: 'Render servis nije dostupan.' } })));
     await klik(dugme('data-sacuvaj'));
-    expect(el().querySelector('app-form-error-banner')!.textContent).toContain('Render servis trenutno nije dostupan');
-    expect(el().querySelector('app-form-error-banner')!.textContent).toContain('nije sačuvana');
+    expect(el().querySelector('app-form-error-banner')!.textContent!.trim())
+      .toBe('Render servis nije dostupan. Varijanta nije sačuvana, pokušaj ponovo za koji minut.');
     expect(router.url).toBe('/banka/varijante/nova?grupa=2');
+
+    api.kreirajVarijantu.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 504 })));
+    await klik(dugme('data-sacuvaj'));
+    expect(el().querySelector('app-form-error-banner')!.textContent!.trim())
+      .toBe('Zahtev je istekao. Proveri u banci da li je sačuvano pre ponovnog pokušaja.');
   });
 
   it('"Renderuj ponovo" (samo izmena, bez nesačuvanih izmena) zove render i prikazuje novi ishod', async () => {
@@ -495,6 +517,46 @@ describe('VarijantaEditorPage', () => {
     expect(el().querySelector('app-svg-pregled .bk-sp-okvir svg path')).not.toBeNull();
   });
 
+  it('otvorena varijanta: pregled iz sačuvanih SVG-ova, bez render-probe dok se sadržaj ne izmeni', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak', resenje: 'R', resenjeSvgId: 'svg-2' })));
+    await otvori('/banka/varijante/13');
+    expect(api.svg.mock.calls).toEqual([['svg-1', { tiho: true }], ['svg-2', { tiho: true }]]);
+    const [zadatak, resenje] = [...el().querySelectorAll('app-svg-pregled')];
+    expect(zadatak.querySelector('.bk-sp-okvir svg path')!.id).toMatch(/svg-1$/);
+    expect(resenje.querySelector('.bk-sp-okvir svg path')!.id).toMatch(/svg-2$/);
+    expect(zadatak.textContent).not.toContain('Renderuje se');
+    await new Promise(r => setTimeout(r, KASNJENJE_PREGLEDA + 100));
+    expect(api.renderProba).not.toHaveBeenCalled();
+
+    // prva izmena: render-proba posle mira u kucanju
+    await unesi(editor('tekst'), 'Zadatak 2');
+    await vi.waitUntil(() => api.renderProba.mock.calls.length > 0, { timeout: 2000 });
+    expect(api.renderProba).toHaveBeenCalledExactlyOnceWith({ predmetId: 7, tekst: 'Zadatak 2', resenje: 'R', prilozi: [] }, { tiho: true });
+  });
+
+  it('otvorena varijanta sa greškom u tekstu: sačuvana greška, bez render-probe i bez učitavanja SVG-a', async () => {
+    await otvori('/banka/varijante/13');
+    await new Promise(r => setTimeout(r, KASNJENJE_PREGLEDA + 100));
+    expect(api.renderProba).not.toHaveBeenCalled();
+    expect(api.svg).not.toHaveBeenCalled();
+    expect(el().querySelector('#bk-ve-greska-tekst')!.textContent).toContain('Greška u liniji 3');
+  });
+
+  it('otvorena varijanta sa greškom samo u rešenju: render-proba, da bi se zadatak video dok se rešenje ispravlja', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ tekst: 'Zadatak', resenje: 'a\n\\foo', renderGreska: { linija: 2, poruka: 'X' }, renderDeo: 'resenje' })));
+    api.renderProba.mockReturnValue(of({
+      ok: false, svg: '<svg xmlns="http://www.w3.org/2000/svg"><path id="zadatak" d="M0 0"/></svg>', resenjeSvg: null,
+      greska: { linija: 2, poruka: 'X' }, deo: 'resenje',
+    }));
+    await otvori('/banka/varijante/13');
+    await vi.waitUntil(() => api.renderProba.mock.calls.length > 0, { timeout: 2000 });
+    await stabilno();
+    expect(api.svg).not.toHaveBeenCalled();
+    const [zadatak] = [...el().querySelectorAll('app-svg-pregled')];
+    expect(zadatak.querySelector('.bk-sp-okvir svg path')!.id).toMatch(/zadatak$/);
+    expect(el().querySelector('#bk-ve-greska-resenje')!.textContent).toContain('Greška u liniji 2: X');
+  });
+
   it('prazan tekst: nema render-probe, pregled čeka tekst', async () => {
     api.renderProba.mockReturnValue(of({ ok: true, svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', resenjeSvg: null, greska: null, deo: null }));
     await otvori('/banka/varijante/nova?grupa=2');
@@ -511,6 +573,22 @@ describe('VarijantaEditorPage', () => {
     expect(dugme('data-sacuvaj').textContent!.trim()).toBe('Sačuvaj');
     expect(el().querySelector('[data-sacuvaj-odobri]')).toBeNull();
     expect(el().querySelector('[data-putanja]')!.parentElement!.textContent).toContain('Aktivna');
+  });
+
+  it('zatvaranje kartice ili osvežavanje (beforeunload) traži potvrdu dok ima izmena ili dok se čuva', async () => {
+    const beforeunload = () => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    api.kreirajVarijantu.mockReturnValue(NEVER);
+    await otvori('/banka/varijante/nova?grupa=2');
+    expect(beforeunload()).toBe(false);
+    await unesi(editor('tekst'), 'x');
+    expect(beforeunload()).toBe(true);
+    await unesi(brojOdgovora(), '1');
+    await klik(dugme('data-sacuvaj'));
+    expect(beforeunload()).toBe(true);
   });
 
   it('obe rute editora pitaju pre napuštanja sa nesačuvanim izmenama', () => {

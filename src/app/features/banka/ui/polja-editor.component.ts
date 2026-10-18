@@ -1,6 +1,10 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, output, signal } from '@angular/core';
+import {
+  afterNextRender, afterRenderEffect, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, output, signal,
+  viewChildren,
+} from '@angular/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
+import { ErrorStateMatcher } from '@angular/material/core';
 import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
@@ -8,7 +12,7 @@ import { MatOption, MatSelect } from '@angular/material/select';
 
 import { OdstupanjeTip, Polje, PoljeOpcija, TipPolja } from '../data-access/banka.models';
 import {
-  imaOpcije, MAX_JEDINICA, MAX_OPCIJA, MAX_OZNAKA, MAX_POLJA, MAX_TEKST_OPCIJE, MIN_OPCIJA, novaOpcija, novoPolje, proveriPolja,
+  imaOpcije, MAX_JEDINICA, MAX_OPCIJA, MAX_OZNAKA, MAX_POLJA, MAX_TEKST_OPCIJE, MIN_OPCIJA, novaOpcija, novoPolje, prekrsajPolja, UnosPolja,
 } from '../data-access/polja';
 
 const TIPOVI: readonly { vrednost: TipPolja; labela: string }[] = [
@@ -17,6 +21,11 @@ const TIPOVI: readonly { vrednost: TipPolja; labela: string }[] = [
   { vrednost: 'JEDAN_TACAN', labela: 'Jedan tačan' },
   { vrednost: 'VISE_TACNIH', labela: 'Više tačnih' },
 ];
+
+let sledeci = 0;
+
+/** Ključ jednog unosa za skup dodirnutih: polje, unos i (za opciju) id opcije. */
+const kljucUnosa = (kljuc: string, unos: UnosPolja, opcija: number | null = null) => `${kljuc}|${unos}|${opcija ?? ''}`;
 
 const ODSTUPANJA: readonly { vrednost: OdstupanjeTip; labela: string }[] = [
   { vrednost: 'APSOLUTNO', labela: 'Apsolutno' },
@@ -44,7 +53,9 @@ export function prikazBroja(v: number | null): string {
  * Šema odgovora grupe banke: polja redom, svako sa ključem (dodeljuje ga `novoPolje`, posle se ne menja), oznakom i tipom,
  * i po tipu: odstupanje, vrsta odstupanja i jedinica (BROJ), zanemarivanje velikih slova i razmaka (TEKST), 2 do 6 opcija
  * (JEDAN_TACAN, VISE_TACNIH). Kontrolisana komponenta: ne čuva listu, svaka izmena emituje novu (`poljaPromena`), a
- * roditelj je vraća kroz `polja`. Ispod liste je poruka prve prekršene provere (`proveriPolja`, iste poruke kao server).
+ * roditelj je vraća kroz `polja`. Ispod liste je poruka prve prekršene provere (`prekrsajPolja`, iste poruke kao server), u
+ * učtivoj živoj oblasti (`role="status"`), tek kad korisnik izađe iz unosa na koji se odnosi (kucanje ne prekida, ni nova
+ * prazna oznaka posle "+ polje"); taj unos tada ima `aria-invalid` i `aria-describedby` na poruku.
  *
  * `tipZakljucan` (grupa ima aktivne varijante): tip polja iz `sacuvanaPolja` se ne menja (server bi odbio, 409); novo polje
  * bira tip slobodno. Novo polje nikad ne dobija ključ sačuvanog polja, ni obrisanog: server bi ga smatrao istim poljem; iz
@@ -78,7 +89,9 @@ export function prikazBroja(v: number | null): string {
             <div class="bk-pe-red">
               <mat-form-field appearance="outline" class="bk-pe-siroko">
                 <mat-label>Oznaka</mat-label>
-                <input matInput [value]="p.oznaka" (input)="promeni(i, { oznaka: unos($event) })" [attr.maxlength]="maxOznaka" autocomplete="off" data-oznaka />
+                <input matInput [value]="p.oznaka" (input)="promeni(i, { oznaka: unos($event) })" (blur)="dodirni(p.kljuc, 'oznaka')"
+                  [errorStateMatcher]="matcher(p.kljuc, 'oznaka')" [aria-describedby]="opis(p.kljuc, 'oznaka')" [attr.maxlength]="maxOznaka"
+                  autocomplete="off" data-oznaka />
                 <mat-hint>Šta student vidi uz polje za odgovor</mat-hint>
               </mat-form-field>
               <mat-form-field appearance="outline" class="bk-pe-usko">
@@ -99,7 +112,8 @@ export function prikazBroja(v: number | null): string {
                   <mat-form-field appearance="outline" class="bk-pe-usko">
                     <mat-label>Dozvoljeno odstupanje</mat-label>
                     <input matInput inputmode="decimal" [value]="prikazOdstupanja(p)" (input)="promeniOdstupanje(i, p.kljuc, unos($event))"
-                      autocomplete="off" data-odstupanje />
+                      (blur)="dodirni(p.kljuc, 'odstupanje')" [errorStateMatcher]="matcher(p.kljuc, 'odstupanje')"
+                      [aria-describedby]="opis(p.kljuc, 'odstupanje')" autocomplete="off" data-odstupanje />
                     <mat-hint>0 = tačno taj broj</mat-hint>
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="bk-pe-usko">
@@ -113,7 +127,8 @@ export function prikazBroja(v: number | null): string {
                   <mat-form-field appearance="outline" class="bk-pe-usko">
                     <mat-label>Jedinica (opciono)</mat-label>
                     <input matInput [value]="p.jedinica ?? ''" (input)="promeni(i, { jedinica: unos($event) || null })" [attr.maxlength]="maxJedinica"
-                      autocomplete="off" data-jedinica />
+                      (blur)="dodirni(p.kljuc, 'jedinica')" [errorStateMatcher]="matcher(p.kljuc, 'jedinica')"
+                      [aria-describedby]="opis(p.kljuc, 'jedinica')" autocomplete="off" data-jedinica />
                   </mat-form-field>
                 </div>
               }
@@ -136,7 +151,9 @@ export function prikazBroja(v: number | null): string {
                     <div class="bk-pe-opcija">
                       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="bk-pe-siroko">
                         <mat-label>Opcija {{ j + 1 }}</mat-label>
-                        <input matInput [value]="o.tekst" (input)="promeniOpciju(i, j, unos($event))" [attr.maxlength]="maxTekstOpcije" autocomplete="off" data-opcija />
+                        <input matInput [value]="o.tekst" (input)="promeniOpciju(i, j, unos($event))" (blur)="dodirni(p.kljuc, 'opcija', o.id)"
+                          [errorStateMatcher]="matcher(p.kljuc, 'opcija', o.id)" [aria-describedby]="opis(p.kljuc, 'opcija', o.id)"
+                          [attr.maxlength]="maxTekstOpcije" autocomplete="off" data-opcija />
                       </mat-form-field>
                       <button matIconButton type="button" disabledInteractive [disabled]="opcije.length <= minOpcija" (click)="obrisiOpciju(i, j)"
                         [attr.aria-label]="'Obriši opciju ' + (j + 1) + ' polja ' + p.kljuc" data-obrisi-opciju>
@@ -160,9 +177,8 @@ export function prikazBroja(v: number | null): string {
       </button>
       <span class="bk-pe-broj">{{ polja().length }} od najviše {{ maxPolja }} polja</span>
     </div>
-    @if (greska(); as g) {
-      <p class="bk-pe-greska" role="alert" data-greska-polja>{{ g }}</p>
-    }
+    <!-- živa oblast je uvek u DOM-u (menja se samo tekst), da bi čitač ekrana najavio poruku kad se pojavi -->
+    <p class="bk-pe-greska" role="status" [id]="idGreske" data-greska-polja>{{ prikazanPrekrsaj()?.poruka }}</p>
   `,
 })
 export class PoljaEditorComponent {
@@ -185,13 +201,62 @@ export class PoljaEditorComponent {
   protected readonly minOpcija = MIN_OPCIJA;
   protected readonly maxOpcija = MAX_OPCIJA;
 
-  protected readonly greska = computed(() => proveriPolja(this.polja()));
+  protected readonly idGreske = `bk-pe-${++sledeci}-greska`;
+  private readonly prekrsaj = computed(() => prekrsajPolja(this.polja()));
+  /** Unosi iz kojih je korisnik izašao (blur): njihova greška se prikazuje, i dalje prati kucanje. */
+  private readonly dodirnuti = signal<ReadonlySet<string>>(new Set());
+  /** Prekršaj koji se prikazuje: pravilo bez svog unosa odmah, ostala tek kad je njihov unos dodirnut. */
+  protected readonly prikazanPrekrsaj = computed(() => {
+    const p = this.prekrsaj();
+    return p && (p.unos === null || p.kljuc === null || this.dodirnuti().has(kljucUnosa(p.kljuc, p.unos, p.opcija))) ? p : null;
+  });
+  private readonly matcheri = new Map<string, ErrorStateMatcher>();
+  private readonly unosi = viewChildren(MatInput);
   private readonly sacuvaniKljucevi = computed(() => new Set(this.sacuvanaPolja().map(p => p.kljuc)));
   /**
    * Odstupanje kako ga je korisnik otkucao, po ključu polja: prikazuje se dok mu vrednost polja odgovara ("1,50", "abc" dok je
    * vrednost NaN), pa kucanje ne prepisuje polje. Kad vrednost dođe spolja (Odbaci, čuvanje), prikazuje se ona.
    */
   private readonly unosOdstupanja = signal<Readonly<Record<string, string>>>({});
+
+  constructor() {
+    // `MatInput` bez `ngControl` ne računa grešku sam (ni `aria-invalid`): posle svake promene prikazane greške, iz `matcher`
+    afterRenderEffect(() => {
+      this.prikazanPrekrsaj();
+      for (const i of this.unosi()) {
+        i.updateErrorState();
+      }
+    });
+  }
+
+  protected dodirni(kljuc: string, unos: UnosPolja, opcija: number | null = null): void {
+    const k = kljucUnosa(kljuc, unos, opcija);
+    if (!this.dodirnuti().has(k)) {
+      this.dodirnuti.update(s => new Set([...s, k]));
+    }
+  }
+
+  /** Unos je onaj na koji se odnosi prikazana greška. */
+  private neispravan(kljuc: string, unos: UnosPolja, opcija: number | null): boolean {
+    const p = this.prikazanPrekrsaj();
+    return !!p && p.kljuc === kljuc && p.unos === unos && p.opcija === opcija;
+  }
+
+  /** Greška polja (crveni okvir i `aria-invalid`) dok je prikazana poruka o njemu. */
+  protected matcher(kljuc: string, unos: UnosPolja, opcija: number | null = null): ErrorStateMatcher {
+    const k = kljucUnosa(kljuc, unos, opcija);
+    let m = this.matcheri.get(k);
+    if (!m) {
+      m = { isErrorState: () => this.neispravan(kljuc, unos, opcija) };
+      this.matcheri.set(k, m);
+    }
+    return m;
+  }
+
+  /** `aria-describedby` unosa: id poruke dok se ona odnosi na njega (`MatInput` ga spaja sa uputstvom polja). */
+  protected opis(kljuc: string, unos: UnosPolja, opcija: number | null = null): string {
+    return this.neispravan(kljuc, unos, opcija) ? this.idGreske : '';
+  }
 
   protected zakljucan(p: Polje): boolean {
     return this.tipZakljucan() && this.sacuvaniKljucevi().has(p.kljuc);

@@ -1,10 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, EMPTY, finalize, forkJoin, map, mergeMap, Observable, of, pipe, switchMap, tap } from 'rxjs';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
 import { BankaApi } from './banka.api';
@@ -12,6 +10,7 @@ import {
   GrupaCmd, GrupaCvor, GrupaDetails, GrupaPutanja, Namena, nadjiCvor, PremestiCmd, prviList, putanjaDo, StatusVarijante,
   VarijantaInfo,
 } from './banka.models';
+import { razlogBanke, TIHO } from './greske';
 
 export type FilterStatusa = StatusVarijante | 'SVE';
 
@@ -40,12 +39,6 @@ export interface Brojaci {
 }
 
 const NULA: Brojaci = { brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0, brojGresaka: 0 };
-/** Greške store prikazuje sam kroz `NotificationStore` (ili status `error`), pa globalni snackbar ne sme da ih udvostruči. */
-const TIHO = { tiho: true } as const;
-
-function razlog(e: unknown): string {
-  return e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
-}
 
 /** Zahtev za stablo: `grupaId` je željeni izbor (važi samo ako postoji u stablu), `prvo` = nov predmet/namena (status učitavanja). */
 interface ZahtevStabla {
@@ -59,8 +52,8 @@ interface ZahtevStabla {
  * Stranica banke (`/banka`): stablo grupa jednog predmeta i namene, izabrana grupa sa varijantama i izmene grupa i varijanti.
  * Feature store: provajduje ga rutirana stranica. Ne zna ništa o prikazu. Posle svake izmene ponovo učitava stablo i izabranu
  * grupu sa varijantama (brojači stabla i kartice ostaju tačni), uz isti izbor i isti filter statusa. Greške idu u
- * `NotificationStore` (razlog servera, a 5xx opšta poruka); uz to prvo učitavanje (`ucitaj`) postavlja status `error`, a
- * neuspelo učitavanje izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
+ * `NotificationStore` (`razlogBanke`: razlog servera, 503 render servis, 504 istek, ostali 5xx opšta poruka); uz to prvo
+ * učitavanje (`ucitaj`) postavlja status `error`, a neuspelo učitavanje izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
  */
 export const BankaStore = signalStore(
   withState<BankaState>({
@@ -96,7 +89,7 @@ export const BankaStore = signalStore(
     filtriraneVarijante: computed(() => varijante().filter(v => filterStatusa() === 'SVE' || v.status === filterStatusa())),
   })),
   withMethods(store => {
-    const prijavi = (e: unknown): void => store._obavestenja.greska(razlog(e));
+    const prijavi = (e: unknown): void => store._obavestenja.greska(razlogBanke(e));
 
     /** Grupa i varijante izabrane grupe; `null` samo prekida zahtev u letu (stari odgovor ne sme na novo stanje). */
     const ucitajGrupu = rxMethod<number | null>(
@@ -108,7 +101,7 @@ export const BankaStore = signalStore(
           return forkJoin({ grupa: store._api.grupa(id, TIHO), varijante: store._api.varijante(id, undefined, TIHO) }).pipe(
             tap(({ grupa, varijante }) => patchState(store, { grupa, varijante, greskaGrupe: null })),
             catchError((e: unknown) => {
-              patchState(store, { grupa: null, varijante: [], greskaGrupe: razlog(e) });
+              patchState(store, { grupa: null, varijante: [], greskaGrupe: razlogBanke(e) });
               prijavi(e);
               return EMPTY;
             }),
@@ -138,7 +131,7 @@ export const BankaStore = signalStore(
             }),
             catchError((e: unknown) => {
               if (z.prvo) {
-                patchState(store, setError(razlog(e)));
+                patchState(store, setError(razlogBanke(e)));
               }
               prijavi(e);
               return EMPTY;

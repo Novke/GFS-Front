@@ -1,4 +1,3 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -9,10 +8,11 @@ import { MatInput } from '@angular/material/input';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { filter, Observable, of, switchMap, tap } from 'rxjs';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
+import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from '../data-access/banka.api';
 import { PreambulaInfo, RenderujSveInfo } from '../data-access/banka.models';
+import { razlogBanke, TIHO } from '../data-access/greske';
 
 /** Najduža preambula (`LatexPreambulaService.MAX_ZNAKOVA`). */
 export const MAX_PREAMBULA = 50_000;
@@ -24,24 +24,26 @@ export interface PreambulaDialogPodaci {
   predmet: string | null;
 }
 
-/** Zbir renderovanja posle čuvanja (`preostalo` je iz poslednjeg koraka). */
+/** Zbir renderovanja posle čuvanja (`renderovano` i `neuspelo` saberu se kroz korake, `preostalo` je iz poslednjeg). */
 export type PreambulaDialogRezultat = RenderujSveInfo;
 
-type Faza = 'ucitava' | 'neucitano' | 'spremna' | 'cuva' | 'renderuje';
-
-const TIHO = { tiho: true } as const;
-
-function razlog(e: unknown): string {
-  return e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
+/** "1 varijanta nije renderovana", "3 varijante nisu renderovane", "12 varijanti nije renderovano". */
+export function opisNeuspelih(n: number): string {
+  return sRecju(n, 'varijanta nije renderovana', 'varijante nisu renderovane', 'varijanti nije renderovano');
 }
+
+type Faza = 'ucitava' | 'neucitano' | 'spremna' | 'cuva' | 'renderuje';
 
 /**
  * "Podešavanja LaTeX-a" predmeta: preambula koja ide ispred teksta svake varijante (`GET|PUT predmeti/{id}/latex-preambula`).
  * Podrazumevana se prikazuje u polju; nepromenjena podrazumevana i prazno polje šalju `null` (predmet ostaje na
  * podrazumevanoj, keš rendera se ne poništava). Posle čuvanja zove `renderuj-sve` dok `preostalo` nije 0 (najviše
- * {@link MAX_KRUGOVA_RENDERA} puta, pa nudi "Nastavi renderovanje"), uz napredak "Renderovano N, preostalo M". Greške su u traci
- * dijaloga (`{ tiho: true }`). Vraća zbir renderovanja kad je preambula sačuvana, inače `undefined`. Dok radi, ne zatvara se;
- * klik van dijaloga ga ne zatvara, a Esc samo dok tekst nije menjan.
+ * {@link MAX_KRUGOVA_RENDERA} puta, pa nudi "Nastavi renderovanje", kao i posle greške), uz napredak "Renderovano N, preostalo
+ * M" i zbir neuspelih. Kad sve uspe, zatvara se sam; kad neki render nije uspeo (`neuspelo`), ostaje otvoren sa upozorenjem
+ * (varijante zadržavaju status i poslednji uspeo render), a ispravljena preambula se čuva ponovo istim dugmetom "Sačuvaj"
+ * (posle čuvanja čeka novu izmenu teksta). Greške su u traci dijaloga (`{ tiho: true }`). Vraća zbir renderovanja kad je
+ * preambula sačuvana, inače `undefined`. Dok radi, ne zatvara se; klik van dijaloga ga ne zatvara, a Esc samo dok tekst nije
+ * menjan.
  */
 @Component({
   selector: 'app-preambula-dialog',
@@ -78,18 +80,24 @@ function razlog(e: unknown): string {
         <button matButton type="button" [disabled]="radi()" (click)="vratiPodrazumevanu()" data-podrazumevana>Vrati podrazumevanu</button>
       }
       @if (napredak(); as n) {
-        <p class="bk-napredak" role="status">Renderovano {{ n.renderovano }}, preostalo {{ n.preostalo }}</p>
+        <p class="bk-napredak" role="status">Renderovano {{ n.renderovano }}, preostalo {{ n.preostalo }}{{ n.neuspelo ? ', nije uspelo ' + n.neuspelo : '' }}</p>
+        @if (!radi() && n.neuspelo > 0) {
+          <div class="bk-upozorenje-preambule" role="alert" data-neuspelo>
+            {{ opisNeuspelih(n.neuspelo) }} (greška u preambuli?). Status varijanti je sačuvan, pregled na telefonu koristi poslednji uspeo
+            render dok se ne ispravi.
+          </div>
+        }
       } @else if (faza() === 'renderuje' || faza() === 'cuva') {
         <p class="bk-napredak" role="status">{{ faza() === 'cuva' ? 'Čuvanje…' : 'Renderovanje…' }}</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button matButton type="button" [disabled]="radi()" (click)="zatvori()" data-zatvori>{{ sacuvano() ? 'Zatvori' : 'Odustani' }}</button>
-      @if (sacuvano()) {
-        <button matButton="filled" type="button" [disabled]="radi()" (click)="renderuj()" data-nastavi>Nastavi renderovanje</button>
-      } @else {
-        <button matButton="filled" type="button" [disabled]="radi() || faza() !== 'spremna'" (click)="sacuvaj()" data-sacuvaj>Sačuvaj</button>
+      @if (nedovrseno()) {
+        <button matButton="outlined" type="button" [disabled]="radi()" (click)="renderuj()" data-nastavi>Nastavi renderovanje</button>
       }
+      <button matButton="filled" type="button" [disabled]="radi() || faza() !== 'spremna' || (sacuvano() && !tekst.dirty)" (click)="sacuvaj()"
+        data-sacuvaj>Sačuvaj</button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -98,6 +106,14 @@ function razlog(e: unknown): string {
     .bk-preambula-polje { width: 100%; }
     .bk-mono { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; white-space: pre; }
     .bk-napredak { margin: 8px 0 0; font-family: var(--font-mono); font-size: 13px; }
+    .bk-upozorenje-preambule {
+      margin: 8px 0 0;
+      padding: 8px 12px;
+      border: 1px solid var(--warn);
+      border-radius: var(--radius-sm);
+      background: var(--warn-soft);
+      color: var(--ink);
+    }
   `,
 })
 export class PreambulaDialog {
@@ -111,7 +127,15 @@ export class PreambulaDialog {
   private readonly info = signal<PreambulaInfo | null>(null);
   /** Zbir koraka renderovanja posle poslednjeg čuvanja; `null` dok čuvanje nije uspelo. */
   protected readonly napredak = signal<RenderujSveInfo | null>(null);
+  /** Poslednji krug renderovanja je pao (greška servera ili mreže): "Nastavi renderovanje" ga ponavlja. */
+  private readonly prekinuto = signal(false);
   protected readonly sacuvano = computed(() => this.napredak() !== null);
+  /**
+   * Preambula je sačuvana, a renderovanje nije stiglo do kraja (prekid ili {@link MAX_KRUGOVA_RENDERA} krugova). Posle celog
+   * kruga sa neuspelim renderima nema nastavka: server bi iste varijante probao ponovo i one bi se brojale dvaput.
+   */
+  protected readonly nedovrseno = computed(() => this.sacuvano() && (this.prekinuto() || (this.napredak()?.preostalo ?? 0) > 0));
+  protected readonly opisNeuspelih = opisNeuspelih;
   protected readonly podrazumevana = computed(() => this.info()?.podrazumevana ?? false);
   protected readonly radi = computed(() => this.faza() === 'cuva' || this.faza() === 'renderuje');
   protected readonly tekst = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(MAX_PREAMBULA)] });
@@ -141,7 +165,7 @@ export class PreambulaDialog {
         this.faza.set('spremna');
       },
       error: (e: unknown) => {
-        this.greska.set(razlog(e));
+        this.greska.set(razlogBanke(e));
         this.faza.set('neucitano');
       },
     });
@@ -168,11 +192,11 @@ export class PreambulaDialog {
       next: novo => {
         this.info.set(novo);
         this.tekst.markAsPristine();
-        this.napredak.set({ renderovano: 0, preostalo: 0 });
+        this.napredak.set({ renderovano: 0, neuspelo: 0, preostalo: 0 });
         this.renderujSve();
       },
       error: (e: unknown) => {
-        this.greska.set(razlog(e));
+        this.greska.set(razlogBanke(e));
         this.faza.set('spremna');
       },
     });
@@ -185,24 +209,31 @@ export class PreambulaDialog {
     }
   }
 
-  /** Do {@link MAX_KRUGOVA_RENDERA} poziva `renderuj-sve` zaredom; zatvara se sam kad ništa ne preostane. */
+  /**
+   * Do {@link MAX_KRUGOVA_RENDERA} poziva `renderuj-sve` zaredom, sa zbirom uspelih i neuspelih; zatvara se sam kad ništa ne
+   * preostane i nijedan render nije pao.
+   */
   private renderujSve(): void {
     this.faza.set('renderuje');
     this.greska.set(null);
+    this.prekinuto.set(false);
     const korak = (krug: number): Observable<RenderujSveInfo> =>
       this.api.renderujSve(this.d.predmetId, TIHO).pipe(
-        tap(r => this.napredak.update(n => ({ renderovano: (n?.renderovano ?? 0) + r.renderovano, preostalo: r.preostalo }))),
+        tap(r => this.napredak.update(n => ({
+          renderovano: (n?.renderovano ?? 0) + r.renderovano, neuspelo: (n?.neuspelo ?? 0) + r.neuspelo, preostalo: r.preostalo,
+        }))),
         switchMap(r => (r.preostalo > 0 && krug < MAX_KRUGOVA_RENDERA ? korak(krug + 1) : of(r))),
       );
     korak(1).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: r => {
         this.faza.set('spremna');
-        if (r.preostalo === 0) {
+        if (r.preostalo === 0 && this.napredak()?.neuspelo === 0) {
           this.zatvori();
         }
       },
       error: (e: unknown) => {
-        this.greska.set(razlog(e));
+        this.greska.set(razlogBanke(e));
+        this.prekinuto.set(true);
         this.faza.set('spremna');
       },
     });

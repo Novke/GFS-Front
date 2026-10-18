@@ -1,4 +1,4 @@
-import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { ENTER } from '@angular/cdk/keycodes';
 import { afterRenderEffect, ChangeDetectionStrategy, Component, computed, input, output, signal, viewChildren } from '@angular/core';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatChipGrid, MatChipInput, MatChipInputEvent, MatChipRemove, MatChipRow } from '@angular/material/chips';
@@ -22,8 +22,8 @@ let sledeci = 0;
 /**
  * Tačni odgovori varijante po šemi polja grupe, polje po polje (`fieldset` sa oznakom, ključem i bedžom "Popunjeno" /
  * "Nedostaje" po `odgovorPopunjen`): BROJ je tekstualno polje sa decimalnim zarezom ili tačkom (čuva se kao broj, neispravan
- * unos je `NaN` i ostaje "Nedostaje"), TEKST lista prihvatljivih odgovora kao čipovi (Enter ili zarez dodaje, do 10, svaki do
- * 200 znakova), JEDAN_TACAN radio i VISE_TACNIH kvačice nad opcijama polja. Kontrolisana komponenta, kao `app-polja-editor`:
+ * unos je `NaN` i ostaje "Nedostaje"), TEKST lista prihvatljivih odgovora kao čipovi (Enter ili izlazak iz polja dodaje, zarez
+ * je deo odgovora; do 10, svaki do 200 znakova), JEDAN_TACAN radio i VISE_TACNIH kvačice nad opcijama polja. Kontrolisana komponenta, kao `app-polja-editor`:
  * svaka izmena emituje sve odgovore (`odgovoriPromena`, tačno ključevi šeme, nepopunjeni prazni), roditelj ih vraća kroz
  * `odgovori`. U svakom odgovoru je postavljeno samo svojstvo tipa polja (server odbija ostala).
  */
@@ -107,7 +107,8 @@ export class OdgovoriFormaComponent {
   readonly odgovoriPromena = output<Record<string, OdgovorPolja>>();
 
   protected readonly idPolja = `bk-of-${++sledeci}`;
-  protected readonly separatori = [ENTER, COMMA] as const;
+  /** Samo Enter (i izlazak iz polja): zarez je deo odgovora, npr. `(1,0)` ili `q0, q1`. */
+  protected readonly separatori = [ENTER] as const;
   /** Odgovor svakog polja šeme (prazan kad ga nema), samo ključevi šeme. */
   private readonly sviOdgovori = computed(() => Object.fromEntries(this.polja().map(p => [p.kljuc, this.odgovori()[p.kljuc] ?? prazanOdgovor(p)])));
   /** BROJ kako je otkucan, po ključu: prikazuje se dok mu vrednost odgovora odgovara (kao odstupanje u `app-polja-editor`). */
@@ -161,7 +162,7 @@ export class OdgovoriFormaComponent {
 
   protected opisTeksta(p: Polje): string {
     const zanemari = [p.zanemariVelicinu !== false ? 'velika slova' : null, p.zanemariRazmake !== false ? 'razmake' : null].filter(Boolean);
-    return `Enter ili zarez dodaje, do ${MAX_PRIHVATLJIVIH}${zanemari.length ? `; poređenje zanemaruje ${zanemari.join(' i ')}` : ''}`;
+    return `Enter dodaje, do ${MAX_PRIHVATLJIVIH}${zanemari.length ? `; poređenje zanemaruje ${zanemari.join(' i ')}` : ''}`;
   }
 
   protected promeniBroj(p: Polje, e: Event): void {

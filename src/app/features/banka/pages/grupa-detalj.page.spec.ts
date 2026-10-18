@@ -168,7 +168,10 @@ describe('GrupaDetaljPage', () => {
     e.querySelector<HTMLElement>('[data-dodaj-polje]')!.click();
     await stabilno();
     expect(upozorenja()).toContain('Aktivne varijante će postati nacrti dok ne dobiju odgovor za novo polje.');
-    // novo polje bez oznake: šema nije ispravna, ne čuva se
+    // novo polje bez oznake: šema nije ispravna, ne čuva se (poruka stiže kad se izađe iz polja, ne dok je fokus u njemu)
+    expect(e.querySelector('[data-greska-polja]')!.textContent!.trim()).toBe('');
+    e.querySelector('[data-polje="b"] input[data-oznaka]')!.dispatchEvent(new FocusEvent('blur'));
+    await stabilno();
     expect(e.querySelector('[data-greska-polja]')!.textContent).toContain('Oznaka polja mora imati 1 do 200 znakova.');
     expect(onemoguceno(sacuvaj())).toBe(true);
     await klik(sacuvaj());
@@ -345,6 +348,18 @@ describe('GrupaDetaljPage', () => {
     await stabilno();
     expect(e.querySelectorAll('app-varijanta-kartica')).toHaveLength(2);
     expect(document.activeElement).toBe(e.querySelector('app-varijanta-kartica[data-varijanta="12"] .bk-kartica-veza'));
+  });
+
+  it('zatvaranje kartice ili osvežavanje (beforeunload) traži potvrdu samo dok ima nesačuvanih izmena', async () => {
+    await otvori('/banka/grupe/2');
+    const pre = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(pre);
+    expect(pre.defaultPrevented).toBe(false);
+
+    await unesi('textarea[data-opis]', 'Novi opis');
+    const posle = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(posle);
+    expect(posle.defaultPrevented).toBe(true);
   });
 
   it('napuštanje sa nesačuvanim izmenama traži potvrdu (unsavedChangesGuard)', async () => {

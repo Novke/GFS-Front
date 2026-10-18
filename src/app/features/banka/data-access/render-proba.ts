@@ -1,25 +1,26 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  catchError, concat, defer, distinctUntilChanged, EMPTY, map, merge, Observable, of, scan, shareReplay, switchMap, timer, withLatestFrom,
+  catchError, concat, defer, distinctUntilChanged, EMPTY, forkJoin, map, merge, Observable, of, scan, shareReplay, switchMap, timer,
+  withLatestFrom,
 } from 'rxjs';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import type { BankaApi } from './banka.api';
 import type { RenderDeo, RenderGreskaInfo, RenderProbaCmd, RenderProbaInfo } from './banka.models';
+import { razlogBanke, TIHO } from './greske';
 
 /** Mir u kucanju posle kog editor traži pregled (`render-proba`). */
 export const KASNJENJE_PREGLEDA = 800;
 
 /**
  * Stanje živog pregleda: `prazno` (nema teksta), `ceka` (sadržaj se promenio, render još nije stigao), `ok`, `greska`
- * (LaTeX greška sa linijom i delom, ili odbijen sadržaj bez linije, npr. zabranjena komanda) i `nedostupan` (render servis
- * ne radi ili je zauzet: 429, 503, bez veze).
+ * (LaTeX greška sa linijom i delom, ili odbijen sadržaj bez linije, npr. zabranjena komanda), `zauzet` (429: sve probe su
+ * zauzete, prolazno) i `nedostupan` (render servis ne radi, istek ili nema veze: 503, 504, 0).
  */
-export type StanjePregleda = 'prazno' | 'ceka' | 'ok' | 'greska' | 'nedostupan';
+export type StanjePregleda = 'prazno' | 'ceka' | 'ok' | 'greska' | 'zauzet' | 'nedostupan';
 
 export interface Pregled {
   stanje: StanjePregleda;
-  /** SVG zadatka (tekst sa našeg servera); dok je `ceka`, poslednji prikazan. */
+  /** SVG zadatka (tekst sa našeg servera); dok je `ceka`, poslednji prikazan; uz grešku u rešenju SVG zadatka. */
   svg: string | null;
   resenjeSvg: string | null;
   greska: RenderGreskaInfo | null;
@@ -27,57 +28,96 @@ export interface Pregled {
   deo: RenderDeo | null;
 }
 
-/** Pregled pre prvog sadržaja (početna vrednost za `toSignal`). */
-export const PRAZAN_PREGLED: Pregled = { stanje: 'prazno', svg: null, resenjeSvg: null, greska: null, deo: null };
-const TIHO = { tiho: true } as const;
+/**
+ * Sačuvan render varijante koji važi za trenutni sadržaj forme (isti ulaz rendera kao sačuvani): SVG-ovi uspelog rendera
+ * (`svgId`, `resenjeSvgId`) ili `'greska'` (grešku prikazuje sačuvana varijanta, pregled ostaje bez SVG-a). Tada nema
+ * render-probe.
+ */
+export type SacuvanRender = { svgId: string; resenjeSvgId: string | null } | 'greska';
 
-/** Ključ sadržaja: isti tekst, rešenje, predmet i prilozi su isti render. */
-const kljuc = (c: RenderProbaCmd | null) => (c === null ? null : JSON.stringify(c));
-
-function izOdgovora(r: RenderProbaInfo): Pregled {
-  return r.ok
-    ? { stanje: 'ok', svg: r.svg, resenjeSvg: r.resenjeSvg, greska: null, deo: null }
-    : { stanje: 'greska', svg: null, resenjeSvg: null, greska: r.greska ?? { linija: null, poruka: 'Render nije uspeo.' }, deo: r.deo ?? null };
+/** Jedan sadržaj za pregled: komanda probe i, dok je sadržaj isti kao sačuvani, sačuvan render. */
+export interface SadrzajPregleda {
+  cmd: RenderProbaCmd;
+  sacuvan: SacuvanRender | null;
 }
 
-/** 429 (zauzet), 503 (ne radi) i 0 (nema veze) su prolazni; ostalo (400 zabranjena komanda, loš prilog) je greška sadržaja. */
+/** Pregled pre prvog sadržaja (početna vrednost za `toSignal`). */
+export const PRAZAN_PREGLED: Pregled = { stanje: 'prazno', svg: null, resenjeSvg: null, greska: null, deo: null };
+
+/** Korak stanja: novo stanje iz prethodnog (`scan`). */
+type Korak = (prethodno: Pregled) => Pregled;
+
+/** Ključ sadržaja: isti tekst, rešenje, predmet, prilozi i sačuvan render su isti pregled. */
+const kljuc = (s: SadrzajPregleda | null) => (s === null ? null : JSON.stringify(s));
+
+/** Uz grešku u rešenju zadatak se preveo: njegov SVG iz odgovora, a kad ga odgovor nema, poslednji prikazan. */
+function izOdgovora(r: RenderProbaInfo): Korak {
+  if (r.ok) {
+    return () => ({ stanje: 'ok', svg: r.svg, resenjeSvg: r.resenjeSvg, greska: null, deo: null });
+  }
+  const greska = r.greska ?? { linija: null, poruka: 'Render nije uspeo.' };
+  const deo = r.deo ?? null;
+  return p => ({ stanje: 'greska', svg: deo === 'resenje' ? (r.svg ?? p.svg) : null, resenjeSvg: null, greska, deo });
+}
+
+/** 429 (zauzet), 503, 504 i 0 (ne radi, istek, nema veze) su prolazni; ostalo (400 zabranjena komanda, loš prilog) je greška sadržaja. */
 function izGreske(e: unknown): Pregled {
-  if (e instanceof HttpErrorResponse && (e.status === 429 || e.status === 503 || e.status === 0)) {
+  if (e instanceof HttpErrorResponse && e.status === 429) {
+    return { ...PRAZAN_PREGLED, stanje: 'zauzet' };
+  }
+  if (e instanceof HttpErrorResponse && (e.status === 503 || e.status === 504 || e.status === 0)) {
     return { ...PRAZAN_PREGLED, stanje: 'nedostupan' };
   }
-  const poruka = e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
-  return { ...PRAZAN_PREGLED, stanje: 'greska', greska: { linija: null, poruka } };
+  return { ...PRAZAN_PREGLED, stanje: 'greska', greska: { linija: null, poruka: razlogBanke(e) } };
 }
 
 /**
  * Živi pregled editora varijante: za svaki nov sadržaj (`izvor$`; `null` = nema teksta) odmah `ceka` (sa poslednjim SVG-om),
  * pa posle {@link KASNJENJE_PREGLEDA} ms mira `render-proba` (tiho: greške su stanje, nikad snackbar ni izuzetak u toku).
  * Isti sadržaj (po JSON ključu) se ne traži ponovo; nov sadržaj otkazuje i čekanje i zahtev u letu (`switchMap` nad
- * `timer`, što je debounce koji ne pušta stari odgovor posle novog stanja). `odmah$` (Ctrl+Enter) renderuje trenutni
- * sadržaj bez čekanja, i kad se nije promenio (npr. posle `nedostupan`).
+ * `timer`, što je debounce koji ne pušta stari odgovor posle novog stanja). Sadržaj sa sačuvanim renderom (`sacuvan`:
+ * otvorena varijanta, dok je ista kao sačuvana) ne troši probu: uspeo render se odmah prikazuje iz sačuvanih SVG-ova
+ * (`BankaApi.svg`; ako se ne učitaju, ipak proba), a neuspeo ostaje bez SVG-a (grešku daje sačuvana varijanta). `odmah$`
+ * (Ctrl+Enter) renderuje trenutni sadržaj probom bez čekanja, i kad se nije promenio (npr. posle `nedostupan`).
  */
-export function pregledUzivo(izvor$: Observable<RenderProbaCmd | null>, api: BankaApi, odmah$: Observable<unknown> = EMPTY): Observable<Pregled> {
+export function pregledUzivo(izvor$: Observable<SadrzajPregleda | null>, api: BankaApi, odmah$: Observable<unknown> = EMPTY): Observable<Pregled> {
   const sadrzaj$ = izvor$.pipe(shareReplay({ bufferSize: 1, refCount: true }));
   const zahtevi$ = merge(
     sadrzaj$.pipe(
       distinctUntilChanged((a, b) => kljuc(a) === kljuc(b)),
-      map(cmd => ({ cmd, cekaj: true })),
+      map(s => ({ s, odmah: false })),
     ),
     odmah$.pipe(
       withLatestFrom(sadrzaj$),
-      map(([, cmd]) => ({ cmd, cekaj: false })),
+      map(([, s]) => ({ s, odmah: true })),
     ),
   );
+  const ceka: Korak = p => ({ ...p, stanje: 'ceka', greska: null, deo: null });
   return zahtevi$.pipe(
-    switchMap(({ cmd, cekaj }) => {
-      if (cmd === null) {
-        return of(PRAZAN_PREGLED);
+    switchMap(({ s, odmah }): Observable<Korak> => {
+      if (s === null) {
+        return of(() => PRAZAN_PREGLED);
       }
-      const render$ = defer(() => api.renderProba(cmd, TIHO)).pipe(map(izOdgovora), catchError((e: unknown) => of(izGreske(e))));
-      return concat(of<Pregled | null>(null), cekaj ? timer(KASNJENJE_PREGLEDA).pipe(switchMap(() => render$)) : render$);
+      const proba$ = defer(() => api.renderProba(s.cmd, TIHO)).pipe(
+        map(izOdgovora),
+        catchError((e: unknown) => of<Korak>(() => izGreske(e))),
+      );
+      if (odmah) {
+        return concat(of(ceka), proba$);
+      }
+      if (s.sacuvan === 'greska') {
+        return of(() => PRAZAN_PREGLED);
+      }
+      if (s.sacuvan) {
+        const { svgId, resenjeSvgId } = s.sacuvan;
+        return forkJoin({ svg: api.svg(svgId, TIHO), resenjeSvg: resenjeSvgId ? api.svg(resenjeSvgId, TIHO) : of(null) }).pipe(
+          map(r => (): Pregled => ({ stanje: 'ok', svg: r.svg, resenjeSvg: r.resenjeSvg, greska: null, deo: null })),
+          catchError(() => proba$),
+        );
+      }
+      return concat(of(ceka), timer(KASNJENJE_PREGLEDA).pipe(switchMap(() => proba$)));
     }),
-    // `null` je "ceka": zadržava SVG-ove poslednjeg stanja (prazno i greška ih nemaju, pa ni ceka posle njih)
-    scan<Pregled | null, Pregled>((prethodno, novo) => novo ?? { ...prethodno, stanje: 'ceka', greska: null, deo: null }, PRAZAN_PREGLED),
+    scan((prethodno: Pregled, korak: Korak) => korak(prethodno), PRAZAN_PREGLED),
   );
 }
 

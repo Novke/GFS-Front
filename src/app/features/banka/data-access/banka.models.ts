@@ -220,7 +220,10 @@ export interface RenderProbaCmd {
   prilozi?: PrilogCmd[] | null;
 }
 
-/** Ishod render-probe: SVG zadatka i rešenja kao tekst kad je `ok`, inače greška i deo u kome je. */
+/**
+ * Ishod render-probe: SVG zadatka i rešenja kao tekst kad je `ok`, inače greška i deo u kome je; kad je pao samo deo
+ * `resenje`, `svg` je ipak SVG zadatka (`resenjeSvg` je `null`).
+ */
 export interface RenderProbaInfo {
   ok: boolean;
   svg: string | null;
@@ -229,9 +232,14 @@ export interface RenderProbaInfo {
   deo: RenderDeo | null;
 }
 
-/** `POST banka/predmeti/{id}/renderuj-sve`: `preostalo` varijanti sa zastarelim renderom čeka sledeći poziv (zvati dok nije 0). */
+/**
+ * `POST banka/predmeti/{id}/renderuj-sve`: `renderovano` uspelih i `neuspelo` neuspelih rendera u ovom pozivu (neuspela
+ * varijanta zadržava status i SVG poslednjeg uspelog rendera, dobija samo `renderStatus: GRESKA` i grešku); `preostalo`
+ * varijanti sa zastarelim renderom čeka sledeći poziv (zvati dok nije 0).
+ */
 export interface RenderujSveInfo {
   renderovano: number;
+  neuspelo: number;
   preostalo: number;
 }
 

@@ -93,3 +93,6 @@
   background: var(--danger-soft);
   color: var(--ink);
 }
+
+/* živa oblast ostaje u DOM-u i kad je prazna, samo bez okvira i razmaka */
+.bk-pe-greska:empty { margin: 0; padding: 0; border: 0; }

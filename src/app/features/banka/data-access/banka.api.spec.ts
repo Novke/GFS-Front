@@ -153,8 +153,18 @@ describe('BankaApi', () => {
     const rez = vi.fn();
     api.renderujSve(7).subscribe(rez);
     const req = zahtev('POST', 'api/banka/predmeti/7/renderuj-sve');
-    req.flush({ renderovano: 5, preostalo: 2 });
-    expect(rez).toHaveBeenCalledWith({ renderovano: 5, preostalo: 2 });
+    req.flush({ renderovano: 5, neuspelo: 1, preostalo: 2 });
+    expect(rez).toHaveBeenCalledWith({ renderovano: 5, neuspelo: 1, preostalo: 2 });
+  });
+
+  it('svg: GET api/public/mediji/{id} kao tekst (pregled sačuvane varijante), tiho', () => {
+    const rez = vi.fn();
+    api.svg('abc-1', { tiho: true }).subscribe(rez);
+    const req = zahtev('GET', 'api/public/mediji/abc-1');
+    expect(req.request.responseType).toBe('text');
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
+    req.flush('<svg/>');
+    expect(rez).toHaveBeenCalledWith('<svg/>');
   });
 
   it('pretraga: GET banka/pretraga šalje samo postavljene filtere i stranicu', () => {

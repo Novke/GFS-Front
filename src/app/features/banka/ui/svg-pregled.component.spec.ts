@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RenderGreskaInfo } from '../data-access/banka.models';
 import type { StanjePregleda } from '../data-access/render-proba';
@@ -11,9 +11,9 @@ const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/19
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAABmJLR0QA/wD/AP+gvaeTAAAAJ0lEQVRIiWM8ISfHMBCAaUBsHbV41OJRi0ctHrV41OJRi0ctHhAAAF+MASwfHtbvAAAAAElFTkSuQmCC';
 
 /*
- * Isečci pravog izlaza `pdftocairo -svg` nad izmišljenim zadatkom (tekst, TikZ sa providnošću, isprekidanom linijom i
- * senčenjem, PNG prilog), skraćene putanje: render kontejner (poppler 22.12, cairo 1.16, stil u `style`) i noviji cairo
- * (poppler 24.02, cairo 1.18, prezentacioni atributi).
+ * Isečci pravog izlaza `pdftocairo -svg` nad izmišljenim zadatkom (tekst, TikZ sa providnošću, isprekidanom linijom,
+ * linearnim i radijalnim senčenjem, fading-om i transparency group-om, što daje mask i filter, PNG prilog), skraćene putanje:
+ * render kontejner (poppler 22.12, cairo 1.16, stil u `style`) i noviji cairo (poppler 24.02, cairo 1.18, prezentacioni atributi).
  */
 const CAIRO_116 = `<?xml version="1.0" encoding="UTF-8"?>
 <svg ${NS} width="224.753pt" height="137.623pt" viewBox="0 0 224.753 137.623" version="1.2">
@@ -34,7 +34,23 @@ const CAIRO_116 = `<?xml version="1.0" encoding="UTF-8"?>
 <stop offset="0" style="stop-color:rgb(100%,99.993896%,0%);stop-opacity:1;"/>
 <stop offset="1" style="stop-color:rgb(100%,0%,0%);stop-opacity:1;"/>
 </linearGradient>
+<radialGradient id="radial0" gradientUnits="userSpaceOnUse" cx="22.591729" cy="22.591729" fx="18.073386" fy="27.110071" r="22.591729" gradientTransform="matrix(1,0,0,-1,153.726422,202.305652)">
+<stop offset="0" style="stop-color:rgb(100%,100%,100%);stop-opacity:1;"/>
+</radialGradient>
+<filter id="alpha" filterUnits="objectBoundingBox" x="0%" y="0%" width="100%" height="100%">
+  <feColorMatrix type="matrix" in="SourceGraphic" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/>
+</filter>
+<mask id="mask0">
+  <g filter="url(#alpha)">
+<rect x="0" y="0" width="229.112" height="243.073" style="fill:rgb(0%,0%,0%);fill-opacity:0.6;stroke:none;"/>
+  </g>
+</mask>
+<g id="surface12">
+<path style=" stroke:none;fill-rule:nonzero;fill:url(#radial0);" d="M 45.183594 22.589844 Z"/>
+</g>
 </defs>
+<use xlink:href="#surface12" transform="matrix(1,0,0,1,-0.000000000000003553,85)" mask="url(#mask0)"/>
+<rect x="0" y="0" width="229.112" height="243.073" style="fill:rgb(100%,0%,0%);fill-opacity:1;stroke:none;" mask="url(#mask0)"/>
 <g style="fill:rgb(0%,0%,0%);fill-opacity:1;">
   <use xlink:href="#glyph0-1" x="6.145506" y="13.454144"/>
 </g>
@@ -60,7 +76,21 @@ const CAIRO_118 = `<?xml version="1.0" encoding="UTF-8"?>
 <linearGradient id="linear-pattern-0" gradientUnits="userSpaceOnUse" x1="0" y1="25.002787" x2="0" y2="74.997178" gradientTransform="matrix(0, -0.565451, -0.565451, 0, 147.693574, 90.96642)">
 <stop offset="0" stop-color="rgb(100%, 99.993896%, 0%)" stop-opacity="1"/>
 </linearGradient>
+<radialGradient id="radial-pattern-0" gradientUnits="userSpaceOnUse" cx="22.591729" cy="22.591729" fx="18.073386" fy="27.110071" r="22.591729" gradientTransform="matrix(1, 0, 0, -1, 153.726422, 202.305652)">
+<stop offset="0" stop-color="rgb(100%, 100%, 100%)" stop-opacity="1"/>
+</radialGradient>
+<filter id="filter-remove-color" x="0%" y="0%" width="100%" height="100%">
+<feColorMatrix color-interpolation-filters="sRGB" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0" />
+</filter>
+<mask id="mask-0">
+<g filter="url(#filter-remove-color)">
+<rect x="-22.9112" y="-24.3073" width="274.9344" height="291.6876" fill="rgb(0%, 0%, 0%)" fill-opacity="0.6"/>
+</g>
+</mask>
 </defs>
+<g mask="url(#mask-0)">
+<path fill-rule="nonzero" fill="url(#radial-pattern-0)" d="M 45.183594 22.589844 Z"/>
+</g>
 <g fill="rgb(0%, 0%, 0%)" fill-opacity="1">
 <use xlink:href="#glyph-0-0" x="6.145506" y="13.454144"/>
 </g>
@@ -169,13 +199,25 @@ describe('ocistiSvg', () => {
 
     it('image-set(), CSS escape (u\\72l) i nepoznate funkcije se brišu', () => {
       const el = cist(`<svg ${NS}><rect style="fill:image-set('http://zlo.example/x' 1x);stroke:u\\72l(http://zlo.example/f);opacity:0.5"`
-        + ` mask="image-set('http://zlo.example/x' 1x)" fill="u\\72l(http://zlo.example/f)" stroke="var(--x)" cursor="url(#c)"/></svg>`);
+        + ` mask="image-set('http://zlo.example/x' 1x)" fill="u\\72l(http://zlo.example/f)" stroke="var(--x)" filter="url(#f)"/></svg>`);
       const r = el.querySelector('rect')!;
       expect(r.getAttribute('style')).toBe('opacity:0.5');
       expect(r.hasAttribute('mask')).toBe(false);
       expect(r.hasAttribute('fill')).toBe(false);
       expect(r.hasAttribute('stroke')).toBe(false);
-      expect(r.getAttribute('cursor')).toBe('url(#p-c)');
+      expect(r.getAttribute('filter')).toBe('url(#p-f)');
+    });
+
+    it('atributi samo sa liste onih koje cairo piše: class, cursor, tabindex, data-*, strani namespace i ostalo se brišu', () => {
+      const el = cist(`<svg ${NS} xmlns:ev="http://www.w3.org/2001/xml-events" class="cdk-overlay-container" tabindex="0">`
+        + `<g class="mat-sys" cursor="pointer" data-x="1" ev:event="click" pointer-events="all" display="block" fill="rgb(0%,0%,0%)">`
+        + `<path d="M0 0" class="x" stroke-width="1" requiredExtensions="x"/></g></svg>`);
+      const atributi = (e: Element) => [...e.attributes].map(a => a.name).filter(n => !n.startsWith('xmlns'));
+      expect(atributi(el)).toEqual([]);
+      expect(atributi(el.querySelector('g')!)).toEqual(['fill']);
+      expect(atributi(el.querySelector('path')!)).toEqual(['d', 'stroke-width']);
+      // root bez class: globalni CSS (npr. .cdk-overlay-container { position: fixed }) ga ne dohvata
+      expect(uStranici(el).querySelector('.cdk-overlay-container, [class]')).toBeNull();
     });
 
     it('stil zadržava samo svojstva crteža: position, inset, z-index i ostalo se briše; prazan stil nestaje', () => {
@@ -291,10 +333,49 @@ describe('SvgPregledComponent', () => {
     expect(komentari(slika)).toBe(0);
   });
 
-  it('nedostupan render servis', async () => {
+  it('nedostupan render servis i zauzet (429) imaju različite poruke i najave', async () => {
+    const najava = () => el().querySelector('[role="status"]')!.textContent!.trim();
     f.componentInstance.stanje.set('nedostupan');
     await f.whenStable();
     expect(tekst()).toContain('Render servis trenutno nije dostupan');
+    expect(najava()).toBe('Zadatak: render servis nije dostupan.');
+    f.componentInstance.stanje.set('zauzet');
+    await f.whenStable();
+    expect(el().querySelector('[data-zauzet]')!.textContent).toContain('Render servis je zauzet, pokušaj za koji trenutak');
+    expect(tekst()).not.toContain('nije dostupan');
+    expect(najava()).toBe('Zadatak: render servis je zauzet.');
+  });
+
+  it('napomena o širini: 84 mm, uvećano, a "umanjeno" kad je kolona uža od 84 mm', async () => {
+    const posmatrani: { cb: () => void; el: Element }[] = [];
+    const sirina = { px: 400 };
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private readonly cb: () => void) {}
+      observe(e: Element) { posmatrani.push({ cb: this.cb, el: e }); this.cb(); }
+      disconnect = vi.fn();
+    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: sirina.px }) as DOMRect);
+    try {
+      f.componentInstance.svg.set(`<svg ${NS}><path d="M0 0"/></svg>`);
+      f.componentInstance.stanje.set('ok');
+      await f.whenStable();
+      const napomena = () => el().querySelector('.bk-sp-napomena')!.textContent!.trim();
+      expect(napomena()).toBe('Širina kao na telefonu (84 mm)');
+      sirina.px = 275;
+      posmatrani.at(-1)!.cb();
+      await f.whenStable();
+      expect(napomena()).toBe('Umanjeno: kolona je uža od telefona (84 mm)');
+      el().querySelector<HTMLButtonElement>('mat-slide-toggle button')!.click();
+      await f.whenStable();
+      expect(napomena()).toBe('Umanjeno: kolona je uža od telefona (84 mm)');
+      sirina.px = 600;
+      posmatrani.at(-1)!.cb();
+      await f.whenStable();
+      expect(napomena()).toBe('Uvećano na širinu kolone');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 
   it('"Puna širina" širi okvir preko cele kolone (dvosmerno vezano)', async () => {

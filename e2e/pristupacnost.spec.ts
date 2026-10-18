@@ -133,7 +133,9 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('app-varijanta-kartica').first()).toBeVisible();
       await page.getByRole('button', { name: 'Dodaj polje' }).click();
       await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti');
-      await expect(page.locator('[data-greska-polja]')).toBeVisible();
+      // poruka provere stiže kad se izađe iz prazne oznake (sa aria-invalid na njoj)
+      await page.keyboard.press('Tab');
+      await expect(page.locator('[data-greska-polja]')).toHaveText(/Oznaka polja/);
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), `axe: detalj grupe sa dodatim poljem (${rezim})`).toEqual([]);
     });

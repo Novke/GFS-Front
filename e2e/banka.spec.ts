@@ -71,11 +71,53 @@ test.describe('banka zadataka', () => {
       { roditeljId: 1, naziv: '8 → 2', tezina: 2, opis: null, uputstvo: null, polja: null },
     ]);
     await expect(stavka(page, '8 → 2')).toHaveAttribute('aria-selected', 'true');
+    // dijalog je otvoren iz menija (stavka menija je nestala): fokus nije na body, nego na novoj stavci stabla
+    await expect(stavka(page, '8 → 2')).toBeFocused();
     await expect(page.getByRole('heading', { level: 2, name: '8 → 2' })).toBeVisible();
     await expect(page.getByText('Grupa još nema varijanti')).toBeVisible();
     const id = mock.podaci.bankaGrupe.find(g => g.naziv === '8 → 2')!.id;
     await expect(page).toHaveURL(new RegExp(`grupa=${id}(&|$)`));
     await expect(page.getByRole('link', { name: 'Nova varijanta' })).toHaveAttribute('href', `/banka/varijante/nova?grupa=${id}`);
+  });
+
+  test('dijalozi iz menija stabla vraćaju fokus: na dugme menija posle Odustani, na premeštenu grupu posle Premesti', async ({ page, mock }) => {
+    await page.goto('banka?predmet=1');
+    await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
+    const meni = (naziv: string) => page.getByRole('button', { name: `Radnje za grupu ${naziv}` });
+
+    await meni('Konverzije brojeva').click();
+    await page.getByRole('menuitem', { name: 'Dodaj podgrupu' }).click();
+    let d = await dijalog(page, 'Nova podgrupa u „Konverzije brojeva“');
+    await d.getByRole('button', { name: 'Odustani' }).click();
+    await expect(d).toBeHidden();
+    await expect(meni('Konverzije brojeva')).toBeFocused();
+
+    await meni('16 → 2').click();
+    await page.getByRole('menuitem', { name: 'Premesti u…' }).click();
+    d = await dijalog(page, 'Premesti grupu „16 → 2“');
+    await d.getByRole('button', { name: 'Odustani' }).click();
+    await expect(d).toBeHidden();
+    await expect(meni('16 → 2')).toBeFocused();
+
+    await meni('16 → 2').click();
+    await page.getByRole('menuitem', { name: 'Obriši' }).click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Obrisati grupu „16 → 2“?' });
+    await expect(potvrda).toBeVisible();
+    await potvrda.getByRole('button', { name: 'Odustani' }).click();
+    await expect(potvrda).toBeHidden();
+    await expect(meni('16 → 2')).toBeFocused();
+    expect(mock.zahteviZa('banka/grupe/3', 'DELETE')).toHaveLength(0);
+
+    await meni('16 → 2').click();
+    await page.getByRole('menuitem', { name: 'Premesti u…' }).click();
+    d = await dijalog(page, 'Premesti grupu „16 → 2“');
+    await d.getByRole('radio', { name: 'Koren (vrh stabla)' }).check();
+    await d.getByRole('button', { name: 'Premesti' }).click();
+    await expect(d).toBeHidden();
+    await expect.poll(() => mock.zahteviZa('banka/grupe/3/premesti', 'POST').map(z => z.telo)).toEqual([{ roditeljId: null, rb: null }]);
+    // premeštena grupa je sad u korenu (posle "Konverzije brojeva"), a fokus na njenoj stavci
+    await expect(stablo(page).locator(':scope > [role=treeitem]')).toHaveCount(2);
+    await expect(stavka(page, '16 → 2')).toBeFocused();
   });
 
   test('F2 preimenuje grupu u stablu: PUT nosi postojeći opis, težinu i uputstvo i "polja": null', async ({ page, mock }) => {
@@ -158,12 +200,15 @@ test.describe('banka zadataka', () => {
   });
 
   test('Podešavanja LaTeX-a: čuva preambulu i renderuje sve varijante predmeta', async ({ page, mock }) => {
+    // varijanta 13 ima svoju grešku (\\foo u tekstu): ispravljena, pa svaki render uspeva i dijalog se zatvara sam
+    mock.podaci.bankaVarijante.find(v => v.id === 13)!.tekst = 'Pretvori binarni broj $100111_2$ u dekadni.';
     await page.goto('banka?predmet=1');
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
     await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
     const d = await dijalog(page, /Podešavanja LaTeX-a/);
     const polje = d.getByRole('textbox', { name: 'Preambula' });
-    await expect(polje).toHaveValue(/\\usepackage\{amsmath\}/);
+    await expect(polje).toHaveValue(/\\usepackage\{amsmath,amssymb\}/);
+    await expect(polje).not.toHaveValue(/documentclass/);
     await expect(d).toContainText('podrazumevanu preambulu');
     await polje.fill('\\usepackage{tikz}\n\\newcommand{\\R}{\\mathbb{R}}');
     await d.getByRole('button', { name: 'Sačuvaj' }).click();
@@ -176,6 +221,32 @@ test.describe('banka zadataka', () => {
     await expect(page.getByText('Preambula je sačuvana. Renderovano varijanti: 4.')).toBeVisible();
   });
 
+  test('preambula sa greškom (\\foo): dijalog ostaje sa upozorenjem, statusi varijanti ostaju, stranica javlja grešku', async ({ page, mock }) => {
+    await page.goto('banka?predmet=1&grupa=2');
+    await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
+    await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
+    const d = await dijalog(page, /Podešavanja LaTeX-a/);
+    await d.getByRole('textbox', { name: 'Preambula' }).fill('\\usepackage{tikz}\n\\foo');
+    await d.getByRole('button', { name: 'Sačuvaj' }).click();
+
+    const upozorenje = d.locator('[data-neuspelo]');
+    await expect(upozorenje).toHaveText('4 varijante nisu renderovane (greška u preambuli?). Status varijanti je sačuvan, pregled na '
+      + 'telefonu koristi poslednji uspeo render dok se ne ispravi.');
+    await expect(d).toBeVisible();
+    await expect(d.getByRole('button', { name: 'Nastavi renderovanje' })).toHaveCount(0);
+    // ništa se ne vraća u nacrt (renderuj-sve ne menja status), samo render je GRESKA
+    expect(mock.podaci.bankaVarijante.filter(v => v.status === 'AKTIVNA').map(v => v.id)).toEqual([12, 14]);
+    expect(mock.podaci.bankaVarijante.every(v => v.renderStatus === 'GRESKA')).toBe(true);
+    // ista preambula se ne čuva ponovo: Sačuvaj čeka ispravku
+    await expect(d.getByRole('button', { name: 'Sačuvaj' })).toBeDisabled();
+
+    await d.getByRole('button', { name: 'Zatvori' }).click();
+    await expect(d).toBeHidden();
+    await expect(page.getByText('Preambula je sačuvana, ali 4 varijante nisu renderovane (greška u preambuli?). Renderovano 0.')).toBeVisible();
+    await expect(page.getByText(/Preambula je sačuvana\. Renderovano/)).toHaveCount(0);
+    await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 1 aktivna, 2 nacrta, 3 greške');
+  });
+
   test('brisanje varijante traži potvrdu', async ({ page, mock }) => {
     await page.goto('banka?predmet=1');
     await page.getByRole('button', { name: 'Radnje za varijantu 110010 u dekadni' }).click();
@@ -185,6 +256,8 @@ test.describe('banka zadataka', () => {
     await potvrda.getByRole('button', { name: 'Odustani' }).click();
     await expect(potvrda).toBeHidden();
     expect(mock.zahteviZa('banka/varijante/12', 'DELETE')).toHaveLength(0);
+    // stavke menija više nema: fokus se vraća na dugme menija kartice, ne na body
+    await expect(page.getByRole('button', { name: 'Radnje za varijantu 110010 u dekadni' })).toBeFocused();
 
     await page.getByRole('button', { name: 'Radnje za varijantu 110010 u dekadni' }).click();
     await page.getByRole('menuitem', { name: 'Obriši' }).click();
@@ -239,11 +312,19 @@ test.describe('banka zadataka: detalj grupe', () => {
 
     await page.getByRole('button', { name: 'Dodaj polje' }).click();
     await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti dok ne dobiju odgovor za novo polje.');
-    await expect(page.locator('[data-greska-polja]')).toHaveText('Oznaka polja mora imati 1 do 200 znakova.');
     const oznakaB = poljeSeme(page, 2).getByLabel('Oznaka', { exact: true });
     await expect(oznakaB).toBeFocused();
-    await page.keyboard.type('Zapis bez vodećih nula');
-    await expect(page.locator('[data-greska-polja]')).toHaveCount(0);
+    // prazna nova oznaka ne prekida porukom dok je fokus u njoj; poruka (učtiva) stiže kad se iz nje izađe
+    const poruka = page.locator('[data-greska-polja]');
+    await expect(poruka).toHaveText('');
+    await expect(poruka).toHaveAttribute('role', 'status');
+    await page.keyboard.press('Tab');
+    await expect(poruka).toHaveText('Oznaka polja mora imati 1 do 200 znakova.');
+    await expect(oznakaB).toHaveAttribute('aria-invalid', 'true');
+    await expect(oznakaB).toHaveAttribute('aria-describedby', new RegExp(await poruka.getAttribute('id') as string));
+    await oznakaB.fill('Zapis bez vodećih nula');
+    await expect(poruka).toHaveText('');
+    await expect(oznakaB).toHaveAttribute('aria-invalid', 'false');
     await poljeSeme(page, 2).getByRole('combobox', { name: 'Tip' }).click();
     await page.getByRole('option', { name: 'Tekst' }).click();
 
@@ -281,6 +362,19 @@ test.describe('banka zadataka: detalj grupe', () => {
     await potvrda.getByRole('button', { name: 'Napusti' }).click();
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=1$/);
     await expect(stavka(page, 'Konverzije brojeva')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('brisanje varijante sa detalja: Odustani vraća fokus na dugme menija kartice', async ({ page, mock }) => {
+    await page.goto('banka/grupe/2');
+    const meni = page.getByRole('button', { name: 'Radnje za varijantu 1011 u dekadni' });
+    await meni.click();
+    await page.getByRole('menuitem', { name: 'Obriši' }).click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Obrisati varijantu „1011 u dekadni“?' });
+    await expect(potvrda).toBeVisible();
+    await potvrda.getByRole('button', { name: 'Odustani' }).click();
+    await expect(potvrda).toBeHidden();
+    await expect(meni).toBeFocused();
+    expect(mock.zahteviZa('banka/varijante/11', 'DELETE')).toHaveLength(0);
   });
 
   test('unutrašnji čvor: samo naziv i opis; PUT zadržava težinu i uputstvo', async ({ page, mock }) => {

@@ -13,9 +13,8 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
-import { catchError, filter, finalize, map, Observable, of, Subject, switchMap } from 'rxjs';
+import { catchError, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -30,18 +29,12 @@ import { BankaApi } from '../data-access/banka.api';
 import {
   GrupaCmd, GrupaDetails, MAX_NAZIV_GRUPE, MAX_OPIS_GRUPE, MAX_UPUTSTVO_GRUPE, Polje, TEZINE, VarijantaInfo,
 } from '../data-access/banka.models';
+import { razlogBanke, TIHO } from '../data-access/greske';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
 
-/** Greške stranica prikazuje sama (traka forme, panel, `NotificationStore`), pa globalni snackbar ne sme da ih udvostruči. */
-const TIHO = { tiho: true } as const;
-
 type RadnjaStatusa = 'odobri' | 'arhiviraj' | 'vratiUNacrt';
-
-function razlog(e: unknown): string {
-  return e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
-}
 
 /** Kao `prazanUNull` na serveru: tekst bez razmaka na krajevima, prazan je `null`. */
 function prazanUNull(s: string): string | null {
@@ -65,7 +58,8 @@ interface GreskaUcitavanja {
  * menja samo naziv i opis. "Sačuvaj" šalje `PUT banka/grupe/{id}` (puna zamena; `polja` je cela lista samo kad se šema
  * promenila, inače `null`, pa server ne dira odgovore varijanti), greška ide u traku iznad forme (`LOCAL_ERRORS`). Pre
  * čuvanja stranica pokazuje šta nova šema radi varijantama (`posledicePromene`). Izmenjeno = drugačije od poslednjeg stanja
- * sa servera (`osnova`), posle normalizacije kao na serveru; napuštanje tada pita (`unsavedChangesGuard`).
+ * sa servera (`osnova`), posle normalizacije kao na serveru; napuštanje tada pita (`unsavedChangesGuard`, a zatvaranje kartice i
+ * osvežavanje `beforeunload`).
  *
  * Varijante se učitavaju same (`BankaApi.varijante`, bez `BankaStore`-a, koji pripada `/banka`) i ponovo posle svake radnje i
  * svakog čuvanja (nova šema menja statuse); brojači aktivnih i varijanti za zaključavanje tipa, obaveznu težinu i upozorenja
@@ -79,6 +73,7 @@ interface GreskaUcitavanja {
     VarijantaKarticaComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(window:beforeunload)': 'preIzlaska($event)' },
   styleUrl: './grupa-detalj.page.css',
   template: `
     @if (greskaUcitavanja(); as gr) {
@@ -320,7 +315,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
       .pipe(
         switchMap(id => this.api.grupa(id, TIHO).pipe(
           map(g => ({ g, greska: null })),
-          catchError((e: unknown) => of({ g: null, greska: { nePostoji: e instanceof HttpErrorResponse && e.status === 404, poruka: razlog(e) } })),
+          catchError((e: unknown) => of({ g: null, greska: { nePostoji: e instanceof HttpErrorResponse && e.status === 404, poruka: razlogBanke(e) } })),
         )),
         takeUntilDestroyed(),
       )
@@ -340,7 +335,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
       .pipe(
         switchMap(id => this.api.varijante(id, undefined, TIHO).pipe(
           map(lista => ({ id, lista, greska: null })),
-          catchError((e: unknown) => of({ id, lista: null, greska: razlog(e) })),
+          catchError((e: unknown) => of({ id, lista: null, greska: razlogBanke(e) })),
         )),
         takeUntilDestroyed(),
       )
@@ -388,9 +383,17 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
     });
   }
 
-  /** Za `unsavedChangesGuard` (`canDeactivate`). */
+  /** Za `unsavedChangesGuard` (`canDeactivate`) i `beforeunload`. */
   imaNesacuvanihIzmena(): boolean {
     return this.izmenjeno();
+  }
+
+  /** Zatvaranje kartice ili osvežavanje sa nesačuvanim izmenama: pregledač pita "Napustiti sajt?". */
+  protected preIzlaska(e: BeforeUnloadEvent): void {
+    if (this.imaNesacuvanihIzmena()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   }
 
   /** Grupa iznova (nov id iz putanje, "Pokušaj ponovo"): sve staro se briše odmah, pa se nikad ne vidi tuđe. */
@@ -467,9 +470,9 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
         },
         error: (e: unknown) => {
           if (this.osnova()?.id === g.id) {
-            this.greska.set(razlog(e));
+            this.greska.set(razlogBanke(e));
           } else {
-            this.obavestenja.greska(`Grupa „${cmd.naziv}“ nije sačuvana: ${razlog(e)}`);
+            this.obavestenja.greska(`Grupa „${cmd.naziv}“ nije sačuvana: ${razlogBanke(e)}`);
           }
         },
       });
@@ -495,7 +498,8 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
       potvrdi: 'Obriši varijantu',
       destruktivno: true,
     })
-      .pipe(filter(Boolean))
+      // dijalog vraća fokus na stavku menija, koje više nema: fokus na dugme menija kartice (posle brisanja ga efekat prebacuje dalje)
+      .pipe(tap(() => this.vratiFokus(v.id)), filter(Boolean))
       .subscribe(() => {
         this.nestajeKartica = { id: v.id, indeks: (this.varijante() ?? []).findIndex(x => x.id === v.id) };
         this.radnja(this.api.obrisiVarijantu(v.id, TIHO), true);
@@ -513,7 +517,15 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
           this.zauzetih.update(n => n - 1);
         }
       }))
-      .subscribe({ next: () => this.osveziVarijante(), error: (e: unknown) => this.obavestenja.greska(razlog(e)) });
+      .subscribe({ next: () => this.osveziVarijante(), error: (e: unknown) => this.obavestenja.greska(razlogBanke(e)) });
+  }
+
+  /** Fokus je pao na body posle dijaloga iz menija kartice: na dugme menija te kartice. */
+  private vratiFokus(varijantaId: number): void {
+    const aktivni = this.document.activeElement;
+    if (!aktivni || aktivni === this.document.body) {
+      this.host.nativeElement.querySelector<HTMLElement>(`app-varijanta-kartica[data-varijanta="${varijantaId}"] [data-meni]`)?.focus();
+    }
   }
 
   private postaviOsnovu(g: GrupaDetails): void {

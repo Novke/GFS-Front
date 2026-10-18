@@ -198,15 +198,54 @@ describe('PoljaEditorComponent', () => {
     expect(document.activeElement).toBe(red('b').querySelector('[data-obrisi-polje]'));
   });
 
-  it('poruka prve prekršene provere je ispod liste (role=alert); prazna šema je ispravna', async () => {
-    const { el, red, unesi, poruka, klik } = await napravi();
-    expect(poruka()).toBeNull();
-    await unesi(red('a').querySelector<HTMLInputElement>('input[data-oznaka]')!, '   ');
-    expect(poruka()!.getAttribute('role')).toBe('alert');
+  it('poruka prve prekršene provere je ispod liste (role=status), tek kad se iz polja izađe; prazna šema je ispravna', async () => {
+    const { el, red, unesi, poruka, klik, stabilno } = await napravi();
+    expect(poruka()!.getAttribute('role')).toBe('status');
+    expect(poruka()!.textContent!.trim()).toBe('');
+    const oznaka = red('a').querySelector<HTMLInputElement>('input[data-oznaka]')!;
+    await unesi(oznaka, '   ');
+    // dok kuca, ništa se ne najavljuje
+    expect(poruka()!.textContent!.trim()).toBe('');
+    expect(oznaka.getAttribute('aria-invalid')).toBe('false');
+    oznaka.dispatchEvent(new FocusEvent('blur'));
+    await stabilno();
     expect(poruka()!.textContent).toContain('Oznaka polja mora imati 1 do 200 znakova.');
+    expect(oznaka.getAttribute('aria-invalid')).toBe('true');
+    expect(oznaka.getAttribute('aria-describedby')!.split(' ')).toContain(poruka()!.id);
+    // posle izlaska greška prati kucanje
+    await unesi(oznaka, 'Vrednost');
+    expect(poruka()!.textContent!.trim()).toBe('');
+    expect(oznaka.getAttribute('aria-invalid')).toBe('false');
+    expect(oznaka.getAttribute('aria-describedby') ?? '').not.toContain(poruka()!.id);
+    await unesi(oznaka, '');
+    expect(poruka()!.textContent).toContain('Oznaka polja');
     await klik(red('a').querySelector<HTMLElement>('[data-obrisi-polje]')!);
-    expect(poruka()).toBeNull();
+    expect(poruka()!.textContent!.trim()).toBe('');
     expect(el.textContent).toContain('Grupa još nema polja');
+  });
+
+  it('"+ polje": nova prazna oznaka ne prekida porukom; posle izlaska greška je na toj oznaci', async () => {
+    const { el, red, klik, poruka, stabilno } = await napravi();
+    await klik(el.querySelector<HTMLElement>('[data-dodaj-polje]')!);
+    const oznaka = red('b').querySelector<HTMLInputElement>('input[data-oznaka]')!;
+    expect(document.activeElement).toBe(oznaka);
+    expect(poruka()!.textContent!.trim()).toBe('');
+    oznaka.dispatchEvent(new FocusEvent('blur'));
+    await stabilno();
+    expect(poruka()!.textContent).toContain('Oznaka polja mora imati 1 do 200 znakova.');
+    expect(oznaka.getAttribute('aria-invalid')).toBe('true');
+    expect(red('a').querySelector('input[data-oznaka]')!.getAttribute('aria-invalid')).toBe('false');
+  });
+
+  it('greška opcije je na toj opciji (aria-invalid i aria-describedby)', async () => {
+    const { red, unesi, poruka, stabilno } = await napravi({ polja: [izbor('a')], sacuvana: [izbor('a')] });
+    const opcije = () => [...red('a').querySelectorAll<HTMLInputElement>('input[data-opcija]')];
+    await unesi(opcije()[1], '');
+    opcije()[1].dispatchEvent(new FocusEvent('blur'));
+    await stabilno();
+    expect(poruka()!.textContent).toContain("Tekst opcije polja 'a' mora imati 1 do 200 znakova.");
+    expect(opcije().map(o => o.getAttribute('aria-invalid'))).toEqual(['false', 'true']);
+    expect(opcije()[1].getAttribute('aria-describedby')!.split(' ')).toContain(poruka()!.id);
   });
 
   it('aktivne varijante: tip sačuvanog polja je zaključan sa objašnjenjem, a novo polje bira tip slobodno', async () => {

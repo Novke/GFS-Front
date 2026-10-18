@@ -8,7 +8,7 @@ import type { OpcijeZahteva } from '../../../core/api/opcije-zahteva';
 import { Strana } from '../../../shared/models/strana';
 import {
   BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, MedijInfo, Namena, PreambulaCmd, PreambulaInfo,
-  PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, StatusVarijante, VarijantaCmd, VarijantaDetails, VarijantaInfo,
+  PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from './banka.models';
 
 /** Strana liste `GET banka/pretraga` (Spring `page` je 0-based, `size` najviše 100). */
@@ -136,6 +136,11 @@ export class BankaApi {
     return this.http.post<RenderProbaInfo>(`${API_URL}/banka/render-proba`, cmd, { context: this.kontekst(o) });
   }
 
+  /** SVG rendera (`api/public/mediji/{id}`) kao tekst: pregled sačuvane varijante u editoru, kroz `ocistiSvg` (bez probe). */
+  svg(id: string, o: OpcijeZahteva = {}): Observable<string> {
+    return this.http.get(svgUrl(id), { responseType: 'text', context: this.kontekst(o) });
+  }
+
   /** `POST banka/prilozi` (multipart, polje `fajl`): PNG, JPEG ili PDF za LaTeX render. */
   prilog(fajl: File, o: OpcijeZahteva = {}): Observable<MedijInfo> {
     const telo = new FormData();
@@ -156,7 +161,10 @@ export class BankaApi {
     return this.http.put<PreambulaInfo>(`${API_URL}/predmeti/${predmetId}/latex-preambula`, cmd, { context: this.kontekst(o) });
   }
 
-  /** `POST banka/predmeti/{id}/renderuj-sve`: jedan korak; ponavljati dok `preostalo` nije 0. */
+  /**
+   * `POST banka/predmeti/{id}/renderuj-sve`: jedan korak; ponavljati dok `preostalo` nije 0. `neuspelo` broji varijante čiji
+   * render u tom pozivu nije uspeo (status im ostaje, i SVG poslednjeg uspelog rendera).
+   */
   renderujSve(predmetId: number, o: OpcijeZahteva = {}): Observable<RenderujSveInfo> {
     return this.http.post<RenderujSveInfo>(`${API_URL}/banka/predmeti/${predmetId}/renderuj-sve`, null, { context: this.kontekst(o) });
   }

@@ -113,13 +113,13 @@ describe('OdgovoriFormaComponent', () => {
     expect(poslednje()['d']).toEqual({ ...prazno, tacne: [] });
   });
 
-  it('TEKST: Enter i zarez dodaju čip (bez razmaka na krajevima, bez duplikata), x ga uklanja', async () => {
+  it('TEKST: Enter dodaje čip (bez razmaka na krajevima, bez duplikata), x ga uklanja', async () => {
     const { polje, enter, poslednje, bedz, stabilno } = await napravi();
     const input = polje('b').querySelector<HTMLInputElement>('input[data-prihvatljiv]')!;
     await enter(input, ' 1011 ');
     expect(poslednje()['b']).toEqual({ ...prazno, prihvatljivi: ['1011'] });
     expect(input.value).toBe('');
-    await enter(input, '0b1011', 188, ',');
+    await enter(input, '0b1011');
     await enter(input, '1011');
     expect(poslednje()['b'].prihvatljivi).toEqual(['1011', '0b1011']);
     expect(bedz('b')).toBe('Popunjeno');
@@ -128,6 +128,20 @@ describe('OdgovoriFormaComponent', () => {
     polje('b').querySelector<HTMLButtonElement>('button[aria-label="Ukloni 1011"]')!.click();
     await stabilno();
     expect(poslednje()['b'].prihvatljivi).toEqual(['0b1011']);
+  });
+
+  it('TEKST: zarez je deo odgovora ((1,0), "q0, q1"), ne razdvaja čipove; uputstvo kaže "Enter dodaje"', async () => {
+    const { polje, enter, poslednje } = await napravi();
+    const input = polje('b').querySelector<HTMLInputElement>('input[data-prihvatljiv]')!;
+    expect(polje('b').querySelector('mat-hint')!.textContent).toContain('Enter dodaje');
+    expect(polje('b').querySelector('mat-hint')!.textContent).not.toContain('zarez');
+    // zarez kao taster ne pravi čip
+    await enter(input, '(1', 188, ',');
+    expect(poslednje()).toBeUndefined();
+    await enter(input, '(1,0)');
+    await enter(input, 'q0, q1');
+    expect(poslednje()['b'].prihvatljivi).toEqual(['(1,0)', 'q0, q1']);
+    expect([...polje('b').querySelectorAll('mat-chip-row')].map(c => c.textContent!.trim())).toEqual(['(1,0)', 'q0, q1']);
   });
 
   it('TEKST: najviše 10 odgovora i 200 znakova po odgovoru', async () => {

@@ -9,7 +9,7 @@ import { BankaApi } from '../data-access/banka.api';
 import { PreambulaInfo, RenderujSveInfo } from '../data-access/banka.models';
 import { MAX_KRUGOVA_RENDERA, PreambulaDialog } from './preambula-dialog';
 
-const PODRAZUMEVANA = '\\documentclass{article}\n\\usepackage{amsmath}';
+const PODRAZUMEVANA = '\\usepackage[T1]{fontenc}\n\\usepackage{amsmath}';
 const info = (preambula: string | null): PreambulaInfo => ({ preambula, podrazumevana: preambula === null, podrazumevanaPreambula: PODRAZUMEVANA });
 
 describe('PreambulaDialog', () => {
@@ -24,7 +24,7 @@ describe('PreambulaDialog', () => {
     }
     api.preambula.mockReturnValue(of(info(null)));
     api.postaviPreambulu.mockImplementation((_id: number, tekst: string | null) => of(info(tekst)));
-    api.renderujSve.mockReturnValue(of({ renderovano: 0, preostalo: 0 }));
+    api.renderujSve.mockReturnValue(of({ renderovano: 0, neuspelo: 0, preostalo: 0 }));
   });
 
   async function napravi(): Promise<HTMLElement> {
@@ -62,7 +62,9 @@ describe('PreambulaDialog', () => {
   });
 
   it('nepromenjena podrazumevana šalje null (ostaje podrazumevana), pa renderuje sve i zatvara sa zbirom', async () => {
-    const koraci: RenderujSveInfo[] = [{ renderovano: 10, preostalo: 15 }, { renderovano: 10, preostalo: 5 }, { renderovano: 5, preostalo: 0 }];
+    const koraci: RenderujSveInfo[] = [
+      { renderovano: 10, neuspelo: 0, preostalo: 15 }, { renderovano: 10, neuspelo: 0, preostalo: 5 }, { renderovano: 5, neuspelo: 0, preostalo: 0 },
+    ];
     api.renderujSve.mockImplementation(() => of(koraci.shift()));
     const el = await napravi();
     await sacuvaj(el);
@@ -70,7 +72,7 @@ describe('PreambulaDialog', () => {
     expect(api.postaviPreambulu).toHaveBeenCalledExactlyOnceWith(7, null, { tiho: true });
     expect(api.renderujSve).toHaveBeenCalledTimes(3);
     expect(api.renderujSve).toHaveBeenCalledWith(7, { tiho: true });
-    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 25, preostalo: 0 });
+    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 25, neuspelo: 0, preostalo: 0 });
   });
 
   it('izmenjen tekst se šalje kakav jeste; prazno polje vraća podrazumevanu (null)', async () => {
@@ -88,7 +90,7 @@ describe('PreambulaDialog', () => {
   });
 
   it(`najviše ${MAX_KRUGOVA_RENDERA} krugova renderovanja: posle toga prikazuje napredak i nudi nastavak`, async () => {
-    api.renderujSve.mockReturnValue(of({ renderovano: 3, preostalo: 40 }));
+    api.renderujSve.mockReturnValue(of({ renderovano: 3, neuspelo: 0, preostalo: 40 }));
     const el = await napravi();
     await sacuvaj(el);
 
@@ -96,10 +98,10 @@ describe('PreambulaDialog', () => {
     expect(ref.close).not.toHaveBeenCalled();
     expect(el.querySelector('[role=status]')!.textContent).toContain('Renderovano 30, preostalo 40');
     const nastavi = el.querySelector<HTMLButtonElement>('[data-nastavi]')!;
-    api.renderujSve.mockReturnValue(of({ renderovano: 40, preostalo: 0 }));
+    api.renderujSve.mockReturnValue(of({ renderovano: 40, neuspelo: 0, preostalo: 0 }));
     nastavi.click();
     await f.whenStable();
-    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 70, preostalo: 0 });
+    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 70, neuspelo: 0, preostalo: 0 });
   });
 
   it('greška pri čuvanju: razlog servera u traci, dijalog ostaje, render se ne pokreće', async () => {
@@ -115,16 +117,60 @@ describe('PreambulaDialog', () => {
   });
 
   it('greška renderovanja posle čuvanja: poruka, napredak ostaje i može se nastaviti', async () => {
-    api.renderujSve.mockReturnValueOnce(of({ renderovano: 10, preostalo: 2 }))
+    api.renderujSve.mockReturnValueOnce(of({ renderovano: 10, neuspelo: 0, preostalo: 2 }))
       .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503, error: { reason: 'Render servis nije dostupan.' } })));
     const el = await napravi();
     await sacuvaj(el);
 
-    expect(el.querySelector('[role=alert]')!.textContent).toContain('Sistemska greška');
+    expect(el.querySelector('[role=alert]')!.textContent).toContain('Render servis nije dostupan.');
     expect(el.querySelector('[role=status]')!.textContent).toContain('Renderovano 10, preostalo 2');
     expect(el.querySelector('[data-nastavi]')).not.toBeNull();
     el.querySelector<HTMLButtonElement>('[data-zatvori]')!.click();
-    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 10, preostalo: 2 });
+    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 10, neuspelo: 0, preostalo: 2 });
+  });
+
+  it('neuspeli renderi se sabiraju kroz krugove: dijalog ostaje otvoren sa upozorenjem, bez "Nastavi renderovanje"', async () => {
+    api.renderujSve.mockReturnValueOnce(of({ renderovano: 2, neuspelo: 8, preostalo: 5 }))
+      .mockReturnValueOnce(of({ renderovano: 1, neuspelo: 4, preostalo: 0 }));
+    const el = await napravi();
+    await unesi(el, '\\usepackage{tikz}\n\\foo');
+    await sacuvaj(el);
+
+    expect(api.renderujSve).toHaveBeenCalledTimes(2);
+    expect(ref.close).not.toHaveBeenCalled();
+    const upozorenje = el.querySelector('[data-neuspelo]')!;
+    expect(upozorenje.getAttribute('role')).toBe('alert');
+    expect(upozorenje.textContent!.replace(/\s+/g, ' ').trim()).toBe('12 varijanti nije renderovano (greška u preambuli?). Status varijanti je '
+      + 'sačuvan, pregled na telefonu koristi poslednji uspeo render dok se ne ispravi.');
+    expect(el.querySelector('[role=status]')!.textContent).toContain('Renderovano 3, preostalo 0');
+    // ponovni krug bi isti neuspeh brojao još jednom: ispravka ide kroz Sačuvaj
+    expect(el.querySelector('[data-nastavi]')).toBeNull();
+    el.querySelector<HTMLButtonElement>('[data-zatvori]')!.click();
+    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 3, neuspelo: 12, preostalo: 0 });
+  });
+
+  it('jedna neuspela varijanta: jednina u upozorenju', async () => {
+    api.renderujSve.mockReturnValue(of({ renderovano: 3, neuspelo: 1, preostalo: 0 }));
+    const el = await napravi();
+    await sacuvaj(el);
+    expect(el.querySelector('[data-neuspelo]')!.textContent).toContain('1 varijanta nije renderovana (greška u preambuli?)');
+  });
+
+  it('posle čuvanja: Sačuvaj čeka novu izmenu teksta; ispravljena preambula se čuva ponovo i brojanje kreće iz početka', async () => {
+    api.renderujSve.mockReturnValueOnce(of({ renderovano: 0, neuspelo: 4, preostalo: 0 }))
+      .mockReturnValueOnce(of({ renderovano: 4, neuspelo: 0, preostalo: 0 }));
+    const el = await napravi();
+    await unesi(el, '\\foo');
+    await sacuvaj(el);
+    const dugme = el.querySelector<HTMLButtonElement>('[data-sacuvaj]')!;
+    expect(dugme.disabled).toBe(true);
+    expect(polje(el).readOnly).toBe(false);
+
+    await unesi(el, '\\usepackage{tikz}');
+    expect(dugme.disabled).toBe(false);
+    await sacuvaj(el);
+    expect(api.postaviPreambulu).toHaveBeenLastCalledWith(7, '\\usepackage{tikz}', { tiho: true });
+    expect(ref.close).toHaveBeenCalledExactlyOnceWith({ renderovano: 4, neuspelo: 0, preostalo: 0 });
   });
 
   it('učitavanje nije uspelo: poruka i ponovni pokušaj', async () => {

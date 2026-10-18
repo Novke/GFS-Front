@@ -11,7 +11,6 @@ import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, map, Observable, of, Subject, switchMap } from 'rxjs';
 
-import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -24,17 +23,18 @@ import { BankaApi } from '../data-access/banka.api';
 import {
   GrupaDetails, OdgovorPolja, Polje, PrilogCmd, RenderDeo, RenderProbaCmd, VarijantaCmd, VarijantaDetails,
 } from '../data-access/banka.models';
+import { razlogBanke, TIHO } from '../data-access/greske';
 import { odgovorPopunjen, prazanOdgovor } from '../data-access/polja';
 import { PorukaPosleCuvanja } from '../data-access/poruka-posle-cuvanja';
-import { PRAZAN_PREGLED, panelResenja, panelZadatka, pregledUzivo, vazecaGreska } from '../data-access/render-proba';
+import {
+  PRAZAN_PREGLED, panelResenja, panelZadatka, pregledUzivo, SacuvanRender, SadrzajPregleda, vazecaGreska,
+} from '../data-access/render-proba';
 import { LatexEditorComponent } from '../ui/latex-editor.component';
 import { OdgovoriFormaComponent } from '../ui/odgovori-forma.component';
 import { greskePriloga, PriloziComponent } from '../ui/prilozi.component';
 import { SvgPregledComponent } from '../ui/svg-pregled.component';
 import { imeVarijante, prikazStatusa } from '../ui/varijanta-kartica.component';
 
-/** Greške stranica prikazuje sama (traka, paneli, `NotificationStore`), pa globalni snackbar ne sme da ih udvostruči. */
-const TIHO = { tiho: true } as const;
 /** Granice varijante kao na serveru (`BankaPP.proveriVarijantu`). */
 export const MAX_NAZIV_VARIJANTE = 120;
 export const MAX_TEKST_VARIJANTE = 20_000;
@@ -42,7 +42,6 @@ export const MAX_TEKST_VARIJANTE = 20_000;
 const ID_GRESKE: Record<RenderDeo, string> = { tekst: 'bk-ve-greska-tekst', resenje: 'bk-ve-greska-resenje' };
 /** Indeks kartice (`mat-tab-group`) po delu. */
 const KARTICA: Record<RenderDeo, number> = { tekst: 0, resenje: 1 };
-const RENDER_NEDOSTUPAN = 'Render servis trenutno nije dostupan';
 
 /** Sadržaj forme kako ide u `VarijantaCmd` (naziv bez razmaka na krajevima, prazno rešenje `null`, odgovori po šemi). */
 interface Sadrzaj {
@@ -62,10 +61,6 @@ interface GreskaUcitavanja {
 type Zahtev = { varijantaId: number } | { grupaId: number };
 type Ucitano = { g: GrupaDetails; v: VarijantaDetails | null; greska: null } | { g: null; v: null; greska: GreskaUcitavanja };
 type Zauzeto = 'cuva' | 'renderuje';
-
-function razlog(e: unknown): string {
-  return e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
-}
 
 /** Kao `prazanUNull` u `VarijantaService`: prazno (i od samih razmaka) je `null`, ostalo ostaje kako je (linije se ne pomeraju). */
 function prazanUNull(s: string): string | null {
@@ -150,8 +145,10 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
  * odbijeno) ostavlja korisnika na varijanti, sa porukom u traci i istaknutom linijom u kartici dela sa greškom
  * (`renderGreska` + `renderDeo`); nova varijanta tada prelazi na svoj editor (bez novog unosa u istoriji), a poruku mu
  * jednokratno predaje `PorukaPosleCuvanja` (samo u memoriji, ne u istoriji pregledača). Samo uspeo render vodi nazad na `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera
- * (tekst, rešenje, prilozi) isti kao sačuvani; živi pregled ima prednost čim stigne. Izmenjeno = drugačije od poslednjeg
- * stanja sa servera; napuštanje tada pita.
+ * (tekst, rešenje, prilozi) isti kao sačuvani; živi pregled ima prednost čim stigne. Dok je taj ulaz isti kao sačuvani,
+ * pregled je sačuvan render (SVG-ovi varijante, bez render-probe); proba kreće tek posle prve izmene ili na Ctrl+Enter.
+ * Izmenjeno = drugačije od poslednjeg stanja sa servera; napuštanje tada pita (ruter kroz `unsavedChangesGuard`, zatvaranje
+ * kartice i osvežavanje kroz `beforeunload`).
  */
 @Component({
   selector: 'app-varijanta-editor-page',
@@ -161,6 +158,7 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
     RouterLink, SkeletonRows, StatusChip, SvgPregledComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(window:beforeunload)': 'preIzlaska($event)' },
   styleUrl: './varijanta-editor.page.css',
   template: `
     @if (greskaUcitavanja(); as gr) {
@@ -369,17 +367,36 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     return v?.renderGreska && this.istiUlazRendera() ? { greska: v.renderGreska, deo: v.renderDeo } : null;
   });
 
-  /** Komanda probe: predmet grupe, tekst, rešenje i prilozi ispravnog imena (server bi probu sa lošim imenom odbio); bez teksta `null`. */
-  private readonly probaCmd = computed<RenderProbaCmd | null>(() => {
+  /**
+   * Sačuvan render koji važi za sadržaj forme (ulaz rendera isti kao sačuvani): uspeo (SVG-ovi sačuvane varijante) ili
+   * neuspeo sa greškom u tekstu (prikazuje se sačuvana greška); inače (izmena, render još čeka, greška samo u rešenju, gde
+   * proba daje i SVG zadatka) `null`, pa pregled ide kroz render-probu.
+   */
+  private readonly sacuvanRender = computed<SacuvanRender | null>(() => {
+    const v = this.osnova();
+    if (!v || !this.istiUlazRendera()) {
+      return null;
+    }
+    if (v.renderStatus === 'OK' && v.svgId) {
+      return { svgId: v.svgId, resenjeSvgId: v.resenjeSvgId };
+    }
+    return v.renderStatus === 'GRESKA' && v.renderGreska && v.renderDeo !== 'resenje' ? 'greska' : null;
+  });
+  /**
+   * Sadržaj za živi pregled: komanda probe (predmet grupe, tekst, rešenje i prilozi ispravnog imena, jer bi server probu sa
+   * lošim imenom odbio) i sačuvan render; bez teksta `null`. Otvorena varijanta ne troši probu dok se ne izmeni.
+   */
+  private readonly sadrzajPregleda = computed<SadrzajPregleda | null>(() => {
     const g = this.detaljiGrupe();
     const s = this.sadrzaj();
     if (!g || s.tekst.trim() === '') {
       return null;
     }
     const greske = greskePriloga(s.prilozi);
-    return { predmetId: g.predmetId, tekst: s.tekst, resenje: s.resenje, prilozi: s.prilozi.filter((_, i) => greske[i] === null) };
+    const cmd: RenderProbaCmd = { predmetId: g.predmetId, tekst: s.tekst, resenje: s.resenje, prilozi: s.prilozi.filter((_, i) => greske[i] === null) };
+    return { cmd, sacuvan: this.sacuvanRender() };
   });
-  protected readonly pregled = toSignal(pregledUzivo(toObservable(this.probaCmd), this.api, this.odmah), { initialValue: PRAZAN_PREGLED });
+  protected readonly pregled = toSignal(pregledUzivo(toObservable(this.sadrzajPregleda), this.api, this.odmah), { initialValue: PRAZAN_PREGLED });
   private readonly greskaDela = computed(() => vazecaGreska(this.pregled(), this.sacuvanaGreska()));
   protected readonly panelZ = computed(() => panelZadatka(this.pregled(), this.greskaDela()));
   protected readonly panelR = computed(() => {
@@ -471,6 +488,14 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     return this.izmenjeno() || this.zauzeto() === 'cuva';
   }
 
+  /** Zatvaranje kartice ili osvežavanje: pregledač pita "Napustiti sajt?" pod istim uslovom kao `unsavedChangesGuard`. */
+  protected preIzlaska(e: BeforeUnloadEvent): void {
+    if (this.imaNesacuvanihIzmena()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  }
+
   tekstNapustanja(): string {
     return this.zauzeto() === 'cuva'
       ? 'Čuvanje je u toku. Ako napustiš stranicu, varijanta se ipak čuva, a ishod rendera vidiš u banci zadataka.'
@@ -537,7 +562,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       .pipe(switchMap(sacuvana => (odobri && sacuvana.renderStatus === 'OK'
         ? this.api.odobri(sacuvana.id, TIHO).pipe(
           map(odobrena => ({ varijanta: odobrena, odobrena: true, greskaOdobravanja: null })),
-          catchError((e: unknown) => of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: razlog(e) })),
+          catchError((e: unknown) => of({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: razlogBanke(e) })),
         )
         : of<IshodCuvanja>({ varijanta: sacuvana, odobrena: false, greskaOdobravanja: null }))))
       .subscribe({
@@ -548,8 +573,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
         error: (e: unknown) => {
           this.oslobodi();
           const poruka = e instanceof HttpErrorResponse && e.status === 503
-            ? `${RENDER_NEDOSTUPAN}, pa varijanta nije sačuvana. Pokušaj ponovo za koji minut.`
-            : razlog(e);
+            ? `${razlogBanke(e)} Varijanta nije sačuvana, pokušaj ponovo za koji minut.`
+            : razlogBanke(e);
           if (this.unisten) {
             this.obavestenja.greska(`Varijanta nije sačuvana: ${poruka}`);
           } else {
@@ -582,7 +607,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       },
       error: (e: unknown) => {
         this.oslobodi();
-        this.greska.set(e instanceof HttpErrorResponse && e.status === 503 ? `${RENDER_NEDOSTUPAN}. Pokušaj ponovo za koji minut.` : razlog(e));
+        this.greska.set(e instanceof HttpErrorResponse && e.status === 503 ? `${razlogBanke(e)} Pokušaj ponovo za koji minut.` : razlogBanke(e));
       },
     });
   }
@@ -592,7 +617,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     const ucitavanje$: Observable<Ucitano> = 'varijantaId' in z
       ? this.api.varijanta(z.varijantaId, TIHO).pipe(switchMap(v => this.api.grupa(v.grupaId, TIHO).pipe(map(g => ({ g, v, greska: null })))))
       : this.api.grupa(z.grupaId, TIHO).pipe(map(g => ({ g, v: null, greska: null })));
-    return ucitavanje$.pipe(catchError((e: unknown) => of({ g: null, v: null, greska: { nePostoji: nePostoji(e), poruka: razlog(e) } })));
+    return ucitavanje$.pipe(catchError((e: unknown) => of({ g: null, v: null, greska: { nePostoji: nePostoji(e), poruka: razlogBanke(e) } })));
   }
 
   /**
@@ -615,7 +640,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     this.postaviFormu(v, g.polja);
     if (p.uspeh) {
       this.obavestenja.uspeh(p.poruka);
-      void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id } });
+      // sa "nova" bez novog unosa: Nazad ne sme da otvori praznu formu (izgleda kao da čuvanje nije uspelo)
+      void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id }, replaceUrl: nova });
     } else if (nova) {
       this.porukePosleCuvanja.ostavi(v.id, p.poruka);
       void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true });

@@ -5,7 +5,8 @@ import { expect, test } from './fixture';
 /*
  * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`) nad mokom `mock-banka.ts` (fixture
  * `banka.json`: grupa 2 "2 → 10" sa poljem BROJ `a`, predmet 1; varijanta 13 ima grešku rendera u liniji 3 teksta). Mok
- * renderuje uvek, osim kad tekst ili rešenje sadrži `\foo` (greška u liniji tog dela); render-proba stiže posle 800 ms mira.
+ * renderuje uvek, osim kad tekst ili rešenje sadrži `\foo` (greška u liniji tog dela); render-proba stiže posle 800 ms mira,
+ * a otvorena sačuvana varijanta je ne traži dok se ne izmeni (pregled iz sačuvanih SVG-ova).
  */
 
 const editor = (page: Page, deo: 'tekst' | 'resenje') => page.locator(`app-latex-editor[data-deo="${deo}"] textarea`);
@@ -39,6 +40,21 @@ test.describe('banka zadataka: editor varijante', () => {
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);
     await expect(page.getByText('Varijanta je sačuvana kao nacrt.')).toBeVisible();
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(4);
+    // "nova" je zamenjena u istoriji: Nazad ne otvara opet praznu formu
+    await page.goBack();
+    await expect(page).not.toHaveURL(/varijante\/nova/);
+  });
+
+  test('otvorena varijanta: pregled iz sačuvanog rendera, render-proba tek posle prve izmene', async ({ page, mock }) => {
+    await page.goto('banka/varijante/12');
+    await expect(pregled(page, 'Zadatak')).toContainText('Zadatak 12');
+    await expect(pregled(page, 'Rešenje')).toContainText('Rešenje 12');
+    await page.waitForTimeout(1000);
+    expect(mock.zahteviZa('banka/render-proba', 'POST')).toHaveLength(0);
+
+    await editor(page, 'tekst').fill('Pretvori $110011_2$ u dekadni.');
+    await expect(pregled(page, 'Zadatak')).toContainText('Pretvori 110011_2 u dekadni.');
+    expect(mock.zahteviZa('banka/render-proba', 'POST')).toHaveLength(1);
   });
 
   test('tekst sa \\foo: greška sa linijom u pregledu i u gutter-u; napuštanje sa izmenama pita', async ({ page }) => {
@@ -111,6 +127,9 @@ test.describe('banka zadataka: editor varijante', () => {
     await page.goto('banka/varijante/11');
     await page.getByRole('tab', { name: 'Rešenje' }).click();
     await editor(page, 'resenje').fill('Cifre množimo stepenima dvojke:\n$8+2+1 = \\foo$');
+    // greška je samo u rešenju: pregled zadatka ostaje (proba šalje i SVG zadatka)
+    await expect(page.locator('#bk-ve-greska-resenje')).toHaveText('Greška u liniji 2: Undefined control sequence \\foo');
+    await expect(pregled(page, 'Zadatak')).toContainText('Pretvori binarni broj 1011_2 u dekadni.');
     await page.getByRole('tab', { name: /Tekst/ }).click();
     await page.getByRole('button', { name: 'Sačuvaj i odobri' }).click();
 

@@ -8,7 +8,8 @@ import type {
  * Mok banke zadataka za e2e: stablo grupa i varijante u memoriji (`Podaci.bankaGrupe`, `bankaVarijante`, `preambule` iz
  * `fixtures/banka.json`), pojednostavljena kopija pravila servera (`GrupaZadatakaService`, `VarijantaService`, uvek sa
  * istim porukama greške) samo za ono što e2e proverava. LaTeX se ne prevodi: render uspeva uvek, osim kad tekst (ili
- * rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog teksta. Rute registruje `mock-api.ts`.
+ * rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog teksta, ili kad ga sadrži preambula
+ * predmeta (tada pada svaki render predmeta, bez linije). Rute registruje `mock-api.ts`.
  */
 
 export interface BankaGrupa {
@@ -44,8 +45,11 @@ export interface Ishod {
   telo?: unknown;
 }
 
-/** Podrazumevana preambula predmeta (izmišljena; prava je na serveru). */
-export const PODRAZUMEVANA_PREAMBULA = '\\documentclass[12pt]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath}\n';
+/**
+ * Podrazumevana preambula predmeta, skraćena kopija `LatexDokument.PODRAZUMEVANA_PREAMBULA`: bez `\\documentclass` (omot je
+ * serverov, a preambula ga ne sme imati).
+ */
+export const PODRAZUMEVANA_PREAMBULA = '\\usepackage[T1]{fontenc}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amsmath,amssymb}\n\\usepackage{tikz}';
 
 /** Koliko varijanti `renderuj-sve` prevede u jednom pozivu (front zove ponovo dok `preostalo` nije 0). */
 const KORAK_RENDERA = 10;
@@ -62,7 +66,8 @@ export function probniSvg(natpis: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80" viewBox="0 0 300 80"><text x="8" y="44" font-family="sans-serif" font-size="14">${uXml(natpis.slice(0, 40))}</text></svg>`;
 }
 
-type Render = { ok: true; svg: string; resenjeSvg: string | null } | { ok: false; greska: RenderGreskaInfo; deo: RenderDeo };
+/** Ishod "prevođenja": uz grešku u rešenju `svg` je SVG zadatka (zadatak se preveo), inače `null`. */
+type Render = { ok: true; svg: string; resenjeSvg: string | null } | { ok: false; greska: RenderGreskaInfo; deo: RenderDeo; svg: string | null };
 
 /** Medij otpremljen kroz `POST banka/prilozi` (lista iz `MockApi.mediji`). */
 interface Medij { id: string; naziv: string; mime: string; velicina: number }
@@ -350,13 +355,24 @@ export class MockBanka {
     return rezultat;
   }
 
-  /** "Prevodi" tekst i rešenje: `\foo` je nepoznata komanda u liniji u kojoj stoji (tekst ima prednost). */
-  private prevedi(tekst: string, resenje: string | null): Render {
+  /** Preambula predmeta kako je server ubacuje u dokument (bez upisane: podrazumevana). */
+  private preambulaPredmeta(predmetId: number | undefined): string {
+    return (predmetId === undefined ? null : this.d.preambule[predmetId]) ?? PODRAZUMEVANA_PREAMBULA;
+  }
+
+  /**
+   * "Prevodi" tekst i rešenje uz preambulu predmeta: `\foo` u preambuli obara render (deo `tekst`, bez linije), a u tekstu ili
+   * rešenju je nepoznata komanda u liniji u kojoj stoji (tekst ima prednost; uz grešku u rešenju zadatak ima SVG).
+   */
+  private prevedi(tekst: string, resenje: string | null, preambula: string): Render {
+    const foo = 'Undefined control sequence \\foo';
+    if (preambula.includes('\\foo')) return { ok: false, greska: { linija: null, poruka: foo }, deo: 'tekst', svg: null };
+    const svg = probniSvg(tekst.replace(/[$\\]/g, ''));
     for (const [deo, izvor] of [['tekst', tekst], ['resenje', resenje ?? '']] as const) {
       const linija = izvor.split('\n').findIndex(l => l.includes('\\foo'));
-      if (linija >= 0) return { ok: false, greska: { linija: linija + 1, poruka: 'Undefined control sequence \\foo' }, deo };
+      if (linija >= 0) return { ok: false, greska: { linija: linija + 1, poruka: foo }, deo, svg: deo === 'resenje' ? svg : null };
     }
-    return { ok: true, svg: probniSvg(tekst.replace(/[$\\]/g, '')), resenjeSvg: resenje?.trim() ? probniSvg(resenje.replace(/[$\\]/g, '')) : null };
+    return { ok: true, svg, resenjeSvg: resenje?.trim() ? probniSvg(resenje.replace(/[$\\]/g, '')) : null };
   }
 
   private noviSvg(svg: string): string {
@@ -365,9 +381,13 @@ export class MockBanka {
     return id;
   }
 
-  /** Render varijante: uspeh upisuje nove SVG-ove, neuspeh ostavlja stare (kao server) i beleži grešku. */
-  private renderuj(v: BankaVarijanta): void {
-    const r = this.prevedi(v.tekst, v.resenje);
+  /**
+   * Render varijante: uspeh upisuje nove SVG-ove, neuspeh ostavlja stare (kao server) i beleži grešku. Čuvanje i ponovni
+   * render vraćaju aktivnu sa neuspelim renderom u nacrt; `renderuj-sve` ne (`vratiUNacrt: false`), status ostaje. Vraća da li
+   * je uspeo.
+   */
+  private renderuj(v: BankaVarijanta, vratiUNacrt = true): boolean {
+    const r = this.prevedi(v.tekst, v.resenje, this.preambulaPredmeta(this.grupa(v.grupaId)?.predmetId));
     v.zastareo = false;
     if (r.ok) {
       v.renderStatus = 'OK';
@@ -379,8 +399,9 @@ export class MockBanka {
       v.renderStatus = 'GRESKA';
       v.renderGreska = r.greska;
       v.renderDeo = r.deo;
-      if (v.status === 'AKTIVNA') v.status = 'NACRT';
+      if (vratiUNacrt && v.status === 'AKTIVNA') v.status = 'NACRT';
     }
+    return r.ok;
   }
 
   kreirajVarijantu(grupaId: number, cmd: VarijantaCmd): Ishod {
@@ -477,10 +498,10 @@ export class MockBanka {
   renderProba(cmd: { predmetId: number; tekst: string; resenje?: string | null }): Ishod {
     if (!this.predmetPostoji(cmd.predmetId)) return greska(404, 'Predmet nije pronađen.');
     if (!cmd.tekst?.trim()) return greska(400, 'Tekst zadatka mora imati 1 do 20 000 znakova.');
-    const r = this.prevedi(cmd.tekst, cmd.resenje ?? null);
+    const r = this.prevedi(cmd.tekst, cmd.resenje ?? null, this.preambulaPredmeta(cmd.predmetId));
     const telo: RenderProbaInfo = r.ok
       ? { ok: true, svg: r.svg, resenjeSvg: r.resenjeSvg, greska: null, deo: null }
-      : { ok: false, svg: null, resenjeSvg: null, greska: r.greska, deo: r.deo };
+      : { ok: false, svg: r.svg, resenjeSvg: null, greska: r.greska, deo: r.deo };
     return { telo };
   }
 
@@ -491,7 +512,10 @@ export class MockBanka {
     return { telo };
   }
 
-  /** Prazan tekst je podrazumevana; promena poništava render svih varijanti predmeta (`renderuj-sve` ih ponovo prevodi). */
+  /**
+   * Prazan tekst je podrazumevana; promena poništava render svih varijanti predmeta (`renderuj-sve` ih ponovo prevodi i
+   * broji uspele i neuspele; neuspela zadržava status i poslednji uspeo SVG).
+   */
   postaviPreambulu(predmetId: number, cmd: { preambula?: string | null } | null): Ishod {
     if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const tekst = cmd?.preambula?.trim() ? cmd.preambula : null;
@@ -506,8 +530,8 @@ export class MockBanka {
     if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const zastarele = this.d.bankaVarijante.filter(v => v.zastareo && this.grupa(v.grupaId)?.predmetId === predmetId);
     const korak = zastarele.slice(0, KORAK_RENDERA);
-    korak.forEach(v => this.renderuj(v));
-    const telo: RenderujSveInfo = { renderovano: korak.length, preostalo: zastarele.length - korak.length };
+    const uspelo = korak.filter(v => this.renderuj(v, false)).length;
+    const telo: RenderujSveInfo = { renderovano: uspelo, neuspelo: korak.length - uspelo, preostalo: zastarele.length - korak.length };
     return { telo };
   }
 

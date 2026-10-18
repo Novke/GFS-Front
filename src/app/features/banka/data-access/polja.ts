@@ -47,44 +47,65 @@ export function novoPolje(tip: TipPolja, postojeci: readonly Polje[]): Polje {
   };
 }
 
+/** Polje za unos na koje se odnosi prekršeno pravilo šeme (`aria-invalid` i `aria-describedby` u editoru polja). */
+export type UnosPolja = 'oznaka' | 'odstupanje' | 'jedinica' | 'opcija';
+
+/** Prvo prekršeno pravilo šeme: poruka, polje (`null` = šema kao celina) i unos (`null` = pravilo bez svog unosa, npr. ključ). */
+export interface PrekrsajPolja {
+  poruka: string;
+  kljuc: string | null;
+  unos: UnosPolja | null;
+  /** Id opcije kad je `unos` `'opcija'`, inače `null`. */
+  opcija: number | null;
+}
+
+const prekrsaj = (poruka: string, kljuc: string | null = null, unos: UnosPolja | null = null, opcija: number | null = null): PrekrsajPolja =>
+  ({ poruka, kljuc, unos, opcija });
+
 /**
- * Poruka prvog prekršenog pravila šeme (kao `BankaPP.proveriPolja`, posle skidanja razmaka sa krajeva ključa, oznake i
- * teksta opcije, kako ih server normalizuje) ili `null`.
+ * Prvo prekršeno pravilo šeme (kao `BankaPP.proveriPolja`, posle skidanja razmaka sa krajeva ključa, oznake i teksta
+ * opcije, kako ih server normalizuje), sa poljem i unosom na koji se odnosi, ili `null`.
  */
-export function proveriPolja(polja: readonly Polje[]): string | null {
+export function prekrsajPolja(polja: readonly Polje[]): PrekrsajPolja | null {
   if (polja.length > MAX_POLJA) {
-    return 'Najviše 10 polja.';
+    return prekrsaj('Najviše 10 polja.');
   }
   const kljucevi = new Set<string>();
   for (const p of polja) {
     const k = p.kljuc.trim();
     if (!KLJUC.test(k)) {
-      return 'Ključ polja mora biti 1-10 malih slova i cifara i počinjati slovom.';
+      return prekrsaj('Ključ polja mora biti 1-10 malih slova i cifara i počinjati slovom.', p.kljuc);
     }
     if (kljucevi.has(k)) {
-      return `Ključ polja '${k}' se ponavlja.`;
+      return prekrsaj(`Ključ polja '${k}' se ponavlja.`, p.kljuc);
     }
     kljucevi.add(k);
     if (prazan(p.oznaka) || duzina(p.oznaka.trim()) > MAX_OZNAKA) {
-      return 'Oznaka polja mora imati 1 do 200 znakova.';
+      return prekrsaj('Oznaka polja mora imati 1 do 200 znakova.', p.kljuc, 'oznaka');
     }
     if (p.odstupanje !== null && (!Number.isFinite(p.odstupanje) || p.odstupanje < 0)) {
-      return `Odstupanje polja '${k}' mora biti nenegativan broj.`;
+      return prekrsaj(`Odstupanje polja '${k}' mora biti nenegativan broj.`, p.kljuc, 'odstupanje');
     }
     if (duzina(p.jedinica?.trim()) > MAX_JEDINICA) {
-      return `Jedinica polja '${k}' može imati najviše 30 znakova.`;
+      return prekrsaj(`Jedinica polja '${k}' može imati najviše 30 znakova.`, p.kljuc, 'jedinica');
     }
     if (imaOpcije(p.tip)) {
       const opcije = p.opcije;
       if (!opcije || opcije.length < MIN_OPCIJA || opcije.length > MAX_OPCIJA) {
-        return `Polje '${k}' mora imati 2 do 6 opcija.`;
+        return prekrsaj(`Polje '${k}' mora imati 2 do 6 opcija.`, p.kljuc);
       }
-      if (opcije.some(o => prazan(o.tekst) || duzina(o.tekst.trim()) > MAX_TEKST_OPCIJE)) {
-        return `Tekst opcije polja '${k}' mora imati 1 do 200 znakova.`;
+      const losa = opcije.find(o => prazan(o.tekst) || duzina(o.tekst.trim()) > MAX_TEKST_OPCIJE);
+      if (losa) {
+        return prekrsaj(`Tekst opcije polja '${k}' mora imati 1 do 200 znakova.`, p.kljuc, 'opcija', losa.id);
       }
     }
   }
   return null;
+}
+
+/** Poruka prvog prekršenog pravila šeme ({@link prekrsajPolja}) ili `null`. */
+export function proveriPolja(polja: readonly Polje[]): string | null {
+  return prekrsajPolja(polja)?.poruka ?? null;
 }
 
 /** Prazan odgovor polja: samo svojstvo koje tip traži je postavljeno na praznu vrednost (broj `null`, liste `[]`). */
