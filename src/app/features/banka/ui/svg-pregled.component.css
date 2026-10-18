@@ -1,8 +1,8 @@
 /*
  * Pregled render-probe: zaglavlje (naslov, čekanje, "Puna širina"), poruka stanja i okvir sa SVG-om, 84 mm kao na
  * telefonu ili preko cele kolone. Okvir je uvek dnevni (`.rezim-dan`): LaTeX je crn na providnom. Boje samo kroz tokene.
- * Globalno (`ViewEncapsulation.None`, jer SVG stiže kroz `innerHTML` bez atributa enkapsulacije): svako pravilo počinje
- * sa `app-svg-pregled` ili `.bk-sp`.
+ * Globalno (`ViewEncapsulation.None`, jer SVG stiže kao čvorovi kroz `importNode`, mimo šablona, pa nema atribute
+ * enkapsulacije): svako pravilo počinje sa `app-svg-pregled` ili `.bk-sp`.
  */
 
 app-svg-pregled { display: block; }

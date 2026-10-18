@@ -25,6 +25,7 @@ import {
   GrupaDetails, OdgovorPolja, Polje, PrilogCmd, RenderDeo, RenderProbaCmd, VarijantaCmd, VarijantaDetails,
 } from '../data-access/banka.models';
 import { odgovorPopunjen, prazanOdgovor } from '../data-access/polja';
+import { PorukaPosleCuvanja } from '../data-access/poruka-posle-cuvanja';
 import { PRAZAN_PREGLED, panelResenja, panelZadatka, pregledUzivo, vazecaGreska } from '../data-access/render-proba';
 import { LatexEditorComponent } from '../ui/latex-editor.component';
 import { OdgovoriFormaComponent } from '../ui/odgovori-forma.component';
@@ -137,9 +138,6 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
   return { uspeh: true, poruka: kaoNacrt ? 'Varijanta je sačuvana kao nacrt.' : 'Varijanta je sačuvana.' };
 }
 
-/** Ključ stanja navigacije sa porukom za novu varijantu koja posle čuvanja prelazi na svoj editor. */
-const PORUKA_CUVANJA = 'porukaCuvanja';
-
 /**
  * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`). Tri kolone na širokom ekranu: LaTeX
  * (kartice Tekst i Rešenje, svaka sa svojim `app-latex-editor`), živi pregled (`pregledUzivo` nad `render-proba`, zadatak i
@@ -150,8 +148,8 @@ const PORUKA_CUVANJA = 'porukaCuvanja';
  * Čuvanje (`POST`/`PUT`, renderuje sinhrono, do minut) drži formu onemogućenom uz traku napretka; dok se prilog otprema, ne
  * čuva se. "Sačuvaj i odobri" posle uspelog rendera zove `odobri`. Svako čuvanje čiji render nije uspeo (ili odobravanje
  * odbijeno) ostavlja korisnika na varijanti, sa porukom u traci i istaknutom linijom u kartici dela sa greškom
- * (`renderGreska` + `renderDeo`); nova varijanta tada prelazi na svoj editor (bez novog unosa u istoriji), a poruku nosi
- * stanje navigacije. Samo uspeo render vodi nazad na `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera
+ * (`renderGreska` + `renderDeo`); nova varijanta tada prelazi na svoj editor (bez novog unosa u istoriji), a poruku mu
+ * jednokratno predaje `PorukaPosleCuvanja` (samo u memoriji, ne u istoriji pregledača). Samo uspeo render vodi nazad na `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera
  * (tekst, rešenje, prilozi) isti kao sačuvani; živi pregled ima prednost čim stigne. Izmenjeno = drugačije od poslednjeg
  * stanja sa servera; napuštanje tada pita.
  */
@@ -435,13 +433,12 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
 
   private readonly zahtevi = new Subject<Zahtev>();
   private unisten = false;
-  /** Poruka koju je nova varijanta poslala svom editoru (neuspeo render posle prvog čuvanja); prikazuje se posle učitavanja. */
-  private porukaPosleCuvanja: string | null = null;
+  private readonly porukePosleCuvanja = inject(PorukaPosleCuvanja);
+  /** Poruka koju je editor nove varijante predao ovom (neuspeo render posle prvog čuvanja); u traku tek posle učitavanja te varijante. */
+  private predataPoruka: { varijantaId: number; poruka: string } | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => (this.unisten = true));
-    const stanje = this.router.currentNavigation()?.extras.state?.[PORUKA_CUVANJA];
-    this.porukaPosleCuvanja = typeof stanje === 'string' ? stanje : null;
 
     this.zahtevi
       .pipe(
@@ -457,9 +454,9 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
         this.postaviOsnovu(u.v);
         this.postaviFormu(u.v, u.g.polja);
         this.kartica.set(u.v?.renderGreska && u.v.renderDeo === 'resenje' ? KARTICA.resenje : KARTICA.tekst);
-        if (this.porukaPosleCuvanja) {
-          this.greska.set(this.porukaPosleCuvanja);
-          this.porukaPosleCuvanja = null;
+        if (u.v && this.predataPoruka?.varijantaId === u.v.id) {
+          this.greska.set(this.predataPoruka.poruka);
+          this.predataPoruka = null;
         }
       });
 
@@ -487,6 +484,14 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     this.osnova.set(null);
     this.greskaUcitavanja.set(null);
     this.greska.set(null);
+    // `app-prilozi` nestaje sa grupom: otpremanje u letu više ne javlja kraj
+    this.otpremaPriloga.set(false);
+    if (z && 'varijantaId' in z) {
+      const poruka = this.porukePosleCuvanja.preuzmi(z.varijantaId);
+      if (poruka) {
+        this.predataPoruka = { varijantaId: z.varijantaId, poruka };
+      }
+    }
     if (z) {
       this.zahtevi.next(z);
     }
@@ -593,7 +598,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   /**
    * Posle uspelog čuvanja: uspeh (render OK, odobrena ako je traženo) vodi nazad u banku na grupu; inače korisnik ostaje na
    * varijanti sa porukom u traci (fokus na nju), karticom dela sa greškom i istaknutom linijom. Nova varijanta tada prelazi na
-   * svoj editor (`replaceUrl`, poruka u stanju navigacije), jer postoji kao nacrt. Ako je korisnik u međuvremenu otišao,
+   * svoj editor (`replaceUrl`, poruku mu predaje `PorukaPosleCuvanja`), jer postoji kao nacrt. Ako je korisnik otišao,
    * ishod je samo obaveštenje.
    */
   private posleCuvanja(g: GrupaDetails, nova: boolean, ishod: IshodCuvanja, p: { uspeh: boolean; poruka: string }): void {
@@ -612,7 +617,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       this.obavestenja.uspeh(p.poruka);
       void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id } });
     } else if (nova) {
-      void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true, state: { [PORUKA_CUVANJA]: p.poruka } });
+      this.porukePosleCuvanja.ostavi(v.id, p.poruka);
+      void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true });
     } else {
       this.greska.set(p.poruka);
       this.izaberiKarticu(v);

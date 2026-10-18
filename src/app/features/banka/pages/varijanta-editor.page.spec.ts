@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { Location } from '@angular/common';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
@@ -285,6 +286,51 @@ describe('VarijantaEditorPage', () => {
       expect(stranica().imaNesacuvanihIzmena()).toBe(false);
     });
   }
+
+  it('predata poruka je jednokratna: Nazad na varijantu i ponovno otvaranje nemaju traku; u istoriji pregledača nema poruke', async () => {
+    novaSaGreskom();
+    const lokacija = TestBed.inject(Location);
+    // u TestBed-u nema bootstrapa: ruter sluša Nazad/Napred tek posle ovoga
+    router.setUpLocationChangeListener();
+    await otvori('/banka/varijante/nova?grupa=2');
+    await unesi(editor('tekst'), 'a\nb\n\\foo');
+    await unesi(brojOdgovora(), '1');
+    await klik(dugme('data-sacuvaj'));
+    await stabilno();
+    expect(router.url).toBe('/banka/varijante/15');
+    expect(el().querySelector('app-form-error-banner [role="alert"]')!.textContent).toContain('render nije uspeo');
+    expect(JSON.stringify(lokacija.getState() ?? null)).not.toContain('render nije uspeo');
+
+    // Nazad (popstate) posle odlaska sa stranice
+    await harness.navigateByUrl('/banka');
+    lokacija.back();
+    await stabilno();
+    expect(router.url).toBe('/banka/varijante/15');
+    expect(el().querySelector('app-form-error-banner [role="alert"]')).toBeNull();
+    // sačuvana greška rendera se i dalje vidi u editoru, samo bez trake
+    expect(istaknute('tekst')).toEqual(['3']);
+
+    // ponovno otvaranje iste varijante
+    await harness.navigateByUrl('/banka');
+    await otvori('/banka/varijante/15');
+    expect(el().querySelector('app-form-error-banner [role="alert"]')).toBeNull();
+  });
+
+  it('nova putanja (druga varijanta) dok se prilog otprema: čuvanje se ne zaglavi', async () => {
+    api.prilog.mockReturnValue(new Subject());
+    api.varijanta.mockImplementation((id: number) => of(varijanta({ ...OK, id, tekst: 'Zadatak' })));
+    await otvori('/banka/varijante/13');
+    const input = el().querySelector<HTMLInputElement>('app-prilozi input[type=file]')!;
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'Graf.png', { type: 'image/png' })], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await stabilno();
+    expect(onemoguceno(dugme('data-sacuvaj'))).toBe(true);
+
+    await otvori('/banka/varijante/14');
+    await unesi(editor('tekst'), 'Zadatak 14');
+    expect(el().querySelector('[data-nedostaje]')).toBeNull();
+    expect(onemoguceno(dugme('data-sacuvaj'))).toBe(false);
+  });
 
   it('"Sačuvaj kao nacrt" izmene sa neuspelim renderom: ostaje na varijanti, kartica dela sa greškom', async () => {
     api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak', resenje: 'r' })));
