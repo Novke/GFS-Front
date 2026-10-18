@@ -175,6 +175,54 @@ describe('BankaApi', () => {
     });
     req.flush({ content: [], page: { size: 20, number: 1, totalElements: 0, totalPages: 0 } });
   });
+
+  it('pretraga: izvor i serija idu kao parametri', () => {
+    api.pretraga({ predmetId: 1, izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', status: 'NACRT' }, { size: 100 }).subscribe();
+    const req = zahtev('GET', 'api/banka/pretraga');
+    expect(Object.fromEntries(req.request.params.keys().map(k => [k, req.request.params.get(k)]))).toEqual({
+      predmetId: '1', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', status: 'NACRT', size: '100',
+    });
+    req.flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
+  });
+
+  it('serije: GET banka/serije?predmetId', () => {
+    const rez = vi.fn();
+    api.serije(1).subscribe(rez);
+    const req = zahtev('GET', 'api/banka/serije');
+    expect(Object.fromEntries(req.request.params.keys().map(k => [k, req.request.params.get(k)]))).toEqual({ predmetId: '1' });
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(false);
+    req.flush([]);
+    expect(rez).toHaveBeenCalledWith([]);
+  });
+
+  it('odbaciSeriju: POST banka/serije/{serija}/odbaci bez tela, serija enkodovana u putanji', () => {
+    const rez = vi.fn();
+    api.odbaciSeriju('uvoz x', { tiho: true }).subscribe(rez);
+    const req = zahtev('POST', 'api/banka/serije/uvoz%20x/odbaci');
+    expect(req.request.body).toBeNull();
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
+    const ishod = { potvrdjeno: true, obrisano: [], preskoceno: [] };
+    req.flush(ishod);
+    expect(rez).toHaveBeenCalledWith(ishod);
+  });
+
+  it('isključene teme: GET i POST predmeti/{id}/iskljucene-teme, DELETE iskljucene-teme/{id}', () => {
+    api.iskljuceneTeme(1).subscribe();
+    zahtev('GET', 'api/predmeti/1/iskljucene-teme').flush([]);
+
+    const cmd = { opis: 'Razlomljeni brojevi', grupaId: null };
+    api.iskljuciTemu(1, cmd).subscribe();
+    const nova = zahtev('POST', 'api/predmeti/1/iskljucene-teme');
+    expect(nova.request.body).toBe(cmd);
+    nova.flush({}, { status: 201, statusText: 'Created' });
+
+    const rez = vi.fn();
+    api.ukljuciTemu(7, { tiho: true }).subscribe(rez);
+    const brisanje = zahtev('DELETE', 'api/iskljucene-teme/7');
+    expect(brisanje.request.context.get(LOCAL_ERRORS)).toBe(true);
+    brisanje.flush(null, { status: 204, statusText: 'No Content' });
+    expect(rez).toHaveBeenCalledOnce();
+  });
 });
 
 describe('svgUrl', () => {

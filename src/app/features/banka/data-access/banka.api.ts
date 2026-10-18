@@ -7,8 +7,9 @@ import { API_URL } from '../../../core/api/api-url';
 import type { OpcijeZahteva } from '../../../core/api/opcije-zahteva';
 import { Strana } from '../../../shared/models/strana';
 import {
-  BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, MedijInfo, Namena, PreambulaCmd, PreambulaInfo,
-  PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
+  BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, IskljucenaTemaCmd, IskljucenaTemaInfo, MedijInfo, Namena,
+  PonistavanjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, SerijaInfo,
+  StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from './banka.models';
 
 /** Strana liste `GET banka/pretraga` (Spring `page` je 0-based, `size` najviše 100). */
@@ -19,9 +20,10 @@ export interface StranaPretrage {
 }
 
 /**
- * Banka zadataka (`GrupaZadatakaRest`, `VarijantaRest`, `PrilogRest`, preambula i pretraga). Sve putanje su relativne na
- * `<base href>`. Greške: 409 (grupa bez težine ne prima varijante, aktivacija bez uspelog rendera), 429 (render-proba:
- * najviše 3 istovremeno, `MAX_PROBA` na serveru) i 503 (render servis ne radi); `{ tiho: true }` ostavlja poruku pozivaocu.
+ * Banka zadataka (`GrupaZadatakaRest`, `VarijantaRest`, `PrilogRest`, preambula, pretraga, Klodove serije i isključene teme:
+ * `SerijaRest`, `IskljuceneTemeRest`). Sve putanje su relativne na `<base href>`. Greške: 409 (grupa bez težine ne prima
+ * varijante, aktivacija bez uspelog rendera), 429 (render-proba: najviše 3 istovremeno, `MAX_PROBA` na serveru) i 503 (render
+ * servis ne radi); `{ tiho: true }` ostavlja poruku pozivaocu.
  */
 @Injectable({ providedIn: 'root' })
 export class BankaApi {
@@ -169,14 +171,50 @@ export class BankaApi {
     return this.http.post<RenderujSveInfo>(`${API_URL}/banka/predmeti/${predmetId}/renderuj-sve`, null, { context: this.kontekst(o) });
   }
 
-  /** `GET banka/pretraga`: tekstualna pretraga varijanti predmeta (`q` ima bar 2 znaka). */
+  /**
+   * `GET banka/pretraga`: pretraga varijanti predmeta (`q` ima bar 2 znaka); `izvor` i `serija` sužavaju na Klodove ili ručne
+   * varijante i na jednu seriju.
+   */
   pretraga(f: BankaFilter, strana: StranaPretrage = {}, o: OpcijeZahteva = {}): Observable<Strana<BankaPretragaStavka>> {
     let params = new HttpParams().set('predmetId', f.predmetId);
-    for (const [kljuc, vrednost] of Object.entries({ namena: f.namena, q: f.q, status: f.status, ...strana })) {
+    const filteri = { namena: f.namena, q: f.q, status: f.status, izvor: f.izvor, serija: f.serija, ...strana };
+    for (const [kljuc, vrednost] of Object.entries(filteri)) {
       if (vrednost !== null && vrednost !== undefined && vrednost !== '') {
         params = params.set(kljuc, vrednost);
       }
     }
     return this.http.get<Strana<BankaPretragaStavka>>(`${API_URL}/banka/pretraga`, { params, context: this.kontekst(o) });
+  }
+
+  // ---------------------------------------------------------------------------------------------- serije i isključene teme
+
+  /** `GET banka/serije?predmetId=`: Klodove serije predmeta sa brojevima, najnovije prve. */
+  serije(predmetId: number, o: OpcijeZahteva = {}): Observable<SerijaInfo[]> {
+    const params = new HttpParams().set('predmetId', predmetId);
+    return this.http.get<SerijaInfo[]>(`${API_URL}/banka/serije`, { params, context: this.kontekst(o) });
+  }
+
+  /**
+   * `POST banka/serije/{serija}/odbaci`: briše neodobrene Klodove nacrte i prazne Klodove grupe serije (ostalo je u
+   * `preskoceno`); prezentacije i slajdove serije ne dira.
+   */
+  odbaciSeriju(serija: string, o: OpcijeZahteva = {}): Observable<PonistavanjeInfo> {
+    const putanja = `${API_URL}/banka/serije/${encodeURIComponent(serija)}/odbaci`;
+    return this.http.post<PonistavanjeInfo>(putanja, null, { context: this.kontekst(o) });
+  }
+
+  /** `GET predmeti/{id}/iskljucene-teme`: teme koje Klod ne nudi, najnovije prve. */
+  iskljuceneTeme(predmetId: number, o: OpcijeZahteva = {}): Observable<IskljucenaTemaInfo[]> {
+    return this.http.get<IskljucenaTemaInfo[]>(`${API_URL}/predmeti/${predmetId}/iskljucene-teme`, { context: this.kontekst(o) });
+  }
+
+  /** `POST predmeti/{id}/iskljucene-teme` (409 kad je ista grupa ili isti opis bez grupe već isključen). */
+  iskljuciTemu(predmetId: number, cmd: IskljucenaTemaCmd, o: OpcijeZahteva = {}): Observable<IskljucenaTemaInfo> {
+    return this.http.post<IskljucenaTemaInfo>(`${API_URL}/predmeti/${predmetId}/iskljucene-teme`, cmd, { context: this.kontekst(o) });
+  }
+
+  /** `DELETE iskljucene-teme/{id}`: tema je ponovo uključena (Klod je opet može nuditi). */
+  ukljuciTemu(id: number, o: OpcijeZahteva = {}): Observable<void> {
+    return this.http.delete<void>(`${API_URL}/iskljucene-teme/${id}`, { context: this.kontekst(o) });
   }
 }

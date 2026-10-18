@@ -30,7 +30,8 @@ function list(izmena: Partial<GrupaDetails> = {}): GrupaDetails {
   return {
     id: 2, predmetId: 7, roditeljId: 1, namena: 'PREDAVANJE', naziv: '2 → 10', opis: 'Binarni u dekadni.', rb: 1, tezina: 2,
     uputstvo: 'Do 8 cifara.', polja: [POLJE_A], putanja: [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 2, naziv: '2 → 10' }], list: true,
-    brojVarijanti: 3, brojAktivnih: 1, brojNacrta: 2, brojGresaka: 1, izmenjeno: '2026-10-17T10:00:00', ...izmena,
+    brojVarijanti: 3, brojAktivnih: 1, brojNacrta: 2, brojGresaka: 1, izmenjeno: '2026-10-17T10:00:00', izvor: 'RUCNO', serija: null,
+    iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
@@ -42,7 +43,7 @@ const UNUTRASNJI: GrupaDetails = {
 function varijanta(id: number, status: VarijantaInfo['status']): VarijantaInfo {
   return {
     id, grupaId: 2, rb: id - 10, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus: 'OK', svgId: `svg-${id}`,
-    resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00',
+    resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00', ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null,
   };
 }
 

@@ -1,17 +1,20 @@
 import type {
-  BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, GrupaPutanja, Namena, OdgovorPolja, Polje, PreambulaInfo, PremestiCmd,
-  PrilogInfo, RenderDeo, RenderGreskaInfo, RenderProbaInfo, RenderujSveInfo, StatusVarijante, VarijantaCmd, VarijantaDetails,
-  VarijantaInfo,
+  BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, GrupaPutanja, IskljucenaTemaCmd, IskljucenaTemaInfo, IzvorVarijante, Namena,
+  OdgovorPolja, Polje, PonistavanjeInfo, PreambulaInfo, PremestiCmd, PrilogInfo, RenderDeo, RenderGreskaInfo, RenderProbaInfo,
+  RenderujSveInfo, SerijaInfo, StatusVarijante, StavkaPonistavanja, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from '../src/app/features/banka/data-access/banka.models';
 
 /*
- * Mok banke zadataka za e2e: stablo grupa i varijante u memoriji (`Podaci.bankaGrupe`, `bankaVarijante`, `preambule` iz
- * `fixtures/banka.json`), pojednostavljena kopija pravila servera (`GrupaZadatakaService`, `VarijantaService`, uvek sa
- * istim porukama greške) samo za ono što e2e proverava. LaTeX se ne prevodi: render uspeva uvek, osim kad tekst (ili
- * rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog teksta. Preambulu sa `\foo` `PUT` odbija
- * (400 "Preambula se ne kompajlira (linija N): ...", kao probni render servera) i ništa ne upisuje. Rute registruje `mock-api.ts`.
+ * Mok banke zadataka za e2e: stablo grupa i varijante u memoriji (`Podaci.bankaGrupe`, `bankaVarijante`, `preambule`,
+ * `iskljuceneTeme` iz `fixtures/banka.json`), pojednostavljena kopija pravila servera (`GrupaZadatakaService`, `VarijantaService`,
+ * `SerijaService`, `IskljuceneTemeService`, uvek sa istim porukama greške) samo za ono što e2e proverava. LaTeX se ne prevodi:
+ * render uspeva uvek, osim kad tekst (ili rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog
+ * teksta. Preambulu sa `\foo` `PUT` odbija (400 "Preambula se ne kompajlira (linija N): ...", kao probni render servera) i ništa
+ * ne upisuje. Klodove serije: grupe i varijante nose `izvor` i `serija` (prezentacije u moku nemaju seriju, pa su njihovi brojači
+ * 0); odobravanje kopije (`zamenjuje`) arhivira original. Rute registruje `mock-api.ts`.
  */
 
+/** Grupa kako je mok čuva; bez `izvor` / `serija` (npr. grupa koju test doda) je ručna, bez serije. */
 export interface BankaGrupa {
   id: number;
   predmetId: number;
@@ -24,7 +27,12 @@ export interface BankaGrupa {
   uputstvo: string | null;
   polja: Polje[];
   izmenjeno: string;
+  izvor?: IzvorVarijante;
+  serija?: string | null;
 }
+
+/** Isključena tema kako je server čuva (`IskljucenaTemaInfo` bez putanje, nju računa mok). */
+export type BankaTema = Omit<IskljucenaTemaInfo, 'putanja'>;
 
 /** Varijanta kako je server čuva (`VarijantaDetails` bez putanje i šeme polja, njih računa mok). */
 export interface BankaVarijanta extends Omit<VarijantaDetails, 'putanja' | 'polja'> {
@@ -37,6 +45,7 @@ export interface BankaPodaci {
   bankaVarijante: BankaVarijanta[];
   /** Preambula po predmetu; bez ključa ili `null` je podrazumevana. */
   preambule: Record<number, string | null>;
+  iskljuceneTeme: BankaTema[];
 }
 
 /** Odgovor rute: isti oblik kao `Odgovor` u `mock-api.ts`. */
@@ -54,12 +63,18 @@ export const PODRAZUMEVANA_PREAMBULA = '\\usepackage[T1]{fontenc}\n\\usepackage[
 /** Koliko varijanti `renderuj-sve` prevede u jednom pozivu (front zove ponovo dok `preostalo` nije 0). */
 const KORAK_RENDERA = 10;
 const MAX_DUBINA = 6;
+/** Oblik serije (`utility/Serija` na serveru) i poruka kad ne odgovara. */
+const SERIJA = /^[a-z0-9-]{3,60}$/;
+const PORUKA_SERIJE = 'Serija mora imati 3 do 60 malih slova, cifara ili crtica.';
+const MAX_OPIS_TEME = 300;
 
 const greska = (status: number, reason: string): Ishod => ({ status, telo: { reason, time: new Date().toISOString() } });
 const vreme = () => new Date().toISOString().slice(0, 19);
 const kopija = <T>(x: T): T => structuredClone(x);
 const uXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const duzina = (s: string | null | undefined) => (s ? [...s].length : 0);
+/** Opis teme za poređenje (kao server): bez razmaka na krajevima, nizovi razmaka kao jedan, bez obzira na velika slova. */
+const normalizujOpis = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** Najmanji SVG kao iz render servisa: širina 300, jedna linija natpisa. */
 export function probniSvg(natpis: string): string {
@@ -77,6 +92,7 @@ export class MockBanka {
   readonly svgovi = new Map<string, string>();
   private sledeciGrupa: number;
   private sledeciVarijanta: number;
+  private sledeciTema: number;
   private sledeciSvg = 0;
 
   constructor(
@@ -86,6 +102,7 @@ export class MockBanka {
   ) {
     this.sledeciGrupa = Math.max(0, ...d.bankaGrupe.map(g => g.id)) + 1;
     this.sledeciVarijanta = Math.max(0, ...d.bankaVarijante.map(v => v.id)) + 1;
+    this.sledeciTema = Math.max(0, ...d.iskljuceneTeme.map(t => t.id)) + 1;
     for (const v of d.bankaVarijante) {
       if (v.svgId) this.svgovi.set(v.svgId, probniSvg(`Zadatak ${v.id}`));
       if (v.resenjeSvgId) this.svgovi.set(v.resenjeSvgId, probniSvg(`Rešenje ${v.id}`));
@@ -127,16 +144,31 @@ export class MockBanka {
     return this.braca(g.predmetId, g.namena, g.id).flatMap(c => [c, ...this.potomci(c)]);
   }
 
+  /** Isključenje grupe: tema same grupe, inače najbližeg pretka (`iskljucenjeId`), ili `null`. */
+  private iskljucenje(g: BankaGrupa): Pick<GrupaCvor, 'iskljucena' | 'iskljucenjeId'> {
+    for (const p of this.putanja(g).reverse()) {
+      const tema = this.d.iskljuceneTeme.find(t => t.grupaId === p.id);
+      if (tema) return { iskljucena: true, iskljucenjeId: tema.id };
+    }
+    return { iskljucena: false, iskljucenjeId: null };
+  }
+
   private cvor(g: BankaGrupa): GrupaCvor {
     const deca = this.braca(g.predmetId, g.namena, g.id).map(c => this.cvor(c));
-    return { id: g.id, naziv: g.naziv, rb: g.rb, tezina: g.tezina, list: deca.length === 0, ...this.brojaci(g), deca };
+    const brojClaudeNacrta = [g, ...this.potomci(g)].flatMap(x => this.varijanteGrupe(x.id))
+      .filter(v => v.izvor === 'CLAUDE' && v.status === 'NACRT').length;
+    return {
+      id: g.id, naziv: g.naziv, rb: g.rb, tezina: g.tezina, list: deca.length === 0, ...this.brojaci(g), deca, izvor: g.izvor ?? 'RUCNO',
+      brojClaudeNacrta, ...this.iskljucenje(g),
+    };
   }
 
   private details(g: BankaGrupa): GrupaDetails {
     return {
       id: g.id, predmetId: g.predmetId, roditeljId: g.roditeljId, namena: g.namena, naziv: g.naziv, opis: g.opis, rb: g.rb,
       tezina: g.tezina, uputstvo: g.uputstvo, polja: kopija(g.polja), putanja: this.putanja(g),
-      list: this.braca(g.predmetId, g.namena, g.id).length === 0, ...this.brojaci(g), izmenjeno: g.izmenjeno,
+      list: this.braca(g.predmetId, g.namena, g.id).length === 0, ...this.brojaci(g), izmenjeno: g.izmenjeno, izvor: g.izvor ?? 'RUCNO',
+      serija: g.serija ?? null, ...this.iskljucenje(g),
     };
   }
 
@@ -188,7 +220,7 @@ export class MockBanka {
     const g: BankaGrupa = {
       id: this.sledeciGrupa++, predmetId, roditeljId: roditelj?.id ?? null, namena, naziv: cmd.naziv.trim(), opis: cmd.opis ?? null,
       rb: Math.max(0, ...braca.map(b => b.rb)) + 1, tezina: cmd.tezina ?? null, uputstvo: cmd.uputstvo ?? null,
-      polja: kopija(cmd.polja ?? []), izmenjeno: vreme(),
+      polja: kopija(cmd.polja ?? []), izmenjeno: vreme(), izvor: 'RUCNO', serija: null,
     };
     this.d.bankaGrupe.push(g);
     return { status: 201, telo: this.details(g) };
@@ -249,6 +281,8 @@ export class MockBanka {
     this.d.bankaVarijante = this.d.bankaVarijante.filter(v => v.grupaId !== id);
     this.d.bankaGrupe = this.d.bankaGrupe.filter(x => x.id !== id);
     this.prenumerisi(this.braca(g.predmetId, g.namena, g.roditeljId));
+    // FK teme prema grupi je `ON DELETE SET NULL`: tema ostaje, bez grupe
+    for (const t of this.d.iskljuceneTeme.filter(x => x.grupaId === id)) t.grupaId = null;
     return { status: 204 };
   }
 
@@ -300,7 +334,8 @@ export class MockBanka {
   private info(v: BankaVarijanta): VarijantaInfo {
     return {
       id: v.id, grupaId: v.grupaId, rb: v.rb, naziv: v.naziv, status: v.status, izvor: v.izvor, renderStatus: v.renderStatus,
-      svgId: v.svgId, resenjeSvgId: v.resenjeSvgId, izmenjeno: v.izmenjeno,
+      svgId: v.svgId, resenjeSvgId: v.resenjeSvgId, izmenjeno: v.izmenjeno, ikadOdobrena: v.ikadOdobrena, zamenjuje: v.zamenjuje,
+      serija: v.serija,
     };
   }
 
@@ -414,7 +449,7 @@ export class MockBanka {
       id: this.sledeciVarijanta++, grupaId, rb: Math.max(0, ...this.varijanteGrupe(grupaId).map(x => x.rb)) + 1, naziv: cmd.naziv || null,
       tekst: cmd.tekst, resenje: cmd.resenje || null, odgovori: kopija(cmd.odgovori ?? {}), prilozi, status: 'NACRT',
       izvor: cmd.izvor ?? 'RUCNO', renderStatus: 'CEKA', svgId: null, resenjeSvgId: null, renderGreska: null, renderDeo: null,
-      kreirano: sada, izmenjeno: sada,
+      kreirano: sada, izmenjeno: sada, ikadOdobrena: false, zamenjuje: null, serija: null,
     };
     this.renderuj(v);
     this.d.bankaVarijante.push(v);
@@ -449,7 +484,10 @@ export class MockBanka {
     return { status: 204 };
   }
 
-  /** `odobri`, `arhiviraj` i `vrati-u-nacrt`: promena statusa; aktivna traži uspeo render i potpune odgovore. */
+  /**
+   * `odobri`, `arhiviraj` i `vrati-u-nacrt`: promena statusa; aktivna traži uspeo render i potpune odgovore. Odobravanje
+   * postavlja `ikadOdobrena` (ostaje i posle vraćanja u nacrt), a kopija (`zamenjuje`) u istom koraku arhivira original.
+   */
   promeniStatus(id: number, status: StatusVarijante): Ishod {
     const v = this.varijanta(id);
     if (!v) return greska(404, 'Varijanta nije pronađena.');
@@ -457,6 +495,12 @@ export class MockBanka {
       if (v.renderStatus !== 'OK') return greska(409, 'Varijanta se odobrava tek kad je render uspeo.');
       const poruka = this.proveriOdgovore(this.grupa(v.grupaId)?.polja ?? [], v.odgovori);
       if (poruka) return greska(400, poruka);
+      v.ikadOdobrena = true;
+      const original = v.zamenjuje === null ? undefined : this.varijanta(v.zamenjuje);
+      if (original && original.status !== 'ARHIVIRANA') {
+        original.status = 'ARHIVIRANA';
+        original.izmenjeno = vreme();
+      }
     }
     v.status = status;
     v.izmenjeno = vreme();
@@ -480,6 +524,7 @@ export class MockBanka {
     const k: BankaVarijanta = {
       ...kopija(v), id: this.sledeciVarijanta++, rb: Math.max(0, ...this.varijanteGrupe(v.grupaId).map(x => x.rb)) + 1, status: 'NACRT',
       renderStatus: 'CEKA', svgId: null, resenjeSvgId: null, renderGreska: null, renderDeo: null, zastareo: false, kreirano: sada, izmenjeno: sada,
+      ikadOdobrena: false, zamenjuje: null, serija: null,
     };
     this.renderuj(k);
     this.d.bankaVarijante.push(k);
@@ -532,11 +577,18 @@ export class MockBanka {
     return { telo };
   }
 
-  /** Sve stavke pretrage (strana se seče u `mock-api.ts`); `izmenjeno` opadajuće, kao podrazumevani sort servera. */
+  /**
+   * Sve stavke pretrage (strana se seče u `mock-api.ts`); `izmenjeno` opadajuće, kao podrazumevani sort servera. `izvor` i
+   * `serija` sužavaju na Klodove ili ručne varijante i na jednu seriju.
+   */
   pretraga(q: URLSearchParams): Ishod {
     const predmetId = Number(q.get('predmetId'));
     const upit = q.get('q')?.trim() ?? '';
     if (q.has('q') && upit !== '' && duzina(upit) < 2) return greska(400, 'Upit mora imati bar 2 znaka.');
+    const izvor = q.get('izvor');
+    if (izvor !== null && izvor !== 'RUCNO' && izvor !== 'CLAUDE') return greska(400, 'Neispravan parametar: izvor.');
+    const serija = q.get('serija');
+    if (serija !== null && !SERIJA.test(serija)) return greska(400, PORUKA_SERIJE);
     if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const namena = q.get('namena');
     const status = q.get('status');
@@ -545,16 +597,118 @@ export class MockBanka {
         const g = this.grupa(v.grupaId);
         const naslov = `${v.naziv ?? ''} ${v.tekst} ${g?.naziv ?? ''}`.toLowerCase();
         return g?.predmetId === predmetId && (!namena || g.namena === namena) && (!status || v.status === status)
-          && (upit === '' || naslov.includes(upit.toLowerCase()));
+          && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija) && (upit === '' || naslov.includes(upit.toLowerCase()));
       })
       .sort((a, b) => b.izmenjeno.localeCompare(a.izmenjeno) || b.id - a.id)
       .map(v => {
         const g = this.grupa(v.grupaId) as BankaGrupa;
         return {
           varijantaId: v.id, grupaId: g.id, grupaNaziv: g.naziv, putanja: this.putanja(g), naziv: v.naziv, status: v.status,
-          renderStatus: v.renderStatus, isecak: [...v.tekst].slice(0, 160).join(''),
+          renderStatus: v.renderStatus, isecak: [...v.tekst].slice(0, 160).join(''), izvor: v.izvor, serija: v.serija,
         };
       });
     return { telo: stavke };
+  }
+
+  // -------------------------------------------------------------------------------------------- serije Kloda
+
+  /**
+   * `GET banka/serije?predmetId=`: serije grupa i varijanti predmeta sa brojevima (kao `SerijaService.serije`), najnovije prve;
+   * `poslednja` je najveće `kreirano` varijante (za grupu `izmenjeno`, mok ne čuva njeno `kreirano`).
+   */
+  serije(predmetIdParam: string | null): Ishod {
+    if (predmetIdParam === null || predmetIdParam === '') return greska(400, 'Predmet je obavezan.');
+    if (!/^\d+$/.test(predmetIdParam)) return greska(400, 'Neispravan parametar: predmetId.');
+    const predmetId = Number(predmetIdParam);
+    const grupe = this.d.bankaGrupe.filter(g => g.predmetId === predmetId);
+    const varijante = this.d.bankaVarijante.filter(v => grupe.some(g => g.id === v.grupaId));
+    const imena = new Set([...grupe.map(g => g.serija), ...varijante.map(v => v.serija)].filter((x): x is string => !!x));
+    const telo: SerijaInfo[] = [...imena]
+      .map(serija => {
+        const vs = varijante.filter(v => v.serija === serija);
+        const gs = grupe.filter(g => g.serija === serija);
+        return {
+          serija,
+          nacrta: vs.filter(v => v.izvor === 'CLAUDE' && v.status === 'NACRT').length,
+          odobrenih: vs.filter(v => v.ikadOdobrena).length,
+          grupa: gs.length,
+          prezentacija: 0,
+          slajdova: 0,
+          poslednja: [...vs.map(v => v.kreirano), ...gs.map(g => g.izmenjeno)].sort().at(-1) as string,
+        };
+      })
+      .sort((a, b) => b.poslednja.localeCompare(a.poslednja));
+    return { telo };
+  }
+
+  /**
+   * `POST banka/serije/{serija}/odbaci` (kao `SerijaService.ponisti(serija, true)`): briše neodobrene Klodove nacrte serije, pa
+   * Klodove grupe serije od najdubljih kad su prazne; ostale varijante i grupe serije navodi kao preskočene, ručne grupe ne pominje.
+   */
+  odbaciSeriju(serija: string): Ishod {
+    if (!SERIJA.test(serija)) return greska(400, PORUKA_SERIJE);
+    const obrisano: StavkaPonistavanja[] = [];
+    const preskoceno: StavkaPonistavanja[] = [];
+    for (const v of this.d.bankaVarijante.filter(x => x.serija === serija)) {
+      const stavka = { vrsta: 'VARIJANTA' as const, id: v.id, naziv: v.naziv };
+      if (v.izvor === 'CLAUDE' && v.status === 'NACRT' && !v.ikadOdobrena) {
+        this.obrisiVarijantu(v.id);
+        obrisano.push({ ...stavka, razlog: null });
+      } else {
+        preskoceno.push({ ...stavka, razlog: 'Odobrena ili nije Klodov nacrt.' });
+      }
+    }
+    const grupe = this.d.bankaGrupe.filter(g => g.izvor === 'CLAUDE' && g.serija === serija)
+      .sort((a, b) => this.putanja(b).length - this.putanja(a).length);
+    for (const g of grupe) {
+      const stavka = { vrsta: 'GRUPA' as const, id: g.id, naziv: g.naziv };
+      if (this.varijanteGrupe(g.id).length > 0 || this.braca(g.predmetId, g.namena, g.id).length > 0) {
+        preskoceno.push({ ...stavka, razlog: 'Grupa nije prazna.' });
+      } else {
+        this.obrisiGrupu(g.id);
+        obrisano.push({ ...stavka, razlog: null });
+      }
+    }
+    const telo: PonistavanjeInfo = { potvrdjeno: true, obrisano, preskoceno };
+    return { telo };
+  }
+
+  // -------------------------------------------------------------------------------------------- isključene teme
+
+  private temaInfo(t: BankaTema): IskljucenaTemaInfo {
+    const g = t.grupaId === null ? undefined : this.grupa(t.grupaId);
+    return { ...kopija(t), putanja: g ? this.putanja(g) : [] };
+  }
+
+  /** `GET predmeti/{id}/iskljucene-teme`: najnovije prve. */
+  iskljuceneTeme(predmetId: number): Ishod {
+    if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
+    const teme = this.d.iskljuceneTeme.filter(t => t.predmetId === predmetId)
+      .sort((a, b) => b.kreirano.localeCompare(a.kreirano) || b.id - a.id);
+    return { telo: teme.map(t => this.temaInfo(t)) };
+  }
+
+  /** `POST predmeti/{id}/iskljucene-teme` (izvor RUCNO): ista grupa ili isti normalizovan opis bez grupe je 409. */
+  iskljuciTemu(predmetId: number, cmd: IskljucenaTemaCmd | null): Ishod {
+    if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
+    const opis = cmd?.opis?.trim() ?? '';
+    if (opis === '' || duzina(opis) > MAX_OPIS_TEME) return greska(400, 'Opis teme mora imati od 1 do 300 znakova.');
+    const grupaId = cmd?.grupaId ?? null;
+    if (grupaId !== null && this.grupa(grupaId)?.predmetId !== predmetId) return greska(400, 'Grupa nije u ovom predmetu.');
+    const teme = this.d.iskljuceneTeme.filter(t => t.predmetId === predmetId);
+    if (grupaId !== null && teme.some(t => t.grupaId === grupaId)) return greska(409, 'Ova grupa je već isključena.');
+    if (grupaId === null && teme.some(t => t.grupaId === null && normalizujOpis(t.opis) === normalizujOpis(opis))) {
+      return greska(409, 'Ova tema je već isključena.');
+    }
+    const t: BankaTema = { id: this.sledeciTema++, predmetId, opis, grupaId, izvor: 'RUCNO', serija: null, kreirano: vreme() };
+    this.d.iskljuceneTeme.push(t);
+    return { status: 201, telo: this.temaInfo(t) };
+  }
+
+  /** `DELETE iskljucene-teme/{id}`. */
+  ukljuciTemu(id: number): Ishod {
+    if (!this.d.iskljuceneTeme.some(t => t.id === id)) return greska(404, 'Isključena tema nije pronađena.');
+    this.d.iskljuceneTeme = this.d.iskljuceneTeme.filter(t => t.id !== id);
+    return { status: 204 };
   }
 }

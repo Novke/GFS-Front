@@ -5,13 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
 import { BankaApi } from './banka.api';
-import { GrupaCvor, GrupaDetails, VarijantaDetails, VarijantaInfo } from './banka.models';
+import { GrupaCvor, GrupaDetails, IskljucenaTemaInfo, SerijaInfo, VarijantaDetails, VarijantaInfo } from './banka.models';
 import { BankaStore } from './banka.store';
 
 function cvor(id: number, naziv: string, deca: GrupaCvor[] = [], izmena: Partial<GrupaCvor> = {}): GrupaCvor {
   return {
     id, naziv, rb: id, tezina: deca.length ? null : 2, list: deca.length === 0, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0,
-    brojGresaka: 0, deca, ...izmena,
+    brojGresaka: 0, deca, izvor: 'RUCNO', brojClaudeNacrta: 0, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
@@ -42,18 +42,35 @@ function detalji(id: number, izmena: Partial<GrupaDetails> = {}): GrupaDetails {
     id, predmetId: 7, roditeljId: putanja.length > 1 ? putanja[putanja.length - 2].id : null, namena: 'PREDAVANJE',
     naziv: putanja[putanja.length - 1].naziv, opis: 'Opis grupe', rb: id, tezina: 2, uputstvo: 'Uputstvo za Claude-a',
     polja: [], putanja, list: id !== 1, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0, brojGresaka: 0,
-    izmenjeno: '2026-10-17T10:00:00', ...izmena,
+    izmenjeno: '2026-10-17T10:00:00', izvor: 'RUCNO', serija: null, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
-function varijanta(id: number, status: VarijantaInfo['status'], renderStatus: VarijantaInfo['renderStatus'] = 'OK'): VarijantaInfo {
+function varijanta(
+  id: number, status: VarijantaInfo['status'], renderStatus: VarijantaInfo['renderStatus'] = 'OK', izmena: Partial<VarijantaInfo> = {},
+): VarijantaInfo {
   return {
     id, grupaId: 2, rb: id, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus,
     svgId: renderStatus === 'OK' ? `svg-${id}` : null, resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00',
+    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null, ...izmena,
   };
 }
 
 const VARIJANTE_2: VarijantaInfo[] = [varijanta(11, 'NACRT'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT', 'GRESKA')];
+
+/** Serija Klodovog uvoza predmeta 7 (najnovija prva). */
+const SERIJE: SerijaInfo[] = [
+  { serija: 'uvoz-kol1-2024', nacrta: 3, odobrenih: 0, grupa: 1, prezentacija: 0, slajdova: 0, poslednja: '2026-10-18T11:00:00' },
+];
+
+/** Isključena tema nad grupom 3 i tema bez grupe. */
+const TEME: IskljucenaTemaInfo[] = [
+  {
+    id: 5, predmetId: 7, opis: 'Razlomljeni brojevi', grupaId: 3, putanja: [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 3, naziv: '16 → 2' }],
+    izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', kreirano: '2026-10-18T11:00:00',
+  },
+  { id: 4, predmetId: 7, opis: 'Osnova 3 i 5', grupaId: null, putanja: [], izvor: 'RUCNO', serija: null, kreirano: '2026-10-18T10:00:00' },
+];
 
 /** Odgovor koji test pušta kad hoće (`stigni`), da se proveri šta radi store dok je zahtev u letu. */
 function kasni<T>(): Subject<T> & { stigni(vrednost: T): void } {
@@ -86,6 +103,9 @@ describe('BankaStore', () => {
     vratiUNacrt: vi.fn(),
     obrisiVarijantu: vi.fn(),
     dupliraj: vi.fn(),
+    serije: vi.fn(),
+    iskljuceneTeme: vi.fn(),
+    ukljuciTemu: vi.fn(),
   };
 
   beforeEach(() => {
@@ -96,6 +116,8 @@ describe('BankaStore', () => {
     api.grupa.mockImplementation((id: number) => of(detalji(id)));
     api.varijante.mockImplementation((id: number) => of(id === 2 ? VARIJANTE_2 : []));
     api.odobri.mockImplementation(() => of({} as VarijantaDetails));
+    api.serije.mockImplementation(() => of(SERIJE));
+    api.iskljuceneTeme.mockImplementation(() => of(TEME));
     TestBed.configureTestingModule({ providers: [BankaStore, { provide: BankaApi, useValue: api }] });
     store = TestBed.inject(BankaStore);
     poruke = [];
@@ -338,6 +360,195 @@ describe('BankaStore', () => {
       expect(store.brojaciIzabrane()).toEqual({ brojVarijanti: 4, brojAktivnih: 2, brojNacrta: 2, brojGresaka: 1 });
       store.izaberi(null);
       expect(store.brojaciIzabrane()).toEqual({ brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0, brojGresaka: 0 });
+    });
+  });
+
+  describe('filter izvora i čišćenje filtera', () => {
+    /** 11 ručni nacrt, 15 i 16 Klodovi (nacrt i aktivna), 12 ručna aktivna. */
+    const MESANE = [
+      varijanta(11, 'NACRT'),
+      varijanta(15, 'NACRT', 'OK', { izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }),
+      varijanta(12, 'AKTIVNA'),
+      varijanta(16, 'AKTIVNA', 'OK', { izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }),
+    ];
+
+    beforeEach(() => {
+      api.varijante.mockImplementation((id: number) => of(id === 2 ? MESANE : []));
+      store.ucitaj(7, 'PREDAVANJE');
+    });
+
+    it('postaviFilterIzvora: "CLAUDE" ostavlja samo Klodove, "RUCNO" samo ručne, "SVI" sve; zajedno sa statusom', () => {
+      expect(store.filterIzvora()).toBe('SVI');
+      store.postaviFilterIzvora('CLAUDE');
+      expect(store.filtriraneVarijante().map(v => v.id)).toEqual([15, 16]);
+      store.postaviFilter('NACRT');
+      expect(store.filtriraneVarijante().map(v => v.id)).toEqual([15]);
+      store.postaviFilterIzvora('RUCNO');
+      expect(store.filtriraneVarijante().map(v => v.id)).toEqual([11]);
+      store.postaviFilterIzvora('SVI');
+      expect(store.filtriraneVarijante().map(v => v.id)).toEqual([11, 15]);
+    });
+
+    it('imaFiltera je tačno kad je postavljen filter statusa ili filter izvora', () => {
+      expect(store.imaFiltera()).toBe(false);
+      store.postaviFilter('AKTIVNA');
+      expect(store.imaFiltera()).toBe(true);
+      store.postaviFilter('SVE');
+      store.postaviFilterIzvora('CLAUDE');
+      expect(store.imaFiltera()).toBe(true);
+      store.postaviFilterIzvora('SVI');
+      expect(store.imaFiltera()).toBe(false);
+    });
+
+    it('ocisti() vraća oba filtera na podrazumevano ("SVE", "SVI")', () => {
+      store.postaviFilter('NACRT');
+      store.postaviFilterIzvora('CLAUDE');
+      store.ocisti();
+      expect(store.filterStatusa()).toBe('SVE');
+      expect(store.filterIzvora()).toBe('SVI');
+      expect(store.imaFiltera()).toBe(false);
+      expect(store.filtriraneVarijante()).toHaveLength(4);
+    });
+
+    it('izbor druge grupe i osvežavanje čuvaju filter izvora', () => {
+      store.postaviFilterIzvora('CLAUDE');
+      store.izaberi(3);
+      store.osveziStablo();
+      expect(store.filterIzvora()).toBe('CLAUDE');
+    });
+  });
+
+  describe('serije i isključene teme', () => {
+    it('ucitaj predmeta učitava njegove serije i teme (tiho)', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      expect(api.serije).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+      expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+      expect(store.serije()).toEqual(SERIJE);
+      expect(store.teme()).toEqual(TEME);
+      expect(poruke).toEqual([]);
+    });
+
+    it('promena namene istog predmeta ih ne učitava ponovo; promena predmeta da, a tuđe liste se odmah brišu', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      store.ucitaj(7, 'TEST');
+      expect(api.serije).toHaveBeenCalledOnce();
+      expect(api.iskljuceneTeme).toHaveBeenCalledOnce();
+      expect(store.serije()).toEqual(SERIJE);
+
+      const serije8 = kasni<SerijaInfo[]>();
+      const teme8 = kasni<IskljucenaTemaInfo[]>();
+      api.serije.mockImplementationOnce(() => serije8);
+      api.iskljuceneTeme.mockImplementationOnce(() => teme8);
+      store.ucitaj(8, 'TEST');
+      expect(api.serije).toHaveBeenLastCalledWith(8, { tiho: true });
+      expect(api.iskljuceneTeme).toHaveBeenLastCalledWith(8, { tiho: true });
+      expect(store.serije()).toEqual([]);
+      expect(store.teme()).toEqual([]);
+
+      serije8.stigni([]);
+      teme8.stigni([TEME[1]]);
+      expect(store.teme()).toEqual([TEME[1]]);
+    });
+
+    it('odgovor za serije i teme starog predmeta, koji stigne posle promene predmeta, ne prepisuje nove', () => {
+      const stareSerije = kasni<SerijaInfo[]>();
+      const stareTeme = kasni<IskljucenaTemaInfo[]>();
+      api.serije.mockImplementationOnce(() => stareSerije);
+      api.iskljuceneTeme.mockImplementationOnce(() => stareTeme);
+      store.ucitaj(7, 'PREDAVANJE');
+      api.serije.mockImplementation(() => of([]));
+      api.iskljuceneTeme.mockImplementation(() => of([]));
+      store.ucitaj(8, 'PREDAVANJE');
+
+      stareSerije.stigni(SERIJE);
+      stareTeme.stigni(TEME);
+      expect(store.serije()).toEqual([]);
+      expect(store.teme()).toEqual([]);
+    });
+
+    it('ponovno učitavanje posle greške stabla (isti predmet) učitava i serije i teme', () => {
+      api.stablo.mockImplementationOnce(() => greskaServera(500, 'Interna greška.'));
+      store.ucitaj(7, 'PREDAVANJE');
+      expect(store.status()).toBe('error');
+      store.ucitaj(7, 'PREDAVANJE');
+      expect(api.serije).toHaveBeenCalledTimes(2);
+      expect(api.iskljuceneTeme).toHaveBeenCalledTimes(2);
+    });
+
+    it('greška serija ili tema: poruka (jedna grupa poruka), lista prazna, stablo i grupa rade', () => {
+      api.serije.mockImplementation(() => greskaServera(500, 'Interna greška.'));
+      api.iskljuceneTeme.mockImplementation(() => greskaServera(404, 'Predmet nije pronađen.'));
+      store.ucitaj(7, 'PREDAVANJE');
+
+      expect(poruke).toEqual([
+        { tip: 'greska', tekst: 'Sistemska greška. Pokušaj ponovo.', akcija: undefined, grupa: 'banka-serije-teme' },
+        { tip: 'greska', tekst: 'Predmet nije pronađen.', akcija: undefined, grupa: 'banka-serije-teme' },
+      ]);
+      expect(store.serije()).toEqual([]);
+      expect(store.teme()).toEqual([]);
+      expect(store.status()).toBe('loaded');
+      expect(store.grupa()?.id).toBe(2);
+    });
+
+    it('ucitajSerije i ucitajTeme učitavaju iznova za tekući predmet; bez predmeta ne rade ništa', () => {
+      store.ucitajSerije();
+      store.ucitajTeme();
+      expect(api.serije).not.toHaveBeenCalled();
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
+
+      store.ucitaj(7, 'PREDAVANJE');
+      api.serije.mockImplementation(() => of([]));
+      api.iskljuceneTeme.mockImplementation(() => of([TEME[0]]));
+      store.ucitajSerije();
+      store.ucitajTeme();
+      expect(api.serije).toHaveBeenLastCalledWith(7, { tiho: true });
+      expect(store.serije()).toEqual([]);
+      expect(store.teme()).toEqual([TEME[0]]);
+    });
+
+    it('ukljuciTemu zove DELETE, pa osvežava stablo (isti izbor) i teme', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      store.izaberi(3);
+      api.stablo.mockClear();
+      api.grupa.mockClear();
+      api.ukljuciTemu.mockImplementation(() => of(undefined));
+      api.iskljuceneTeme.mockImplementation(() => of([TEME[1]]));
+
+      store.ukljuciTemu(5);
+
+      expect(api.ukljuciTemu).toHaveBeenCalledExactlyOnceWith(5, { tiho: true });
+      expect(api.stablo).toHaveBeenCalledExactlyOnceWith(7, 'PREDAVANJE', { tiho: true });
+      expect(api.grupa).toHaveBeenCalledWith(3, { tiho: true });
+      expect(api.iskljuceneTeme).toHaveBeenLastCalledWith(7, { tiho: true });
+      expect(store.teme()).toEqual([TEME[1]]);
+      expect(store.izabranaGrupaId()).toBe(3);
+      expect(api.ukljuciTemu.mock.invocationCallOrder[0]).toBeLessThan(api.stablo.mock.invocationCallOrder[0]);
+    });
+
+    it('ukljuciTemu: greška (404) ide u NotificationStore, ništa se ne učitava ponovo', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      api.stablo.mockClear();
+      api.iskljuceneTeme.mockClear();
+      api.ukljuciTemu.mockImplementation(() => greskaServera(404, 'Isključena tema nije pronađena.'));
+
+      store.ukljuciTemu(5);
+
+      expect(poruke).toEqual([{ tip: 'greska', tekst: 'Isključena tema nije pronađena.', akcija: undefined }]);
+      expect(api.stablo).not.toHaveBeenCalled();
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
+    });
+
+    it('izmena u predmetu sa serijama osvežava i serije (brojači nacrta i odobrenih); bez serija ne', () => {
+      store.ucitaj(7, 'PREDAVANJE');
+      api.serije.mockClear();
+      store.odobri(11);
+      expect(api.serije).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+
+      api.serije.mockImplementation(() => of([]));
+      store.ucitajSerije();
+      api.serije.mockClear();
+      store.odobri(11);
+      expect(api.serije).not.toHaveBeenCalled();
     });
   });
 

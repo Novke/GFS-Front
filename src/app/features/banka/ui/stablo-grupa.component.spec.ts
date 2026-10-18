@@ -12,7 +12,7 @@ import { StabloGrupaComponent } from './stablo-grupa.component';
 function cvor(id: number, naziv: string, deca: GrupaCvor[] = [], izmena: Partial<GrupaCvor> = {}): GrupaCvor {
   return {
     id, naziv, rb: id, tezina: deca.length ? null : 2, list: deca.length === 0, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0,
-    brojGresaka: 0, deca, ...izmena,
+    brojGresaka: 0, deca, izvor: 'RUCNO', brojClaudeNacrta: 0, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 

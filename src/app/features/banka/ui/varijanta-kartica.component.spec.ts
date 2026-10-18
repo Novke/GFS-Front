@@ -13,7 +13,8 @@ import { VarijantaKarticaComponent } from './varijanta-kartica.component';
 function varijanta(izmena: Partial<VarijantaInfo> = {}): VarijantaInfo {
   return {
     id: 11, grupaId: 2, rb: 1, naziv: '1011 u dekadni', status: 'NACRT', izvor: 'RUCNO', renderStatus: 'OK',
-    svgId: 'b0000000-0000-4000-8000-000000000011', resenjeSvgId: null, izmenjeno: '2026-10-15T10:00:00', ...izmena,
+    svgId: 'b0000000-0000-4000-8000-000000000011', resenjeSvgId: null, izmenjeno: '2026-10-15T10:00:00', ikadOdobrena: false,
+    zamenjuje: null, serija: null, ...izmena,
   };
 }
 

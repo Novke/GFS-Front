@@ -28,7 +28,8 @@ function grupa(izmena: Partial<GrupaDetails> = {}): GrupaDetails {
   return {
     id: 2, predmetId: 7, roditeljId: 1, namena: 'PREDAVANJE', naziv: '2 → 10', opis: null, rb: 1, tezina: 2, uputstvo: null,
     polja: [POLJE_A], putanja: [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 2, naziv: '2 → 10' }], list: true,
-    brojVarijanti: 3, brojAktivnih: 1, brojNacrta: 2, brojGresaka: 1, izmenjeno: '2026-10-17T10:00:00', ...izmena,
+    brojVarijanti: 3, brojAktivnih: 1, brojNacrta: 2, brojGresaka: 1, izmenjeno: '2026-10-17T10:00:00', izvor: 'RUCNO', serija: null,
+    iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
@@ -37,7 +38,8 @@ function varijanta(izmena: Partial<VarijantaDetails> = {}): VarijantaDetails {
     id: 13, grupaId: 2, putanja: grupa().putanja, rb: 3, naziv: '100111 u dekadni', tekst: 'Pretvori\n$100111_2$\n\\foo u dekadni.',
     resenje: null, odgovori: { a: { ...prazno, broj: 39 } }, polja: [POLJE_A], prilozi: [], status: 'NACRT', izvor: 'RUCNO',
     renderStatus: 'GRESKA', svgId: null, resenjeSvgId: null, renderGreska: { linija: 3, poruka: 'Undefined control sequence \\foo' },
-    renderDeo: 'tekst', kreirano: '2026-10-17T10:00:00', izmenjeno: '2026-10-17T10:00:00', ...izmena,
+    renderDeo: 'tekst', kreirano: '2026-10-17T10:00:00', izmenjeno: '2026-10-17T10:00:00', ikadOdobrena: false, zamenjuje: null, serija: null,
+    ...izmena,
   };
 }
 

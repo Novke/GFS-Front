@@ -12,6 +12,7 @@ export type TipPolja = 'BROJ' | 'TEKST' | 'JEDAN_TACAN' | 'VISE_TACNIH';
 export type OdstupanjeTip = 'APSOLUTNO' | 'PROCENAT';
 export type StatusVarijante = 'NACRT' | 'AKTIVNA' | 'ARHIVIRANA';
 export type RenderStatus = 'CEKA' | 'OK' | 'GRESKA';
+/** Ko je napravio grupu, varijantu ili isključenu temu: Novica u UI-ju (`RUCNO`) ili Klod kroz MCP (`CLAUDE`). */
 export type IzvorVarijante = 'RUCNO' | 'CLAUDE';
 /** Deo varijante u kome je LaTeX greška; `linija` je relativna na taj deo. */
 export type RenderDeo = 'tekst' | 'resenje';
@@ -82,7 +83,9 @@ export interface GrupaPutanja {
 
 /**
  * Čvor stabla (`GET banka/stablo`), deca po `rb`. Brojači: `brojVarijanti` sve (i arhivirane), `brojAktivnih`, `brojNacrta`,
- * `brojGresaka` = render GRESKA u bilo kom statusu; za unutrašnji čvor zbir celog podstabla.
+ * `brojGresaka` = render GRESKA u bilo kom statusu, `brojClaudeNacrta` = Klodovi nacrti; za unutrašnji čvor zbir celog podstabla.
+ * `iskljucena`: grupa ili neki predak ima isključenu temu (Klod ih ne nudi); `iskljucenjeId` je id teme najbližeg takvog čvora
+ * (sopstvena pre pretka), `null` kad nije isključena.
  */
 export interface GrupaCvor {
   id: number;
@@ -96,8 +99,13 @@ export interface GrupaCvor {
   brojNacrta: number;
   brojGresaka: number;
   deca: GrupaCvor[];
+  izvor: IzvorVarijante;
+  brojClaudeNacrta: number;
+  iskljucena: boolean;
+  iskljucenjeId: number | null;
 }
 
+/** Detalj grupe; `serija` je Klodova serija koja ju je napravila (`null` za ručnu), `iskljucena` kao u {@link GrupaCvor}. */
 export interface GrupaDetails {
   id: number;
   predmetId: number;
@@ -116,6 +124,10 @@ export interface GrupaDetails {
   brojNacrta: number;
   brojGresaka: number;
   izmenjeno: string;
+  izvor: IzvorVarijante;
+  serija: string | null;
+  iskljucena: boolean;
+  iskljucenjeId: number | null;
 }
 
 /**
@@ -160,7 +172,12 @@ export interface PrilogCmd {
   medijId: string;
 }
 
-/** Varijanta u listi grupe; `svgId` i `resenjeSvgId` poslednjeg uspelog rendera ostaju i posle neuspelog dok novi ne uspe. */
+/**
+ * Varijanta u listi grupe; `svgId` i `resenjeSvgId` poslednjeg uspelog rendera ostaju i posle neuspelog dok novi ne uspe.
+ * `ikadOdobrena`: bila je aktivna bar jednom (ostaje i posle vraćanja u nacrt); `zamenjuje`: id varijante koju ova kopija
+ * menja (Klod ne menja odobrenu varijantu na mestu, nego pravi kopiju; odobravanje kopije arhivira original); `serija`: Klodova
+ * serija koja ju je napravila ili izmenila, `null` za ručnu.
+ */
 export interface VarijantaInfo {
   id: number;
   grupaId: number;
@@ -172,8 +189,12 @@ export interface VarijantaInfo {
   svgId: string | null;
   resenjeSvgId: string | null;
   izmenjeno: string;
+  ikadOdobrena: boolean;
+  zamenjuje: number | null;
+  serija: string | null;
 }
 
+/** Puna varijanta; `ikadOdobrena`, `zamenjuje` i `serija` kao u {@link VarijantaInfo}. */
 export interface VarijantaDetails {
   id: number;
   grupaId: number;
@@ -195,6 +216,9 @@ export interface VarijantaDetails {
   renderDeo: RenderDeo | null;
   kreirano: string;
   izmenjeno: string;
+  ikadOdobrena: boolean;
+  zamenjuje: number | null;
+  serija: string | null;
 }
 
 /**
@@ -256,12 +280,14 @@ export interface PreambulaCmd {
   preambula: string | null;
 }
 
-/** Filteri `GET banka/pretraga`; `q` ima bar 2 znaka. */
+/** Filteri `GET banka/pretraga`; `q` ima bar 2 znaka, `serija` 3-60 malih slova, cifara ili crtica (inače 400). */
 export interface BankaFilter {
   predmetId: number;
   namena?: Namena | null;
   q?: string | null;
   status?: StatusVarijante | null;
+  izvor?: IzvorVarijante | null;
+  serija?: string | null;
 }
 
 export interface BankaPretragaStavka {
@@ -274,6 +300,69 @@ export interface BankaPretragaStavka {
   renderStatus: RenderStatus;
   /** Prvih 160 znakova teksta. */
   isecak: string;
+  izvor: IzvorVarijante;
+  serija: string | null;
+}
+
+// ------------------------------------------------------------------------------------------------ serije Kloda
+
+/**
+ * `GET banka/serije?predmetId=`: jedna serija (oznaka jednog Klodovog posla, npr. `uvoz-kol1-2024`) predmeta sa brojevima,
+ * najnovije prve. `nacrta` = Klodovi nacrti, `odobrenih` = varijante serije koje su bar jednom odobrene, `grupa`, `prezentacija`
+ * i `slajdova` napravljenih u seriji; `poslednja` je vreme poslednjeg upisa serije.
+ */
+export interface SerijaInfo {
+  serija: string;
+  nacrta: number;
+  odobrenih: number;
+  grupa: number;
+  prezentacija: number;
+  slajdova: number;
+  poslednja: string;
+}
+
+/** Vrsta stavke poništavanja serije (A2 dodaje `IZMENA_SLAJDA`). */
+export type VrstaPonistavanja = 'VARIJANTA' | 'GRUPA' | 'SLAJD' | 'PREZENTACIJA';
+
+/** Jedna obrisana (ili preskočena) stavka; `razlog` ima samo preskočena (npr. "Grupa nije prazna."). */
+export interface StavkaPonistavanja {
+  vrsta: VrstaPonistavanja;
+  id: number;
+  naziv: string | null;
+  razlog: string | null;
+}
+
+/**
+ * `POST banka/serije/{serija}/odbaci`: obrisani neodobreni Klodovi nacrti i prazne Klodove grupe serije, i šta je preskočeno
+ * (odobreno, ručno, neprazno). `potvrdjeno: false` (samo MCP proba) znači da je `obrisano` spisak onoga što bi se obrisalo.
+ */
+export interface PonistavanjeInfo {
+  potvrdjeno: boolean;
+  obrisano: StavkaPonistavanja[];
+  preskoceno: StavkaPonistavanja[];
+}
+
+// ------------------------------------------------------------------------------------------------ isključene teme
+
+/** `POST predmeti/{id}/iskljucene-teme`: tema nad grupom (isključuje i celo podstablo) ili samo opis (`grupaId: null`). */
+export interface IskljucenaTemaCmd {
+  opis: string;
+  grupaId: number | null;
+}
+
+/**
+ * Isključena tema predmeta (`GET predmeti/{id}/iskljucene-teme`, najnovije prve): Klod je ne nudi. `putanja` je putanja grupe
+ * (prazna kad tema nema grupu ili je grupa obrisana, pa je `grupaId` postao `null`).
+ */
+export interface IskljucenaTemaInfo {
+  id: number;
+  predmetId: number;
+  opis: string;
+  grupaId: number | null;
+  putanja: GrupaPutanja[];
+  izvor: IzvorVarijante;
+  serija: string | null;
+  kreirano: string;
 }
 
 // ------------------------------------------------------------------------------------------------ stablo

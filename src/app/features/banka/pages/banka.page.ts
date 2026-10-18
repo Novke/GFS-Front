@@ -181,7 +181,7 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
                   <button matButton="outlined" type="button" (click)="izmeniGrupu(c, true)">Zadaj težinu</button>
                 </div>
               }
-              <app-filter-bar [imaFiltera]="store.filterStatusa() !== 'SVE'" (ocisti)="store.postaviFilter('SVE')">
+              <app-filter-bar [imaFiltera]="store.imaFiltera()" (ocisti)="store.ocisti()">
                 <app-chip-select labela="Status" [opcije]="statusi" [vrednost]="filterChipa()" (vrednostChange)="store.postaviFilter($event ?? 'SVE')" />
               </app-filter-bar>
               @if (store.greskaGrupe(); as g) {
@@ -192,8 +192,8 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
                 <app-empty-state naslov="Grupa još nema varijanti" ikona="quiz"
                   tekst="Varijanta je jedan zadatak u LaTeX-u sa tačnim odgovorom; paralelne varijante iste grupe dobijaju se ravnomerno." />
               } @else if (store.filtriraneVarijante().length === 0) {
-                <app-empty-state naslov="Nema varijanti sa izabranim statusom" ikona="filter_alt_off">
-                  <button matButton="outlined" type="button" (click)="store.postaviFilter('SVE')">Očisti filter</button>
+                <app-empty-state naslov="Nema varijanti za izabrane filtere" ikona="filter_alt_off">
+                  <button matButton="outlined" type="button" (click)="store.ocisti()">Očisti filter</button>
                 </app-empty-state>
               } @else {
                 <ul class="bk-mreza" aria-label="Varijante grupe">

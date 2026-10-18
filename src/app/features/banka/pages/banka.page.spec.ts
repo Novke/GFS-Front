@@ -14,6 +14,7 @@ import { PREFS_KLJUC } from '../../../core/state/preferences.store';
 import { BANKA_RUTE } from '../banka.routes';
 import { BankaApi } from '../data-access/banka.api';
 import { GrupaCvor, GrupaDetails, VarijantaInfo } from '../data-access/banka.models';
+import { BankaStore } from '../data-access/banka.store';
 
 @Component({ template: '404' })
 class NijePronadjeno {}
@@ -21,7 +22,7 @@ class NijePronadjeno {}
 function cvor(id: number, naziv: string, deca: GrupaCvor[] = [], izmena: Partial<GrupaCvor> = {}): GrupaCvor {
   return {
     id, naziv, rb: id, tezina: deca.length ? null : 2, list: deca.length === 0, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0,
-    brojGresaka: 0, deca, ...izmena,
+    brojGresaka: 0, deca, izvor: 'RUCNO', brojClaudeNacrta: 0, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
@@ -38,6 +39,7 @@ function detalji(id: number): GrupaDetails {
   return {
     id, predmetId: 7, roditeljId: null, namena: 'PREDAVANJE', naziv: `Grupa ${id}`, opis: null, rb: id, tezina: 2, uputstvo: null,
     polja: [], putanja: [], list: id !== 1, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0, brojGresaka: 0, izmenjeno: '2026-10-17T10:00:00',
+    izvor: 'RUCNO', serija: null, iskljucena: false, iskljucenjeId: null,
   };
 }
 
@@ -45,6 +47,7 @@ function varijanta(id: number, status: VarijantaInfo['status'], renderStatus: Va
   return {
     id, grupaId: 2, rb: id - 10, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus,
     svgId: renderStatus === 'OK' ? `svg-${id}` : null, resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00',
+    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null,
   };
 }
 
@@ -59,6 +62,8 @@ describe('BankaPage', () => {
     izmeniGrupu: vi.fn(),
     odobri: vi.fn(),
     obrisiVarijantu: vi.fn(),
+    serije: vi.fn(),
+    iskljuceneTeme: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 7, naziv: 'Statika' }, { id: 3, naziv: 'Beton' }])),
@@ -92,6 +97,8 @@ describe('BankaPage', () => {
     api.stablo.mockImplementation(() => of(STABLO));
     api.grupa.mockImplementation((id: number) => of(detalji(id)));
     api.varijante.mockImplementation((id: number) => of(id === 2 ? [varijanta(11, 'NACRT'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT', 'GRESKA')] : []));
+    api.serije.mockImplementation(() => of([]));
+    api.iskljuceneTeme.mockImplementation(() => of([]));
     TestBed.configureTestingModule({
       providers: [
         provideRouter([{ path: 'banka', children: BANKA_RUTE }, { path: '**', component: NijePronadjeno }], withComponentInputBinding()),
@@ -167,6 +174,47 @@ describe('BankaPage', () => {
     nacrt.click();
     await stabilno();
     expect([...e.querySelectorAll<HTMLElement>('app-varijanta-kartica')].map(k => k.dataset['varijanta'])).toEqual(['11', '13']);
+  });
+
+  it('"Očisti filtere" u traci filtera vraća i filter statusa i filter izvora; prazna lista ih čisti isto', async () => {
+    const e = await otvori('/banka?predmet=7&grupa=2');
+    const store = harness.routeDebugElement!.injector.get(BankaStore);
+    expect(e.querySelector('app-filter-bar [data-ocisti]')).toBeNull();
+
+    // samo filter izvora (čip stiže sa UI-jem izvora): traka nudi čišćenje
+    store.postaviFilterIzvora('CLAUDE');
+    await stabilno();
+    expect(e.querySelectorAll('app-varijanta-kartica')).toHaveLength(0);
+    expect(e.querySelector('app-filter-bar [data-ocisti]')).not.toBeNull();
+    store.postaviFilter('NACRT');
+    await stabilno();
+    e.querySelector<HTMLButtonElement>('app-filter-bar [data-ocisti]')!.click();
+    await stabilno();
+    expect([store.filterStatusa(), store.filterIzvora()]).toEqual(['SVE', 'SVI']);
+    expect(e.querySelectorAll('app-varijanta-kartica')).toHaveLength(3);
+    expect(e.querySelector('app-filter-bar [data-ocisti]')).toBeNull();
+
+    store.postaviFilter('ARHIVIRANA');
+    store.postaviFilterIzvora('RUCNO');
+    await stabilno();
+    expect(e.querySelector('app-empty-state h2')!.textContent).toBe('Nema varijanti za izabrane filtere');
+    const prazno = [...e.querySelectorAll<HTMLButtonElement>('app-empty-state button')].find(b => b.textContent!.includes('Očisti filter'))!;
+    prazno.click();
+    await stabilno();
+    expect([store.filterStatusa(), store.filterIzvora()]).toEqual(['SVE', 'SVI']);
+  });
+
+  it('učitava serije i isključene teme izabranog predmeta (jednom, i pri promeni namene ne)', async () => {
+    await otvori('/banka?predmet=7&grupa=2');
+    expect(api.serije).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+    expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+    await router.navigate(['/banka'], { queryParams: { predmet: 7, namena: 'TEST' } });
+    await stabilno();
+    expect(api.serije).toHaveBeenCalledOnce();
+    await router.navigate(['/banka'], { queryParams: { predmet: 3 } });
+    await stabilno();
+    expect(api.serije).toHaveBeenLastCalledWith(3, { tiho: true });
+    expect(api.iskljuceneTeme).toHaveBeenLastCalledWith(3, { tiho: true });
   });
 
   it('unutrašnji čvor iz ?grupa: zbirni brojači, podgrupe i "Nova podgrupa", bez kartica', async () => {
