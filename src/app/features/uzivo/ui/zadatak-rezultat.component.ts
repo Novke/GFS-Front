@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RezultatPolja, RezultatVarijante, ZadatakRezultat, medijUrl } from '../data-access/uzivo.models';
-import { decimalni } from './format';
+import { tacanBroj } from './format';
 import { meriFormule } from './mera-formule';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
@@ -10,7 +10,7 @@ export function kolone(n: number): 2 | 3 | 4 {
 }
 
 /**
- * Tačan odgovor polja kao tekst za prikaz: BROJ vrednost sa jedinicom, TEKST prihvatljivi odgovori spojeni zarezom,
+ * Tačan odgovor polja kao tekst za prikaz: BROJ vrednost sa jedinicom (sve decimale, bez zaokruživanja), TEKST prihvatljivi odgovori spojeni zarezom,
  * JEDAN_TACAN tekst izabrane opcije, VISE_TACNIH tekstovi tačnih opcija (redom opcija) spojeni zarezom. Tekst opcije sme da
  * ima `$formule$` (prikaz ga crta kroz `app-tekst-formule`). Bez `tacno` (još nije prikazano) prazan tekst.
  */
@@ -19,7 +19,7 @@ export function tacnoTekst(p: RezultatPolja): string {
   if (!t) return '';
   switch (p.tip) {
     case 'BROJ':
-      return t.broj === null ? '' : decimalni(t.broj) + (p.jedinica ? ' ' + p.jedinica : '');
+      return t.broj === null ? '' : tacanBroj(t.broj) + (p.jedinica ? ' ' + p.jedinica : '');
     case 'TEKST':
       return (t.prihvatljivi ?? []).join(', ');
     case 'JEDAN_TACAN':

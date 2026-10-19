@@ -63,6 +63,13 @@ describe('tacnoTekst', () => {
     expect(tacnoTekst(polje({ tacno: { broj: 2.5, prihvatljivi: null, tacna: null, tacne: null } }))).toBe('2,5');
   });
 
+  it('BROJ: sve decimale, bez zaokruživanja na dve (binarni razlomci)', () => {
+    const sa = (broj: number, jedinica: string | null = null) => polje({ jedinica, tacno: { broj, prihvatljivi: null, tacna: null, tacne: null } });
+    expect(tacnoTekst(sa(0.0625))).toBe('0,0625');
+    expect(tacnoTekst(sa(0.625))).toBe('0,625');
+    expect(tacnoTekst(sa(0.1015625, 'm'))).toBe('0,1015625 m');
+  });
+
   it('TEKST: prihvatljivi odgovori spojeni zarezom', () => {
     const p = polje({ tip: 'TEKST', tacno: { broj: null, prihvatljivi: ['1011', 'jedanaest'], tacna: null, tacne: null } });
     expect(tacnoTekst(p)).toBe('1011, jedanaest');
