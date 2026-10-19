@@ -111,8 +111,8 @@ describe('PregledNacrtaStore', () => {
       store.ucitaj({ ...FILTER, izvor: 'CLAUDE' }, null);
 
       expect(api.pretraga.mock.calls).toEqual([
-        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 0, size: 100 }, { tiho: true }],
-        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 1, size: 100 }, { tiho: true }],
+        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
+        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 1, size: 100, sort: 'id,asc' }, { tiho: true }],
       ]);
       expect(store.ids()).toHaveLength(102);
       expect(store.ids().slice(98)).toEqual([1098, 1099, 7, 5]);
@@ -140,6 +140,32 @@ describe('PregledNacrtaStore', () => {
       store.ucitaj(FILTER, 99);
       expect(store.indeks()).toBe(0);
       expect(store.trenutna()?.id).toBe(16);
+    });
+
+    it('redosled nastanka (`sort=id,asc` na svakoj strani): izmenjena varijanta ostaje na svom mestu posle povratka sa `od`', () => {
+      // server kao `BankaPretragaService`: bez `sort` podrazumevano `izmenjeno` opadajuće, pa `id` opadajuće
+      const izmenjeno: Record<number, string> = { 16: '2026-10-18T10:10:00', 17: '2026-10-18T10:20:00', 18: '2026-10-18T10:30:00' };
+      api.pretraga.mockImplementation((_f: unknown, s: { sort?: string }) => {
+        const ids = Object.keys(izmenjeno).map(Number);
+        ids.sort(s.sort === 'id,asc' ? (a, b) => a - b : (a, b) => izmenjeno[b].localeCompare(izmenjeno[a]) || b - a);
+        return of(strana(ids.map(id => stavka(id)), 0, 1));
+      });
+
+      store.ucitaj(FILTER, null);
+      expect(api.pretraga.mock.calls.map(c => (c[1] as { sort?: string }).sort)).toEqual(['id,asc']);
+      expect(store.ids()).toEqual([16, 17, 18]);
+      store.sledeca();
+      expect(store.napredak()).toBe('2 / 3');
+
+      // Uredi 17 (PUT pomera `izmenjeno`), pa nazad na pregled sa `od=17`
+      izmenjeno[17] = '2026-10-18T11:00:00';
+      store.ucitaj(FILTER, 17);
+      expect(store.ids()).toEqual([16, 17, 18]);
+      expect(store.napredak()).toBe('2 / 3');
+      expect(store.trenutna()?.id).toBe(17);
+      store.sledeca();
+      expect(store.trenutna()?.id).toBe(18);
+      expect(store.napredak()).toBe('3 / 3');
     });
 
     it('`grupa` sužava po putanji (i podgrupe), na klijentu', () => {

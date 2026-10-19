@@ -16,6 +16,11 @@ import { razlogBanke, TIHO, UPIS } from './greske';
 /** Veličina strane pretrage (najviše što server daje) i najviše strana po predmetu (1 000 varijanti). */
 const VELICINA_STRANE = 100;
 const MAX_STRANA = 10;
+/**
+ * Redosled pregleda: kako su nastale (Klod piše seriju redom, zad. 1, 2, 3...), i stalan dok se pregleda. Podrazumevani sort
+ * pretrage (`izmenjeno` opadajuće) bi izmenjenu varijantu (Uredi, pa nazad sa `od`) pomerio na prvo mesto i vratio preskočene posle nje.
+ */
+const SORT_PREGLEDA = 'id,asc';
 /** Oblik serije kao na serveru (`utility/Serija`); drugačija vrednost iz linka je "bez serije". */
 const SERIJA = /^[a-z0-9-]{3,60}$/;
 const IZVORI: readonly IzvorVarijante[] = ['RUCNO', 'CLAUDE'];
@@ -74,7 +79,7 @@ export function porukaOdbacivanja(info: PonistavanjeInfo): string {
 interface PregledState {
   /** Filter poslednjeg `ucitaj` (`null` pre prvog). */
   filter: PregledFilter | null;
-  /** Varijante za pregled, redom servera; odobrena ili obrisana izlazi iz liste. */
+  /** Varijante za pregled, redom nastanka (`id` rastuće, sort na serveru); odobrena ili obrisana izlazi iz liste. */
   ids: number[];
   /** Mesto prikazane u `ids`; `ids.length` = posle poslednje (kraj). */
   indeks: number;
@@ -92,9 +97,9 @@ interface PregledState {
 }
 
 /**
- * Pregled nacrta jedan po jedan (`/banka/pregled`): lista varijanti iz `GET banka/pretraga` po filteru (strane po 100 dok ih
- * ima, najviše 10 po predmetu; bez predmeta u filteru redom kroz sve predmete iz `ReferenceStore`; grupa se sužava na
- * klijentu po putanji), pa prikazana varijanta i, kad je kopija (`zamenjuje`), njen original. Posle odobravanja ili brisanja
+ * Pregled nacrta jedan po jedan (`/banka/pregled`): lista varijanti iz `GET banka/pretraga` po filteru (redom nastanka, strane
+ * po 100 dok ih ima, najviše 10 po predmetu; bez predmeta u filteru redom kroz sve predmete iz `ReferenceStore`; grupa se sužava
+ * na klijentu po putanji), pa prikazana varijanta i, kad je kopija (`zamenjuje`), njen original. Posle odobravanja ili brisanja
  * varijanta izlazi iz liste i prikazuje se sledeća (na istom mestu); `sledeca` posle poslednje daje `kraj`. Varijanta koje
  * u međuvremenu više nema (404) se preskače. Akcije idu jedna po jedna (`radi`), a odgovor akcije posle novog `ucitaj` se
  * zanemaruje. Greške učitavanja su u `greska`, greške akcija idu u `NotificationStore` (`razlogBanke`). Feature store:
@@ -151,9 +156,9 @@ export const PregledNacrtaStore = signalStore(
       );
     };
 
-    /** Sve strane pretrage jednog predmeta (najviše {@link MAX_STRANA}), redom. */
+    /** Sve strane pretrage jednog predmeta (najviše {@link MAX_STRANA}), po {@link SORT_PREGLEDA}. */
     const stranePredmeta = (f: BankaFilter, page = 0): Observable<BankaPretragaStavka[]> =>
-      store._api.pretraga(f, { page, size: VELICINA_STRANE }, TIHO).pipe(
+      store._api.pretraga(f, { page, size: VELICINA_STRANE, sort: SORT_PREGLEDA }, TIHO).pipe(
         switchMap(s => (s.content.length > 0 && page + 1 < Math.min(s.page.totalPages, MAX_STRANA)
           ? stranePredmeta(f, page + 1).pipe(map(dalje => [...s.content, ...dalje]))
           : of(s.content))),

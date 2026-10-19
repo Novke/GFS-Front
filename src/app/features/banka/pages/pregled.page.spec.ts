@@ -116,7 +116,7 @@ describe('PregledPage', () => {
   it('prvi nacrt: napredak, putanja, naziv, izvor, serija, SVG zadatka i rešenja, odgovori; kopija sa originalom pored', async () => {
     const e = await otvori('/banka/pregled?predmet=1&serija=uvoz-kol1-2024');
     expect(api.pretraga).toHaveBeenCalledWith(
-      { predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024' }, { page: 0, size: 100 }, { tiho: true });
+      { predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true });
     expect(napredak()).toBe('1 / 3');
     expect(naslov()).toBe('Kol. 1, zad. 16');
     expect([...e.querySelectorAll('[data-nacrt] [data-putanja] li')].map(li => li.textContent!.trim())).toEqual(['Konverzije brojeva', '8 → 2 (Klod)']);

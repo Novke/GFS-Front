@@ -75,6 +75,26 @@ const uXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').repla
 const duzina = (s: string | null | undefined) => (s ? [...s].length : 0);
 /** Opis teme za poređenje (kao server): bez razmaka na krajevima, nizovi razmaka kao jedan, bez obzira na velika slova. */
 const normalizujOpis = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+/** Polja sorta pretrage: `BankaPretragaService.SORT_POLJA` i `id` (uvek dozvoljen u `PageableUtil`). */
+const SORT_PRETRAGE: readonly string[] = ['izmenjeno', 'naziv', 'id'];
+
+/**
+ * Poredak pretrage kao `PageableUtil.proveri`: svaki `sort=polje[,asc|desc]` redom, bez njega `izmenjeno` opadajuće, a na kraj
+ * `id` opadajuće kad ga sort nema. Polje van dozvoljenih (ili sort drugog oblika) je `null` (server: 400).
+ */
+function poredakPretrage(sortovi: string[]): ((a: BankaVarijanta, b: BankaVarijanta) => number) | null {
+  const redovi = (sortovi.length > 0 ? sortovi : ['izmenjeno,desc']).map(s => /^(\w+)(?:,(asc|desc))?$/i.exec(s));
+  if (redovi.some(r => r === null || !SORT_PRETRAGE.includes(r[1]))) return null;
+  const kriterijumi = (redovi as RegExpExecArray[]).map(r => ({ polje: r[1] as 'izmenjeno' | 'naziv' | 'id', opada: r[2]?.toLowerCase() === 'desc' }));
+  if (!kriterijumi.some(k => k.polje === 'id')) kriterijumi.push({ polje: 'id', opada: true });
+  return (a, b) => {
+    for (const { polje, opada } of kriterijumi) {
+      const r = polje === 'id' ? a.id - b.id : String(a[polje] ?? '').localeCompare(String(b[polje] ?? ''), 'sr');
+      if (r !== 0) return opada ? -r : r;
+    }
+    return 0;
+  };
+}
 
 /** Najmanji SVG kao iz render servisa: širina 300, jedna linija natpisa. */
 export function probniSvg(natpis: string): string {
@@ -578,8 +598,8 @@ export class MockBanka {
   }
 
   /**
-   * Sve stavke pretrage (strana se seče u `mock-api.ts`); `izmenjeno` opadajuće, kao podrazumevani sort servera. `izvor` i
-   * `serija` sužavaju na Klodove ili ručne varijante i na jednu seriju.
+   * Sve stavke pretrage (strana se seče u `mock-api.ts`), redom po `sort` kao na serveru (bez njega `izmenjeno` opadajuće, pa
+   * `id` opadajuće; nepoznato polje sorta je 400). `izvor` i `serija` sužavaju na Klodove ili ručne varijante i na jednu seriju.
    */
   pretraga(q: URLSearchParams): Ishod {
     const predmetId = Number(q.get('predmetId'));
@@ -589,6 +609,8 @@ export class MockBanka {
     if (izvor !== null && izvor !== 'RUCNO' && izvor !== 'CLAUDE') return greska(400, 'Neispravan parametar: izvor.');
     const serija = q.get('serija');
     if (serija !== null && !SERIJA.test(serija)) return greska(400, PORUKA_SERIJE);
+    const poredak = poredakPretrage(q.getAll('sort'));
+    if (!poredak) return greska(400, 'Neispravan parametar: sort.');
     if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const namena = q.get('namena');
     const status = q.get('status');
@@ -599,7 +621,7 @@ export class MockBanka {
         return g?.predmetId === predmetId && (!namena || g.namena === namena) && (!status || v.status === status)
           && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija) && (upit === '' || naslov.includes(upit.toLowerCase()));
       })
-      .sort((a, b) => b.izmenjeno.localeCompare(a.izmenjeno) || b.id - a.id)
+      .sort(poredak)
       .map(v => {
         const g = this.grupa(v.grupaId) as BankaGrupa;
         return {

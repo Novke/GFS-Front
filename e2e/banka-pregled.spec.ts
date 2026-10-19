@@ -5,8 +5,9 @@ import { expect, test } from './fixture';
 
 /*
  * Pregled nacrta (`/banka/pregled`) nad mokom `mock-banka.ts` (fixture `banka.json`): serija uvoz-kol1-2024 u grupi "8 → 2 (Klod)"
- * su Klodovi nacrti 16 (kopija koja menja aktivnu ručnu 15 "17 u binarni"), 17 i 18; pretraga ide po `izmenjeno` opadajuće, pa
- * redom 16, 17, 18. Ručni nacrti predmeta 1 su 13 (greška u LaTeX-u, linija 3) i 11.
+ * su Klodovi nacrti 16 (kopija koja menja aktivnu ručnu 15 "17 u binarni"), 17 i 18, nastali tim redom; pregled traži redosled
+ * nastanka (`sort=id,asc`), pa redom 16, 17, 18, i taj redosled se ne menja kad izmena (PUT) pomeri `izmenjeno`. Ručni nacrti
+ * predmeta 1 su 11 i 13 (greška u LaTeX-u, linija 3).
  */
 
 const napredak = (page: Page) => page.locator('[data-napredak]');
@@ -19,8 +20,8 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await expect(napredak(page)).toHaveText('1 / 3');
     await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
     // link nema predmet: pretraga ide kroz sve predmete
-    expect(mock.zahteviZa('banka/pretraga', 'GET').map(z => [z.query.get('predmetId'), z.query.get('serija'), z.query.get('status')]))
-      .toEqual([['1', 'uvoz-kol1-2024', 'NACRT'], ['2', 'uvoz-kol1-2024', 'NACRT']]);
+    expect(mock.zahteviZa('banka/pretraga', 'GET').map(z => [z.query.get('predmetId'), z.query.get('serija'), z.query.get('status'), z.query.get('sort')]))
+      .toEqual([['1', 'uvoz-kol1-2024', 'NACRT', 'id,asc'], ['2', 'uvoz-kol1-2024', 'NACRT', 'id,asc']]);
 
     const nacrt = page.locator('[data-nacrt]');
     await expect(nacrt.getByRole('img', { name: 'Zadatak: Kol. 1, 2024/25, zad. 2' })).toBeVisible();
@@ -64,6 +65,34 @@ test.describe('banka zadataka: pregled nacrta', () => {
     expect(mock.podaci.bankaVarijante.some(v => v.id === 18)).toBe(false);
   });
 
+  test('Uredi usred serije: povratak na isto mesto i dalje redom nastanka (izmena ne pomera varijantu na početak)', async ({ page, mock }) => {
+    await page.goto('banka/pregled?serija=uvoz-kol1-2024');
+    await expect(napredak(page)).toHaveText('1 / 3');
+    await page.keyboard.press('ArrowRight');
+    await expect(napredak(page)).toHaveText('2 / 3');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 3');
+
+    await page.keyboard.press('u');
+    await expect(page).toHaveURL(/banka\/varijante\/17\?povratak=%2Fbanka%2Fpregled%3Fserija%3Duvoz-kol1-2024%26od%3D17$/);
+    await page.getByLabel('Naziv (opciono)').fill('Kol. 1, 2024/25, zad. 3 (heksadekadni)');
+    await page.getByRole('button', { name: 'Sačuvaj kao nacrt' }).click();
+    await expect.poll(() => mock.zahteviZa('banka/varijante/17', 'PUT').length).toBe(1);
+    await expect(page).toHaveURL(/banka\/pregled\?serija=uvoz-kol1-2024&od=17$/);
+    // PUT je pomerio `izmenjeno` iza svih u seriji (podrazumevani sort pretrage bi 17 stavio prvu, a preskočenu 16 posle nje)
+    const izmenjeno = (id: number) => mock.podaci.bankaVarijante.find(v => v.id === id)!.izmenjeno;
+    expect(izmenjeno(17) > izmenjeno(18)).toBe(true);
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 3 (heksadekadni)');
+    await expect(napredak(page)).toHaveText('2 / 3');
+
+    await page.keyboard.press('ArrowRight');
+    await expect(napredak(page)).toHaveText('3 / 3');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 4');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(napredak(page)).toHaveText('1 / 3');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
+  });
+
   test('tasteri: → preskače, Delete briše Klodov nacrt bez pitanja, posle poslednjeg "Nema više nacrta.", ← vraća', async ({ page, mock }) => {
     await page.goto('banka/pregled?predmet=1&serija=uvoz-kol1-2024');
     await expect(napredak(page)).toHaveText('1 / 3');
@@ -91,6 +120,9 @@ test.describe('banka zadataka: pregled nacrta', () => {
   test('ručni nacrt: Delete pita, a tasteri dok je dijalog otvoren ne rade ništa; Odustani ostavlja varijantu', async ({ page, mock }) => {
     await page.goto('banka/pregled?predmet=1&izvor=RUCNO');
     await expect(napredak(page)).toHaveText('1 / 2');
+    await expect(naziv(page)).toHaveText('1011 u dekadni');
+    await page.keyboard.press('ArrowRight');
+    await expect(napredak(page)).toHaveText('2 / 2');
     await expect(naziv(page)).toHaveText('100111 u dekadni');
     await expect(page.locator('[data-nacrt]')).toContainText('linija 3: Undefined control sequence \\foo');
     await expect(page.getByRole('button', { name: 'Odobri' })).toHaveAttribute('aria-disabled', 'true');
@@ -107,6 +139,6 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     expect(mock.zahteviZa('banka/varijante/13', 'DELETE')).toHaveLength(0);
     await expect(naziv(page)).toHaveText('100111 u dekadni');
-    await expect(napredak(page)).toHaveText('1 / 2');
+    await expect(napredak(page)).toHaveText('2 / 2');
   });
 });
