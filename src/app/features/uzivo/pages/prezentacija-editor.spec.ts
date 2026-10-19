@@ -1127,7 +1127,7 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     expect(isprazni.mock.invocationCallOrder[0]).toBeLessThan(izmeni.mock.invocationCallOrder[0]);
     expect(izmeni.mock.calls[0]).toEqual([11, {
       tip: 'INFO', naslov: 'Uvod', sadrzaj: '- prvo\n- drugo', slikaId: null, beleske: 'Moje beleške', postepeno: true,
-      pitanje: null, platno: null, prelaz: null,
+      pitanje: null, platno: null, prelaz: null, zadatak: null,
     }, null]);
     expect(store.izabrani()!.tip).toBe('INFO');
     sacuvajSve();

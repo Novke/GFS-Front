@@ -1,8 +1,8 @@
 import { platno } from './platno-podaci.testing';
-import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from './izvodjenje-podaci.testing';
+import { infoSlajd, naPitanju, naZadatku, pitanjeSlajd, platnoSlajd, stanje, varijantaRunde } from './izvodjenje-podaci.testing';
 import {
-  datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, ispravanIndeks, mozePregled, odgovorili, opisVeze,
-  naslovSledeceg, oznakaDalje, oznakaPolozaja, oznakaPolozajaKratko, oznakaTajmera, sledeciKlik, SledeciKlik,
+  datumKratko, dozvoljeneKomande, imaBrojeve, imaTacanOdgovor, imaTacanOdgovorZadatka, ispravanIndeks, mozePregled, odgovorili,
+  opisVeze, naslovSledeceg, oznakaDalje, oznakaPolozaja, oznakaPolozajaKratko, oznakaTajmera, sledeciKlik, SledeciKlik,
 } from './izvodjenje-pravila';
 
 describe('dozvoljeneKomande', () => {
@@ -75,6 +75,83 @@ describe('dozvoljeneKomande', () => {
   });
 });
 
+describe('dozvoljeneKomande na Zadatak slajdu', () => {
+  it('CEKA: otvori i broj različitih da; rešenje, tačan, ponovi, rezultati i tajmer ne', () => {
+    const d = dozvoljeneKomande(naZadatku('CEKA'));
+    expect(d.has('OTVORI_ZATVORI')).toBe(true);
+    expect(d.has('BROJ_VARIJANTI')).toBe(true);
+    expect(d.has('RESENJE')).toBe(false);
+    expect(d.has('TACAN')).toBe(false);
+    expect(d.has('PONOVI')).toBe(false);
+    expect(d.has('REZULTATI')).toBe(false);
+    expect(d.has('TAJMER')).toBe(false);
+  });
+
+  it('OTVORENO: zatvori, ponovi, rezultati i tajmer kao pitanje; broj različitih, rešenje i tačan ne', () => {
+    let d = dozvoljeneKomande(naZadatku('OTVORENO'));
+    expect(d.has('OTVORI_ZATVORI')).toBe(true);
+    expect(d.has('PONOVI')).toBe(true);
+    expect(d.has('REZULTATI')).toBe(true);
+    expect(d.has('TAJMER')).toBe(true);
+    expect(d.has('TAJMER_PLUS')).toBe(false);
+    expect(d.has('BROJ_VARIJANTI')).toBe(false);
+    expect(d.has('RESENJE')).toBe(false);
+    expect(d.has('TACAN')).toBe(false);
+    d = dozvoljeneKomande(naZadatku('OTVORENO', { stanje: { runda: { id: 9, redniBroj: 1, rokMs: 5, preostaloMs: null, tajmerRadi: true } } }));
+    expect(d.has('TAJMER_PLUS')).toBe(true);
+    expect(d.has('TAJMER_MINUS')).toBe(true);
+  });
+
+  it('ZATVORENO sa rešenjem: rešenje i tačan da; bez ijednog rešenja rešenje ne', () => {
+    let d = dozvoljeneKomande(naZadatku('ZATVORENO'));
+    expect(d.has('RESENJE')).toBe(true);
+    expect(d.has('TACAN')).toBe(true);
+    expect(d.has('PONOVI')).toBe(true);
+    expect(d.has('REZULTATI')).toBe(true);
+    expect(d.has('BROJ_VARIJANTI')).toBe(false);
+    expect(d.has('TAJMER')).toBe(false);
+    d = dozvoljeneKomande(naZadatku('ZATVORENO', { varijante: [varijantaRunde(11, false), varijantaRunde(12, false)] }));
+    expect(d.has('RESENJE')).toBe(false);
+    // bar jedna varijanta sa rešenjem je dovoljna (server: "Nijedna varijanta nema rešenje." tek kad nema nijedne)
+    d = dozvoljeneKomande(naZadatku('ZATVORENO', { varijante: [varijantaRunde(11, false), varijantaRunde(12)] }));
+    expect(d.has('RESENJE')).toBe(true);
+  });
+
+  it('rad na papiru (šema bez polja): tačan ne, rešenje da', () => {
+    const d = dozvoljeneKomande(naZadatku('ZATVORENO', { polja: [] }));
+    expect(d.has('TACAN')).toBe(false);
+    expect(d.has('RESENJE')).toBe(true);
+  });
+
+  it('uključeno rešenje i prikazan tačan mogu uvek da se isključe', () => {
+    const d = dozvoljeneKomande(naZadatku('CEKA', { zadatak: { resenjePrikazano: true }, stanje: { tacanPrikazan: true } }));
+    expect(d.has('RESENJE')).toBe(true);
+    expect(d.has('TACAN')).toBe(true);
+    expect(dozvoljeneKomande(naZadatku('ZATVORENO', { polja: [], stanje: { tacanPrikazan: true } })).has('TACAN')).toBe(true);
+  });
+
+  it('pitanje i INFO nemaju rešenje ni broj različitih', () => {
+    for (const s of [naPitanju('CEKA'), naPitanju('ZATVORENO'), stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() })]) {
+      expect(dozvoljeneKomande(s).has('RESENJE')).toBe(false);
+      expect(dozvoljeneKomande(s).has('BROJ_VARIJANTI')).toBe(false);
+    }
+  });
+
+  it('Zadatak slajd se ne računa dok je prikaz prijava', () => {
+    const naPrijavi = naZadatku('CEKA', { stanje: { prikaz: 'PRIJAVA', indeks: -1 } });
+    expect(dozvoljeneKomande(naPrijavi).has('OTVORI_ZATVORI')).toBe(false);
+    expect(dozvoljeneKomande(naPrijavi).has('BROJ_VARIJANTI')).toBe(false);
+  });
+
+  it('imaTacanOdgovorZadatka: bar jedna izvučena varijanta ima polje (kao ZadatakSnimak.imaTacanOdgovor)', () => {
+    expect(imaTacanOdgovorZadatka(naZadatku('ZATVORENO').zadatak)).toBe(true);
+    expect(imaTacanOdgovorZadatka(naZadatku('ZATVORENO', { polja: [] }).zadatak)).toBe(false);
+    expect(imaTacanOdgovorZadatka(naZadatku('CEKA').zadatak)).toBe(false);
+    expect(imaTacanOdgovorZadatka(null)).toBe(false);
+    expect(imaTacanOdgovorZadatka(undefined)).toBe(false);
+  });
+});
+
 describe('imaTacanOdgovor i ispravanIndeks', () => {
   it('tipovi bez tačnog', () => {
     expect(imaTacanOdgovor(pitanjeSlajd('TACNO_NETACNO').pitanje)).toBe(true);
@@ -135,6 +212,13 @@ describe('oznake', () => {
     expect(oznakaDalje(naPitanju('ZATVORENO'))).toBe('Sledeći slajd');
     expect(oznakaDalje(naPitanju('ZATVORENO', { indeks: 2 }))).toBe('Na kraj');
     expect(oznakaDalje(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), korak: 0, brojStavki: 2 }))).toBe('Sledeća stavka');
+  });
+
+  it('dalje na Zadatak slajdu: otvori, zatvori, pa sledeći slajd', () => {
+    expect(oznakaDalje(naZadatku('CEKA'))).toBe('Otvori zadatak');
+    expect(oznakaDalje(naZadatku('OTVORENO'))).toBe('Zatvori zadatak');
+    expect(oznakaDalje(naZadatku('ZATVORENO'))).toBe('Sledeći slajd');
+    expect(oznakaDalje(naZadatku('ZATVORENO', { stanje: { indeks: 2 } }))).toBe('Na kraj');
   });
 
   it('dalje na PLATNO slajdu: koraci, pa sledeći slajd', () => {
@@ -230,6 +314,13 @@ describe('sledeciKlik', () => {
     expect(sledeciKlik(naPitanju('CEKA', { sledeciSlajd: sledeci }))).toEqual({ vrsta: 'PITANJE', radnja: 'OTVARA', potom: sledeci, indeksPotom: 2 });
     expect(sledeciKlik(naPitanju('OTVORENO', { sledeciSlajd: null }))).toEqual({ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 2 });
     expect(sledeciKlik(naPitanju('ZATVORENO', { sledeciSlajd: sledeci }))).toEqual({ vrsta: 'SLAJD', slajd: sledeci, indeks: 2 });
+  });
+  it('Zadatak kao pitanje: CEKA otvara, OTVORENO zatvara, ZATVORENO -> sledeći slajd', () => {
+    expect(sledeciKlik(naZadatku('CEKA', { stanje: { sledeciSlajd: sledeci } })))
+      .toEqual({ vrsta: 'PITANJE', radnja: 'OTVARA', potom: sledeci, indeksPotom: 2 });
+    expect(sledeciKlik(naZadatku('OTVORENO', { stanje: { sledeciSlajd: null } })))
+      .toEqual({ vrsta: 'PITANJE', radnja: 'ZATVARA', potom: null, indeksPotom: 2 });
+    expect(sledeciKlik(naZadatku('ZATVORENO', { stanje: { sledeciSlajd: sledeci } }))).toEqual({ vrsta: 'SLAJD', slajd: sledeci, indeks: 2 });
   });
   it('poslednji slajd bez koraka -> KRAJ; prikaz KRAJ -> NISTA', () => {
     expect(sledeciKlik(naPitanju('ZATVORENO', { indeks: 2, sledeciSlajd: null }))).toEqual({ vrsta: 'KRAJ' });

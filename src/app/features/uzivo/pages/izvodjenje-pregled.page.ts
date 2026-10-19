@@ -33,7 +33,9 @@ export interface OznakaRunde {
  * (`ukupno` = 1). Slajd je isti po `slajdId`, a kad slajda više nema, po `pitanjeId` iz snimka. Niz je poravnat sa ulazom.
  */
 export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] {
-  const kljuc = (p: RezultatPitanja) => (p.slajdId ?? p.pitanje.slajdId) ?? `pitanje-${p.pitanje.pitanjeId}`;
+  // Zadatak runda nema pitanje u snimku: broji se sama za sebe
+  const kljuc = (p: RezultatPitanja) =>
+    (p.slajdId ?? p.pitanje?.slajdId) ?? (p.pitanje ? `pitanje-${p.pitanje.pitanjeId}` : `runda-${p.rundaId}`);
   const ukupno = new Map<number | string, number>();
   for (const p of pitanja) {
     ukupno.set(kljuc(p), (ukupno.get(kljuc(p)) ?? 0) + 1);
@@ -103,12 +105,15 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
                 }
               </header>
               <div class="uz-pr-sadrzaj">
-                <app-tekst-formule class="uz-md uz-pr-tekst" [tekst]="k.p.pitanje.tekst" [markdown]="true" />
-                @if (k.p.pitanje.slikaId; as slika) {
-                  <img class="uz-pr-slika" [src]="url(slika)" alt="Slika uz pitanje">
+                @if (k.p.pitanje; as pitanje) {
+                  <app-tekst-formule class="uz-md uz-pr-tekst" [tekst]="pitanje.tekst" [markdown]="true" />
+                  @if (pitanje.slikaId; as slika) {
+                    <img class="uz-pr-slika" [src]="url(slika)" alt="Slika uz pitanje">
+                  }
+                  @if (k.p.rezultat; as rezultat) {
+                    <app-rezultat-prikaz [rezultat]="rezultat" [tekstPrikaz]="pitanje.tekstPrikaz" [jedinica]="pitanje.jedinica" />
+                  }
                 }
-                <app-rezultat-prikaz [rezultat]="k.p.rezultat" [tekstPrikaz]="k.p.pitanje.tekstPrikaz"
-                                     [jedinica]="k.p.pitanje.jedinica" />
               </div>
               <p class="uz-pr-podnozje">
                 {{ tekst(k.p) }}
