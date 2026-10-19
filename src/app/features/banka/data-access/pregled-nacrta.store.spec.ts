@@ -8,7 +8,7 @@ import { NotificationStore, Poruka } from '../../../core/state/notification.stor
 import { Strana } from '../../../shared/models/strana';
 import { BankaApi } from './banka.api';
 import { BankaPretragaStavka, PonistavanjeInfo, VarijantaDetails } from './banka.models';
-import { filterPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja } from './pregled-nacrta.store';
+import { filterPregleda, pocetakPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja } from './pregled-nacrta.store';
 
 function stavka(id: number, izmena: Partial<BankaPretragaStavka> = {}): BankaPretragaStavka {
   return {
@@ -64,6 +64,20 @@ describe('porukaOdbacivanja', () => {
   });
 });
 
+describe('pocetakPregleda', () => {
+  it('bez `od` prva; `od` u listi je njeno mesto', () => {
+    expect(pocetakPregleda([16, 17, 18], null)).toBe(0);
+    expect(pocetakPregleda([16, 17, 18], 17)).toBe(1);
+  });
+
+  it('`od` van liste: prva nastala posle nje, a kad je nema, kraj (`ids.length`)', () => {
+    expect(pocetakPregleda([16, 18], 17)).toBe(1);
+    expect(pocetakPregleda([16, 18], 10)).toBe(0);
+    expect(pocetakPregleda([16, 17], 18)).toBe(2);
+    expect(pocetakPregleda([], 17)).toBe(0);
+  });
+});
+
 describe('PregledNacrtaStore', () => {
   let store: PregledNacrtaStore;
   let poruke: Poruka[];
@@ -103,10 +117,10 @@ describe('PregledNacrtaStore', () => {
   });
 
   describe('ucitaj', () => {
-    it('spaja dve strane pretrage (po 100) redom servera i prikazuje prvu', () => {
+    it('spaja dve strane pretrage (po 100) redom nastanka i prikazuje prvu', () => {
       const prva = Array.from({ length: 100 }, (_, i) => stavka(1000 + i));
       api.pretraga.mockImplementation((_f: unknown, s: { page: number }) =>
-        of(s.page === 0 ? strana(prva, 0, 2, 102) : strana([stavka(7), stavka(5)], 1, 2, 102)));
+        of(s.page === 0 ? strana(prva, 0, 2, 102) : strana([stavka(1100), stavka(1101)], 1, 2, 102)));
 
       store.ucitaj({ ...FILTER, izvor: 'CLAUDE' }, null);
 
@@ -115,7 +129,7 @@ describe('PregledNacrtaStore', () => {
         [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 1, size: 100, sort: 'id,asc' }, { tiho: true }],
       ]);
       expect(store.ids()).toHaveLength(102);
-      expect(store.ids().slice(98)).toEqual([1098, 1099, 7, 5]);
+      expect(store.ids().slice(98)).toEqual([1098, 1099, 1100, 1101]);
       expect(store.indeks()).toBe(0);
       expect(api.varijanta).toHaveBeenCalledWith(1000, { tiho: true });
       expect(store.trenutna()?.id).toBe(1000);
@@ -131,15 +145,45 @@ describe('PregledNacrtaStore', () => {
       expect(store.ids()).toEqual([100, 101, 102, 103, 104, 105, 106, 107, 108, 109]);
     });
 
-    it('počinje od `od` kad je u listi, inače od prve', () => {
+    it('počinje od `od` kad je u listi; `od` pre svih je prva, a posle svih kraj (Nazad vraća poslednju)', () => {
       store.ucitaj(FILTER, 18);
       expect(store.indeks()).toBe(2);
       expect(store.trenutna()?.id).toBe(18);
       expect(store.napredak()).toBe('3 / 3');
 
-      store.ucitaj(FILTER, 99);
+      store.ucitaj(FILTER, 10);
       expect(store.indeks()).toBe(0);
       expect(store.trenutna()?.id).toBe(16);
+
+      store.ucitaj(FILTER, 99);
+      expect(store.kraj()).toBe(true);
+      expect(store.trenutna()).toBeNull();
+      store.prethodna();
+      expect(store.trenutna()?.id).toBe(18);
+    });
+
+    it('`od` odobrena u editoru (više nije u listi nacrta): sledeća po id-ju, a preskočena pre nje ostaje iza', () => {
+      store.ucitaj(FILTER, null);
+      store.sledeca();
+      expect(store.trenutna()?.id).toBe(17);
+      expect(store.napredak()).toBe('2 / 3');
+
+      // "Sačuvaj i odobri" u editoru: 17 je AKTIVNA, pa je pretraga nacrta više ne vraća; povratak sa `od=17`
+      lista(16, 18);
+      store.ucitaj(FILTER, 17);
+      expect(store.ids()).toEqual([16, 18]);
+      expect(store.trenutna()?.id).toBe(18);
+      expect(store.napredak()).toBe('2 / 2');
+      store.prethodna();
+      expect(store.trenutna()?.id).toBe(16);
+      expect(store.napredak()).toBe('1 / 2');
+    });
+
+    it('`od` poslednja, odobrena u editoru: kraj (ne prva preskočena)', () => {
+      lista(16, 17);
+      store.ucitaj(FILTER, 18);
+      expect(store.kraj()).toBe(true);
+      expect(api.varijanta).not.toHaveBeenCalled();
     });
 
     it('redosled nastanka (`sort=id,asc` na svakoj strani): izmenjena varijanta ostaje na svom mestu posle povratka sa `od`', () => {
@@ -175,7 +219,7 @@ describe('PregledNacrtaStore', () => {
       store.ucitaj({ ...FILTER, grupa: 4 }, null);
       expect(store.ids()).toEqual([16, 18]);
       store.ucitaj({ ...FILTER, grupa: 1 }, null);
-      expect(store.ids()).toEqual([16, 21, 18]);
+      expect(store.ids()).toEqual([16, 18, 21]);
     });
 
     it('kopija (`zamenjuje`) učitava i original; original koji ne postoji je null, a kopija se ipak prikazuje', () => {
@@ -193,13 +237,14 @@ describe('PregledNacrtaStore', () => {
       expect(poruke).toEqual([]);
     });
 
-    it('bez predmeta: pretraga po svim predmetima, redom', () => {
-      api.pretraga.mockImplementation((f: { predmetId: number }) => of(strana(f.predmetId === 1 ? [stavka(16)] : [stavka(40), stavka(41)], 0, 1)));
+    it('bez predmeta: pretraga po svim predmetima, spojeno redom nastanka (id)', () => {
+      api.pretraga.mockImplementation((f: { predmetId: number }) =>
+        of(strana(f.predmetId === 1 ? [stavka(16), stavka(45)] : [stavka(40), stavka(41)], 0, 1)));
       store.ucitaj({ ...FILTER, predmet: null }, null);
       TestBed.tick();
       expect(referenca.predmeti).toHaveBeenCalled();
       expect(api.pretraga.mock.calls.map(c => (c[0] as { predmetId: number }).predmetId)).toEqual([1, 2]);
-      expect(store.ids()).toEqual([16, 40, 41]);
+      expect(store.ids()).toEqual([16, 40, 41, 45]);
       expect(store.trenutna()?.id).toBe(16);
     });
 

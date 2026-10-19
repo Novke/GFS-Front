@@ -93,6 +93,30 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
   });
 
+  test('Uredi pa "Sačuvaj i odobri": povratak na sledeći nacrt, a preskočeni ostaje pre njega', async ({ page, mock }) => {
+    await page.goto('banka/pregled?serija=uvoz-kol1-2024');
+    await expect(napredak(page)).toHaveText('1 / 3');
+    await page.keyboard.press('ArrowRight');
+    await expect(napredak(page)).toHaveText('2 / 3');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 3');
+
+    await page.keyboard.press('u');
+    await expect(page).toHaveURL(/banka\/varijante\/17\?povratak=%2Fbanka%2Fpregled%3Fserija%3Duvoz-kol1-2024%26od%3D17$/);
+    await page.getByLabel('Naziv (opciono)').fill('Kol. 1, 2024/25, zad. 3 (heksadekadni)');
+    await page.getByRole('button', { name: 'Sačuvaj i odobri' }).click();
+    await expect.poll(() => mock.zahteviZa('banka/varijante/17/odobri', 'POST').length).toBe(1);
+    expect(mock.zahteviZa('banka/varijante/17', 'PUT')).toHaveLength(1);
+    await expect(page).toHaveURL(/banka\/pregled\?serija=uvoz-kol1-2024&od=17$/);
+    expect(mock.podaci.bankaVarijante.find(v => v.id === 17)!.status).toBe('AKTIVNA');
+    // 17 više nije nacrt (lista nacrta je 16, 18): na njenom mestu je sledeća po nastanku, kao posle O na pregledu
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 4');
+    await expect(napredak(page)).toHaveText('2 / 2');
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(napredak(page)).toHaveText('1 / 2');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
+  });
+
   test('tasteri: → preskače, Delete briše Klodov nacrt bez pitanja, posle poslednjeg "Nema više nacrta.", ← vraća', async ({ page, mock }) => {
     await page.goto('banka/pregled?predmet=1&serija=uvoz-kol1-2024');
     await expect(napredak(page)).toHaveText('1 / 3');

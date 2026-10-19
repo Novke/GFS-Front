@@ -29,6 +29,23 @@ const STATUSI: readonly StatusVarijante[] = ['NACRT', 'AKTIVNA', 'ARHIVIRANA'];
 /** Predmeti (za pregled bez predmeta u filteru) nisu učitani: poruka `ReferenceStore`-a ide u `greska` pregleda. */
 class GreskaPredmeta extends Error {}
 
+/**
+ * Mesto od kog pregled počinje u `ids` (rastući id-jevi): `od` kad je u listi; kad nije (u editoru je "Sačuvaj i odobri"
+ * izbacio iz liste nacrta, ili je u međuvremenu obrisana), prva nastala posle nje, kao posle odobravanja na pregledu, pa
+ * preskočene pre nje ostaju iza; kad posle nje nema nijedne, kraj (`ids.length`, Nazad vraća poslednju). Bez `od` prva.
+ */
+export function pocetakPregleda(ids: readonly number[], od: number | null): number {
+  if (od === null) {
+    return 0;
+  }
+  const i = ids.indexOf(od);
+  if (i >= 0) {
+    return i;
+  }
+  const sledeca = ids.findIndex(id => id > od);
+  return sledeca >= 0 ? sledeca : ids.length;
+}
+
 /** Šta pregled prikazuje (`/banka/pregled?predmet&izvor&serija&grupa&status`); `null` = bez tog filtera. */
 export interface PregledFilter {
   /** `null` = svi predmeti (link iz MCP-a nosi samo seriju). */
@@ -79,7 +96,10 @@ export function porukaOdbacivanja(info: PonistavanjeInfo): string {
 interface PregledState {
   /** Filter poslednjeg `ucitaj` (`null` pre prvog). */
   filter: PregledFilter | null;
-  /** Varijante za pregled, redom nastanka (`id` rastuće, sort na serveru); odobrena ili obrisana izlazi iz liste. */
+  /**
+   * Varijante za pregled, redom nastanka (`id` rastuće: sort na serveru, a strane više predmeta se spajaju po id-ju);
+   * odobrena ili obrisana izlazi iz liste.
+   */
   ids: number[];
   /** Mesto prikazane u `ids`; `ids.length` = posle poslednje (kraj). */
   indeks: number;
@@ -98,8 +118,9 @@ interface PregledState {
 
 /**
  * Pregled nacrta jedan po jedan (`/banka/pregled`): lista varijanti iz `GET banka/pretraga` po filteru (redom nastanka, strane
- * po 100 dok ih ima, najviše 10 po predmetu; bez predmeta u filteru redom kroz sve predmete iz `ReferenceStore`; grupa se sužava
- * na klijentu po putanji), pa prikazana varijanta i, kad je kopija (`zamenjuje`), njen original. Posle odobravanja ili brisanja
+ * po 100 dok ih ima, najviše 10 po predmetu; bez predmeta u filteru kroz sve predmete iz `ReferenceStore`, spojeno po id-ju;
+ * grupa se sužava na klijentu po putanji), pa prikazana varijanta i, kad je kopija (`zamenjuje`), njen original. Početak je
+ * `od` ({@link pocetakPregleda}: ili prva posle nje kad je izašla iz liste). Posle odobravanja ili brisanja
  * varijanta izlazi iz liste i prikazuje se sledeća (na istom mestu); `sledeca` posle poslednje daje `kraj`. Varijanta koje
  * u međuvremenu više nema (404) se preskače. Akcije idu jedna po jedna (`radi`), a odgovor akcije posle novog `ucitaj` se
  * zanemaruje. Greške učitavanja su u `greska`, greške akcija idu u `NotificationStore` (`razlogBanke`). Feature store:
@@ -169,7 +190,10 @@ export const PregledNacrtaStore = signalStore(
         switchMap(ids => (ids.length === 0 ? of([]) : forkJoin(ids.map(predmetId => stranePredmeta({
           predmetId, namena: null, q: null, status: f.status, izvor: f.izvor, serija: f.serija,
         }))))),
-        map(po => po.flat().filter(s => f.grupa === null || s.putanja.some(p => p.id === f.grupa))),
+        // redom nastanka i preko predmeta (svaki predmet stiže sortiran po `id`): na tome stoji `pocetakPregleda`
+        map(po => po.flat()
+          .filter(s => f.grupa === null || s.putanja.some(p => p.id === f.grupa))
+          .sort((a, b) => a.varijantaId - b.varijantaId)),
       );
 
     /** Prikazana varijanta (`ids[indeks]`) i njen original; 404 izbacuje id iz liste i prelazi na sledeću. */
@@ -207,7 +231,7 @@ export const PregledNacrtaStore = signalStore(
           tap(lista => {
             const ids = lista.map(s => s.varijantaId);
             const nacrtiKloda = lista.filter(s => s.izvor === 'CLAUDE' && s.status === 'NACRT').map(s => s.varijantaId);
-            patchState(store, { ids, indeks: Math.max(0, od === null ? 0 : ids.indexOf(od)), _nacrtiKloda: nacrtiKloda, ucitava: false });
+            patchState(store, { ids, indeks: pocetakPregleda(ids, od), _nacrtiKloda: nacrtiKloda, ucitava: false });
             prikazi(true);
           }),
           catchError((e: unknown) => {
@@ -266,7 +290,7 @@ export const PregledNacrtaStore = signalStore(
     );
 
     return {
-      /** Lista za filter iznova; počinje od varijante `od` kad je u listi, inače od prve. */
+      /** Lista za filter iznova; počinje od varijante `od` ({@link pocetakPregleda}), bez nje od prve. */
       ucitaj,
       /** Posle greške: lista iznova, od prikazane (ili one na kojoj je stalo). */
       ucitajPonovo(): void {

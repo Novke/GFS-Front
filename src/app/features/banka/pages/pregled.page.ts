@@ -52,11 +52,11 @@ function opisGreske(v: VarijantaDetails): string {
  * MCP-a nosi samo seriju): na ekranu je jedan nacrt (putanja grupe, naziv, status, izvor, serija, SVG zadatka i rešenja,
  * tačni odgovori po polju), a kad je kopija Klodove izmene, i original pored, uz "Zamenjuje: …". Radnje i prečice: Odobri
  * (`O`), Obriši (`Delete`; potvrda za sve osim Klodovog nacrta koji nikad nije odobren), Uredi (`U`: editor varijante sa
- * `?povratak` na ovaj pregled sa `od=<id>`, pa se posle čuvanja vraća na isti nacrt), Preskoči (`→`) i Nazad (`←`); posle
- * odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je fokus u polju za unos, dok je otvoren dijalog i
- * uz Ctrl/Alt/Meta. Uz seriju u filteru, pri vrhu "Odbaci celu seriju" (potvrda sa brojem Klodovih nacrta). Na kraju liste
- * "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija pod
- * `prefers-reduced-motion`.
+ * `?povratak` na ovaj pregled sa `od=<id>`, pa se posle čuvanja vraća na isto mesto: isti nacrt, a posle "Sačuvaj i odobri"
+ * sledeći), Preskoči (`→`) i Nazad (`←`); posle odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je
+ * fokus u polju za unos, dok je otvoren dijalog i uz Ctrl/Alt/Meta. Uz seriju u filteru, pri vrhu "Odbaci celu seriju"
+ * (potvrda sa brojem Klodovih nacrta). Na kraju liste "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde
+ * (feature store stranice); bez animacija pod `prefers-reduced-motion`.
  */
 @Component({
   selector: 'app-pregled-page',
@@ -233,7 +233,7 @@ export class PregledPage {
   readonly serija = input<string>();
   readonly grupa = input<string>();
   readonly status = input<string>();
-  /** `?od=`: varijanta od koje pregled počinje (povratak iz editora); menja samo početak, ne listu. */
+  /** `?od=`: varijanta od koje pregled počinje (povratak iz editora, `pocetakPregleda`); menja samo početak, ne listu. */
   readonly od = input<string>();
 
   protected readonly ime = imeVarijante;
