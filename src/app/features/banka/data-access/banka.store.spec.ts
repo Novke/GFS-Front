@@ -511,6 +511,7 @@ describe('BankaStore', () => {
       store.izaberi(3);
       api.stablo.mockClear();
       api.grupa.mockClear();
+      api.iskljuceneTeme.mockClear();
       api.ukljuciTemu.mockImplementation(() => of(undefined));
       api.iskljuceneTeme.mockImplementation(() => of([TEME[1]]));
 
@@ -519,10 +520,25 @@ describe('BankaStore', () => {
       expect(api.ukljuciTemu).toHaveBeenCalledExactlyOnceWith(5, { tiho: true });
       expect(api.stablo).toHaveBeenCalledExactlyOnceWith(7, 'PREDAVANJE', { tiho: true });
       expect(api.grupa).toHaveBeenCalledWith(3, { tiho: true });
-      expect(api.iskljuceneTeme).toHaveBeenLastCalledWith(7, { tiho: true });
+      expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
       expect(store.teme()).toEqual([TEME[1]]);
       expect(store.izabranaGrupaId()).toBe(3);
       expect(api.ukljuciTemu.mock.invocationCallOrder[0]).toBeLessThan(api.stablo.mock.invocationCallOrder[0]);
+      expect(api.ukljuciTemu.mock.invocationCallOrder[0]).toBeLessThan(api.iskljuceneTeme.mock.invocationCallOrder[0]);
+    });
+
+    it('ukljuciTemu učitava teme i kad je lista prazna (npr. posle greške tema, a stablo pokazuje "Isključeno")', () => {
+      api.iskljuceneTeme.mockImplementationOnce(() => greskaServera(500, 'x'));
+      store.ucitaj(7, 'PREDAVANJE');
+      expect(store.teme()).toEqual([]);
+      api.iskljuceneTeme.mockClear();
+      api.ukljuciTemu.mockImplementation(() => of(undefined));
+      api.iskljuceneTeme.mockImplementation(() => of([TEME[1]]));
+
+      store.ukljuciTemu(5);
+
+      expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+      expect(store.teme()).toEqual([TEME[1]]);
     });
 
     it('ukljuciTemu: greška (404) ide u NotificationStore, ništa se ne učitava ponovo', () => {
@@ -541,8 +557,11 @@ describe('BankaStore', () => {
     it('izmena u predmetu sa serijama osvežava i serije (brojači nacrta i odobrenih); bez serija ne', () => {
       store.ucitaj(7, 'PREDAVANJE');
       api.serije.mockClear();
+      api.iskljuceneTeme.mockClear();
       store.odobri(11);
       expect(api.serije).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+      // izmena varijante ne menja isključene teme
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
 
       api.serije.mockImplementation(() => of([]));
       store.ucitajSerije();
@@ -694,6 +713,7 @@ describe('BankaStore', () => {
       api.stablo.mockClear();
       api.grupa.mockClear();
       api.varijante.mockClear();
+      api.iskljuceneTeme.mockClear();
     });
 
     it('kreirajGrupu šalje komandu, ponovo učitava stablo i bira novu grupu', () => {
@@ -814,6 +834,57 @@ describe('BankaStore', () => {
       expect(poruke).toEqual([{ tip: 'greska', tekst: 'Grupa ima podgrupe.', akcija: undefined }]);
       expect(store.izabranaGrupaId()).toBe(2);
       expect(api.stablo).not.toHaveBeenCalled();
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
+    });
+
+    // TEME[0] je isključena tema nad grupom 3 ("Konverzije brojeva" > "16 → 2")
+    it.each<{ metoda: 'obrisiGrupu' | 'preimenuj' | 'premesti'; posledica: string; tema: Partial<IskljucenaTemaInfo> }>([
+      { metoda: 'obrisiGrupu', posledica: 'odvezuje temu od grupe (grupaId null)', tema: { grupaId: null, putanja: [] } },
+      {
+        metoda: 'preimenuj', posledica: 'menja putanju teme',
+        tema: { putanja: [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 3, naziv: 'Heksadekadno u binarno' }] },
+      },
+      { metoda: 'premesti', posledica: 'menja putanju teme', tema: { putanja: [{ id: 3, naziv: '16 → 2' }] } },
+    ])('$metoda grupe isključene teme $posledica: teme se učitavaju ponovo posle izmene', ({ metoda, tema }) => {
+      const posle: IskljucenaTemaInfo[] = [{ ...TEME[0], ...tema }, TEME[1]];
+      api.iskljuceneTeme.mockImplementation(() => of(posle));
+      api.obrisiGrupu.mockImplementation(() => of(undefined));
+      api.izmeniGrupu.mockImplementation(() => of(detalji(3)));
+      api.premesti.mockImplementation(() => of(detalji(3)));
+
+      if (metoda === 'obrisiGrupu') {
+        store.obrisiGrupu(3);
+      } else if (metoda === 'preimenuj') {
+        store.preimenuj(3, 'Heksadekadno u binarno');
+      } else {
+        store.premesti(3, { roditeljId: null, rb: null });
+      }
+
+      const izmena = metoda === 'preimenuj' ? api.izmeniGrupu : api[metoda];
+      expect(izmena).toHaveBeenCalledOnce();
+      expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+      expect(api.iskljuceneTeme.mock.invocationCallOrder[0]).toBeGreaterThan(izmena.mock.invocationCallOrder[0]);
+      expect(store.teme()).toEqual(posle);
+    });
+
+    it('kreirajGrupu ne učitava teme ponovo, a izmene grupa ni kad predmet nema isključenih tema', () => {
+      api.kreirajGrupu.mockImplementation(() => of(detalji(50)));
+      store.kreirajGrupu({ predmetId: 7, namena: 'PREDAVANJE', roditeljId: 1, naziv: 'Nova', opis: null, tezina: null, uputstvo: null, polja: null });
+      expect(api.kreirajGrupu).toHaveBeenCalledOnce();
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
+
+      api.iskljuceneTeme.mockImplementation(() => of([]));
+      store.ucitajTeme();
+      api.iskljuceneTeme.mockClear();
+      api.obrisiGrupu.mockImplementation(() => of(undefined));
+      api.izmeniGrupu.mockImplementation(() => of(detalji(3)));
+      api.premesti.mockImplementation(() => of(detalji(3)));
+      store.obrisiGrupu(4);
+      store.preimenuj(3, 'Heksadekadno u binarno');
+      store.premesti(3, { roditeljId: null, rb: null });
+
+      expect(api.premesti).toHaveBeenCalledOnce();
+      expect(api.iskljuceneTeme).not.toHaveBeenCalled();
     });
   });
 });

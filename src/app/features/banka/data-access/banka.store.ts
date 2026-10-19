@@ -61,7 +61,8 @@ interface ZahtevStabla {
  * Stranica banke (`/banka`): stablo grupa jednog predmeta i namene, izabrana grupa sa varijantama i izmene grupa i varijanti,
  * uz Klodove serije i isključene teme predmeta. Feature store: provajduje ga rutirana stranica. Ne zna ništa o prikazu. Posle
  * svake izmene ponovo učitava stablo i izabranu grupu sa varijantama (brojači stabla i kartice ostaju tačni), uz isti izbor i
- * iste filtere, a kad predmet ima serije, i njih (brojači nacrta i odobrenih). Greške idu u
+ * iste filtere, a kad predmet ima serije, i njih (brojači nacrta i odobrenih); posle brisanja, preimenovanja i premeštanja grupe
+ * i isključene teme, kad ih predmet ima (njihova grupa i putanja). Greške idu u
  * `NotificationStore` (`razlogBanke`: razlog servera, 503 render servis, 504 istek, kod izmena uz proveru banke pre ponovnog
  * pokušaja, ostali 5xx opšta poruka); uz to prvo učitavanje (`ucitaj`) postavlja status `error`, a neuspelo učitavanje
  * izabrane grupe `greskaGrupe`. `zauzeto` je `true` dok traje kreiranje, dupliranje ili brisanje.
@@ -204,11 +205,14 @@ export const BankaStore = signalStore(
      * Izmena na serveru: emitovana vrednost je grupa koja se bira posle (`undefined` = ostaje izabrana). Izmene idu paralelno
      * (server ih serijalizuje), a ponovno učitavanje posle njih prekida prethodno, pa važi poslednje; kad predmet ima serije,
      * učitavaju se i one (izmena varijante ili grupe serije menja njene brojače, a ručna izmena seriju ne pravi). `zauzima`:
-     * neidempotentna izmena (ponovljen zahtev pravi duplikat ili 404), `zauzeto` je `true` dok njen zahtev traje.
+     * neidempotentna izmena (ponovljen zahtev pravi duplikat ili 404), `zauzeto` je `true` dok njen zahtev traje. `teme`: šta
+     * izmena menja u isključenim temama. `'lista'` = samu listu, pa se teme učitavaju uvek; `'grupe'` = grupe na koje teme
+     * pokazuju (brisanje grupe odvezuje njenu temu, server postavlja `grupaId` na `null`; preimenovanje i premeštanje grupe ili
+     * pretka menjaju `putanja`), pa se učitavaju kad ih predmet ima. Bez `teme` (varijante, nova grupa) teme se ne učitavaju.
      */
-    const izmena = rxMethod<{ poziv: Observable<number | null | undefined>; zauzima?: boolean }>(
+    const izmena = rxMethod<{ poziv: Observable<number | null | undefined>; zauzima?: boolean; teme?: 'lista' | 'grupe' }>(
       pipe(
-        mergeMap(({ poziv, zauzima }) => {
+        mergeMap(({ poziv, zauzima, teme }) => {
           if (zauzima) {
             patchState(store, s => ({ _zauzetih: s._zauzetih + 1 }));
           }
@@ -217,6 +221,9 @@ export const BankaStore = signalStore(
               osvezi(izbor === undefined ? store.izabranaGrupaId() : izbor);
               if (store.serije().length > 0) {
                 zaPredmet(ucitajSerije);
+              }
+              if (teme === 'lista' || (teme === 'grupe' && store.teme().length > 0)) {
+                zaPredmet(ucitajTeme);
               }
             }),
             catchError((e: unknown) => {
@@ -282,7 +289,7 @@ export const BankaStore = signalStore(
        * `NotificationStore` kao kod ostalih izmena.
        */
       ukljuciTemu(id: number): void {
-        izmena({ poziv: store._api.ukljuciTemu(id, TIHO).pipe(tap(() => zaPredmet(ucitajTeme)), bezIzbora) });
+        izmena({ poziv: store._api.ukljuciTemu(id, TIHO).pipe(bezIzbora), teme: 'lista' });
       },
 
       /** Nova grupa (koren ili podgrupa); posle uspeha je izabrana. */
@@ -301,16 +308,17 @@ export const BankaStore = signalStore(
             id, { naziv: naziv.trim(), tezina: tezina === undefined ? g.tezina : tezina, opis: g.opis, uputstvo: g.uputstvo, polja: null }, TIHO)),
           bezIzbora,
         );
-        izmena({ poziv });
+        izmena({ poziv, teme: 'grupe' });
       },
       /** Briše grupu; ako je bila izabrana, bira se njen roditelj (ili prvi list kad je koren). */
       obrisiGrupu(id: number): void {
         const bila = store.izabranaGrupaId() === id;
         const roditelj = putanjaDo(store.stablo(), id).at(-2)?.id ?? null;
-        izmena({ poziv: store._api.obrisiGrupu(id, TIHO).pipe(map(() => (bila ? roditelj : undefined))), zauzima: true });
+        const poziv = store._api.obrisiGrupu(id, TIHO).pipe(map(() => (bila ? roditelj : undefined)));
+        izmena({ poziv, zauzima: true, teme: 'grupe' });
       },
       premesti(id: number, cmd: PremestiCmd): void {
-        izmena({ poziv: store._api.premesti(id, cmd, TIHO).pipe(bezIzbora) });
+        izmena({ poziv: store._api.premesti(id, cmd, TIHO).pipe(bezIzbora), teme: 'grupe' });
       },
 
       odobri(id: number): void {
