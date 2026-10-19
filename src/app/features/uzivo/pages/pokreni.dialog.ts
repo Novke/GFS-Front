@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -27,13 +28,16 @@ export function pokretanjeBezDijaloga(predavanje: string | null, brojPitanja: nu
   return null;
 }
 
-/** Komanda iz izbora u dijalogu; `null` dok izbor nije potpun (nije izabrano predavanje ili grupa). */
-export function pokreniCmd(izbor: IzborPokretanja, predavanjeId: number | null, grupaId: number | null): PokreniCmd | null {
+/**
+ * Komanda iz izbora u dijalogu; `null` dok izbor nije potpun (nije izabrano predavanje ili grupa). `boduje` (prisustvo i
+ * rešeni zadaci) ide samo uz predavanje (server inače odbija: `Bodovanje traži predavanje.`).
+ */
+export function pokreniCmd(izbor: IzborPokretanja, predavanjeId: number | null, grupaId: number | null, boduje: boolean): PokreniCmd | null {
   switch (izbor) {
-    case 'predavanje': return predavanjeId ? { cuvanje: true, grupaId: null, predavanjeId } : null;
-    case 'grupa': return grupaId ? { cuvanje: true, grupaId, predavanjeId: null } : null;
-    case 'bezGrupe': return { cuvanje: true, grupaId: null, predavanjeId: null };
-    case 'necuvaj': return { cuvanje: false, grupaId: null, predavanjeId: null };
+    case 'predavanje': return predavanjeId ? { cuvanje: true, grupaId: null, predavanjeId, boduje } : null;
+    case 'grupa': return grupaId ? { cuvanje: true, grupaId, predavanjeId: null, boduje: false } : null;
+    case 'bezGrupe': return { cuvanje: true, grupaId: null, predavanjeId: null, boduje: false };
+    case 'necuvaj': return { cuvanje: false, grupaId: null, predavanjeId: null, boduje: false };
   }
 }
 
@@ -51,11 +55,14 @@ export function otvoriPokreni(dialog: MatDialog, podaci: PokreniPodaci): Observa
   }).afterClosed();
 }
 
-/** Izbor čuvanja pre starta (prezentacija sa pitanjima): uz predavanje, za grupu, bez grupe, ne čuvaj. */
+/**
+ * Izbor čuvanja pre starta (prezentacija sa pitanjima): uz predavanje, za grupu, bez grupe, ne čuvaj; uz predavanje još
+ * "Boduje se" (bodovan run). Razlog odbijanja servera (400/409) ostaje u traci dijaloga.
+ */
 @Component({
   selector: 'app-pokreni-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule, MatFormFieldModule, MatProgressBarModule, MatRadioModule, MatSelectModule],
+  imports: [MatButtonModule, MatCheckboxModule, MatDialogModule, MatFormFieldModule, MatProgressBarModule, MatRadioModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>Pokreni prezentaciju</h2>
     <mat-dialog-content class="uz-ed-dijalog">
@@ -63,7 +70,7 @@ export function otvoriPokreni(dialog: MatDialog, podaci: PokreniPodaci): Observa
       @if (ucitava()) {
         <mat-progress-bar mode="indeterminate" aria-label="Učitavanje predavanja i grupa" />
       }
-      <mat-radio-group class="uz-ed-izbori" aria-label="Čuvanje odgovora" [value]="izbor()" (change)="izbor.set($event.value)">
+      <mat-radio-group class="uz-ed-izbori" aria-label="Čuvanje odgovora" [value]="izbor()" (change)="izaberi($event.value)">
         <mat-radio-button value="predavanje" [disabled]="!predavanja().length">Uz predavanje</mat-radio-button>
         @if (izbor() === 'predavanje') {
           <mat-form-field class="uz-ed-uvuceno">
@@ -92,6 +99,11 @@ export function otvoriPokreni(dialog: MatDialog, podaci: PokreniPodaci): Observa
         <mat-radio-button value="bezGrupe">Bez grupe, sačuvaj rezultate</mat-radio-button>
         <mat-radio-button value="necuvaj">Ne čuvaj (odgovori postoje samo tokom izvođenja)</mat-radio-button>
       </mat-radio-group>
+      <mat-checkbox [checked]="boduje()" [disabled]="izbor() !== 'predavanje'"
+                    aria-describedby="uz-pokreni-boduje-napomena" (change)="boduje.set($event.checked)">
+        Boduje se (upisuje prisustvo i rešene zadatke studentima)
+      </mat-checkbox>
+      <p id="uz-pokreni-boduje-napomena" class="uz-ed-napomena uz-ed-uvuceno">Traži prijavu studenata.</p>
       @if (greska(); as g) {
         <p class="uz-ed-greska" role="alert">{{ g }}</p>
       }
@@ -117,7 +129,8 @@ export class PokreniDialog {
   protected readonly izbor = signal<IzborPokretanja>('bezGrupe');
   protected readonly predavanjeId = signal<number | null>(null);
   protected readonly grupaId = signal<number | null>(null);
-  protected readonly cmd = computed(() => pokreniCmd(this.izbor(), this.predavanjeId(), this.grupaId()));
+  protected readonly boduje = signal(false);
+  protected readonly cmd = computed(() => pokreniCmd(this.izbor(), this.predavanjeId(), this.grupaId(), this.boduje()));
 
   constructor() {
     const neuspeh = <T>(poruka: string) => catchError<T[], Observable<T[]>>(e => {
@@ -136,6 +149,12 @@ export class PokreniDialog {
       }
       this.ucitava.set(false);
     });
+  }
+
+  /** Bodovanje upisuje ocene, pa se posle odlaska sa "Uz predavanje" bira ponovo (ne pamti se skriveno uključeno). */
+  protected izaberi(izbor: IzborPokretanja): void {
+    this.izbor.set(izbor);
+    if (izbor !== 'predavanje') this.boduje.set(false);
   }
 
   protected pokreni(): void {

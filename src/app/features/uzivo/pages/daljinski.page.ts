@@ -26,7 +26,7 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
 /**
  * Daljinski na telefonu nastavnika (`izvodjenja/:id/daljinski`, iza basic-auth-a, prati dan/noć): gore štoperica, sat,
  * položaj i veza, u sredini beleške (skroluju same), dole velika dugmad Nazad/Napred (svako pola širine, bar 25% visine),
- * a na pitanju još red Otvori/Zatvori, Rezultati, Tačan. Ekran se drži budnim (Wake Lock), dodir vibrira, odskok prsta u
+ * a na pitanju još red Otvori/Zatvori, Rezultati, Tačan (na Zadatak slajdu i Rešenje). Ekran se drži budnim (Wake Lock), dodir vibrira, odskok prsta u
  * 300 ms se ignoriše (monotoni sat). Posle buđenja: `posleVracanja`; dok veza nije tu, `GET stanje` na 5 s. Greška
  * komande se vidi u traci (6 s); završeno izvođenje: poruka, bez dugmadi i bez navigacije. `ZAVRSI` namerno nije ovde.
  */
@@ -64,11 +64,15 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
         </div>
         <app-beleske-panel class="uz-dalj-beleske" [tekst]="s.trenutniSlajd?.beleske ?? null"
                            [kljucSlajda]="s.trenutniSlajd?.id ?? s.prikaz" [prazno]="prazno()" />
-        @if (naPitanju()) {
-          <div class="uz-dalj-pitanje" role="group" aria-label="Pitanje">
+        @if (runda(); as vrsta) {
+          <div class="uz-dalj-pitanje" role="group" [attr.aria-label]="vrsta">
             <button type="button" [disabled]="!ima('OTVORI_ZATVORI')" (click)="dodir('OTVORI_ZATVORI')">{{ otvoriZatvori() }}</button>
             <button type="button" [disabled]="!ima('REZULTATI')" [attr.aria-pressed]="s.rezultatiPrikazani" (click)="dodir('REZULTATI')">Rezultati</button>
             <button type="button" [disabled]="!ima('TACAN')" [attr.aria-pressed]="s.tacanPrikazan" (click)="dodir('TACAN')">Tačan</button>
+            @if (vrsta === 'Zadatak') {
+              <button type="button" [disabled]="!ima('RESENJE')" [attr.aria-pressed]="s.zadatak?.resenjePrikazano ?? false"
+                      (click)="dodir('RESENJE')">Rešenje</button>
+            }
             @if (s.runda) {
               @let o = odgovoriliSu();
               <p class="uz-dalj-odgovorili">Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong></p>
@@ -125,9 +129,12 @@ export class DaljinskiPage {
     const s = this.store.stanje();
     return s ? odgovorili(s) : null;
   });
-  protected readonly naPitanju = computed(() => {
+  /** Slajd sa rundama: red komandi "Pitanje" ili "Zadatak" (zadatak ima još Rešenje), inače `null`. */
+  protected readonly runda = computed<'Pitanje' | 'Zadatak' | null>(() => {
     const s = this.store.stanje();
-    return s?.prikaz === 'SLAJD' && s.trenutniSlajd?.tip === 'PITANJE';
+    if (s?.prikaz !== 'SLAJD') return null;
+    const tip = s.trenutniSlajd?.tip;
+    return tip === 'PITANJE' ? 'Pitanje' : tip === 'ZADATAK' ? 'Zadatak' : null;
   });
   protected readonly prazno = computed(() => {
     const p = this.store.stanje()?.prikaz;

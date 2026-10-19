@@ -30,6 +30,7 @@ import { SledecePanelComponent } from './sledece-panel.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
+import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
@@ -97,8 +98,9 @@ export class IzborEkranaDialog {
 /**
  * Konzola za predavača (spec 6.4): zaglavlje (naziv, kod, povezani/ukupno, veza, publika, monitor, telefon, Završi),
  * levo trenutni (tačno ono što je na projektoru) i sledeći slajd, u sredini kontrole i tajmer, desno rezultati uživo
- * (privatno, uvek), tekstovi sa "sakrij", beleške i učesnici. Ispod 600 px: tabovi i lepljiva donja traka. Iste
- * prečice kao publika; `R` traži potvrdu, `P` otvara publiku. Posle završetka: pregled (uz čuvanje) ili editor.
+ * (privatno, uvek; na Zadatak slajdu panel zadatka: broj različitih pre otvaranja, izvučene varijante posle), tekstovi
+ * sa "sakrij", beleške i učesnici. Ispod 600 px: tabovi i lepljiva donja traka. Iste prečice kao publika; `R` traži
+ * potvrdu, `Shift+R` je rešenje zadatka, `P` otvara publiku. Posle završetka: pregled (uz čuvanje) ili editor.
  */
 @Component({
   selector: 'app-konzola',
@@ -107,9 +109,15 @@ export class IzborEkranaDialog {
   imports: [
     NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTabsModule, KonzolaKontroleComponent,
     PublikaScenaComponent, RezultatPrikazComponent, SledecePanelComponent, TajmerComponent, TekstoviPanelComponent,
-    UcesniciPanelComponent, BeleskePanelComponent, VremeIzvodjenjaComponent,
+    UcesniciPanelComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent,
   ],
   host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)', '(document:keyup)': 'tast.pusten($event)' },
+  // čip bodovanog runa (u komponenti, ne u globalnom CSS-u: početni paket je na granici budžeta)
+  styles: `
+    .uz-boduje {
+      border-color: transparent; background: var(--primary-soft); color: var(--primary-soft-ink); font-size: 12px; font-weight: 600;
+    }
+  `,
   template: `
     @if (store.stanje(); as s) {
       <header class="uz-kon-zaglavlje">
@@ -119,6 +127,7 @@ export class IzborEkranaDialog {
             <span>kod <strong>{{ kod() }}</strong></span>
             <span>{{ polozaj() }}</span>
             <span>učesnici {{ s.brojPovezanih }}/{{ s.ucesnici.length }}</span>
+            @if (s.izvodjenje.boduje) { <span class="uz-cip uz-boduje">Boduje se</span> }
             <span class="uz-kon-veza" [class.uz-kon-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
           </p>
         </div>
@@ -158,28 +167,44 @@ export class IzborEkranaDialog {
       </ng-template>
 
       <ng-template #rezultatiTpl>
-        <section class="uz-kon-kartica" aria-label="Rezultati uživo">
-          <h2 class="uz-kon-naslov">
-            Rezultati uživo
-            @if (s.rezultatiPrikazani) { <span class="uz-cip">na projektoru</span> }
-          </h2>
-          @if (s.runda && s.trenutniSlajd?.pitanje; as p) {
-            @let o = odgovoriliSu();
-            <p class="uz-kon-odgovorili" [class.uz-kon-odgovorili--svi]="o?.svi">
-              Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
-            </p>
-            @if (s.rezultat; as r) {
-              <app-rezultat-prikaz class="rezim-dan uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
-                                   [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
-              @if (r.tip === 'KRATAK_TEKST') {
-                <h3 class="uz-kon-podnaslov">Tekstovi</h3>
-                <app-tekstovi-panel [tekstovi]="r.tekstovi ?? []" (sakrij)="store.sakrij(s.runda.id, $event.kljuc, $event.sakriven)" />
-              }
+        @if (s.trenutniSlajd?.tip === 'ZADATAK' && s.zadatak) {
+          <section class="uz-kon-kartica" aria-label="Zadatak">
+            <h2 class="uz-kon-naslov">
+              Zadatak
+              @if (s.rezultatiPrikazani) { <span class="uz-cip">rezultati na projektoru</span> }
+            </h2>
+            @if (s.runda) {
+              @let o = odgovoriliSu();
+              <p class="uz-kon-odgovorili" [class.uz-kon-odgovorili--svi]="o?.svi">
+                Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
+              </p>
             }
-          } @else {
-            <p class="uz-prazno">Rezultati se vide kad se pitanje otvori.</p>
-          }
-        </section>
+            <app-zadatak-panel [stanje]="s" (komanda)="komanda($event)" />
+          </section>
+        } @else {
+          <section class="uz-kon-kartica" aria-label="Rezultati uživo">
+            <h2 class="uz-kon-naslov">
+              Rezultati uživo
+              @if (s.rezultatiPrikazani) { <span class="uz-cip">na projektoru</span> }
+            </h2>
+            @if (s.runda && s.trenutniSlajd?.pitanje; as p) {
+              @let o = odgovoriliSu();
+              <p class="uz-kon-odgovorili" [class.uz-kon-odgovorili--svi]="o?.svi">
+                Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
+              </p>
+              @if (s.rezultat; as r) {
+                <app-rezultat-prikaz class="rezim-dan uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
+                                     [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
+                @if (r.tip === 'KRATAK_TEKST') {
+                  <h3 class="uz-kon-podnaslov">Tekstovi</h3>
+                  <app-tekstovi-panel [tekstovi]="r.tekstovi ?? []" (sakrij)="store.sakrij(s.runda.id, $event.kljuc, $event.sakriven)" />
+                }
+              }
+            } @else {
+              <p class="uz-prazno">Rezultati se vide kad se pitanje otvori.</p>
+            }
+          </section>
+        }
       </ng-template>
 
       <ng-template #beleskeTpl>
@@ -192,7 +217,7 @@ export class IzborEkranaDialog {
       <ng-template #ucesniciTpl>
         <section class="uz-kon-kartica" aria-label="Učesnici">
           <h2 class="uz-kon-naslov">Učesnici</h2>
-          <app-ucesnici-panel [ucesnici]="s.ucesnici" [takmicenje]="s.takmicenje"
+          <app-ucesnici-panel [ucesnici]="s.ucesnici" [takmicenje]="s.takmicenje" [zadatak]="s.zadatak ?? null"
                               (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
         </section>
       </ng-template>
@@ -349,9 +374,12 @@ export class KonzolaPage {
   }
 
   private ponovi(): void {
+    const zadatak = this.store.stanje()?.trenutniSlajd?.tip === 'ZADATAK';
     ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Ponoviti pitanje?',
-      tekst: 'Otvara se nova runda; dosadašnji odgovori ostaju u prethodnoj rundi.',
+      naslov: zadatak ? 'Ponoviti zadatak?' : 'Ponoviti pitanje?',
+      tekst: zadatak
+        ? 'Otvara se nova runda sa novim izvlačenjem varijanti; dosadašnji odgovori ostaju u prethodnoj rundi.'
+        : 'Otvara se nova runda; dosadašnji odgovori ostaju u prethodnoj rundi.',
       potvrdi: 'Ponovi',
     }).subscribe(da => {
       if (da) this.store.komanda('PONOVI');

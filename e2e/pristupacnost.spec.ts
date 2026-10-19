@@ -241,6 +241,29 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/konzola (${rezim})`).toEqual([]);
     });
 
+    // Zadatak slajd (106): panel sa izborom broja različitih (CEKA), pa zatvorena runda sa karticama varijanti, varijantom i
+    // ishodom uz učesnike i uključenim rešenjem (dugme Rešenje pritisnuto); konzola je i noću svetla
+    test('/izvodjenja/7/konzola na Zadatak slajdu (CEKA i zatvorena runda sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.izvodjenje.primeni('IDI_NA', 5);
+      const broker = await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/konzola');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const panel = page.getByRole('region', { name: 'Zadatak' });
+      await expect(panel.getByLabel('Broj različitih zadataka')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola, Zadatak u CEKA (${rezim})`).toEqual([]);
+
+      // otvaranje, zatvaranje i rešenje stižu sa drugog prozora kroz STOMP
+      mock.izvodjenje.primeni('OTVORI_ZATVORI');
+      mock.izvodjenje.primeni('OTVORI_ZATVORI');
+      broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
+      await expect(panel.getByText('Rešenje prikazano')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Rešenje', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('region', { name: 'Učesnici' })).toContainText('nije odgovorio');
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola, Zadatak zatvoren sa rešenjem (${rezim})`).toEqual([]);
+    });
+
     test.describe('daljinski na telefonu', () => {
       test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
