@@ -61,15 +61,43 @@ export interface FiksturaIzvodjenja {
   varijanteZadatka?: VarijantaZadatka[];
 }
 
-/** `NastavnickiZadatak` (konzola vidi sve: tačne odgovore i rešenja svake izvučene). */
+/** `RezultatPolja`: `vrednosti` (BROJ, TEKST) ili `opcije` (JEDAN_TACAN, VISE_TACNIH), `tacno` tek kad je `TACAN` vidljiv. */
+interface RezultatPoljaMok {
+  kljuc: string; oznaka: string; tip: PoljeZadatka['tip']; jedinica: string | null;
+  vrednosti: { kljuc: string; tekst: string; broj: number; sakriven: boolean; tacan: boolean | null }[] | null;
+  opcije: { id: number; tekst: string | null; broj: number; tacna: boolean | null }[] | null; tacno: OdgovorPolja | null;
+}
+interface RezultatVarijanteMok {
+  varijantaId: number; naziv: string | null; svgId: string; resenjeSvgId: string | null; dodeljeno: number; odgovorilo: number;
+  tacnih: number | null; polja: RezultatPoljaMok[];
+}
+/** `ZadatakRezultat`: bez `odgovoriPrikazani` su brojevi 0 i `vrednosti` `null` (pravila vidljivosti iz Ugovora). */
+interface ZadatakRezultatMok { ukupno: number; varijante: RezultatVarijanteMok[]; odgovoriPrikazani: boolean }
+/** Šta rezultat otkriva: nezavisni prekidači projektora (rezultati, `TACAN`, `RESENJE`); konzola ima sve. */
+interface Vidljivo { brojevi: boolean; tacno: boolean; resenje: boolean }
+
+/** `NastavnickiZadatak` (konzola vidi sve: tačne odgovore i rešenja svake izvučene; projektor samo `javniRezultat`). */
 interface ZadatakSnimak {
   slajd: ZadatakInfo; izmenaBrojaVarijanti: number | null; brojZaOtvaranje: number; resenjePrikazano: boolean;
   varijante: {
     varijantaId: number; naziv: string | null; svgId: string; resenjeSvgId: string | null; dodeljeno: number; odgovorilo: number;
     tacnih: number;
   }[] | null;
-  rezultat: { ukupno: number; varijante: unknown[]; odgovoriPrikazani: boolean } | null;
-  javniRezultat: null;
+  rezultat: ZadatakRezultatMok | null;
+  javniRezultat: ZadatakRezultatMok | null;
+}
+
+/** Odgovor učesnika po polju (`OdgovorCmd.polja`): BROJ i TEKST string, JEDAN_TACAN i VISE_TACNIH lista id-jeva opcija. */
+export type OdgovoriPolja = Record<string, string | number[]>;
+
+/** Da li je vrednost polja tačna po definiciji varijante (BROJ tačno, TEKST među prihvatljivima, opcije skup id-jeva). */
+function jeTacno(p: PoljeZadatka, vrednost: string | number[] | undefined, tacan: OdgovorPolja | undefined): boolean {
+  if (vrednost === undefined || !tacan) return false;
+  if (typeof vrednost === 'string') {
+    return p.tip === 'BROJ' ? Number(vrednost) === tacan.broj : (tacan.prihvatljivi ?? []).includes(vrednost);
+  }
+  const trazeni = p.tip === 'JEDAN_TACAN' ? [tacan.tacna] : [...(tacan.tacne ?? [])].sort();
+  return trazeni.length === vrednost.length && [...vrednost].sort().every((x, i) => x === trazeni[i]);
 }
 
 /** Snimak za nastavnika: sva polja `NastavnickoStanje`. */
@@ -158,6 +186,8 @@ export class MockIzvodjenje {
   private izmenaBrojaVarijanti: number | null = null;
   private resenjePrikazano = false;
   private izvucene: VarijantaZadatka[] | null = null;
+  /** Odgovori učesnika u Zadatak rundi (`odgovori`), po id-ju učesnika. */
+  private readonly odgovoriZadatka = new Map<number, OdgovoriPolja>();
 
   constructor(fikstura: FiksturaIzvodjenja) {
     this.f = fikstura;
@@ -175,6 +205,15 @@ export class MockIzvodjenje {
   /** Slajd izvođenja po id-ju, sa potezima (za `GET slajdovi/:id/potezi`; snimak nosi slajd bez poteza, `bezPoteza`). */
   slajdPoId(id: number): Slajd | undefined {
     return this.f.slajdovi.find(s => s.id === id);
+  }
+
+  /**
+   * Učesnik odgovara u otvorenoj Zadatak rundi (kao STOMP `SEND`, bez provere roka i šeme): računa se u sledećem snimku
+   * (`brojOdgovora`, `odgovorio`, `tacno`, brojevi varijante, vrednosti polja). Mok ne šalje snimak sam: spec ga šalje kroz broker.
+   */
+  odgovori(ucesnikId: number, polja: OdgovoriPolja): void {
+    this.odgovoriZadatka.set(ucesnikId, polja);
+    this.verzija++;
   }
 
   /** Izvođenje je završeno (npr. sa laptopa): `GET stanje` pokazuje ZAVRSENO, svaka komanda dobija 410. */
@@ -202,7 +241,7 @@ export class MockIzvodjenje {
       faza: this.faza, runda: this.runda, rezultatiPrikazani: this.rezultatiPrikazani, tacanPrikazan: this.tacanPrikazan,
       rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: this.f.telefonPrikaz,
       detaljiDozvoljeni: this.f.detaljiDozvoljeni, takmicenje: this.f.takmicenje, tema: this.f.tema, rezultat,
-      brojOdgovora: 0, brojPovezanih: this.f.ucesnici.filter(u => u.povezan).length,
+      brojOdgovora: this.odgovoriZadatka.size, brojPovezanih: this.f.ucesnici.filter(u => u.povezan).length,
       rangLista: [], javniRezultat: javni, javnaRangLista: null, pocetakMs: this.pocetakMs,
       ucesnici: this.ucesniciSnimka(), zadatak: this.zadatakSnimak(trenutni),
     };
@@ -304,6 +343,7 @@ export class MockIzvodjenje {
       if (n === 0) return greska(409, 'Grupa nema aktivnih varijanti.');
       this.izvucene = (this.f.varijanteZadatka ?? []).slice(0, n);
       this.resenjePrikazano = false;
+      this.odgovoriZadatka.clear();
     }
     this.faza = 'OTVORENO';
     this.brojRundi++;
@@ -318,38 +358,91 @@ export class MockIzvodjenje {
   }
 
   private ucesniciSnimka(): Ucesnik[] {
-    if (!this.izvucene || this.trenutni()?.tip !== 'ZADATAK') return this.f.ucesnici;
+    const sl = this.trenutni();
+    if (!this.izvucene || sl?.tip !== 'ZADATAK') return this.f.ucesnici;
     const d = this.dodele();
-    return this.f.ucesnici.map(u => ({ ...u, varijantaId: d.get(u.id) ?? null, tacno: null }));
+    return this.f.ucesnici.map(u => {
+      const odgovor = this.odgovoriZadatka.get(u.id);
+      const v = this.izvucene!.find(x => x.varijantaId === d.get(u.id));
+      return {
+        ...u, odgovorio: odgovor !== undefined, varijantaId: d.get(u.id) ?? null,
+        tacno: odgovor !== undefined && v && sl.zadatak ? this.tacanOdgovor(sl.zadatak, v, odgovor) : null,
+      };
+    });
   }
 
-  /** `NastavnickiZadatak` (bez odgovora: brojevi odgovora su 0); `javniRezultat` mok ne gradi. */
+  /** Odgovor je tačan kad su tačna sva polja šeme (grupa bez polja nema odgovora). */
+  private tacanOdgovor(z: ZadatakInfo, v: VarijantaZadatka, odgovor: OdgovoriPolja): boolean {
+    return (z.polja ?? []).every(p => jeTacno(p, odgovor[p.kljuc], v.odgovori[p.kljuc]));
+  }
+
+  /**
+   * `RezultatVarijante` po pravilima vidljivosti iz Ugovora: bez `brojevi` su brojevi 0 i `vrednosti` `null`; `tacnih` samo uz
+   * `brojevi` i `tacno`; `tacno`, `tacan` i `tacna` samo uz `tacno`; `resenjeSvgId` samo uz `resenje`.
+   */
+  private rezultatVarijante(z: ZadatakInfo, v: VarijantaZadatka, d: Map<number, number>, vidljivo: Vidljivo): RezultatVarijanteMok {
+    const dodeljeni = [...d].filter(([, vid]) => vid === v.varijantaId).map(([u]) => u);
+    const odgovori = dodeljeni.flatMap(u => (this.odgovoriZadatka.has(u) ? [this.odgovoriZadatka.get(u)!] : []));
+    const polja = z.polja ?? [];
+    return {
+      varijantaId: v.varijantaId, naziv: v.naziv, svgId: v.svgId, resenjeSvgId: vidljivo.resenje ? v.resenjeSvgId : null,
+      dodeljeno: vidljivo.brojevi ? dodeljeni.length : 0, odgovorilo: vidljivo.brojevi ? odgovori.length : 0,
+      tacnih: vidljivo.brojevi && vidljivo.tacno ? odgovori.filter(o => this.tacanOdgovor(z, v, o)).length : null,
+      polja: polja.map(p => {
+        const tacno = v.odgovori[p.kljuc];
+        const vrednosti = odgovori.map(o => o[p.kljuc]).filter(x => x !== undefined);
+        const brojeviPoOpciji = (id: number) => vrednosti.filter(x => Array.isArray(x) && x.includes(id)).length;
+        const grupe = new Map<string, number>();
+        for (const x of vrednosti) if (typeof x === 'string') grupe.set(x, (grupe.get(x) ?? 0) + 1);
+        return {
+          kljuc: p.kljuc, oznaka: p.oznaka, tip: p.tip, jedinica: p.jedinica,
+          vrednosti: p.opcije || !vidljivo.brojevi ? null : [...grupe].sort((x, y) => y[1] - x[1]).map(([tekst, broj]) => ({
+            kljuc: tekst, tekst, broj, sakriven: false, tacan: vidljivo.tacno ? jeTacno(p, tekst, tacno) : null,
+          })),
+          opcije: p.opcije?.map(o => ({
+            id: o.id, tekst: o.tekst, broj: vidljivo.brojevi ? brojeviPoOpciji(o.id) : 0,
+            tacna: vidljivo.tacno ? (tacno?.tacna === o.id || (tacno?.tacne ?? []).includes(o.id)) : null,
+          })) ?? null,
+          tacno: vidljivo.tacno ? tacno ?? null : null,
+        };
+      }),
+    };
+  }
+
+  private rezultatRunde(z: ZadatakInfo, d: Map<number, number>, vidljivo: Vidljivo): ZadatakRezultatMok | null {
+    if (!this.izvucene) return null;
+    return {
+      ukupno: vidljivo.brojevi ? this.odgovoriZadatka.size : 0, odgovoriPrikazani: vidljivo.brojevi,
+      varijante: this.izvucene.map(v => this.rezultatVarijante(z, v, d, vidljivo)),
+    };
+  }
+
+  /**
+   * `NastavnickiZadatak`: konzola vidi sve (`rezultat`), projektor `javniRezultat` kad je uključen bar jedan od tri nezavisna
+   * prekidača (rezultati; `TACAN` i `RESENJE` samo na zatvorenoj rundi), inače `null`.
+   */
   private zadatakSnimak(sl: Slajd | null): ZadatakSnimak | null {
     const z = sl?.tip === 'ZADATAK' ? sl.zadatak ?? null : null;
     if (!z) return null;
-    const d = [...this.dodele().values()];
-    const polja = z.polja ?? [];
+    const dodele = this.dodele();
+    const d = [...dodele.values()];
     const izvucene = this.izvucene;
+    const zatvoreno = this.faza === 'ZATVORENO';
+    const javno: Vidljivo = {
+      brojevi: this.rezultatiPrikazani, tacno: this.tacanPrikazan && zatvoreno, resenje: this.resenjePrikazano && zatvoreno,
+    };
     return {
       slajd: z, izmenaBrojaVarijanti: this.izmenaBrojaVarijanti, brojZaOtvaranje: this.brojZaOtvaranje(z),
       resenjePrikazano: this.resenjePrikazano,
       varijante: izvucene?.map(v => ({
         varijantaId: v.varijantaId, naziv: v.naziv, svgId: v.svgId, resenjeSvgId: v.resenjeSvgId,
-        dodeljeno: d.filter(x => x === v.varijantaId).length, odgovorilo: 0, tacnih: 0,
+        dodeljeno: d.filter(x => x === v.varijantaId).length,
+        odgovorilo: [...dodele].filter(([u, vid]) => vid === v.varijantaId && this.odgovoriZadatka.has(u)).length,
+        tacnih: [...dodele].filter(([u, vid]) => vid === v.varijantaId && this.odgovoriZadatka.has(u)
+          && this.tacanOdgovor(z, v, this.odgovoriZadatka.get(u)!)).length,
       })) ?? null,
-      rezultat: izvucene && {
-        ukupno: 0, odgovoriPrikazani: true,
-        varijante: izvucene.map(v => ({
-          varijantaId: v.varijantaId, naziv: v.naziv, svgId: v.svgId, resenjeSvgId: v.resenjeSvgId,
-          dodeljeno: d.filter(x => x === v.varijantaId).length, odgovorilo: 0, tacnih: 0,
-          polja: polja.map(p => ({
-            kljuc: p.kljuc, oznaka: p.oznaka, tip: p.tip, jedinica: p.jedinica, vrednosti: p.opcije ? null : [],
-            opcije: p.opcije?.map(o => ({ id: o.id, tekst: o.tekst, broj: 0, tacna: null })) ?? null,
-            tacno: v.odgovori[p.kljuc] ?? null,
-          })),
-        })),
-      },
-      javniRezultat: null,
+      rezultat: this.rezultatRunde(z, dodele, { brojevi: true, tacno: true, resenje: true }),
+      javniRezultat: javno.brojevi || javno.tacno || javno.resenje ? this.rezultatRunde(z, dodele, javno) : null,
     };
   }
 
@@ -362,6 +455,7 @@ export class MockIzvodjenje {
     this.izmenaBrojaVarijanti = null;
     this.resenjePrikazano = false;
     this.izvucene = null;
+    this.odgovoriZadatka.clear();
     this.korak = 0;
     this.faza = null;
     if (i < 0) {

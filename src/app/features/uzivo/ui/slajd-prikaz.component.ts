@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, input, viewChild } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
-import { Faza, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
 import { meriFormule } from './mera-formule';
 import { renderMarkdown } from './markdown';
@@ -10,6 +10,7 @@ import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
+import { ZadatakPrikazComponent } from './zadatak-prikaz.component';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
 export interface KodTraka { host: string; kod: string; }
@@ -20,7 +21,8 @@ export interface KodTraka { host: string; kod: string; }
  * INFO: naslov, Markdown, slika; uz `postepeno` su sakrivene stavke liste najvišeg nivoa sa indeksom ≥ `korak`.
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
  * Tekst pitanja i opcija može imati formule `$...$` (`app-tekst-formule`); INFO ih ne tumači.
- * ZADATAK (bez stanja izvođenja, npr. pregled u editoru): statična kartica "Zadatak", naziv grupe i broj različitih.
+ * ZADATAK: `app-zadatak-prikaz` (opis "N različitih varijanti", tajmer i broj odgovora, a uz `javniRezultat` mreža rezultata po
+ * varijanti; bez stanja izvođenja, npr. pregled u editoru, statična kartica "Zadatak", naziv grupe i broj različitih).
  * PLATNO: `app-platno-prikaz` preko celog okvira (slojevi posle koraka `korak`, animacija prelaza `animacija`), bez
  * trake "host/uzivo · kod" (pokrila bi sadržaj uvezenog slajda; kasni studenti imaju QR).
  * Tema prezentacije: CSS promenljive `--uz-tema-*` na korenu `uz-platno` (pozadina, tekst, naslov, fontovi INFO i
@@ -31,7 +33,10 @@ export interface KodTraka { host: string; kod: string; }
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
-  imports: [PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent, TekstFormuleComponent],
+  imports: [
+    PitanjePlociceComponent, PlatnoPrikazComponent, RezultatPrikazComponent, TajmerComponent, TekstFormuleComponent,
+    ZadatakPrikazComponent,
+  ],
   host: { class: 'uz-okvir' },
   template: `
     <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'" [class.rezim-noc]="tamna()"
@@ -47,14 +52,7 @@ export interface KodTraka { host: string; kod: string; }
           @if (slajd().slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
         </div>
       } @else if (slajd().tip === 'ZADATAK') {
-        @let z = slajd().zadatak;
-        <h1 class="uz-slajd-naslov">Zadatak</h1>
-        <div class="uz-slajd-telo">
-          <div class="uz-md uz-slajd-md" data-zadatak>
-            <p>{{ z?.grupaNaziv ?? (z && z.grupaId !== null ? 'Grupa zadataka' : 'Grupa nije izabrana') }}</p>
-            <p>Različitih: {{ z?.brojVarijanti ?? 'sve' }}</p>
-          </div>
-        </div>
+        <app-zadatak-prikaz [slajd]="slajd()" [zadatak]="zadatak()" [faza]="faza()" [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" />
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
           <app-tekst-formule class="uz-md uz-pitanje-tekst" [tekst]="p.tekst" [markdown]="true" />
@@ -79,7 +77,7 @@ export interface KodTraka { host: string; kod: string; }
           }
           <span class="uz-slajd-status">
             @if (faza() === 'ZATVORENO') { <span class="uz-cip uz-cip--zatvoreno">Zatvoreno</span> }
-            @if (brojOdgovora() !== null) { <span class="uz-slajd-odgovori">Odgovora: <strong>{{ brojOdgovora() }}</strong></span> }
+            @if (brojOdgovora() !== null && slajd().tip !== 'ZADATAK') { <span class="uz-slajd-odgovori">Odgovora: <strong>{{ brojOdgovora() }}</strong></span> }
           </span>
         </footer>
       }
@@ -96,6 +94,8 @@ export class SlajdPrikazComponent {
   readonly prikaziRezultat = input<boolean>(false);
   readonly tacanPrikazan = input<boolean>(false);
   readonly brojOdgovora = input<number | null>(null);
+  /** Nastavnički snimak Zadatak slajda (samo ZADATAK sa stanjem izvođenja); projektor iz njega čita samo `javniRezultat`. */
+  readonly zadatak = input<NastavnickiZadatak | null>(null);
   readonly tajmer = input<TajmerUlaz | null>(null);
   readonly kodTraka = input<KodTraka | null>(null);
   /** Tema prezentacije (snimak bez teme, npr. stari server, daje NACRT). */

@@ -572,4 +572,27 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     await page.waitForLoadState('networkidle');
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
   });
+
+  // Zadatak slajd (FE-4): opis u CEKA, pa zatvorena runda sa uključenim rezultatima, tačnim i rešenjem (mreža 2 kartice)
+  test('/izvodjenja/7/publika (projektor, Zadatak slajd, opis i rezultati sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.izvodjenje.primeni('IDI_NA', 5);
+    mock.izvodjenje.primeni('BROJ_VARIJANTI', 2);
+    const broker = await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    await expect(page.locator('app-publika-scena [data-zadatak]')).toHaveText('2 različitih varijanti');
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak u CEKA').toEqual([]);
+
+    mock.izvodjenje.primeni('OTVORI_ZATVORI');
+    mock.izvodjenje.odgovori(1, { a: '11' });
+    mock.izvodjenje.odgovori(2, { a: '49' });
+    mock.izvodjenje.primeni('OTVORI_ZATVORI');
+    for (const tip of ['REZULTATI', 'TACAN']) mock.izvodjenje.primeni(tip);
+    broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
+    await expect(page.locator('app-publika-scena .uz-zr-kartica')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena img[alt^="Rešenje"]')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena .uz-zr-red')).toHaveCount(2);
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak sa rezultatima i rešenjem').toEqual([]);
+  });
 });

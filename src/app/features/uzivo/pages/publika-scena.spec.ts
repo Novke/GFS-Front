@@ -2,10 +2,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { infoSlajd, naPitanju, pitanjeSlajd, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
+import {
+  infoSlajd, naPitanju, naZadatku, pitanjeSlajd, platnoSlajd, rezultatVarijante, stanje, varijantaRunde,
+} from '../data-access/izvodjenje-podaci.testing';
 import { animacija, platno } from '../data-access/platno-podaci.testing';
 import type { CrtezSloj, Potez } from '../data-access/platno.models';
-import { NastavnickoStanje, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
+import { ServerskiSat } from '../data-access/sat';
+import { NastavnickoStanje, Rezultat, SlajdDetails, ZadatakRezultat } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { PublikaScenaComponent } from './publika-scena.component';
 
@@ -99,6 +102,77 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
     const postolje = tekst(el.querySelector('app-postolje'));
     expect(postolje).toContain('Ana');
     expect(postolje).not.toContain('Nastavnički');
+  });
+});
+
+/**
+ * Zadatak slajd na projektoru (MCP projekat B, FE-4): scena daje prikazu samo `javniRezultat` (nikad nastavnički
+ * `rezultat`, ni `varijante` sa id-jevima rešenja), broj odgovora i tajmer važe i za Zadatak, imena učesnika nigde.
+ */
+describe('PublikaScenaComponent (Zadatak slajd)', () => {
+  const javni = (izmene: Partial<ZadatakRezultat> = {}): ZadatakRezultat => ({
+    ukupno: 0, odgovoriPrikazani: false,
+    varijante: [varijantaRunde(11), varijantaRunde(12)].map(v => ({
+      ...rezultatVarijante(v), dodeljeno: 0, odgovorilo: 0, tacnih: null, resenjeSvgId: null,
+      polja: [{ ...rezultatVarijante(v).polja[0], vrednosti: null, tacno: null }],
+    })),
+    ...izmene,
+  });
+  const slike = (el: Element) => Array.from(el.querySelectorAll('img')).map(i => i.getAttribute('src'));
+
+  it('CEKA: "Zadatak", grupa i "2 različitih varijanti"; bez broja odgovora i bez slika', async () => {
+    const el = await prikazi(naZadatku('CEKA'));
+    expect(tekst(el.querySelector('.uz-slajd-naslov'))).toBe('Zadatak');
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
+    expect(el.querySelector('.uz-zad-odgovori')).toBeNull();
+    expect(el.querySelector('img')).toBeNull();
+  });
+
+  it('OTVORENO: broj odgovora (brojOdgovora snimka) i tajmer runde, na slajdu sa vremenom', async () => {
+    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3 } });
+    s.runda = { id: 9, redniBroj: 1, rokMs: s.serverVremeMs + 60_000, preostaloMs: null, tajmerRadi: true };
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', s);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('sat', new ServerskiSat());
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovora: 3');
+    expect(el.querySelector('.uz-zad-zaglavlje app-tajmer')).not.toBeNull();
+  });
+
+  it('nastavnički rezultat i varijante (sa rešenjima) se ne crtaju dok javniRezultat nije tu', async () => {
+    const s = naZadatku('ZATVORENO', { zadatak: { resenjePrikazano: true, javniRezultat: null } });
+    expect(s.zadatak!.rezultat!.varijante.length).toBe(2);
+    const el = await prikazi(s);
+    expect(el.querySelector('app-zadatak-rezultat')).toBeNull();
+    expect(slike(el)).toEqual([]);
+    expect(tekst(el.querySelector('.uz-slajd-podnozje .uz-cip--zatvoreno'))).toBe('Zatvoreno');
+  });
+
+  it('samo rešenje (javniRezultat bez brojeva): slike zadatka i rešenja, bez traka; imena učesnika nigde', async () => {
+    const r = javni();
+    r.varijante.forEach(v => (v.resenjeSvgId = `res-${v.svgId}`));
+    const el = await prikazi(naZadatku('ZATVORENO', {
+      zadatak: { resenjePrikazano: true, javniRezultat: r },
+      stanje: {
+        ucesnici: [
+          { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: true, varijantaId: 11, tacno: true },
+          { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: true, varijantaId: 12, tacno: false },
+        ],
+      },
+    }));
+    expect(slike(el)).toEqual([
+      'api/public/mediji/svg-V11', 'api/public/mediji/res-svg-V11', 'api/public/mediji/svg-V12', 'api/public/mediji/res-svg-V12',
+    ]);
+    expect(el.querySelector('.uz-zr-red, .uz-zr-brojevi')).toBeNull();
+    expect(tekst(el)).not.toMatch(/Ana|Bojan/);
+  });
+
+  it('javniRezultat sa prikazanim odgovorima: mreža kartica u sceni', async () => {
+    const el = await prikazi(naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni({ odgovoriPrikazani: true }) } }));
+    expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);
   });
 });
 

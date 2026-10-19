@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { platnoSlajd, zadatakSlajd } from '../data-access/izvodjenje-podaci.testing';
+import { naZadatku, platnoSlajd, rezultatVarijante, varijantaRunde, zadatakSlajd } from '../data-access/izvodjenje-podaci.testing';
 import { animacija, platno, platnoSaAnimacijama } from '../data-access/platno-podaci.testing';
 import { PitanjeDetails, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from './slajd-prikaz.component';
@@ -233,5 +233,39 @@ describe('SlajdPrikazComponent: ZADATAK bez stanja izvođenja (editor)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(el.querySelector('[data-zadatak] p')!.textContent?.trim()).toBe('Grupa zadataka');
+  });
+});
+
+describe('SlajdPrikazComponent: ZADATAK sa stanjem izvođenja (projektor)', () => {
+  const tekst = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const kodTraka = { host: 'gfs.trif.rs', kod: '123456' };
+
+  it('OTVORENO: app-zadatak-prikaz sa opisom, brojem odgovora u zaglavlju i kodom u podnožju (broj odgovora jednom)', async () => {
+    const s = naZadatku('OTVORENO');
+    const { el } = await prikazi({
+      slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'OTVORENO', brojOdgovora: 4, kodTraka,
+    });
+    expect(el.querySelector('app-zadatak-prikaz')).not.toBeNull();
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
+    expect(el.querySelectorAll('.uz-zad-odgovori').length).toBe(1);
+    expect(el.querySelector('.uz-slajd-podnozje .uz-slajd-odgovori')).toBeNull();
+    expect(tekst(el.querySelector('.uz-kod-traka'))).toContain('gfs.trif.rs/uzivo · kod 123 456');
+    expect(el.querySelector('app-pitanje-plocice')).toBeNull();
+  });
+
+  it('ZATVORENO sa javnim rezultatom: mreža kartica, čip "Zatvoreno" u podnožju', async () => {
+    const v = [varijantaRunde(11), varijantaRunde(12)];
+    const s = naZadatku('ZATVORENO', {
+      zadatak: { javniRezultat: { ukupno: 0, odgovoriPrikazani: true, varijante: v.map(x => rezultatVarijante(x)) } },
+    });
+    const { el } = await prikazi({ slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'ZATVORENO', brojOdgovora: 0, kodTraka });
+    expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);
+    expect(tekst(el.querySelector('.uz-slajd-podnozje .uz-cip--zatvoreno'))).toBe('Zatvoreno');
+  });
+
+  it('bez stanja i bez trake (editor): i dalje bez podnožja', async () => {
+    const { el } = await prikazi({ slajd: zadatakSlajd() });
+    expect(el.querySelector('app-zadatak-prikaz')).not.toBeNull();
+    expect(el.querySelector('.uz-slajd-podnozje')).toBeNull();
   });
 });
