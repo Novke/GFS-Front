@@ -14,7 +14,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
-import { catchError, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
+import { catchError, EMPTY, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
@@ -32,6 +32,7 @@ import {
 } from '../data-access/banka.models';
 import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
+import { potvrdiUkljucivanje } from '../ui/iskljucene-teme.component';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
 
@@ -65,6 +66,10 @@ interface GreskaUcitavanja {
  * Varijante se učitavaju same (`BankaApi.varijante`, bez `BankaStore`-a, koji pripada `/banka`) i ponovo posle svake radnje i
  * svakog čuvanja (nova šema menja statuse); brojači aktivnih i varijanti za zaključavanje tipa, obaveznu težinu i upozorenja
  * dolaze iz te liste čim stigne.
+ *
+ * Isključena grupa (sopstvena tema ili tema pretka, Klod je ne nudi) ima u zaglavlju oznaku "Isključeno" i "Uključi": posle
+ * potvrde `DELETE iskljucene-teme/{iskljucenjeId}`, pa novo čitanje grupe, iz kog stižu samo `iskljucena` i `iskljucenjeId`
+ * (forma i osnova izmena ostaju, otkucano se ne gubi; pretku sa svojom temom grupa ostaje isključena).
  */
 @Component({
   selector: 'app-grupa-detalj-page',
@@ -97,6 +102,13 @@ interface GreskaUcitavanja {
             }
           </ol>
         </nav>
+        @if (g.iskljucena) {
+          <div kontekst class="bk-gd-iskljuceno" data-iskljuceno>
+            <span class="oznaka">Isključeno</span>
+            <span class="bk-gd-iskljuceno-tekst">Klod ovu temu ne nudi.</span>
+            <button matButton type="button" disabledInteractive [disabled]="ukljucuje()" (click)="ukljuciTemu()" data-ukljuci>Uključi</button>
+          </div>
+        }
       </app-page-header>
 
       <form class="lista-kartica bk-gd-forma" [formGroup]="forma" (ngSubmit)="sacuvaj()" novalidate aria-labelledby="bk-gd-naslov-forme">
@@ -248,6 +260,8 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   protected readonly cuva = signal(false);
   /** Razlog neuspelog čuvanja, u traci iznad forme. */
   protected readonly greska = signal<string | null>(null);
+  /** Uključivanje teme je u toku (dvostruka potvrda ne šalje dva `DELETE`-a). */
+  protected readonly ukljucuje = signal(false);
   /** Dupliranja i brisanja varijanti u letu: dok nije 0, ta dugmad čekaju (ponovljen zahtev pravi duplikat ili 404). */
   private readonly zauzetih = signal(0);
   protected readonly zauzeto = computed(() => this.zauzetih() > 0);
@@ -487,6 +501,49 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
             this.obavestenja.greska(`Grupa „${cmd.naziv}“ nije sačuvana: ${razlogBanke(e, UPIS)}`);
           }
         },
+      });
+  }
+
+  /**
+   * "Uključi" isključenu grupu: posle potvrde `DELETE` teme (`iskljucenjeId`, sopstvene ili pretka), pa grupa iznova; iz odgovora
+   * se preuzima samo isključenje. Kad oznaka nestane (sa dugmetom koje je imalo fokus), fokus ide na naziv grupe.
+   */
+  protected ukljuciTemu(): void {
+    const g = this.osnova();
+    const temaId = g?.iskljucenjeId ?? null;
+    if (!g || temaId === null || this.ukljucuje()) {
+      return;
+    }
+    potvrdiUkljucivanje(this.dialog)
+      .pipe(
+        filter(ok => ok && !this.ukljucuje()),
+        switchMap(() => {
+          this.ukljucuje.set(true);
+          return this.api.ukljuciTemu(temaId, TIHO).pipe(
+            tap(() => this.obavestenja.uspeh('Tema je ponovo uključena; Klod je opet može nuditi.')),
+            catchError((e: unknown) => {
+              this.obavestenja.greska(razlogBanke(e, UPIS));
+              return EMPTY;
+            }),
+            switchMap(() => this.api.grupa(g.id, TIHO).pipe(catchError((e: unknown) => {
+              this.obavestenja.greska(razlogBanke(e));
+              return EMPTY;
+            }))),
+            finalize(() => this.ukljucuje.set(false)),
+          );
+        }),
+      )
+      .subscribe(nova => {
+        if (this.osnova()?.id !== nova.id) {
+          return; // stranica je u međuvremenu prešla na drugu grupu
+        }
+        this.osnova.update(o => o && { ...o, iskljucena: nova.iskljucena, iskljucenjeId: nova.iskljucenjeId });
+        afterNextRender(() => {
+          const aktivni = this.document.activeElement;
+          if (!aktivni || aktivni === this.document.body) {
+            this.host.nativeElement.querySelector<HTMLElement>('input[data-naziv]')?.focus();
+          }
+        }, { injector: this.injector });
       });
   }
 

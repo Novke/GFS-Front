@@ -59,6 +59,7 @@ describe('GrupaDetaljPage', () => {
     vratiUNacrt: vi.fn(),
     dupliraj: vi.fn(),
     obrisiVarijantu: vi.fn(),
+    ukljuciTemu: vi.fn(),
   };
   const el = () => harness.routeNativeElement as HTMLElement;
 
@@ -134,6 +135,57 @@ describe('GrupaDetaljPage', () => {
     expect(e.querySelector('a[data-nova-varijanta]')!.getAttribute('href')).toBe('/banka/varijante/nova?grupa=2');
     expect(onemoguceno(sacuvaj())).toBe(true);
     expect(onemoguceno(odbaci())).toBe(true);
+  });
+
+  it('isključena grupa: oznaka "Isključeno" i "Uključi" (potvrda, DELETE teme, grupa iznova); otkucano u formi ostaje', async () => {
+    let iskljucena = true;
+    api.grupa.mockImplementation(() => of(list(iskljucena ? { iskljucena: true, iskljucenjeId: 9 } : {})));
+    api.ukljuciTemu.mockImplementation(() => {
+      iskljucena = false;
+      return of(undefined);
+    });
+    const uspeh = vi.spyOn(TestBed.inject(NotificationStore), 'uspeh');
+    const e = await otvori('/banka/grupe/2');
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    const oznaka = e.querySelector('app-page-header [data-iskljuceno]')!;
+    expect(oznaka.querySelector('.oznaka')!.textContent!.trim()).toBe('Isključeno');
+    await unesi('input[data-naziv]', 'Novi naziv');
+
+    const dugme = oznaka.querySelector<HTMLButtonElement>('button[data-ukljuci]')!;
+    dugme.focus();
+    await klik(dugme);
+    expect(overlay.querySelector('[role=alertdialog] h2')!.textContent!.trim()).toBe('Uključi temu ponovo?');
+    await klik(overlay.querySelector<HTMLButtonElement>('[data-odustani]')!);
+    expect(api.ukljuciTemu).not.toHaveBeenCalled();
+
+    await klik(dugme);
+    await klik(overlay.querySelector<HTMLButtonElement>('[data-potvrdi]')!);
+    expect(api.ukljuciTemu).toHaveBeenCalledExactlyOnceWith(9, { tiho: true });
+    expect(api.grupa).toHaveBeenCalledTimes(2);
+    expect(uspeh).toHaveBeenCalledWith('Tema je ponovo uključena; Klod je opet može nuditi.');
+    expect(e.querySelector('[data-iskljuceno]')).toBeNull();
+    // forma nije vraćena na sačuvano: samo oznaka isključenja dolazi iz novog čitanja
+    expect(e.querySelector<HTMLInputElement>('input[data-naziv]')!.value).toBe('Novi naziv');
+    expect(stranica().imaNesacuvanihIzmena()).toBe(true);
+    // dugme sa fokusom je nestalo: fokus na naziv grupe
+    expect(document.activeElement).toBe(e.querySelector('input[data-naziv]'));
+  });
+
+  it('neuspelo uključivanje teme: poruka greške, oznaka ostaje; grupa bez isključenja nema oznaku', async () => {
+    api.grupa.mockImplementation(() => of(list({ iskljucena: true, iskljucenjeId: 9 })));
+    api.ukljuciTemu.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 404, error: { reason: 'Isključena tema nije pronađena.' } })));
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    const e = await otvori('/banka/grupe/2');
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    await klik(e.querySelector<HTMLButtonElement>('[data-iskljuceno] button[data-ukljuci]')!);
+    await klik(overlay.querySelector<HTMLButtonElement>('[data-potvrdi]')!);
+    expect(greska).toHaveBeenCalledWith('Isključena tema nije pronađena.');
+    expect(e.querySelector('[data-iskljuceno]')).not.toBeNull();
+    expect(api.grupa).toHaveBeenCalledTimes(1);
+
+    api.grupa.mockImplementation(() => of(list()));
+    await otvori('/banka/grupe/3');
+    expect(el().querySelector('[data-iskljuceno]')).toBeNull();
   });
 
   it('samo preimenovanje: PUT sa "polja": null (šema ostaje), LOCAL_ERRORS, poruka uspeha i ponovo učitane varijante', async () => {

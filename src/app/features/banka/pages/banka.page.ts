@@ -23,11 +23,13 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { PageHeader } from '../../../shared/ui/page-header';
 import { StatTile } from '../../../shared/ui/stat-tile';
 import { sRecju } from '../../../shared/util/mnozina';
-import { GrupaCvor, Namena, nadjiCvor, putanjaDo, StatusVarijante, VarijantaInfo } from '../data-access/banka.models';
+import { GrupaCvor, IzvorVarijante, Namena, nadjiCvor, putanjaDo, StatusVarijante, VarijantaInfo } from '../data-access/banka.models';
 import { BankaStore } from '../data-access/banka.store';
 import { GrupaDialog } from '../ui/grupa-dialog';
+import { IskljuceneTemeComponent } from '../ui/iskljucene-teme.component';
 import { opisNeuspelih, PreambulaDialog } from '../ui/preambula-dialog';
 import { PremestiDialog } from '../ui/premesti-dialog';
+import { SerijeComponent } from '../ui/serije.component';
 import { opisBrojaca, StabloGrupaComponent } from '../ui/stablo-grupa.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
 
@@ -52,19 +54,27 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
   { vrednost: 'ARHIVIRANA', labela: 'Arhivirana' },
 ];
 
+/** Čip "Izvor": bez izbora su sve varijante ("Svi"). */
+const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
+  { vrednost: 'RUCNO', labela: 'Ručno' },
+  { vrednost: 'CLAUDE', labela: 'Claude' },
+];
+
 /**
  * Banka zadataka (`/banka?predmet&namena&grupa`): izbor predmeta i namene (Predavanja | Testovi) u zaglavlju, levo stablo
- * grupa, desno izabrana grupa. List: filter statusa i mreža kartica varijanti, "Nova varijanta" (samo grupa sa težinom);
- * unutrašnji čvor: zbirni brojači i podgrupe. URL je izvor istine za predmet, namenu i izbor; bez `?predmet` vraća se
- * zapamćen predmet (ili prvi po nazivu), jednom i sa `replaceUrl`. Izbor u stablu menja `?grupa` bez novog unosa u
- * istoriji. `BankaStore` je ovde (feature store stranice); izmene i greške idu kroz njega.
+ * grupa, a ispod njega isključene teme i Klodove serije predmeta (sa vezom na pregled nacrta), desno izabrana grupa (u DOM-u
+ * odmah posle stabla, pa je na uskom ekranu ispod njega, pre tema i serija). List: filteri statusa i izvora (Ručno / Claude) i
+ * mreža kartica varijanti, "Nova varijanta" (samo grupa sa težinom); unutrašnji čvor: zbirni brojači i podgrupe. URL je izvor
+ * istine za predmet, namenu i izbor; bez `?predmet` vraća se zapamćen predmet (ili prvi po nazivu), jednom i sa `replaceUrl`.
+ * Izbor u stablu menja `?grupa` bez novog unosa u istoriji. `BankaStore` je ovde (feature store stranice); izmene i greške idu
+ * kroz njega.
  */
 @Component({
   selector: 'app-banka-page',
   imports: [
-    ChipSelect, EmptyState, ErrorPanel, FilterBar, MatButton, MatButtonToggle, MatButtonToggleGroup, MatFormField, MatIcon,
-    MatLabel, MatOption, MatSelect, MatTooltip, PageHeader, RouterLink, SkeletonRows, StabloGrupaComponent, StatTile,
-    VarijantaKarticaComponent,
+    ChipSelect, EmptyState, ErrorPanel, FilterBar, IskljuceneTemeComponent, MatButton, MatButtonToggle, MatButtonToggleGroup,
+    MatFormField, MatIcon, MatLabel, MatOption, MatSelect, MatTooltip, PageHeader, RouterLink, SerijeComponent, SkeletonRows,
+    StabloGrupaComponent, StatTile, VarijantaKarticaComponent,
   ],
   providers: [BankaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -117,6 +127,11 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
           </button>
         </app-empty-state>
       </section>
+      <!-- teme i serije su po predmetu (ne po nameni), pa ih ima i kad je stablo ove namene prazno -->
+      <div class="bk-sekcije">
+        <app-iskljucene-teme [teme]="store.teme()" (ukljuci)="ukljuciTemu($event)" />
+        <app-serije [serije]="store.serije()" [predmetId]="predmetId()!" />
+      </div>
     } @else {
       <div class="bk-raspored">
         <section class="lista-kartica bk-panel-stabla" aria-labelledby="bk-naslov-stabla">
@@ -183,6 +198,8 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
               }
               <app-filter-bar [imaFiltera]="store.imaFiltera()" (ocisti)="store.ocisti()">
                 <app-chip-select labela="Status" [opcije]="statusi" [vrednost]="filterChipa()" (vrednostChange)="store.postaviFilter($event ?? 'SVE')" />
+                <app-chip-select labela="Izvor" [opcije]="izvori" [vrednost]="filterIzvoraChipa()"
+                  (vrednostChange)="store.postaviFilterIzvora($event ?? 'SVI')" />
               </app-filter-bar>
               @if (store.greskaGrupe(); as g) {
                 <app-error-panel naslov="Varijante grupe nisu učitane." [poruka]="g" (ponovo)="store.osveziStablo()" />
@@ -229,6 +246,9 @@ const STATUSI: readonly ChipOpcija<StatusVarijante>[] = [
             }
           }
         </section>
+
+        <app-iskljucene-teme [teme]="store.teme()" (ukljuci)="ukljuciTemu($event)" />
+        <app-serije [serije]="store.serije()" [predmetId]="predmetId()!" />
       </div>
     }
   `,
@@ -246,6 +266,8 @@ export class BankaPage {
   private readonly document = inject(DOCUMENT);
   /** Kartica posle čije radnje može da nestane (filter ili brisanje): njen indeks za fokus na sledeću. */
   private nestajeKartica: { grupaId: number | null; id: number; indeks: number } | null = null;
+  /** Uključena tema (nestaje iz liste): njen indeks za fokus na temu koja dođe na njeno mesto. */
+  private nestajeTema: { predmetId: number | null; id: number; indeks: number } | null = null;
   /** "Zadaj težinu": kad grupa dobije težinu, dugme i upozorenje nestaju, pa fokus ide na "Nova varijanta". */
   private tezinaZaGrupu: number | null = null;
   /**
@@ -263,6 +285,7 @@ export class BankaPage {
   readonly grupa = input<string>();
 
   protected readonly statusi = STATUSI;
+  protected readonly izvori = IZVORI;
   protected readonly predmetId = computed(() => parseId(this.predmet()));
   protected readonly namenaV = computed<Namena>(() => parseNamena(this.namena()) ?? 'PREDAVANJE');
   private readonly grupaIzUrla = computed(() => parseId(this.grupa()));
@@ -274,6 +297,7 @@ export class BankaPage {
   protected readonly cvor = computed(() => nadjiCvor(this.store.stablo(), this.store.izabranaGrupaId()));
   protected readonly grupaUcitana = computed(() => this.store.grupa()?.id === this.store.izabranaGrupaId());
   protected readonly filterChipa = computed(() => (this.store.filterStatusa() === 'SVE' ? null : (this.store.filterStatusa() as StatusVarijante)));
+  protected readonly filterIzvoraChipa = computed(() => (this.store.filterIzvora() === 'SVI' ? null : (this.store.filterIzvora() as IzvorVarijante)));
 
   constructor() {
     this.reference.ucitaj();
@@ -327,6 +351,27 @@ export class BankaPage {
           this.posleCrtanja(() => {
             const veze = this.host.nativeElement.querySelectorAll<HTMLElement>('app-varijanta-kartica .bk-kartica-veza');
             return veze[Math.min(k.indeks, veze.length - 1)] ?? this.host.nativeElement.querySelector<HTMLElement>('app-filter-bar button');
+          });
+        }
+      });
+    });
+
+    // uključena tema je nestala iz liste (zajedno sa dugmetom koje je imalo fokus): fokus na temu na njenom mestu, a kad je lista
+    // prazna (sekcije više nema), na stavku stabla u Tab redu; drugi predmet ili neuspelo uključivanje ne pomeraju ništa
+    effect(() => {
+      const teme = this.store.teme();
+      untracked(() => {
+        const t = this.nestajeTema;
+        if (!t || teme.some(x => x.id === t.id)) {
+          return;
+        }
+        this.nestajeTema = null;
+        if (t.predmetId === this.store.predmetId()) {
+          this.posleCrtanja(() => {
+            const dugmad = this.host.nativeElement.querySelectorAll<HTMLElement>('app-iskljucene-teme button[data-ukljuci]');
+            // prazno stablo (teme ispod praznog stanja): "Nova grupa" praznog stanja
+            return dugmad[Math.min(t.indeks, dugmad.length - 1)]
+              ?? this.host.nativeElement.querySelector<HTMLElement>('[role=treeitem][tabindex="0"], [data-prva-grupa]');
           });
         }
       });
@@ -423,6 +468,12 @@ export class BankaPage {
         this.fokusPosleIzmene = { vrsta: 'nova', roditeljId: roditelj?.id ?? null, naziv: r.naziv, privremeni: izMenija ? this.aktivni() : null };
         this.store.kreirajGrupu(roditelj ? { roditeljId: roditelj.id, ...sadrzaj } : { predmetId, namena: this.store.namena(), roditeljId: null, ...sadrzaj });
       });
+  }
+
+  /** Uključuje temu (posle potvrde u sekciji tema); stablo i teme se učitavaju iznova, tema nestaje iz liste. */
+  protected ukljuciTemu(id: number): void {
+    this.nestajeTema = { predmetId: this.store.predmetId(), id, indeks: this.store.teme().findIndex(t => t.id === id) };
+    this.store.ukljuciTemu(id);
   }
 
   /** Odobri, arhiviraj, vrati u nacrt; kartica može da nestane zbog filtera statusa. */

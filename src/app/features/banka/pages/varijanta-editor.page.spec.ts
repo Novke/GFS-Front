@@ -16,7 +16,7 @@ import { BankaApi } from '../data-access/banka.api';
 import { GrupaDetails, OdgovorPolja, Polje, VarijantaCmd, VarijantaDetails } from '../data-access/banka.models';
 import { novoPolje } from '../data-access/polja';
 import { KASNJENJE_PREGLEDA } from '../data-access/render-proba';
-import { VarijantaEditorPage } from './varijanta-editor.page';
+import { povratakNaPregled, VarijantaEditorPage } from './varijanta-editor.page';
 
 @Component({ template: 'druga' })
 class Druga {}
@@ -611,6 +611,59 @@ describe('VarijantaEditorPage', () => {
   it('obe rute editora pitaju pre napuštanja sa nesačuvanim izmenama', () => {
     const rute = BANKA_RUTE.filter(r => r.title === 'Nova varijanta' || r.title === 'Varijanta');
     expect(rute.map(r => r.canDeactivate)).toEqual([[unsavedChangesGuard], [unsavedChangesGuard]]);
+  });
+
+  it('Klodova varijanta: oznaka "Claude" uz status u zaglavlju; ručna i nova je nemaju', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' })));
+    let e = await otvori('/banka/varijante/13');
+    const oznaka = e.querySelector('app-page-header [data-izvor]')!;
+    expect(oznaka.textContent!.trim()).toBe('Claude');
+    expect(oznaka.getAttribute('title')).toBe('Varijantu je napravio Claude');
+
+    api.varijanta.mockReturnValue(of(varijanta(OK)));
+    e = await otvori('/banka/varijante/12');
+    expect(e.querySelector('[data-izvor]')).toBeNull();
+    e = await otvori('/banka/varijante/nova?grupa=2');
+    expect(e.querySelector('[data-izvor]')).toBeNull();
+  });
+
+  it('povratakNaPregled: samo putanja pregleda nacrta (sa upitom), ništa drugo', () => {
+    expect(povratakNaPregled('/banka/pregled')).toBe('/banka/pregled');
+    expect(povratakNaPregled('/banka/pregled?predmet=1&serija=x&od=13')).toBe('/banka/pregled?predmet=1&serija=x&od=13');
+    for (const los of [undefined, '', 'https://x', '//x/banka/pregled', '/banka', '/banka/pregledi', '/banka/pregled/../grupe/2', 'banka/pregled',
+      '/banka/pregled\\x', ' /banka/pregled']) {
+      expect(povratakNaPregled(los)).toBeNull();
+    }
+  });
+
+  it('?povratak na pregled nacrta: posle uspelog čuvanja nazad na pregled; povratak van pregleda vodi u banku kao do sada', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak' })));
+    await otvori('/banka/varijante/13?povratak=/banka/pregled?serija=x');
+    await unesi(editor('tekst'), 'Zadatak 2');
+    await klik(dugme('data-sacuvaj'));
+    expect(api.izmeniVarijantu).toHaveBeenCalledOnce();
+    expect(router.url).toBe('/banka/pregled?serija=x');
+
+    await router.navigate(['/banka/varijante', 13], { queryParams: { povratak: '/banka/pregled?predmet=7&serija=x&od=13' } });
+    await stabilno();
+    await klik(dugme('data-sacuvaj-odobri'));
+    expect(api.odobri).toHaveBeenCalledOnce();
+    expect(router.url).toBe('/banka/pregled?predmet=7&serija=x&od=13');
+
+    await otvori('/banka/varijante/13?povratak=https://x');
+    await unesi(editor('tekst'), 'Zadatak 3');
+    await klik(dugme('data-sacuvaj'));
+    expect(router.url).toBe('/banka?predmet=7&namena=PREDAVANJE&grupa=2');
+  });
+
+  it('?povratak ne menja ishod neuspelog rendera: korisnik ostaje na varijanti', async () => {
+    api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak' })));
+    api.izmeniVarijantu.mockImplementation((id: number, cmd: VarijantaCmd) => of(varijanta({ id, ...izCmd(cmd) })));
+    await otvori('/banka/varijante/13?povratak=/banka/pregled?serija=x');
+    await unesi(editor('tekst'), 'Zadatak \\foo');
+    await klik(dugme('data-sacuvaj'));
+    expect(router.url).toBe('/banka/varijante/13?povratak=%2Fbanka%2Fpregled%3Fserija%3Dx');
+    expect(el().querySelector('app-form-error-banner')!.textContent).toContain('render nije uspeo');
   });
 
   it('nepostojeća varijanta i nova bez ?grupa: prazno stanje sa vezom na banku', async () => {

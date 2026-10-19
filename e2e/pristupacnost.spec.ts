@@ -32,14 +32,18 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
     },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
-  // banka zadataka: list sa karticama (i greškom rendera) i unutrašnji čvor sa zbirom
+  // banka zadataka: list sa karticama (i greškom rendera), ispod stabla isključene teme i Klodove serije; unutrašnji čvor sa
+  // zbirom; Klodova grupa (bedž "Klod: N", oznake "Claude", prigušen isključen čvor u stablu)
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
+  { putanja: 'banka?predmet=1&grupa=4', spremno: p => p.locator('app-serije [data-serija]') },
   // detalj grupe: list sa poljem BROJ (tip zaključan aktivnom varijantom) i karticama, list sa poljima TEKST i JEDAN_TACAN,
   // unutrašnji čvor (samo naziv i opis)
   { putanja: 'banka/grupe/2', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka/grupe/3', spremno: p => p.locator('app-polja-editor input[data-opcija]').first() },
   { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
+  // isključena grupa: oznaka "Isključeno" i "Uključi" u zaglavlju
+  { putanja: 'banka/grupe/5', spremno: p => p.locator('[data-iskljuceno]') },
   // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
   // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
   { putanja: 'banka/varijante/nova?grupa=2', spremno: p => p.locator('[data-nedostaje]') },
