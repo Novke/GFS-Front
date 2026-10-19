@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { PRELAZ, greskeSlajda, novoPitanje, slajdUCmd, trajanjeIzSekundi } from '../data-access/slajd-pravila';
 import { MedijInfo, SlajdCmd, SlajdDetails, TipPrelaza, TipSlajda } from '../data-access/uzivo.models';
 import { PitanjeForma, PitanjeFormaComponent, pitanjeForma, pitanjeIzForme } from './pitanje-forma.component';
+import { ZadatakForma, ZadatakFormaComponent, zadatakForma, zadatakIzForme } from './zadatak-forma.component';
 // samo u @defer bloku (i `import type`): polja prelaza su lenji chunk, stranica editora ne raste
 import { PrelazPoljaComponent } from './prelaz-polja.component';
 import type { KontrolePrelaza } from './prelaz-polja.component';
@@ -22,6 +23,7 @@ type SlajdForma = FormGroup<KontrolePrelaza & {
   postepeno: FormControl<boolean>;
   beleske: FormControl<string>;
   pitanje: PitanjeForma;
+  zadatak: ZadatakForma;
 }>;
 
 const nn = { nonNullable: true } as const;
@@ -36,7 +38,7 @@ const nn = { nonNullable: true } as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, TextFieldModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatIconModule, MatInputModule,
-    PitanjeFormaComponent, PrelazPoljaComponent, SlikaPoljeComponent,
+    PitanjeFormaComponent, PrelazPoljaComponent, SlikaPoljeComponent, ZadatakFormaComponent,
   ],
   template: `
     <form class="uz-ed-forma" [formGroup]="forma" (submit)="$event.preventDefault()">
@@ -60,6 +62,9 @@ const nn = { nonNullable: true } as const;
           </button>
           <p class="uz-ed-napomena" id="uz-ed-pretvori-opis">Slajd postaje platno sa slojevima (naslov, tekst, slika) koje uređuješ slobodno.</p>
         </div>
+      } @else if (tip === 'ZADATAK') {
+        <!-- opis grupe prati odgovore servera (ulaz slajd), kontrole se grade jednom -->
+        <app-zadatak-forma [forma]="forma.controls.zadatak" [info]="slajd().zadatak ?? null" [predmetId]="predmetId()" />
       } @else if (tip !== 'PLATNO') {
         <!-- PLATNO: slojeve uređuje editor platna iznad forme; ovde ostaju samo beleške -->
         <app-pitanje-forma [forma]="forma.controls.pitanje" />
@@ -88,6 +93,8 @@ const nn = { nonNullable: true } as const;
 export class SlajdFormaComponent implements OnInit {
   /** Početno stanje slajda; čita se samo pri pravljenju forme. */
   readonly slajd = input.required<SlajdDetails>();
+  /** Predmet prezentacije (Zadatak slajd: izbor grupe iz banke tog predmeta). */
+  readonly predmetId = input<number>(0);
   readonly izmena = output<SlajdCmd>();
   /** INFO: "Pretvori u platno" (odluka 20); forma se posle toga pravi ponovo (`track kljuc:tip`). */
   readonly pretvori = output<void>();
@@ -115,6 +122,7 @@ export class SlajdFormaComponent implements OnInit {
       postepeno: new FormControl(cmd.postepeno, nn),
       beleske: new FormControl(cmd.beleske ?? '', nn),
       pitanje: pitanjeForma(cmd.pitanje ?? novoPitanje('JEDAN_TACAN')),
+      zadatak: zadatakForma(cmd.zadatak ?? null),
       prelazEfekat: new FormControl<TipPrelaza | 'NEMA'>(cmd.prelaz?.efekat ?? 'NEMA', nn),
       prelazSmer: new FormControl(cmd.prelaz?.smer ?? 'DESNO', nn),
       prelazSekunde: new FormControl(String((cmd.prelaz?.trajanjeMs ?? PRELAZ.podrazumevano) / 1000).replace('.', ','), nn),
@@ -135,19 +143,22 @@ export class SlajdFormaComponent implements OnInit {
 
   private cmd(): SlajdCmd {
     const v = this.forma.getRawValue();
+    // ZADATAK: samo zadatak (uz beleške i prelaz), ostala polja sadržaja su null
+    const zadatak = this.tip === 'ZADATAK';
     return {
       tip: this.tip,
-      naslov: v.naslov || null,
-      sadrzaj: v.sadrzaj || null,
-      slikaId: v.slikaId,
+      naslov: zadatak ? null : v.naslov || null,
+      sadrzaj: zadatak ? null : v.sadrzaj || null,
+      slikaId: zadatak ? null : v.slikaId,
       beleske: v.beleske || null,
-      postepeno: v.postepeno,
+      postepeno: zadatak ? false : v.postepeno,
       pitanje: this.tip === 'PITANJE' ? pitanjeIzForme(this.forma.controls.pitanje) : null,
       platno: this.platno,
       // zarez ili tačka; prazno ili neispravno polje daje 0 ms, pa poruku servera ispod forme
       prelaz: v.prelazEfekat === 'NEMA' ? null : {
         efekat: v.prelazEfekat, smer: v.prelazEfekat === 'FADE' ? null : v.prelazSmer, trajanjeMs: trajanjeIzSekundi(v.prelazSekunde),
       },
+      zadatak: zadatak ? zadatakIzForme(this.forma.controls.zadatak) : null,
     };
   }
 }

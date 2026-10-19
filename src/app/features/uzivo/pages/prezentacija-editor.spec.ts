@@ -26,6 +26,10 @@ import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { OPISI_GUBITAKA } from '../data-access/pretvori-u-platno';
 import { SlajdFormaComponent } from './slajd-forma.component';
 import { PregledPrelazaPodaci, PrelazPregledDialog } from './prelaz-pregled.dialog';
+import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
+import { ZadatakFormaComponent } from './zadatak-forma.component';
+import { zadatakSlajd } from '../data-access/izvodjenje-podaci.testing';
+import type { CvorIzbora } from '../../../core/api/banka-izbor.api';
 
 const POKRENI = 'api/prezentacije/1/izvodjenja';
 /** Stavka otvorenog menija (CDK overlay je u body). */
@@ -1304,5 +1308,77 @@ describe('PrezentacijaEditorPage: Pretvori u platno (F10)', () => {
     (uspeh.mock.calls[0][1] as { run: () => void }).run();
     expect(izmeni).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith('Editor je zatvoren, pa pretvaranje više ne može da se poništi.');
+  });
+});
+
+describe('PrezentacijaEditorPage: Zadatak slajd', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let http: HttpTestingController;
+  let store: InstanceType<typeof EditorStore>;
+  let izaberi: ReturnType<typeof vi.fn>;
+  const LIST: CvorIzbora = { id: 3, naziv: '16 → 2', list: true, brojAktivnih: 1, iskljucena: false, deca: [] };
+  const zadatak: SlajdDetails = { ...zadatakSlajd({ brojVarijanti: 2 }), id: 12, rb: 2 };
+
+  beforeEach(() => {
+    izaberi = vi.fn(() => of(LIST));
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: IzborGrupeOtvarac, useValue: { izaberi } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, slajdovi: [slajd(11, 1, 'Uvod'), zadatak] });
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  const el = () => fixture.nativeElement as HTMLElement;
+  const dugmeZadatka = () => [...el().querySelectorAll<HTMLButtonElement>('.uz-ed-dodaj button')].find(b => b.textContent?.trim() === 'Zadatak');
+
+  it('dugme "Zadatak" (ikona assignment) u traci dodavanja: izbor iz banke predmeta prezentacije, pa slajd posle izabranog', saLaznimSatom(async () => {
+    const dodaj = vi.spyOn(store, 'dodajZadatak');
+    const b = dugmeZadatka()!;
+    expect(b).toBeDefined();
+    expect(b.querySelector('mat-icon')!.getAttribute('data-mat-icon-name')).toBe('assignment');
+    b.click();
+    expect(izaberi).toHaveBeenCalledWith({ predmetId: 7, grupaId: null });
+    expect(dodaj).toHaveBeenCalledWith(LIST, 11);
+    expect(store.izabrani()!.tip).toBe('ZADATAK');
+    expect(store.slajdovi().map(s => s.id).slice(0, 1)).toEqual([11]);
+    http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi').flush({ ...zadatakSlajd(), id: 40, rb: 2 });
+    await pomeriSat(800);
+  }));
+
+  it('odustajanje od izbora ne dodaje slajd', () => {
+    izaberi.mockReturnValue(of(undefined));
+    const dodaj = vi.spyOn(store, 'dodajZadatak');
+    dugmeZadatka()!.click();
+    expect(dodaj).not.toHaveBeenCalled();
+    expect(store.slajdovi().length).toBe(2);
+    http.expectNone(() => true);
+  });
+
+  it('ZADATAK u listi: ikona assignment i naziv Zadatak, oznaka sa grupom; bočni pregled je kartica zadatka; forma dobija predmet', () => {
+    const ikone = [...el().querySelectorAll('.uz-ed-stavka mat-icon.uz-ed-ikona')];
+    expect(ikone.map(i => i.getAttribute('aria-label'))).toEqual(['Info slajd', 'Zadatak']);
+    expect(ikone[1].getAttribute('data-mat-icon-name')).toBe('assignment');
+    expect(el().querySelectorAll('.uz-ed-oznaka')[1].textContent?.trim()).toBe('Zadatak: 2 → 10');
+    store.izaberi(12);
+    fixture.detectChanges();
+    const pregled = el().querySelector('.uz-ed-pregled app-slajd-prikaz')!;
+    expect(pregled.textContent).toContain('Zadatak');
+    expect(pregled.textContent).toContain('Različitih: 2');
+    const forma = fixture.debugElement.query(d => d.componentInstance instanceof ZadatakFormaComponent).componentInstance as ZadatakFormaComponent;
+    expect(forma.predmetId()).toBe(7);
   });
 });

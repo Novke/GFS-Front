@@ -6,6 +6,7 @@ import type { Page, Request, Route } from '@playwright/test';
 import type {
   BankaPretragaStavka, GrupaCmd, IskljucenaTemaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd,
 } from '../src/app/features/banka/data-access/banka.models';
+import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 
@@ -58,6 +59,8 @@ interface Prijava {
 interface UzivoSlajd {
   id: number; rb: number; tip: string; naslov: string | null; sadrzaj: string | null; slika: unknown; beleske: string | null;
   postepeno: boolean; pitanje: unknown; platno: unknown; prelaz?: Prelaz | null;
+  /** ZADATAK: samo izbor (`SlajdCmd.zadatak`); opis (`ZadatakSlajdaInfo`) mok računa pri svakom odgovoru, kao server. */
+  zadatak?: ZadatakSlajda | null;
 }
 /** Prelaz na slajd (faza 5, Ugovor 4); slajd koji test doda bez polja front čita kao `null`. */
 interface Prelaz { efekat: string; smer: string | null; trajanjeMs: number }
@@ -66,6 +69,12 @@ interface Prelaz { efekat: string; smer: string | null; trajanjeMs: number }
 function normalizujPrelaz(p: Partial<Prelaz> | null | undefined): Prelaz | null {
   if (!p?.efekat) return null;
   return { efekat: p.efekat, smer: p.efekat === 'FADE' ? null : (p.smer ?? 'DESNO'), trajanjeMs: p.trajanjeMs ?? 500 };
+}
+
+/** Kao `SlajdPP.normalizuj`: zadatak (izbor grupe, vreme, broj različitih) nosi samo ZADATAK slajd. */
+function zadatakIzCmd(cmd: { tip: string; zadatak?: ZadatakSlajda | null }): ZadatakSlajda | null {
+  const z = cmd.tip === 'ZADATAK' ? cmd.zadatak : null;
+  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null } : null;
 }
 interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
@@ -79,6 +88,7 @@ interface SlajdCmd {
   platno: unknown;
   /** Kao server: PUT je puna zamena, pa komanda bez `prelaz` briše prelaz. */
   prelaz?: Partial<Prelaz> | null;
+  zadatak?: ZadatakSlajda | null;
 }
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
@@ -576,7 +586,7 @@ export class MockApi {
     const { slikaId, ...q } = cmd.pitanje ?? { slikaId: null };
     return {
       id, rb: 0, tip: cmd.tip, naslov: cmd.naslov, sadrzaj: cmd.sadrzaj, slika: medij(cmd.slikaId), beleske: cmd.beleske,
-      postepeno: cmd.postepeno, platno: cmd.platno, prelaz: normalizujPrelaz(cmd.prelaz),
+      postepeno: cmd.postepeno, platno: cmd.platno, prelaz: normalizujPrelaz(cmd.prelaz), zadatak: zadatakIzCmd(cmd),
       pitanje: cmd.pitanje
         ? {
             ...q, id: this.sledeciId++, slika: medij(slikaId),
@@ -584,6 +594,16 @@ export class MockApi {
           }
         : null,
     };
+  }
+
+  /** Slajd kako ga server šalje: ZADATAK dobija opis grupe nad trenutnim stanjem banke (`ZadaciSlajdova`, pri svakom čitanju). */
+  private slajdOdgovor(s: UzivoSlajd): unknown {
+    if (s.tip !== 'ZADATAK') return s;
+    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null }) };
+  }
+
+  private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
+    return { ...x, slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
   }
 
   private kontrolnaTabla() {
@@ -852,7 +872,8 @@ export class MockApi {
     get('izvodjenja', () => ok([]));
     const info = (x: UzivoPrezentacija) => {
       const { slajdovi, ...ostalo } = x;
-      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE').length };
+      // kao server: slajdovi sa rundama (PITANJE i ZADATAK)
+      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length };
     };
     get('prezentacije', z => {
       const predmetId = z.query.get('predmetId');
@@ -919,7 +940,7 @@ export class MockApi {
       x.slajdovi.splice(mesto, 0, ...novi);
       x.slajdovi.forEach((s, i) => (s.rb = i + 1));
       x.brojSlajdova = x.slajdovi.length;
-      return { status: 201, telo: x };
+      return { status: 201, telo: this.prezentacijaOdgovor(x) };
     });
     // dijalog "Pokreni" (prezentacija sa pitanjem): predavanja za izbor; mok ih nema (izbor "Uz predavanje" je onemogućen)
     get('prezentacije/:id/predavanja', (_z, p) => {
@@ -928,7 +949,7 @@ export class MockApi {
     });
     get('prezentacije/:id', (_z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
-      return jeOdgovor(x) ? x : ok(x);
+      return jeOdgovor(x) ? x : ok(this.prezentacijaOdgovor(x));
     });
     put('prezentacije/:id', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
@@ -936,7 +957,7 @@ export class MockApi {
         return x;
       }
       Object.assign(x, z.telo);
-      return ok(x);
+      return ok(this.prezentacijaOdgovor(x));
     });
     put('slajdovi/:id', (z, p) => {
       for (const pr of d.prezentacije) {
@@ -944,14 +965,18 @@ export class MockApi {
         if (i >= 0) {
           const cmd = { ...(z.telo as UzivoSlajd & { slikaId?: string | null }) };
           delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
-          // puna zamena prelaza kao na serveru: PUT bez `prelaz` ga briše (regresija F16)
-          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd, prelaz: normalizujPrelaz(cmd.prelaz) };
-          return ok(pr.slajdovi[i]);
+          if (cmd.tip === 'ZADATAK') {
+            const odbijeno = this.banka.proveriZadatak(pr.predmet.id, cmd.zadatak);
+            if (odbijeno) return odbijeno;
+          }
+          // puna zamena prelaza (i zadatka) kao na serveru: PUT bez `prelaz` ga briše (regresija F16)
+          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd, prelaz: normalizujPrelaz(cmd.prelaz), zadatak: zadatakIzCmd(cmd) };
+          return ok(this.slajdOdgovor(pr.slajdovi[i]));
         }
       }
       return greska(404, 'Slajd ne postoji.');
     });
-    // nov slajd (editor: "+ Info", "+ Pitanje", "+ Platno"): kao backend, na kraj ili odmah posle `?posle=`, prenumeracija
+    // nov slajd (editor: "+ Info", "+ Pitanje", "+ Platno", "Zadatak"): kao backend, na kraj ili odmah posle `?posle=`, prenumeracija
     post('prezentacije/:id/slajdovi', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
       if (jeOdgovor(x)) {
@@ -965,10 +990,15 @@ export class MockApi {
       if (posle !== null && i < 0) {
         return greska(400, 'Slajd posle kog se dodaje nije u ovoj prezentaciji.');
       }
-      const slajd = this.slajdIzCmd(z.telo as SlajdCmd, this.sledeciId++);
+      const cmd = z.telo as SlajdCmd;
+      if (cmd.tip === 'ZADATAK') {
+        const odbijeno = this.banka.proveriZadatak(x.predmet.id, cmd.zadatak);
+        if (odbijeno) return odbijeno;
+      }
+      const slajd = this.slajdIzCmd(cmd, this.sledeciId++);
       x.slajdovi.splice(i + 1, 0, slajd);
       x.slajdovi.forEach((s, rb) => (s.rb = rb + 1));
-      return { status: 201, telo: slajd };
+      return { status: 201, telo: this.slajdOdgovor(slajd) };
     });
     del('slajdovi/:id', (_z, p) => {
       for (const pr of d.prezentacije) {

@@ -6,12 +6,13 @@ import {
   EMPTY, Observable, Subject, catchError, concat, debounce, defer, filter, finalize, groupBy, map, mergeMap, of, pipe, race,
   switchMap, take, tap, throwError, timer,
 } from 'rxjs';
+import type { CvorIzbora } from '../../../core/api/banka-izbor.api';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { RegistarCuvanja, SesijaCuvanja } from '../../../core/state/registar-cuvanja';
 import { PrezentacijeApi } from './prezentacije.api';
 import { razlogGreske } from './razlog-greske';
 import {
-  MAX_SLAJDOVA, PORUKE, greskePrezentacije, greskeSlajda, greskeSlajdaZaSlanje, noviSlajd, slajdIzCmd, slajdUCmd,
+  MAX_SLAJDOVA, PORUKE, greskePrezentacije, greskeSlajda, greskeSlajdaZaSlanje, noviSlajd, prazanZadatakInfo, slajdIzCmd, slajdUCmd,
 } from './slajd-pravila';
 import { novoPlatno, type RasporedNovogPlatna } from './platno-novo';
 import type { Platno } from './platno.models';
@@ -144,8 +145,8 @@ export const EditorStore = signalStore(
     return {
       slajdovi,
       izabrani: computed(() => slajdovi().find(s => s.id === izabraniId()) ?? null),
-      /** Sačuvana pitanja (o njima odlučuje dijalog "Pokreni"). */
-      brojPitanja: computed(() => slajdovi().filter(s => s.id > 0 && s.tip === 'PITANJE').length),
+      /** Sačuvani slajdovi sa rundama, pitanja i zadaci (o njima odlučuje dijalog "Pokreni"; kao `brojPitanja` servera). */
+      brojPitanja: computed(() => slajdovi().filter(s => s.id > 0 && (s.tip === 'PITANJE' || s.tip === 'ZADATAK')).length),
       /** Id-jevi slajdova koji ne prolaze validaciju (u listi dobijaju upozorenje). */
       neispravni: computed(() => new Set(slajdovi().filter(s => greskeSlajda(slajdUCmd(s)).length > 0).map(s => s.id))),
     };
@@ -438,10 +439,11 @@ export const EditorStore = signalStore(
       patchState(store, { izabraniId: novi });
     }
 
-    function ubaciNacrt(cmd: SlajdCmd, posleIndeksa: number): number {
+    /** `osnova`: lokalni opis do odgovora servera (npr. opis zadatka iz izabranog čvora ili originala kopije). */
+    function ubaciNacrt(cmd: SlajdCmd, posleIndeksa: number, osnova: Partial<SlajdDetails> = {}): number {
       const id = sledeciNacrt--;
       const lista = [...store.slajdovi()];
-      lista.splice(posleIndeksa + 1, 0, slajdIzCmd(cmd, { id, rb: 0 }));
+      lista.splice(posleIndeksa + 1, 0, slajdIzCmd(cmd, { ...osnova, id, rb: 0 }));
       postaviSlajdove(lista);
       cmdovi.set(id, cmd);
       izmena.set(id, 1);
@@ -630,6 +632,24 @@ export const EditorStore = signalStore(
         if (tip === 'PLATNO') posaljiOdmah(id);
       },
 
+      /**
+       * Nov Zadatak slajd nad čvorom banke iz dijaloga izbora, posle slajda `posle` (id; bez njega posle izabranog, inače na
+       * kraj); bira ga. Bez tajmera, sve aktivne varijante. Ispravan je odmah, pa se šalje odmah; do odgovora servera opis
+       * (naziv, kandidati, isključenje) dolazi iz čvora, pa lista odmah kaže "Zadatak: <grupa>".
+       */
+      dodajZadatak(cvor: CvorIzbora, posle?: number): void {
+        if (!imaMesta()) return;
+        const lista = store.slajdovi();
+        const posleId = posle === undefined ? store.izabraniId() : razresi(posle);
+        const i = lista.findIndex(s => s.id === posleId);
+        const z = { grupaId: cvor.id, vremeSekunde: null, brojVarijanti: null };
+        const opis = {
+          ...prazanZadatakInfo(z), grupaNaziv: cvor.naziv, putanja: [{ id: cvor.id, naziv: cvor.naziv }], list: cvor.list,
+          brojAktivnihVarijanti: cvor.brojAktivnih, iskljucena: cvor.iskljucena,
+        };
+        posaljiOdmah(ubaciNacrt(noviSlajd('ZADATAK', undefined, null, z), i < 0 ? lista.length - 1 : i, { zadatak: opis }));
+      },
+
       obrisi(id: number): void {
         const kljuc = razresi(id);
         const lista = store.slajdovi();
@@ -662,7 +682,7 @@ export const EditorStore = signalStore(
         if (i < 0 || !imaMesta()) return;
         if (kljuc < 0 || naCekanju(kljuc)) {
           const cmd = structuredClone(cmdovi.get(kljuc) ?? slajdUCmd(lista[i]));
-          posaljiOdmah(ubaciNacrt(cmd, i));
+          posaljiOdmah(ubaciNacrt(cmd, i, { zadatak: lista[i].zadatak }));
           return;
         }
         const gen = generacija;

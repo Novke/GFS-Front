@@ -206,6 +206,31 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('mat-dialog-container')).toHaveCount(0);
     });
 
+    // Zadatak slajd (FE-2): forma sa upozorenjima servera (`--warn`) i vezom na banku (grupa 5: isključena, bez aktivnih),
+    // bočni pregled (kartica zadatka) i dijalog izbora grupe (stablo radio dugmadi, čip "Isključeno")
+    test('/prezentacije/6 (Zadatak slajd sa upozorenjima i dijalog izbora grupe): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.prezentacije.find(x => x.id === 6)!.slajdovi.find(s => s.id === 62)!.zadatak =
+        { grupaId: 5, vremeSekunde: 120, brojVarijanti: null };
+      await page.goto('prezentacije/6');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      const forma = page.locator('app-zadatak-forma');
+      await expect(forma.getByRole('status').locator('p')).toHaveCount(2);
+      await expect(forma.getByRole('link', { name: 'Otvori u banci' })).toBeVisible();
+      await expect(page.locator('.uz-ed-pregled [data-zadatak]')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma Zadatak slajda (${rezim})`).toEqual([]);
+
+      await forma.getByRole('button', { name: 'Promeni grupu…' }).click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.getByRole('radio')).toHaveCount(5);
+      await expect(kontejner.getByText('Isključeno', { exact: true })).toBeVisible();
+      await posleOtvaranjaDijaloga(page, kontejner);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: izbor grupe zadataka (${rezim})`).toEqual([]);
+      await kontejner.getByRole('button', { name: 'Otkaži' }).click();
+      await expect(kontejner).toHaveCount(0);
+    });
+
     test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {
       await nastavnickiBroker(page, mock);
       await page.goto('izvodjenja/7/konzola');

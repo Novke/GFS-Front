@@ -20,6 +20,7 @@ export interface KodTraka { host: string; kod: string; }
  * INFO: naslov, Markdown, slika; uz `postepeno` su sakrivene stavke liste najvišeg nivoa sa indeksom ≥ `korak`.
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
  * Tekst pitanja i opcija može imati formule `$...$` (`app-tekst-formule`); INFO ih ne tumači.
+ * ZADATAK (bez stanja izvođenja, npr. pregled u editoru): statična kartica "Zadatak", naziv grupe i broj različitih.
  * PLATNO: `app-platno-prikaz` preko celog okvira (slojevi posle koraka `korak`, animacija prelaza `animacija`), bez
  * trake "host/uzivo · kod" (pokrila bi sadržaj uvezenog slajda; kasni studenti imaju QR).
  * Tema prezentacije: CSS promenljive `--uz-tema-*` na korenu `uz-platno` (pozadina, tekst, naslov, fontovi INFO i
@@ -44,6 +45,15 @@ export interface KodTraka { host: string; kod: string; }
         <div class="uz-slajd-telo" [class.uz-slajd-telo--dve]="!!html() && !!slajd().slika">
           @if (html()) { <div #sadrzaj class="uz-md uz-slajd-md" [innerHTML]="html()"></div> }
           @if (slajd().slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
+        </div>
+      } @else if (slajd().tip === 'ZADATAK') {
+        @let z = slajd().zadatak;
+        <h1 class="uz-slajd-naslov">Zadatak</h1>
+        <div class="uz-slajd-telo">
+          <div class="uz-md uz-slajd-md" data-zadatak>
+            <p>{{ z?.grupaNaziv ?? (z && z.grupaId !== null ? 'Grupa zadataka' : 'Grupa nije izabrana') }}</p>
+            <p>Različitih: {{ z?.brojVarijanti ?? 'sve' }}</p>
+          </div>
         </div>
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
