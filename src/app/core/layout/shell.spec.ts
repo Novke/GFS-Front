@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { routes } from '../../app.routes';
 import { ReferenceStore } from '../state/reference.store';
+import { SesijaStore } from '../auth/sesija.store';
 import { DashboardCountsStore } from '../state/dashboard-counts.store';
 import { IKONE } from './icons';
 import { Shell } from './shell';
@@ -51,6 +52,8 @@ describe('Shell', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: MediaMatcher, useValue: mediaZaSirinu(sirina) },
+        // čuvar ljuske (nastavnikGuard): nastavnik je prijavljen; sam čuvar i 401 imaju svoje specove u core/auth
+        { provide: SesijaStore, useValue: { proveri: () => Promise.resolve(true) } },
         {
           provide: DashboardCountsStore,
           useFactory: () => {

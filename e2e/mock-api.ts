@@ -200,6 +200,10 @@ function pogodi(rute: readonly Ruta[], z: Zahtev): { ruta: Ruta; p: Parametri } 
 
 const greska = (status: number, reason: string): Odgovor => ({ status, telo: { reason, time: new Date().toISOString() } });
 
+/** Kao `PristupMatrica` na serveru: bez sesije nastavnika prolaze samo `public/*`, `auth/prijava` i `auth/ja`. */
+const trazeSesiju = (putanja: string): boolean =>
+  !(putanja === 'public' || putanja.startsWith('public/') || putanja === 'auth/prijava' || putanja === 'auth/ja');
+
 /** Zadržan odgovor: `stigao` se razrešava kad zahtev stigne do moka, a odgovor ide tek posle `pusti()`. */
 export interface Zadrzan {
   stigao: Promise<Zahtev>;
@@ -220,6 +224,15 @@ export class MockApi {
   readonly mediji: Medij[] = [];
   /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
   readonly banka = new MockBanka(this.podaci, id => this.predmet(id) !== null, this.mediji);
+  /**
+   * Sesija nastavnika (kao kolačić `gfs_nastavnik`). Podrazumevano je nastavnik prijavljen, pa specovi pre prijave rade kao
+   * ranije. Bez nje mok odgovara kao server: svaki nastavnički API (sve osim `public/*`, `auth/prijava` i `auth/ja`) daje 401
+   * `Potrebna je prijava.`, pre zamena (`na`) i podrazumevanih ruta. Test je menja direktno (istek usred rada) ili kroz
+   * `POST auth/prijava` sa {@link MockApi.LOZINKA}.
+   */
+  prijavljen = true;
+  /** Izmišljena lozinka koju mok prihvata za korisnika `nastavnik`. */
+  static readonly LOZINKA = 'lozinka-za-e2e';
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -297,7 +310,9 @@ export class MockApi {
 
     const izbor = pogodi(this.zamene, z) ?? pogodi(this.rute, z);
     let odgovor: Odgovor;
-    if (!izbor) {
+    if (!this.prijavljen && trazeSesiju(putanja)) {
+      odgovor = greska(401, 'Potrebna je prijava.');
+    } else if (!izbor) {
       this.nepoznati.push(`${z.metod} api/${putanja}${url.search}`);
       odgovor = greska(404, 'Mok nema ovu rutu.');
     } else {
@@ -627,6 +642,22 @@ export class MockApi {
     const nadji = <T extends { id: number }>(lista: T[], id: string, sta: string): T | Odgovor =>
       lista.find(x => x.id === Number(id)) ?? greska(404, `${sta} ne postoji.`);
     const jeOdgovor = (x: unknown): x is Odgovor => typeof x === 'object' && x !== null && 'status' in x;
+
+    // sesija nastavnika (`api/auth/*`) i značka obaveštenja; prijava prima samo `nastavnik` / `MockApi.LOZINKA`
+    get('auth/ja', () => (this.prijavljen ? ok({ uloga: 'NASTAVNIK', korisnik: 'nastavnik' }) : greska(401, 'Potrebna je prijava.')));
+    post('auth/prijava', z => {
+      const telo = z.telo as { korisnik?: unknown; lozinka?: unknown } | null;
+      if (telo?.korisnik !== 'nastavnik' || telo.lozinka !== MockApi.LOZINKA) {
+        return greska(401, 'Pogrešno korisničko ime ili lozinka.');
+      }
+      this.prijavljen = true;
+      return { status: 204 };
+    });
+    post('auth/odjava', () => {
+      this.prijavljen = false;
+      return { status: 204 };
+    });
+    get('obavestenja/broj', () => ok({ neprocitana: 0, otvorena: 0 }));
 
     // predmeti, grupe, tipovi testa
     get('predmeti', () => ok(d.predmeti));

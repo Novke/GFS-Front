@@ -1,5 +1,6 @@
 import { Route, Routes } from '@angular/router';
 
+import { nastavnikGuard } from './core/auth/nastavnik.guard';
 import { Mrvica, MrviceFn } from './core/layout/breadcrumbs';
 import { mrvica as m } from './core/layout/mrvica';
 import { NotFound } from './core/layout/not-found';
@@ -155,9 +156,26 @@ export const routes: Routes = [
     children: UZIVO_JAVNE_RUTE,
   },
 
+  // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.
+  {
+    path: 'prijava',
+    component: PublicLayout,
+    children: [
+      {
+        path: '',
+        title: 'Prijava',
+        loadComponent: () => import('./features/prijava/pages/prijava.page').then(x => x.PrijavaPage),
+      },
+    ],
+  },
+
+  // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
+  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `prijava`; kasnije `nalog`, `render/slajd`) su bez njega.
+
   // Projektor (bez ljuske, uvek svetao)
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     children: [
       {
@@ -169,6 +187,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     children: [
       {
@@ -182,6 +201,7 @@ export const routes: Routes = [
   // Izvođenje uživo na projektoru, konzola (desktop i telefon) i daljinski: bez ljuske, ceo ekran; uvek svetlo osim daljinskog.
   {
     matcher: putanjaSaId('izvodjenja/:id/publika'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true },
     children: [
@@ -190,6 +210,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('izvodjenja/:id/konzola'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true },
     children: [
@@ -198,6 +219,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('izvodjenja/:id/daljinski'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true, pratiRezim: true },
     children: [
@@ -205,5 +227,5 @@ export const routes: Routes = [
     ],
   },
 
-  { path: '', component: Shell, children: nastavnickeRute },
+  { path: '', component: Shell, canMatch: [nastavnikGuard], children: nastavnickeRute },
 ];

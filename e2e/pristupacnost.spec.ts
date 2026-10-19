@@ -32,6 +32,8 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
     },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
+  // prijava nastavnika (bez ljuske; nastavnik je u moku prijavljen, a stranica ionako ne pita za sesiju)
+  { putanja: 'prijava?nazad=studenti', spremno: p => p.getByRole('button', { name: 'Prijavi se' }) },
   // banka zadataka: list sa karticama (i greškom rendera) i unutrašnji čvor sa zbirom
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
