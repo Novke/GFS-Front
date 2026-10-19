@@ -646,6 +646,7 @@ export class MockBanka {
     if (predmetIdParam === null || predmetIdParam === '') return greska(400, 'Predmet je obavezan.');
     if (!/^\d+$/.test(predmetIdParam)) return greska(400, 'Neispravan parametar: predmetId.');
     const predmetId = Number(predmetIdParam);
+    if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const grupe = this.d.bankaGrupe.filter(g => g.predmetId === predmetId);
     const varijante = this.d.bankaVarijante.filter(v => grupe.some(g => g.id === v.grupaId));
     const imena = new Set([...grupe.map(g => g.serija), ...varijante.map(v => v.serija)].filter((x): x is string => !!x));

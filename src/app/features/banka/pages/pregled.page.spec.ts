@@ -154,7 +154,7 @@ describe('PregledPage', () => {
     expect(naslov()).toBe('Kol. 1, zad. 18');
   });
 
-  it('tasteri se ne obrađuju dok je fokus u polju ili uz Ctrl/Alt/Meta', async () => {
+  it('tasteri se ne obrađuju dok je fokus u polju ili uz Ctrl/Alt/Meta/Shift', async () => {
     const e = await otvori('/banka/pregled?predmet=1');
     const polje = document.createElement('input');
     const uredivo = document.createElement('div');
@@ -170,9 +170,17 @@ describe('PregledPage', () => {
     await taster('o', document, { ctrlKey: true });
     await taster('o', document, { altKey: true });
     await taster('o', document, { metaKey: true });
+    // Shift+O (e.key je "O"), Shift+Delete, Shift+strelice i Shift+U nisu prečice; tasteri ostaju pregledaču (ništa ne sprečava)
+    for (const key of ['O', 'Delete', 'ArrowRight', 'ArrowLeft', 'U']) {
+      expect((await taster(key, document, { shiftKey: true })).defaultPrevented).toBe(false);
+    }
+    expect(router.url).toBe('/banka/pregled?predmet=1');
     expect(api.odobri).not.toHaveBeenCalled();
     expect(api.obrisiVarijantu).not.toHaveBeenCalled();
     expect(napredak()).toBe('1 / 3');
+    // Caps Lock: "O" bez Shift-a ostaje prečica
+    await taster('O');
+    expect(api.odobri).toHaveBeenCalledExactlyOnceWith(16, { tiho: true });
   });
 
   it('tasteri se ne obrađuju dok je fokus u CDK overlay-u (npr. meni teme u ljusci)', async () => {

@@ -279,6 +279,32 @@ describe('BankaPage', () => {
     expect(document.activeElement).toBe(e.querySelector('[role=treeitem][data-id="2"]'));
   });
 
+  it('"Uključi" dok DELETE teme traje: dugme te teme čeka, drugi klik ne otvara potvrdu i ne šalje drugi DELETE', async () => {
+    api.iskljuceneTeme.mockImplementation(() => of([tema(5, 'Razlomljeni brojevi', 3), tema(6, 'Osnova 3 i 5')]));
+    const brisanje = new Subject<void>();
+    api.ukljuciTemu.mockImplementation(() => brisanje);
+    const e = await otvori('/banka?predmet=7&grupa=2');
+    const dugme = () => e.querySelector<HTMLButtonElement>('app-iskljucene-teme [data-tema="5"] button[data-ukljuci]')!;
+
+    dugme().click();
+    await stabilno();
+    overlay().querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+    await stabilno();
+    expect(api.ukljuciTemu).toHaveBeenCalledExactlyOnceWith(5, { tiho: true });
+    expect(dugme().getAttribute('aria-disabled')).toBe('true');
+
+    dugme().click();
+    await stabilno();
+    expect(overlay().querySelector('[role=alertdialog]')).toBeNull();
+    expect(api.ukljuciTemu).toHaveBeenCalledOnce();
+
+    api.iskljuceneTeme.mockImplementation(() => of([tema(6, 'Osnova 3 i 5')]));
+    brisanje.next();
+    brisanje.complete();
+    await stabilno();
+    expect([...e.querySelectorAll<HTMLElement>('app-iskljucene-teme [data-tema]')].map(t => t.dataset['tema'])).toEqual(['6']);
+  });
+
   it('učitava serije i isključene teme izabranog predmeta (jednom, i pri promeni namene ne)', async () => {
     await otvori('/banka?predmet=7&grupa=2');
     expect(api.serije).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });

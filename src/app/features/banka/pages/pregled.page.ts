@@ -62,7 +62,7 @@ function opisGreske(v: VarijantaDetails): string {
  * (`O`), Obriši (`Delete`; potvrda za sve osim Klodovog nacrta koji nikad nije odobren), Uredi (`U`: editor varijante sa
  * `?povratak` na ovaj pregled sa `od=<id>`, pa se posle čuvanja vraća na isto mesto: isti nacrt, a posle "Sačuvaj i odobri"
  * sledeći), Preskoči (`→`) i Nazad (`←`); posle odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je
- * fokus u polju za unos ili u CDK overlay-u (meni), dok je otvoren dijalog i uz Ctrl/Alt/Meta. Uz seriju u filteru, pri vrhu
+ * fokus u polju za unos ili u CDK overlay-u (meni), dok je otvoren dijalog i uz Ctrl/Alt/Meta/Shift. Uz seriju u filteru, pri vrhu
  * "Odbaci celu seriju" (potvrda bez broja: server briše sve neodobrene Klodove nacrte serije, ne samo ove iz filtera). Na
  * kraju liste "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija
  * pod `prefers-reduced-motion`.
@@ -321,10 +321,10 @@ export class PregledPage {
 
   /**
    * Prečice (`O`, `Delete`, `U`, `→`, `←`); ne dok je fokus u polju ili u overlay-u (meni), dok je otvoren dijalog, uz
-   * Ctrl/Alt/Meta ni ponovljen taster.
+   * Ctrl/Alt/Meta/Shift (Shift+O, Shift+Delete nisu prečice) ni ponovljen taster. Caps Lock ne smeta: `O` bez Shift-a je `o`.
    */
   protected tastatura(e: KeyboardEvent): void {
-    if (e.defaultPrevented || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) {
+    if (e.defaultPrevented || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
       return;
     }
     const radnja = PRECICE[taster(e)];

@@ -378,6 +378,44 @@ describe('PregledNacrtaStore', () => {
       expect(store.radi()).toBe(false);
     });
 
+    it('odobri kopiju (`zamenjuje`): i original (server ga arhivira) izlazi iz liste, prikazana je sledeća posle kopije', () => {
+      lista(15, 16, 17, 18);
+      api.varijanta.mockImplementation((id: number) => of(varijanta(id, id === 16 ? { zamenjuje: 15 } : {})));
+      store.ucitaj(FILTER, 16);
+      expect(store.trenutna()?.id).toBe(16);
+      expect(store.original()?.id).toBe(15);
+      store.odobri();
+      expect(api.odobri).toHaveBeenCalledWith(16, { tiho: true });
+      expect(store.ids()).toEqual([17, 18]);
+      expect(store.indeks()).toBe(0);
+      expect(store.trenutna()?.id).toBe(17);
+      expect(store.napredak()).toBe('1 / 2');
+    });
+
+    it('odobri kopiju dok je prikazan njen original (Nazad dok je zahtev trajao): obe izlaze, prikazana je sledeća', () => {
+      lista(15, 16, 17);
+      api.varijanta.mockImplementation((id: number) => of(varijanta(id, id === 16 ? { zamenjuje: 15 } : {})));
+      store.ucitaj(FILTER, 16);
+      const kasni = new Subject<VarijantaDetails>();
+      api.odobri.mockImplementationOnce(() => kasni);
+      store.odobri();
+      store.prethodna();
+      expect(store.trenutna()?.id).toBe(15);
+      kasni.next(varijanta(16, { status: 'AKTIVNA', zamenjuje: 15 }));
+      kasni.complete();
+      expect(store.ids()).toEqual([17]);
+      expect(store.indeks()).toBe(0);
+      expect(store.trenutna()?.id).toBe(17);
+    });
+
+    it('odobri kopiju čiji original nije u listi: izlazi samo kopija', () => {
+      api.varijanta.mockImplementation((id: number) => of(varijanta(id, id === 16 ? { zamenjuje: 15 } : {})));
+      store.ucitaj(FILTER, null);
+      store.odobri();
+      expect(store.ids()).toEqual([17, 18]);
+      expect(store.trenutna()?.id).toBe(17);
+    });
+
     it('odobri poslednje: kraj', () => {
       store.sledeca();
       store.sledeca();

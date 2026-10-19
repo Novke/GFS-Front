@@ -235,16 +235,19 @@ export const PregledNacrtaStore = signalStore(
     };
 
     /**
-     * Odobrena ili obrisana varijanta izlazi iz liste. Ako je još prikazana, na njenom mestu je sledeća; ako je korisnik u
-     * međuvremenu prešao na drugu (preskok dok je zahtev trajao), ta ostaje prikazana (mesto joj se pomera za jedan).
+     * Odobrene ili obrisane varijante izlaze iz liste. Ako je jedna od njih prikazana, na njenom mestu je sledeća koja ostaje;
+     * ako je korisnik u međuvremenu prešao na drugu (preskok dok je zahtev trajao), ta ostaje prikazana (mesto joj se pomera
+     * za svaku uklonjenu pre nje).
      */
-    const ukloni = (id: number): void => {
-      const i = store.ids().indexOf(id);
-      if (i < 0) {
+    const ukloni = (...uklonjene: number[]): void => {
+      const ids = store.ids();
+      const ostaje = (x: number) => !uklonjene.includes(x);
+      if (ids.every(ostaje)) {
         return;
       }
-      const bilaPrikazana = i === store.indeks();
-      patchState(store, s => ({ ids: s.ids.filter(x => x !== id), indeks: i < s.indeks ? s.indeks - 1 : s.indeks }));
+      const prikazana = ids[store.indeks()];
+      const bilaPrikazana = prikazana !== undefined && !ostaje(prikazana);
+      patchState(store, { ids: ids.filter(ostaje), indeks: ids.slice(0, store.indeks()).filter(ostaje).length });
       if (bilaPrikazana) {
         prikazi(true);
       }
@@ -298,11 +301,17 @@ export const PregledNacrtaStore = signalStore(
           prikazi(true);
         }
       },
-      /** `POST banka/varijante/{id}/odobri` za prikazanu, pa sledeća. */
+      /**
+       * `POST banka/varijante/{id}/odobri` za prikazanu, pa sledeća. Kopija (`zamenjuje`) na serveru u istoj transakciji
+       * arhivira original, pa i on izlazi iz liste (inače bi ostao kao ARHIVIRANA i `O` bi ga odobrio uz kopiju).
+       */
       odobri(): void {
         const v = store.trenutna();
         if (v && !store.radi()) {
-          akcija({ poziv: store._api.odobri(v.id, TIHO), posle: () => ukloni(v.id) });
+          akcija({
+            poziv: store._api.odobri(v.id, TIHO),
+            posle: () => (v.zamenjuje === null ? ukloni(v.id) : ukloni(v.id, v.zamenjuje)),
+          });
         }
       },
       /** `DELETE banka/varijante/{id}` za prikazanu (potvrdu traži stranica), pa sledeća. */

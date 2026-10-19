@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  afterNextRender, ChangeDetectionStrategy, Component, computed, DOCUMENT, effect, ElementRef, inject, Injector, input, signal, untracked,
-  viewChild,
+  afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, DOCUMENT, effect, ElementRef, inject, Injector, input, signal,
+  untracked, viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
@@ -32,7 +32,7 @@ import {
 } from '../data-access/banka.models';
 import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
-import { potvrdiUkljucivanje } from '../ui/iskljucene-teme.component';
+import { potvrdiUkljucivanje, pretakIskljucenja } from '../ui/iskljucene-teme.component';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
 
@@ -68,8 +68,9 @@ interface GreskaUcitavanja {
  * dolaze iz te liste čim stigne.
  *
  * Isključena grupa (sopstvena tema ili tema pretka, Klod je ne nudi) ima u zaglavlju oznaku "Isključeno" i "Uključi": posle
- * potvrde `DELETE iskljucene-teme/{iskljucenjeId}`, pa novo čitanje grupe, iz kog stižu samo `iskljucena` i `iskljucenjeId`
- * (forma i osnova izmena ostaju, otkucano se ne gubi; pretku sa svojom temom grupa ostaje isključena).
+ * potvrde (za temu pretka imenuje pretka i kaže da se uključuje celo njegovo podstablo) `DELETE iskljucene-teme/{iskljucenjeId}`,
+ * pa novo čitanje grupe, iz kog stižu samo `iskljucena` i `iskljucenjeId` (forma i osnova izmena ostaju, otkucano se ne gubi;
+ * pretku sa svojom temom grupa ostaje isključena).
  */
 @Component({
   selector: 'app-grupa-detalj-page',
@@ -237,6 +238,7 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
   private readonly poljaEditor = viewChild(PoljaEditorComponent);
 
@@ -505,8 +507,10 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   }
 
   /**
-   * "Uključi" isključenu grupu: posle potvrde `DELETE` teme (`iskljucenjeId`, sopstvene ili pretka), pa grupa iznova; iz odgovora
-   * se preuzima samo isključenje. Kad oznaka nestane (sa dugmetom koje je imalo fokus), fokus ide na naziv grupe.
+   * "Uključi" isključenu grupu: prvo teme predmeta (`GET predmeti/{id}/iskljucene-teme`), da se vidi čija je tema `iskljucenjeId`;
+   * kad je pretkova, potvrda imenuje pretka i kaže da se uključuje celo njegovo podstablo. Posle potvrde `DELETE` te teme, pa
+   * grupa iznova; iz odgovora se preuzima samo isključenje. Kad oznaka nestane (sa dugmetom koje je imalo fokus), fokus ide na
+   * naziv grupe. Dok se teme čitaju, dugme čeka (`ukljucuje`); neuspelo čitanje je poruka greške, bez potvrde.
    */
   protected ukljuciTemu(): void {
     const g = this.osnova();
@@ -514,7 +518,28 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
     if (!g || temaId === null || this.ukljucuje()) {
       return;
     }
-    potvrdiUkljucivanje(this.dialog)
+    this.ukljucuje.set(true);
+    this.api
+      .iskljuceneTeme(g.predmetId, TIHO)
+      .pipe(
+        map(teme => pretakIskljucenja(g, teme.find(t => t.id === temaId))),
+        catchError((e: unknown) => {
+          this.obavestenja.greska(razlogBanke(e));
+          return EMPTY;
+        }),
+        finalize(() => this.ukljucuje.set(false)),
+        // stranica zatvorena dok se teme čitaju: bez potvrde na drugoj stranici
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(pretak => {
+        if (this.osnova()?.id === g.id) {
+          this.potvrdiIUkljuci(g, temaId, pretak);
+        }
+      });
+  }
+
+  private potvrdiIUkljuci(g: GrupaDetails, temaId: number, pretak: string | null): void {
+    potvrdiUkljucivanje(this.dialog, pretak)
       .pipe(
         filter(ok => ok && !this.ukljucuje()),
         switchMap(() => {

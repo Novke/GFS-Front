@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { IskljucenaTemaInfo } from '../data-access/banka.models';
-import { IskljuceneTemeComponent } from './iskljucene-teme.component';
+import { IskljuceneTemeComponent, pretakIskljucenja } from './iskljucene-teme.component';
 
 function tema(id: number, opis: string, izmena: Partial<IskljucenaTemaInfo> = {}): IskljucenaTemaInfo {
   return { id, predmetId: 1, opis, grupaId: null, putanja: [], izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', kreirano: '2026-10-18T10:40:00', ...izmena };
@@ -22,12 +22,33 @@ const TEME: IskljucenaTemaInfo[] = [
 
 @Component({
   imports: [IskljuceneTemeComponent],
-  template: `<app-iskljucene-teme [teme]="teme()" (ukljuci)="ukljuci($event)" />`,
+  template: `<app-iskljucene-teme [teme]="teme()" [uToku]="uToku()" (ukljuci)="ukljuci($event)" />`,
 })
 class Host {
   teme = signal<IskljucenaTemaInfo[]>(TEME);
+  uToku = signal<number[]>([]);
   ukljuci = vi.fn();
 }
+
+describe('pretakIskljucenja', () => {
+  const putanja = [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 5, naziv: 'Razlomljeni brojevi (demo)' }, { id: 6, naziv: 'Deo' }];
+
+  it('tema pretka: naziv pretka iz putanje grupe', () => {
+    expect(pretakIskljucenja({ id: 6, putanja }, tema(1, 'x', { grupaId: 1, putanja: [{ id: 1, naziv: 'Konverzije brojeva' }] })))
+      .toBe('Konverzije brojeva');
+    expect(pretakIskljucenja({ id: 6, putanja }, TEME[0])).toBe('Razlomljeni brojevi (demo)');
+  });
+
+  it('pretka nema u putanji grupe: poslednji iz putanje teme', () => {
+    expect(pretakIskljucenja({ id: 6, putanja: [] }, TEME[0])).toBe('Razlomljeni brojevi (demo)');
+  });
+
+  it('sopstvena tema, tema bez grupe ili tema koje nema: null (obična potvrda)', () => {
+    expect(pretakIskljucenja({ id: 5, putanja: putanja.slice(0, 2) }, TEME[0])).toBeNull();
+    expect(pretakIskljucenja({ id: 6, putanja }, TEME[1])).toBeNull();
+    expect(pretakIskljucenja({ id: 6, putanja }, undefined)).toBeNull();
+  });
+});
 
 describe('IskljuceneTemeComponent', () => {
   beforeEach(() => {
@@ -63,6 +84,27 @@ describe('IskljuceneTemeComponent', () => {
     const dugme = stavke[1].querySelector<HTMLButtonElement>('button[data-ukljuci]')!;
     expect(tekst(dugme)).toBe('Uključi');
     expect(dugme.getAttribute('aria-label')).toBe('Uključi temu Brojni sistemi sa osnovom 3 i 5');
+  });
+
+  it('tema čije uključivanje traje: njeno dugme čeka (fokusabilno, aria-disabled) i ne otvara potvrdu; ostale rade', async () => {
+    const { el, h, stabilno } = await napravi();
+    h.uToku.set([1]);
+    await stabilno();
+    const dugme = el.querySelector<HTMLButtonElement>('[data-tema="1"] button[data-ukljuci]')!;
+    expect(dugme.getAttribute('aria-disabled')).toBe('true');
+    expect(dugme.disabled).toBe(false);
+    dugme.click();
+    await stabilno();
+    expect(overlay().querySelector('[role=alertdialog]')).toBeNull();
+    expect(h.ukljuci).not.toHaveBeenCalled();
+
+    const drugo = el.querySelector<HTMLButtonElement>('[data-tema="2"] button[data-ukljuci]')!;
+    expect(drugo.getAttribute('aria-disabled')).not.toBe('true');
+    drugo.click();
+    await stabilno();
+    overlay().querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+    await stabilno();
+    expect(h.ukljuci).toHaveBeenCalledExactlyOnceWith(2);
   });
 
   it('prazna lista ne prikazuje sekciju', async () => {

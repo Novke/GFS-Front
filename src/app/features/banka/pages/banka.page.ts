@@ -129,7 +129,7 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
       </section>
       <!-- teme i serije su po predmetu (ne po nameni), pa ih ima i kad je stablo ove namene prazno -->
       <div class="bk-sekcije">
-        <app-iskljucene-teme [teme]="store.teme()" (ukljuci)="ukljuciTemu($event)" />
+        <app-iskljucene-teme [teme]="store.teme()" [uToku]="store.temeUToku()" (ukljuci)="ukljuciTemu($event)" />
         <app-serije [serije]="store.serije()" [predmetId]="predmetId()!" />
       </div>
     } @else {
@@ -247,7 +247,7 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
           }
         </section>
 
-        <app-iskljucene-teme [teme]="store.teme()" (ukljuci)="ukljuciTemu($event)" />
+        <app-iskljucene-teme [teme]="store.teme()" [uToku]="store.temeUToku()" (ukljuci)="ukljuciTemu($event)" />
         <app-serije [serije]="store.serije()" [predmetId]="predmetId()!" />
       </div>
     }
@@ -470,8 +470,14 @@ export class BankaPage {
       });
   }
 
-  /** Uključuje temu (posle potvrde u sekciji tema); stablo i teme se učitavaju iznova, tema nestaje iz liste. */
+  /**
+   * Uključuje temu (posle potvrde u sekciji tema); stablo i teme se učitavaju iznova, tema nestaje iz liste. Tema čiji `DELETE`
+   * još traje se zanemaruje (drugi klik i potvrda pre odgovora bi poslali drugi `DELETE`, pa 404).
+   */
   protected ukljuciTemu(id: number): void {
+    if (this.store.temeUToku().includes(id)) {
+      return;
+    }
     this.nestajeTema = { predmetId: this.store.predmetId(), id, indeks: this.store.teme().findIndex(t => t.id === id) };
     this.store.ukljuciTemu(id);
   }

@@ -833,7 +833,13 @@ and Claude's series, and reviews the drafts one by one (below).
   such an item (`bk-iskljucen`, badge "Isključeno", "isključeno" in its name), the group page shows "Isključeno" and "Uključi" in its
   header. "Uključi" (list and group page) confirms with `potvrdiUkljucivanje` ("Uključi temu ponovo?" / "Klod je opet može nuditi.")
   and sends `DELETE iskljucene-teme/{id}`; on the group page that is the nearest topic, so a group under another excluded ancestor
-  stays excluded, and only `iskljucena`/`iskljucenjeId` are taken from the re-read group (typed edits stay). Focus that fell to `<body>`
+  stays excluded, and only `iskljucena`/`iskljucenjeId` are taken from the re-read group (typed edits stay). When that nearest topic
+  belongs to an ancestor (the page reads `GET predmeti/{id}/iskljucene-teme` first, `pretakIskljucenja`; a failed read is an error
+  toast and no dialog), deleting it re-enables the ancestor's whole subtree, so the dialog names the ancestor ("Uključi celu grupu
+  „X“?", "Ova grupa je isključena preko nadređene grupe „X“." and that the exclusion is lifted from X and its whole subtree, button
+  "Uključi celu grupu"). In the list `BankaStore.temeUToku` holds the topics whose `DELETE` is in flight: their button waits
+  (`disabledInteractive`, no dialog), a second call is ignored, and after success the topic leaves `teme` at once (before the
+  reload), so a second `DELETE` (a 404) cannot be sent; after a failure it stays and can be retried. Focus that fell to `<body>`
   goes to the topic now in the removed one's place (or to the tree), on the group page to the name. **There is no form to add a
   topic** (spec decision): Novica tells Claude, which calls the MCP tool `iskljuci_temu`.
 - **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`; no "approve all" by design): one variant at a time. The
@@ -856,11 +862,13 @@ and Claude's series, and reviews the drafts one by one (below).
   original next to it with "Zamenjuje: <name or #id>". Actions and keys: Odobri `O` (render OK and not AKTIVNA), Obriši `Delete`
   (immediately only for a Claude draft that was never approved, otherwise `ConfirmDialog`: deliberately stricter than the plan's
   "confirm only RUCNO", so an active, archived or ever-approved Claude variant asks too), Uredi `U`, Preskoči `→`, Nazad `←`; after
-  approve or delete the variant leaves the list and the next one shows; one deleted meanwhile (404) is skipped; actions run one at a
+  approve or delete the variant leaves the list and the next one shows (approving a copy also drops its original, `zamenjuje`, which the
+  server archived; otherwise `O` on it would approve it next to the copy); one deleted meanwhile (404) is skipped; actions run one at a
   time (`radi`), and an action's response after a new `ucitaj` is ignored. Keys do nothing while focus is in
   `input`/`textarea`/`select`/`[contenteditable]` or inside a CDK overlay (`.cdk-overlay-container`, e.g. the shell's theme
   `mat-menu`: a vertical menu neither handles `←`/`→` nor prevents letters, so they would act on the draft behind it), while any
-  `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta and on auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
+  `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta/Shift (Shift+O, Shift+Delete and Shift+arrows are not shortcuts; `O`
+  under Caps Lock without Shift is) and on auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
   a polite status region names the draft now shown). "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
   the server deletes the series' never-approved Claude drafts in every subject and group and the Claude groups left empty, approved
   and manual items stay and come back in `preskoceno`, presentations are untouched. The confirmation says exactly that and shows
@@ -889,6 +897,7 @@ and Claude's series, and reviews the drafts one by one (below).
   series `uvoz-kol1-2024`: 15 an active manual variant, 16-18 Claude drafts of the series, 16 `zamenjuje` 15), group 5 "Razlomljeni
   brojevi (demo)" (no variants, excluded by topic 1), topic 2 without a group; existing rows are `RUCNO` without a series. The mock
   serves `banka/serije`, `banka/serije/:serija/odbaci`, `predmeti/:id/iskljucene-teme` (GET, POST) and `iskljucene-teme/:id` (DELETE),
+  answers `banka/serije` for an unknown subject with 404 "Predmet nije pronađen." (as `SerijaService.serije`),
   filters `pretraga` by `izvor` and `serija` (like the server: without `predmetId` over every subject, an unknown subject is an empty
   page, a non-numeric one 400) and sorts it like `PageableUtil` (an unknown `sort` field is 400), archives the original
   when a copy is approved, computes `brojClaudeNacrta`, `iskljucena` and `iskljucenjeId`, and sets a topic's `grupaId` to `null` when

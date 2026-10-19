@@ -341,6 +341,9 @@ test.describe('banka zadataka: Klodovi nacrti, isključene teme i serije', () =>
     await page.goto('banka?predmet=1');
     const serija = page.getByRole('region', { name: 'Klodove serije' }).getByRole('listitem').filter({ hasText: 'uvoz-kol1-2024' });
     await expect(serija).toContainText('3 nacrta, 0 odobrenih, 1 grupa, 0 slajdova');
+    // mok kao server (`SerijaService.serije`): nepoznat predmet je 404, ne prazna lista
+    expect(await page.evaluate(() => fetch('api/banka/serije?predmetId=999').then(async r => [r.status, (await r.json()).reason])))
+      .toEqual([404, 'Predmet nije pronađen.']);
     await serija.getByRole('link', { name: 'Pregledaj seriju uvoz-kol1-2024' }).click();
     await expect(page).toHaveURL(/\/banka\/pregled\?predmet=1&serija=uvoz-kol1-2024$/);
   });

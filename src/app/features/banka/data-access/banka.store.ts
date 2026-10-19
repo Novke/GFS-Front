@@ -33,6 +33,8 @@ interface BankaState {
   serije: SerijaInfo[];
   /** Isključene teme predmeta (najnovije prve); kao `serije`. */
   teme: IskljucenaTemaInfo[];
+  /** Teme čiji je `DELETE` (Uključi) u letu: drugi klik na istu ne šalje novi zahtev (bio bi 404). */
+  temeUToku: number[];
   /** Razlog neuspelog učitavanja izabrane grupe (stablo ostaje); briše se sa novim izborom i uspelim učitavanjem. */
   greskaGrupe: string | null;
   /** Broj neidempotentnih izmena u letu (kreiranje, dupliranje, brisanje): dok nije 0, njihova dugmad su onemogućena. */
@@ -79,6 +81,7 @@ export const BankaStore = signalStore(
     filterIzvora: 'SVI',
     serije: [],
     teme: [],
+    temeUToku: [],
     greskaGrupe: null,
     _zauzetih: 0,
   }),
@@ -286,10 +289,23 @@ export const BankaStore = signalStore(
       },
       /**
        * Uključuje isključenu temu (`DELETE`), pa osvežava stablo (oznaka "Isključeno" u stablu i grupi) i teme. Greška ide u
-       * `NotificationStore` kao kod ostalih izmena.
+       * `NotificationStore` kao kod ostalih izmena. Dok `DELETE` traje, tema je u `temeUToku` i nov poziv za nju se zanemaruje;
+       * posle uspeha odmah izlazi iz `teme` (ne tek kad stigne ponovo učitana lista), pa ni tada nema dugmeta za drugi `DELETE`.
+       * Posle greške ostaje u listi i može se pokušati ponovo.
        */
       ukljuciTemu(id: number): void {
-        izmena({ poziv: store._api.ukljuciTemu(id, TIHO).pipe(bezIzbora), teme: 'lista' });
+        if (store.temeUToku().includes(id)) {
+          return;
+        }
+        patchState(store, s => ({ temeUToku: [...s.temeUToku, id] }));
+        izmena({
+          poziv: store._api.ukljuciTemu(id, TIHO).pipe(
+            tap(() => patchState(store, s => ({ teme: s.teme.filter(t => t.id !== id) }))),
+            finalize(() => patchState(store, s => ({ temeUToku: s.temeUToku.filter(x => x !== id) }))),
+            bezIzbora,
+          ),
+          teme: 'lista',
+        });
       },
 
       /** Nova grupa (koren ili podgrupa); posle uspeha je izabrana. */

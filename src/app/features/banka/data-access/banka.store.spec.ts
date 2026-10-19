@@ -541,6 +541,49 @@ describe('BankaStore', () => {
       expect(store.teme()).toEqual([TEME[1]]);
     });
 
+    it('ukljuciTemu dok DELETE iste teme traje ne šalje drugi; posle uspeha tema odmah izlazi iz liste, pre ponovnog učitavanja', () => {
+      api.iskljuceneTeme.mockImplementation(() => of(TEME));
+      store.ucitaj(7, 'PREDAVANJE');
+      const brisanje = new Subject<void>();
+      const ponovo = new Subject<IskljucenaTemaInfo[]>();
+      api.ukljuciTemu.mockImplementation(() => brisanje);
+      api.iskljuceneTeme.mockImplementation(() => ponovo);
+
+      store.ukljuciTemu(5);
+      expect(store.temeUToku()).toEqual([5]);
+      store.ukljuciTemu(5);
+      expect(api.ukljuciTemu).toHaveBeenCalledOnce();
+      // druga tema nije blokirana
+      api.ukljuciTemu.mockImplementationOnce(() => new Subject<void>());
+      store.ukljuciTemu(4);
+      expect(api.ukljuciTemu).toHaveBeenCalledTimes(2);
+      expect(store.temeUToku()).toEqual([5, 4]);
+
+      brisanje.next();
+      brisanje.complete();
+      // lista tema se još učitava, a obrisana tema je već van nje (nema dugmeta za drugi DELETE)
+      expect(store.teme().map(t => t.id)).toEqual([4]);
+      expect(store.temeUToku()).toEqual([4]);
+      ponovo.next([TEME[1]]);
+      ponovo.complete();
+      expect(store.teme().map(t => t.id)).toEqual([4]);
+    });
+
+    it('ukljuciTemu posle neuspelog DELETE-a: tema ostaje u listi i može ponovo', () => {
+      api.iskljuceneTeme.mockImplementation(() => of(TEME));
+      store.ucitaj(7, 'PREDAVANJE');
+      api.ukljuciTemu.mockImplementationOnce(() => greskaServera(500, 'Sistemska greška.'));
+      store.ukljuciTemu(5);
+      expect(store.temeUToku()).toEqual([]);
+      expect(store.teme().map(t => t.id)).toEqual([5, 4]);
+
+      api.ukljuciTemu.mockImplementation(() => of(undefined));
+      api.iskljuceneTeme.mockImplementation(() => of([TEME[1]]));
+      store.ukljuciTemu(5);
+      expect(api.ukljuciTemu).toHaveBeenCalledTimes(2);
+      expect(store.teme().map(t => t.id)).toEqual([4]);
+    });
+
     it('ukljuciTemu: greška (404) ide u NotificationStore, ništa se ne učitava ponovo', () => {
       store.ucitaj(7, 'PREDAVANJE');
       api.stablo.mockClear();

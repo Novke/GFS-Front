@@ -13,7 +13,7 @@ import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { BANKA_RUTE } from '../banka.routes';
 import { BankaApi } from '../data-access/banka.api';
-import { GrupaDetails, Polje, VarijantaInfo } from '../data-access/banka.models';
+import { GrupaDetails, IskljucenaTemaInfo, Polje, VarijantaInfo } from '../data-access/banka.models';
 import { novoPolje } from '../data-access/polja';
 import { GrupaDetaljPage } from './grupa-detalj.page';
 
@@ -40,6 +40,12 @@ const UNUTRASNJI: GrupaDetails = {
   putanja: [{ id: 1, naziv: 'Konverzije brojeva' }], list: false, brojVarijanti: 4, brojAktivnih: 2,
 };
 
+/** Tema 9 nad grupom `grupaId` (podrazumevano sama grupa 2). */
+function tema(grupaId: number | null = 2): IskljucenaTemaInfo {
+  const putanja = grupaId === 1 ? [{ id: 1, naziv: 'Konverzije brojeva' }] : grupaId === 2 ? list().putanja : [];
+  return { id: 9, predmetId: 7, opis: 'Konverzije', grupaId, putanja, izvor: 'RUCNO', serija: null, kreirano: '2026-10-18T10:00:00' };
+}
+
 function varijanta(id: number, status: VarijantaInfo['status']): VarijantaInfo {
   return {
     id, grupaId: 2, rb: id - 10, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus: 'OK', svgId: `svg-${id}`,
@@ -60,6 +66,7 @@ describe('GrupaDetaljPage', () => {
     dupliraj: vi.fn(),
     obrisiVarijantu: vi.fn(),
     ukljuciTemu: vi.fn(),
+    iskljuceneTeme: vi.fn(),
   };
   const el = () => harness.routeNativeElement as HTMLElement;
 
@@ -98,6 +105,7 @@ describe('GrupaDetaljPage', () => {
     }
     api.grupa.mockImplementation((id: number) => of(id === 1 ? UNUTRASNJI : list()));
     api.varijante.mockImplementation(() => of([varijanta(11, 'NACRT'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT')]));
+    api.iskljuceneTeme.mockImplementation(() => of([tema()]));
     api.izmeniGrupu.mockImplementation((id: number, cmd: { naziv: string; opis: string | null; tezina: number | null; uputstvo: string | null; polja: Polje[] | null }) =>
       of({ ...(id === 1 ? UNUTRASNJI : list()), naziv: cmd.naziv, opis: cmd.opis, tezina: cmd.tezina, uputstvo: cmd.uputstvo, ...(cmd.polja ? { polja: cmd.polja } : {}) }));
     TestBed.configureTestingModule({
@@ -154,7 +162,10 @@ describe('GrupaDetaljPage', () => {
     const dugme = oznaka.querySelector<HTMLButtonElement>('button[data-ukljuci]')!;
     dugme.focus();
     await klik(dugme);
+    expect(api.iskljuceneTeme).toHaveBeenCalledExactlyOnceWith(7, { tiho: true });
+    // sopstvena tema grupe: obična potvrda
     expect(overlay.querySelector('[role=alertdialog] h2')!.textContent!.trim()).toBe('Uključi temu ponovo?');
+    expect(overlay.querySelector('[role=alertdialog] mat-dialog-content')!.textContent!.trim()).toBe('Klod je opet može nuditi.');
     await klik(overlay.querySelector<HTMLButtonElement>('[data-odustani]')!);
     expect(api.ukljuciTemu).not.toHaveBeenCalled();
 
@@ -169,6 +180,50 @@ describe('GrupaDetaljPage', () => {
     expect(stranica().imaNesacuvanihIzmena()).toBe(true);
     // dugme sa fokusom je nestalo: fokus na naziv grupe
     expect(document.activeElement).toBe(e.querySelector('input[data-naziv]'));
+  });
+
+  it('isključena preko pretka: potvrda imenuje pretka i kaže da se uključuje celo njegovo podstablo; DELETE teme pretka', async () => {
+    let iskljucena = true;
+    api.grupa.mockImplementation(() => of(list(iskljucena ? { iskljucena: true, iskljucenjeId: 9 } : {})));
+    api.iskljuceneTeme.mockImplementation(() => of([tema(1)]));
+    api.ukljuciTemu.mockImplementation(() => {
+      iskljucena = false;
+      return of(undefined);
+    });
+    const e = await otvori('/banka/grupe/2');
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    await klik(e.querySelector<HTMLButtonElement>('[data-iskljuceno] button[data-ukljuci]')!);
+
+    const potvrda = overlay.querySelector('[role=alertdialog]')!;
+    expect(potvrda.querySelector('h2')!.textContent!.trim()).toBe('Uključi celu grupu „Konverzije brojeva“?');
+    expect([...potvrda.querySelectorAll('mat-dialog-content p')].map(p => p.textContent!.trim())).toEqual([
+      'Ova grupa je isključena preko nadređene grupe „Konverzije brojeva“.',
+      'Uključivanje briše njenu temu, pa se isključenje skida sa „Konverzije brojeva“ i celog njenog podstabla, ne samo sa ove grupe. Klod ih opet može nuditi.',
+    ]);
+    expect(potvrda.querySelector('[data-potvrdi]')!.textContent!.trim()).toBe('Uključi celu grupu');
+    await klik(overlay.querySelector<HTMLButtonElement>('[data-potvrdi]')!);
+    expect(api.ukljuciTemu).toHaveBeenCalledExactlyOnceWith(9, { tiho: true });
+    expect(e.querySelector('[data-iskljuceno]')).toBeNull();
+  });
+
+  it('teme se ne čitaju: poruka greške, bez potvrde i bez DELETE-a; dok se čitaju, drugi klik ništa ne šalje', async () => {
+    api.grupa.mockImplementation(() => of(list({ iskljucena: true, iskljucenjeId: 9 })));
+    const teme = new Subject<IskljucenaTemaInfo[]>();
+    api.iskljuceneTeme.mockImplementation(() => teme);
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    const e = await otvori('/banka/grupe/2');
+    const overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    const dugme = e.querySelector<HTMLButtonElement>('[data-iskljuceno] button[data-ukljuci]')!;
+    await klik(dugme);
+    expect(onemoguceno(dugme)).toBe(true);
+    await klik(dugme);
+    expect(api.iskljuceneTeme).toHaveBeenCalledTimes(1);
+    teme.error(new HttpErrorResponse({ status: 404, error: { reason: 'Predmet nije pronađen.' } }));
+    await stabilno();
+    expect(greska).toHaveBeenCalledExactlyOnceWith('Predmet nije pronađen.');
+    expect(overlay.querySelector('[role=alertdialog]')).toBeNull();
+    expect(api.ukljuciTemu).not.toHaveBeenCalled();
+    expect(onemoguceno(dugme)).toBe(false);
   });
 
   it('neuspelo uključivanje teme: poruka greške, oznaka ostaje; grupa bez isključenja nema oznaku', async () => {
