@@ -175,6 +175,32 @@ describe('PregledPage', () => {
     expect(napredak()).toBe('1 / 3');
   });
 
+  it('tasteri se ne obrađuju dok je fokus u CDK overlay-u (npr. meni teme u ljusci)', async () => {
+    await otvori('/banka/pregled?predmet=1');
+    // stavka menija (`mat-menu` crta panel u `.cdk-overlay-container`); i element ispod nje
+    const stavkaMenija = document.createElement('button');
+    stavkaMenija.setAttribute('role', 'menuitem');
+    const ikona = document.createElement('span');
+    stavkaMenija.appendChild(ikona);
+    overlay().appendChild(stavkaMenija);
+    try {
+      for (const cilj of [stavkaMenija, ikona]) {
+        for (const key of ['o', 'Delete', 'ArrowRight', 'ArrowLeft', 'u']) {
+          expect((await taster(key, cilj)).defaultPrevented).toBe(false);
+        }
+      }
+      expect(api.odobri).not.toHaveBeenCalled();
+      expect(api.obrisiVarijantu).not.toHaveBeenCalled();
+      expect(napredak()).toBe('1 / 3');
+      expect(router.url).toBe('/banka/pregled?predmet=1');
+    } finally {
+      stavkaMenija.remove();
+    }
+    // van overlay-a prečica opet radi
+    await taster('ArrowRight');
+    expect(napredak()).toBe('2 / 3');
+  });
+
   it('`Delete` za Klodov nacrt briše bez dijaloga', async () => {
     await otvori('/banka/pregled?predmet=1');
     const e = await taster('Delete');
@@ -250,21 +276,37 @@ describe('PregledPage', () => {
     expect(router.url).toBe(ocekivano);
   });
 
-  it('"Odbaci celu seriju": samo uz seriju; potvrda sa brojem Klodovih nacrta, pa POST', async () => {
+  it('"Odbaci celu seriju": samo uz seriju; potvrda bez broja iz (filtrirane) liste, pa POST', async () => {
     let e = await otvori('/banka/pregled?predmet=1');
     expect(e.querySelector('[data-odbaci-seriju]')).toBeNull();
 
     const info: PonistavanjeInfo = { potvrdjeno: true, obrisano: [{ vrsta: 'VARIJANTA', id: 16, naziv: null, razlog: null }], preskoceno: [] };
     api.odbaciSeriju.mockImplementation(() => of(info));
-    e = await otvori('/banka/pregled?predmet=1&serija=uvoz-kol1-2024');
+    // filter grupe i statusa sužava listu, a server briše celu seriju: potvrda to kaže i ne broji listu
+    e = await otvori('/banka/pregled?predmet=1&serija=uvoz-kol1-2024&grupa=4&status=ARHIVIRANA');
     e.querySelector<HTMLButtonElement>('[data-odbaci-seriju]')!.click();
     await stabilno();
-    expect(dijalog()!.textContent).toContain('Odbaciti seriju „uvoz-kol1-2024“?');
-    expect(dijalog()!.textContent).toContain('ovde ih je 2');
+    const tekst = dijalog()!.textContent!;
+    expect(tekst).toContain('Odbaciti seriju „uvoz-kol1-2024“?');
+    expect(tekst).toContain('svi Klodovi nacrti ove serije koji nikad nisu odobreni, u svim predmetima i grupama, ne samo oni u ovom pregledu');
+    expect(tekst.replace('uvoz-kol1-2024', '')).not.toMatch(/\d/);
     expect(api.odbaciSeriju).not.toHaveBeenCalled();
     dijalog()!.querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
     await stabilno();
     expect(api.odbaciSeriju).toHaveBeenCalledWith('uvoz-kol1-2024', { tiho: true });
+  });
+
+  it('lista skraćena na 1000 po predmetu: napomena; cela lista bez napomene', async () => {
+    let e = await otvori('/banka/pregled?predmet=1');
+    expect(e.querySelector('[data-skraceno]')).toBeNull();
+
+    api.pretraga.mockImplementation((_f: unknown, s: { page: number }) => of({
+      content: [stavka(100 + s.page)], page: { size: 100, number: s.page, totalElements: 1500, totalPages: 15 },
+    }));
+    api.varijanta.mockImplementation((id: number) => of(varijanta(id)));
+    e = await otvori('/banka/pregled?predmet=2');
+    expect(api.pretraga).toHaveBeenCalledTimes(1 + 10);
+    expect(e.querySelector('[data-skraceno]')!.textContent).toContain('Učitano je najviše 1000 varijanti po predmetu, pa lista nije cela.');
   });
 
   it('greška rendera: poruka umesto slike i Odobri onemogućeno', async () => {

@@ -722,14 +722,15 @@ the bank with drafts through the backend's MCP server (`/mcp`, no front code); t
 and Claude's series, and reviews the drafts one by one (below).
 
 - **Routes** (`banka.routes.ts`, loaded with `loadChildren` under the shell route `banka`, side nav entry "Banka zadataka",
-  breadcrumbs "Nastava > Banka zadataka"; a static route table pushed the initial closure over the 785 000 B budget of
-  `e2e/lenji-editor.spec.ts`): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
+  breadcrumbs "Nastava > Banka zadataka"; lazy on purpose, outside FE-4's file list: a static route table pushed the initial
+  closure over the 785 000 B budget of `e2e/lenji-editor.spec.ts`, and only about 500 B of headroom are left, so nothing new
+  goes into the initial chunk): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
   (draft review, title and last breadcrumb "Pregled nacrta"; declared before `grupe/:id`), `banka/grupe/:id` (group detail),
   `banka/varijante/nova?grupa=` and `banka/varijante/:id` (the same `VarijantaEditorPage`, optional `?povratak`). Ids must be numeric
   (`putanjaSaId`, otherwise 404 without an API call); the last two routes and `grupe/:id` carry `unsavedChangesGuard`.
 - **`data-access/`**: `banka.models.ts` mirrors the backend `dto/banka/*` (same keys; commands are full-replacement `PUT`s, so nullable
-  fields are always sent; the MCP fields `izvor`, `serija`, `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`,
-  `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
+  fields are always sent; the MCP fields `izvor` on groups, search rows and topics (variants have had it since phase 1), `serija`,
+  `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`, `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
   A1 contract, new backend fields are always appended at the end of the record); `banka.api.ts` (`BankaApi`, all calls accept
   `{ tiho: true }`; `pretraga` also sends `izvor` and `serija`, plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed),
   `iskljuceneTeme`, `iskljuciTemu` (no UI uses it) and `ukljuciTemu`); `banka.store.ts` (`BankaStore`, NgRx
@@ -838,23 +839,37 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`; no "approve all" by design): one variant at a time. The
   filter comes from the query (`filterPregleda`: an invalid value means no filter, `status` defaults to `NACRT`, `serija` must match the
   server pattern); the MCP link (`<front>/banka/pregled?serija=<s>`) carries only the series, so without `predmet` the list runs over
-  every subject of `ReferenceStore`. The list is `GET banka/pretraga` with `sort=id,asc` (creation order, stable while reviewing: the
-  default `izmenjeno,desc` would move an edited variant to the front), pages of 100, at most 10 per subject, merged by id; `grupa`
+  every subject of `ReferenceStore`, each with its own page limit below (the plan said 10 pages in total, but the backend needs a
+  `predmetId` and the series link has none). The subjects are awaited on the **live** `ReferenceStore` state: `toObservable` replays
+  its last snapshot on subscribe, which predates `ucitaj()`, so after a failed subject list "Pokušaj ponovo" would rethrow the old error
+  while the retry is still running (`_promenaPredmeta$` only says "look again", `_stanjePredmeta` is read then). The list is
+  `GET banka/pretraga` with `sort=id,asc` (creation order, stable while reviewing: the default `izmenjeno,desc` would move an edited
+  variant to the front), pages of 100, at most 10 pages (1 000 variants, `NAJVISE_PO_PREDMETU`) per subject, merged by id; more are not
+  loaded, and when the server has more for any subject (`totalElements` of its first page) `skraceno` shows a note above the list
+  ("Učitano je najviše 1000 varijanti po predmetu, pa lista nije cela. ..."; the rest are the newest, they come after a reload). `grupa`
   (a group and its subtree) is filtered on the client by `putanja`. `od` (`pocetakPregleda`) starts at that variant or, when it has
-  left the list (approved in the editor, deleted), at the first one created after it, so skipped ones stay behind. The page shows the
+  left the list (approved in the editor, deleted), at the first one created after it, or at the end when none is newer (Nazad returns
+  the last). That deliberately departs from the plan's "otherwise from the first": after "Sačuvaj i odobri" in the editor the variant
+  is no longer a draft, and starting from the first would bring back the drafts skipped before it. The page shows the
   group path, name (Claude writes the source into it, e.g. "Kol. 1, 2024/25, zad. 3"), status, source, series, task and solution SVG
   (`<img [src]="svgUrl(...)">` on a day canvas, or the LaTeX error with its line), the answers per field (`ui/odgovori-pregled`: BROJ
   "45 ± 0,1 m" or "45 kN ± 10 %", TEKST every accepted answer, JEDAN_TACAN / VISE_TACNIH the option texts), and for a copy the
   original next to it with "Zamenjuje: <name or #id>". Actions and keys: Odobri `O` (render OK and not AKTIVNA), Obriši `Delete`
-  (immediately only for a Claude draft that was never approved, otherwise `ConfirmDialog`), Uredi `U`, Preskoči `→`, Nazad `←`; after
+  (immediately only for a Claude draft that was never approved, otherwise `ConfirmDialog`: deliberately stricter than the plan's
+  "confirm only RUCNO", so an active, archived or ever-approved Claude variant asks too), Uredi `U`, Preskoči `→`, Nazad `←`; after
   approve or delete the variant leaves the list and the next one shows; one deleted meanwhile (404) is skipped; actions run one at a
   time (`radi`), and an action's response after a new `ucitaj` is ignored. Keys do nothing while focus is in
-  `input`/`textarea`/`select`/`[contenteditable]`, while any `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta and on
-  auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
-  a polite status region names the draft now shown). "Odbaci celu seriju" (only with `serija`; the confirmation counts Claude's
-  drafts in the list) -> `POST banka/serije/{serija}/odbaci`: the server deletes the series' never-approved Claude drafts and the
-  Claude groups left empty, approved and manual items stay and come back in `preskoceno`, presentations are untouched; then the
-  snackbar `porukaOdbacivanja` ("Obrisano: 2 varijante, 1 grupa." plus " Preskočeno: N.") and the list again. After the last one:
+  `input`/`textarea`/`select`/`[contenteditable]` or inside a CDK overlay (`.cdk-overlay-container`, e.g. the shell's theme
+  `mat-menu`: a vertical menu neither handles `←`/`→` nor prevents letters, so they would act on the draft behind it), while any
+  `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta and on auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
+  a polite status region names the draft now shown). "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
+  the server deletes the series' never-approved Claude drafts in every subject and group and the Claude groups left empty, approved
+  and manual items stay and come back in `preskoceno`, presentations are untouched. The confirmation says exactly that and shows
+  **no number** (the plan asked for one): the list is narrowed by `predmet`, `grupa`, `status` and the page limit and does not know
+  `ikadOdobrena`, so its count could be far from what an irreversible action deletes, `SerijaInfo.nacrta` is per subject and counts
+  ever-approved drafts too, and the dry run (`potvrdjeno: false`) exists only in MCP. Then the snackbar `porukaOdbacivanja`
+  ("Obrisano: 2 varijante, 1 grupa." plus " Preskočeno: N.", with Serbian plural forms through `sRecju`: 1 varijanta, 2 varijante,
+  5 varijanti; the plan's literal was "X varijanti, Y grupa") and the list again. After the last one:
   "Nema više nacrta." with a link to `/banka` (and "Nazad" while skipped ones remain); focus that fell to `<body>` after an action
   goes to that link. No animations under `prefers-reduced-motion`.
 - **Return from the editor**: "Uredi" opens `banka/varijante/:id?povratak=<review URL with od=<id>>`. After a successful save the
@@ -880,7 +895,7 @@ and Claude's series, and reviews the drafts one by one (below).
   its group is deleted (`ON DELETE SET NULL`). `e2e/banka.spec.ts` also covers the source chip, "Uključi" and "Pregledaj";
   `e2e/banka-pregled.spec.ts` the review (series link without a subject, copy next to the original, `O` twice, "Uredi" and back to
   the same position, "Uredi" + "Sačuvaj i odobri" to the next one, keys, the end, the confirmation of a manual draft while keys do
-  nothing, "Odbaci celu seriju"); `pristupacnost.spec.ts` the bank with both sections, the excluded group page and three review
+  nothing, keys while the theme menu is open, "Odbaci celu seriju"); `pristupacnost.spec.ts` the bank with both sections, the excluded group page and three review
   states, day and night.
 
 ## Routes and paths
@@ -896,27 +911,30 @@ and Claude's series, and reviews the drafts one by one (below).
 MCP A1 (spec 6.5): Claude writes slides through MCP, so a Markdown image may only point into GFS, and the browser enforces it.
 
 - **Markdown** (`features/uzivo/ui/markdown.ts`: INFO `sadrzaj` through `renderMarkdown`, question text through `markdownSaFormulama`,
-  two own `Marked` instances, raw HTML dropped) renders an image only when its target is exactly
-  `api/public/mediji/<uuid>` (`DOZVOLJENA_SLIKA`, lower-case UUID, relative to `<base href>`); `renderer.image` returns `''` for
-  anything else in **both** instances (external URL, `data:`, another path, the reference form `![a][r]`), so nothing is drawn and no
-  request is made. Same rule as the backend (`SlajdPP` / `PrezentacijaService`: 400 "Slika u tekstu mora biti otpremljena u GFS.",
+  two own `Marked` instances, raw HTML dropped) renders an image only when its resolved target is exactly
+  `api/public/mediji/<uuid>` (`DOZVOLJENA_SLIKA`, lower-case UUID, relative to `<base href>`), in the inline form and in the
+  reference form alike (`![a][r]` with `[r]: url`: `marked` resolves the reference first, so a reference to a GFS medium draws);
+  `renderer.image` returns `''` for any other target in **both** instances (external URL, `data:`, another path, or a reference whose
+  definition points there), so nothing is drawn and no request is made. Same rule as the backend (`SlajdPP` / `PrezentacijaService`: 400 "Slika u tekstu mora biti otpremljena u GFS.",
   and only media of kind `SLIKA`), which guards every write; the front rule is the second layer and covers rows written before the
   backend rule. Option text is plain text on the front (no Markdown images). `markdown.ts` is on the public allow-list (phone), so
   the regex lives in it with no new import.
   A new image source for slides means changing this regex, the backend rule and the CSP together.
 - **CSP** of the frontend container: `img-src 'self' data: blob:; connect-src 'self' ws: wss:` (`docker/nginx.conf`, `add_header ...
   always` in `location /` **and** in the hashed-file location, because `add_header` is not inherited into a location with its own;
-  `/api/` responses do not get it: they are JSON, and the bank's render SVGs carry the backend's CSP). It restricts only images and
-  connections: an image or a `fetch` to another origin is refused, WebSockets go through `ws:`/`wss:` (uživo); scripts, styles, fonts
-  and workers are deliberately free (MathLive, pdf.js and its web worker, the inline theme script of `index.html`). The same string is
+  `/api/` responses do not get it: they are JSON and media served by the backend, and the bank's render SVGs carry the backend's own
+  CSP). It restricts only images and connections: images and `fetch`/XHR are limited to the app's own origin, but `ws:`/`wss:` are
+  scheme sources, so a WebSocket to **any** host is allowed (uživo uses its own origin; narrowing it to explicit hosts would be a
+  deliberate later change); scripts, styles, fonts and workers are deliberately free (MathLive, pdf.js and its web worker, the inline theme script of `index.html`). The same string is
   `CSP` in `e2e/csp.ts` (no imports: Node runs `e2e/staticki-server.ts` directly, and it sends `CSP` on every response, so every e2e
   spec runs under it). `e2e/csp.spec.ts` checks that `nginx.conf` has exactly that line in both locations and no other CSP header,
   that the browser enforces it (off-origin image and `fetch` refused), that the bank, the variant editor, the presentation editor
   with the canvas and the projector with a formula log no "Content Security Policy" message, and that a slide with
   `![x](https://primer.invalid/x.png)` makes no request to it on the projector (INFO) or the phone (PITANJE) while a GFS image still
   draws.
-- **A new image or connection source** (a CDN, another API origin, a WebSocket host) goes into `e2e/csp.ts` and both `add_header`
-  lines of `docker/nginx.conf` in one change (`csp.spec.ts` fails otherwise), and is checked by running the whole e2e suite; restricting
+- **A new image or connection source** (a CDN, another API origin; a WebSocket host needs nothing while `ws:`/`wss:` stay) goes into
+  `e2e/csp.ts` and both `add_header` lines of `docker/nginx.conf` in one change (`csp.spec.ts` fails otherwise), and is checked by
+  running the whole e2e suite; restricting
   `script-src`/`default-src` would also need `worker-src 'self'` and `script-src 'self' 'wasm-unsafe-eval'` for PDF import (see
   "Uživo", phase 5d) and a check of MathLive. Never add an off-origin source just for a Markdown image: upload it into GFS instead.
 

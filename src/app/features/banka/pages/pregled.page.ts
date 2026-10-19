@@ -15,7 +15,7 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { sRecju } from '../../../shared/util/mnozina';
 import { svgUrl, VarijantaDetails } from '../data-access/banka.models';
-import { filterPregleda, PregledFilter, PregledNacrtaStore, upitPregleda } from '../data-access/pregled-nacrta.store';
+import { filterPregleda, NAJVISE_PO_PREDMETU, PregledFilter, PregledNacrtaStore, upitPregleda } from '../data-access/pregled-nacrta.store';
 import { OdgovoriPregledComponent } from '../ui/odgovori-pregled.component';
 import { imeVarijante, prikazStatusa } from '../ui/varijanta-kartica.component';
 
@@ -39,6 +39,14 @@ function uPolju(t: EventTarget | null): boolean {
   return t instanceof Element && t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !== null;
 }
 
+/**
+ * Fokus je u CDK overlay-u (npr. `mat-menu` teme u ljusci): tasteri pripadaju njemu, ne nacrtu iza. Vertikalni meni ne
+ * obrađuje `←`/`→` niti sprečava slova, pa bi inače preskočili, odobrili ili obrisali nacrt ispod otvorenog menija.
+ */
+function uOverlayu(t: EventTarget | null): boolean {
+  return t instanceof Element && t.closest('.cdk-overlay-container') !== null;
+}
+
 const istiFilter = (a: PregledFilter, b: PregledFilter) => JSON.stringify(a) === JSON.stringify(b);
 
 /** "linija 3: Undefined control sequence \foo" (ili samo poruka kad se linija ne zna). */
@@ -54,9 +62,10 @@ function opisGreske(v: VarijantaDetails): string {
  * (`O`), Obriši (`Delete`; potvrda za sve osim Klodovog nacrta koji nikad nije odobren), Uredi (`U`: editor varijante sa
  * `?povratak` na ovaj pregled sa `od=<id>`, pa se posle čuvanja vraća na isto mesto: isti nacrt, a posle "Sačuvaj i odobri"
  * sledeći), Preskoči (`→`) i Nazad (`←`); posle odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je
- * fokus u polju za unos, dok je otvoren dijalog i uz Ctrl/Alt/Meta. Uz seriju u filteru, pri vrhu "Odbaci celu seriju"
- * (potvrda sa brojem Klodovih nacrta). Na kraju liste "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde
- * (feature store stranice); bez animacija pod `prefers-reduced-motion`.
+ * fokus u polju za unos ili u CDK overlay-u (meni), dok je otvoren dijalog i uz Ctrl/Alt/Meta. Uz seriju u filteru, pri vrhu
+ * "Odbaci celu seriju" (potvrda bez broja: server briše sve neodobrene Klodove nacrte serije, ne samo ove iz filtera). Na
+ * kraju liste "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija
+ * pod `prefers-reduced-motion`.
  */
 @Component({
   selector: 'app-pregled-page',
@@ -90,6 +99,12 @@ function opisGreske(v: VarijantaDetails): string {
     </app-page-header>
 
     <p class="sr-only" role="status">{{ najava() }}</p>
+
+    @if (store.skraceno() && !store.greska()) {
+      <p class="bk-pn-napomena" data-skraceno>
+        Učitano je najviše {{ najvise }} varijanti po predmetu, pa lista nije cela. Kad ove pregledaš, učitaj stranicu ponovo za ostale.
+      </p>
+    }
 
     @if (store.greska(); as g) {
       <app-error-panel naslov="Pregled nije učitan." [poruka]="g" (ponovo)="store.ucitajPonovo()" />
@@ -240,6 +255,7 @@ export class PregledPage {
   protected readonly prikazStatusa = prikazStatusa;
   protected readonly opisGreske = opisGreske;
   protected readonly slika = svgUrl;
+  protected readonly najvise = NAJVISE_PO_PREDMETU;
 
   protected readonly filterV = computed(
     () => filterPregleda({ predmet: this.predmet(), izvor: this.izvor(), serija: this.serija(), grupa: this.grupa(), status: this.status() }),
@@ -303,13 +319,16 @@ export class PregledPage {
     });
   }
 
-  /** Prečice (`O`, `Delete`, `U`, `→`, `←`); ne dok je fokus u polju, dok je otvoren dijalog, uz Ctrl/Alt/Meta ni ponovljen taster. */
+  /**
+   * Prečice (`O`, `Delete`, `U`, `→`, `←`); ne dok je fokus u polju ili u overlay-u (meni), dok je otvoren dijalog, uz
+   * Ctrl/Alt/Meta ni ponovljen taster.
+   */
   protected tastatura(e: KeyboardEvent): void {
     if (e.defaultPrevented || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) {
       return;
     }
     const radnja = PRECICE[taster(e)];
-    if (!radnja || this.dialog.openDialogs.length > 0 || uPolju(e.target)) {
+    if (!radnja || this.dialog.openDialogs.length > 0 || uPolju(e.target) || uOverlayu(e.target)) {
       return;
     }
     e.preventDefault();
@@ -367,6 +386,11 @@ export class PregledPage {
     this.store.prethodna();
   }
 
+  /**
+   * Potvrda bez broja nacrta: server briše **sve** Klodove nacrte serije koji nikad nisu odobreni (u svim predmetima i grupama,
+   * bez obzira na filter pregleda i na granicu učitavanja), a lista ovde je sužena filterom i ne zna `ikadOdobrena`, pa bi
+   * njen broj bio manji (ili veći) od onoga što se trajno briše. Tačan spisak stiže posle, u poruci (`porukaOdbacivanja`).
+   */
   protected odbaciSeriju(): void {
     const serija = this.filterV().serija;
     if (!serija || this.store.radi() || this.store.ucitava()) {
@@ -375,7 +399,8 @@ export class PregledPage {
     ConfirmDialog.otvori(this.dialog, {
       naslov: `Odbaciti seriju „${serija}“?`,
       tekst: [
-        `Brišu se Klodovi nacrti serije koji nikad nisu odobreni (ovde ih je ${this.store.nacrtaSerije()}) i Klodove grupe serije koje ostanu prazne.`,
+        'Trajno se brišu svi Klodovi nacrti ove serije koji nikad nisu odobreni, u svim predmetima i grupama, ne samo oni u ovom '
+          + 'pregledu, i Klodove grupe serije koje posle toga ostanu prazne.',
         'Odobrene i ručne varijante i grupe ostaju, kao i prezentacije serije.',
       ],
       potvrdi: 'Odbaci seriju',

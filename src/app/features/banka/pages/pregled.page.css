@@ -13,6 +13,12 @@
   margin-top: 4px;
 }
 
+.bk-pn-napomena {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
 .bk-pn-traka {
   display: flex;
   align-items: center;

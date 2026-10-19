@@ -3,9 +3,10 @@ import { formulaMarked, KLASA_FORMULE, tekstTokena, type PripremljenTekst } from
 
 /**
  * Jedini cilj slike u Markdown-u: medij otpremljen u GFS (`api/public/mediji/<uuid>`, relativno na `<base href>`), isto
- * pravilo kao backend (`SlajdPP`, MCP spec 6.5). Slika sa bilo kog drugog cilja (spoljni URL, `data:`, druga putanja,
- * referentni oblik `![a][r]`) se izbacuje u obe instance ispod, pre CSP-a (`img-src`), pa nema ni zahteva ni poruke u
- * konzoli. Bez uvoza: fajl je na javnoj allow-listi (`gfs/javna-ruta-uvozi`).
+ * pravilo kao backend (`SlajdPP`, MCP spec 6.5). Važi za razrešen cilj, u običnom i u referentnom obliku (`![a][r]` uz
+ * `[r]: url`; `marked` prvo razreši referencu, pa referenca na medij GFS-a crta sliku). Slika sa bilo kog drugog cilja
+ * (spoljni URL, `data:`, druga putanja, i referenca čija definicija vodi tamo) se izbacuje u obe instance ispod, pre CSP-a
+ * (`img-src`), pa nema ni zahteva ni poruke u konzoli. Bez uvoza: fajl je na javnoj allow-listi (`gfs/javna-ruta-uvozi`).
  */
 const DOZVOLJENA_SLIKA = /^api\/public\/mediji\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

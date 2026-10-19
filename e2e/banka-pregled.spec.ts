@@ -55,7 +55,8 @@ test.describe('banka zadataka: pregled nacrta', () => {
 
     await page.getByRole('button', { name: 'Odbaci celu seriju' }).click();
     const potvrda = page.getByRole('alertdialog', { name: 'Odbaciti seriju „uvoz-kol1-2024“?' });
-    await expect(potvrda).toContainText('ovde ih je 1');
+    // bez broja iz liste (sužene filterom): server briše sve neodobrene Klodove nacrte serije
+    await expect(potvrda).toContainText('svi Klodovi nacrti ove serije koji nikad nisu odobreni, u svim predmetima i grupama');
     await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
     await potvrda.getByRole('button', { name: 'Odbaci seriju' }).click();
     await expect.poll(() => mock.zahteviZa('banka/serije/uvoz-kol1-2024/odbaci', 'POST').length).toBe(1);
@@ -139,6 +140,31 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await page.keyboard.press('ArrowLeft');
     await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 4');
     expect(mock.zahteviZa(/^banka\/varijante\/\d+$/, 'DELETE')).toHaveLength(1);
+  });
+
+  test('otvoren meni teme (CDK overlay): tasteri pripadaju meniju, ne nacrtu iza', async ({ page, mock }) => {
+    await page.goto('banka/pregled?predmet=1&serija=uvoz-kol1-2024');
+    await expect(napredak(page)).toHaveText('1 / 3');
+    await page.getByRole('button', { name: /^Režim prikaza/ }).click();
+    const meni = page.getByRole('menu');
+    await expect(meni).toBeVisible();
+    const stavka = page.getByRole('menuitemradio', { name: 'Dan' });
+    await stavka.focus();
+    await expect(stavka).toBeFocused();
+    for (const taster of ['ArrowRight', 'o', 'Delete', 'u']) {
+      await page.keyboard.press(taster);
+    }
+    // dva kadra: prečica koja bi prošla do pregleda je do tada već nacrtala sledeći nacrt
+    await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    await expect(meni).toBeVisible();
+    expect(await napredak(page).textContent()).toBe('1 / 3');
+    await expect(page).toHaveURL(/banka\/pregled\?predmet=1&serija=uvoz-kol1-2024$/);
+    expect(mock.zahteviZa(/^banka\/varijante\/\d+(\/odobri)?$/).filter(z => z.metod !== 'GET')).toHaveLength(0);
+
+    await page.keyboard.press('Escape');
+    await expect(meni).toHaveCount(0);
+    await page.keyboard.press('ArrowRight');
+    await expect(napredak(page)).toHaveText('2 / 3');
   });
 
   test('ručni nacrt: Delete pita, a tasteri dok je dijalog otvoren ne rade ništa; Odustani ostavlja varijantu', async ({ page, mock }) => {
