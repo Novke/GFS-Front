@@ -1,23 +1,21 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject, untracked } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { catchError, defer, EMPTY, exhaustMap, finalize, first, forkJoin, map, Observable, of, pipe, switchMap, tap, throwError } from 'rxjs';
+import { catchError, defer, EMPTY, exhaustMap, finalize, map, Observable, of, pipe, switchMap, tap } from 'rxjs';
 
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
-import { ReferenceStore } from '../../../core/state/reference.store';
 import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from './banka.api';
 import { BankaFilter, BankaPretragaStavka, IzvorVarijante, PonistavanjeInfo, StatusVarijante, VarijantaDetails } from './banka.models';
 import { razlogBanke, TIHO, UPIS } from './greske';
 
-/** Veličina strane pretrage (najviše što server daje) i najviše strana po predmetu (1 000 varijanti). */
+/** Veličina strane pretrage (najviše što server daje) i najviše strana pregleda (1 000 varijanti, i kad je bez predmeta). */
 const VELICINA_STRANE = 100;
 const MAX_STRANA = 10;
-/** Najviše varijanti jednog predmeta u pregledu (preko toga je `skraceno`). */
-export const NAJVISE_PO_PREDMETU = VELICINA_STRANE * MAX_STRANA;
+/** Najviše varijanti u pregledu (preko toga je `skraceno`). */
+export const NAJVISE_U_PREGLEDU = VELICINA_STRANE * MAX_STRANA;
 /**
  * Redosled pregleda: kako su nastale (Klod piše seriju redom, zad. 1, 2, 3...), i stalan dok se pregleda. Podrazumevani sort
  * pretrage (`izmenjeno` opadajuće) bi izmenjenu varijantu (Uredi, pa nazad sa `od`) pomerio na prvo mesto i vratio preskočene posle nje.
@@ -28,14 +26,11 @@ const SERIJA = /^[a-z0-9-]{3,60}$/;
 const IZVORI: readonly IzvorVarijante[] = ['RUCNO', 'CLAUDE'];
 const STATUSI: readonly StatusVarijante[] = ['NACRT', 'AKTIVNA', 'ARHIVIRANA'];
 
-/** Učitane strane jednog predmeta i `totalElements` servera za filter (više od učitanih = lista je skraćena). */
-interface StranePredmeta {
+/** Učitane strane pretrage i `totalElements` servera za filter (više od učitanih = lista je skraćena). */
+interface UcitaneStrane {
   stavke: BankaPretragaStavka[];
   ukupno: number;
 }
-
-/** Predmeti (za pregled bez predmeta u filteru) nisu učitani: poruka `ReferenceStore`-a ide u `greska` pregleda. */
-class GreskaPredmeta extends Error {}
 
 /**
  * Mesto od kog pregled počinje u `ids` (rastući id-jevi): `od` kad je u listi; kad nije (u editoru je "Sačuvaj i odobri"
@@ -56,7 +51,7 @@ export function pocetakPregleda(ids: readonly number[], od: number | null): numb
 
 /** Šta pregled prikazuje (`/banka/pregled?predmet&izvor&serija&grupa&status`); `null` = bez tog filtera. */
 export interface PregledFilter {
-  /** `null` = svi predmeti (link iz MCP-a nosi samo seriju). */
+  /** `null` = svi predmeti (link iz MCP-a nosi samo seriju): pretraga bez `predmetId`, server traži kroz sve. */
   predmet: number | null;
   izvor: IzvorVarijante | null;
   serija: string | null;
@@ -104,10 +99,7 @@ export function porukaOdbacivanja(info: PonistavanjeInfo): string {
 interface PregledState {
   /** Filter poslednjeg `ucitaj` (`null` pre prvog). */
   filter: PregledFilter | null;
-  /**
-   * Varijante za pregled, redom nastanka (`id` rastuće: sort na serveru, a strane više predmeta se spajaju po id-ju);
-   * odobrena ili obrisana izlazi iz liste.
-   */
+  /** Varijante za pregled, redom nastanka (`id` rastuće, sort na serveru); odobrena ili obrisana izlazi iz liste. */
   ids: number[];
   /** Mesto prikazane u `ids`; `ids.length` = posle poslednje (kraj). */
   indeks: number;
@@ -121,16 +113,16 @@ interface PregledState {
   /** Razlog neuspelog učitavanja liste ili varijante ("Pokušaj ponovo" je `ucitajPonovo`). */
   greska: string | null;
   /**
-   * Bar jedan predmet ima više varijanti za filter nego što se učitava ({@link MAX_STRANA} strana po {@link VELICINA_STRANE}):
-   * lista nije cela, a ostale (novije, `sort=id,asc`) stižu tek kad se ove pregledaju i lista učita ponovo.
+   * Server ima više varijanti za filter nego što se učitava ({@link MAX_STRANA} strana po {@link VELICINA_STRANE}): lista nije
+   * cela, a ostale (novije, `sort=id,asc`) stižu tek kad se ove pregledaju i lista učita ponovo.
    */
   skraceno: boolean;
 }
 
 /**
  * Pregled nacrta jedan po jedan (`/banka/pregled`): lista varijanti iz `GET banka/pretraga` po filteru (redom nastanka, strane
- * po 100 dok ih ima, najviše 10 strana po predmetu, a kad ih server ima više, `skraceno`; bez predmeta u filteru kroz sve
- * predmete iz `ReferenceStore`, spojeno po id-ju; grupa se sužava na klijentu po putanji), pa prikazana varijanta i, kad je
+ * po 100 dok ih ima, najviše 10, a kad ih server ima više, `skraceno`; bez predmeta u filteru pretraga ide bez `predmetId`, pa
+ * server traži kroz sve predmete; grupa se sužava na klijentu po putanji), pa prikazana varijanta i, kad je
  * kopija (`zamenjuje`), njen original. Početak je `od` ({@link pocetakPregleda}: ili prva posle nje kad je izašla iz liste).
  * Posle odobravanja ili brisanja varijanta izlazi iz liste i prikazuje se sledeća (na istom mestu); `sledeca` posle
  * poslednje daje `kraj`. Varijanta koje u međuvremenu više nema (404) se preskače. Akcije idu jedna po jedna (`radi`), a
@@ -149,22 +141,10 @@ export const PregledNacrtaStore = signalStore(
     greska: null,
     skraceno: false,
   }),
-  withProps(() => {
-    const reference = inject(ReferenceStore);
-    const stanjePredmeta = computed(() => ({ predmeti: reference.predmeti(), status: reference.status(), greska: reference.greska() }));
-    return {
-      _api: inject(BankaApi),
-      _obavestenja: inject(NotificationStore),
-      _reference: reference,
-      /** Predmeti, status i greška `ReferenceStore`-a sada (lista bez predmeta u filteru ide kroz sve). */
-      _stanjePredmeta: stanjePredmeta,
-      /**
-       * Javlja promenu {@link stanjePredmeta}. Snimak u emisiji se ne čita: `toObservable` pri pretplati ponavlja poslednji
-       * snimak (`ReplaySubject`), a on je iz vremena pre `ReferenceStore.ucitaj()`, sve dok efekat ne stigne da ga osveži.
-       */
-      _promenaPredmeta$: toObservable(stanjePredmeta),
-    };
-  }),
+  withProps(() => ({
+    _api: inject(BankaApi),
+    _obavestenja: inject(NotificationStore),
+  })),
   withComputed(({ filter, ids, indeks, ucitava, greska }) => ({
     /** Prazno posle poslednje (i kad lista nema ništa); pre prvog učitavanja i uz grešku nije kraj. */
     kraj: computed(() => filter() !== null && !ucitava() && greska() === null && indeks() >= ids().length),
@@ -176,47 +156,30 @@ export const PregledNacrtaStore = signalStore(
     let generacija = 0;
 
     /**
-     * Id-jevi predmeta za filter: zadat, ili svi (čeka `ReferenceStore`; greška bez ijednog predmeta je greška liste). Uslov se
-     * proverava nad stanjem **sada**, ne nad snimkom iz emisije: posle neuspelih predmeta ponovljeni stari snimak (`error`) bi
-     * odmah bacio staru grešku, dok novi pokušaj koji je `ucitaj()` upravo pokrenuo još traje ("Pokušaj ponovo" bez dejstva).
+     * Sve strane pretrage (najviše {@link MAX_STRANA}), po {@link SORT_PREGLEDA}; `ukupno` = `totalElements` prve strane
+     * (koliko ih server ima za filter). `predmetId: null` je pretraga kroz sve predmete (server, `BankaSpecs.predmet(null)`).
      */
-    const predmeti = (f: PregledFilter): Observable<number[]> => {
-      if (f.predmet !== null) {
-        return of([f.predmet]);
-      }
-      store._reference.ucitaj();
-      return store._promenaPredmeta$.pipe(
-        map(() => untracked(store._stanjePredmeta)),
-        first(r => r.predmeti.length > 0 || r.status === 'loaded' || r.status === 'error'),
-        switchMap(r => (r.predmeti.length === 0 && r.status === 'error'
-          ? throwError(() => new GreskaPredmeta(r.greska ?? 'Predmeti nisu učitani.'))
-          : of(r.predmeti.map(p => p.id)))),
-      );
-    };
-
-    /**
-     * Sve strane pretrage jednog predmeta (najviše {@link MAX_STRANA}), po {@link SORT_PREGLEDA}; `ukupno` = `totalElements`
-     * prve strane (koliko ih server ima za filter).
-     */
-    const stranePredmeta = (f: BankaFilter, page = 0): Observable<StranePredmeta> =>
+    const strane = (f: BankaFilter, page = 0): Observable<UcitaneStrane> =>
       store._api.pretraga(f, { page, size: VELICINA_STRANE, sort: SORT_PREGLEDA }, TIHO).pipe(
         switchMap(s => (s.content.length > 0 && page + 1 < Math.min(s.page.totalPages, MAX_STRANA)
-          ? stranePredmeta(f, page + 1).pipe(map(dalje => [...s.content, ...dalje.stavke]))
+          ? strane(f, page + 1).pipe(map(dalje => [...s.content, ...dalje.stavke]))
           : of(s.content)).pipe(map(stavke => ({ stavke, ukupno: s.page.totalElements })))),
       );
 
+    /**
+     * Lista pregleda redom nastanka (`sort=id,asc` na serveru, i preko predmeta: na tome stoji `pocetakPregleda`), svaka
+     * varijanta jednom: ona koja između dve strane uđe u filter (npr. vraćena u nacrt) pomera ostale, pa bi se ponovila.
+     */
     const stavke = (f: PregledFilter): Observable<{ lista: BankaPretragaStavka[]; skraceno: boolean }> =>
-      predmeti(f).pipe(
-        switchMap(ids => (ids.length === 0 ? of<StranePredmeta[]>([]) : forkJoin(ids.map(predmetId => stranePredmeta({
-          predmetId, namena: null, q: null, status: f.status, izvor: f.izvor, serija: f.serija,
-        }))))),
-        map(po => ({
-          // redom nastanka i preko predmeta (svaki predmet stiže sortiran po `id`): na tome stoji `pocetakPregleda`
-          lista: po.flatMap(p => p.stavke)
-            .filter(s => f.grupa === null || s.putanja.some(p => p.id === f.grupa))
-            .sort((a, b) => a.varijantaId - b.varijantaId),
-          skraceno: po.some(p => p.ukupno > p.stavke.length),
-        })),
+      strane({ predmetId: f.predmet, namena: null, q: null, status: f.status, izvor: f.izvor, serija: f.serija }).pipe(
+        map(({ stavke: sve, ukupno }) => {
+          const vidjene = new Set<number>();
+          return {
+            lista: sve.filter(s => !vidjene.has(s.varijantaId) && vidjene.add(s.varijantaId)
+              && (f.grupa === null || s.putanja.some(p => p.id === f.grupa))),
+            skraceno: ukupno > sve.length,
+          };
+        }),
       );
 
     /** Prikazana varijanta (`ids[indeks]`) i njen original; 404 izbacuje id iz liste i prelazi na sledeću. */
@@ -257,7 +220,7 @@ export const PregledNacrtaStore = signalStore(
             prikazi(true);
           }),
           catchError((e: unknown) => {
-            patchState(store, { ucitava: false, greska: e instanceof GreskaPredmeta ? e.message : razlogBanke(e) });
+            patchState(store, { ucitava: false, greska: razlogBanke(e) });
             return EMPTY;
           }),
         )),

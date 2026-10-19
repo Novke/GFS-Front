@@ -296,7 +296,7 @@ describe('PregledPage', () => {
     expect(api.odbaciSeriju).toHaveBeenCalledWith('uvoz-kol1-2024', { tiho: true });
   });
 
-  it('lista skraćena na 1000 po predmetu: napomena; cela lista bez napomene', async () => {
+  it('lista skraćena na 1000: napomena; cela lista bez napomene', async () => {
     let e = await otvori('/banka/pregled?predmet=1');
     expect(e.querySelector('[data-skraceno]')).toBeNull();
 
@@ -306,7 +306,7 @@ describe('PregledPage', () => {
     api.varijanta.mockImplementation((id: number) => of(varijanta(id)));
     e = await otvori('/banka/pregled?predmet=2');
     expect(api.pretraga).toHaveBeenCalledTimes(1 + 10);
-    expect(e.querySelector('[data-skraceno]')!.textContent).toContain('Učitano je najviše 1000 varijanti po predmetu, pa lista nije cela.');
+    expect(e.querySelector('[data-skraceno]')!.textContent).toContain('Učitano je najviše 1000 varijanti, pa lista nije cela.');
   });
 
   it('greška rendera: poruka umesto slike i Odobri onemogućeno', async () => {

@@ -280,9 +280,12 @@ export interface PreambulaCmd {
   preambula: string | null;
 }
 
-/** Filteri `GET banka/pretraga`; `q` ima bar 2 znaka, `serija` 3-60 malih slova, cifara ili crtica (inače 400). */
+/**
+ * Filteri `GET banka/pretraga`; `q` ima bar 2 znaka, `serija` 3-60 malih slova, cifara ili crtica (inače 400). Svaki je opcion
+ * na serveru (`BankaFilter`): `predmetId: null` traži kroz sve predmete, nepoznat predmet daje praznu stranu (ne 404).
+ */
 export interface BankaFilter {
-  predmetId: number;
+  predmetId: number | null;
   namena?: Namena | null;
   q?: string | null;
   status?: StatusVarijante | null;

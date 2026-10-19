@@ -185,6 +185,16 @@ describe('BankaApi', () => {
     req.flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
   });
 
+  it('pretraga bez predmeta (`predmetId: null`): bez parametra predmetId, server traži kroz sve predmete', () => {
+    api.pretraga({ predmetId: null, serija: 'uvoz-kol1-2024', status: 'NACRT' }, { page: 0, size: 100, sort: 'id,asc' }).subscribe();
+    const req = zahtev('GET', 'api/banka/pretraga');
+    expect(req.request.params.has('predmetId')).toBe(false);
+    expect(Object.fromEntries(req.request.params.keys().map(k => [k, req.request.params.get(k)]))).toEqual({
+      serija: 'uvoz-kol1-2024', status: 'NACRT', page: '0', size: '100', sort: 'id,asc',
+    });
+    req.flush({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 0 } });
+  });
+
   it('serije: GET banka/serije?predmetId', () => {
     const rez = vi.fn();
     api.serije(1).subscribe(rez);

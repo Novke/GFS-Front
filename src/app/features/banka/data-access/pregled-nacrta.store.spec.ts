@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReferenceApi } from '../../../core/api/reference.api';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
-import { ReferenceStore } from '../../../core/state/reference.store';
 import { Strana } from '../../../shared/models/strana';
 import { BankaApi } from './banka.api';
 import { BankaPretragaStavka, PonistavanjeInfo, VarijantaDetails } from './banka.models';
@@ -95,7 +94,7 @@ describe('PregledNacrtaStore', () => {
     tipoviTesta: vi.fn(() => of([])),
   };
 
-  /** Pretraga sa jednom stranom ovih stavki (za svaki predmet). */
+  /** Pretraga sa jednom stranom ovih stavki. */
   function lista(...ids: number[]): void {
     api.pretraga.mockImplementation(() => of(strana(ids.map(id => stavka(id)), 0, 1)));
   }
@@ -149,11 +148,9 @@ describe('PregledNacrtaStore', () => {
       expect(store.skraceno()).toBe(true);
     });
 
-    it('skraceno samo kad server za neki predmet ima više nego što je učitano; nov `ucitaj` ga briše', () => {
-      api.pretraga.mockImplementation((f: { predmetId: number }, s: { page: number }) =>
-        of(f.predmetId === 1 ? strana([stavka(16)], 0, 1) : strana(s.page === 0 ? [stavka(40)] : [], s.page, 11, 1001)));
+    it('skraceno samo kad server ima više nego što je učitano; nov `ucitaj` ga briše', () => {
+      api.pretraga.mockImplementation((_f: unknown, s: { page: number }) => of(strana(s.page === 0 ? [stavka(40)] : [], s.page, 11, 1001)));
       store.ucitaj({ ...FILTER, predmet: null }, null);
-      TestBed.tick();
       expect(store.skraceno()).toBe(true);
 
       lista(16, 17);
@@ -230,7 +227,7 @@ describe('PregledNacrtaStore', () => {
 
     it('`grupa` sužava po putanji (i podgrupe), na klijentu', () => {
       api.pretraga.mockImplementation(() => of(strana([
-        stavka(16), stavka(21, { grupaId: 2, putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 2, naziv: '2 → 10' }] }), stavka(18),
+        stavka(16), stavka(18), stavka(21, { grupaId: 2, putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 2, naziv: '2 → 10' }] }),
       ], 0, 1)));
       store.ucitaj({ ...FILTER, grupa: 4 }, null);
       expect(store.ids()).toEqual([16, 18]);
@@ -253,90 +250,33 @@ describe('PregledNacrtaStore', () => {
       expect(poruke).toEqual([]);
     });
 
-    it('bez predmeta: pretraga po svim predmetima, spojeno redom nastanka (id)', () => {
-      api.pretraga.mockImplementation((f: { predmetId: number }) =>
-        of(strana(f.predmetId === 1 ? [stavka(16), stavka(45)] : [stavka(40), stavka(41)], 0, 1)));
+    it('bez predmeta: jedna pretraga bez predmetId (server traži kroz sve predmete), bez liste predmeta', () => {
+      api.pretraga.mockImplementation(() => of(strana([stavka(16), stavka(40), stavka(41), stavka(45)], 0, 1)));
       store.ucitaj({ ...FILTER, predmet: null }, null);
-      TestBed.tick();
-      expect(referenca.predmeti).toHaveBeenCalled();
-      expect(api.pretraga.mock.calls.map(c => (c[0] as { predmetId: number }).predmetId)).toEqual([1, 2]);
+      expect(api.pretraga.mock.calls).toEqual([
+        [{ predmetId: null, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
+      ]);
+      expect(referenca.predmeti).not.toHaveBeenCalled();
       expect(store.ids()).toEqual([16, 40, 41, 45]);
       expect(store.trenutna()?.id).toBe(16);
+      expect(store.greska()).toBeNull();
     });
 
-    /** Pretraga po predmetu: predmet 1 ima 16, 17 i 18, ostali ništa (spajanje bez duplikata). */
-    function listaPredmeta1(): void {
-      api.pretraga.mockImplementation((f: { predmetId: number }) =>
-        of(f.predmetId === 1 ? strana([stavka(16), stavka(17), stavka(18)], 0, 1) : strana([], 0, 0)));
-    }
-
-    it('bez predmeta, predmeti padnu: greška; jedan `ucitajPonovo` čeka nov odgovor, ne stari snimak greške', () => {
-      listaPredmeta1();
-      referenca.predmeti.mockReturnValueOnce(greskaServera(502));
-      store.ucitaj({ ...FILTER, predmet: null }, null);
-      TestBed.tick();
-      expect(store.greska()).toBe('Sistemska greška. Pokušaj ponovo.');
-      expect(store.ucitava()).toBe(false);
-      expect(api.pretraga).not.toHaveBeenCalled();
-
-      store.ucitajPonovo();
-      TestBed.tick();
-      expect(referenca.predmeti).toHaveBeenCalledTimes(2);
-      expect(store.greska()).toBeNull();
+    it('varijanta koja između dve strane opet uđe u filter (pa se pojavi i na drugoj) je u listi jednom', () => {
+      api.pretraga.mockImplementation((_f: unknown, s: { page: number }) =>
+        of(s.page === 0 ? strana([stavka(16), stavka(17)], 0, 2, 4) : strana([stavka(17), stavka(18)], 1, 2, 4)));
+      store.ucitaj(FILTER, null);
       expect(store.ids()).toEqual([16, 17, 18]);
-      expect(store.trenutna()?.id).toBe(16);
+      expect(store.napredak()).toBe('1 / 3');
     });
 
-    it('bez predmeta, predmeti su pali ranije (npr. u ljusci): prvo otvaranje čeka nov pokušaj, ne staru grešku', () => {
-      listaPredmeta1();
-      referenca.predmeti.mockReturnValueOnce(greskaServera(502));
-      const reference = TestBed.inject(ReferenceStore);
-      reference.ucitaj();
-      TestBed.tick();
-      expect(reference.status()).toBe('error');
-
-      const novi = new Subject<{ id: number; naziv: string }[]>();
-      referenca.predmeti.mockReturnValueOnce(novi);
+    it('bez predmeta: najviše 10 strana ukupno (ne po predmetu)', () => {
+      api.pretraga.mockImplementation((_f: unknown, s: { page: number }) => of(strana([stavka(100 + s.page)], s.page, 25, 2500)));
       store.ucitaj({ ...FILTER, predmet: null }, null);
-      TestBed.tick();
-      expect(store.greska()).toBeNull();
-      expect(store.ucitava()).toBe(true);
-      novi.next([{ id: 1, naziv: 'Statika' }]);
-      novi.complete();
-      TestBed.tick();
-      expect(store.ids()).toEqual([16, 17, 18]);
-      expect(store.trenutna()?.id).toBe(16);
-    });
-
-    it('bez predmeta: ponovni pokušaj dok predmeti još stižu ne prikazuje staru grešku, a novu grešku da', () => {
-      listaPredmeta1();
-      referenca.predmeti.mockReturnValueOnce(greskaServera(502));
-      store.ucitaj({ ...FILTER, predmet: null }, null);
-      TestBed.tick();
-      expect(store.greska()).not.toBeNull();
-
-      const drugi = new Subject<{ id: number; naziv: string }[]>();
-      referenca.predmeti.mockReturnValueOnce(drugi);
-      store.ucitajPonovo();
-      TestBed.tick();
-      expect(store.greska()).toBeNull();
-      expect(store.ucitava()).toBe(true);
-      expect(api.pretraga).not.toHaveBeenCalled();
-      drugi.error(new HttpErrorResponse({ status: 0 }));
-      TestBed.tick();
-      expect(store.greska()).toBe('Nema veze sa serverom.');
-
-      const treci = new Subject<{ id: number; naziv: string }[]>();
-      referenca.predmeti.mockReturnValueOnce(treci);
-      store.ucitajPonovo();
-      TestBed.tick();
-      expect(store.greska()).toBeNull();
-      treci.next([{ id: 1, naziv: 'Statika' }]);
-      treci.complete();
-      TestBed.tick();
-      expect(store.ids()).toEqual([16, 17, 18]);
-      expect(store.trenutna()?.id).toBe(16);
-      expect(store.greska()).toBeNull();
+      expect(api.pretraga).toHaveBeenCalledTimes(10);
+      expect(api.pretraga.mock.calls.every(c => (c[0] as { predmetId: number | null }).predmetId === null)).toBe(true);
+      expect(store.ids()).toHaveLength(10);
+      expect(store.skraceno()).toBe(true);
     });
 
     it('prazna lista: odmah kraj, bez učitavanja varijante', () => {

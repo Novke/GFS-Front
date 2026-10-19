@@ -172,12 +172,12 @@ export class BankaApi {
   }
 
   /**
-   * `GET banka/pretraga`: pretraga varijanti predmeta (`q` ima bar 2 znaka); `izvor` i `serija` sužavaju na Klodove ili ručne
-   * varijante i na jednu seriju.
+   * `GET banka/pretraga`: pretraga varijanti predmeta, a bez `predmetId` (`null`) svih predmeta (`q` ima bar 2 znaka); `izvor` i
+   * `serija` sužavaju na Klodove ili ručne varijante i na jednu seriju. Šalju se samo postavljeni filteri.
    */
   pretraga(f: BankaFilter, strana: StranaPretrage = {}, o: OpcijeZahteva = {}): Observable<Strana<BankaPretragaStavka>> {
-    let params = new HttpParams().set('predmetId', f.predmetId);
-    const filteri = { namena: f.namena, q: f.q, status: f.status, izvor: f.izvor, serija: f.serija, ...strana };
+    let params = new HttpParams();
+    const filteri = { predmetId: f.predmetId, namena: f.namena, q: f.q, status: f.status, izvor: f.izvor, serija: f.serija, ...strana };
     for (const [kljuc, vrednost] of Object.entries(filteri)) {
       if (vrednost !== null && vrednost !== undefined && vrednost !== '') {
         params = params.set(kljuc, vrednost);

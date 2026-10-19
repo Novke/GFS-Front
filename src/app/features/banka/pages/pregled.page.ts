@@ -15,7 +15,7 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { sRecju } from '../../../shared/util/mnozina';
 import { svgUrl, VarijantaDetails } from '../data-access/banka.models';
-import { filterPregleda, NAJVISE_PO_PREDMETU, PregledFilter, PregledNacrtaStore, upitPregleda } from '../data-access/pregled-nacrta.store';
+import { filterPregleda, NAJVISE_U_PREGLEDU, PregledFilter, PregledNacrtaStore, upitPregleda } from '../data-access/pregled-nacrta.store';
 import { OdgovoriPregledComponent } from '../ui/odgovori-pregled.component';
 import { imeVarijante, prikazStatusa } from '../ui/varijanta-kartica.component';
 
@@ -102,7 +102,7 @@ function opisGreske(v: VarijantaDetails): string {
 
     @if (store.skraceno() && !store.greska()) {
       <p class="bk-pn-napomena" data-skraceno>
-        Učitano je najviše {{ najvise }} varijanti po predmetu, pa lista nije cela. Kad ove pregledaš, učitaj stranicu ponovo za ostale.
+        Učitano je najviše {{ najvise }} varijanti, pa lista nije cela. Kad ove pregledaš, učitaj stranicu ponovo za ostale.
       </p>
     }
 
@@ -255,7 +255,7 @@ export class PregledPage {
   protected readonly prikazStatusa = prikazStatusa;
   protected readonly opisGreske = opisGreske;
   protected readonly slika = svgUrl;
-  protected readonly najvise = NAJVISE_PO_PREDMETU;
+  protected readonly najvise = NAJVISE_U_PREGLEDU;
 
   protected readonly filterV = computed(
     () => filterPregleda({ predmet: this.predmet(), izvor: this.izvor(), serija: this.serija(), grupa: this.grupa(), status: this.status() }),

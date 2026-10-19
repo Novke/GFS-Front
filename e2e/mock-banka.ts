@@ -600,9 +600,13 @@ export class MockBanka {
   /**
    * Sve stavke pretrage (strana se seče u `mock-api.ts`), redom po `sort` kao na serveru (bez njega `izmenjeno` opadajuće, pa
    * `id` opadajuće; nepoznato polje sorta je 400). `izvor` i `serija` sužavaju na Klodove ili ručne varijante i na jednu seriju.
+   * Svaki filter je opcion kao u `BankaFilter`: bez `predmetId` (ili prazan) pretraga ide kroz sve predmete, a nepoznat predmet
+   * daje praznu stranu, ne 404 (`BankaSpecs.predmet`); nebrojčana vrednost je 400 kao u `ApiExceptionHandler`.
    */
   pretraga(q: URLSearchParams): Ishod {
-    const predmetId = Number(q.get('predmetId'));
+    const predmetParam = q.get('predmetId');
+    if (predmetParam !== null && predmetParam !== '' && !/^\d+$/.test(predmetParam)) return greska(400, 'Neispravan parametar: predmetId.');
+    const predmetId = predmetParam ? Number(predmetParam) : null;
     const upit = q.get('q')?.trim() ?? '';
     if (q.has('q') && upit !== '' && duzina(upit) < 2) return greska(400, 'Upit mora imati bar 2 znaka.');
     const izvor = q.get('izvor');
@@ -611,15 +615,15 @@ export class MockBanka {
     if (serija !== null && !SERIJA.test(serija)) return greska(400, PORUKA_SERIJE);
     const poredak = poredakPretrage(q.getAll('sort'));
     if (!poredak) return greska(400, 'Neispravan parametar: sort.');
-    if (!this.predmetPostoji(predmetId)) return greska(404, 'Predmet nije pronađen.');
     const namena = q.get('namena');
     const status = q.get('status');
     const stavke: BankaPretragaStavka[] = this.d.bankaVarijante
       .filter(v => {
         const g = this.grupa(v.grupaId);
         const naslov = `${v.naziv ?? ''} ${v.tekst} ${g?.naziv ?? ''}`.toLowerCase();
-        return g?.predmetId === predmetId && (!namena || g.namena === namena) && (!status || v.status === status)
-          && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija) && (upit === '' || naslov.includes(upit.toLowerCase()));
+        return g !== undefined && (predmetId === null || g.predmetId === predmetId) && (!namena || g.namena === namena)
+          && (!status || v.status === status) && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija)
+          && (upit === '' || naslov.includes(upit.toLowerCase()));
       })
       .sort(poredak)
       .map(v => {

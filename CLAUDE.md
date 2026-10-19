@@ -732,7 +732,7 @@ and Claude's series, and reviews the drafts one by one (below).
   fields are always sent; the MCP fields `izvor` on groups, search rows and topics (variants have had it since phase 1), `serija`,
   `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`, `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
   A1 contract, new backend fields are always appended at the end of the record); `banka.api.ts` (`BankaApi`, all calls accept
-  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija`, plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed),
+  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija` and leaves out `predmetId` when it is `null` (every subject), plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed),
   `iskljuceneTeme`, `iskljuciTemu` (no UI uses it) and `ukljuciTemu`); `banka.store.ts` (`BankaStore`, NgRx
   SignalStore provided by the `banka` page: tree, selected group, its variants, status and source filters (`filterStatusa`,
   `filterIzvora`; `imaFiltera`, `ocisti()` resets both), the subject's series and excluded topics (`serije`, `teme`: per subject, not
@@ -838,15 +838,14 @@ and Claude's series, and reviews the drafts one by one (below).
   topic** (spec decision): Novica tells Claude, which calls the MCP tool `iskljuci_temu`.
 - **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`; no "approve all" by design): one variant at a time. The
   filter comes from the query (`filterPregleda`: an invalid value means no filter, `status` defaults to `NACRT`, `serija` must match the
-  server pattern); the MCP link (`<front>/banka/pregled?serija=<s>`) carries only the series, so without `predmet` the list runs over
-  every subject of `ReferenceStore`, each with its own page limit below (the plan said 10 pages in total, but the backend needs a
-  `predmetId` and the series link has none). The subjects are awaited on the **live** `ReferenceStore` state: `toObservable` replays
-  its last snapshot on subscribe, which predates `ucitaj()`, so after a failed subject list "Pokušaj ponovo" would rethrow the old error
-  while the retry is still running (`_promenaPredmeta$` only says "look again", `_stanjePredmeta` is read then). The list is
+  server pattern); the MCP link (`<front>/banka/pregled?serija=<s>`) carries only the series, so without `predmet` the review covers
+  every subject. The backend's `predmetId` is optional (`BankaFilter`: `BankaSpecs.predmet(null)` is no subject filter, an unknown id
+  is an empty page, not 404), so that is **one** search without `predmetId` (`BankaFilter.predmetId: null`, which `BankaApi.pretraga`
+  leaves out): no subject list from `ReferenceStore`, no request per subject. The list is
   `GET banka/pretraga` with `sort=id,asc` (creation order, stable while reviewing: the default `izmenjeno,desc` would move an edited
-  variant to the front), pages of 100, at most 10 pages (1 000 variants, `NAJVISE_PO_PREDMETU`) per subject, merged by id; more are not
-  loaded, and when the server has more for any subject (`totalElements` of its first page) `skraceno` shows a note above the list
-  ("Učitano je najviše 1000 varijanti po predmetu, pa lista nije cela. ..."; the rest are the newest, they come after a reload). `grupa`
+  variant to the front), pages of 100, at most 10 pages (1 000 variants, `NAJVISE_U_PREGLEDU`) in total, with or without a subject; more
+  are not loaded, and when the server has more (`totalElements` of the first page) `skraceno` shows a note above the list
+  ("Učitano je najviše 1000 varijanti, pa lista nije cela. ..."; the rest are the newest, they come after a reload). `grupa`
   (a group and its subtree) is filtered on the client by `putanja`. `od` (`pocetakPregleda`) starts at that variant or, when it has
   left the list (approved in the editor, deleted), at the first one created after it, or at the end when none is newer (Nazad returns
   the last). That deliberately departs from the plan's "otherwise from the first": after "Sačuvaj i odobri" in the editor the variant
@@ -890,7 +889,8 @@ and Claude's series, and reviews the drafts one by one (below).
   series `uvoz-kol1-2024`: 15 an active manual variant, 16-18 Claude drafts of the series, 16 `zamenjuje` 15), group 5 "Razlomljeni
   brojevi (demo)" (no variants, excluded by topic 1), topic 2 without a group; existing rows are `RUCNO` without a series. The mock
   serves `banka/serije`, `banka/serije/:serija/odbaci`, `predmeti/:id/iskljucene-teme` (GET, POST) and `iskljucene-teme/:id` (DELETE),
-  filters `pretraga` by `izvor` and `serija` and sorts it like `PageableUtil` (an unknown `sort` field is 400), archives the original
+  filters `pretraga` by `izvor` and `serija` (like the server: without `predmetId` over every subject, an unknown subject is an empty
+  page, a non-numeric one 400) and sorts it like `PageableUtil` (an unknown `sort` field is 400), archives the original
   when a copy is approved, computes `brojClaudeNacrta`, `iskljucena` and `iskljucenjeId`, and sets a topic's `grupaId` to `null` when
   its group is deleted (`ON DELETE SET NULL`). `e2e/banka.spec.ts` also covers the source chip, "Uključi" and "Pregledaj";
   `e2e/banka-pregled.spec.ts` the review (series link without a subject, copy next to the original, `O` twice, "Uredi" and back to

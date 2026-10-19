@@ -19,9 +19,9 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Pregled nacrta' })).toBeVisible();
     await expect(napredak(page)).toHaveText('1 / 3');
     await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
-    // link nema predmet: pretraga ide kroz sve predmete
+    // link nema predmet: jedna pretraga bez `predmetId`, server (i mok) traži kroz sve predmete
     expect(mock.zahteviZa('banka/pretraga', 'GET').map(z => [z.query.get('predmetId'), z.query.get('serija'), z.query.get('status'), z.query.get('sort')]))
-      .toEqual([['1', 'uvoz-kol1-2024', 'NACRT', 'id,asc'], ['2', 'uvoz-kol1-2024', 'NACRT', 'id,asc']]);
+      .toEqual([[null, 'uvoz-kol1-2024', 'NACRT', 'id,asc']]);
 
     const nacrt = page.locator('[data-nacrt]');
     await expect(nacrt.getByRole('img', { name: 'Zadatak: Kol. 1, 2024/25, zad. 2' })).toBeVisible();
