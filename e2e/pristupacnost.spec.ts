@@ -44,6 +44,11 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
   // isključena grupa: oznaka "Isključeno" i "Uključi" u zaglavlju
   { putanja: 'banka/grupe/5', spremno: p => p.locator('[data-iskljuceno]') },
+  // pregled nacrta: traka napretka i radnje, Klodova kopija (render, odgovori) sa originalom pored; ručni nacrt sa greškom
+  // rendera i onemogućenim "Odobri"; kraj liste
+  { putanja: 'banka/pregled?serija=uvoz-kol1-2024', spremno: p => p.locator('[data-original] img').first() },
+  { putanja: 'banka/pregled?predmet=1&izvor=RUCNO', spremno: p => p.locator('[data-nacrt] .bk-pn-greska') },
+  { putanja: 'banka/pregled?predmet=2', spremno: p => p.locator('[data-kraj]') },
   // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
   // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
   { putanja: 'banka/varijante/nova?grupa=2', spremno: p => p.locator('[data-nedostaje]') },

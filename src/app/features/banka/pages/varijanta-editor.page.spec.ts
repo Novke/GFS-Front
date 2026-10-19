@@ -108,9 +108,15 @@ describe('VarijantaEditorPage', () => {
     api.odobri.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: 'AKTIVNA' })));
     TestBed.configureTestingModule({
       providers: [
-        // `/banka` (odredište posle čuvanja) je ovde prazna stranica: prava bi učitavala stablo
+        // `/banka` i `/banka/pregled` (odredišta posle čuvanja) su ovde prazne stranice: prave bi učitavale stablo i nacrte
         provideRouter([
-          { path: 'banka', children: [{ path: '', pathMatch: 'full', component: Druga }, ...BANKA_RUTE.filter(r => r.path !== '')] },
+          {
+            path: 'banka',
+            children: [
+              { path: '', pathMatch: 'full', component: Druga }, { path: 'pregled', component: Druga },
+              ...BANKA_RUTE.filter(r => r.path !== '' && r.path !== 'pregled'),
+            ],
+          },
           { path: '**', component: Druga },
         ], withComponentInputBinding()),
         { provide: BankaApi, useValue: api },
