@@ -149,7 +149,7 @@ describe('sesijaInterceptor', () => {
       pustiNapustanje = false;
       odbij('api/testovi');
       await smiri();
-      expect(otvori).not.toHaveBeenCalled(); // pita čuvar rute, ne ovaj kod (jedno pitanje)
+      expect(otvori).not.toHaveBeenCalled(); // registar nema nesačuvanog: pita samo čuvar rute (jedno pitanje)
       expect(router.url).toBe('/forma');
       expect(greska).toHaveBeenCalledOnce();
       expect(greska.mock.calls[0][0]).toContain('Prijava je istekla');
@@ -159,6 +159,37 @@ describe('sesijaInterceptor', () => {
       odbij('api/testovi');
       await smiri();
       expect(navigacija).not.toHaveBeenCalled();
+    });
+
+    it('ruta sa čuvarom napuštanja i nesačuvanim u registru (editor prezentacije): dijalog isteka se ipak otvara', async () => {
+      // čuvar rute zna samo za svoje (editor: nepotpuni slajdovi); PUT na čekanju ili pao zbog 401 vidi samo registar
+      await router.navigateByUrl('/forma');
+      nesacuvano = 2;
+      odbij('api/slajdovi/5');
+      await smiri();
+      expect(otvori).toHaveBeenCalledOnce();
+      expect(otvori.mock.calls[0][1].data.tekst.join(' ')).toContain('2 izmene');
+      expect(router.url).toBe('/forma');
+
+      // "Idi na prijavu": navigacija ide kroz ruter, pa čuvar rute još pita za svoje (ovde pušta)
+      odgovorDijaloga.next(true);
+      odgovorDijaloga.complete();
+      await smiri();
+      expect(router.parseUrl(router.url).queryParams).toEqual({ nazad: 'forma' });
+    });
+
+    it('ruta sa čuvarom napuštanja, nesačuvano u registru, "Odustani": ostaje, bez navigacije', async () => {
+      await router.navigateByUrl('/forma');
+      nesacuvano = 1;
+      const navigacija = vi.spyOn(router, 'navigateByUrl');
+      odbij('api/slajdovi/5');
+      await smiri();
+      odgovorDijaloga.next(false);
+      odgovorDijaloga.complete();
+      await smiri();
+      expect(navigacija).not.toHaveBeenCalled();
+      expect(router.url).toBe('/forma');
+      expect(greska).toHaveBeenCalledOnce();
     });
 
     it('ekran koji čuva red po red (bez čuvara rute) sa nesačuvanim: pita pre odlaska; "Odustani" ostaje', async () => {

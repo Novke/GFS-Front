@@ -1,6 +1,6 @@
 import { inject, Injectable, Injector } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { ActivatedRouteSnapshot, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { Observable, of, take } from 'rxjs';
 
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
@@ -14,11 +14,6 @@ import { SesijaStore } from './sesija.store';
 /** Poruka kad nastavnik posle isteka ostane na ekranu (sam je odustao od odlaska na prijavu). */
 export const PORUKA_OSTAO = 'Prijava je istekla, pa se izmene ne čuvaju. Prijavi se u novoj kartici, pa ovde ponovi čuvanje.';
 
-/** Da li neka aktivna ruta ima `canDeactivate` (forma sa svojim pitanjem "Napustiti stranicu?"). */
-function imaCuvarNapustanja(r: ActivatedRouteSnapshot | null): boolean {
-  return !!r && (!!r.routeConfig?.canDeactivate?.length || r.children.some(imaCuvarNapustanja));
-}
-
 const jePrijava = (url: string) => url === '/prijava' || url.startsWith('/prijava?');
 
 /**
@@ -27,10 +22,12 @@ const jePrijava = (url: string) => url === '/prijava' || url.startsWith('/prijav
  * stiže tačno gde je bio.
  *
  * Nesačuvan rad se ne gubi bez pitanja:
- * - Forma sa `canDeactivate` (`unsavedChangesGuard`) pita sama, jer navigacija ide kroz ruter.
- * - Ekrani koji čuvaju red po red (`RegistarCuvanja`: predavanje, domaći, test) nemaju čuvar rute: kad ima nesačuvanog
- *   (`NesacuvaneIzmene.broj()`, isto što pita pre zatvaranja kartice), ovde se otvara `ConfirmDialog`. Odlazak bi zatvorio
- *   sesiju čuvanja, a redovi čije je čuvanje palo zbog 401 bi nestali sa ekranom.
+ * - Kad sesije čuvanja (`RegistarCuvanja`: predavanje, domaći, test, editor prezentacije) imaju nesačuvanog
+ *   (`NesacuvaneIzmene.broj()`, isto što pita pre zatvaranja kartice), ovde se **uvek** otvara `ConfirmDialog`, i na ruti sa
+ *   `canDeactivate`: čuvar rute zna samo za svoje (npr. editor prezentacije broji nepotpune slajdove i uvoz, ne PUT-ove na
+ *   čekanju ili pale zbog 401). Odlazak bi zatvorio sesiju čuvanja, a izmene čije je čuvanje palo zbog 401 bi nestale.
+ * - Posle "Idi na prijavu" navigacija ide kroz ruter, pa forma sa `canDeactivate` (`unsavedChangesGuard`) još pita za
+ *   svoje (drugo pitanje je prihvatljivo: odnosi se na nešto drugo); bez nesačuvanog u registru pita samo ona.
  * Kad nastavnik ostane ("Odustani" u bilo kom od ta dva pitanja), dobija {@link PORUKA_OSTAO}; dok je na istom URL-u,
  * novi 401 (npr. sledeći red) ga više ne pita, a polja sa greškom imaju "Pokušaj ponovo" za posle prijave u drugoj kartici.
  *
@@ -54,7 +51,7 @@ export class IstekSesije {
     this.uToku = true;
     this.ostaoNa = null;
     this.injector.get(SesijaStore).ponisti();
-    this.pitajAkoTreba(router).pipe(take(1)).subscribe(ide => {
+    this.pitajAkoTreba().pipe(take(1)).subscribe(ide => {
       if (!ide) {
         this.ostani(url);
         return;
@@ -71,10 +68,7 @@ export class IstekSesije {
     });
   }
 
-  private pitajAkoTreba(router: Router): Observable<boolean> {
-    if (imaCuvarNapustanja(router.routerState.snapshot.root)) {
-      return of(true);
-    }
+  private pitajAkoTreba(): Observable<boolean> {
     const n = this.injector.get(NesacuvaneIzmene).broj();
     if (n === 0) {
       return of(true);
