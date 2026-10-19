@@ -27,6 +27,10 @@
     </div>
     <div class="kolona">
       <app-ceka-na-tebe [ceka]="store.ceka()" />
+      @if (obavestenja.otvorena().length > 0) {
+        <app-nalozi-kartica [stavke]="obavestenja.otvorena()" [ukupno]="obavestenja.broj().otvorena"
+                            (procitano)="obavestenja.procitano($event)" (reseno)="obavestenja.reseno($event)" />
+      }
       <app-nedavno [stavke]="preference.nedavno()" />
     </div>
   </div>

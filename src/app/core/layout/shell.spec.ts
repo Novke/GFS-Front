@@ -15,6 +15,7 @@ import { routes } from '../../app.routes';
 import { ReferenceStore } from '../state/reference.store';
 import { SesijaStore } from '../auth/sesija.store';
 import { DashboardCountsStore } from '../state/dashboard-counts.store';
+import { ObavestenjaStore } from '../state/obavestenja.store';
 import { IKONE } from './icons';
 import { Shell } from './shell';
 
@@ -42,10 +43,12 @@ function mediaZaSirinu(sirina: number): Pick<MediaMatcher, 'matchMedia'> {
 describe('Shell', () => {
   let brojaciNapravljeni: number;
   let ucitajReferentne: ReturnType<typeof vi.fn>;
+  let pokreniObavestenja: ReturnType<typeof vi.fn>;
 
   function podesi(sirina: number) {
     brojaciNapravljeni = 0;
     ucitajReferentne = vi.fn();
+    pokreniObavestenja = vi.fn();
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes, withComponentInputBinding()), // kao app.config (data -> input, npr. NotFound.javna)
@@ -53,7 +56,9 @@ describe('Shell', () => {
         provideHttpClientTesting(),
         { provide: MediaMatcher, useValue: mediaZaSirinu(sirina) },
         // čuvar ljuske (nastavnikGuard): nastavnik je prijavljen; sam čuvar i 401 imaju svoje specove u core/auth
-        { provide: SesijaStore, useValue: { proveri: () => Promise.resolve(true) } },
+        { provide: SesijaStore, useValue: { proveri: () => Promise.resolve(true), korisnik: signal('nastavnik') } },
+        // zvono u gornjoj traci (osvežavanje broja živi koliko i ljuska; store ima svoj spec)
+        { provide: ObavestenjaStore, useValue: { broj: signal({ neprocitana: 1, otvorena: 1 }), pokreni: pokreniObavestenja } },
         {
           provide: DashboardCountsStore,
           useFactory: () => {
@@ -144,6 +149,13 @@ describe('Shell', () => {
     expect(el.querySelector('a[href="/testovi"]')?.textContent).toContain('2');
     expect(el.querySelector('a[href="/domaci"]')?.textContent).toContain('1');
     expect(el.querySelector('.skip-link')?.textContent).toContain('Preskoči na sadržaj');
+    // dno navigacije: prijavljeni nastavnik (ranije stajalo "prijava dolazi kasnije")
+    expect(el.querySelector('app-side-nav .nalog small')?.textContent).toBe('nastavnik');
+    expect(el.querySelector('app-side-nav .nalog')?.textContent).not.toContain('kasnije');
+    // zvono i meni nastavnika (`@defer` u gornjoj traci) se učitaju i pokrenu osvežavanje obaveštenja
+    await vi.waitFor(() => expect(el.querySelector('app-obavestenja-meni [data-znacka]')).not.toBeNull());
+    expect(el.querySelector('app-korisnik-meni')).not.toBeNull();
+    expect(pokreniObavestenja).toHaveBeenCalledOnce();
   });
 
   it('javna ruta /upis/x: bez ljuske, bez brojača, bez referentnih podataka; samo env.json i api/public/upis', async () => {
@@ -155,6 +167,7 @@ describe('Shell', () => {
     expect(el.querySelector('app-shell')).toBeNull();
     expect(brojaciNapravljeni).toBe(0);
     expect(ucitajReferentne).not.toHaveBeenCalled();
+    expect(pokreniObavestenja).not.toHaveBeenCalled();
 
     const zahtevi = TestBed.inject(HttpTestingController).match(() => true).map(r => r.request.url);
     expect(zahtevi.length).toBeGreaterThan(0);

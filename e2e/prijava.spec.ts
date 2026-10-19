@@ -26,6 +26,14 @@ function pratiApi(page: Page): string[] {
   return api;
 }
 
+/**
+ * Gornja traka je spremna: zvono (`@defer`) je učitano i prvi `GET obavestenja/broj` je odgovoren. Pre opoziva sesije u
+ * testu, inače bi baš taj zahtev dobio 401 i odveo na `/prijava` pre radnje koju test proverava.
+ */
+async function trakaSpremna(page: Page): Promise<void> {
+  await expect(page.locator('app-obavestenja-meni [data-znacka]')).toHaveText('2');
+}
+
 async function prijaviSe(page: Page, lozinka = MockApi.LOZINKA): Promise<void> {
   await page.getByLabel('Korisničko ime').fill('nastavnik');
   await page.getByLabel('Lozinka').fill(lozinka);
@@ -68,6 +76,7 @@ test.describe('prijava nastavnika', () => {
   test('401 usred rada: /prijava?nazad=studenti bez snackbara, posle prijave nazad na studente', async ({ page, mock }) => {
     await page.goto('grupe');
     await expect(page.locator('tbody tr').first()).toBeVisible();
+    await trakaSpremna(page);
 
     mock.prijavljen = false; // sesija opozvana sa drugog uređaja
     await page.locator('app-side-nav').getByRole('link', { name: /Studenti/ }).click();
@@ -83,6 +92,7 @@ test.describe('prijava nastavnika', () => {
   test('401 dok se čuvaju poeni: pita pre odlaska; "Odustani" čuva unos, posle prijave "Pokušaj ponovo" upisuje', async ({ page, mock }) => {
     await page.goto('testovi/1');
     await expect(page.locator('tbody tr')).toHaveCount(4);
+    await trakaSpremna(page);
 
     mock.prijavljen = false;
     await poeni(page, 1).fill('20');
@@ -114,6 +124,7 @@ test.describe('prijava nastavnika', () => {
   test('401 dok se čuvaju poeni: "Idi na prijavu" vodi na prijavu, posle nje nazad na test', async ({ page, mock }) => {
     await page.goto('testovi/1');
     await expect(page.locator('tbody tr')).toHaveCount(4);
+    await trakaSpremna(page);
 
     mock.prijavljen = false;
     await poeni(page, 1).fill('20');

@@ -5,7 +5,7 @@ import { catchError, throwError } from 'rxjs';
 import { jeIstekSesije } from './nastavnicki-api';
 
 /**
- * 401 sa nastavničkog API-ja (sve pod `api/` osim `api/public/*`, `api/auth/prijava` i `api/auth/ja`) -> `IstekSesije`
+ * 401 sa nastavničkog API-ja (sve pod `api/` osim `api/public/*`, `api/auth/prijava`, `api/auth/ja` i `api/auth/odjava`) -> `IstekSesije`
  * (`./istek-sesije`: jednom za sve paralelne zahteve, pitanje za nesačuvan rad, navigacija na `/prijava?nazad=...`). Taj
  * modul se učitava dinamički tek na prvi takav 401, pa početni bundle nosi samo ovu proveru putanje. Greška uvek ide dalje
  * (pozivalac i dalje vidi neuspeh, npr. red ostaje "nije sačuvano"). U `app.config.ts` stoji pre `errorInterceptor`, koji

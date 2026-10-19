@@ -81,6 +81,13 @@ interface SlajdCmd {
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
+/** `ObavestenjeInfo` (`GET api/obavestenja`), kao backend. */
+interface Obavestenje {
+  id: number; vrsta: 'NE_STIZE_KOD' | 'PREVISE_KODOVA'; studentId: number | null; studentIme: string | null; indeks: string | null;
+  podaci: Record<string, unknown> | null; kreirano: string; procitano: string | null; reseno: string | null;
+}
+/** `SesijaInfo` (`GET api/auth/sesije`): prijavljeni uređaji nastavnika. */
+interface SesijaNastavnika { id: number; opis: string; kreirano: string; poslednjiUlaz: string; trenutna: boolean }
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
@@ -103,6 +110,10 @@ export interface Podaci extends BankaPodaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
+  /** Obaveštenja za nastavnika (značka, padajuća lista, kartica "Nalozi"); `reseno` != null nisu otvorena. */
+  obavestenja: Obavestenje[];
+  /** Prijavljeni uređaji nastavnika (`trenutna` = ovaj pregledač). */
+  sesijeNastavnika: SesijaNastavnika[];
   // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
@@ -118,6 +129,7 @@ export function ucitajPodatke(): Podaci {
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
   const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
+  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[] }>('nalozi.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -135,6 +147,8 @@ export function ucitajPodatke(): Podaci {
     prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
       .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],
+    obavestenja: nalozi.obavestenja,
+    sesijeNastavnika: nalozi.sesijeNastavnika,
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
@@ -643,7 +657,7 @@ export class MockApi {
       lista.find(x => x.id === Number(id)) ?? greska(404, `${sta} ne postoji.`);
     const jeOdgovor = (x: unknown): x is Odgovor => typeof x === 'object' && x !== null && 'status' in x;
 
-    // sesija nastavnika (`api/auth/*`) i značka obaveštenja; prijava prima samo `nastavnik` / `MockApi.LOZINKA`
+    // sesija nastavnika (`api/auth/*`); prijava prima samo `nastavnik` / `MockApi.LOZINKA`
     get('auth/ja', () => (this.prijavljen ? ok({ uloga: 'NASTAVNIK', korisnik: 'nastavnik' }) : greska(401, 'Potrebna je prijava.')));
     post('auth/prijava', z => {
       const telo = z.telo as { korisnik?: unknown; lozinka?: unknown } | null;
@@ -657,7 +671,54 @@ export class MockApi {
       this.prijavljen = false;
       return { status: 204 };
     });
-    get('obavestenja/broj', () => ok({ neprocitana: 0, otvorena: 0 }));
+    // prijavljeni uređaji nastavnika (meni korisnika); odjava ovog uređaja ide kroz `auth/odjava`
+    get('auth/sesije', () => ok(d.sesijeNastavnika));
+    del('auth/sesije/:id', (_z, p) => {
+      const s = nadji(d.sesijeNastavnika, p['id'], 'Sesija');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      d.sesijeNastavnika = d.sesijeNastavnika.filter(x => x.id !== s.id);
+      return { status: 204 };
+    });
+    post('auth/sesije/odjavi-sve', () => {
+      const pre = d.sesijeNastavnika.length;
+      d.sesijeNastavnika = d.sesijeNastavnika.filter(x => x.trenutna);
+      return ok({ odjavljeno: pre - d.sesijeNastavnika.length });
+    });
+
+    // obaveštenja za nastavnika (spec prijave, sekcija 6): otvorena = nerešena; najnovija prva
+    const otvorenaObavestenja = () => d.obavestenja.filter(o => o.reseno === null);
+    get('obavestenja', z => {
+      const lista = (z.query.get('stanje') === 'sva' ? [...d.obavestenja] : otvorenaObavestenja())
+        .sort((a, b) => b.kreirano.localeCompare(a.kreirano));
+      return strana(lista, z.query);
+    });
+    get('obavestenja/broj', () => {
+      const otvorena = otvorenaObavestenja();
+      return ok({ neprocitana: otvorena.filter(o => o.procitano === null).length, otvorena: otvorena.length });
+    });
+    post('obavestenja/procitaj-sve', () => {
+      const neprocitana = d.obavestenja.filter(o => o.procitano === null);
+      neprocitana.forEach(o => (o.procitano = lokalnoVreme(new Date())));
+      return ok({ procitano: neprocitana.length });
+    });
+    post('obavestenja/:id/procitano', (_z, p) => {
+      const o = nadji(d.obavestenja, p['id'], 'Obaveštenje');
+      if (jeOdgovor(o)) {
+        return o;
+      }
+      o.procitano ??= lokalnoVreme(new Date());
+      return { status: 204 };
+    });
+    post('obavestenja/:id/reseno', (_z, p) => {
+      const o = nadji(d.obavestenja, p['id'], 'Obaveštenje');
+      if (jeOdgovor(o)) {
+        return o;
+      }
+      o.reseno ??= lokalnoVreme(new Date());
+      return { status: 204 };
+    });
 
     // predmeti, grupe, tipovi testa
     get('predmeti', () => ok(d.predmeti));

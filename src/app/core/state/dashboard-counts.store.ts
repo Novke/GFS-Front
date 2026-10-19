@@ -1,12 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { patchState, signalStore, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
-import { filter, interval, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../api/api-error';
 import { KontrolnaTablaInfo, PregledApi } from '../api/pregled.api';
+import { periodicnoOsvezavanje } from './periodicno-osvezavanje';
+
+export { PERIOD_MS, RAZMAK_NAVIGACIJA_MS } from './periodicno-osvezavanje';
 
 export type StatusTable = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -18,11 +20,6 @@ export interface DashboardCounts {
   /** Prijave na čekanju, zbir po svim otvorenim sesijama. */
   prijave: number;
 }
-
-/** Posle navigacije osvežava se najviše jednom u ovom razmaku. */
-export const RAZMAK_NAVIGACIJA_MS = 15_000;
-/** Periodično osvežavanje dok je tab vidljiv. */
-export const PERIOD_MS = 60_000;
 
 /** Zahtev koji je počeo ovoliko ranije još važi za nekoga ko traži svež odgovor (stranica Početna ne pravi drugi zahtev). */
 export const SVEZ_ZAHTEV_MS = 2_000;
@@ -58,7 +55,7 @@ export const DashboardCountsStore = signalStore(
     _router: inject(Router),
     _document: inject(DOCUMENT),
     _poslednje: { vreme: Number.NEGATIVE_INFINITY, pocetakZahteva: Number.NEGATIVE_INFINITY },
-    _zahtev: { veza: null as Subscription | null },
+    _zahtev: { veza: null as Subscription | null, periodicno: null as Subscription | null },
   })),
   withMethods(store => {
     const osvezi = (): void => {
@@ -90,22 +87,16 @@ export const DashboardCountsStore = signalStore(
   withHooks({
     onInit(store) {
       store.osvezi();
-      store._router.events
-        .pipe(
-          filter(e => e instanceof NavigationEnd),
-          filter(() => Date.now() - store._poslednje.vreme >= RAZMAK_NAVIGACIJA_MS),
-          takeUntilDestroyed(),
-        )
-        .subscribe(() => store.osvezi());
-      interval(PERIOD_MS)
-        .pipe(
-          filter(() => store._document.visibilityState === 'visible'),
-          takeUntilDestroyed(),
-        )
-        .subscribe(() => store.osvezi());
+      store._zahtev.periodicno = periodicnoOsvezavanje({
+        router: store._router,
+        document: store._document,
+        osvezi: () => store.osvezi(),
+        poslednje: () => store._poslednje.vreme,
+      });
     },
     onDestroy(store) {
       store._zahtev.veza?.unsubscribe();
+      store._zahtev.periodicno?.unsubscribe();
     },
   }),
 );

@@ -52,6 +52,8 @@ export class SideNav {
   readonly predmeti = input<readonly PredmetInfo[]>([]);
   readonly brojaci = input<DashboardCounts>({ testovi: 0, domaci: 0, prijave: 0 });
   readonly staging = input(false);
+  /** Korisničko ime prijavljenog nastavnika (`SesijaStore.korisnik`), u dnu navigacije. */
+  readonly korisnik = input<string | null>(null);
   /** Klik na stavku (ljuska zatvara navigaciju u `over` režimu). */
   readonly izabrano = output<void>();
 

@@ -17,12 +17,13 @@ export function jeNastavnickiApi(url: string): boolean {
 
 /**
  * 401 na ovom zahtevu znači "sesija nastavnika je istekla ili je opozvana": nastavnički API osim `auth/prijava` (pogrešna
- * lozinka, prikazuje je forma) i `auth/ja` (provera sesije, obrađuju je čuvar i `SesijaStore`).
+ * lozinka, prikazuje je forma), `auth/ja` (provera sesije, obrađuju je čuvar i `SesijaStore`) i `auth/odjava` (401 tu znači
+ * da sesije već nema, što je za odjavu uspeh; meni korisnika sam vodi na `/prijava`, bez `nazad`).
  */
 export function jeIstekSesije(url: string): boolean {
   if (!jeNastavnickiApi(url)) {
     return false;
   }
   const p = putanjaApija(url);
-  return p !== 'auth/prijava' && p !== 'auth/ja';
+  return p !== 'auth/prijava' && p !== 'auth/ja' && p !== 'auth/odjava';
 }

@@ -3,6 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { Router, RouterLink } from '@angular/router';
 
 import { formatSkolskaGodina, tekucaSkolskaGodina } from '../../../shared/util/skolska-godina';
+import { ObavestenjaStore } from '../../../core/state/obavestenja.store';
 import { PreferencesStore } from '../../../core/state/preferences.store';
 import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -10,6 +11,7 @@ import { PredavanjaApi } from '../../../core/api/predavanja.api';
 import { PocetnaStore } from '../data-access/pocetna.store';
 import { naslovDatuma, pozdravZaSat } from '../data-access/pocetna.vreme';
 import { CekaNaTebe } from '../ui/ceka-na-tebe';
+import { NaloziKartica } from '../ui/nalozi-kartica.component';
 import { Nedavno } from '../ui/nedavno';
 import { OvaNedelja } from '../ui/ova-nedelja';
 import { SledecePredavanje } from '../ui/sledece-predavanje';
@@ -17,12 +19,13 @@ import { StatusChip } from '../../../shared/ui/status-chip';
 
 /**
  * Kontrolna tabla (`/`): pozdrav po dobu dana, datum i školska godina; traka "U toku" po nezavršenom predavanju od danas,
- * "Sledeće predavanje" (P1), "Čeka na tebe" (P3), "Ova nedelja" (P4) i "Nedavno" (P5). Jedan zahtev
- * `GET pregled/kontrolna-tabla`; greška je panel sa "Pokušaj ponovo".
+ * "Sledeće predavanje" (P1), "Čeka na tebe" (P3) sa karticom "Nalozi" (otvorena obaveštenja o nalozima studenata, iz
+ * `ObavestenjaStore`), "Ova nedelja" (P4) i "Nedavno" (P5). Jedan zahtev `GET pregled/kontrolna-tabla` (obaveštenja su
+ * poseban endpoint, spec prijave, sekcija 6); greška table je panel sa "Pokušaj ponovo".
  */
 @Component({
   selector: 'app-pocetna',
-  imports: [CekaNaTebe, ErrorPanel, MatButton, Nedavno, OvaNedelja, PageHeader, RouterLink, SkeletonRows, SledecePredavanje, StatusChip],
+  imports: [CekaNaTebe, ErrorPanel, MatButton, NaloziKartica, Nedavno, OvaNedelja, PageHeader, RouterLink, SkeletonRows, SledecePredavanje, StatusChip],
   providers: [PocetnaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pocetna.html',
@@ -31,6 +34,7 @@ import { StatusChip } from '../../../shared/ui/status-chip';
 export class Pocetna implements OnInit {
   protected readonly store = inject(PocetnaStore);
   protected readonly preference = inject(PreferencesStore);
+  protected readonly obavestenja = inject(ObavestenjaStore);
   private readonly api = inject(PredavanjaApi);
   private readonly router = inject(Router);
 
@@ -38,6 +42,7 @@ export class Pocetna implements OnInit {
 
   ngOnInit(): void {
     this.store.ucitaj();
+    this.obavestenja.ucitaj();
   }
 
   protected pozdrav(): string {

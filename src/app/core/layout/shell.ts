@@ -6,6 +6,7 @@ import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/mat
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
+import { SesijaStore } from '../auth/sesija.store';
 import { GlobalnaPretraga } from '../search/globalna-pretraga';
 import { DashboardCountsStore } from '../state/dashboard-counts.store';
 import { ReferenceStore } from '../state/reference.store';
@@ -33,6 +34,7 @@ export class Shell {
   private readonly brojaciStore = inject(DashboardCountsStore);
   protected readonly reference = inject(ReferenceStore);
   protected readonly okruzenje = inject(Okruzenje);
+  protected readonly sesija = inject(SesijaStore);
   private readonly sadrzaj = viewChild.required<ElementRef<HTMLElement>>('sadrzaj');
 
   protected readonly siroko = toSignal(

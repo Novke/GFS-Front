@@ -3,6 +3,8 @@ import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 
 import { Breadcrumbs } from './breadcrumbs';
+import { KorisnikMeni } from './korisnik-meni';
+import { ObavestenjaMeni } from './obavestenja-meni';
 
 /** Da li je fokus u polju za unos (tada `/` piše kosu crtu, a ne otvara pretragu). */
 function kucaUPolje(cilj: EventTarget | null): boolean {
@@ -12,10 +14,14 @@ function kucaUPolje(cilj: EventTarget | null): boolean {
   return cilj.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(cilj.tagName);
 }
 
-/** Gornja traka ljuske: hamburger (ispod 1024 px), mrvice, pretraga (Ctrl+K i `/`), oznaka STAGING. */
+/**
+ * Gornja traka ljuske: hamburger (ispod 1024 px), mrvice, pretraga (Ctrl+K i `/`), oznaka STAGING, zvono obaveštenja i meni
+ * nastavnika. Zvono i meni (sa `ObavestenjaStore`, API-jem i šablonima) su `@defer (on immediate)`: učitavaju se odmah posle
+ * prvog prikaza, ali van početnog paketa (budžet u `e2e/lenji-editor.spec.ts`); do tada je njihovo mesto rezervisano.
+ */
 @Component({
   selector: 'app-top-bar',
-  imports: [Breadcrumbs, MatIcon, MatIconButton],
+  imports: [Breadcrumbs, KorisnikMeni, MatIcon, MatIconButton, ObavestenjaMeni],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown)': 'precica($event)',
@@ -35,6 +41,14 @@ function kucaUPolje(cilj: EventTarget | null): boolean {
     </button>
     @if (staging()) {
       <span class="oznaka-okruzenja">STAGING</span>
+    }
+    @defer (on immediate) {
+      <div class="nalog">
+        <app-obavestenja-meni />
+        <app-korisnik-meni />
+      </div>
+    } @placeholder {
+      <div class="nalog" data-mesto-naloga aria-hidden="true"></div>
     }
   `,
   styleUrl: './top-bar.scss',

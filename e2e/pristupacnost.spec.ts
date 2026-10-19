@@ -128,6 +128,33 @@ for (const rezim of ['dan', 'noc'] as const) {
       await proveri('preambula');
     });
 
+    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
+    // i dijalog "Prijavljeni uređaji"
+    test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('./');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.getByRole('region', { name: 'Nalozi' })).toBeVisible();
+      await page.locator('app-obavestenja-meni button').click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-obavestenje]').first()).toBeVisible();
+      await posleOtvaranjaDijaloga(page, kontejner);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: lista obaveštenja (${rezim})`).toEqual([]);
+    });
+
+    test('meni nastavnika i dijalog "Prijavljeni uređaji": bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('grupe');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: 'Nalog: nastavnik' }).click();
+      await expect(page.getByRole('menuitem', { name: 'Odjava' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, '.mat-mdc-menu-panel'), `axe: meni nastavnika (${rezim})`).toEqual([]);
+      await page.getByRole('menuitem', { name: 'Prijavljeni uređaji' }).click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-sesija]')).toHaveCount(3);
+      await posleOtvaranjaDijaloga(page, kontejner);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: prijavljeni uređaji (${rezim})`).toEqual([]);
+    });
+
     // detalj grupe banke: dodato polje daje upozorenje (aktivne varijante postaju nacrti) i poruku provere šeme
     test('/banka/grupe/2 (dodato polje: upozorenje i poruka provere šeme): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('banka/grupe/2');

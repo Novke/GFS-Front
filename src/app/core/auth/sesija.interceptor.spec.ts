@@ -102,6 +102,16 @@ describe('sesijaInterceptor', () => {
     expect(router.url).toBe('/studenti?q=ana');
   });
 
+  it('401 sa api/auth/odjava nije istek (sesije već nema; odjava sama vodi na /prijava, bez nazad)', async () => {
+    const navigacija = vi.spyOn(router, 'navigateByUrl');
+    http.post('api/auth/odjava', null).subscribe({ error: () => undefined });
+    kontrola.expectOne('api/auth/odjava').flush(POTREBNA, neovlascen);
+    await smiri();
+    expect(ponisti).not.toHaveBeenCalled();
+    expect(navigacija).not.toHaveBeenCalled();
+    expect(router.url).toBe('/studenti?q=ana');
+  });
+
   it('ostale greške (403, 500, mreža) i zahtevi van api/ ne preusmeravaju', async () => {
     odbij('api/studenti/1', { status: 403, statusText: 'Forbidden' }, { reason: 'Nemaš pristup.' });
     odbij('api/studenti/2', { status: 500, statusText: 'Server Error' }, 'x');
