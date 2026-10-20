@@ -37,7 +37,8 @@ describe('nalog.pravila', () => {
 
   it.each([
     'predavanja/3', 'studenti', '', 'prijava?nazad=nalog', 'nalozi', 'uzivox/1', 'upisi', 'uzivo%2F1', '//evil.com', 'https://x',
-    '/\\evil', 'javascript:alert(1)', 'nalog/../predavanja', null, undefined,
+    '/\\evil', 'javascript:alert(1)', 'nalog/../predavanja',
+    'nalog/%2e%2e/x', 'uzivo/%2F%2Fevil', null, undefined,
   ])('javnoNazad(%s): nastavnička ili nebezbedna putanja je null (kao da je nema)', v => {
     expect(javnoNazad(v)).toBeNull();
   });

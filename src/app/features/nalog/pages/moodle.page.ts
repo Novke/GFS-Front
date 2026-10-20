@@ -54,7 +54,7 @@ export const PORUKE_LTI_GRESAKA: Readonly<Record<string, string>> = {
   // pregledač ne vraća kolačić `SameSite=None` (stroga zaštita privatnosti): provera se ne slabi, student ide na prijavu kodom
   'bez-kolacica':
     'Pregledač nije vratio kolačić potreban za ulazak iz Moodle-a (to rade neki pregledači sa strogom zaštitom privatnosti). ' +
-    'Otvori GFS ovde i prijavi se kodom sa mejla.',
+    'Otvori GFS ovde i prijavi se kodom sa mejla, ili otvori Moodle u drugom pregledaču.',
   'neispravan-token':
     'GFS nije mogao da proveri prijavu koju je poslao Moodle. Otvori GFS ponovo iz Moodle-a; ako se ponovi, javi se nastavniku.',
   'nepodrzana-poruka': 'GFS ne podržava ovu vrstu veze iz Moodle-a. Javi se nastavniku.',
@@ -74,7 +74,10 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
  *   Već prijavljen student vidi svoje ime i bira "Poveži" (nikad automatski). 409 i 410 su doslovno tekst servera; 401 vraća
  *   na indeks; mreža i 5xx ostavljaju prijavljenog studenta na "Poveži" sa greškom.
  *
- * Zove samo `api/public/nalog/*` i `api/public/lti/povezi` (`NalogApi`). `nazad` (samo javna ruta, `javnoNazad`) posle
+ * Pre svega pita `GET api/public/lti/povezivanje`: ime Moodle naloga se pokazuje na potvrdi (zajednički računar u laboratoriji
+ * može biti prijavljen kao neko drugi), a 410 kaže da veze iz Moodle-a nema. "Drugi indeks" odjavljuje uređaj i briše polje.
+ *
+ * Zove samo `api/public/nalog/*`, `api/public/lti/povezi` i `api/public/lti/povezivanje` (`NalogApi`). `nazad` (samo javna ruta, `javnoNazad`) posle
  * povezivanja daje "Nastavi" (bez skoka: potvrda veze ostaje vidljiva).
  */
 @Component({
@@ -82,7 +85,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
   imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogOkvir, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-nalog-okvir>
+    <app-nalog-okvir [naslov]="okvirNaslov()">
       <h2 tabindex="-1">{{ naslov() }}</h2>
       @switch (prikaz()) {
         @case ('lti-greska') {
@@ -135,10 +138,16 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
         }
         @case ('potvrda') {
           <app-form-error-banner [poruka]="greskaKoraka()" />
-          @if (ja(); as s) {
-            <p class="uvod">Na ovom uređaju si prijavljen kao {{ s.ime }} {{ s.prezime }} ({{ s.indeks }}).</p>
-          }
-          <p class="uvod">Posle povezivanja iz Moodle-a ulaziš jednim klikom, bez koda.</p>
+          <p class="uvod">Na ovom uređaju si prijavljen u GFS-u. Proveri da li se nalozi poklapaju pre nego što ih povežeš.</p>
+          <p class="nalozi">
+            @if (ja(); as s) {
+              <span class="nalog-red"><span class="oznaka">GFS nalog:</span> {{ s.ime }} {{ s.prezime }} ({{ s.indeks }})</span>
+            }
+            @if (moodleIme(); as ime) {
+              <span class="nalog-red"><span class="oznaka">Moodle nalog:</span> {{ ime }}</span>
+            }
+          </p>
+          <p class="uvod">Ako ovo nisi ti, izaberi „Drugi indeks“. Posle povezivanja iz Moodle-a ulaziš jednim klikom, bez koda.</p>
           <button type="button" mat-flat-button class="dugme" [disabled]="salje()" (click)="povezi()">
             @if (salje()) {
               <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
@@ -146,7 +155,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
             Poveži
           </button>
           <div class="akcije">
-            <button type="button" matButton [disabled]="salje()" (click)="idiNa('indeks')">Drugi indeks</button>
+            <button type="button" matButton [disabled]="salje()" (click)="drugiIndeks()">Drugi indeks</button>
           </div>
         }
         @case ('povezan') {
@@ -170,6 +179,10 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
     h2:focus { outline: none; }
 
     .uvod { margin: 0 0 16px; color: var(--ink-2); }
+    .nalozi { display: flex; flex-direction: column; gap: 4px; margin: 0 0 16px; padding: 10px 14px;
+      border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+    .nalozi:empty { display: none; }
+    .oznaka { color: var(--muted); }
     .stanje { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 24px 0;
       color: var(--muted); }
     .dugme { width: 100%; min-height: 48px; font-size: 16px; }
@@ -201,6 +214,8 @@ export class MoodlePage {
   protected readonly korak = signal<KorakMoodla>('ucitavanje');
   protected readonly prikaz = computed<Prikaz>(() => (this.rezim() === 'tok' ? this.korak() : this.rezim() as Prikaz));
   protected readonly naslov = computed(() => NASLOV[this.prikaz()]);
+  /** `h1` okvira: stranica za nastavnika nije "Nalog studenta". */
+  protected readonly okvirNaslov = computed(() => (this.prikaz() === 'nastavnik' ? 'GFS i Moodle' : 'Nalog studenta'));
   /** Samo sopstveni ključevi mape (`constructor`, `__proto__` iz URL-a nisu kodovi). */
   protected readonly porukaLti = computed(() => {
     const kod = this.greska() ?? '';
@@ -218,6 +233,8 @@ export class MoodlePage {
   protected readonly pomoc = signal<string | null>(null);
   protected readonly pomocSalje = signal(false);
   protected readonly ja = signal<StudentJa | null>(null);
+  /** Ime Moodle naloga iz ulaska (`GET povezivanje`); `null` dok ga server ne šalje, da student na zajedničkom računaru vidi koji nalog povezuje. */
+  protected readonly moodleIme = signal<string | null>(null);
   /** Javni `nazad` koji ne vodi nazad na ovu stranicu. */
   protected readonly nastaviNa = computed(() => {
     const cilj = javnoNazad(this.nazad());
@@ -238,10 +255,40 @@ export class MoodlePage {
     });
   }
 
-  /** `GET stanje`, pa (prijavljen) `GET ja`: indeks ili "Poveži". */
+  /**
+   * `GET povezivanje` (ime Moodle naloga; 410 = veze iz Moodle-a nema, tada nema ni uparivanja), pa `GET stanje` i (prijavljen)
+   * `GET ja`: indeks ili "Poveži". Druga greška `povezivanja` (404 dok backend tačku nema, mreža, 5xx) ne blokira: nalog se
+   * povezuje i bez prikaza imena.
+   */
   protected ucitaj(fokus = true): void {
     this.zahtev?.unsubscribe();
     this.korak.set('ucitavanje');
+    this.moodleIme.set(null);
+    this.zahtev = this.api.povezivanje().subscribe({
+      next: odg => {
+        this.moodleIme.set(odg?.ime?.trim() || null);
+        this.ucitajStanje(fokus);
+      },
+      error: (e: unknown) => {
+        if (e instanceof HttpErrorResponse && e.status === 410) {
+          this.povezivanjeNijeMoguce(e, fokus);
+        } else {
+          this.ucitajStanje(fokus);
+        }
+      },
+    });
+  }
+
+  /** "Drugi indeks" sa ekrana potvrde: odjava ovog uređaja (greška se ignoriše) i prazno polje, da tuđ nalog ne ostane upisan. */
+  protected drugiIndeks(): void {
+    this.api.odjavi().subscribe({ error: () => undefined });
+    this.indeks.set('');
+    this.ja.set(null);
+    this.idiNa('indeks');
+  }
+
+  private ucitajStanje(fokus: boolean): void {
+    this.zahtev?.unsubscribe();
     this.zahtev = this.api.stanje().subscribe({
       next: s => (s?.prijavljen ? this.ucitajJa(fokus) : this.idiNa('indeks', fokus)),
       error: (e: unknown) => this.greskaPriUcitavanju(e, fokus),
@@ -331,13 +378,19 @@ export class MoodlePage {
     }
   }
 
+  /** 409 i 410: tekst servera doslovno, bez ponovnog pokušaja (ekran "Povezivanje nije uspelo"). */
+  private povezivanjeNijeMoguce(e: unknown, fokus = false): void {
+    this.salje.set(false);
+    const status = e instanceof HttpErrorResponse ? e.status : 0;
+    this.idiNa('neuspeh', fokus);
+    this.greskaKoraka.set(razlogServera(e) ?? (status === 410 ? PORUKA_POVEZIVANJE_ISTEKLO : PORUKA_VEC_POVEZAN));
+  }
+
   private neuspehPovezivanja(e: unknown): void {
     this.salje.set(false);
     const status = e instanceof HttpErrorResponse ? e.status : 0;
     if (status === 409 || status === 410) {
-      // tekst servera doslovno ("već povezan sa drugim studentom", "Povezivanje je isteklo. ..."); posle toga nema ponovnog pokušaja
-      this.idiNa('neuspeh');
-      this.greskaKoraka.set(razlogServera(e) ?? (status === 410 ? PORUKA_POVEZIVANJE_ISTEKLO : PORUKA_VEC_POVEZAN));
+      this.povezivanjeNijeMoguce(e, true);
     } else if (status === 401) {
       this.ja.set(null);
       this.idiNa('indeks');

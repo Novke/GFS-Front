@@ -25,6 +25,8 @@ describe('RegistracijaDialog', () => {
   let http: HttpTestingController;
   let f: ComponentFixture<RegistracijaDialog>;
   const zatvori = vi.fn();
+  /** Zamena za `MatDialogRef`: `disableClose` je običan atribut (dijalog ga postavlja dok traje čuvanje). */
+  const ref = { close: zatvori, disableClose: false };
 
   const el = () => f.nativeElement as HTMLElement;
   const polje = (ime: string) => el().querySelector<HTMLInputElement>(`[formcontrolname="${ime}"]`)!;
@@ -43,7 +45,7 @@ describe('RegistracijaDialog', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: MAT_DIALOG_DATA, useValue: cfg },
-        { provide: MatDialogRef, useValue: { close: zatvori } },
+        { provide: MatDialogRef, useValue: ref },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -64,7 +66,10 @@ describe('RegistracijaDialog', () => {
     await upisi('deploymentId', '5');
   }
 
-  beforeEach(() => zatvori.mockReset());
+  beforeEach(() => {
+    zatvori.mockReset();
+    ref.disableClose = false;
+  });
   afterEach(() => http.verify());
 
   it('nova: naslov, prazna polja, aktivna uključena', () => {
@@ -137,6 +142,33 @@ describe('RegistracijaDialog', () => {
     expect(req.request.body).toMatchObject({ deploymentId: '6', authUrl: '', jwksUrl: 'https://sso.example.test/certs' });
     req.flush({ ...POSTOJECA, deploymentId: '6' });
     expect(zatvori).toHaveBeenCalledWith(expect.objectContaining({ deploymentId: '6' }));
+  });
+
+  it('izmena: isključena "Aktivna" ide u PUT (celo telo)', async () => {
+    napravi({ registracija: POSTOJECA });
+    await osvezi();
+    el().querySelector<HTMLInputElement>('mat-checkbox input')!.click();
+    await osvezi();
+    sacuvaj().click();
+    const req = http.expectOne('api/lti/registracije/3');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({
+      naziv: 'Uvod u primenu računara', izdavac: 'https://moodle.example.test', clientId: 'klijent-1', deploymentId: '5',
+      authUrl: '', jwksUrl: 'https://sso.example.test/certs', aktivna: false,
+    });
+    req.flush({ ...POSTOJECA, aktivna: false });
+    expect(zatvori).toHaveBeenCalledWith(expect.objectContaining({ aktivna: false }));
+  });
+
+  it('dok traje čuvanje dijalog se ne zatvara (Esc, klik sa strane); posle greške opet može', async () => {
+    napravi();
+    await popuniObavezna();
+    expect(ref.disableClose).toBe(false);
+    sacuvaj().click();
+    expect(ref.disableClose).toBe(true);
+    http.expectOne('api/lti/registracije').flush({ reason: 'Greška.' }, { status: 409, statusText: 'Conflict' });
+    await osvezi();
+    expect(ref.disableClose).toBe(false);
   });
 
   it.each([

@@ -282,6 +282,8 @@ export class MockApi {
    * server. Podrazumevano postoji (stranica `/nalog/moodle` posle preusmerenja).
    */
   moodlePar = true;
+  /** Ime Moodle naloga iz ulaska (`GET public/lti/povezivanje`); `null` = Moodle ga nije podelio. Izmišljeno, nije stvaran nalog. */
+  moodleIme: string | null = 'Pera Test';
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -1253,6 +1255,9 @@ export class MockApi {
       return ok({ odjavljeno });
     });
     post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
+    // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `gfs_lti_par`; ne traži sesiju studenta
+    get('public/lti/povezivanje', () =>
+      this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));
     // povezivanje Moodle naloga (javno, STUDENT + `gfs_lti_par`, spec prijave 8.3): 401 bez studenta, 410 bez para, pa veza
     post('public/lti/povezi', () => {
       if (!this.studentPrijavljen) {

@@ -12,6 +12,8 @@ const JA = 'api/public/nalog/ja';
 const KOD = 'api/public/nalog/kod';
 const PRIJAVA = 'api/public/nalog/prijava';
 const POVEZI = 'api/public/lti/povezi';
+const POVEZIVANJE = 'api/public/lti/povezivanje';
+const ODJAVA = 'api/public/nalog/odjava';
 
 const JA_ODGOVOR: StudentJa = {
   indeks: 'GD12',
@@ -61,8 +63,15 @@ describe('MoodlePage', () => {
     await stabilno();
   }
 
-  async function otvoriTok(prijavljen = false, nazad?: string): Promise<void> {
+  /** Prvi zahtev toka uparivanja: ime Moodle naloga iz ulaska (`null` = Moodle ga nije podelio). */
+  async function imeMoodla(ime: string | null = 'Pera Test'): Promise<void> {
+    http.expectOne(POVEZIVANJE).flush({ ime });
+    await stabilno();
+  }
+
+  async function otvoriTok(prijavljen = false, nazad?: string, ime: string | null = 'Pera Test'): Promise<void> {
     await otvori(nazad === undefined ? {} : { nazad });
+    await imeMoodla(ime);
     http.expectOne(STANJE).flush({ prijavljen });
     if (prijavljen) {
       http.expectOne(JA).flush(JA_ODGOVOR);
@@ -114,7 +123,7 @@ describe('MoodlePage', () => {
       [
         'bez-kolacica',
         'Pregledač nije vratio kolačić potreban za ulazak iz Moodle-a (to rade neki pregledači sa strogom zaštitom privatnosti). ' +
-          'Otvori GFS ovde i prijavi se kodom sa mejla.',
+          'Otvori GFS ovde i prijavi se kodom sa mejla, ili otvori Moodle u drugom pregledaču.',
       ],
       [
         'neispravan-token',
@@ -157,12 +166,14 @@ describe('MoodlePage', () => {
       await otvori({ uloga: 'nastavnik' });
       expect(el().querySelector('[role="status"]')?.textContent?.trim()).toBe('Alat je ispravno registrovan.');
       expect(el().textContent).toContain('Podešavanja → Moodle');
+      expect(el().querySelector('h1')?.textContent?.trim()).toBe('GFS i Moodle');
       expect(polje('indeks')).toBeNull();
       http.expectNone(() => true);
     });
 
     it('druga vrednost (uloga=student) je običan tok uparivanja', async () => {
       await otvori({ uloga: 'student' });
+      await imeMoodla();
       http.expectOne(STANJE).flush({ prijavljen: false });
       await stabilno();
       expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
@@ -172,6 +183,7 @@ describe('MoodlePage', () => {
   describe('uparivanje (bez parametara)', () => {
     it('nije prijavljen: naslov i objašnjenje, pa indeks -> kod -> povezi -> "Moodle nalog je povezan"', async () => {
       await otvoriTok();
+      expect(el().querySelector('h1')?.textContent?.trim()).toBe('Nalog studenta');
       expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
       expect(el().textContent).toContain('prijavi se jednom kodom sa mejla');
       expect(polje('indeks')).not.toBeNull();
@@ -256,7 +268,9 @@ describe('MoodlePage', () => {
     it('već prijavljen: ime i indeks, bez automatskog povezivanja; "Poveži" -> povezan', async () => {
       await otvoriTok(true);
       expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
-      expect(el().textContent).toContain('Na ovom uređaju si prijavljen kao Ana Primerović (GD12).');
+      expect(el().textContent).toContain('GFS nalog: Ana Primerović (GD12)');
+      expect(el().textContent).toContain('Moodle nalog: Pera Test');
+      expect(el().textContent).toContain('Ako ovo nisi ti, izaberi „Drugi indeks“.');
       http.expectNone(POVEZI);
       dugme('Poveži')!.click();
       fixture.detectChanges();
@@ -266,19 +280,71 @@ describe('MoodlePage', () => {
       expect(naslov()).toBe('Moodle nalog je povezan');
     });
 
-    it('već prijavljen, "Drugi indeks": korak indeksa, posle prijave povezi', async () => {
+    it('već prijavljen, "Drugi indeks": odjava uređaja, prazno polje indeksa, posle prijave povezi', async () => {
       await otvoriTok(true);
+      expect(dugme('Drugi indeks')).toBeDefined();
       dugme('Drugi indeks')!.click();
+      const odjava = http.expectOne(ODJAVA);
+      expect(odjava.request.method).toBe('POST');
+      odjava.flush(null, bezSadrzaja);
       await stabilno();
       expect(polje('indeks')).not.toBeNull();
+      expect(polje('indeks')!.value).toBe('');
       const povezi = await prijaviKodom();
       povezi.flush(null, bezSadrzaja);
       await stabilno();
       expect(naslov()).toBe('Moodle nalog je povezan');
     });
 
+    it('"Drugi indeks": greška odjave se ignoriše, polje je prazno', async () => {
+      await otvoriTok(true);
+      dugme('Drugi indeks')!.click();
+      http.expectOne(ODJAVA).error(new ProgressEvent('error'));
+      await stabilno();
+      expect(polje('indeks')!.value).toBe('');
+      expect(banner()).toBeNull();
+    });
+
+    it('Moodle nije podelio ime: potvrda bez reda "Moodle nalog"', async () => {
+      await otvoriTok(true, undefined, null);
+      expect(el().textContent).toContain('GFS nalog: Ana Primerović (GD12)');
+      expect(el().textContent).not.toContain('Moodle nalog:');
+    });
+
+    it('GET povezivanje 404 (backend tačku još nema) ili greška mreže: uparivanje ide dalje bez imena', async () => {
+      await otvori();
+      http.expectOne(POVEZIVANJE).flush({ reason: 'x' }, greska(404, 'Not Found'));
+      await stabilno();
+      http.expectOne(STANJE).flush({ prijavljen: true });
+      http.expectOne(JA).flush(JA_ODGOVOR);
+      await stabilno();
+      expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
+      expect(el().textContent).toContain('GFS nalog: Ana Primerović (GD12)');
+      expect(el().textContent).not.toContain('Moodle nalog:');
+      expect(dugme('Poveži')).toBeDefined();
+    });
+
+    it('GET povezivanje 410: tekst servera, bez uparivanja i bez daljih zahteva', async () => {
+      await otvori();
+      http.expectOne(POVEZIVANJE).flush({ reason: PORUKA_410 }, greska(410, 'Gone'));
+      await stabilno();
+      expect(naslov()).toBe('Povezivanje nije uspelo');
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe(PORUKA_410);
+      expect(link('Otvori GFS')?.getAttribute('href')).toBe('/nalog');
+      expect(dugme('Poveži')).toBeUndefined();
+      http.expectNone(() => true);
+    });
+
+    it('GET povezivanje 410 bez tela: isti tekst kao server', async () => {
+      await otvori();
+      http.expectOne(POVEZIVANJE).flush(null, greska(410, 'Gone'));
+      await stabilno();
+      expect(el().querySelector('[role="alert"]')?.textContent?.trim()).toBe(PORUKA_410);
+    });
+
     it('stanje kaže prijavljen, ali GET ja 401: korak indeksa', async () => {
       await otvori();
+      await imeMoodla();
       http.expectOne(STANJE).flush({ prijavljen: true });
       http.expectOne(JA).flush({ reason: 'Potrebna je prijava.' }, greska(401, 'Unauthorized'));
       await stabilno();
@@ -287,10 +353,12 @@ describe('MoodlePage', () => {
 
     it('mreža ne radi pri učitavanju: poruka i "Pokušaj ponovo"', async () => {
       await otvori();
+      await imeMoodla();
       http.expectOne(STANJE).error(new ProgressEvent('error'));
       await stabilno();
       expect(el().querySelector('[role="alert"]')?.textContent).toContain('Nema veze sa serverom.');
       dugme('Pokušaj ponovo')!.click();
+      await imeMoodla();
       http.expectOne(STANJE).flush({ prijavljen: false });
       await stabilno();
       expect(polje('indeks')).not.toBeNull();

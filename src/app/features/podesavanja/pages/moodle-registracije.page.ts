@@ -122,7 +122,11 @@ const greskaZa = (e: unknown) => (e instanceof HttpErrorResponse ? toApiError(e)
     <section class="kartica" aria-labelledby="pd-uputstvo" data-uputstvo>
       <h2 id="pd-uputstvo">Uputstvo za Moodle</h2>
       <ol class="koraci">
-        <li>Na predmetu u Moodle-u: <strong>More → LTI External tools → Add tool</strong> (administrator nije potreban).</li>
+        <li>
+          Na predmetu u Moodle-u (Moodle 4.3+): <strong>More → LTI External tools → Add tool</strong> (administrator nije
+          potreban). U starijim verzijama alat dodaje administrator Moodle-a: <strong>Site administration → Plugins → Activity
+          modules → External tool → Manage tools</strong>.
+        </li>
         <li>
           Tool name po želji (npr. GFS). <strong>Tool URL</strong>, <strong>Initiate login URL</strong> i
           <strong>Redirection URI(s)</strong>: vrednosti iznad. LTI version: <strong>LTI 1.3</strong>; Public key type:
@@ -139,7 +143,8 @@ const greskaZa = (e: unknown) => (e instanceof HttpErrorResponse ? toApiError(e)
           ostati prazni (izvode se iz Platform ID-ja).
         </li>
         <li>
-          Na predmetu: Add an activity or resource → GFS. Kad aktivnost otvoriš kao nastavnik, GFS kaže
+          U LTI External tools alat mora imati uključeno <strong>Show in activity chooser</strong>, inače ga nema u izboru
+          aktivnosti. Na predmetu: Add an activity or resource → GFS. Kad aktivnost otvoriš kao nastavnik, GFS kaže
           „Alat je ispravno registrovan.“; student je prvi put poveže kodom sa mejla, posle toga ulazi jednim klikom.
         </li>
       </ol>
@@ -239,8 +244,12 @@ export class MoodleRegistracijePage {
   protected nova(): void {
     RegistracijaDialog.otvori(this.dialog, { registracija: null }).subscribe(r => {
       if (r) {
-        this.lista.update(l => [r, ...l]);
-        this.status.set('ok');
+        if (this.status() === 'ok') {
+          this.lista.update(l => [r, ...l]);
+        } else {
+          // lista nije učitana (greška ili još traje): red bi bio jedini prikazan, pa se lista učitava iznova (nova je u njoj)
+          this.ucitajListu();
+        }
         this.poruke.uspeh('Registracija je sačuvana.');
       }
     });

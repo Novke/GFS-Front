@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 /**
  * Okvir javnih stranica naloga (`/nalog`, `/nalog/moodle`): kartica sa zaglavljem (znak iz logoa, "Građevinski fakultet
- * Subotica", `h1` "Nalog studenta") i telom u koje stranica projektuje svoj korak (`h2` koraka i sadržaj). Bez HTTP-a.
+ * Subotica", `h1` "Nalog studenta" ili naslov koji zada stranica) i telom u koje stranica projektuje svoj korak (`h2` koraka i sadržaj). Bez HTTP-a.
  */
 @Component({
   selector: 'app-nalog-okvir',
@@ -13,7 +13,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         <span class="znak" aria-hidden="true"><img src="assets/images/gfs-logo.png" alt="" width="170" height="128"></span>
         <div class="naslovi">
           <p class="nadnaslov">Građevinski fakultet Subotica</p>
-          <h1>Nalog studenta</h1>
+          <h1>{{ naslov() }}</h1>
         </div>
       </header>
       <div class="telo"><ng-content /></div>
@@ -66,4 +66,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     .telo { padding: 20px; }
   `,
 })
-export class NalogOkvir {}
+export class NalogOkvir {
+  /** `h1` okvira; stranica za nastavnika (`/nalog/moodle?uloga=nastavnik`) ne sme da kaže "Nalog studenta". */
+  readonly naslov = input('Nalog studenta');
+}

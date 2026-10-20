@@ -41,6 +41,11 @@ export interface PomocOdgovor {
   poruka: string;
 }
 
+/** `GET api/public/lti/povezivanje`: ime Moodle naloga iz ulaska (`null` kad ga Moodle nije podelio). */
+export interface PovezivanjeOdgovor {
+  ime: string | null;
+}
+
 /** `POST api/public/nalog/odjava-svuda`. */
 export interface OdjavaSvudaOdgovor {
   odjavljeno: number;

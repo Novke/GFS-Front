@@ -155,6 +155,9 @@ describe('MoodleRegistracijePage', () => {
     await otvoriStranu();
     const uputstvo = el().querySelector('[data-uputstvo]')!.textContent!;
     expect(uputstvo).toContain('LTI External tools');
+    expect(uputstvo).toContain('Moodle 4.3+');
+    expect(uputstvo).toContain('Site administration → Plugins → Activity modules → External tool → Manage tools');
+    expect(uputstvo).toContain('Show in activity chooser');
     expect(uputstvo).toContain('LTI 1.3');
     expect(uputstvo).toContain('Keyset URL');
     expect(uputstvo).toContain('New window');
@@ -169,6 +172,23 @@ describe('MoodleRegistracijePage', () => {
     await stabilno();
     expect(otvori).toHaveBeenCalledWith(RegistracijaDialog, expect.objectContaining({ data: { registracija: null } }));
     expect(redovi().map(r => r.textContent)).toEqual([expect.stringContaining('Nov predmet'), expect.stringContaining('Uvod')]);
+    expect(poruke.uspeh).toHaveBeenCalledWith('Registracija je sačuvana.');
+  });
+
+  it('"Nova registracija" posle neuspelog učitavanja liste: lista se učitava iznova, ne prikazuje se samo nov red', async () => {
+    fixture = TestBed.createComponent(MoodleRegistracijePage);
+    fixture.detectChanges();
+    http.expectOne(LISTA).flush({ reason: 'x' }, { status: 500, statusText: 'Server Error' });
+    http.expectOne(VREDNOSTI).flush(VR);
+    await stabilno();
+    expect(el().querySelector('app-error-panel')).not.toBeNull();
+
+    const nova = { ...REG, id: 9, naziv: 'Nov predmet' };
+    odgovorDijaloga.set(RegistracijaDialog, nova);
+    dugme('Nova registracija')!.click();
+    http.expectOne(LISTA).flush([REG, nova]);
+    await stabilno();
+    expect(redovi()).toHaveLength(2);
     expect(poruke.uspeh).toHaveBeenCalledWith('Registracija je sačuvana.');
   });
 

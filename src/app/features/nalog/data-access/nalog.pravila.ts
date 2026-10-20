@@ -42,11 +42,12 @@ const JAVNI_PREFIKSI: readonly string[] = ['uzivo', 'upis', 'nalog'];
 /**
  * `nazad` za javnu stranicu naloga: {@link bezbednoNazad} i još prvi segment mora biti javna ruta (`uzivo`, `upis`, `nalog`).
  * Nastavnička ruta (`predavanja/3`) se ignoriše kao da `nazad` ne postoji: student nema sesiju nastavnika, pa bi ga čuvar
- * odveo na `/prijava`. Kodiran segment (`uzivo%2F1`) ne prolazi (ruter bi ga čitao kao jedan segment).
+ * odveo na `/prijava`. Svaki `%` ne prolazi (`uzivo%2F1`, `nalog/%2e%2e/x`, `uzivo/%2F%2Fevil`): ruter dekodira segmente, pa bi
+ * kodirano `..` ili `//` zaobišlo proveru, a javne rute i inače nemaju razlog za kodirane znake.
  */
 export function javnoNazad(v: string | null | undefined): string | null {
   const cilj = bezbednoNazad(v);
-  if (cilj === null) {
+  if (cilj === null || cilj.includes('%')) {
     return null;
   }
   return JAVNI_PREFIKSI.includes(cilj.split(/[/?]/u, 1)[0]) ? cilj : null;

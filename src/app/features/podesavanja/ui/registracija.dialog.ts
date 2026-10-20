@@ -175,6 +175,7 @@ export class RegistracijaDialog {
       return;
     }
     this.salje.set(true);
+    this.ref.disableClose = true; // Esc ili klik sa strane ne sme da zatvori dijalog dok zahtev traje (rezultat bi se izgubio)
     this.greska.set(null);
     const cmd = uCmd(this.forma.getRawValue());
     const id = this.cfg.registracija?.id;
@@ -183,6 +184,7 @@ export class RegistracijaDialog {
       next: r => this.ref.close(r),
       error: (e: unknown) => {
         this.salje.set(false);
+        this.ref.disableClose = false;
         this.greska.set(e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM);
       },
     });

@@ -4,11 +4,11 @@ import { Observable } from 'rxjs';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
-import { KodOdgovor, OdjavaSvudaOdgovor, PomocOdgovor, StanjeNaloga, StudentJa } from './nalog.models';
+import { KodOdgovor, OdjavaSvudaOdgovor, PomocOdgovor, PovezivanjeOdgovor, StanjeNaloga, StudentJa } from './nalog.models';
 
 /**
  * Jedini API javnih ruta `/nalog` i `/nalog/moodle` (student na telefonu, bez sesije nastavnika): samo `api/public/nalog/*` i
- * `api/public/lti/povezi`. Svaki drugi `/api/*` je zaključan (401 bi studentu otvorio dijalog za lozinku), zato ovde nema
+ * `api/public/lti/povezi` i `api/public/lti/povezivanje`. Svaki drugi `/api/*` je zaključan (401 bi studentu otvorio dijalog za lozinku), zato ovde nema
  * ničeg drugog. Greške prikazuje sama stranica (`LOCAL_ERRORS`), nikad nastavnički snackbar.
  */
 @Injectable({ providedIn: 'root' })
@@ -52,6 +52,14 @@ export class NalogApi {
    */
   poveziMoodle(): Observable<void> {
     return this.http.post<void>(`${API_URL}/public/lti/povezi`, null, { context: this.lokalneGreske });
+  }
+
+  /**
+   * Ime Moodle naloga iz ulaska (kolačić `gfs_lti_par`), da student na zajedničkom računaru vidi koji nalog povezuje. Samo čita,
+   * ne troši vezu. 410 kad veze iz Moodle-a nema, istekla je ili je iskorišćena; 404 dok server ne zna za tačku (stari backend).
+   */
+  povezivanje(): Observable<PovezivanjeOdgovor> {
+    return this.http.get<PovezivanjeOdgovor>(`${API_URL}/public/lti/povezivanje`, { context: this.lokalneGreske });
   }
 
   /** "Ne stiže mi kod": obaveštenje nastavniku. */
