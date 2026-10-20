@@ -27,6 +27,7 @@ import { kodSaRazmakom } from '../ui/format';
 import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
+import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
 import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
@@ -42,7 +43,7 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
- * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno" (meni: Prazno, Naslov i tekst)), u sredini
+ * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno" (meni: Prazno, Naslov i tekst), "Zadatak" (izbor grupe iz banke)), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
  * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), bez bočnog pregleda (koraci su u režimu "Pregled" editora, F18). Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
@@ -174,12 +175,13 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               }
             </ol>
             @if (!store.slajdovi().length) {
-              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd, pitanje ili platno.</p>
+              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd, pitanje, platno ili zadatak.</p>
             }
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPlatna"><mat-icon svgIcon="layers" />Platno</button>
+              <button mat-stroked-button type="button" (click)="dodajZadatak()"><mat-icon svgIcon="assignment" />Zadatak</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PDF-a" title="Uvezi iz PDF-a"
@@ -224,7 +226,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
                 }
               }
-              <app-slajd-forma [slajd]="s" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)" (pregledPrelaza)="pregledajPrelaz(s)" />
+              <app-slajd-forma [slajd]="s" [predmetId]="p.predmet.id" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)"
+                               (pregledPrelaza)="pregledajPrelaz(s)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
@@ -262,6 +265,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly mrvice = inject(BreadcrumbService);
   private readonly otvaracUvoza = inject(UvozPptxOtvarac);
   private readonly otvaracPdf = inject(UvozPdfOtvarac);
+  private readonly izborGrupe = inject(IzborGrupeOtvarac);
   private readonly greske = inject(ErrorHandler);
   private readonly registar = inject(RegistarCuvanja);
   private readonly destroyRef = inject(DestroyRef);
@@ -496,12 +500,28 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
 
   protected ikona(s: SlajdDetails): NazivIkone {
     if (s.tip === 'PLATNO') return 'layers';
+    if (s.tip === 'ZADATAK') return 'assignment';
     return s.tip === 'PITANJE' && s.pitanje ? opisTipa(s.pitanje.tip).ikona : 'article';
   }
 
   protected nazivTipa(s: SlajdDetails): string {
     if (s.tip === 'PLATNO') return 'Platno';
+    if (s.tip === 'ZADATAK') return 'Zadatak';
     return s.tip === 'PITANJE' && s.pitanje ? `Pitanje: ${opisTipa(s.pitanje.tip).naziv}` : 'Info slajd';
+  }
+
+  /**
+   * "Zadatak": izbor čvora iz banke predmeta prezentacije (lenji dijalog, jedan u isto vreme), pa nov Zadatak slajd posle
+   * slajda koji je bio izabran pri kliku.
+   */
+  protected dodajZadatak(): void {
+    const p = this.store.prezentacija();
+    if (!p) return;
+    const posle = this.store.izabraniId() ?? undefined;
+    this.izborGrupe.izaberi({ predmetId: p.predmet.id, grupaId: null })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      // druga prezentacija učitana dok je dijalog bio otvoren: čvor pripada predmetu prve
+      .subscribe(c => c && this.store.prezentacija()?.id === p.id && this.store.dodajZadatak(c, posle));
   }
 
   protected spusteno(e: CdkDragDrop<unknown>): void {

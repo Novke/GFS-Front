@@ -124,8 +124,8 @@ without it.
 ## Public routes
 
 `upis/:token` and `uzivo`, `uzivo/:kod` are opened by students on a phone **without basic-auth**, so they may only request
-`assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo: `api/public/uzivo/*`, `api/public/mediji/*`,
-`api/public/ws`); any other `/api/*` call returns 401 and pops the browser's password dialog. Both live in
+`assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo: `api/public/uzivo/*`, `api/public/mediji/*` (for a Zadatak slide only the
+participant's own variant and, after `RESENJE`, its solution), `api/public/ws`); any other `/api/*` call returns 401 and pops the browser's password dialog. Both live in
 `PublicLayout` (no shell; a wrong link under `/upis` or `/uzivo` stays a public 404). `gfs/javna-ruta-uvozi` enforces
 this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may import only itself plus
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
@@ -711,6 +711,32 @@ over STOMP; teacher commands are REST.
 - Zoneless: all state is signals (STOMP messages go through `patchState`, the timer interval sets a signal). Component
   specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
   `animationsDisabled: true`, otherwise MatFormField leaves 300 ms timers behind.
+
+### Zadatak slide (banka phase 2)
+
+Slide type `ZADATAK`: every phone gets its own random variant of a bank task, the console and projector show results per variant.
+- **Editor:** `pages/zadatak-forma.component` + `pages/izbor-grupe.dialog` choose a node of the subject's PREDAVANJE bank through
+  `core/api/banka-izbor.api.ts` (`CvorIzbora` over `GET banka/stablo`; `features/uzivo` never imports `features/banka/data-access`,
+  `gfs/granice-featurea`), with timer and "broj različitih" (empty = all active). Warnings come from the server
+  (`ZadatakSlajdaInfo.upozorenja`), the editor only shows them.
+- **Console / remote:** `pages/zadatak-panel.component` (count for the next opening, `BROJ_VARIJANTI` in CEKA, drawn variants with
+  assigned/answered/correct), `Shift+R` = `RESENJE` (`tastatura.ts`; plain `r`/`R` stays `PONOVI`, so Caps Lock never shows the
+  solution), the remote has the same toggle. A scored run (`PokreniCmd.boduje`) is offered but the server answers 409 until
+  student login exists.
+- **Projector:** renders only `NastavnickiZadatak.javniRezultat` (`ui/zadatak-rezultat.component`, `ui/zadatak-prikaz.component`), whose
+  numbers, correctness and solution follow three independent switches on the server; the console's `rezultat` is never on the
+  projector.
+- **Phone:** `javno/zadatak-ekran` + `javno/zadatak-unos` (lazy, `@defer`) show the participant's own variant (`LicnoStanje.zadatak`:
+  SVG through `api/public/mediji/<own id>`, the fields of its schema), the outcome after closing, correct values only with `TACAN`
+  and the solution only with `RESENJE`. They import only modules already allowed for `features/uzivo/javno` (the allow-list did not
+  change). A scored run without a signed-in student (`prijavaObavezna && !prijavljenStudent`, or 403 on join) goes to
+  `nalog?nazad=uzivo/<kod>` (the login project's route; a public 404 until it lands).
+- **Overview** (`pages/izvodjenje-pregled.page`): a ZADATAK round (`RezultatPitanja.zadatak`, `pitanje`/`rezultat` null) shows the group
+  path, `app-zadatak-rezultat` (everything visible) and the participants table (variant, outcome per field, total). Round cards are
+  keyed by slide id (`slajdId`, else the snapshot's `pitanje.slajdId` or `zadatak.slajdId`), never by group id.
+- **Bundle budget exception:** the student page's static part grew by ~1.9 kB for the task (student login redirect, task screens in
+  the store, the `@defer` entry must work before the lazy chunk), so `e2e/lenji-formule.spec.ts` allows `RAST_ZADATKA = 1 300` B on
+  top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5).
 
 ## Banka zadataka (`features/banka`)
 

@@ -1,4 +1,4 @@
-import { IzvodjenjeInfo, NastavnickoStanje, PitanjeDetails, SlajdDetails, TipKomande } from './uzivo.models';
+import { IzvodjenjeInfo, NastavnickiZadatak, NastavnickoStanje, PitanjeDetails, SlajdDetails, TipKomande } from './uzivo.models';
 
 const UVEK: readonly TipKomande[] = ['TELEFON_PRIKAZ', 'DETALJI', 'EKRAN_CRN', 'EKRAN_BEO', 'QR', 'ZAVRSI'];
 
@@ -14,6 +14,19 @@ export function imaTacanOdgovor(p: PitanjeDetails | null | undefined): boolean {
 }
 
 /**
+ * Da li Zadatak runda ima tačan odgovor: bar jedna izvučena varijanta ima polje (isto kao `ZadatakSnimak.imaTacanOdgovor`);
+ * šema bez polja je rad na papiru. Bez runde nema rezultata, pa ni tačnog.
+ */
+export function imaTacanOdgovorZadatka(z: NastavnickiZadatak | null | undefined): boolean {
+  return !!z?.rezultat?.varijante.some(v => v.polja.length > 0);
+}
+
+/** Slajd sa rundama (server `TokIzvodjenja.saRundama`): PITANJE sa pitanjem ili ZADATAK. */
+function saRundama(sl: SlajdDetails | null | undefined): boolean {
+  return (sl?.tip === 'PITANJE' && !!sl.pitanje) || sl?.tip === 'ZADATAK';
+}
+
+/**
  * Komande koje server u ovom stanju prihvata (ista pravila kao `IzvodjenjeService`, spec 2.3 i 4.5); ostale vraćaju
  * 409 (410 kad je izvođenje završeno). Konzola po ovome onemogućava dugmad, a publika tiho preskače prečice.
  * `SLEDECI` na kraju i `PRETHODNI` na prijavi server prima bez promene; ovde su isključene jer ništa ne rade.
@@ -26,16 +39,27 @@ export function dozvoljeneKomande(s: NastavnickoStanje | null): ReadonlySet<TipK
   if (s.prikaz !== 'KRAJ') d.add('SLEDECI');
   if (s.prikaz !== 'PRIJAVA') d.add('PRETHODNI');
 
-  const pitanje = s.prikaz === 'SLAJD' && s.trenutniSlajd?.tip === 'PITANJE' ? s.trenutniSlajd.pitanje : null;
+  const sl = s.prikaz === 'SLAJD' ? s.trenutniSlajd : null;
+  const pitanje = sl?.tip === 'PITANJE' ? sl.pitanje : null;
+  const zadatak = sl?.tip === 'ZADATAK';
+  // Zadatak slajd ima runde kao pitanje: otvori/zatvori, ponovi, rezultati i tajmer važe isto
+  const runde = saRundama(sl);
   const faza = s.faza ?? 'CEKA';
-  if (pitanje) {
+  if (runde) {
     d.add('OTVORI_ZATVORI');
     if (faza !== 'CEKA') d.add('PONOVI');
   }
-  if (s.rezultatiPrikazani || (pitanje && s.runda && (faza === 'OTVORENO' || faza === 'ZATVORENO'))) d.add('REZULTATI');
-  if (s.tacanPrikazan || (pitanje && faza === 'ZATVORENO' && imaTacanOdgovor(pitanje))) d.add('TACAN');
+  if (s.rezultatiPrikazani || (runde && s.runda && (faza === 'OTVORENO' || faza === 'ZATVORENO'))) d.add('REZULTATI');
+  const tacan = pitanje ? imaTacanOdgovor(pitanje) : zadatak && imaTacanOdgovorZadatka(s.zadatak);
+  if (s.tacanPrikazan || (runde && faza === 'ZATVORENO' && tacan)) d.add('TACAN');
+  // RESENJE je prekidač: isključenje uvek, uključenje na zatvorenoj rundi kad bar jedna izvučena varijanta ima rešenje
+  if (s.zadatak?.resenjePrikazano || (zadatak && faza === 'ZATVORENO' && !!s.zadatak?.varijante?.some(v => v.resenjeSvgId))) {
+    d.add('RESENJE');
+  }
+  // broj različitih važi za sledeće otvaranje (i PONOVI), pa samo pre otvaranja
+  if (zadatak && faza === 'CEKA') d.add('BROJ_VARIJANTI');
   if (s.takmicenje || s.rangListaPrikazana) d.add('RANG_LISTA');
-  if (pitanje && faza === 'OTVORENO' && s.runda) {
+  if (runde && faza === 'OTVORENO' && s.runda) {
     d.add('TAJMER');
     if (s.runda.rokMs !== null || s.runda.preostaloMs !== null) {
       d.add('TAJMER_PLUS');
@@ -65,10 +89,11 @@ export function oznakaDalje(s: NastavnickoStanje): string {
   if (s.prikaz === 'PRIJAVA') return 'Počni';
   if (s.prikaz === 'KRAJ') return 'Kraj';
   const sl = s.trenutniSlajd;
-  if (sl?.tip === 'PITANJE') {
+  if (sl?.tip === 'PITANJE' || sl?.tip === 'ZADATAK') {
+    const sta = sl.tip === 'PITANJE' ? 'pitanje' : 'zadatak';
     const faza = s.faza ?? 'CEKA';
-    if (faza === 'CEKA') return 'Otvori pitanje';
-    if (faza === 'OTVORENO') return 'Zatvori pitanje';
+    if (faza === 'CEKA') return `Otvori ${sta}`;
+    if (faza === 'OTVORENO') return `Zatvori ${sta}`;
   }
   if (sl?.tip === 'INFO' && s.korak < s.brojStavki) return 'Sledeća stavka';
   // `brojStavki` je za PLATNO broj koraka (KLIK animacija).
@@ -112,14 +137,16 @@ export type SledeciKlik =
   | { vrsta: 'KRAJ' }
   | { vrsta: 'NISTA' };
 
-/** Šta pokazuje sledeći `SLEDECI`: isti slajd na koraku k+1, sledeći slajd na koraku 0, radnja pitanja ili kraj. */
+/**
+ * Šta pokazuje sledeći `SLEDECI`: isti slajd na koraku k+1, sledeći slajd na koraku 0, radnja pitanja (i Zadatak slajda) ili kraj.
+ */
 export function sledeciKlik(s: NastavnickoStanje): SledeciKlik {
   if (s.prikaz === 'KRAJ') return { vrsta: 'NISTA' };
   const posle = (): SledeciKlik =>
     s.sledeciSlajd ? { vrsta: 'SLAJD', slajd: s.sledeciSlajd, indeks: s.indeks + 1 } : { vrsta: 'KRAJ' };
   if (s.prikaz === 'PRIJAVA') return posle();
   const sl = s.trenutniSlajd;
-  if (sl?.tip === 'PITANJE') {
+  if (sl?.tip === 'PITANJE' || sl?.tip === 'ZADATAK') {
     const faza = s.faza ?? 'CEKA';
     if (faza !== 'ZATVORENO') {
       return { vrsta: 'PITANJE', radnja: faza === 'CEKA' ? 'OTVARA' : 'ZATVARA', potom: s.sledeciSlajd, indeksPotom: s.indeks + 1 };

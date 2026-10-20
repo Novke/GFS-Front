@@ -1,8 +1,8 @@
 import {
-  PORUKE, PRELAZ, greskeSlajda, greskeSlajdaZaSlanje, normalizujPrelaz, noviSlajd, novoPitanje, oznakaSlajda, promeniTipPitanja,
-  slajdIzCmd, slajdUCmd, trajanjeIzSekundi,
+  PORUKE, PRELAZ, greskeSlajda, greskeSlajdaZaSlanje, normalizujPrelaz, noviSlajd, novoPitanje, oznakaSlajda, prazanZadatakInfo,
+  promeniTipPitanja, slajdIzCmd, slajdUCmd, trajanjeIzSekundi,
 } from './slajd-pravila';
-import { Prelaz, SlajdCmd, SlajdDetails } from './uzivo.models';
+import { Prelaz, SlajdCmd, SlajdDetails, ZadatakSlajda, ZadatakSlajdaInfo } from './uzivo.models';
 import { platno as platnoFabrika } from './platno-podaci.testing';
 import { Platno, Sloj } from './platno.models';
 
@@ -43,7 +43,7 @@ describe('slajd-pravila', () => {
   it('SlajdDetails -> SlajdCmd -> lokalni SlajdDetails čuva sadržaj', () => {
     const s: SlajdDetails = {
       id: 4, rb: 2, tip: 'INFO', naslov: 'N', sadrzaj: 'S', slika: { id: 'u', naziv: 'x.png', mime: 'image/png', velicina: 1 },
-      beleske: 'B', postepeno: true, pitanje: null, platno: null, prelaz: null,
+      beleske: 'B', postepeno: true, pitanje: null, platno: null, prelaz: null, zadatak: null,
     };
     expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
   });
@@ -78,7 +78,7 @@ describe('slajd-pravila', () => {
   describe('PLATNO', () => {
     const platnoSlajd = (platno: Platno | null = platnoFabrika()): SlajdDetails => ({
       id: 4, rb: 2, tip: 'PLATNO', naslov: null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false, pitanje: null, platno,
-      prelaz: null,
+      prelaz: null, zadatak: null,
     });
 
     it('slajdUCmd daje isto platno po vrednosti, a slajdIzCmd ga vraća', () => {
@@ -156,7 +156,7 @@ describe('slajd-pravila', () => {
     const platnoCmd = (prelaz: Prelaz | null): SlajdCmd => ({ ...noviSlajd('PLATNO', undefined, platnoFabrika()), prelaz });
     const detalji = (prelaz: Prelaz | null, tip: SlajdDetails['tip'] = 'INFO'): SlajdDetails => ({
       id: 7, rb: 1, tip, naslov: tip === 'INFO' ? 'Uvod' : null, sadrzaj: null, slika: null, beleske: 'B', postepeno: false,
-      pitanje: null, platno: tip === 'PLATNO' ? platnoFabrika() : null, prelaz,
+      pitanje: null, platno: tip === 'PLATNO' ? platnoFabrika() : null, prelaz, zadatak: null,
     });
 
     it('granice i poruka kao na serveru (SlajdPP)', () => {
@@ -231,6 +231,98 @@ describe('slajd-pravila', () => {
       expect(greskeSlajda({ ...noviSlajd('INFO'), beleske: 'x'.repeat(20_001), prelaz: P('FADE', null, 1) }))
         .toEqual([PORUKE.beleske, PORUKE.prelaz, PORUKE.infoPrazan]);
       expect(greskeSlajda({ ...platnoCmd(P('FADE', null, 1)), platno: null })).toEqual([PORUKE.prelaz, PORUKE.bezPlatna]);
+    });
+  });
+
+  describe('ZADATAK (projekat B)', () => {
+    const z = (izmene: Partial<ZadatakSlajda> = {}): ZadatakSlajda => ({ grupaId: 2, vremeSekunde: null, brojVarijanti: null, ...izmene });
+    const zadatakCmd = (izmene: Partial<ZadatakSlajda> = {}): SlajdCmd => noviSlajd('ZADATAK', undefined, null, z(izmene));
+    const info = (izmene: Partial<ZadatakSlajdaInfo> = {}): ZadatakSlajdaInfo => ({
+      grupaId: 2, vremeSekunde: 120, brojVarijanti: 4, grupaNaziv: '2 → 10',
+      putanja: [{ id: 1, naziv: 'Konverzije brojeva (demo)' }, { id: 2, naziv: '2 → 10' }], list: true, brojAktivnihVarijanti: 3,
+      polja: [{ kljuc: 'a', oznaka: 'a', tip: 'BROJ', odstupanje: 0, odstupanjeTip: 'APSOLUTNO', jedinica: null, zanemariVelicinu: null,
+        zanemariRazmake: null, opcije: null }],
+      iskljucena: false, iskljucenePodgrupe: [], upozorenja: ['Tema je isključena.'], ...izmene,
+    });
+    const detalji = (zadatak: ZadatakSlajdaInfo | null = info()): SlajdDetails => ({
+      id: 8, rb: 3, tip: 'ZADATAK', naslov: null, sadrzaj: null, slika: null, beleske: 'Na tabli posle.', postepeno: false,
+      pitanje: null, platno: null, prelaz: null, zadatak,
+    });
+
+    it('poruke kao na serveru (SlajdPP)', () => {
+      expect(PORUKE.zadatakBezGrupe).toBe('Zadatak slajd mora imati grupu zadataka.');
+      expect(PORUKE.brojVarijanti).toBe('Broj različitih zadataka mora biti od 1 do 50.');
+    });
+
+    it('noviSlajd: zadatak samo za ZADATAK, bez pitanja i platna', () => {
+      expect(zadatakCmd()).toEqual(expect.objectContaining({ tip: 'ZADATAK', pitanje: null, platno: null, zadatak: z() }));
+      for (const tip of ['INFO', 'PITANJE', 'PLATNO'] as const) expect(noviSlajd(tip, undefined, null, z()).zadatak).toBeNull();
+    });
+
+    it('bez grupe (ili bez zadatka) -> poruka grupe', () => {
+      expect(greskeSlajda(zadatakCmd({ grupaId: null }))).toEqual([PORUKE.zadatakBezGrupe]);
+      expect(greskeSlajda({ ...zadatakCmd(), zadatak: null })).toEqual([PORUKE.zadatakBezGrupe]);
+      expect(greskeSlajda({ ...zadatakCmd(), zadatak: undefined })).toEqual([PORUKE.zadatakBezGrupe]);
+      expect(greskeSlajda(zadatakCmd())).toEqual([]);
+    });
+
+    it('vreme kao kod pitanja: 4 i 601 (i neispravan unos) su greška, 5, 600 i null nisu', () => {
+      for (const v of [4, 601, 20.5, Number.NaN]) expect(greskeSlajda(zadatakCmd({ vremeSekunde: v }))).toEqual([PORUKE.vreme]);
+      for (const v of [5, 600, null]) expect(greskeSlajda(zadatakCmd({ vremeSekunde: v }))).toEqual([]);
+    });
+
+    it('broj različitih: 0, 51 (i neispravan unos) su greška; 1, 50 i null (= sve aktivne) nisu', () => {
+      for (const b of [0, 51, 2.5, Number.NaN]) expect(greskeSlajda(zadatakCmd({ brojVarijanti: b }))).toEqual([PORUKE.brojVarijanti]);
+      for (const b of [1, 50, null]) expect(greskeSlajda(zadatakCmd({ brojVarijanti: b }))).toEqual([]);
+    });
+
+    it('redosled: zajedničke provere, pa grupa, vreme, broj (sve, kao SlajdPP.proveri redom)', () => {
+      expect(greskeSlajda({ ...zadatakCmd({ grupaId: null, vremeSekunde: 4, brojVarijanti: 0 }), beleske: 'x'.repeat(20_001) }))
+        .toEqual([PORUKE.beleske, PORUKE.zadatakBezGrupe, PORUKE.vreme, PORUKE.brojVarijanti]);
+    });
+
+    it('slajdUCmd šalje samo grupu, vreme i broj; drugi tipovi šalju zadatak null', () => {
+      expect(slajdUCmd(detalji()).zadatak).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 4 });
+      expect(slajdUCmd(detalji(null)).zadatak).toBeNull();
+      const infoSlajd: SlajdDetails = { ...detalji(), tip: 'INFO', naslov: 'Uvod', zadatak: null };
+      expect(slajdUCmd(infoSlajd).zadatak).toBeNull();
+      // fixture ili stari odgovor bez polja: null, ne undefined
+      const bezPolja = { ...infoSlajd } as Partial<SlajdDetails>;
+      delete bezPolja.zadatak;
+      expect(slajdUCmd(bezPolja as SlajdDetails).zadatak).toBeNull();
+    });
+
+    it('slajdUCmd -> slajdIzCmd povratno čuva zadatak (ista grupa: opis sa servera ostaje, vreme i broj iz komande)', () => {
+      const s = detalji();
+      expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
+      const cmd = { ...slajdUCmd(s), zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: 2 } };
+      expect(slajdIzCmd(cmd, s).zadatak).toEqual(info({ vremeSekunde: null, brojVarijanti: 2 }));
+    });
+
+    it('promena grupe daje prazanZadatakInfo (opis stiže tek sa servera)', () => {
+      const s = detalji();
+      const cmd = { ...slajdUCmd(s), zadatak: { grupaId: 5, vremeSekunde: 60, brojVarijanti: null } };
+      const prazan: ZadatakSlajdaInfo = {
+        grupaId: 5, vremeSekunde: 60, brojVarijanti: null, grupaNaziv: null, putanja: [], list: false, brojAktivnihVarijanti: 0,
+        polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
+      };
+      expect(prazanZadatakInfo({ grupaId: 5, vremeSekunde: 60, brojVarijanti: null })).toEqual(prazan);
+      expect(slajdIzCmd(cmd, s).zadatak).toEqual(prazan);
+      // nov nacrt (osnova bez zadatka)
+      expect(slajdIzCmd(zadatakCmd({ grupaId: 5, vremeSekunde: 60 }), { id: -1, rb: 0 }).zadatak).toEqual(prazan);
+    });
+
+    it('slajdIzCmd: tip koji nije ZADATAK nema zadatak ni kad ga osnova ima', () => {
+      const cmd: SlajdCmd = { ...noviSlajd('INFO'), naslov: 'Uvod' };
+      expect(slajdIzCmd(cmd, detalji()).zadatak).toBeNull();
+      expect(slajdIzCmd({ ...zadatakCmd(), zadatak: null }, detalji()).zadatak).toBeNull();
+    });
+
+    it('oznakaSlajda: "Zadatak: <grupa>" ili "Zadatak" dok naziv nije poznat', () => {
+      expect(oznakaSlajda(detalji())).toBe('Zadatak: 2 → 10');
+      expect(oznakaSlajda(detalji(info({ grupaNaziv: null })))).toBe('Zadatak');
+      expect(oznakaSlajda(detalji(null))).toBe('Zadatak');
+      expect(oznakaSlajda(detalji(info({ grupaNaziv: 'G'.repeat(80) })), 20)).toBe('Zadatak: GGGGGGGGGG…');
     });
   });
 });

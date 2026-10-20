@@ -18,12 +18,19 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /**
  * Izvođenja jedne prezentacije (spec 6.2), najnovije prvo: aktivno ima "Nastavi" (konzola), završeno sa čuvanjem
- * "Pregled", završeno "Obriši" uz potvrdu (aktivno se ne briše, server vraća 409).
+ * "Pregled", završeno "Obriši" uz potvrdu (aktivno se ne briše, server vraća 409); bodovan run ima čip "Boduje se".
  */
 @Component({
   selector: 'app-izvodjenja-lista',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule],
+  // čip bodovanog runa (kao u zaglavlju konzole)
+  styles: `
+    .uz-boduje {
+      margin-left: 6px; vertical-align: middle; border-color: transparent; background: var(--primary-soft);
+      color: var(--primary-soft-ink); font-size: 12px; font-weight: 600;
+    }
+  `,
   template: `
     <div class="uz-ed-strana">
       <header class="uz-ed-strana-zaglavlje">
@@ -58,7 +65,10 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
                   <tr>
                     <td>{{ i.pocetak | date: 'd.M.yyyy. HH:mm' }}</td>
                     <td>{{ veza(i) }}</td>
-                    <td>{{ i.cuvanje ? 'Sačuvano' : 'Ne čuva se' }}</td>
+                    <td>
+                      {{ i.cuvanje ? 'Sačuvano' : 'Ne čuva se' }}
+                      @if (i.boduje) { <span class="uz-cip uz-boduje">Boduje se</span> }
+                    </td>
                     <td>
                       @if (i.status === 'AKTIVNO') {
                         <span class="uz-cip uz-ed-u-toku">U toku</span>
