@@ -14,16 +14,18 @@ import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { StudentStore } from '../data-access/student.store';
 import { mailtoHref, telHref } from '../data-access/studenti.models';
 import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
+import { StudentNalogComponent } from '../ui/student-nalog.component';
 
 /**
  * Profil studenta (`/studenti/:id/{pregled,hronologija,beleske}`): zaglavlje (ime, indeks sa godinom upisa, grupa kao
  * link, `mailto:` i `tel:` linkovi, meni Izmeni / Premesti), prethodni i sledeći student grupe (S5) i tabovi kao child
- * rute. Store je na ovoj komponenti, pa ga tabovi dele. Godina upisa, kontakt i id grupe dolaze u `GET studenti/{id}`;
+ * rute. Ispod zaglavlja je sekcija "Nalog" (`StudentNalogComponent`: mejl, uređaji, Moodle, slanje koda; spec prijave 5.3); promena mejla
+ * studenta (`p.email`) ponovo učitava nalog. Store je na ovoj komponenti, pa ga tabovi dele. Godina upisa, kontakt i id grupe dolaze u `GET studenti/{id}`;
  * ono što student nema prikazuje se kao `—`. Prethodni/sledeći otvaraju isti tab.
  */
 @Component({
   selector: 'app-student-profil',
-  imports: [ErrorPanel, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, RouterLinkActive, RouterOutlet, SkeletonRows],
+  imports: [ErrorPanel, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, RouterLinkActive, RouterOutlet, SkeletonRows, StudentNalogComponent],
   providers: [StudentStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -74,6 +76,10 @@ import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
           </mat-menu>
         </div>
       </header>
+
+      @if (sId(); as nid) {
+        <app-student-nalog [studentId]="nid" [email]="p.email" />
+      }
 
       <nav class="tabovi" aria-label="Odeljci studenta">
         @for (t of tabovi; track t.putanja) {

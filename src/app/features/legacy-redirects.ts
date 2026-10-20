@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { Params, RedirectFunction, Router, Routes } from '@angular/router';
 
+import { nastavnikGuard } from '../core/auth/nastavnik.guard';
 import { putanjaSaId } from '../core/route-matchers';
 
 /** Preusmerenje na novu putanju: `:ime` u šablonu se zamenjuje parametrom stare rute; ostali query parametri ostaju. */
@@ -43,14 +44,17 @@ export const legacyRedirects: Routes = [
   { path: 'student/:id', pathMatch: 'full', redirectTo: na('/studenti/:id') },
   { path: 'student/:studentId/predmet/:predmetId', pathMatch: 'full', redirectTo: na('/studenti/:studentId/predmeti/:predmetId') },
 
-  // Sesija zna grupu tek posle učitavanja: komponenta učita i preusmeri (bez ljuske, samo poruka dok čeka).
+  // Sesija zna grupu tek posle učitavanja: komponenta učita i preusmeri (bez ljuske, samo poruka dok čeka). Zove
+  // nastavnički API, pa ima čuvar kao i ljuska.
   {
     matcher: putanjaSaId('onboarding/:id'),
+    canMatch: [nastavnikGuard],
     title: 'Otvaram sesiju',
     loadComponent: () => import('./onboarding/pages/onboarding-preusmerenje').then(m => m.OnboardingPreusmerenje),
   },
   {
     matcher: putanjaSaId('onboarding/:id/qr'),
+    canMatch: [nastavnikGuard],
     title: 'Otvaram sesiju',
     data: { qr: true },
     loadComponent: () => import('./onboarding/pages/onboarding-preusmerenje').then(m => m.OnboardingPreusmerenje),

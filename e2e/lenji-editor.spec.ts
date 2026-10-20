@@ -13,8 +13,11 @@ import { NIZ_EDITORA, NIZ_FORMULE_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI
 /**
  * Budžeti odluke 7: početno <= 785 000 B (rast <= 5 kB), fajl stranice editora, sopstveno zatvorenje editora. Od 4b (F12:
  * uređivač teksta uvodi ProseMirror, ~208 kB) editor platna ima budžet 4b: <= 450 000 B i <= 140 000 B gzip.
+ * Prijava (F1, 2026-10-19): početno je bilo 784 657 B, sesija nastavnika mora biti u početnom paketu (čuvar ljuske i svih
+ * nastavničkih ruta, `SesijaStore`, `AuthApi`, provera 401 u interceptoru) i dodaje 3 247 B (787 904 B); dijalog isteka i
+ * preusmerenje (`core/auth/istek-sesije`) su lenji chunk. Budžet je zato podignut za 5 kB, na 790 000 B.
  */
-const BUDZET_POCETNO = 785_000;
+const BUDZET_POCETNO = 790_000;
 const BUDZET_STRANICA = 215_000;
 const BUDZET_EDITOR_4B = 450_000;
 const BUDZET_EDITOR_4B_GZIP = 140_000;

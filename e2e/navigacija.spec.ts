@@ -12,6 +12,7 @@ const STAVKE: { link: RegExp; url: RegExp; h1: RegExp; naslov: string }[] = [
   { link: /^Studenti/, url: /\/studenti$/, h1: /^Studenti$/, naslov: 'Studenti · GFS' },
   { link: /^Programiranje u građevinarstvu/, url: /\/predmeti\/1\/pregled$/, h1: /^Programiranje u građevinarstvu$/, naslov: 'Predmet · GFS' },
   { link: /^Svi predmeti/, url: /\/predmeti$/, h1: /^Predmeti$/, naslov: 'Predmeti · GFS' },
+  { link: /^Moodle/, url: /\/podesavanja\/moodle$/, h1: /^Moodle$/, naslov: 'Moodle · GFS' },
   { link: /^Početna/, url: /:\d+\/$/, h1: /^(Dobro jutro|Dobar dan|Dobro veče)$/, naslov: 'Početna · GFS' },
 ];
 

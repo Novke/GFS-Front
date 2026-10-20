@@ -1,11 +1,12 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/material/sidenav';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
+import { SesijaStore } from '../auth/sesija.store';
 import { GlobalnaPretraga } from '../search/globalna-pretraga';
 import { DashboardCountsStore } from '../state/dashboard-counts.store';
 import { ReferenceStore } from '../state/reference.store';
@@ -18,8 +19,8 @@ export const SIROKO = '(min-width: 1024px)';
 
 /**
  * Ljuska nastavničkih ruta: tamna bočna navigacija, gornja traka sa mrvicama, sadržaj (max 1440 px).
- * Jedino mesto koje instancira `DashboardCountsStore` i učitava `ReferenceStore` (predmeti u navigaciji):
- * javne (`/upis`) i projektorske rute koriste svoj layout bez ljuske.
+ * Jedino mesto koje instancira i pokreće `DashboardCountsStore` (osvežavanje traje koliko i ljuska) i učitava
+ * `ReferenceStore` (predmeti u navigaciji): javne (`/upis`, `/uzivo`, `/nalog`) i projektorske rute koriste svoj layout bez ljuske.
  */
 @Component({
   selector: 'app-shell',
@@ -33,6 +34,7 @@ export class Shell {
   private readonly brojaciStore = inject(DashboardCountsStore);
   protected readonly reference = inject(ReferenceStore);
   protected readonly okruzenje = inject(Okruzenje);
+  protected readonly sesija = inject(SesijaStore);
   private readonly sadrzaj = viewChild.required<ElementRef<HTMLElement>>('sadrzaj');
 
   protected readonly siroko = toSignal(
@@ -48,6 +50,7 @@ export class Shell {
   }));
 
   constructor() {
+    this.brojaciStore.pokreni(inject(DestroyRef));
     this.reference.ucitaj();
     inject(Router)
       .events.pipe(

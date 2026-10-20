@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { prijaviNastavnika } from '../../core/auth/sesija.testing';
 import { routes } from '../../app.routes';
 import { NotFound } from '../../core/layout/not-found';
 import { ProjectorLayout } from '../../core/layout/projector-layout';
@@ -32,12 +33,14 @@ describe('uživo rute', () => {
   let router: Router;
   let http: HttpTestingController;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     TestBed.configureTestingModule({
       providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
     });
     router = TestBed.inject(Router);
     http = TestBed.inject(HttpTestingController);
+    // čuvar nastavničkih ruta: nastavnik je prijavljen (jedan GET api/auth/ja, posle keširano)
+    await prijaviNastavnika();
   });
 
   async function idi(url: string): Promise<string> {

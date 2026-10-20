@@ -4,8 +4,9 @@ import { RouterOutlet } from '@angular/router';
 import { Okruzenje } from './okruzenje';
 
 /**
- * Javni layout (`/upis/:token`, `/uzivo[/:kod]`; student na telefonu, bez basic-auth-a): bez ljuske, uvek dnevni izgled.
- * Sme da pozove samo `assets/env.json` (oznaka STAGING); stranice ispod njega samo `api/public/*`.
+ * Javni layout (`/upis/:token`, `/uzivo[/:kod]`, `/nalog`; student na telefonu, bez basic-auth-a): bez ljuske, uvek dnevni izgled.
+ * Sme da pozove samo `assets/env.json` (oznaka STAGING); stranice ispod njega samo `api/public/*`. Isti layout nosi i
+ * `/prijava` (nastavnik bez sesije), čija stranica zove samo `api/auth/prijava`.
  * Ne injektuje nijedan store: `DashboardCountsStore` i `ReferenceStore` zovu zaključan `/api/*` (401 = dijalog za lozinku).
  */
 @Component({

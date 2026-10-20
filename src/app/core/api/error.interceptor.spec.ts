@@ -77,4 +77,22 @@ describe('errorInterceptor', () => {
 
     expect(greska).not.toHaveBeenCalled();
   });
+
+  it('401 sa nastavničkog API-ja ne ide u snackbar (sesijaInterceptor vodi na prijavu), greška ide dalje', () => {
+    const onError = vi.fn();
+    http.get('api/studenti/pretraga').subscribe({ error: onError });
+    kontrola.expectOne('api/studenti/pretraga').flush({ reason: 'Potrebna je prijava.' }, { status: 401, statusText: 'Unauthorized' });
+    http.post('api/auth/odjava', {}).subscribe({ error: () => undefined });
+    kontrola.expectOne('api/auth/odjava').flush({ reason: 'Potrebna je prijava.' }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(greska).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it('ostale 4xx sa nastavničkog API-ja i dalje idu u snackbar (403)', () => {
+    http.get('api/studenti/1').subscribe({ error: () => undefined });
+    kontrola.expectOne('api/studenti/1').flush({ reason: 'Nemaš pristup.' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(greska).toHaveBeenCalledExactlyOnceWith('Nemaš pristup.');
+  });
 });

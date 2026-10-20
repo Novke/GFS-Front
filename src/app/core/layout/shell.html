@@ -3,7 +3,7 @@
   <mat-sidenav class="bocna ljuska-tamna" [mode]="siroko() ? 'side' : 'over'" [opened]="siroko() || otvorena()"
                [disableClose]="siroko()"
                (openedChange)="promenaOtvorenosti($event)">
-    <app-side-nav [predmeti]="reference.predmeti()" [brojaci]="brojaci()" [staging]="okruzenje.jeStaging()"
+    <app-side-nav [predmeti]="reference.predmeti()" [brojaci]="brojaci()" [staging]="okruzenje.jeStaging()" [korisnik]="sesija.korisnik()"
                   (izabrano)="zatvoriAkoJeDrawer()" />
   </mat-sidenav>
   <mat-sidenav-content class="desno">

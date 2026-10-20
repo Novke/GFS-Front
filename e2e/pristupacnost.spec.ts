@@ -19,7 +19,9 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'predavanja/1', spremno: p => p.locator('app-studentska-plocica').first() },
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
-  { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
+  // kartica studenta sa sekcijom "Nalog" (uređaji i Moodle) i student bez mejla (objašnjenje, onemogućeno "Pošalji kod")
+  { putanja: 'studenti/1', spremno: p => p.locator('[data-nalog] [data-uredjaj]').first() },
+  { putanja: 'studenti/2', spremno: p => p.locator('[data-nalog] [data-bez-mejla]') },
   // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',
@@ -32,6 +34,10 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
     },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
+  // prijava nastavnika (bez ljuske; nastavnik je u moku prijavljen, a stranica ionako ne pita za sesiju)
+  { putanja: 'prijava?nazad=studenti', spremno: p => p.getByRole('button', { name: 'Prijavi se' }) },
+  // podešavanja -> Moodle: registracije (aktivna i isključena), vrednosti sa "Kopiraj", uputstvo
+  { putanja: 'podesavanja/moodle', spremno: p => p.locator('[data-vrednosti] code').first() },
   // banka zadataka: list sa karticama (i greškom rendera), ispod stabla isključene teme i Klodove serije; unutrašnji čvor sa
   // zbirom; Klodova grupa (bedž "Klod: N", oznake "Claude", prigušen isključen čvor u stablu)
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
@@ -133,6 +139,47 @@ for (const rezim of ['dan', 'noc'] as const) {
       await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
       await expect(page.getByRole('textbox', { name: 'Preambula' })).toBeVisible();
       await proveri('preambula');
+    });
+
+    // Podešavanja -> Moodle: dijalog registracije sa porukom provere
+    test('/podesavanja/moodle (forma registracije sa porukama provere): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('podesavanja/moodle');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-registracija]').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Nova registracija' }).first().click();
+      const dijalog = page.getByRole('dialog', { name: 'Nova registracija' });
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
+      await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
+      await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
+    });
+
+    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
+    // i dijalog "Prijavljeni uređaji"
+    test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('./');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.getByRole('region', { name: 'Nalozi' })).toBeVisible();
+      await page.locator('app-obavestenja-meni button').click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-obavestenje]').first()).toBeVisible();
+      await posleOtvaranjaDijaloga(page, kontejner);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: lista obaveštenja (${rezim})`).toEqual([]);
+    });
+
+    test('meni nastavnika i dijalog "Prijavljeni uređaji": bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('grupe');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: 'Nalog: nastavnik' }).click();
+      await expect(page.getByRole('menuitem', { name: 'Odjava' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, '.mat-mdc-menu-panel'), `axe: meni nastavnika (${rezim})`).toEqual([]);
+      await page.getByRole('menuitem', { name: 'Prijavljeni uređaji' }).click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-sesija]')).toHaveCount(3);
+      await posleOtvaranjaDijaloga(page, kontejner);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: prijavljeni uređaji (${rezim})`).toEqual([]);
     });
 
     // detalj grupe banke: dodato polje daje upozorenje (aktivne varijante postaju nacrti) i poruku provere šeme

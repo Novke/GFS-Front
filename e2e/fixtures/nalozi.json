@@ -1,0 +1,49 @@
+{
+  "_napomena": "Izmišljena obaveštenja o nalozima studenata i sesije nastavnika (spec prijave, sekcije 4.2 i 6). IP adrese su iz opsega za dokumentaciju (192.0.2.0/24).",
+  "obavestenja": [
+    {
+      "id": 1, "vrsta": "NE_STIZE_KOD", "studentId": 2, "studentIme": "Bojan Izmišljenović", "indeks": "GD2",
+      "podaci": { "indeks": "GD2", "imaMejl": false, "ip": "192.0.2.10", "uredjaj": "NEPOZNAT" },
+      "kreirano": "2026-10-19T09:15:00", "procitano": null, "reseno": null
+    },
+    {
+      "id": 2, "vrsta": "NE_STIZE_KOD", "studentId": null, "studentIme": null, "indeks": "GD99",
+      "podaci": { "indeks": "GD99", "imaMejl": false, "ip": "192.0.2.11", "uredjaj": "NEPOZNAT" },
+      "kreirano": "2026-10-18T20:40:00", "procitano": null, "reseno": null
+    },
+    {
+      "id": 3, "vrsta": "PREVISE_KODOVA", "studentId": 1, "studentIme": "Ana Primerović", "indeks": "GD1",
+      "podaci": { "indeks": "GD1", "imaMejl": true, "ip": "192.0.2.12" },
+      "kreirano": "2026-10-17T12:00:00", "procitano": "2026-10-17T13:00:00", "reseno": null
+    },
+    {
+      "id": 4, "vrsta": "NE_STIZE_KOD", "studentId": 3, "studentIme": "Vesna Testić", "indeks": "GD3",
+      "podaci": { "indeks": "GD3", "imaMejl": true, "ip": "192.0.2.13", "uredjaj": "ZAPAMCEN" },
+      "kreirano": "2026-10-10T08:00:00", "procitano": "2026-10-10T09:00:00", "reseno": "2026-10-10T09:05:00"
+    }
+  ],
+  "sesijeNastavnika": [
+    { "id": 1, "opis": "Firefox, Linux", "kreirano": "2026-10-01T08:00:00", "poslednjiUlaz": "2026-10-19T10:00:00", "trenutna": true },
+    { "id": 2, "opis": "Chrome, Android", "kreirano": "2026-09-20T12:30:00", "poslednjiUlaz": "2026-10-18T19:45:00", "trenutna": false },
+    { "id": 3, "opis": "Safari, iOS", "kreirano": "2026-09-02T07:00:00", "poslednjiUlaz": "2026-09-03T07:10:00", "trenutna": false }
+  ],
+  "_napomenaStudenta": "Nalog studenta (javna ruta /nalog, spec prijave 5.1): izmišljen student, maska mejla iz domena example.test.",
+  "nalogStudenta": {
+    "indeks": "GD1", "ime": "Ana", "prezime": "Primerović", "maskaMejla": "a***@example.test", "moodlePovezan": false,
+    "uredjaji": [
+      { "id": 11, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00", "trenutni": false },
+      { "id": 12, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00", "trenutni": false }
+    ]
+  },
+  "naloziStudenata": [
+    {
+      "studentId": 1,
+      "uredjaji": [
+        { "id": 21, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00" },
+        { "id": 22, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00" }
+      ],
+      "moodle": { "povezan": true, "poslednjiUlaz": "2026-10-02T09:15:00" },
+      "poslednjaPrijava": "2026-10-19T08:30:00"
+    }
+  ]
+}

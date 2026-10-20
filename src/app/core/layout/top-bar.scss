@@ -70,6 +70,15 @@ kbd {
   white-space: nowrap;
 }
 
+// zvono i meni nastavnika (dva dugmeta od 40 px); isto mesto drži i placeholder `@defer`-a
+.nalog {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 84px;
+  min-height: 40px;
+}
 
 @media (max-width: 1023.98px) {
   :host {

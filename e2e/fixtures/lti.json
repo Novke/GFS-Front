@@ -1,0 +1,21 @@
+{
+  "_napomena": "Izmišljene registracije alata na Moodle-u (Podešavanja -> Moodle, spec prijave 8.1) i vrednosti za Moodle formu. Domeni su iz example.test.",
+  "registracije": [
+    {
+      "id": 1, "naziv": "Uvod u primenu računara", "izdavac": "https://moodle.example.test", "clientId": "kXr2pQ7vLmN9sT4",
+      "deploymentId": "5", "authUrl": "https://moodle.example.test/mod/lti/auth.php",
+      "jwksUrl": "https://moodle.example.test/mod/lti/certs.php", "aktivna": true, "kreirano": "2026-10-19T10:00:00"
+    },
+    {
+      "id": 2, "naziv": "Programiranje u građevinarstvu", "izdavac": "https://moodle.example.test", "clientId": "Zb8wYc3dFh6jKq1",
+      "deploymentId": "7", "authUrl": "https://moodle.example.test/mod/lti/auth.php",
+      "jwksUrl": "https://moodle.example.test/mod/lti/certs.php", "aktivna": false, "kreirano": "2026-10-19T11:30:00"
+    }
+  ],
+  "vrednosti": {
+    "toolUrl": "https://gfs.example.test/api/public/lti/start",
+    "initiateLoginUrl": "https://gfs.example.test/api/public/lti/prijava",
+    "redirectionUri": "https://gfs.example.test/api/public/lti/start",
+    "publicKeysetUrl": "https://gfs.example.test/api/public/lti/jwks"
+  }
+}

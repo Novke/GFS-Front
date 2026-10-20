@@ -7,7 +7,7 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { ESLint } = require('eslint');
 
-const { JAVNI_FEATURE, DOZVOLJENO_PO_FEATURE, ZABRANJENI_PAKETI_JAVNO, dozvoljenoZa } = require('./javna-ruta-konfig');
+const { JAVNI_FEATURE, JAVNO_DOZVOLJENO, DOZVOLJENO_PO_FEATURE, ZABRANJENI_PAKETI_JAVNO, dozvoljenoZa } = require('./javna-ruta-konfig');
 
 const KORENI = path.resolve(__dirname, '..');
 const RULE_ID = 'gfs/javna-ruta-uvozi';
@@ -118,6 +118,67 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
 
     for (const dodatak of DOZVOLJENO_PO_FEATURE['features/uzivo/javno']) {
       it(`upis ne sme da uvozi dodatak uživa ${dodatak}`, async () => {
+        const m = await poruke('features/upis', `import * as X from '${dubina('features/upis')}${dodatak}';\nexport const y = X;\n`);
+        assert.equal(m.length, 1, JSON.stringify(m));
+      });
+    }
+  });
+
+  describe('features/nalog: javni nalog studenta (spec prijave 10), samo api/public/nalog/*', () => {
+    const gore = dubina('features/nalog');
+
+    it('je javni feature', () => {
+      assert.ok(JAVNI_FEATURE.includes('features/nalog'));
+    });
+
+    for (const zabranjen of [
+      'core/state/notification.store',
+      'core/state/obavestenja.store',
+      'core/state/dashboard-counts.store',
+      'core/state/nesacuvane-izmene',
+      'core/api/studenti.api',
+      'core/api/obavestenja.api',
+      'core/auth/sesija.store',
+      'core/auth/auth.api',
+      'core/layout/shell',
+      'core/layout/icons',
+      'features/studenti/pages/student-profil',
+      'features/studenti/data-access/student-nalog.api',
+      'features/studenti/studenti.routes',
+      'features/prijava/pages/prijava.page',
+      'features/upis/upis.pravila',
+      'shared/ui/student-picker',
+    ]) {
+      it(`obara uvoz ${zabranjen}`, async () => {
+        const m = await poruke('features/nalog', `import { X } from '${gore}${zabranjen}';\nexport const y = X;\n`);
+        assert.equal(m.length, 1, JSON.stringify(m));
+        assert.equal(m[0].messageId, 'zabranjen');
+      });
+    }
+
+    for (const dozvoljen of ['shared/util/nazad', 'shared/ui/confirm-dialog', 'shared/util/datum.pipe', 'core/api/api-error']) {
+      it(`sme ${dozvoljen}`, async () => {
+        assert.deepEqual(await poruke('features/nalog', `import * as X from '${gore}${dozvoljen}';\nexport const y = X;\n`), []);
+      });
+    }
+
+    it('shared/util/nazad je u zajedničkom spisku (čista funkcija, bez uvoza)', () => {
+      assert.ok(JAVNO_DOZVOLJENO.includes('shared/util/nazad'));
+    });
+
+    it('stvarni fajlovi naloga uvoze samo dozvoljeno (stranica, korak, API)', async () => {
+      const stranica = `import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';\n` +
+        `import { bezbednoNazad } from '../../../shared/util/nazad';\n` +
+        `import { NalogApi } from '../data-access/nalog.api';\nimport { KodKorak } from '../ui/kod-korak.component';\n` +
+        `export const y = [ConfirmDialog, bezbednoNazad, NalogApi, KodKorak];\n`;
+      assert.deepEqual(await poruke('features/nalog', stranica, 'pages/nalog.page.ts'), []);
+      const api = `import { LOCAL_ERRORS } from '../../../core/api/api-error';\nimport { API_URL } from '../../../core/api/api-url';\n` +
+        `export const y = [LOCAL_ERRORS, API_URL];\n`;
+      assert.deepEqual(await poruke('features/nalog', api, 'data-access/nalog.api.ts'), []);
+    });
+
+    for (const dodatak of DOZVOLJENO_PO_FEATURE['features/nalog']) {
+      it(`upis ne sme da uvozi dodatak naloga ${dodatak}`, async () => {
         const m = await poruke('features/upis', `import * as X from '${dubina('features/upis')}${dodatak}';\nexport const y = X;\n`);
         assert.equal(m.length, 1, JSON.stringify(m));
       });

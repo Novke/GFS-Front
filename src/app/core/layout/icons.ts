@@ -38,6 +38,8 @@ export const IKONE = [
   'download', 'link',
   // Uvoz iz PDF-a (faza 5d).
   'picture_as_pdf',
+  // Gornja traka: obaveštenja i meni nastavnika (prijava).
+  'notifications', 'account_circle', 'logout', 'devices',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];
