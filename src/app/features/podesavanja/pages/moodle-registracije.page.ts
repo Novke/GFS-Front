@@ -1,10 +1,11 @@
 import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { Subscription } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -184,6 +185,9 @@ export class MoodleRegistracijePage {
   private readonly dialog = inject(MatDialog);
   private readonly poruke = inject(NotificationStore);
   private readonly dokument = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Potvrda brisanja je otvorena: drugi klik ne otvara drugu. */
+  private potvrdaOtvorena = false;
 
   protected readonly lista = signal<LtiRegistracijaInfo[]>([]);
   protected readonly status = signal<Status>('ucitavanje');
@@ -203,7 +207,7 @@ export class MoodleRegistracijePage {
   private ucitavanjeVrednosti?: Subscription;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
+    this.destroyRef.onDestroy(() => {
       this.ucitavanjeListe?.unsubscribe();
       this.ucitavanjeVrednosti?.unsubscribe();
     });
@@ -265,17 +269,24 @@ export class MoodleRegistracijePage {
   }
 
   protected obrisi(reg: LtiRegistracijaInfo): void {
+    if (this.potvrdaOtvorena || this.brise() !== null) {
+      return;
+    }
+    this.potvrdaOtvorena = true;
     ConfirmDialog.otvori(this.dialog, {
       naslov: `Obrisati registraciju „${reg.naziv}“?`,
       tekst: 'Moodle predmet sa ovom registracijom više neće moći da otvori GFS. Studenti koji su već povezali Moodle nalog ostaju povezani.',
       potvrdi: 'Obriši',
       destruktivno: true,
-    }).subscribe(da => {
+    }).pipe(
+      finalize(() => (this.potvrdaOtvorena = false)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(da => {
       if (!da) {
         return;
       }
       this.brise.set(reg.id);
-      this.api.obrisi(reg.id).subscribe({
+      this.api.obrisi(reg.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.brise.set(null);
           this.lista.update(l => l.filter(x => x.id !== reg.id));

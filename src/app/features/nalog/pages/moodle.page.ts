@@ -13,6 +13,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
@@ -61,6 +62,10 @@ export const PORUKE_LTI_GRESAKA: Readonly<Record<string, string>> = {
 };
 export const PORUKA_LTI_OPSTA = 'Ulazak iz Moodle-a nije uspeo. Otvori GFS ponovo iz Moodle-a.';
 
+/** Potvrda bez imena iz Moodle-a (privatnost "Share launcher's name" nije `Always`): student nema šta da uporedi, pa se upozorava. */
+const PORUKA_BEZ_IMENA =
+  'Moodle nije poslao ime naloga. Poveži samo ako je Moodle na ovom računaru otvoren pod tvojim nalogom.';
+
 /** `povezi` 401: kolačića studenta nema (istekao ili opozvan između prijave i povezivanja). */
 const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se ponovo kodom sa mejla.';
 
@@ -70,9 +75,11 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
  * - **`?greska=<kod>`**: poruka po kodu ({@link PORUKE_LTI_GRESAKA}) i link "Otvori GFS" (`/nalog`); bez ijednog zahteva.
  * - **`?uloga=nastavnik`**: "Alat je ispravno registrovan." (Moodle ne otvara nastavničku sesiju); bez zahteva.
  * - **bez parametara**: student čiji Moodle nalog još nije povezan. Isti tok indeks -> kod kao `/nalog` (koraci `IndeksKorak`
- *   i `KodKorak`), pa odmah `POST api/public/lti/povezi` (kolačić `gfs_lti_par` iz ulaska) -> "Moodle nalog je povezan".
- *   Već prijavljen student vidi svoje ime i bira "Poveži" (nikad automatski). 409 i 410 su doslovno tekst servera; 401 vraća
- *   na indeks; mreža i 5xx ostavljaju prijavljenog studenta na "Poveži" sa greškom.
+ *   i `KodKorak`), pa korak potvrde (ime GFS naloga i Moodle naloga) i tek klikom na "Poveži" `POST api/public/lti/povezi`
+ *   (kolačić `gfs_lti_par` iz ulaska) -> "Moodle nalog je povezan". Povezivanje nikad nije automatsko, ni posle koda ni za već
+ *   prijavljenog studenta (R18/R19: kod dokazuje samo GFS identitet, a Moodle u pregledaču može biti tuđ). Kad Moodle nije poslao
+ *   ime, potvrda to kaže ("Moodle nije poslao ime naloga..."). 409 i 410 su doslovno tekst servera; 401 vraća na indeks; mreža
+ *   i 5xx ostavljaju prijavljenog studenta na "Poveži" sa greškom.
  *
  * Pre svega pita `GET api/public/lti/povezivanje`: ime Moodle naloga se pokazuje na potvrdi (zajednički računar u laboratoriji
  * može biti prijavljen kao neko drugi), a 410 kaže da veze iz Moodle-a nema. "Drugi indeks" odjavljuje uređaj i briše polje.
@@ -139,16 +146,27 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
         @case ('potvrda') {
           <app-form-error-banner [poruka]="greskaKoraka()" />
           <p class="uvod">Na ovom uređaju si prijavljen u GFS-u. Proveri da li se nalozi poklapaju pre nego što ih povežeš.</p>
-          <p class="nalozi">
+          <div class="nalozi" id="moodle-nalozi" role="group" aria-label="Nalozi koji se povezuju">
             @if (ja(); as s) {
               <span class="nalog-red"><span class="oznaka">GFS nalog:</span> {{ s.ime }} {{ s.prezime }} ({{ s.indeks }})</span>
             }
             @if (moodleIme(); as ime) {
               <span class="nalog-red"><span class="oznaka">Moodle nalog:</span> {{ ime }}</span>
+            } @else {
+              <span class="nalog-red">{{ PORUKA_BEZ_IMENA }}</span>
             }
+          </div>
+          <p class="uvod" id="moodle-upozorenje">
+            Ako ovo nisi ti, izaberi „Drugi indeks“. Posle povezivanja iz Moodle-a ulaziš jednim klikom, bez koda.
           </p>
-          <p class="uvod">Ako ovo nisi ti, izaberi „Drugi indeks“. Posle povezivanja iz Moodle-a ulaziš jednim klikom, bez koda.</p>
-          <button type="button" mat-flat-button class="dugme" [disabled]="salje()" (click)="povezi()">
+          <button
+            type="button"
+            mat-flat-button
+            class="dugme"
+            aria-describedby="moodle-upozorenje moodle-nalozi"
+            [disabled]="salje()"
+            (click)="povezi()"
+          >
             @if (salje()) {
               <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
             }
@@ -195,6 +213,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
   `,
 })
 export class MoodlePage {
+  protected readonly PORUKA_BEZ_IMENA = PORUKA_BEZ_IMENA;
   /** Query `greska` (kod iz preusmerenja backenda). */
   readonly greska = input<string | null | undefined>(null);
   /** Query `uloga`: samo `nastavnik` menja prikaz. */
@@ -206,6 +225,7 @@ export class MoodlePage {
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Šta stranica radi: greška ulaska ima prednost, pa nastavnik, pa uparivanje. */
   private readonly rezim = computed<'lti-greska' | 'nastavnik' | 'tok'>(() =>
@@ -245,7 +265,7 @@ export class MoodlePage {
   private ucitano = false;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.zahtev?.unsubscribe());
+    this.destroyRef.onDestroy(() => this.zahtev?.unsubscribe());
     // tok uparivanja učitava stanje tek kad su query ulazi postavljeni (greška i nastavnik ne zovu ništa)
     effect(() => {
       if (this.rezim() === 'tok' && !this.ucitano) {
@@ -281,7 +301,7 @@ export class MoodlePage {
 
   /** "Drugi indeks" sa ekrana potvrde: odjava ovog uređaja (greška se ignoriše) i prazno polje, da tuđ nalog ne ostane upisan. */
   protected drugiIndeks(): void {
-    this.api.odjavi().subscribe({ error: () => undefined });
+    this.api.odjavi().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => undefined });
     this.indeks.set('');
     this.ja.set(null);
     this.idiNa('indeks');
@@ -316,14 +336,20 @@ export class MoodlePage {
     });
   }
 
-  /** Prijava kodom, pa odmah povezivanje (dugme koraka ostaje zauzeto do kraja oba zahteva). */
+  /**
+   * Prijava kodom, pa uvek korak "potvrda" (R19): kod dokazuje samo GFS identitet, a Moodle nalog u pregledaču može biti tuđ
+   * (zajednički računar), pa se `povezi` šalje tek klikom na "Poveži".
+   */
   protected prijavi(kod: string): void {
     if (this.salje()) {
       return;
     }
     this.pocni();
     this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
-      next: () => this.povezi(true),
+      next: () => {
+        this.salje.set(false);
+        this.ucitajJa(true);
+      },
       error: (e: unknown) => this.neuspeh(e),
     });
   }
@@ -335,7 +361,7 @@ export class MoodlePage {
     this.pomocSalje.set(true);
     this.greskaKoraka.set(null);
     this.pomoc.set(null);
-    this.api.pomoc(this.indeks()).subscribe({
+    this.api.pomoc(this.indeks()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: odg => {
         this.pomocSalje.set(false);
         this.pomoc.set(odg?.poruka || PORUKA_POMOC);
@@ -347,9 +373,9 @@ export class MoodlePage {
     });
   }
 
-  /** `POST api/public/lti/povezi`; `posleKoda`: zahtev ide odmah posle prijave kodom (`salje` je već uključen). */
-  protected povezi(posleKoda = false): void {
-    if (this.salje() && !posleKoda) {
+  /** `POST api/public/lti/povezi` (klik na "Poveži"). */
+  protected povezi(): void {
+    if (this.salje()) {
       return;
     }
     this.pocni();

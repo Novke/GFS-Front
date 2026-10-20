@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -222,5 +222,20 @@ describe('MoodleRegistracijePage', () => {
     await stabilno();
     expect(redovi()).toHaveLength(1);
     expect(poruke.uspeh).toHaveBeenCalledWith('Registracija je obrisana.');
+  });
+
+  it('"Obriši": drugi klik dok je potvrda otvorena ne otvara drugi dijalog', async () => {
+    await otvoriStranu();
+    const zatvaranje = new Subject<boolean>();
+    otvori.mockImplementation(() => ({ afterClosed: () => zatvaranje }));
+    const pre = otvori.mock.calls.length;
+    dugme('Obriši', redovi()[0])!.click();
+    dugme('Obriši', redovi()[0])!.click();
+    dugme('Obriši', redovi()[1])!.click();
+    expect(otvori.mock.calls.length - pre).toBe(1);
+    zatvaranje.next(false);
+    zatvaranje.complete();
+    dugme('Obriši', redovi()[0])!.click();
+    expect(otvori.mock.calls.length - pre).toBe(2);
   });
 });

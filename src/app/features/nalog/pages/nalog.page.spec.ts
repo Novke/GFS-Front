@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StudentJa } from '../data-access/nalog.models';
@@ -342,6 +342,35 @@ describe('NalogPage', () => {
       await stabilno();
       expect(polje('indeks')).not.toBeNull();
       expect(el().querySelector('[role="status"]')?.textContent).toContain('Odjavljeno: 2 uređaja.');
+    });
+
+    it('posle "Odjavi se" polje indeksa je prazno (tuđ indeks ne ostaje na zajedničkom računaru)', async () => {
+      await otvoriStranu(null, true);
+      dugme('Odjavi se')!.click();
+      http.expectOne('api/public/nalog/odjava').flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      expect(polje('indeks').value).toBe('');
+    });
+
+    it('posle "Odjavi sve uređaje" polje indeksa je prazno', async () => {
+      await otvoriStranu(null, true);
+      dugme('Odjavi sve uređaje')!.click();
+      http.expectOne('api/public/nalog/odjava-svuda').flush({ odjavljeno: 2 });
+      await stabilno();
+      expect(polje('indeks').value).toBe('');
+    });
+
+    it('drugi klik na "Odjavi sve uređaje" dok je potvrda otvorena ne otvara drugi dijalog', async () => {
+      const zatvaranje = new Subject<boolean>();
+      otvori.mockImplementation(() => ({ afterClosed: () => zatvaranje }));
+      await otvoriStranu(null, true);
+      dugme('Odjavi sve uređaje')!.click();
+      dugme('Odjavi sve uređaje')!.click();
+      expect(otvori).toHaveBeenCalledOnce();
+      zatvaranje.next(false);
+      zatvaranje.complete();
+      dugme('Odjavi sve uređaje')!.click();
+      expect(otvori).toHaveBeenCalledTimes(2);
     });
 
     it('"Odjavi sve uređaje" pa "Odustani": bez zahteva', async () => {

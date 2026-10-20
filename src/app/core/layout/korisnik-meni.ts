@@ -63,8 +63,18 @@ export class KorisnikMeni {
   });
 
   protected async uredjaji(): Promise<void> {
-    const { SesijeDialog } = await import('./sesije.dialog');
-    SesijeDialog.otvori(this.dialog);
+    try {
+      const { SesijeDialog } = await this.ucitajSesijeDialog();
+      SesijeDialog.otvori(this.dialog);
+    } catch {
+      // lenji chunk nije stigao (npr. posle novog izdanja su hešovi fajlova drugi): bez povratne informacije klik bi bio mrtav
+      this.injector.get(NotificationStore).greska('Nije moguće otvoriti listu uređaja. Osveži stranicu.');
+    }
+  }
+
+  /** Lenji chunk dijaloga (izdvojeno da test može da simulira neuspelo učitavanje). */
+  protected ucitajSesijeDialog(): Promise<typeof import('./sesije.dialog')> {
+    return import('./sesije.dialog');
   }
 
   protected async odjava(): Promise<void> {

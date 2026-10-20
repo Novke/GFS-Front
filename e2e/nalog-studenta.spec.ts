@@ -39,14 +39,17 @@ test.describe('kartica studenta: sekcija "Nalog"', () => {
   test('"Raskini Moodle vezu" traži potvrdu; Odustani ne menja ništa', async ({ page, mock }) => {
     await page.goto('studenti/1');
     await nalog(page).getByRole('button', { name: 'Raskini Moodle vezu' }).click();
-    const potvrda = page.getByRole('alertdialog', { name: 'Raskinuti Moodle vezu?' });
+    const potvrda = page.getByRole('alertdialog', { name: 'Raskinuti vezu sa Moodle nalogom?' });
     await potvrda.getByRole('button', { name: 'Odustani' }).click();
     await expect(potvrda).toHaveCount(0);
     expect(mock.podaci.naloziStudenata.find(n => n.studentId === 1)!.moodle.povezan).toBe(true);
 
     await nalog(page).getByRole('button', { name: 'Raskini Moodle vezu' }).click();
-    await page.getByRole('alertdialog', { name: 'Raskinuti Moodle vezu?' }).getByRole('button', { name: 'Raskini vezu' }).click();
+    const potvrda2 = page.getByRole('alertdialog', { name: 'Raskinuti vezu sa Moodle nalogom?' });
+    await expect(potvrda2).toContainText('Uređaji prijavljeni preko Moodle-a biće odjavljeni.');
+    await potvrda2.getByRole('button', { name: 'Raskini vezu' }).click();
     await expect(page.locator('.snackbar-uspeh')).toContainText('Moodle veza je raskinuta.');
+    await expect(nalog(page).locator('[data-uredjaj]')).toHaveCount(1); // Moodle uređaj je odjavljen
     await expect(nalog(page).locator('[data-moodle]')).toContainText('nije povezan');
     await expect(nalog(page).getByRole('button', { name: 'Raskini Moodle vezu' })).toBeDisabled();
   });

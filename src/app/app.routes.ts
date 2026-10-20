@@ -165,7 +165,7 @@ export const routes: Routes = [
   },
 
   // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
-  // api/public/lti/povezi. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  // api/public/lti/povezi i api/public/lti/povezivanje. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
   {
     path: 'nalog',
     component: PublicLayout,

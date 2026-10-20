@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input, output, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input, output, signal, untracked,
+} from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatError, MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
@@ -109,6 +111,12 @@ export class KodKorak {
       this.slanjeBroj();
       untracked(() => this.pokreniCekanje());
     });
+    // pogrešan kod: ostaje samo poruka, polje je prazno za novi unos (na telefonu se ne briše cifru po cifru); fokus ostaje na traci greške (FormErrorBanner)
+    effect(() => {
+      if (this.greska() !== null && !this.salje()) {
+        untracked(() => this.isprazniKod());
+      }
+    });
     inject(DestroyRef).onDestroy(() => this.zaustavi());
   }
 
@@ -147,6 +155,13 @@ export class KodKorak {
       return;
     }
     this.posaljiPonovo.emit();
+  }
+
+  private isprazniKod(): void {
+    if (this.forma.controls.kod.value === '') {
+      return;
+    }
+    this.forma.reset();
   }
 
   private pokreniCekanje(): void {

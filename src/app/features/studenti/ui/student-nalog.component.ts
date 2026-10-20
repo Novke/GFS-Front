@@ -1,8 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
-import { Observable, Subscription } from 'rxjs';
+import { finalize, Observable, Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -42,6 +43,12 @@ let brojac = 0;
         }
         @default {
           @if (nalog(); as n) {
+            @if (greskaOsvezavanja(); as g) {
+              <div class="osvezavanje" data-osvezavanje-greska>
+                <p role="alert">Podaci možda nisu ažurni: {{ g }}</p>
+                <button matButton="outlined" type="button" data-osvezi-ponovo (click)="ucitaj()">Pokušaj ponovo</button>
+              </div>
+            }
             <div class="redovi">
               @if (!n.imaMejl) {
                 <p class="upozorenje" [id]="mejlId" data-bez-mejla>Student nema mejl: upiši ga da bi mogao da dobije kod.</p>
@@ -62,10 +69,10 @@ let brojac = 0;
                     }
                   </ul>
                 } @else {
-                  <span class="prazno" data-bez-uredjaja>Nema zapamćenih uređaja.</span>
+                  <span class="prazno" [id]="uredjajiId" data-bez-uredjaja>Nema zapamćenih uređaja.</span>
                 }
               </div>
-              <p class="red" data-moodle>
+              <p class="red" [id]="moodleId" data-moodle>
                 <span class="oznaka">Moodle</span>
                 @if (n.moodle.povezan) {
                   povezan · poslednji ulaz {{ n.moodle.poslednjiUlaz | datum: 'sa-vremenom' }}
@@ -78,9 +85,9 @@ let brojac = 0;
               <button matButton="filled" type="button" data-posalji-kod [disabled]="!n.imaMejl || radi()"
                       [attr.aria-describedby]="n.imaMejl ? null : mejlId" (click)="posaljiKod()">Pošalji kod</button>
               <button matButton="outlined" type="button" data-opozovi [disabled]="n.uredjaji.length === 0 || radi()"
-                      (click)="opozovi()">Opozovi uređaje</button>
+                      [attr.aria-describedby]="n.uredjaji.length === 0 ? uredjajiId : null" (click)="opozovi()">Opozovi uređaje</button>
               <button matButton="outlined" type="button" data-raskini-moodle [disabled]="!n.moodle.povezan || radi()"
-                      (click)="raskiniMoodle()">Raskini Moodle vezu</button>
+                      [attr.aria-describedby]="n.moodle.povezan ? null : moodleId" (click)="raskiniMoodle()">Raskini Moodle vezu</button>
             </div>
           }
         }
@@ -99,9 +106,10 @@ let brojac = 0;
     .lista { margin: 0; padding: 0; list-style: none; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     li { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
     .opis { font-weight: 600; overflow-wrap: anywhere; }
-    .nacin { padding: 1px 8px; border-radius: 999px; background: var(--info-soft, var(--line)); color: var(--ink); font-size: 12px; font-weight: 600; }
+    .nacin { padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; }
     .vreme, .prazno { color: var(--muted); font-size: 13px; }
     .akcije { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .osvezavanje { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
     .stanje { color: var(--muted); }
     .stanje p { margin-bottom: 8px; color: var(--ink); }
     @media (max-width: 599.98px) { .oznaka { min-width: 100%; } .akcije button { flex: 1 1 100%; } }
@@ -124,19 +132,31 @@ export class StudentNalogComponent {
   protected readonly radi = signal(false);
   protected readonly naslovId = `nalog-naslov-${++brojac}`;
   protected readonly mejlId = `nalog-bez-mejla-${brojac}`;
+  protected readonly uredjajiId = `nalog-bez-uredjaja-${brojac}`;
+  protected readonly moodleId = `nalog-moodle-${brojac}`;
+  /** Osvežavanje nije uspelo, a stariji podaci istog studenta su još tu: red iznad podataka umesto praznog stanja greške. */
+  protected readonly greskaOsvezavanja = signal<string | null>(null);
 
+  private readonly destroyRef = inject(DestroyRef);
   private ucitanZa: number | null = null;
   private veza: Subscription | null = null;
+  /** Raste kad se prikaže drugi student: zahtev i potvrda iz prethodne generacije ne rade ništa. */
+  private generacija = 0;
+  /** Neka potvrda (`ConfirmDialog`) je otvorena: drugi klik ne otvara drugu. */
+  private potvrdaOtvorena = false;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.veza?.unsubscribe());
+    this.destroyRef.onDestroy(() => this.veza?.unsubscribe());
     effect(() => {
       const id = this.studentId();
       this.email();
       untracked(() => {
         if (id !== this.ucitanZa) {
           // drugi student: ne pokazuj uređaje prethodnog
+          this.generacija++;
+          this.radi.set(false);
           this.nalog.set(null);
+          this.greskaOsvezavanja.set(null);
           this.status.set('loading');
         }
         this.ucitaj();
@@ -154,11 +174,18 @@ export class StudentNalogComponent {
       next: n => {
         this.ucitanZa = id;
         this.nalog.set(n);
+        this.greskaOsvezavanja.set(null);
         this.status.set('loaded');
       },
       error: (e: unknown) => {
+        const razlog = e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM;
+        if (this.nalog() !== null && this.ucitanZa === id) {
+          // akcija je možda uspela: podaci istog studenta ostaju vidljivi, greška je red iznad njih
+          this.greskaOsvezavanja.set(razlog);
+          return;
+        }
         this.nalog.set(null);
-        this.greska.set(e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM);
+        this.greska.set(razlog);
         this.status.set('error');
       },
     });
@@ -176,34 +203,49 @@ export class StudentNalogComponent {
   }
 
   protected opozovi(): void {
-    ConfirmDialog.otvori(this.dialog, {
+    this.uzPotvrdu({
       naslov: 'Opozvati uređaje studenta?',
       tekst: 'Student će morati ponovo da se prijavi kodom sa mejla (ili iz Moodle-a) na svakom uređaju.',
       potvrdi: 'Opozovi uređaje',
       destruktivno: true,
-    }).subscribe(da => {
-      if (da) {
-        this.izvrsi(this.api.opozoviUredjaje(this.studentId()), r => {
-          const n = typeof r?.opozvano === 'number' ? r.opozvano : 0;
-          if (n > 0) {
-            this.poruke.uspeh(`Opozvano uređaja: ${n}.`);
-          } else {
-            this.poruke.info('Nijedan uređaj nije bio zapamćen.');
-          }
-        });
+    }, () => this.izvrsi(this.api.opozoviUredjaje(this.studentId()), r => {
+      const n = typeof r?.opozvano === 'number' ? r.opozvano : 0;
+      if (n > 0) {
+        this.poruke.uspeh(`Opozvano uređaja: ${n}.`);
+      } else {
+        this.poruke.info('Nijedan uređaj nije bio zapamćen.');
       }
-    });
+    }));
   }
 
   protected raskiniMoodle(): void {
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Raskinuti Moodle vezu?',
-      tekst: 'Moodle nalog više neće biti povezan sa ovim studentom. Veza se može uspostaviti ponovo pri sledećem ulasku iz Moodle-a.',
+    this.uzPotvrdu({
+      naslov: 'Raskinuti vezu sa Moodle nalogom?',
+      tekst: [
+        'Moodle nalog više neće biti povezan sa ovim studentom. Veza se može uspostaviti ponovo pri sledećem ulasku iz Moodle-a.',
+        'Uređaji prijavljeni preko Moodle-a biće odjavljeni.',
+      ],
       potvrdi: 'Raskini vezu',
       destruktivno: true,
-    }).subscribe(da => {
-      if (da) {
-        this.izvrsi(this.api.raskiniMoodle(this.studentId()), () => this.poruke.uspeh('Moodle veza je raskinuta.'));
+    }, () => this.izvrsi(this.api.raskiniMoodle(this.studentId()), () => this.poruke.uspeh('Moodle veza je raskinuta.')));
+  }
+
+  /**
+   * Potvrda pa akcija. Jedna potvrda odjednom (dvoklik ne otvara dva dijaloga); ako se u međuvremenu prikaže drugi student,
+   * potvrda ne važi za njega i akcija se ne izvršava.
+   */
+  private uzPotvrdu(cfg: Parameters<typeof ConfirmDialog.otvori>[1], akcija: () => void): void {
+    if (this.potvrdaOtvorena || this.radi()) {
+      return;
+    }
+    this.potvrdaOtvorena = true;
+    const generacija = this.generacija;
+    ConfirmDialog.otvori(this.dialog, cfg).pipe(
+      finalize(() => (this.potvrdaOtvorena = false)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(da => {
+      if (da && generacija === this.generacija) {
+        akcija();
       }
     });
   }
@@ -217,8 +259,12 @@ export class StudentNalogComponent {
       return;
     }
     this.radi.set(true);
-    zahtev.subscribe({
+    const generacija = this.generacija;
+    zahtev.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: r => {
+        if (generacija !== this.generacija) {
+          return; // u međuvremenu je prikazan drugi student: bez poruke i bez novog učitavanja
+        }
         this.radi.set(false);
         uspeh(r);
         if (osvezi) {
@@ -226,6 +272,9 @@ export class StudentNalogComponent {
         }
       },
       error: (e: unknown) => {
+        if (generacija !== this.generacija) {
+          return;
+        }
         this.radi.set(false);
         if (!(e instanceof HttpErrorResponse && e.status === 429)) {
           this.ucitaj();

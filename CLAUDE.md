@@ -221,13 +221,20 @@ the front only routes and shows.
   redirects here after a Moodle launch. `?greska=<kod>` shows a fixed text per code (`nepoznata-registracija`,
   `istekla-sesija`, `bez-kolacica`, `neispravan-token`, `nepodrzana-poruka`; unknown code = generic text, the code itself is
   never shown) and a link "Otvori GFS" (`/nalog`); `?uloga=nastavnik` shows "Alat je ispravno registrovan."; both make no
-  request. Without them it is the pairing flow: `GET stanje` (+ `ja`), the same `IndeksKorak`/`KodKorak`, then right after
-  the code `POST api/public/lti/povezi` (`NalogApi.poveziMoodle`, cookie `gfs_lti_par`) -> "Moodle nalog je povezan". An
-  already signed-in student sees "prijavljen kao ..." and presses "Poveži" (never automatic). 409/410 are the server text
-  verbatim (fallbacks `PORUKA_VEC_POVEZAN`, `PORUKA_POVEZIVANJE_ISTEKLO`) with "Otvori GFS"; 401 goes back to the index step;
-  network/5xx keep the signed-in student on "Poveži" with the error. `nazad` (public only) gives "Nastavi" after pairing.
-  Both pages share the card frame `ui/nalog-okvir.component.ts`. The page requests only `api/public/nalog/*` and
-  `api/public/lti/povezi` (`e2e/nalog.spec.ts`, "nalog/moodle").
+  request. Without them it is the pairing flow: first `GET api/public/lti/povezivanje` (the Moodle account name from the launch, kept
+  for the confirmation step; 410 = "Povezivanje nije uspelo" with the server text and no pairing; any other error, e.g. 404, network
+  or 5xx, continues without a name), then `GET stanje` (+ `ja`), the same `IndeksKorak`/`KodKorak`, then the confirmation step.
+  **Linking is never automatic (R18/R19):** a code proves only the GFS identity, while the Moodle account in the browser may belong
+  to someone else (shared lab PC). So after a fresh code login the page always goes to the confirmation step ("GFS nalog: <ime>
+  (<indeks>)" and, when Moodle sent a name, "Moodle nalog: <ime>"; without a name the text "Moodle nije poslao ime naloga. Poveži
+  samo ako je Moodle na ovom računaru otvoren pod tvojim nalogom." instead) and only the button "Poveži" sends
+  `POST api/public/lti/povezi` (`NalogApi.poveziMoodle`, cookie `gfs_lti_par`) -> "Moodle nalog je povezan". An already signed-in
+  student lands on the same step. "Poveži" has `aria-describedby` on the warning and on the `role="group"` accounts block. "Drugi
+  indeks" logs the device out (error ignored) and clears the index field. 409/410 are the server text verbatim (fallbacks
+  `PORUKA_VEC_POVEZAN`, `PORUKA_POVEZIVANJE_ISTEKLO`) with "Otvori GFS"; 401 goes back to the index step; network/5xx keep the
+  signed-in student on "Poveži" with the error. `nazad` (public only) gives "Nastavi" after pairing. Both pages share the card
+  frame `ui/nalog-okvir.component.ts`. The page requests only `api/public/nalog/*`, `api/public/lti/povezi` and
+  `api/public/lti/povezivanje` (`e2e/nalog.spec.ts`, "nalog/moodle").
 - **Moodle, teacher side** (`features/podesavanja/`, route `podesavanja` in the shell via `loadChildren`, `podesavanja` ->
   `podesavanja/moodle`; side nav section "Podešavanja" -> "Moodle"): `MoodleRegistracijePage` lists registrations
   (`LtiApi`, `api/lti/registracije`), "Nova registracija"/"Izmeni" open `RegistracijaDialog` (typed form; empty auth/JWKS

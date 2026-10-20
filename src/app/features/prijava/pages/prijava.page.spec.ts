@@ -98,6 +98,40 @@ describe('PrijavaPage (/prijava)', () => {
     expect(TestBed.inject(SesijaStore).status()).toBe('prijavljen');
   });
 
+  it('uspeh: forma ne ustupa mesto panelu "Već si prijavljen" dok traje navigacija', async () => {
+    await otvori('studenti');
+    await prijaviSe();
+    await odgovori(null, 204);
+    fixture.detectChanges();
+    expect(tekst()).not.toContain('Već si prijavljen');
+    expect(polje('korisnik')).not.toBeNull();
+  });
+
+  it('već prijavljen nastavnik na /prijava: "Već si prijavljen kao <korisnik>." i "Nastavi" (nazad), bez forme i bez zahteva', async () => {
+    await otvori();
+    await prijaviSe('ana.nastavnik', 'lozinka');
+    await odgovori(null, 204);
+    idi.mockClear();
+
+    await otvori('studenti?q=ana');
+    expect(tekst()).toContain('Već si prijavljen kao ana.nastavnik.');
+    expect(html().querySelector('form')).toBeNull();
+    http.expectNone(() => true);
+    const nastavi = [...html().querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === 'Nastavi')!;
+    nastavi.click();
+    expect(idi).toHaveBeenCalledExactlyOnceWith('studenti?q=ana');
+  });
+
+  it('već prijavljen sa nebezbednim nazad: "Nastavi" vodi na početnu', async () => {
+    await otvori();
+    await prijaviSe();
+    await odgovori(null, 204);
+    idi.mockClear();
+    await otvori('//evil.com');
+    [...html().querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === 'Nastavi')!.click();
+    expect(idi).toHaveBeenCalledExactlyOnceWith('');
+  });
+
   it.each(['//evil.com', 'https://x', 'javascript:alert(1)', '../x'])('nazad=%s se ignoriše: uspeh vodi na početnu', async nazad => {
     await otvori(nazad);
     await prijaviSe();

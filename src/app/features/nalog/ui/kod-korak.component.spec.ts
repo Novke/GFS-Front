@@ -101,6 +101,26 @@ describe('KodKorak', () => {
     expect(dugme('Pošalji ponovo').disabled).toBe(false);
   });
 
+  it('greška servera posle slanja koda: polje se prazni (fokus ostaje na traci greške)', async () => {
+    upisi('111111');
+    expect(polje().value).toBe('111111');
+    fixture.componentRef.setInput('greska', 'Kod nije ispravan ili je istekao.');
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(polje().value).toBe('');
+    expect(el().querySelector('[role="alert"]')?.textContent).toContain('Kod nije ispravan ili je istekao.');
+  });
+
+  it('dok se kod šalje (salje=true) greška ne briše upisane cifre', async () => {
+    upisi('111111');
+    fixture.componentRef.setInput('salje', true);
+    fixture.componentRef.setInput('greska', 'Neka greška.');
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(polje().value).toBe('111111');
+  });
+
   it('"Ne stiže mi kod" i "Drugi indeks" su izlazi; odgovor pomoći je status', () => {
     const neStize = vi.fn();
     const drugi = vi.fn();

@@ -125,4 +125,17 @@ describe('KorisnikMeni', () => {
     await vi.waitFor(() => expect(otvori).toHaveBeenCalled());
     expect(otvori.mock.calls[0][0]).toBe(Dijalog);
   });
+
+  it('"Prijavljeni uređaji": neuspelo učitavanje chunka (npr. posle novog izdanja) javlja grešku u snackbaru, bez dijaloga', async () => {
+    const dialog = TestBed.inject(MatDialog);
+    const otvori = vi.spyOn(dialog, 'open');
+    const neuspeh = vi
+      .spyOn(KorisnikMeni.prototype as unknown as { ucitajSesijeDialog: () => Promise<unknown> }, 'ucitajSesijeDialog')
+      .mockRejectedValue(new TypeError('Failed to fetch dynamically imported module'));
+    await otvoriMeni();
+    stavka('[data-uredjaji]').click();
+    await vi.waitFor(() => expect(greska).toHaveBeenCalledExactlyOnceWith('Nije moguće otvoriti listu uređaja. Osveži stranicu.'));
+    expect(otvori).not.toHaveBeenCalled();
+    neuspeh.mockRestore();
+  });
 });

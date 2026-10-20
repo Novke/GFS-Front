@@ -192,16 +192,21 @@ describe('StudentNalogComponent', () => {
     await stani();
   });
 
-  it('"Raskini Moodle vezu": potvrda, DELETE, poruka, novo učitavanje', async () => {
+  it('"Raskini Moodle vezu": potvrda, DELETE, poruka, novo učitavanje (Moodle uređaji nestaju iz liste)', async () => {
     await otvori();
     dugme('raskini-moodle').click();
+    await tick();
+    const dijalog = overlay().textContent ?? '';
+    expect(dijalog).toContain('Raskinuti vezu sa Moodle nalogom?');
+    expect(dijalog).toContain('Uređaji prijavljeni preko Moodle-a biće odjavljeni.');
     await potvrdi(true);
     const z = await vi.waitFor(() => http.expectOne('api/studenti/5/nalog/moodle'));
     expect(z.request.method).toBe('DELETE');
     z.flush(null, { status: 204, statusText: 'No Content' });
     expect(poruke.map(p => p.tekst)).toEqual(['Moodle veza je raskinuta.']);
-    nalog().flush({ ...NALOG, moodle: { povezan: false, poslednjiUlaz: null } });
+    nalog().flush({ ...NALOG, uredjaji: [NALOG.uredjaji[0]], moodle: { povezan: false, poslednjiUlaz: null } });
     await stani();
+    expect(el().querySelectorAll('[data-uredjaj]').length).toBe(1);
     expect(el().querySelector('[data-moodle]')!.textContent).toContain('nije povezan');
     expect(dugme('raskini-moodle').disabled).toBe(true);
   });
@@ -226,5 +231,84 @@ describe('StudentNalogComponent', () => {
     nalog(6).flush(BEZ_NALOGA);
     await stani();
     expect(el().querySelector('[data-bez-mejla]')).not.toBeNull();
+  });
+
+  it('zahtev akcije koji kasni posle prelaska na drugog studenta ne pokreće GET niti poruku', async () => {
+    await otvori();
+    dugme('posalji-kod').click();
+    const z = http.expectOne('api/studenti/5/nalog/posalji-kod');
+    fixture.componentRef.setInput('studentId', 6);
+    fixture.detectChanges();
+    nalog(6).flush(BEZ_NALOGA);
+    await stani();
+    z.flush(null, { status: 204, statusText: 'No Content' });
+    await stani();
+    expect(poruke).toEqual([]);
+    http.expectNone('api/studenti/6/nalog');
+    http.expectNone('api/obavestenja/broj');
+  });
+
+  it('potvrda otvorena za jednog studenta, a odgovor stigne kad je prikazan drugi: ništa se ne šalje', async () => {
+    await otvori();
+    dugme('opozovi').click();
+    await tick();
+    fixture.componentRef.setInput('studentId', 6);
+    fixture.detectChanges();
+    nalog(6).flush(NALOG);
+    await stani();
+    await potvrdi(true);
+    http.expectNone('api/studenti/6/nalog/opozovi-uredjaje');
+    http.expectNone('api/studenti/5/nalog/opozovi-uredjaje');
+  });
+
+  it('uništena komponenta otkazuje zahtev akcije', async () => {
+    await otvori();
+    dugme('posalji-kod').click();
+    const z = http.expectOne('api/studenti/5/nalog/posalji-kod');
+    fixture.destroy();
+    expect(z.cancelled).toBe(true);
+  });
+
+  it('drugi klik dok je potvrda otvorena ne otvara drugi dijalog (ni za drugu akciju)', async () => {
+    await otvori();
+    dugme('opozovi').click();
+    dugme('opozovi').click();
+    dugme('raskini-moodle').click();
+    await tick();
+    expect(overlay().querySelectorAll('[data-potvrdi]').length).toBe(1);
+    await potvrdi(false);
+    dugme('raskini-moodle').click();
+    await tick();
+    expect(overlay().querySelectorAll('[data-potvrdi]').length).toBe(1);
+    await potvrdi(false);
+  });
+
+  it('isključena dugmad "Opozovi uređaje" i "Raskini Moodle vezu" upućuju na razlog (aria-describedby)', async () => {
+    await otvori(BEZ_NALOGA, null);
+    const razlog = (ime: string) => el().querySelector(`#${dugme(ime).getAttribute('aria-describedby')}`)?.textContent ?? '';
+    expect(razlog('opozovi')).toContain('Nema zapamćenih uređaja.');
+    expect(razlog('raskini-moodle')).toContain('nije povezan');
+  });
+
+  it('uključena dugmad nemaju aria-describedby', async () => {
+    await otvori();
+    expect(dugme('opozovi').getAttribute('aria-describedby')).toBeNull();
+    expect(dugme('raskini-moodle').getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('neuspelo osvežavanje posle uspešne akcije: podaci ostaju, greška je red iznad njih, "Pokušaj ponovo" učitava', async () => {
+    await otvori();
+    dugme('raskini-moodle').click();
+    await potvrdi(true);
+    (await vi.waitFor(() => http.expectOne('api/studenti/5/nalog/moodle'))).flush(null, { status: 204, statusText: 'No Content' });
+    nalog().error(new ProgressEvent('error'));
+    await stani();
+    expect(el().querySelectorAll('[data-uredjaj]').length).toBe(2);
+    expect(el().querySelector('[data-osvezavanje-greska]')!.textContent).toContain('Nema veze sa serverom.');
+    dugme('osvezi-ponovo').click();
+    nalog().flush({ ...NALOG, moodle: { povezan: false, poslednjiUlaz: null } });
+    await stani();
+    expect(el().querySelector('[data-osvezavanje-greska]')).toBeNull();
+    expect(el().querySelector('[data-moodle]')!.textContent).toContain('nije povezan');
   });
 });

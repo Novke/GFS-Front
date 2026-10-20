@@ -11,11 +11,12 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
 
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
@@ -133,6 +134,9 @@ export class NalogPage {
   private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Potvrda o odjavi svih uređaja je otvorena: drugi klik ne otvara drugi dijalog. */
+  private potvrdaOtvorena = false;
 
   protected readonly korak = signal<KorakNaloga>('ucitavanje');
   protected readonly naslov = computed(() => NASLOV[this.korak()]);
@@ -158,7 +162,7 @@ export class NalogPage {
   private zahtev?: Subscription;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.zahtev?.unsubscribe());
+    this.destroyRef.onDestroy(() => this.zahtev?.unsubscribe());
     this.ucitaj(false);
   }
 
@@ -219,7 +223,7 @@ export class NalogPage {
     this.pomocSalje.set(true);
     this.greska.set(null);
     this.pomoc.set(null);
-    this.api.pomoc(this.indeks()).subscribe({
+    this.api.pomoc(this.indeks()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: odg => {
         this.pomocSalje.set(false);
         this.pomoc.set(odg?.poruka || PORUKA_POMOC);
@@ -243,15 +247,19 @@ export class NalogPage {
   }
 
   protected odjaviSvuda(): void {
-    if (this.salje()) {
+    if (this.salje() || this.potvrdaOtvorena) {
       return;
     }
+    this.potvrdaOtvorena = true;
     ConfirmDialog.otvori(this.dialog, {
       naslov: 'Odjaviti sve uređaje?',
       tekst: 'Odjavićeš se na svim uređajima, i na ovom. Na svakom posle možeš ponovo da se prijaviš kodom sa mejla.',
       potvrdi: 'Odjavi sve',
       destruktivno: true,
-    }).subscribe(da => {
+    }).pipe(
+      finalize(() => (this.potvrdaOtvorena = false)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(da => {
       if (!da) {
         return;
       }
@@ -320,6 +328,9 @@ export class NalogPage {
     this.salje.set(false);
     this.ja.set(null);
     this.pomoc.set(null);
+    // zajednički računar: indeks i maska prethodnog studenta ne smeju da ostanu u polju
+    this.indeks.set('');
+    this.maska.set('');
     this.idiNa('indeks');
     this.info.set(poruka);
   }

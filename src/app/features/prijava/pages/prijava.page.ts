@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, input, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormGroupDirective, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
@@ -26,7 +26,8 @@ export function porukaPrijave(e: unknown): string {
  * Prijava nastavnika (`/prijava`, u `PublicLayout`-u: bez ljuske, uvek svetlo). Ne injektuje store-ove ljuske
  * (`ReferenceStore`, `DashboardCountsStore`, ...): jedini zahtev stranice je `POST api/auth/prijava` (kroz `SesijaStore`).
  * Posle uspeha ide na `nazad` (query, `withComponentInputBinding`) ako ga `bezbednoNazad` pusti, inače na početnu; spoljni
- * ili apsolutni URL se nikad ne otvara. Greške (401, 429, 503, mreža) su u baneru forme, nikad u snackbar-u.
+ * ili apsolutni URL se nikad ne otvara. Već prijavljen nastavnik vidi "Već si prijavljen kao ..." i "Nastavi" umesto forme
+ * (bez zahteva: `prijavljen` je keširano stanje). Greške (401, 429, 503, mreža) su u baneru forme, nikad u snackbar-u.
  */
 @Component({
   selector: 'app-prijava-page',
@@ -43,32 +44,39 @@ export function porukaPrijave(e: unknown): string {
       </header>
 
       <div class="telo">
-        <app-form-error-banner [poruka]="greska()" />
-        <form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Korisničko ime</mat-label>
-            <input matInput type="text" formControlName="korisnik" autocomplete="username" autocapitalize="none"
-              spellcheck="false" maxlength="100">
-            @if (forma.controls.korisnik.hasError('required')) {
-              <mat-error>Unesi korisničko ime.</mat-error>
-            }
-          </mat-form-field>
+        @if (vecPrijavljen()) {
+          <div class="vec">
+            <p class="vec-tekst" role="status">Već si prijavljen kao {{ sesija.korisnik() }}.</p>
+            <button type="button" mat-flat-button class="dugme" (click)="nastavi()">Nastavi</button>
+          </div>
+        } @else {
+          <app-form-error-banner [poruka]="greska()" />
+          <form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Korisničko ime</mat-label>
+              <input matInput type="text" formControlName="korisnik" autocomplete="username" autocapitalize="none"
+                spellcheck="false" maxlength="100">
+              @if (forma.controls.korisnik.hasError('required')) {
+                <mat-error>Unesi korisničko ime.</mat-error>
+              }
+            </mat-form-field>
 
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Lozinka</mat-label>
-            <input matInput type="password" formControlName="lozinka" autocomplete="current-password" maxlength="200">
-            @if (forma.controls.lozinka.hasError('required')) {
-              <mat-error>Unesi lozinku.</mat-error>
-            }
-          </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Lozinka</mat-label>
+              <input matInput type="password" formControlName="lozinka" autocomplete="current-password" maxlength="200">
+              @if (forma.controls.lozinka.hasError('required')) {
+                <mat-error>Unesi lozinku.</mat-error>
+              }
+            </mat-form-field>
 
-          <button type="submit" mat-flat-button class="dugme" [disabled]="salje()">
-            @if (salje()) {
-              <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
-            }
-            Prijavi se
-          </button>
-        </form>
+            <button type="submit" mat-flat-button class="dugme" [disabled]="salje()">
+              @if (salje()) {
+                <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
+              }
+              Prijavi se
+            </button>
+          </form>
+        }
       </div>
     </article>
   `,
@@ -117,6 +125,8 @@ export function porukaPrijave(e: unknown): string {
     h1 { margin: 0; color: inherit; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
 
     .telo { padding: 20px; }
+    .vec { display: flex; flex-direction: column; gap: 18px; }
+    .vec-tekst { margin: 0; overflow-wrap: anywhere; }
     .forma { display: flex; flex-direction: column; gap: 18px; }
     mat-form-field { width: 100%; }
 
@@ -128,7 +138,7 @@ export class PrijavaPage {
   /** Query `nazad` (relativna putanja aplikacije); proverava ga `bezbednoNazad` tek pri upotrebi. */
   readonly nazad = input<string | null | undefined>(null);
 
-  private readonly sesija = inject(SesijaStore);
+  protected readonly sesija = inject(SesijaStore);
   private readonly router = inject(Router);
 
   protected readonly forma = new FormGroup({
@@ -137,6 +147,10 @@ export class PrijavaPage {
   });
   protected readonly salje = signal(false);
   protected readonly greska = signal<string | null>(null);
+  /** Prijava je upravo uspela i traje navigacija: forma ne ustupa mesto panelu "Već si prijavljen". */
+  private readonly prelazi = signal(false);
+  /** Nastavnik koji već ima sesiju otvori `/prijava` (obeleživač, dugme Nazad): bez druge sesije na novom slanju. */
+  protected readonly vecPrijavljen = computed(() => this.sesija.prijavljen() && !this.prelazi());
   private readonly formaDir = viewChild.required(FormGroupDirective);
 
   protected async posalji(): Promise<void> {
@@ -162,6 +176,11 @@ export class PrijavaPage {
     } finally {
       this.salje.set(false);
     }
+    this.prelazi.set(true);
     await this.router.navigateByUrl(bezbednoNazad(this.nazad()) ?? '');
+  }
+
+  protected nastavi(): void {
+    void this.router.navigateByUrl(bezbednoNazad(this.nazad()) ?? '');
   }
 }

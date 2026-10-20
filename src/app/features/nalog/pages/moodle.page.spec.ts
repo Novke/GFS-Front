@@ -85,8 +85,8 @@ describe('MoodlePage', () => {
     fixture.detectChanges();
   }
 
-  /** Indeks -> kod -> 204 prijave; vraća zahtev `povezi` (još bez odgovora). */
-  async function prijaviKodom() {
+  /** Indeks -> kod -> 204 prijave -> `GET ja` -> korak "potvrda" (nikad automatsko povezivanje, R19). */
+  async function prijaviKodomDoPotvrde(): Promise<void> {
     upisi('indeks', 'gd12');
     dugme('Pošalji kod')!.click();
     http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'a***@example.test' });
@@ -98,6 +98,19 @@ describe('MoodlePage', () => {
     expect(prijava.request.body).toEqual({ indeks: 'GD12', kod: '123456' });
     prijava.flush(null, bezSadrzaja);
     await stabilno();
+    http.expectNone(POVEZI);
+    http.expectOne(JA).flush(JA_ODGOVOR);
+    await stabilno();
+    http.expectNone(POVEZI);
+    expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
+    expect(dugme('Poveži')).toBeDefined();
+  }
+
+  /** Posle koda i potvrde: klik na "Poveži"; vraća zahtev `povezi` (još bez odgovora). */
+  async function prijaviKodom() {
+    await prijaviKodomDoPotvrde();
+    dugme('Poveži')!.click();
+    fixture.detectChanges();
     const povezi = http.expectOne(POVEZI);
     expect(povezi.request.method).toBe('POST');
     return povezi;
@@ -197,6 +210,53 @@ describe('MoodlePage', () => {
       expect(link('Otvori nalog')?.getAttribute('href')).toBe('/nalog');
       expect(dugme('Nastavi')).toBeUndefined();
       expect(navigacija).not.toHaveBeenCalled();
+    });
+
+    it('posle koda sa imenom iz Moodle-a: potvrda sa oba imena, nema POST povezi; Poveži -> povezan', async () => {
+      await otvoriTok();
+      await prijaviKodomDoPotvrde();
+      expect(el().textContent).toContain('GFS nalog: Ana Primerović (GD12)');
+      expect(el().textContent).toContain('Moodle nalog: Pera Test');
+      expect(el().textContent).not.toContain('Moodle nije poslao ime naloga.');
+      http.expectNone(POVEZI);
+      dugme('Poveži')!.click();
+      http.expectOne(POVEZI).flush(null, bezSadrzaja);
+      await stabilno();
+      expect(naslov()).toBe('Moodle nalog je povezan');
+    });
+
+    it('posle koda bez imena: potvrda sa tekstom "Moodle nije poslao ime naloga…", nema POST povezi; Poveži -> povezan', async () => {
+      await otvoriTok(false, undefined, null);
+      await prijaviKodomDoPotvrde();
+      expect(el().textContent).toContain(
+        'Moodle nije poslao ime naloga. Poveži samo ako je Moodle na ovom računaru otvoren pod tvojim nalogom.',
+      );
+      expect(el().textContent).not.toContain('Moodle nalog:');
+      http.expectNone(POVEZI);
+      dugme('Poveži')!.click();
+      http.expectOne(POVEZI).flush(null, bezSadrzaja);
+      await stabilno();
+      expect(naslov()).toBe('Moodle nalog je povezan');
+    });
+
+    it('"Poveži" upućuje (aria-describedby) na upozorenje i na prikaz naloga; nalozi su grupa sa nazivom', async () => {
+      await otvoriTok(true);
+      const opis = dugme('Poveži')!.getAttribute('aria-describedby')!.split(' ');
+      expect(opis.length).toBe(2);
+      for (const id of opis) {
+        expect(el().querySelector(`#${id}`)).not.toBeNull();
+      }
+      expect(el().querySelector(`#${opis[0]}`)?.textContent).toContain('Ako ovo nisi ti');
+      const nalozi = el().querySelector(`#${opis[1]}`)!;
+      expect(nalozi.getAttribute('role')).toBe('group');
+      expect(nalozi.getAttribute('aria-label')).toBe('Nalozi koji se povezuju');
+    });
+
+    it('bez imena iz Moodle-a: "Poveži" upućuje i na tekst o imenu koje nije stiglo', async () => {
+      await otvoriTok(true, undefined, null);
+      const opis = dugme('Poveži')!.getAttribute('aria-describedby')!.split(' ');
+      const tekstovi = opis.map(id => el().querySelector(`#${id}`)?.textContent ?? '');
+      expect(tekstovi.some(t => t.includes('Moodle nije poslao ime naloga.'))).toBe(true);
     });
 
     it('pogrešan kod: tekst servera, ostaje na kodu, bez povezi', async () => {
@@ -309,11 +369,21 @@ describe('MoodlePage', () => {
       await otvoriTok(true, undefined, null);
       expect(el().textContent).toContain('GFS nalog: Ana Primerović (GD12)');
       expect(el().textContent).not.toContain('Moodle nalog:');
+      expect(el().textContent).toContain('Moodle nije poslao ime naloga.');
     });
 
-    it('GET povezivanje 404 (backend tačku još nema) ili greška mreže: uparivanje ide dalje bez imena', async () => {
+    it.each([
+      ['mreža (status 0)', () => new ProgressEvent('error'), 0],
+      ['404 (backend tačku još nema)', () => ({ reason: 'x' }), 404],
+      ['500', () => ({ reason: 'x' }), 500],
+    ] as const)('GET povezivanje, %s: uparivanje ide dalje na GET stanje, bez imena', async (_naziv, telo, status) => {
       await otvori();
-      http.expectOne(POVEZIVANJE).flush({ reason: 'x' }, greska(404, 'Not Found'));
+      const zahtev = http.expectOne(POVEZIVANJE);
+      if (status === 0) {
+        zahtev.error(telo() as ProgressEvent);
+      } else {
+        zahtev.flush(telo(), greska(status, 'Greška'));
+      }
       await stabilno();
       http.expectOne(STANJE).flush({ prijavljen: true });
       http.expectOne(JA).flush(JA_ODGOVOR);

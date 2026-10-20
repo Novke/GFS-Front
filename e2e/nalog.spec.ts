@@ -197,7 +197,7 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
     dozvoljeni401: /^\/api\/public\/nalog\/(prijava|ja)$/,
   });
 
-  test('uparivanje: indeks -> kod -> povezi -> "Moodle nalog je povezan", pa nalog kaže "povezan"', async ({ page, mock, javnaMreza }) => {
+  test('uparivanje: indeks -> kod -> potvrda -> "Poveži" -> "Moodle nalog je povezan", pa nalog kaže "povezan"', async ({ page, mock, javnaMreza }) => {
     await page.goto('nalog/moodle');
     await ocekuj(page).toHaveTitle('Moodle · GFS');
     await ocekuj(page.getByRole('heading', { level: 2, name: 'Poveži Moodle nalog sa GFS-om' })).toBeVisible();
@@ -205,6 +205,12 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
 
     await posaljiKod(page);
     await unesiKod(page, MockApi.KOD_NALOGA);
+    // R19: kod ne povezuje sam; student prvo vidi oba naloga
+    await ocekuj(page.getByText('GFS nalog: Ana Primerović (GD1)')).toBeVisible();
+    await ocekuj(page.getByText('Moodle nalog: Pera Test')).toBeVisible();
+    ocekuj(mock.zahteviZa('public/lti/povezi')).toHaveLength(0);
+    ocekuj(mock.podaci.nalogStudenta.moodlePovezan).toBe(false);
+    await page.getByRole('button', { name: 'Poveži', exact: true }).click();
     await ocekuj(page.getByRole('heading', { level: 2, name: 'Moodle nalog je povezan' })).toBeVisible();
     ocekuj(mock.podaci.nalogStudenta.moodlePovezan).toBe(true);
     ocekuj(mock.moodlePar).toBe(false);
@@ -219,11 +225,25 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
       'GET /api/public/nalog/stanje',
       'POST /api/public/nalog/kod',
       'POST /api/public/nalog/prijava',
+      'GET /api/public/nalog/ja',
       'POST /api/public/lti/povezi',
       'GET /api/public/nalog/stanje',
       'GET /api/public/nalog/ja',
     ]);
     ocekuj(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
+  test('Moodle nije poslao ime: posle koda potvrda sa upozorenjem, bez povezivanja dok student ne pritisne "Poveži"', async ({ page, mock }) => {
+    mock.moodleIme = null;
+    await page.goto('nalog/moodle');
+    await posaljiKod(page);
+    await unesiKod(page, MockApi.KOD_NALOGA);
+    await ocekuj(page.getByText('GFS nalog: Ana Primerović (GD1)')).toBeVisible();
+    await ocekuj(page.getByText('Moodle nije poslao ime naloga. Poveži samo ako je Moodle na ovom računaru otvoren pod tvojim nalogom.'))
+      .toBeVisible();
+    ocekuj(mock.zahteviZa('public/lti/povezi')).toHaveLength(0);
+    await page.getByRole('button', { name: 'Poveži', exact: true }).click();
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Moodle nalog je povezan' })).toBeVisible();
   });
 
   test('već prijavljen: "Poveži" (bez automatskog povezivanja); 409 je tekst servera', async ({ page, mock }) => {
@@ -286,7 +306,7 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
   });
 
   for (const rezim of ['dan', 'noc'] as const) {
-    test(`axe (${rezim}), 360 px: uparivanje, povezan, greška ulaska, nastavnik; bez serious/critical`, async ({ page }) => {
+    test(`axe (${rezim}), 360 px: uparivanje, potvrda, povezan, 410, greška ulaska, nastavnik; bez serious/critical`, async ({ page, mock }) => {
       test.info().annotations.push({ type: 'rezim', description: rezim });
       await page.emulateMedia({ colorScheme: rezim === 'noc' ? 'dark' : 'light' });
       await page.setViewportSize({ width: 360, height: 740 });
@@ -295,7 +315,15 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
       await bezOzbiljnihKrsenja(page);
       await posaljiKod(page);
       await unesiKod(page, MockApi.KOD_NALOGA);
+      await ocekuj(page.getByText('Moodle nalog: Pera Test')).toBeVisible();
+      await bezOzbiljnihKrsenja(page); // korak potvrde
+      await page.getByRole('button', { name: 'Poveži', exact: true }).click();
       await ocekuj(page.getByRole('heading', { level: 2, name: 'Moodle nalog je povezan' })).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+
+      mock.moodlePar = false;
+      await page.goto('nalog/moodle'); // veza iz Moodle-a je istekla: 410
+      await ocekuj(page.getByRole('heading', { level: 2, name: 'Povezivanje nije uspelo' })).toBeVisible();
       await bezOzbiljnihKrsenja(page);
 
       await page.goto('nalog/moodle?greska=neispravan-token');

@@ -141,8 +141,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       await proveri('preambula');
     });
 
-    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
-    // i dijalog "Prijavljeni uređaji"
+    // Podešavanja -> Moodle: dijalog registracije sa porukom provere
     test('/podesavanja/moodle (forma registracije sa porukama provere): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('podesavanja/moodle');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
@@ -156,6 +155,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
     });
 
+    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
+    // i dijalog "Prijavljeni uređaji"
     test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('./');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);

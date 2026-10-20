@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_ERRORS } from '../api/api-error';
@@ -117,6 +117,20 @@ describe('SesijeDialog (prijavljeni uređaji)', () => {
     http.expectOne('api/auth/sesije').flush(SESIJE.slice(0, 2));
     await tick();
     expect(red(3)).toBeNull();
+  });
+
+  it('drugi klik dok je potvrda otvorena ne otvara drugu potvrdu', async () => {
+    const zatvaranje = new Subject<boolean>();
+    const potvrda = vi.spyOn(ConfirmDialog, 'otvori').mockReturnValue(zatvaranje);
+    await otvori();
+    dugme('[data-odjavi-sve]').click();
+    dugme('[data-odjavi-sve]').click();
+    red(3).querySelector<HTMLButtonElement>('[data-odjavi]')!.click();
+    expect(potvrda).toHaveBeenCalledOnce();
+    zatvaranje.next(false);
+    zatvaranje.complete();
+    dugme('[data-odjavi-sve]').click();
+    expect(potvrda).toHaveBeenCalledTimes(2);
   });
 
   it('greška učitavanja: poruka u dijalogu i "Pokušaj ponovo"', async () => {

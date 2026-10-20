@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import {
   MatDialog, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogRef, MatDialogTitle,
 } from '@angular/material/dialog';
-import { Observable } from 'rxjs';
+import { finalize, Observable } from 'rxjs';
 
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { DatumPipe } from '../../shared/util/datum.pipe';
@@ -85,6 +86,9 @@ export class SesijeDialog {
   private readonly api = inject(AuthApi);
   private readonly dialog = inject(MatDialog);
   private readonly poruke = inject(NotificationStore);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Neka potvrda je otvorena: drugi klik ne otvara drugu. */
+  private potvrdaOtvorena = false;
 
   protected readonly sesije = signal<SesijaInfo[]>([]);
   protected readonly status = signal<Status>('loading');
@@ -142,15 +146,19 @@ export class SesijeDialog {
 
   /** Potvrda, zahtev (greška ide u snackbar), poruka uspeha, pa ponovo lista (i posle greške). */
   private uzPotvrdu<T>(cfg: Parameters<typeof ConfirmDialog.otvori>[1], zahtev: () => Observable<T>, uspeh: (r: T) => void): void {
-    if (this.radi()) {
+    if (this.radi() || this.potvrdaOtvorena) {
       return;
     }
-    ConfirmDialog.otvori(this.dialog, cfg).subscribe(da => {
+    this.potvrdaOtvorena = true;
+    ConfirmDialog.otvori(this.dialog, cfg).pipe(
+      finalize(() => (this.potvrdaOtvorena = false)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(da => {
       if (!da) {
         return;
       }
       this.radi.set(true);
-      zahtev().subscribe({
+      zahtev().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: r => uspeh(r),
         error: () => {
           this.radi.set(false);

@@ -994,7 +994,9 @@ export class MockApi {
       if (jeOdgovor(s)) {
         return s;
       }
-      nalogKartice(s.id).moodle = { povezan: false, poslednjiUlaz: null };
+      const n = nalogKartice(s.id);
+      n.moodle = { povezan: false, poslednjiUlaz: null };
+      n.uredjaji = n.uredjaji.filter(u => u.nacin !== 'LTI'); // B9: odjavljuju se i uređaji prijavljeni preko Moodle-a
       return { status: 204 };
     });
     get('studenti/:id/predmeti', (_z, p) => {
