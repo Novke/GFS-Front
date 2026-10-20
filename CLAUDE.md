@@ -830,7 +830,8 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   SVG through `api/public/mediji/<own id>`, the fields of its schema), the outcome after closing, correct values only with `TACAN`
   and the solution only with `RESENJE`. They import only modules already allowed for `features/uzivo/javno` (the allow-list did not
   change). A scored run without a signed-in student (`prijavaObavezna && !prijavljenStudent`, or 403 on join) goes to
-  `nalog?nazad=uzivo/<kod>` (the login project's route; a public 404 until it lands).
+  `nalog?nazad=uzivo/<kod>`; after the code login `/nalog` returns to `uzivo/<kod>` (`javnoNazad`) and the phone joins under the
+  student's own name without the name form (`e2e/nalog.spec.ts`, "bodovan uživo run").
 - **Overview** (`pages/izvodjenje-pregled.page`): a ZADATAK round (`RezultatPitanja.zadatak`, `pitanje`/`rezultat` null) shows the group
   path, `app-zadatak-rezultat` (everything visible) and the participants table (variant, outcome per field, total). Round cards are
   keyed by slide id (`slajdId`, else the snapshot's `pitanje.slajdId` or `zadatak.slajdId`), never by group id.
@@ -850,7 +851,7 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Routes** (`banka.routes.ts`, loaded with `loadChildren` under the shell route `banka`, side nav entry "Banka zadataka",
   breadcrumbs "Nastava > Banka zadataka"; lazy on purpose, outside FE-4's file list: a static route table pushed the initial
   closure over the budget of `e2e/lenji-editor.spec.ts` (then 785 000 B; 790 000 B since the teacher session, see "Prijava"; after
-  merging MCP into prijava the initial closure is 789 011 B, under 1 kB of headroom), so nothing new goes into the initial chunk): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
+  merging MCP and the Zadatak slide into prijava the initial closure is 789 083 B, under 1 kB of headroom), so nothing new goes into the initial chunk): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
   (draft review, title and last breadcrumb "Pregled nacrta"; declared before `grupe/:id`), `banka/grupe/:id` (group detail),
   `banka/varijante/nova?grupa=` and `banka/varijante/:id` (the same `VarijantaEditorPage`, optional `?povratak`). Ids must be numeric
   (`putanjaSaId`, otherwise 404 without an API call); the last two routes and `grupe/:id` carry `unsavedChangesGuard`.

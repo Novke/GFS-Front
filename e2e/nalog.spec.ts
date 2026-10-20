@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test as osnova } from './fixture';
 import { expect as ocekuj, test } from './javna-mreza';
+import { lazniBroker } from './lazni-stomp';
 import { MockApi } from './mock-api';
 
 /*
@@ -36,7 +37,8 @@ async function bezOzbiljnihKrsenja(page: Page): Promise<void> {
 test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
   test.use({
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
-    dozvoljeniApi: new RegExp(`${API_NALOGA.source}|^GET /api/public/uzivo/123456(/ja)?$`),
+    // posle povratka na uživo prijavljen student ulazi bez forme imena (`POST prijava`), kao kod bodovanog runa
+    dozvoljeniApi: new RegExp(`${API_NALOGA.source}|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$`),
     dozvoljeni401: /^\/api\/public\/nalog\/(prijava|ja)$/,
   });
 
@@ -76,7 +78,7 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, kod: MockApi.KOD_NALOGA });
 
     // samo javni API naloga (pa uživo posle povratka), ništa nastavničko
-    ocekuj(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/'))).toEqual([
+    ocekuj(javnaMreza.api.filter(z => !/^(GET|POST) \/api\/public\/uzivo\//.test(z))).toEqual([
       'GET /api/public/nalog/stanje',
       'POST /api/public/nalog/kod',
       'POST /api/public/nalog/prijava',
@@ -183,6 +185,55 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
       await bezOzbiljnihKrsenja(page);
     });
   }
+});
+
+/*
+ * Bodovan uživo run (slajd Zadatak, `prijavaObavezna`): telefon bez prijavljenog studenta ide na `nalog?nazad=uzivo/<kod>`
+ * (`features/uzivo/javno/student.store.ts`), prijava kodom vraća na `uzivo/<kod>` (`javnoNazad`), pa student ulazi pod
+ * svojim imenom bez forme imena (`POST prijava` sa praznim imenom; ime uzima server). Lažni broker igra STOMP.
+ */
+test.describe('bodovan uživo run: nalog?nazad=uzivo/<kod> i nazad', () => {
+  test.use({
+    viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    dozvoljeniApi: new RegExp(`${API_NALOGA.source}|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$`),
+    dozvoljeni401: /^\/api\/public\/nalog\/(prijava|ja)$/,
+  });
+
+  test('uzivo/123456 -> nalog?nazad=uzivo/123456 -> kod -> nazad na uzivo/123456 pod svojim imenom', async ({ page, mock, javnaMreza }) => {
+    mock.podaci.izvodjenja.find(i => i.kod === '123456')!.prijavaObavezna = true;
+    const ime = `${mock.podaci.nalogStudenta.ime} ${mock.podaci.nalogStudenta.prezime}`;
+    await lazniBroker(page, 'api/public/ws', o => {
+      if (o !== '/app/izvodjenja/7/pocetno') return undefined;
+      const u = mock.podaci.ucesnici.at(-1)!;
+      return {
+        javno: {
+          izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas', kod: '123456',
+          prikaz: 'PRIJAVA', slajdTip: null, ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
+          brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null, zadatak: null,
+        },
+        licno: {
+          verzija: 1, ucesnikId: u.ucesnikId, ime: u.ime, poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null,
+          zadatak: null,
+        },
+      };
+    }, url => javnaMreza.ws.push(new URL(url).pathname));
+
+    await page.goto('uzivo/123456');
+    // tačno putanja koju gradi student.store (`nalog?nazad=uzivo/<kod>`; ruter `/` u query-ju može da kodira)
+    await ocekuj(page).toHaveURL(/\/nalog\?nazad=uzivo(\/|%2F)123456$/);
+    await ocekuj(page.getByRole('heading', { level: 1 })).toHaveText('Nalog studenta');
+    ocekuj(mock.zahteviZa('public/uzivo/123456/prijava', 'POST')).toHaveLength(0);
+
+    await posaljiKod(page);
+    await unesiKod(page, MockApi.KOD_NALOGA);
+    await ocekuj(page).toHaveURL(/\/uzivo\/123456$/);
+    await ocekuj(page.getByText('Čekamo početak')).toBeVisible();
+    await ocekuj(page.getByText(`Ti si: ${ime}`)).toBeVisible();
+    await ocekuj(page.getByLabel('Tvoje ime')).toHaveCount(0);
+    ocekuj(mock.podaci.prijavljenStudent).toBe(ime);
+    ocekuj(mock.zahteviZa('public/uzivo/123456/prijava', 'POST').map(z => z.telo)).toEqual([{ ime: '' }]);
+    ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST')).toHaveLength(1);
+  });
 });
 
 /*
