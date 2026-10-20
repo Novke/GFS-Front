@@ -228,7 +228,7 @@ the front only routes and shows.
   to someone else (shared lab PC). So after a fresh code login the page always goes to the confirmation step ("GFS nalog: <ime>
   (<indeks>)" and, when Moodle sent a name, "Moodle nalog: <ime>"; without a name the text "Moodle nije poslao ime naloga. Poveži
   samo ako je Moodle na ovom računaru otvoren pod tvojim nalogom." instead) and only the button "Poveži" sends
-  `POST api/public/lti/povezi` (`NalogApi.poveziMoodle`, cookie `gfs_lti_par`) -> "Moodle nalog je povezan". An already signed-in
+  `POST api/public/lti/povezi` (`NalogApi.poveziMoodle`, cookie `__Host-gfs_lti_par`) -> "Moodle nalog je povezan". An already signed-in
   student lands on the same step. "Poveži" has `aria-describedby` on the warning and on the `role="group"` accounts block. "Drugi
   indeks" logs the device out (error ignored) and clears the index field. 409/410 are the server text verbatim (fallbacks
   `PORUKA_VEC_POVEZAN`, `PORUKA_POVEZIVANJE_ISTEKLO`) with "Otvori GFS"; 401 goes back to the index step; network/5xx keep the
@@ -243,7 +243,7 @@ the front only routes and shows.
   za Moodle" (`GET api/lti/registracije/vrednosti`) has a "Kopiraj" button per address (`shared/util/kopiraj`, snackbar
   confirmation) and the short Moodle guide (More -> LTI External tools -> Add tool; LTI 1.3, Keyset URL, New window,
   services off, name Always, e-mail Never). e2e: `podesavanja-moodle.spec.ts`; mock routes `lti/registracije*` and
-  `public/lti/povezi` (`MockApi.moodlePar` = cookie `gfs_lti_par`), fixture `e2e/fixtures/lti.json`.
+  `public/lti/povezi` (`MockApi.moodlePar` = cookie `__Host-gfs_lti_par`), fixture `e2e/fixtures/lti.json`.
 - **Tests:** `core/auth/sesija.testing.ts` `prijaviNastavnika()` signs the real `SesijaStore` in for specs that go through the
   real routes. e2e: `MockApi.prijavljen` (teacher cookie; `false` = every teacher API answers 401 before overrides, as the
   server), `MockApi.LOZINKA`, `MockApi.studentPrijavljen` and `MockApi.KOD_NALOGA` (student cookie and the only accepted code

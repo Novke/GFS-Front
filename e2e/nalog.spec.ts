@@ -325,7 +325,7 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/lti/povezi')).toHaveLength(0);
   });
 
-  test('veza iz Moodle-a je istekla (nema gfs_lti_par): 410 odmah, bez ponude povezivanja', async ({ page, mock }) => {
+  test('veza iz Moodle-a je istekla (nema __Host-gfs_lti_par): 410 odmah, bez ponude povezivanja', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     mock.moodlePar = false;
     await page.goto('nalog/moodle');

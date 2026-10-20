@@ -76,7 +76,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
  * - **`?uloga=nastavnik`**: "Alat je ispravno registrovan." (Moodle ne otvara nastavničku sesiju); bez zahteva.
  * - **bez parametara**: student čiji Moodle nalog još nije povezan. Isti tok indeks -> kod kao `/nalog` (koraci `IndeksKorak`
  *   i `KodKorak`), pa korak potvrde (ime GFS naloga i Moodle naloga) i tek klikom na "Poveži" `POST api/public/lti/povezi`
- *   (kolačić `gfs_lti_par` iz ulaska) -> "Moodle nalog je povezan". Povezivanje nikad nije automatsko, ni posle koda ni za već
+ *   (kolačić `__Host-gfs_lti_par` iz ulaska) -> "Moodle nalog je povezan". Povezivanje nikad nije automatsko, ni posle koda ni za već
  *   prijavljenog studenta (R18/R19: kod dokazuje samo GFS identitet, a Moodle u pregledaču može biti tuđ). Kad Moodle nije poslao
  *   ime, potvrda to kaže ("Moodle nije poslao ime naloga..."). 409 i 410 su doslovno tekst servera; 401 vraća na indeks; mreža
  *   i 5xx ostavljaju prijavljenog studenta na "Poveži" sa greškom.

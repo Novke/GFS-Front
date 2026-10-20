@@ -310,7 +310,7 @@ export class MockApi {
   /** Jedini kod koji mok prihvata pri prijavi studenta (kao da je stigao mejlom). */
   static readonly KOD_NALOGA = '246810';
   /**
-   * Kolačić `gfs_lti_par` (ulazak iz Moodle-a bez veze, 30 min): `POST public/lti/povezi` ga troši; bez njega 410 kao
+   * Kolačić `__Host-gfs_lti_par` (ulazak iz Moodle-a bez veze, 30 min): `POST public/lti/povezi` ga troši; bez njega 410 kao
    * server. Podrazumevano postoji (stranica `/nalog/moodle` posle preusmerenja).
    */
   moodlePar = true;
@@ -1323,10 +1323,10 @@ export class MockApi {
       return ok({ odjavljeno });
     });
     post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
-    // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `gfs_lti_par`; ne traži sesiju studenta
+    // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));
-    // povezivanje Moodle naloga (javno, STUDENT + `gfs_lti_par`, spec prijave 8.3): 401 bez studenta, 410 bez para, pa veza
+    // povezivanje Moodle naloga (javno, STUDENT + `__Host-gfs_lti_par`, spec prijave 8.3): 401 bez studenta, 410 bez para, pa veza
     post('public/lti/povezi', () => {
       if (!this.studentPrijavljen) {
         return bezSesijeStudenta();

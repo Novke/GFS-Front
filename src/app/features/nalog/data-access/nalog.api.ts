@@ -46,7 +46,7 @@ export class NalogApi {
   }
 
   /**
-   * Veza Moodle naloga sa prijavljenim studentom (kolačići `gfs_student` i `gfs_lti_par` iz ulaska iz Moodle-a): 204; 409
+   * Veza Moodle naloga sa prijavljenim studentom (kolačići `gfs_student` i `__Host-gfs_lti_par` iz ulaska iz Moodle-a): 204; 409
    * "Ovaj Moodle nalog je već povezan sa drugim studentom. ..."; 410 kad veze iz Moodle-a nema, istekla je ili je iskorišćena;
    * 401 bez sesije studenta.
    */
@@ -55,7 +55,7 @@ export class NalogApi {
   }
 
   /**
-   * Ime Moodle naloga iz ulaska (kolačić `gfs_lti_par`), da student na zajedničkom računaru vidi koji nalog povezuje. Samo čita,
+   * Ime Moodle naloga iz ulaska (kolačić `__Host-gfs_lti_par`), da student na zajedničkom računaru vidi koji nalog povezuje. Samo čita,
    * ne troši vezu. 410 kad veze iz Moodle-a nema, istekla je ili je iskorišćena; 404 dok server ne zna za tačku (stari backend).
    */
   povezivanje(): Observable<PovezivanjeOdgovor> {
