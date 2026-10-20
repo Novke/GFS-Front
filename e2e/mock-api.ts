@@ -3,8 +3,10 @@ import { join } from 'node:path';
 
 import type { Page, Request, Route } from '@playwright/test';
 
-import type { BankaPretragaStavka, GrupaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd } from '../src/app/features/banka/data-access/banka.models';
-import { type BankaGrupa, type BankaPodaci, type BankaVarijanta, MockBanka } from './mock-banka';
+import type {
+  BankaPretragaStavka, GrupaCmd, IskljucenaTemaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd,
+} from '../src/app/features/banka/data-access/banka.models';
+import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 
 /*
@@ -103,7 +105,7 @@ export interface Podaci extends BankaPodaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
-  // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
+  // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`, `iskljuceneTeme`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
 /** PNG 1 x 1, providan. */
@@ -117,7 +119,9 @@ export function ucitajPodatke(): Podaci {
   const predmeti = ucitaj<{ predmeti: Predmet[]; tipoviTesta: TipTesta[] }>('predmeti.json');
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
-  const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
+  const banka = ucitaj<{
+    grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null>; iskljuceneTeme: BankaTema[];
+  }>('banka.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -138,6 +142,7 @@ export function ucitajPodatke(): Podaci {
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
+    iskljuceneTeme: banka.iskljuceneTeme,
   };
 }
 
@@ -169,7 +174,10 @@ interface Ruta {
   rukovalac: Rukovalac;
 }
 
-/** `predavanja/:id/prisustvo/:sid` -> regex; `:param` je samo ceo broj, `:token` bilo koji segment. */
+/**
+ * `predavanja/:id/prisustvo/:sid` -> regex; `:param` je samo ceo broj, `:token` i `:serija` bilo koji segment (kako stigne,
+ * URL-enkodovan).
+ */
 function napraviRutu(metod: string, sablon: string, rukovalac: Rukovalac): Ruta {
   const imena: string[] = [];
   const izraz = sablon
@@ -179,7 +187,7 @@ function napraviRutu(metod: string, sablon: string, rukovalac: Rukovalac): Ruta 
         return deo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }
       imena.push(deo.slice(1));
-      return deo === ':token' ? '([^/]+)' : '(\\d+)';
+      return deo === ':token' || deo === ':serija' ? '([^/]+)' : '(\\d+)';
     })
     .join('/');
   return { metod, sablon: new RegExp(`^${izraz}$`), imena, rukovalac };
@@ -1006,6 +1014,12 @@ export class MockApi {
       const r = b.pretraga(z.query);
       return r.status ? r : strana(r.telo as BankaPretragaStavka[], z.query);
     });
+    // Klodove serije (brojači i odbacivanje nacrta) i isključene teme predmeta
+    get('banka/serije', z => b.serije(z.query.get('predmetId')));
+    post('banka/serije/:serija/odbaci', (_z, p) => b.odbaciSeriju(decodeURIComponent(p['serija'])));
+    get('predmeti/:id/iskljucene-teme', (_z, p) => b.iskljuceneTeme(Number(p['id'])));
+    post('predmeti/:id/iskljucene-teme', (z, p) => b.iskljuciTemu(Number(p['id']), z.telo as IskljucenaTemaCmd | null));
+    del('iskljucene-teme/:id', (_z, p) => b.ukljuciTemu(Number(p['id'])));
 
     // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec
     const aktivnoZaKod = (kod: string) => d.izvodjenja.find(i => i.kod === kod && i.status === 'AKTIVNO');

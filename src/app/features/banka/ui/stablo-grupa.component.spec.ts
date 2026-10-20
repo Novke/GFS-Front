@@ -12,7 +12,7 @@ import { StabloGrupaComponent } from './stablo-grupa.component';
 function cvor(id: number, naziv: string, deca: GrupaCvor[] = [], izmena: Partial<GrupaCvor> = {}): GrupaCvor {
   return {
     id, naziv, rb: id, tezina: deca.length ? null : 2, list: deca.length === 0, brojVarijanti: 0, brojAktivnih: 0, brojNacrta: 0,
-    brojGresaka: 0, deca, ...izmena,
+    brojGresaka: 0, deca, izvor: 'RUCNO', brojClaudeNacrta: 0, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 
@@ -70,6 +70,32 @@ describe('StabloGrupaComponent', () => {
     // bedževi su samo vizuelni (broj je u imenu stavke); nula se ne prikazuje
     expect(stavka(3).querySelectorAll('.bk-bedz')).toHaveLength(1);
     expect(stavka(2).querySelector('.bk-bedz-greske')!.textContent!.trim()).toBe('1');
+  });
+
+  it('Klodovi nacrti: bedž "Klod: N" (i broj u imenu stavke); isključena grupa i njeno podstablo su prigušeni, sa oznakom "Isključeno"', async () => {
+    const { h, f, stavka } = await napravi();
+    h.cvorovi.set([
+      cvor(1, 'Konverzije brojeva', [
+        cvor(2, '8 → 2 (Klod)', [], { izvor: 'CLAUDE', brojVarijanti: 4, brojAktivnih: 1, brojNacrta: 3, brojClaudeNacrta: 2 }),
+        cvor(3, 'Razlomljeni', [cvor(5, 'Decimalni', [], { iskljucena: true, iskljucenjeId: 7 })], { iskljucena: true, iskljucenjeId: 7 }),
+      ], { brojVarijanti: 4, brojAktivnih: 1, brojNacrta: 3, brojClaudeNacrta: 2 }),
+    ]);
+    await f.whenStable();
+    const red = (id: number) => stavka(id).querySelector(':scope > .bk-red')!;
+
+    expect(red(2).querySelector('.bk-bedz-claude')!.textContent!.trim()).toBe('Klod: 2');
+    expect(red(1).querySelector('.bk-bedz-claude')!.textContent!.trim()).toBe('Klod: 2');
+    expect(red(3).querySelector('.bk-bedz-claude')).toBeNull();
+    expect(stavka(2).getAttribute('aria-label')).toBe('8 → 2 (Klod), 1 aktivna, 3 nacrta, 2 Klodova nacrta');
+
+    expect(red(3).classList).toContain('bk-iskljucen');
+    expect(red(5).classList).toContain('bk-iskljucen');
+    expect(red(1).classList).not.toContain('bk-iskljucen');
+    expect(red(2).classList).not.toContain('bk-iskljucen');
+    expect(red(3).querySelector('.bk-bedz-iskljuceno')!.textContent!.trim()).toBe('Isključeno');
+    expect(red(2).querySelector('.bk-bedz-iskljuceno')).toBeNull();
+    expect(stavka(3).getAttribute('aria-label')).toBe('Razlomljeni, isključeno');
+    expect(stavka(5).getAttribute('aria-label')).toBe('Decimalni, isključeno');
   });
 
   it('aria-expanded samo za čvor sa decom, aria-selected za izabranu, jedna stavka u Tab redu', async () => {
