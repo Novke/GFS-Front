@@ -88,7 +88,7 @@ const nastavnickeRute: Routes = [
     children: PREZENTACIJE_RUTE,
   },
   // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe, editor varijante i pregled nacrta. Rute dece su lenje
-  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 785 000 B, `e2e/lenji-editor.spec.ts`).
+  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 790 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'banka',
     title: 'Banka zadataka',

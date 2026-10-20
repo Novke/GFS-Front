@@ -64,6 +64,9 @@ describe('rute i sesija nastavnika', () => {
     ['/predavanje/5', 'predavanje/5'],
     ['/podesavanja/moodle', 'podesavanja/moodle'],
     ['/podesavanja', 'podesavanja'],
+    ['/banka?predmet=1', 'banka?predmet=1'],
+    ['/banka/pregled?serija=uvoz-kol1-2024', 'banka/pregled?serija=uvoz-kol1-2024'],
+    ['/banka/varijante/16', 'banka/varijante/16'],
   ])('nastavnička ruta %s bez sesije -> /prijava (nazad=%s), bez učitavanja ekrana', async (url, nazad) => {
     await idiBezSesije(url);
     const stablo = router.parseUrl(router.url);
