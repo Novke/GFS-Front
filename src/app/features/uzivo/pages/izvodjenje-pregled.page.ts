@@ -9,10 +9,11 @@ import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { opisVeze } from '../data-access/izvodjenje-pravila';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { meriFormule } from '../ui/mera-formule';
-import { IzvodjenjeRezultati, RezultatPitanja, medijUrl } from '../data-access/uzivo.models';
+import { IzvodjenjeRezultati, PregledZadatka, RezultatPitanja, UcesnikZadatka, medijUrl } from '../data-access/uzivo.models';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { MERA_FORMULE, TekstFormuleComponent } from '../ui/tekst-formule.component';
+import { ZadatakRezultatComponent } from '../ui/zadatak-rezultat.component';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
@@ -30,12 +31,13 @@ export interface OznakaRunde {
 
 /**
  * Runde istog slajda (nastavnik je pitanje ponovio) dobijaju "1. runda", "2. runda"; slajd sa jednom rundom nema oznaku
- * (`ukupno` = 1). Slajd je isti po `slajdId`, a kad slajda više nema, po `pitanjeId` iz snimka. Niz je poravnat sa ulazom.
+ * (`ukupno` = 1). Slajd je isti po `slajdId`, a kad slajda više nema, po `slajdId` iz snimka (pitanja ili zadatka; sva tri su
+ * id-jevi slajdova, nikad id grupe), pa po `pitanjeId` iz snimka pitanja. Niz je poravnat sa ulazom.
  */
 export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] {
-  // Zadatak runda nema pitanje u snimku: broji se sama za sebe
   const kljuc = (p: RezultatPitanja) =>
-    (p.slajdId ?? p.pitanje?.slajdId) ?? (p.pitanje ? `pitanje-${p.pitanje.pitanjeId}` : `runda-${p.rundaId}`);
+    p.slajdId ?? p.pitanje?.slajdId ?? p.zadatak?.slajdId
+      ?? (p.pitanje ? `pitanje-${p.pitanje.pitanjeId}` : `runda-${p.rundaId}`);
   const ukupno = new Map<number | string, number>();
   for (const p of pitanja) {
     ukupno.set(kljuc(p), (ukupno.get(kljuc(p)) ?? 0) + 1);
@@ -50,14 +52,34 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
   });
 }
 
-/** Pregled sačuvanog izvođenja posle časa (spec 6.2): pitanja po redu otvaranja sa rezultatima i rang-lista. */
+/** Putanja grupe zadatka od korena: "Konverzije › 2 → 10". */
+export function putanjaTekst(z: Pick<PregledZadatka, 'putanja' | 'grupaNaziv'>): string {
+  return z.putanja.length ? z.putanja.map(g => g.naziv).join(' › ') : z.grupaNaziv;
+}
+
+/** Ishod učesnika po polju ("a) ✓ · b) ✗"), oznake iz šeme njegove varijante u rezultatu; bez odgovora "—". */
+export function ishodPoPolju(z: PregledZadatka, u: UcesnikZadatka): string {
+  if (!u.polja) return '—';
+  const polja = z.rezultat.varijante.find(v => v.varijantaId === u.varijantaId)?.polja ?? [];
+  return Object.entries(u.polja)
+    .map(([kljuc, tacno]) => `${polja.find(p => p.kljuc === kljuc)?.oznaka ?? kljuc} ${tacno ? '✓' : '✗'}`)
+    .join(' · ');
+}
+
+/** Ukupno za učesnika: "tačno", "netačno", "bez odgovora" (rad na papiru i neodgovoreni). */
+export function ishodUkupno(u: UcesnikZadatka): string {
+  if (!u.odgovorio) return 'bez odgovora';
+  return u.tacno === true ? 'tačno' : u.tacno === false ? 'netačno' : '—';
+}
+
+/** Pregled sačuvanog izvođenja posle časa (spec 6.2): pitanja i zadaci po redu otvaranja sa rezultatima i rang-lista. */
 @Component({
   selector: 'app-izvodjenje-pregled',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
-    TekstFormuleComponent],
+    TekstFormuleComponent, ZadatakRezultatComponent],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -96,7 +118,7 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
           @for (k of kartice(); track k.p.rundaId; let i = $index) {
             <section class="rezim-dan uz-dan uz-pr-karta" [attr.aria-labelledby]="'pitanje-' + k.p.rundaId">
               <header class="uz-pr-karta-zaglavlje">
-                <h2 [id]="'pitanje-' + k.p.rundaId">Pitanje {{ i + 1 }}</h2>
+                <h2 [id]="'pitanje-' + k.p.rundaId">{{ k.p.zadatak ? 'Zadatak' : 'Pitanje' }} {{ i + 1 }}</h2>
                 @if (k.p.rbSlajda) {
                   <span class="uz-ed-napomena">slajd {{ k.p.rbSlajda }}</span>
                 }
@@ -112,6 +134,32 @@ export function oznakeRundi(pitanja: readonly RezultatPitanja[]): OznakaRunde[] 
                   }
                   @if (k.p.rezultat; as rezultat) {
                     <app-rezultat-prikaz [rezultat]="rezultat" [tekstPrikaz]="pitanje.tekstPrikaz" [jedinica]="pitanje.jedinica" />
+                  }
+                } @else if (k.p.zadatak; as z) {
+                  <p class="uz-pr-tekst">{{ putanja(z) }}</p>
+                  <app-zadatak-rezultat [rezultat]="z.rezultat" />
+                  @if (z.ucesnici.length) {
+                    <table class="uz-ed-tabela uz-pr-ucesnici">
+                      <caption class="uz-ed-napomena">Učesnici i njihove varijante</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Učesnik</th>
+                          <th scope="col">Varijanta</th>
+                          <th scope="col">Po polju</th>
+                          <th scope="col">Ukupno</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (u of z.ucesnici; track u.ucesnikId) {
+                          <tr>
+                            <td>{{ u.ime }}</td>
+                            <td>{{ u.varijantaNaziv ?? '—' }}</td>
+                            <td>{{ poPolju(z, u) }}</td>
+                            <td>{{ ukupnoUcesnika(u) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
                   }
                 }
               </div>
@@ -152,6 +200,9 @@ export class IzvodjenjePregledPage {
 
   protected readonly url = medijUrl;
   protected readonly tekst = procenatTacnihTekst;
+  protected readonly putanja = putanjaTekst;
+  protected readonly poPolju = ishodPoPolju;
+  protected readonly ukupnoUcesnika = ishodUkupno;
   protected readonly veza = computed(() => {
     const r = this.podaci();
     return r ? opisVeze(r.izvodjenje) : '';
