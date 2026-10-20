@@ -2,7 +2,9 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
-import { JavnoPitanje, JavnoStanje, LicnoStanje, TelefonPrikaz } from '../data-access/uzivo.models';
+import {
+  JavniZadatak, JavnoPitanje, JavnoStanje, LicniZadatak, LicnoStanje, TelefonPrikaz,
+} from '../data-access/uzivo.models';
 import { ServerskiSat } from '../data-access/sat';
 import { EkranStudenta, FazaStudenta, StudentStore, TacanOdgovor, Veza } from './student.store';
 import { UzivoStudentPage } from './uzivo-student.page';
@@ -39,7 +41,9 @@ function lazniStore() {
     ukupnoMs: signal<number | null>(null), nacrt: signal(null), ishod: signal(null), tacan: signal<TacanOdgovor | null>(null),
     greska: signal<string | null>(null), ucesnik: signal(null), info: signal(null), kod: signal('123456'),
     veza: signal<Veza>('povezan'), salje: signal(false),
+    runda: signal<JavnoPitanje | JavniZadatak | null>(null), zadatak: signal<LicniZadatak | null>(null), nacrtZadatka: signal(null),
     otvori: vi.fn(), prijavi: vi.fn(), odgovori: vi.fn(), sacuvajNacrt: vi.fn(), ponovoUdji: vi.fn(),
+    odgovoriZadatak: vi.fn(), sacuvajNacrtZadatka: vi.fn(),
   };
 }
 
@@ -57,7 +61,7 @@ describe('UzivoStudentPage: formule u pitanju i odgovorima', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     lazni = lazniStore();
     TestBed.configureTestingModule({
       imports: [UzivoStudentPage],
@@ -67,6 +71,8 @@ describe('UzivoStudentPage: formule u pitanju i odgovorima', () => {
       ],
     });
     TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    // stranica ima `@defer` (lenja komponenta zadatka): preklopljena komponenta se prevodi asinhrono
+    await TestBed.compileComponents();
   });
 
   it('režim PITANJE: tekst pitanja je app-tekst-formule (Markdown) sa mestom formule; kod ide u otvori', () => {
@@ -120,5 +126,94 @@ describe('UzivoStudentPage: formule u pitanju i odgovorima', () => {
     expect(panel.querySelector('app-tekst-formule.uz-st-md span.uz-formula')?.textContent).toBe('$1011_2$');
     const opcije = Array.from(panel.querySelectorAll('.uz-st-detalji-opcije li app-tekst-formule')) as HTMLElement[];
     expect(opcije.map(o => o.querySelector('span.uz-formula')?.textContent)).toEqual(['$11$', '$13$']);
+  });
+});
+
+describe('UzivoStudentPage: Zadatak slajd', () => {
+  let lazni: ReturnType<typeof lazniStore>;
+  let fixture: ComponentFixture<UzivoStudentPage>;
+
+  const jz: JavniZadatak = {
+    faza: 'OTVORENO', rundaId: 55, rokMs: null, preostaloMs: 60_000, brojVarijanti: 2, grupaNaziv: '2 → 10', resenjePrikazano: false,
+  };
+  const lz: LicniZadatak = {
+    rundaId: 55, varijantaId: 12, svgId: 'svg-a', faza: 'OTVORENO', primljen: false, ishod: null, tacno: null, tacneVrednosti: null,
+    resenjeSvgId: null,
+    polja: [{
+      kljuc: 'a', oznaka: 'a', tip: 'BROJ', odstupanje: null, odstupanjeTip: null, jedinica: null, zanemariVelicinu: null,
+      zanemariRazmake: null, opcije: null,
+    }],
+  };
+
+  async function napravi(ekran: EkranStudenta, z: LicniZadatak | null = lz, javni: JavniZadatak = jz): Promise<HTMLElement> {
+    lazni.javno.set({
+      izvodjenjeId: 7, verzija: 4, serverVremeMs: 0, status: 'AKTIVNO', naziv: 'Brojni sistemi', kod: '123456', prikaz: 'SLAJD',
+      slajdTip: 'ZADATAK', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
+      brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null, zadatak: javni,
+    });
+    lazni.ekran.set(ekran);
+    lazni.runda.set(javni);
+    lazni.zadatak.set(z);
+    fixture = TestBed.createComponent(UzivoStudentPage);
+    fixture.detectChanges();
+    // komponenta zadatka je lenja (`@defer`): sačeka se njen chunk
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  beforeEach(async () => {
+    lazni = lazniStore();
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ kod: '123456' })) } },
+      ],
+    });
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    // stranica ima `@defer` (lenja komponenta zadatka): preklopljena komponenta se prevodi asinhrono
+    await TestBed.compileComponents();
+  });
+
+  it('CEKA: "Zadatak stiže…" bez slike', async () => {
+    const el = await napravi('stize', null, { ...jz, faza: 'CEKA', rundaId: null });
+    expect(el.textContent).toContain('Zadatak stiže…');
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('app-zadatak-unos')).toBeNull();
+  });
+
+  it('otvoreno: svoja slika, tajmer i polja; "Pošalji" ide u odgovoriZadatak', async () => {
+    const el = await napravi('zadatak');
+    expect(el.querySelector('img[data-zadatak-svg]')?.getAttribute('src')).toBe('api/public/mediji/svg-a');
+    expect(el.querySelector('app-tajmer')).not.toBeNull();
+    const polje = el.querySelector<HTMLInputElement>('input[data-polje="a"]')!;
+    expect(polje.disabled).toBe(false);
+    polje.value = '45';
+    polje.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(lazni.sacuvajNacrtZadatka).toHaveBeenCalledWith({ rundaId: 55, polja: { a: '45' } });
+    Array.from(el.querySelectorAll('button')).find(b => b.textContent!.trim() === 'Pošalji')!.click();
+    expect(lazni.odgovoriZadatak).toHaveBeenCalledWith({ a: '45' });
+  });
+
+  it('poslato: "Odgovor primljen ✓", slika ostaje, polja zaključana', async () => {
+    const el = await napravi('zadatakPrimljen');
+    expect(el.textContent).toContain('Odgovor primljen ✓');
+    expect(el.querySelector('img[data-zadatak-svg]')).not.toBeNull();
+    expect(el.querySelector<HTMLInputElement>('input[data-polje="a"]')!.disabled).toBe(true);
+  });
+
+  it('ishod: naslov "Tačno!" ili "Nisi odgovorio"; rad na papiru bez naslova ishoda', async () => {
+    const zatvoreno = { ...jz, faza: 'ZATVORENO' as const };
+    let el = await napravi('zadatakIshod', { ...lz, faza: 'ZATVORENO', primljen: true, tacno: true, ishod: { a: true } }, zatvoreno);
+    expect(el.querySelector('.uz-st-zd-naslov')?.textContent?.trim()).toBe('Tačno!');
+    fixture.destroy();
+    el = await napravi('zadatakIshod', { ...lz, faza: 'ZATVORENO' }, zatvoreno);
+    expect(el.querySelector('.uz-st-zd-naslov')?.textContent?.trim()).toBe('Nisi odgovorio');
+    fixture.destroy();
+    el = await napravi('zadatakIshod', { ...lz, faza: 'ZATVORENO', polja: [] }, zatvoreno);
+    expect(el.querySelector('.uz-st-zd-naslov')).toBeNull();
+    expect(el.textContent).toContain('Reši na papiru.');
   });
 });

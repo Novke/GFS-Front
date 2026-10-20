@@ -80,7 +80,8 @@ interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
   telefonPrikaz: string; detaljiDozvoljeni: boolean; slajdovi: UzivoSlajd[]; [ostalo: string]: unknown;
 }
-interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
+/** `prijavaObavezna`: bodovan run (bez prijavljenog studenta prijava je 403); fikstura bez polja = nebodovan. */
+interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO'; prijavaObavezna?: boolean }
 /** `SlajdCmd` (telo `POST prezentacije/:id/slajdovi` i `PUT slajdovi/:id`); pitanje samo sa poljima koja mok čita. */
 interface SlajdCmd {
   tip: string; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean;
@@ -115,6 +116,8 @@ export interface Podaci extends BankaPodaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
+  /** "Ime Prezime" prijavljenog studenta (kao kolačić `gfs_student`); `null` = student nije prijavljen. */
+  prijavljenStudent: string | null;
   // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`, `iskljuceneTeme`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
@@ -149,6 +152,7 @@ export function ucitajPodatke(): Podaci {
     prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
       .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],
+    prijavljenStudent: null,
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
@@ -1051,11 +1055,15 @@ export class MockApi {
     post('predmeti/:id/iskljucene-teme', (z, p) => b.iskljuciTemu(Number(p['id']), z.telo as IskljucenaTemaCmd | null));
     del('iskljucene-teme/:id', (_z, p) => b.ukljuciTemu(Number(p['id'])));
 
-    // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec
+    // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec.
+    // Bodovan run (`prijavaObavezna`) bez prijavljenog studenta: prijava 403; prijavljen student ulazi pod svojim imenom
+    // (ukucano se ignoriše), kao `IdentitetStudenta` na serveru.
     const aktivnoZaKod = (kod: string) => d.izvodjenja.find(i => i.kod === kod && i.status === 'AKTIVNO');
     get('public/uzivo/:token', (_z, p) => {
       const i = aktivnoZaKod(p['token']);
-      return i ? ok({ naziv: i.naziv }) : greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
+      return i
+        ? ok({ naziv: i.naziv, prijavaObavezna: !!i.prijavaObavezna, prijavljenStudent: d.prijavljenStudent !== null })
+        : greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
     });
     get('public/uzivo/:token/ja', (_z, p) => {
       const i = aktivnoZaKod(p['token']);
@@ -1067,7 +1075,11 @@ export class MockApi {
       if (!i) {
         return greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
       }
-      const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime: (z.telo as { ime: string }).ime, izvodjenjeId: i.id };
+      if (i.prijavaObavezna && d.prijavljenStudent === null) {
+        return greska(403, 'Potrebna je prijava studenta.');
+      }
+      const ime = d.prijavljenStudent ?? (z.telo as { ime: string }).ime;
+      const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime, izvodjenjeId: i.id };
       d.ucesnici.push(ucesnik);
       return { status: 201, telo: ucesnik };
     });

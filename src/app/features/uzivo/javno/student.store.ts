@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { Subscription } from 'rxjs';
@@ -7,11 +8,12 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import { ServerskiSat } from '../data-access/sat';
 import { STOMP_FABRIKA } from '../data-access/stomp';
 import {
-  JavnoIzvodjenjeInfo, JavnoPitanje, JavnoStanje, LicnoStanje, OdgovorCmd, PocetnoStanje, UcesnikInfo,
+  JavniZadatak, JavnoIzvodjenjeInfo, JavnoPitanje, JavnoStanje, LicnoStanje, OdgovorCmd, PocetnoStanje, UcesnikInfo,
 } from '../data-access/uzivo.models';
 import { decimalni } from '../ui/format';
 import { JavnoApi } from './javno.api';
 import type { NacrtOdgovora } from './odgovor-unos.component';
+import type { NacrtZadatka } from './zadatak-unos.component';
 
 export type FazaStudenta = 'kod' | 'ime' | 'uzivo' | 'kraj' | 'izbacen' | 'greska';
 export type Veza = 'povezivanje' | 'povezan' | 'prekinut';
@@ -33,14 +35,18 @@ export interface StudentState {
   salje: boolean;
   /** Započet odgovor trenutne runde (izbor, ukucan broj ili tekst), da preživi zaključavanje i otključavanje unosa. */
   nacrt: NacrtOdgovora | null;
+  /** Isto za polja Zadatak runde. */
+  nacrtZadatka: NacrtZadatka | null;
 }
 
 /**
  * Šta telefon prikazuje u fazi `uzivo` (i `kraj`): izvedeno iz javnog i ličnog stanja. Rang-lista se crta preko
- * ovoga u stranici (osim dok student unosi odgovor).
+ * ovoga u stranici (osim dok student unosi odgovor). Na Zadatak slajdu: `stize` (CEKA ili još bez svoje varijante),
+ * `zadatak` (unos), `zadatakPrimljen` (poslato ili primljeno) i `zadatakIshod` (zatvoreno, ili server više ne prima odgovor).
  */
 export type EkranStudenta =
-  | 'povezivanje' | 'cekamo' | 'tabla' | 'stize' | 'unos' | 'primljen' | 'isteklo' | 'tacan' | 'kraj';
+  | 'povezivanje' | 'cekamo' | 'tabla' | 'stize' | 'unos' | 'primljen' | 'isteklo' | 'tacan' | 'kraj'
+  | 'zadatak' | 'zadatakPrimljen' | 'zadatakIshod';
 
 export interface TacanOdgovor {
   /** Tačne opcije: `indeks` je mesto u listi opcija (oblik i slovo), tekst kad je poznat. */
@@ -69,14 +75,16 @@ const ZAKLJUCAVAJU = new Set(['Pitanje je zatvoreno.', 'Vreme je isteklo.']);
 const VEC_ODGOVORIO = 'Već si odgovorio.';
 const NIJE_PRIJAVLJEN = 'Nisi prijavljen na ovo izvođenje.';
 const ZAVRSENO = 'Izvođenje je završeno.';
+/** Prijava studenta (ruta agenta prijave): bodovan run bez prijavljenog studenta ide tamo, pa se vraća na `uzivo/<kod>`. */
+const NALOG = 'nalog?nazad=uzivo/';
 
 const POCETNO: StudentState = {
   faza: 'kod', kod: null, info: null, ucesnik: null, javno: null, licno: null, veza: 'povezivanje',
-  poslato: null, zakljucano: null, greska: null, salje: false, nacrt: null,
+  poslato: null, zakljucano: null, greska: null, salje: false, nacrt: null, nacrtZadatka: null,
 };
 
 const BEZ_UCESNIKA: Partial<StudentState> = {
-  ucesnik: null, javno: null, licno: null, veza: 'povezivanje', poslato: null, zakljucano: null, nacrt: null,
+  ucesnik: null, javno: null, licno: null, veza: 'povezivanje', poslato: null, zakljucano: null, nacrt: null, nacrtZadatka: null,
 };
 
 /** Ime kao na serveru: kontrolni znaci u razmak, razmaci skraćeni. */
@@ -89,9 +97,15 @@ export function trenutnoPitanje(javno: JavnoStanje | null): JavnoPitanje | null 
   return javno?.prikaz === 'SLAJD' && javno.slajdTip === 'PITANJE' ? javno.pitanje : null;
 }
 
-/** Da li je server primio odgovor ovog učesnika u rundi `rundaId`. */
+/** Zadatak trenutnog slajda iz javnog snimka (null van Zadatak slajda): faza, runda i rok, bez sadržaja. */
+export function trenutniZadatak(javno: JavnoStanje | null): JavniZadatak | null {
+  return javno?.prikaz === 'SLAJD' && javno.slajdTip === 'ZADATAK' ? javno.zadatak ?? null : null;
+}
+
+/** Da li je server primio odgovor ovog učesnika u rundi `rundaId` (pitanje ili svoj zadatak). */
 export function primljenU(licno: LicnoStanje | null, rundaId: number | null): boolean {
-  return rundaId !== null && licno?.odgovor?.rundaId === rundaId && licno.odgovor.primljen;
+  return rundaId !== null && ((licno?.odgovor?.rundaId === rundaId && licno.odgovor.primljen)
+    || (licno?.zadatak?.rundaId === rundaId && licno.zadatak.primljen));
 }
 
 function tacanPrikazan(p: JavnoPitanje, licno: LicnoStanje | null): boolean {
@@ -104,6 +118,14 @@ export function ekranStudenta(s: Pick<StudentState, 'faza' | 'javno' | 'licno' |
   if (s.faza === 'kraj' || j?.status === 'ZAVRSENO' || j?.prikaz === 'KRAJ') return 'kraj';
   if (!j) return 'povezivanje';
   if (j.prikaz === 'PRIJAVA') return 'cekamo';
+  if (j.slajdTip === 'ZADATAK') {
+    // svoja varijanta mora biti iz iste runde (posle PONOVI lično stanje stare runde još može da stoji)
+    const z = j.zadatak;
+    if (!z || z.faza === 'CEKA' || s.licno?.zadatak?.rundaId !== z.rundaId) return 'stize';
+    if (z.faza === 'ZATVORENO') return 'zadatakIshod';
+    if (primljenU(s.licno, z.rundaId) || s.poslato === z.rundaId) return 'zadatakPrimljen';
+    return s.zakljucano === z.rundaId ? 'zadatakIshod' : 'zadatak';
+  }
   const p = trenutnoPitanje(j);
   if (!p) return 'tabla';
   if (p.faza === 'CEKA' || p.rundaId === null) return 'stize';
@@ -135,18 +157,23 @@ export function tacanOdgovor(p: JavnoPitanje): TacanOdgovor | null {
   return null;
 }
 
-const je404 = (e: unknown) => e instanceof HttpErrorResponse && e.status === 404;
+const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : 0);
+const je404 = (e: unknown) => status(e) === 404;
 
 /**
  * Stanje studenta na javnim stranicama (`uzivo/:kod`; jedna instanca po stranici, `providers: [StudentStore]`).
  * Sme da zove samo `api/public/uzivo/*` (kroz {@link JavnoApi}) i `api/public/ws`.
  *
- * - `otvori(kod)`: `info` (naziv), pa `ja` -> kolačić važi: STOMP i faza `uzivo`; 404: faza `ime`.
+ * - `otvori(kod)`: `info` (naziv), pa `ja` -> kolačić važi: STOMP i faza `uzivo`; 404: faza `ime`. Bodovan run
+ *   (`prijavaObavezna`) bez prijavljenog studenta odmah ide na `nalog?nazad=uzivo/<kod>` (i na 403 prijave); prijavljen
+ *   student bez učesnika ulazi bez forme imena (`prijava(kod, '')`: server uzima ime iz baze).
  * - STOMP: `/topic/izvodjenja/{id}/javno`, `/user/queue/licno`, `/user/queue/greske` i `/app/izvodjenja/{id}/pocetno`
  *   (snimak odmah, i posle svakog ponovnog povezivanja, jer `watch` ponovo pretplaćuje; lično pre javnog). Starija
  *   verzija se odbacuje. Posle `ZAVRSENO` veza ostaje još `KRAJ_ZADRZI_MS` za konačno lično stanje.
  * - `odgovori`: `poslato` odmah (dugmad zaključana), poruka kroz STOMP (RxStomp je čuva dok veza ne proradi). Potvrda je
- *   `licno.odgovor.primljen` za tu rundu; ako je nema `POTVRDA_MS` dok je veza otvorena, unos se otključava.
+ *   `licno.odgovor.primljen` (zadatak: `licno.zadatak.primljen`) za tu rundu; ako je nema `POTVRDA_MS` dok je veza
+ *   otvorena, unos se otključava. `odgovoriZadatak(polja)` šalje `{rundaId, polja}` istim tokom (bez `varijantaId`:
+ *   server uzima dodelu).
  * - Rukovanje odbijeno (zatvoreno pre otvaranja): `GET ja`; 404 -> kolačić više ne važi (izbačen, istekao, kraj):
  *   `GET info` -> unos imena, ili kraj sa poslednjim mestom kad je izvođenje završeno (inače greška).
  */
@@ -159,14 +186,19 @@ export const StudentStore = signalStore(
   })),
   withComputed(store => {
     const pitanje = computed(() => trenutnoPitanje(store.javno()));
+    /** Trenutna runda (pitanje ili zadatak): faza, `rundaId` i rok. */
+    const runda = computed<JavnoPitanje | JavniZadatak | null>(() => pitanje() ?? trenutniZadatak(store.javno()));
     const ekran = computed(() => ekranStudenta({
       faza: store.faza(), javno: store.javno(), licno: store.licno(), poslato: store.poslato(), zakljucano: store.zakljucano(),
     }));
     return {
       sat: computed(() => store._sat),
       pitanje,
+      runda,
+      /** Svoja varijanta (lično stanje); stranica je crta samo na ekranima zadatka, gde je iz trenutne runde. */
+      zadatak: computed(() => store.licno()?.zadatak ?? null),
       ekran,
-      unosZakljucan: computed(() => ekran() !== 'unos'),
+      unosZakljucan: computed(() => ekran() !== 'unos' && ekran() !== 'zadatak'),
       primljen: computed(() => primljenU(store.licno(), pitanje()?.rundaId ?? null)),
       tacan: computed(() => {
         const p = pitanje();
@@ -181,7 +213,7 @@ export const StudentStore = signalStore(
         return { odgovorio: true, tacno: o.tacno, poeni: o.poeni };
       }),
       ukupnoMs: computed(() => {
-        const p = pitanje();
+        const p = runda();
         if (!p || p.rundaId === null || p.faza !== 'OTVORENO') return null;
         const preostalo = p.preostaloMs ?? (p.rokMs !== null ? store._sat.preostalo(p.rokMs) : null);
         if (preostalo === null) return null;
@@ -193,6 +225,7 @@ export const StudentStore = signalStore(
   withMethods(store => {
     const api = inject(JavnoApi);
     const fabrika = inject(STOMP_FABRIKA);
+    const router = inject(Router);
 
     let stomp: RxStomp | null = null;
     let veza = new Subscription();
@@ -263,7 +296,7 @@ export const StudentStore = signalStore(
         if (cekaPotvrdu !== r || store.poslato() !== r || primljenU(store.licno(), r)) return;
         cekaPotvrdu = null;
         patchState(store, { poslato: null });
-        if (store.pitanje()?.rundaId === r && store.pitanje()?.faza === 'OTVORENO') {
+        if (store.runda()?.rundaId === r && store.runda()?.faza === 'OTVORENO') {
           postaviGresku(PORUKA_NIJE_STIGAO, GRESKA_TRAJANJE_MS);
         }
       }, POTVRDA_MS);
@@ -301,14 +334,14 @@ export const StudentStore = signalStore(
     function greskaServera(poruka: string): void {
       if (store.faza() !== 'uzivo') return;
       if (poruka === NIJE_PRIJAVLJEN) {
-        naIme(poruka);
+        bezUcesnika(poruka);
         return;
       }
       if (poruka === ZAVRSENO) {
         zavrsi('kraj');
         return;
       }
-      const runda = store.poslato() ?? store.pitanje()?.rundaId ?? null;
+      const runda = store.poslato() ?? store.runda()?.rundaId ?? null;
       if (poruka === VEC_ODGOVORIO) {
         // server već ima odgovor za ovu rundu: ostaje zaključano
         potvrdi();
@@ -351,7 +384,7 @@ export const StudentStore = signalStore(
             next: info => {
               if (store.faza() !== 'uzivo') return;
               patchState(store, { info });
-              naIme();
+              bezUcesnika();
             },
             error: e2 => {
               if (store.faza() !== 'uzivo') return;
@@ -417,13 +450,66 @@ export const StudentStore = signalStore(
       z.add(api.info(kod).subscribe({
         next: info => {
           patchState(store, { info });
+          if (info.prijavaObavezna && !info.prijavljenStudent) {
+            void router.navigateByUrl(NALOG + kod);
+            return;
+          }
           z.add(api.ja(kod).subscribe({
             next: udji,
-            error: e => (je404(e) ? naIme() : fazaGreska(e, 'Prijava nije proverena. Pokušaj ponovo.')),
+            error: e => (je404(e) ? bezUcesnika() : fazaGreska(e, 'Prijava nije proverena. Pokušaj ponovo.')),
           }));
         },
         error: e => fazaGreska(e, 'Izvođenje nije učitano. Pokušaj ponovo.'),
       }));
+    }
+
+    /**
+     * Prijava (`POST prijava`): imenom iz forme, ili prijavljen student bez forme (`ime` prazno, server ga uzima iz baze).
+     * 403 (bodovan run bez prijavljenog studenta) vodi na nalog; bez forme svaka druga greška je faza greške.
+     */
+    function posaljiPrijavu(kod: string, ime: string): void {
+      patchState(store, { salje: true });
+      postaviGresku(null);
+      novZahtev().add(api.prijava(kod, ime).subscribe({
+        next: udji,
+        error: e => {
+          patchState(store, { salje: false });
+          if (status(e) === 403) void router.navigateByUrl(NALOG + kod);
+          else if (je404(e)) fazaGreska(e, 'Izvođenje sa ovim kodom ne postoji ili je završeno.');
+          else if (store.faza() === 'ime') postaviGresku(razlogGreske(e, 'Prijava nije uspela. Pokušaj ponovo.'));
+          else fazaGreska(e, 'Prijava nije uspela. Pokušaj ponovo.');
+        },
+      }));
+    }
+
+    /**
+     * Nema (više) učesnika za ovaj kod: bodovan run bez prijavljenog studenta ide na nalog, prijavljen student ulazi bez
+     * forme imena, ostali na unos imena (sa porukom).
+     */
+    function bezUcesnika(poruka: string | null = null): void {
+      const kod = store.kod()!;
+      const info = store.info();
+      if (info?.prijavaObavezna && !info.prijavljenStudent) {
+        zatvoriVezu();
+        void router.navigateByUrl(NALOG + kod);
+      } else if (info?.prijavljenStudent) {
+        zatvoriVezu();
+        patchState(store, { faza: 'kod', ...BEZ_UCESNIKA });
+        posaljiPrijavu(kod, '');
+      } else {
+        naIme(poruka);
+      }
+    }
+
+    function odgovori(cmd: OdgovorCmd): void {
+      const p = store.runda();
+      const u = store.ucesnik();
+      if (!stomp || !u || !p || cmd.rundaId !== p.rundaId || store.unosZakljucan()) return;
+      patchState(store, { poslato: cmd.rundaId });
+      postaviGresku(null);
+      cekaPotvrdu = cmd.rundaId;
+      stomp.publish({ destination: `/app/izvodjenja/${u.izvodjenjeId}/odgovor`, body: JSON.stringify(cmd) });
+      pratiPotvrdu();
     }
 
     return {
@@ -439,27 +525,15 @@ export const StudentStore = signalStore(
           postaviGresku(PORUKA_IME);
           return;
         }
-        patchState(store, { salje: true });
-        postaviGresku(null);
-        novZahtev().add(api.prijava(kod, cisto).subscribe({
-          next: udji,
-          error: e => {
-            patchState(store, { salje: false });
-            if (je404(e)) fazaGreska(e, 'Izvođenje sa ovim kodom ne postoji ili je završeno.');
-            else postaviGresku(razlogGreske(e, 'Prijava nije uspela. Pokušaj ponovo.'));
-          },
-        }));
+        posaljiPrijavu(kod, cisto);
       },
 
-      odgovori(cmd: OdgovorCmd): void {
-        const p = store.pitanje();
-        const u = store.ucesnik();
-        if (!stomp || !u || !p || cmd.rundaId !== p.rundaId || store.unosZakljucan()) return;
-        patchState(store, { poslato: cmd.rundaId });
-        postaviGresku(null);
-        cekaPotvrdu = cmd.rundaId;
-        stomp.publish({ destination: `/app/izvodjenja/${u.izvodjenjeId}/odgovor`, body: JSON.stringify(cmd) });
-        pratiPotvrdu();
+      odgovori,
+
+      /** Odgovor na svoj zadatak trenutne runde: `{rundaId, polja}`, isti tok potvrde i grešaka kao `odgovori`. */
+      odgovoriZadatak(polja: Record<string, string | number[]>): void {
+        const r = store.runda()?.rundaId;
+        if (r != null) odgovori({ rundaId: r, polja });
       },
 
       /** Nacrt odgovora trenutne runde (iz `app-odgovor-unos`). */
@@ -467,9 +541,14 @@ export const StudentStore = signalStore(
         if (store.faza() === 'uzivo' && n.rundaId === store.pitanje()?.rundaId) patchState(store, { nacrt: n });
       },
 
-      /** Posle izbacivanja: novo ime (isti kod, naziv ostaje). */
+      /** Nacrt polja svog zadatka trenutne runde (iz `app-zadatak-unos`). */
+      sacuvajNacrtZadatka(n: NacrtZadatka): void {
+        if (store.faza() === 'uzivo' && n.rundaId === store.runda()?.rundaId) patchState(store, { nacrtZadatka: n });
+      },
+
+      /** Posle izbacivanja: novo ime (isti kod, naziv ostaje); prijavljen student ulazi ponovo bez forme. */
       ponovoUdji(): void {
-        naIme();
+        bezUcesnika();
       },
 
       /** Zatvara STOMP vezu, zahteve i tajmere (zove se i iz `onDestroy`). */

@@ -13,6 +13,7 @@ import { TajmerComponent } from '../ui/tajmer.component';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore } from './student.store';
+import { ZadatakUnosComponent } from './zadatak-unos.component';
 
 /** Naslov ličnog ishoda posle `C`: "Tačno! +850", "Netačno", "Nisi odgovorio". */
 export function naslovIshoda(
@@ -30,12 +31,17 @@ export function naslovIshoda(
  * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first. Tekst pitanja i opcija (i tačne opcije)
  * ide kroz `app-tekst-formule` (formule `$...$`): lenji `mathlive/ssr` chunk i `assets/mathlive/` traže se samo kad tekst
  * ima formulu. Prihvatljivi odgovori, jedinica i oznake skale ostaju običan tekst (plan faze 5, odluka 2).
+ * Zadatak slajd: "Zadatak stiže…", pa svoja varijanta u `app-zadatak-unos` (lenja, `@defer`: telefon vuče njen chunk tek
+ * na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu), iznad nje stanje runde (tajmer, "Odgovor primljen ✓", ishod).
  */
 @Component({
   selector: 'app-uzivo-student',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [StudentStore],
-  imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent],
+  imports: [
+    RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
+    ZadatakUnosComponent,
+  ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
     @let s = store;
@@ -78,6 +84,7 @@ export function naslovIshoda(
         @let j = s.javno();
         @let l = s.licno();
         @let p = s.pitanje();
+        @let z = s.zadatak();
         @if (s.faza() === 'uzivo' && s.veza() !== 'povezan') {
           <p class="uz-st-veza" role="status">
             {{ s.veza() === 'prekinut' ? 'Veza prekinuta, povezujem…' : 'Povezivanje…' }}
@@ -107,6 +114,31 @@ export function naslovIshoda(
               }
               <app-rang-lista [stavke]="rang" [istakni]="l?.mesto ?? null" />
             </section>
+          } @else if (z && naZadatku()) {
+            @let r = s.runda();
+            <div class="uz-st-zd-okvir">
+              <div class="uz-st-zd-vrh">
+                @if (s.ekran() === 'zadatakIshod') {
+                  @if (z.polja.length) {
+                    <p class="uz-st-veliko uz-st-zd-naslov" role="status" [class.uz-st-ok]="z.tacno === true"
+                       [class.uz-st-lose]="z.tacno === false">{{ ishod({ odgovorio: z.primljen, tacno: z.tacno, poeni: null }, false) }}</p>
+                  }
+                } @else {
+                  @if (s.ekran() === 'zadatakPrimljen') { <p class="uz-st-veliko uz-st-ok" role="status">Odgovor primljen ✓</p> }
+                  <app-tajmer class="uz-st-tajmer" [rokMs]="r?.rokMs ?? null" [preostaloMs]="r?.preostaloMs ?? null" [sat]="s.sat()"
+                              [ukupnoMs]="s.ukupnoMs()" />
+                }
+              </div>
+              @defer (on immediate) {
+                <app-zadatak-unos [zadatak]="z" [nacrt]="s.nacrtZadatka()" [zakljucan]="s.ekran() !== 'zadatak'"
+                                  (nacrtPromena)="s.sacuvajNacrtZadatka($event)" (posalji)="s.odgovoriZadatak($event)" />
+              } @placeholder {
+                <p class="uz-st-tekst" role="status">Učitavanje zadatka…</p>
+              } @error {
+                <p class="uz-st-tekst" role="alert">Zadatak nije učitan.</p>
+                <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="osvezi()">Osveži stranicu</button>
+              }
+            </div>
           } @else {
             @switch (s.ekran()) {
               @case ('povezivanje') { <p class="uz-st-veliko" role="status">Povezivanje…</p> }
@@ -117,7 +149,7 @@ export function naslovIshoda(
                 </div>
               }
               @case ('tabla') { <p class="uz-st-veliko" role="status">Gledaj u tablu</p> }
-              @case ('stize') { <p class="uz-st-veliko" role="status">Pitanje stiže…</p> }
+              @case ('stize') { <p class="uz-st-veliko" role="status">{{ j?.slajdTip === 'ZADATAK' ? 'Zadatak' : 'Pitanje' }} stiže…</p> }
               @case ('unos') {
                 @if (p) {
                   <div class="uz-st-pitanje">
@@ -233,10 +265,17 @@ export class UzivoStudentPage {
   /** Rang-lista zamenjuje sadržaj, osim dok student odgovara i na kraju (tamo je deo ekrana). */
   protected readonly rangVidljiv = computed(() => {
     const e = this.store.ekran();
-    return !!this.store.javno()?.rangLista && e !== 'unos' && e !== 'kraj';
+    return !!this.store.javno()?.rangLista && e !== 'unos' && e !== 'zadatak' && e !== 'kraj';
   });
+  /** Ekrani svoje varijante (`zadatak`, `zadatakPrimljen`, `zadatakIshod`): jedna instanca `app-zadatak-unos` kroz sva tri. */
+  protected readonly naZadatku = computed(() => this.store.ekran().startsWith('zadatak'));
 
   private readonly zatvoriDetalje = viewChild<ElementRef<HTMLButtonElement>>('zatvoriDetalje');
+
+  /** Lenji chunk zadatka nije stigao (mreža): ponovno učitavanje dobija istu varijantu (kolačić, `pocetno`). */
+  protected osvezi(): void {
+    location.reload();
+  }
 
   constructor() {
     inject(ActivatedRoute).paramMap.pipe(

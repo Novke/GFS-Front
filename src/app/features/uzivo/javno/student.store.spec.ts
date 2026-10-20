@@ -1,11 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { IMessage } from '@stomp/stompjs';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { STOMP_FABRIKA } from '../data-access/stomp';
-import { JavnoPitanje, JavnoStanje, LicnoStanje, UcesnikInfo } from '../data-access/uzivo.models';
+import {
+  JavniZadatak, JavnoPitanje, JavnoStanje, LicniZadatak, LicnoStanje, PoljeZadatka, UcesnikInfo,
+} from '../data-access/uzivo.models';
 import { GRESKA_TRAJANJE_MS, KRAJ_ZADRZI_MS, POTVRDA_MS, StudentStore, ekranStudenta, tacanOdgovor } from './student.store';
 import { pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
@@ -52,11 +55,35 @@ function licno(izmene: Partial<LicnoStanje> = {}): LicnoStanje {
   return { verzija: 1, ucesnikId: 3, ime: 'Ana', poeni: 0, mesto: 1, brojUcesnika: 1, izbacen: false, odgovor: null, ...izmene };
 }
 
+const POLJE_A: PoljeZadatka = {
+  kljuc: 'a', oznaka: 'a', tip: 'BROJ', odstupanje: null, odstupanjeTip: null, jedinica: null, zanemariVelicinu: null,
+  zanemariRazmake: null, opcije: null,
+};
+
+function javniZadatak(izmene: Partial<JavniZadatak> = {}): JavniZadatak {
+  return {
+    faza: 'OTVORENO', rundaId: 55, rokMs: null, preostaloMs: null, brojVarijanti: 2, grupaNaziv: '2 → 10',
+    resenjePrikazano: false, ...izmene,
+  };
+}
+
+/** Svoja varijanta (izmišljeni id-jevi slika). */
+function licniZadatak(izmene: Partial<LicniZadatak> = {}): LicniZadatak {
+  return {
+    rundaId: 55, varijantaId: 12, svgId: 'svg-a', polja: [POLJE_A], faza: 'OTVORENO', primljen: false, ishod: null, tacno: null,
+    tacneVrednosti: null, resenjeSvgId: null, ...izmene,
+  };
+}
+
+const naZadatku = (verzija: number, z: Partial<JavniZadatak> = {}) =>
+  javno({ verzija, prikaz: 'SLAJD', slajdTip: 'ZADATAK', zadatak: javniZadatak(z) });
+
 describe('StudentStore', () => {
   let store: InstanceType<typeof StudentStore>;
   let http: HttpTestingController;
   let stompovi: LazniStomp[];
   let putanje: string[];
+  let navigacija: ReturnType<typeof vi.spyOn>;
   const stomp = () => stompovi[stompovi.length - 1];
 
   beforeEach(() => {
@@ -64,7 +91,7 @@ describe('StudentStore', () => {
     putanje = [];
     TestBed.configureTestingModule({
       providers: [
-        StudentStore, provideHttpClient(), provideHttpClientTesting(),
+        StudentStore, provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
         {
           provide: STOMP_FABRIKA,
           useValue: (p: string) => {
@@ -78,6 +105,7 @@ describe('StudentStore', () => {
     });
     store = TestBed.inject(StudentStore);
     http = TestBed.inject(HttpTestingController);
+    navigacija = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
   });
 
   afterEach(() => http.verify());
@@ -410,6 +438,163 @@ describe('StudentStore', () => {
       http.expectNone('api/public/uzivo/123456/ja');
       expect(store.veza()).toBe('prekinut');
       expect(store.faza()).toBe('uzivo');
+    });
+  });
+
+  describe('prijava studenta (bodovan run)', () => {
+    const zabranjeno = [{ reason: 'Potrebna je prijava studenta.' }, { status: 403, statusText: 'Forbidden' }] as const;
+
+    it('prijavaObavezna bez prijavljenog studenta: odmah na nalog (bez ja i bez forme imena)', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavaObavezna: true, prijavljenStudent: false });
+      http.expectNone('api/public/uzivo/123456/ja');
+      expect(navigacija).toHaveBeenCalledWith('nalog?nazad=uzivo/123456');
+      expect(store.faza()).not.toBe('ime');
+      expect(putanje).toEqual([]);
+    });
+
+    it('prijavljen student bez učesnika (ja 404): prijava bez forme imena (ime prazno), pa uživo', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavaObavezna: true, prijavljenStudent: true });
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      expect(store.faza()).not.toBe('ime');
+      const zahtev = http.expectOne('api/public/uzivo/123456/prijava');
+      expect(zahtev.request.body).toEqual({ ime: '' });
+      zahtev.flush(UCESNIK);
+      expect(store.faza()).toBe('uzivo');
+      expect(putanje).toEqual(['api/public/ws']);
+      expect(navigacija).not.toHaveBeenCalled();
+    });
+
+    it('prijavljen student koji već ima učesnika (ja) ulazi bez POST-a', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavaObavezna: true, prijavljenStudent: true });
+      http.expectOne('api/public/uzivo/123456/ja').flush(UCESNIK);
+      http.expectNone('api/public/uzivo/123456/prijava');
+      expect(store.faza()).toBe('uzivo');
+    });
+
+    it('403 na prijavi imenom vodi na nalog', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1' });
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      store.prijavi('Ana');
+      http.expectOne('api/public/uzivo/123456/prijava').flush(...zabranjeno);
+      expect(navigacija).toHaveBeenCalledWith('nalog?nazad=uzivo/123456');
+    });
+
+    it('prijava bez forme koja ne uspe (409) je faza greške sa porukom servera, "Pokušaj ponovo" kreće iznova', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavljenStudent: true });
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456/prijava')
+        .flush({ reason: 'Izvođenje je popunjeno.' }, { status: 409, statusText: 'Conflict' });
+      expect(store.faza()).toBe('greska');
+      expect(store.greska()).toBe('Izvođenje je popunjeno.');
+    });
+
+    it('odbijeno rukovanje, ja 404 i info sa prijavljenim studentom: ponovna prijava bez forme', () => {
+      udji();
+      stomp().connectionState$.next(RxStompState.CLOSED);
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavljenStudent: true });
+      expect(store.faza()).not.toBe('ime');
+      expect(http.expectOne('api/public/uzivo/123456/prijava').request.body).toEqual({ ime: '' });
+    });
+  });
+
+  describe('zadatak', () => {
+    it('ekrani: CEKA i bez svoje varijante "stize", otvoreno "zadatak", zatvoreno "zadatakIshod"', () => {
+      udji();
+      store.prihvatiJavno(naZadatku(2, { faza: 'CEKA', rundaId: null }));
+      expect(store.ekran()).toBe('stize');
+      store.prihvatiJavno(naZadatku(3));
+      expect(store.ekran()).toBe('stize'); // javno je stiglo pre ličnog: još bez dodele
+      store.prihvatiLicno(licno({ verzija: 2, zadatak: licniZadatak() }));
+      expect(store.ekran()).toBe('zadatak');
+      expect(store.zadatak()).toEqual(licniZadatak());
+      expect(store.unosZakljucan()).toBe(false);
+      store.prihvatiJavno(naZadatku(4, { faza: 'ZATVORENO' }));
+      expect(store.ekran()).toBe('zadatakIshod');
+      expect(store.unosZakljucan()).toBe(true);
+      // PONOVI: nova runda, lično stanje stare runde još stoji -> "stize" dok ne stigne nova dodela
+      store.prihvatiJavno(naZadatku(5, { rundaId: 56 }));
+      expect(store.ekran()).toBe('stize');
+      store.prihvatiLicno(licno({ verzija: 3, zadatak: licniZadatak({ rundaId: 56, varijantaId: 13, svgId: 'svg-b' }) }));
+      expect(store.ekran()).toBe('zadatak');
+    });
+
+    it('odgovoriZadatak: jedna poruka {rundaId, polja} bez varijantaId, zatim "zadatakPrimljen"; drugi pokušaj se ne šalje', () => {
+      udji();
+      pocetno(naZadatku(2), licno({ verzija: 2, zadatak: licniZadatak() }));
+      store.odgovoriZadatak({ a: '45', c: [2] });
+      store.odgovoriZadatak({ a: '46' });
+      expect(store.ekran()).toBe('zadatakPrimljen');
+      expect(stomp().publish).toHaveBeenCalledTimes(1);
+      const poruka = stomp().publish.mock.calls[0][0] as { destination: string; body: string };
+      expect(poruka.destination).toBe('/app/izvodjenja/5/odgovor');
+      expect(JSON.parse(poruka.body)).toEqual({ rundaId: 55, polja: { a: '45', c: [2] } });
+      expect(poruka.body).not.toContain('varijantaId');
+    });
+
+    it('potvrda kroz licno.zadatak.primljen gasi rok; posle ponovnog povezivanja primljen ostaje primljen', saLaznimSatom(async () => {
+      udji();
+      stomp().connectionState$.next(RxStompState.OPEN);
+      pocetno(naZadatku(2), licno({ verzija: 2, zadatak: licniZadatak() }));
+      store.odgovoriZadatak({ a: '45' });
+      stomp().posalji('/user/queue/licno', licno({ verzija: 3, zadatak: licniZadatak({ primljen: true }) }));
+      await pomeriSat(POTVRDA_MS * 2);
+      expect(store.ekran()).toBe('zadatakPrimljen');
+      expect(store.greska()).toBeNull();
+      // osveženje stranice / nova veza: pocetno nosi istu varijantu, primljen odgovor i dalje zaključava
+      stomp().connectionState$.next(RxStompState.CLOSED);
+      stomp().connectionState$.next(RxStompState.OPEN);
+      pocetno(naZadatku(3), licno({ verzija: 4, zadatak: licniZadatak({ primljen: true }) }));
+      expect(store.ekran()).toBe('zadatakPrimljen');
+      expect(store.zadatak()?.svgId).toBe('svg-a');
+      store.destroy();
+    }));
+
+    it('greška provere ("Popuni sva polja.") otključava unos; "Vreme je isteklo." prelazi na ishod', saLaznimSatom(async () => {
+      udji();
+      pocetno(naZadatku(2), licno({ verzija: 2, zadatak: licniZadatak() }));
+      store.odgovoriZadatak({ a: '' });
+      stomp().posalji('/user/queue/greske', { poruka: 'Popuni sva polja.' });
+      expect(store.ekran()).toBe('zadatak');
+      expect(store.greska()).toBe('Popuni sva polja.');
+      store.odgovoriZadatak({ a: '45' });
+      expect(stomp().publish).toHaveBeenCalledTimes(2);
+      stomp().posalji('/user/queue/greske', { poruka: 'Vreme je isteklo.' });
+      expect(store.ekran()).toBe('zadatakIshod');
+      expect(store.unosZakljucan()).toBe(true);
+      store.destroy();
+    }));
+
+    it('bez potvrde servera dok je veza otvorena, unos zadatka se posle roka otključava', saLaznimSatom(async () => {
+      udji();
+      stomp().connectionState$.next(RxStompState.OPEN);
+      pocetno(naZadatku(2), licno({ verzija: 2, zadatak: licniZadatak() }));
+      store.odgovoriZadatak({ a: '45' });
+      await pomeriSat(POTVRDA_MS);
+      expect(store.ekran()).toBe('zadatak');
+      expect(store.greska()).toBe('Odgovor nije stigao. Pošalji ponovo.');
+      store.destroy();
+    }));
+
+    it('tajmer zadatka: ukupnoMs je prvo viđeno preostalo vreme runde', () => {
+      udji();
+      pocetno(naZadatku(2, { preostaloMs: 90_000 }), licno({ verzija: 2, zadatak: licniZadatak() }));
+      expect(store.runda()?.rundaId).toBe(55);
+      expect(store.ukupnoMs()).toBe(90_000);
+    });
+
+    it('nacrt zadatka se pamti samo za trenutnu rundu', () => {
+      udji();
+      pocetno(naZadatku(2), licno({ verzija: 2, zadatak: licniZadatak() }));
+      store.sacuvajNacrtZadatka({ rundaId: 54, polja: { a: '1' } });
+      expect(store.nacrtZadatka()).toBeNull();
+      store.sacuvajNacrtZadatka({ rundaId: 55, polja: { a: '45' } });
+      expect(store.nacrtZadatka()).toEqual({ rundaId: 55, polja: { a: '45' } });
     });
   });
 });

@@ -7,7 +7,9 @@ import { expect, test } from '@playwright/test';
 import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, tekst, zatvorenje, zbir, zbirGzip,
 } from './chunkovi';
-import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, NIZOVI_CRTEZA, nizoviEditora } from './nizovi-editora';
+import {
+  NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, NIZ_ZADATKA_STUDENTA, NIZOVI_CRTEZA, nizoviEditora,
+} from './nizovi-editora';
 
 /**
  * Studentska stranica (`javno/uzivo-student.page`, statičko zatvorenje bez početnog bundle-a). Osnova je izmerena
@@ -16,9 +18,21 @@ import { NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, NIZOVI_CRTEZA, nizoviEdit
  * `mera-formule`), 114 515 B posle talasa ispravki završne recenzije (2026-10-15: tab stop široke formule, maska formula za
  * naglašavanje, stil koji ne pamti grešku, jedno upozorenje po prozoru) i 114 615 B posle kruga 2 (tabindex -1 u dugmetu,
  * granica dužine teksta sa formulama).
+ *
+ * Zadatak slajd na telefonu (projekat B, FE-5) dodaje statički samo stanja zadatka u store-u i stranici, prijavu studenta
+ * i ulaz u lenji blok (`@defer`); sama komponenta zadatka je lenji chunk (ispod). Na početku FE-5 rezerva je bila 729 B
+ * (115 489 B), pa FE-5 dobija svoj deo: izmereno 2026-10-20 +3 397 B (118 886 B).
  */
 const OSNOVA_STUDENTA = 108_218;
-const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000;
+const RAST_ZADATKA = 3_600;
+const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA;
+/**
+ * `app-zadatak-unos` (slika svoje varijante, polja, ishod, rešenje; stilovi u komponenti, ne u globalnom CSS-u početnog
+ * paketa): samo dinamički uvoz iz studentske stranice, telefon ga vuče tek na Zadatak slajdu. Izmereno 2026-10-20 (FE-5):
+ * 11 293 B; granica + 10 %.
+ */
+const IZMERENO_ZADATAK = 11_293;
+const BUDZET_ZADATKA = Math.floor(IZMERENO_ZADATAK * 1.1);
 /**
  * `mathlive/ssr` (formula u tekstu na telefonu, lenji chunk) kao sopstveno zatvorenje posle početnog i studentske stranice.
  * Izmereno 2026-10-14 (e13cfdd): 348 195 B / 102 932 B gzip. Granica: izmereno + 5 % i nikad iznad 380 000 B (granica
@@ -56,6 +70,8 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
   test('nizovi provere su pravi: NIZ_STUDENTA u studentskoj stranici, NIZ_MATHLIVE_CEO samo u celom mathlive-u', () => {
     const src = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'uzivo-student.page.ts'), 'utf8');
     expect(src).toContain(NIZ_STUDENTA);
+    const zadatak = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'zadatak-unos.component.ts'), 'utf8');
+    expect(zadatak).toContain(NIZ_ZADATKA_STUDENTA);
     // ceo mathlive (dijalog formule editora) ima niz, a ssr ne: bez toga bi filter `ssrFajlovi` bio prazan ili pogrešan
     expect(js.filter(f => tekst(f).includes(NIZ_MATHLIVE_CEO) && tekst(f).includes(NIZ_MATHLIVE)).length, 'ceo mathlive').toBe(1);
     expect(ssrFajlovi.length, 'tačno jedan chunk sa mathlive/ssr').toBe(1);
@@ -63,7 +79,7 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
     for (const n of NIZOVI_PLATNA) expect(js.some(f => tekst(f).includes(n)), n).toBe(true);
   });
 
-  test('studentska stranica: zatvorenje u budžetu (osnova + 8 000 B), bez MathLive-a, editora i koda platna', () => {
+  test('studentska stranica: zatvorenje u budžetu (osnova + 8 000 B + rast zadatka), bez MathLive-a, editora i koda platna', () => {
     expect(pocetno.has(student), 'studentska stranica nije u početnom zatvorenju').toBe(false);
     zapisi('studentska stranica (sopstveno zatvorenje)', zbir(zatvorenjeStudenta), zbirGzip(zatvorenjeStudenta));
     zapisi('studentska stranica: rast od osnove', zbir(zatvorenjeStudenta) - OSNOVA_STUDENTA);
@@ -72,6 +88,21 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
       .map(f => ({ f, nizovi: [...nizoviEditora(tekst(f)), ...NIZOVI_PLATNA.filter(n => tekst(f).includes(n))] }))
       .filter(x => x.nizovi.length);
     expect(sporni, 'MathLive, kod editora ili platna u početnom zatvorenju ili zatvorenju studentske stranice').toEqual([]);
+  });
+
+  test('zadatak na telefonu (FE-5): samo dinamički uvoz iz studentske stranice, van njenog zatvorenja, u budžetu, bez editora', () => {
+    const zadatak = fajlSa(NIZ_ZADATKA_STUDENTA, js);
+    const ucitano = new Set([...pocetno, ...zatvorenjeStudenta]);
+    expect(ucitano.has(zadatak), 'zadatak u početnom zatvorenju ili zatvorenju studentske stranice').toBe(false);
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(zadatak)), 'statički uvoz zadatka').toEqual([]);
+    expect(dinamickiUvozi(tekst(student)), 'dinamički uvoz iz studentske stranice').toContain(zadatak);
+    const sopstveno = sopstvenoZatvorenje([zadatak], ucitano);
+    zapisi('zadatak na telefonu (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
+    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_ZADATKA);
+    const sporni = [...sopstveno]
+      .map(f => ({ f, nizovi: [...nizoviEditora(tekst(f)), ...NIZOVI_PLATNA.filter(n => tekst(f).includes(n))] }))
+      .filter(x => x.nizovi.length);
+    expect(sporni, 'MathLive, kod editora ili platna u chunk-u zadatka').toEqual([]);
   });
 
   test('mathlive/ssr: samo dinamički uvoz, van početnog i studentskog zatvorenja, sopstveno zatvorenje u budžetu', () => {

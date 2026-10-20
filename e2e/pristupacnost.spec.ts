@@ -596,3 +596,64 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak sa rezultatima i rešenjem').toEqual([]);
   });
 });
+
+// FE-5: Zadatak slajd na telefonu studenta (javne strane su uvek dnevne): unos sa sva četiri tipa polja (opcija sa formulom),
+// uvećan prikaz slike i ishod posle zatvaranja sa tačnim vrednostima i rešenjem, na 390 px.
+test.describe('pristupačnost (axe): Zadatak na telefonu, dan', () => {
+  test.use({ colorScheme: 'light', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('/uzivo/123456 (Zadatak: unos, uvećan prikaz, ishod sa rešenjem, 390 x 844): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+    const polje = (kljuc: string, oznaka: string, tip: string, izmene: Record<string, unknown> = {}) => ({
+      kljuc, oznaka, tip, odstupanje: null, odstupanjeTip: null, jedinica: null, zanemariVelicinu: null, zanemariRazmake: null,
+      opcije: null, ...izmene,
+    });
+    const opcije = [{ id: 1, tekst: '$2^3$' }, { id: 2, tekst: '9' }, { id: 3, tekst: '10' }];
+    const polja = [
+      polje('a', 'a) Dekadno', 'BROJ', { jedinica: 'm' }),
+      polje('b', 'b) Binarno', 'TEKST'),
+      polje('c', 'c) Koliko je 8?', 'JEDAN_TACAN', { opcije }),
+      polje('d', 'd) Parni', 'VISE_TACNIH', { opcije }),
+    ];
+    const javno = (verzija: number, faza: string) => ({
+      izvodjenjeId: 7, verzija, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas', kod: '123456',
+      prikaz: 'SLAJD', slajdTip: 'ZADATAK', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
+      brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null,
+      zadatak: { faza, rundaId: 55, rokMs: null, preostaloMs: 90_000, brojVarijanti: 2, grupaNaziv: '2 → 10', resenjePrikazano: faza === 'ZATVORENO' },
+    });
+    const licno = (verzija: number, zadatak: Record<string, unknown>) => ({
+      verzija, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null,
+      zadatak: {
+        rundaId: 55, varijantaId: 12, svgId: '00000000-0000-4000-8000-00000000000a', polja, faza: 'OTVORENO', primljen: false,
+        ishod: null, tacno: null, tacneVrednosti: null, resenjeSvgId: null, ...zadatak,
+      },
+    });
+    const broker = await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno'
+      ? { javno: javno(1, 'OTVORENO'), licno: licno(1, {}) } : undefined));
+    await page.goto('uzivo/123456');
+    await expect(page.locator('img[data-zadatak-svg]')).toBeVisible();
+    await page.getByLabel('a) Dekadno').fill('8');
+    await page.getByRole('group', { name: 'd) Parni' }).getByRole('button', { name: '10' }).click();
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, unos zadatka').toEqual([]);
+
+    await page.getByRole('button', { name: 'Uvećaj', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Zadatak' })).toBeVisible();
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, uvećan zadatak').toEqual([]);
+    await page.keyboard.press('Escape');
+
+    const bez = { broj: null, prihvatljivi: null, tacna: null, tacne: null };
+    broker.posalji('/topic/izvodjenja/7/javno', javno(2, 'ZATVORENO'));
+    broker.posalji('/user/queue/licno', licno(2, {
+      faza: 'ZATVORENO', primljen: true, tacno: false, ishod: { a: true, b: false, c: true, d: false },
+      tacneVrednosti: { a: { ...bez, broj: 8 }, b: { ...bez, prihvatljivi: ['1000'] }, c: { ...bez, tacna: 1 }, d: { ...bez, tacne: [1, 3] } },
+      resenjeSvgId: '00000000-0000-4000-8000-0000000000aa',
+    }));
+    await expect(page.getByRole('img', { name: 'Rešenje' })).toBeVisible();
+    await expect(page.getByText('Tačno: 8 m')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, ishod zadatka sa rešenjem').toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+});

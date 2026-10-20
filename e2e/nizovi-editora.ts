@@ -17,6 +17,8 @@ export const nizoviEditora = (tekst: string): string[] => NIZOVI_EDITORA.filter(
 export const NIZ_MATHLIVE_CEO = 'math-virtual-keyboard';
 /** Samo studentska stranica (`javno/uzivo-student.page.ts`, ekran "tabla"; `lenji-formule.spec.ts` proverava izvor). */
 export const NIZ_STUDENTA = 'Gledaj u tablu';
+/** Samo lenja komponenta zadatka na telefonu (`javno/zadatak-unos.component.ts`; `lenji-formule.spec.ts` proverava izvor). */
+export const NIZ_ZADATKA_STUDENTA = 'Reši na papiru.';
 /**
  * Javna ruta ovo nikad ne učitava (5a): `ML__latex` sme samo kao `mathlive/ssr` (formula u tekstu pitanja ili opcije),
  * bez `NIZ_MATHLIVE_CEO`; kod editora platna, ProseMirror i dijalog formule nikad.
