@@ -105,15 +105,19 @@ export class KodKorak {
   /** Sekunde do "Pošalji ponovo" (0 = može). */
   protected readonly preostalo = signal(CEKANJE_PONOVO_S);
   private tajmer: ReturnType<typeof setInterval> | null = null;
+  /** Poslat je `prijavi`, a roditelj još nije javio grešku: samo ta greška prazni polje koda. */
+  private cekaPrijavu = false;
 
   constructor() {
     effect(() => {
       this.slanjeBroj();
       untracked(() => this.pokreniCekanje());
     });
-    // pogrešan kod: ostaje samo poruka, polje je prazno za novi unos (na telefonu se ne briše cifru po cifru); fokus ostaje na traci greške (FormErrorBanner)
+    // pogrešan kod: ostaje samo poruka, polje je prazno za novi unos (na telefonu se ne briše cifru po cifru); fokus ostaje na traci greške (FormErrorBanner).
+    // Samo greška koja sledi sopstveni izlaz `prijavi`: greške "Ne stiže mi kod" i "Pošalji ponovo" (429, 503) ne brišu upisane cifre.
     effect(() => {
-      if (this.greska() !== null && !this.salje()) {
+      if (this.greska() !== null && !this.salje() && this.cekaPrijavu) {
+        this.cekaPrijavu = false;
         untracked(() => this.isprazniKod());
       }
     });
@@ -147,6 +151,7 @@ export class KodKorak {
     if (this.forma.invalid) {
       return;
     }
+    this.cekaPrijavu = true;
     this.prijavi.emit(this.forma.controls.kod.value);
   }
 

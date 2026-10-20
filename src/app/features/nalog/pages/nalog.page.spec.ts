@@ -252,6 +252,58 @@ describe('NalogPage', () => {
       http.expectNone(JA);
     });
 
+    it('nazad=uzivo/123456 (bodovan run, slajd Zadatak): navigateByUrl(uzivo/123456)', async () => {
+      await otvoriStranu('uzivo/123456');
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith('uzivo/123456');
+    });
+
+    it('dupli dodir: dok navigacija na nazad traje, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+      let zavrsi!: (ok: boolean) => void;
+      navigacija.mockReturnValue(new Promise<boolean>(r => (zavrsi = r)));
+      await otvoriStranu('uzivo/123456');
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      expect(dugme('Prijavi se')!.disabled).toBe(true);
+      await prijaviKodom();
+      http.expectNone(PRIJAVA);
+      // navigacija nije uspela (npr. lenji chunk): dugme ponovo radi
+      zavrsi(false);
+      await stabilno();
+      expect(dugme('Prijavi se')!.disabled).toBe(false);
+    });
+
+    it('dupli dodir bez nazad: dok GET ja ne stigne, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+      await otvoriStranu();
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      const ja = http.expectOne(JA);
+      expect(dugme('Prijavi se')!.disabled).toBe(true);
+      await prijaviKodom();
+      http.expectNone(PRIJAVA);
+      ja.flush(JA_ODGOVOR);
+      await stabilno();
+      expect(el().textContent).toContain('Ana Primerović');
+    });
+
+    it('bez nazad, GET ja 401 posle prijave: indeks, "Pošalji kod" ponovo radi', async () => {
+      await otvoriStranu();
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      http.expectOne(JA).flush(null, greska(401, 'Unauthorized'));
+      await stabilno();
+      expect(dugme('Pošalji kod')!.disabled).toBe(false);
+    });
+
     it.each(['//evil.com', 'https://x', '/\\evil', 'javascript:alert(1)', '../x'])(
       'nazad=%s se ignoriše (Review Focus 4): ekran naloga, bez navigacije',
       async nazad => {

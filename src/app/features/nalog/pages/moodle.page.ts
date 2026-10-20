@@ -338,7 +338,8 @@ export class MoodlePage {
 
   /**
    * Prijava kodom, pa uvek korak "potvrda" (R19): kod dokazuje samo GFS identitet, a Moodle nalog u pregledaču može biti tuđ
-   * (zajednički računar), pa se `povezi` šalje tek klikom na "Poveži".
+   * (zajednički računar), pa se `povezi` šalje tek klikom na "Poveži". `salje` ostaje `true` dok `GET ja` ne završi
+   * (`ucitajJa` ga vraća), da dupli dodir ne pošalje drugu prijavu već iskorišćenim kodom.
    */
   protected prijavi(kod: string): void {
     if (this.salje()) {
@@ -346,10 +347,7 @@ export class MoodlePage {
     }
     this.pocni();
     this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
-      next: () => {
-        this.salje.set(false);
-        this.ucitajJa(true);
-      },
+      next: () => this.ucitajJa(true),
       error: (e: unknown) => this.neuspeh(e),
     });
   }
@@ -427,17 +425,19 @@ export class MoodlePage {
     }
   }
 
-  /** `GET ja`, pa "Poveži" (sa greškom za baner, ako je ima); 401 = indeks. */
+  /** `GET ja`, pa "Poveži" (sa greškom za baner, ako je ima); 401 = indeks. Vraća `salje` na `false` kad završi. */
   private ucitajJa(fokus: boolean, greska: string | null = null): void {
     this.zahtev?.unsubscribe();
     this.zahtev = this.api.ja().subscribe({
       next: ja => {
+        this.salje.set(false);
         this.ja.set(ja);
         this.indeks.set(ja.indeks);
         this.idiNa('potvrda', fokus);
         this.greskaKoraka.set(greska);
       },
       error: (e: unknown) => {
+        this.salje.set(false);
         if (e instanceof HttpErrorResponse && e.status === 401) {
           this.ja.set(null);
           this.idiNa('indeks', fokus);

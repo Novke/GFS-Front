@@ -197,6 +197,10 @@ export class NalogPage {
     });
   }
 
+  /**
+   * Prijava kodom, pa `nazad` ili ekran naloga. `salje` ostaje `true` dok navigacija ili `GET ja` ne završe, da dupli dodir
+   * ne pošalje drugu prijavu već iskorišćenim kodom (401 bi prijavljenom studentu pokazao "Kod nije ispravan").
+   */
   protected prijavi(kod: string): void {
     if (this.salje()) {
       return;
@@ -204,10 +208,17 @@ export class NalogPage {
     this.pocni();
     this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
       next: () => {
-        this.salje.set(false);
         const cilj = this.nastaviNa();
         if (cilj) {
-          void this.router.navigateByUrl(cilj);
+          // uspela navigacija uništava stranicu; neuspela (npr. lenji chunk bez mreže) vraća dugme
+          this.router.navigateByUrl(cilj).then(
+            ok => {
+              if (!ok) {
+                this.salje.set(false);
+              }
+            },
+            () => this.salje.set(false),
+          );
         } else {
           this.ucitajJa(true);
         }
@@ -294,13 +305,20 @@ export class NalogPage {
     this.zahtev?.unsubscribe();
     this.zahtev = this.api.ja().subscribe({
       next: ja => {
+        this.salje.set(false);
         this.ja.set(ja);
         this.indeks.set(ja.indeks);
         this.idiNa('prijavljen', fokus);
       },
       // kolačić je istekao ili je opozvan u međuvremenu: prijava ispočetka
-      error: (e: unknown) =>
-        e instanceof HttpErrorResponse && e.status === 401 ? this.idiNa('indeks', fokus) : this.greskaPriUcitavanju(e, fokus),
+      error: (e: unknown) => {
+        this.salje.set(false);
+        if (e instanceof HttpErrorResponse && e.status === 401) {
+          this.idiNa('indeks', fokus);
+        } else {
+          this.greskaPriUcitavanju(e, fokus);
+        }
+      },
     });
   }
 

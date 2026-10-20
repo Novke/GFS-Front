@@ -101,15 +101,72 @@ describe('KodKorak', () => {
     expect(dugme('Pošalji ponovo').disabled).toBe(false);
   });
 
+  /** Roditelj kao `/nalog`: "Prijavi se" -> `salje` dok zahtev traje, pa greška servera i `salje` false. */
+  function greskaRoditelja(poruka: string): void {
+    fixture.componentRef.setInput('salje', true);
+    fixture.componentRef.setInput('greska', null);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('salje', false);
+    fixture.componentRef.setInput('greska', poruka);
+    fixture.detectChanges();
+  }
+
   it('greška servera posle slanja koda: polje se prazni (fokus ostaje na traci greške)', async () => {
     upisi('111111');
     expect(polje().value).toBe('111111');
-    fixture.componentRef.setInput('greska', 'Kod nije ispravan ili je istekao.');
+    dugme('Prijavi se').click();
+    greskaRoditelja('Kod nije ispravan ili je istekao.');
     fixture.detectChanges();
     await vi.advanceTimersByTimeAsync(0);
     fixture.detectChanges();
     expect(polje().value).toBe('');
     expect(el().querySelector('[role="alert"]')?.textContent).toContain('Kod nije ispravan ili je istekao.');
+  });
+
+  it('greška posle "Ne stiže mi kod" ne briše upisane cifre', async () => {
+    upisi('1234');
+    dugme('Ne stiže mi kod').click();
+    fixture.componentRef.setInput('pomocSalje', true);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('pomocSalje', false);
+    fixture.componentRef.setInput('greska', 'Servis je trenutno nedostupan.');
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(polje().value).toBe('1234');
+    expect(el().querySelector('[role="alert"]')?.textContent).toContain('Servis je trenutno nedostupan.');
+  });
+
+  it('greška posle "Pošalji ponovo" ne briše upisane cifre', async () => {
+    await vi.advanceTimersByTimeAsync(CEKANJE_PONOVO_S * 1000);
+    fixture.detectChanges();
+    upisi('1234');
+    const ponovo = vi.fn();
+    fixture.componentInstance.posaljiPonovo.subscribe(ponovo);
+    dugme('Pošalji ponovo').click();
+    expect(ponovo).toHaveBeenCalledOnce();
+    greskaRoditelja('Previše pokušaja. Pokušaj ponovo kasnije.');
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(polje().value).toBe('1234');
+  });
+
+  it('posle greške sopstvene prijave (polje prazno) tuđa greška ne briše nove cifre', async () => {
+    upisi('111111');
+    dugme('Prijavi se').click();
+    greskaRoditelja('Kod nije ispravan ili je istekao.');
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(polje().value).toBe('');
+    upisi('12');
+    fixture.componentRef.setInput('greska', null);
+    fixture.detectChanges();
+    dugme('Ne stiže mi kod').click();
+    fixture.componentRef.setInput('greska', 'Servis je trenutno nedostupan.');
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    expect(polje().value).toBe('12');
   });
 
   it('dok se kod šalje (salje=true) greška ne briše upisane cifre', async () => {

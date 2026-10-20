@@ -259,6 +259,59 @@ describe('MoodlePage', () => {
       expect(tekstovi.some(t => t.includes('Moodle nije poslao ime naloga.'))).toBe(true);
     });
 
+    /** Indeks -> kod -> 204 prijave; `GET ja` ostaje bez odgovora (vraća ga). */
+    async function prijavaBezJa() {
+      upisi('indeks', 'GD12');
+      dugme('Pošalji kod')!.click();
+      http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'a***@example.test' });
+      await stabilno();
+      upisi('kod', '123456');
+      dugme('Prijavi se')!.click();
+      http.expectOne(PRIJAVA).flush(null, bezSadrzaja);
+      await stabilno();
+      return http.expectOne(JA);
+    }
+
+    it('dupli dodir: posle 204 prijave, dok GET ja ne stigne, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+      await otvoriTok();
+      const ja = await prijavaBezJa();
+      expect(naslov()).toBe('Unesi kod');
+      expect(dugme('Prijavi se')!.disabled).toBe(true);
+      upisi('kod', '123456');
+      dugme('Prijavi se')!.click();
+      fixture.detectChanges();
+      http.expectNone(PRIJAVA);
+      ja.flush(JA_ODGOVOR);
+      await stabilno();
+      expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
+      expect(dugme('Poveži')!.disabled).toBe(false);
+      http.expectNone(POVEZI);
+    });
+
+    it('posle 204 prijave GET ja 401: indeks, "Pošalji kod" ponovo radi', async () => {
+      await otvoriTok();
+      const ja = await prijavaBezJa();
+      ja.flush(null, greska(401, 'Unauthorized'));
+      await stabilno();
+      expect(polje('indeks')).not.toBeNull();
+      expect(dugme('Pošalji kod')!.disabled).toBe(false);
+    });
+
+    it('posle 204 prijave GET ja bez mreže: poruka i "Pokušaj ponovo", slanje nije zaglavljeno', async () => {
+      await otvoriTok();
+      const ja = await prijavaBezJa();
+      ja.error(new ProgressEvent('error'));
+      await stabilno();
+      const ponovo = dugme('Pokušaj ponovo')!;
+      expect(ponovo.disabled).toBe(false);
+      ponovo.click();
+      await imeMoodla();
+      http.expectOne(STANJE).flush({ prijavljen: true });
+      http.expectOne(JA).flush(JA_ODGOVOR);
+      await stabilno();
+      expect(dugme('Poveži')!.disabled).toBe(false);
+    });
+
     it('pogrešan kod: tekst servera, ostaje na kodu, bez povezi', async () => {
       await otvoriTok();
       upisi('indeks', 'GD12');
