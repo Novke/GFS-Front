@@ -1,5 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSidenav, MatSidenavContainer, MatSidenavContent } from '@angular/material/sidenav';
@@ -19,8 +19,8 @@ export const SIROKO = '(min-width: 1024px)';
 
 /**
  * Ljuska nastavničkih ruta: tamna bočna navigacija, gornja traka sa mrvicama, sadržaj (max 1440 px).
- * Jedino mesto koje instancira `DashboardCountsStore` i učitava `ReferenceStore` (predmeti u navigaciji):
- * javne (`/upis`) i projektorske rute koriste svoj layout bez ljuske.
+ * Jedino mesto koje instancira i pokreće `DashboardCountsStore` (osvežavanje traje koliko i ljuska) i učitava
+ * `ReferenceStore` (predmeti u navigaciji): javne (`/upis`, `/uzivo`, `/nalog`) i projektorske rute koriste svoj layout bez ljuske.
  */
 @Component({
   selector: 'app-shell',
@@ -50,6 +50,7 @@ export class Shell {
   }));
 
   constructor() {
+    this.brojaciStore.pokreni(inject(DestroyRef));
     this.reference.ucitaj();
     inject(Router)
       .events.pipe(

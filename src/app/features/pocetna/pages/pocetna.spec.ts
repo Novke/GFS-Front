@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { Component, signal } from '@angular/core';
+import { Component, DestroyRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -247,7 +247,8 @@ describe('Pocetna', () => {
   });
 
   it('Početna ne pravi drugi zahtev kad je ljuska već pokrenula učitavanje (isti odgovor za ekran i brojače)', async () => {
-    const brojaci = TestBed.inject(DashboardCountsStore); // kao Shell: zahtev kreće pri nastanku
+    const brojaci = TestBed.inject(DashboardCountsStore);
+    brojaci.pokreni(TestBed.inject(DestroyRef)); // kao Shell: zahtev kreće kad ga ljuska pokrene
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');
     http.expectOne('api/pregled/kontrolna-tabla').flush({ ...PRAZNA, ceka: { ...PRAZNA.ceka, brojTestova: 4 } });

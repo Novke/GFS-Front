@@ -33,12 +33,15 @@ describe('sesijaInterceptor', () => {
   let odgovorDijaloga: Subject<boolean>;
   let nesacuvano: number;
   let pustiNapustanje: boolean;
+  /** Čuvar rute `nalog` u ovom specu (da navigacija na javnu rutu može da traje dok stigne 401). */
+  let cuvarNaloga: () => boolean | Promise<boolean>;
 
   beforeEach(async () => {
     ponisti = vi.fn();
     greska = vi.fn();
     nesacuvano = 0;
     pustiNapustanje = true;
+    cuvarNaloga = () => true;
     odgovorDijaloga = new Subject<boolean>();
     otvori = vi.fn(() => ({ afterClosed: () => odgovorDijaloga.asObservable() }));
     TestBed.configureTestingModule({
@@ -50,6 +53,11 @@ describe('sesijaInterceptor', () => {
           { path: 'studenti', component: Prazna },
           { path: 'testovi', component: Prazna },
           { path: 'forma', component: Prazna, canDeactivate: [() => pustiNapustanje] },
+          // javne rute (student na telefonu): nastavnički 401 ih nikad ne preusmerava
+          { path: 'nalog', component: Prazna, canActivate: [() => cuvarNaloga()] },
+          { path: 'upis/:token', component: Prazna },
+          { path: 'uzivo', component: Prazna },
+          { path: 'uzivo/:kod', component: Prazna },
         ]),
         { provide: SesijaStore, useValue: { ponisti } },
         { provide: NotificationStore, useValue: { greska, info: vi.fn(), uspeh: vi.fn() } },
@@ -110,6 +118,33 @@ describe('sesijaInterceptor', () => {
     expect(ponisti).not.toHaveBeenCalled();
     expect(navigacija).not.toHaveBeenCalled();
     expect(router.url).toBe('/studenti?q=ana');
+  });
+
+  it.each(['/nalog', '/nalog?nazad=uzivo%2FABC123', '/upis/abc', '/uzivo', '/uzivo/123456'])(
+    'zakasneli 401 nastavničkog API-ja na javnoj ruti %s: bez navigacije (sesija se samo poništi)',
+    async url => {
+      await router.navigateByUrl(url);
+      const navigacija = vi.spyOn(router, 'navigateByUrl');
+      odbij('api/pregled/kontrolna-tabla');
+      await smiri();
+      expect(navigacija).not.toHaveBeenCalled();
+      expect(router.url).toBe(url);
+      expect(ponisti).toHaveBeenCalledOnce();
+      expect(otvori).not.toHaveBeenCalled();
+    },
+  );
+
+  it('401 stigne dok navigacija ka javnoj ruti (/nalog) još traje: navigacija se ne prekida', async () => {
+    let pusti!: (v: boolean) => void;
+    cuvarNaloga = () => new Promise<boolean>(r => (pusti = r));
+    const kaNalogu = router.navigateByUrl('/nalog');
+    await smiri();
+    odbij('api/obavestenja/broj');
+    await smiri();
+    pusti(true);
+    expect(await kaNalogu).toBe(true);
+    await smiri();
+    expect(router.url).toBe('/nalog');
   });
 
   it('ostale greške (403, 500, mreža) i zahtevi van api/ ne preusmeravaju', async () => {

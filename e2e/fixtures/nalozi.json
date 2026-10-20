@@ -26,5 +26,13 @@
     { "id": 1, "opis": "Firefox, Linux", "kreirano": "2026-10-01T08:00:00", "poslednjiUlaz": "2026-10-19T10:00:00", "trenutna": true },
     { "id": 2, "opis": "Chrome, Android", "kreirano": "2026-09-20T12:30:00", "poslednjiUlaz": "2026-10-18T19:45:00", "trenutna": false },
     { "id": 3, "opis": "Safari, iOS", "kreirano": "2026-09-02T07:00:00", "poslednjiUlaz": "2026-09-03T07:10:00", "trenutna": false }
-  ]
+  ],
+  "_napomenaStudenta": "Nalog studenta (javna ruta /nalog, spec prijave 5.1): izmišljen student, maska mejla iz domena example.test.",
+  "nalogStudenta": {
+    "indeks": "GD1", "ime": "Ana", "prezime": "Primerović", "maskaMejla": "a***@example.test", "moodlePovezan": false,
+    "uredjaji": [
+      { "id": 11, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00", "trenutni": false },
+      { "id": 12, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00", "trenutni": false }
+    ]
+  }
 }

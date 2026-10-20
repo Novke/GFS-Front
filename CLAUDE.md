@@ -3,7 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 GFS-Front is the teacher tool of Građevinski fakultet Subotica (lectures, homework, tests, grade proposals, live
-presentations "uživo") plus two public student areas (the intake form `upis` and the live student pages `uzivo`). The backend is `Novke/GFSSystem` (Spring Boot); deploy, staging and branching rules live in the
+presentations "uživo") plus three public student areas (the intake form `upis`, the live student pages `uzivo` and the student
+account `nalog`). Teachers sign in at `/prijava` (see "Prijava"). The backend is `Novke/GFSSystem` (Spring Boot); deploy, staging and branching rules live in the
 wrapper repo `Novke/GFS-deploy` (`CLAUDE.md`, `README.md`). This repo is **public**: no secrets, no real data.
 
 ## Stack
@@ -50,7 +51,10 @@ long-cache regex of `docker/nginx.conf` (`DUGI_KES_IZRAZ`, also used by the e2e 
 (no browser) checks them against the real build: every file except `index.html` is public, every hashed file (root and
 `media/`) is long-cached, `assets/` never is, and `nginx.conf` uses the same string. Public-route specs (`javni-upis`,
 `uzivo-javno`) import `test` from `e2e/javna-mreza.ts`: every request whose path does not match the public regex (static
-files too, e.g. a lazy chunk) gets 401 and fails the test, as on staging; `dozvoljeniApi` lists the allowed `/api/` calls.
+files too, e.g. a lazy chunk) gets 401 and fails the test, as on staging; `dozvoljeniApi` lists the allowed `/api/` calls,
+`dozvoljeni401` the public API paths where a 401 is the app's own answer (`nalog`: wrong code, expired student cookie; a 401
+from a locked path still fails). `JAVNI_IZRAZ` already contains `nalog(/|$)`, which the server regex gets with the prijava
+release (Novica runs `staging public gfs`; until then the e2e regex is one branch ahead of staging).
 By default the fixture is strict (no JS with any `NIZOVI_EDITORA` string, `ML__latex` included, and no request under
 `assets/mathlive/`: `upis` and uživo without a formula); `test.use({ formule: true })` (uživo with a formula, 5a) checks
 `zabranjeniJavno` instead (`e2e/nizovi-editora.ts`: editor, ProseMirror, formula dialog and `NIZ_MATHLIVE_CEO`, i.e. the full
@@ -122,11 +126,12 @@ without it.
 
 ## Public routes
 
-`upis/:token` and `uzivo`, `uzivo/:kod` are opened by students on a phone **without basic-auth**, so they may only request
-`assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo: `api/public/uzivo/*`, `api/public/mediji/*`,
-`api/public/ws`); any other `/api/*` call returns 401 and pops the browser's password dialog. Both live in
-`PublicLayout` (no shell; a wrong link under `/upis` or `/uzivo` stays a public 404). `gfs/javna-ruta-uvozi` enforces
-this fail-closed: a public feature (`features/upis`, `features/uzivo/javno`) may import only itself plus
+`upis/:token`, `uzivo`, `uzivo/:kod` and `nalog` are opened by students on a phone **without basic-auth** and without a
+teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
+`api/public/uzivo/*`, `api/public/mediji/*`, `api/public/ws`; nalog: `api/public/nalog/*`); any other `/api/*` call returns
+401 and pops the browser's password dialog. All live in `PublicLayout` (no shell; a wrong link under `/upis`, `/uzivo` or
+`/nalog` stays a public 404). `gfs/javna-ruta-uvozi` enforces this fail-closed: a public feature (`features/upis`,
+`features/uzivo/javno`, `features/nalog`) may import only itself plus
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
 own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
@@ -150,6 +155,69 @@ the `href` is never an arbitrary URL. The teacher side lives on the group's Stud
 `<a download>` to `api/grupe/{id}/kontakti.vcf` (vCard; the phone offers the import into Contacts), "Pošalji WA link" is a
 `mailto:` built by `mailtoWaLinka` (`core/api/grupe.models.ts`: shown students' addresses in BCC, RFC 6068 encoding) that
 opens the teacher's own mail app, and `ui/wa-link-dialog` sets the link (`PATCH grupe/{id}/wa-link`).
+
+## Prijava (teacher session and student account)
+
+Spec `docs/superpowers/specs/2026-10-19-prijava-design.md` in `Novke/GFS-deploy` (sections 4, 5, 10). The backend decides;
+the front only routes and shows.
+
+- **Teacher session** (`core/auth/`): `SesijaStore` (root; `proveri()` = one shared `GET api/auth/ja`, success cached; 401
+  `odjavljen`, network/5xx `nepoznato` and the route loads anyway, so a deploy does not log anybody out; `ponisti()`),
+  `AuthApi` (`api/auth/*`), `nastavnikGuard` (`canMatch`) **per route**: on the shell route and on every teacher route
+  outside it (the five `ProjectorLayout` routes: lecture projector, onboarding QR, publika, konzola, daljinski; the two
+  legacy `onboarding/:id[/qr]` redirects in `legacy-redirects.ts`). Without a session it returns a `UrlTree` to
+  `/prijava?nazad=<nazadIzUrla(url)>`. **No guard** on `upis`, `uzivo`, `nalog`, `prijava` (and later `render/slajd`); a new
+  teacher route outside the shell must get `canMatch: [nastavnikGuard]` (`app.routes.spec.ts` lists the guarded URLs).
+- **`/prijava`** (`features/prijava/pages/prijava.page`, in `PublicLayout`, day look): injects only `SesijaStore` and
+  `Router`, so its only requests are `GET api/auth/ja` (guard of the target) and `POST api/auth/prijava` (`API_BEZ_SESIJE`
+  in `e2e/javne-putanje.ts`). It is **not** in `JAVNI_IZRAZ` (a teacher page; on staging behind basic-auth) and not a
+  `JAVNI_FEATURE` (it must call `api/auth/*`); `e2e/prijava.spec.ts` checks its network instead. Errors: 401/429/503 show the
+  server's `reason` in the form banner (503 read from the body, `toApiError` hides 5xx), network/other 5xx generic.
+- **`nazad`** (`shared/util/nazad.ts`, no imports, also on the public allow-list): `bezbednoNazad(v)` passes only a relative
+  app path (`^[A-Za-z0-9][A-Za-z0-9/_.?=&%-]*$`, no `//`, `..`, `:`, `\`), anything else is `null` and ignored
+  (`//evil.com`, `https://x`, `/\evil`, `javascript:`); `nazadIzUrla(routerUrl)` builds it (drops the leading `/` and the
+  fragment, percent-encodes the rest, e.g. the comma of `sort=datum,desc`). Use is always `navigateByUrl(bezbednoNazad(x) ?? ...)`.
+- **401 = expiry** (`sesija.interceptor.ts`, before `errorInterceptor`): a 401 on a teacher API (`jeIstekSesije`: `api/*`
+  except `api/public/*`, `auth/prijava`, `auth/ja`, `auth/odjava`) dynamically imports `istek-sesije` (lazy chunk, budget) and
+  calls `IstekSesije.obradi()` once for all parallel 401s: `ponisti()`, then `/prijava?nazad=<current URL>` through the router.
+  With unsaved work in `RegistarCuvanja` (`NesacuvaneIzmene.broj() > 0`) a `ConfirmDialog` ("Prijava je istekla") asks first,
+  also on routes with `canDeactivate`; "Odustani" keeps the page, shows `PORUKA_OSTAO` once per URL, and rows keep
+  "Pokušaj ponovo" for after a login in another tab. The error interceptor shows no snackbar for that 401. **Never from a
+  public route:** when the current URL or the navigation in progress targets `/upis`, `/uzivo` or `/nalog`, `obradi` only
+  calls `ponisti()` (a late teacher response must not take a student to `/prijava`).
+- **Shell-lifetime refresh:** the root stores that poll a teacher API run only while the shell lives:
+  `DashboardCountsStore.pokreni(DestroyRef)` (called by `Shell`) and `ObavestenjaStore.pokreni(DestroyRef)` (called by the bell
+  in the top bar) load at once, then follow `core/state/periodicno-osvezavanje.ts` (after navigation at most once per 15 s,
+  every 60 s while the tab is visible) and stop (and cancel the request in flight) when that `DestroyRef` ends. Creating the
+  store alone requests nothing. A new teacher-side polling store must follow the same pattern; `e2e/nalog.spec.ts` ("posle
+  ljuske u istoj kartici") checks that no teacher request fires on `/nalog` after leaving the shell in the same tab.
+- **Top bar and nav** (F2): `@defer (on immediate)` holds the bell (`obavestenja-meni`, badge = unread) and the user menu
+  (`korisnik-meni`: "Prijavljeni uređaji" (lazy `sesije.dialog`), "Odjava" (`ConfirmDialog` only with unsaved work; 401 counts
+  as success; other errors keep the teacher on the page)); the notifications list is a lazy dialog anchored under the bell
+  (`obavestenja-panel`, several actions per item, so not a menu). All of it is outside the initial bundle. The side nav shows
+  the username (`SideNav.korisnik` from `SesijaStore.korisnik`). Home shows the "Nalozi" card next to "Čeka na tebe".
+- **Student account `nalog`** (`features/nalog/`, a `JAVNI_FEATURE`): route `nalog` in `PublicLayout` with children
+  `NALOG_RUTE` (lazy page; the public 404 under `/nalog` is added in `app.routes.ts` because `NotFound` lives in
+  `core/layout`). Allow-list: `JAVNO_DOZVOLJENO` plus `DOZVOLJENO_PO_FEATURE['features/nalog']` = `shared/ui/confirm-dialog`
+  (Angular Material dialog/button and rxjs only) and `shared/util/datum.pipe` (`@angular/core` only); never `core/state`,
+  `core/auth`, teacher API clients or `features/studenti`. `data-access/`: `nalog.api.ts` (only `api/public/nalog/*`, all
+  `LOCAL_ERRORS`), `nalog.models.ts` (DTOs as on the server), `nalog.pravila.ts` (index normalisation like `upis`, code digits,
+  `porukaGreske`). `ui/`: presentational steps with inputs/outputs and no HTTP, reused by `nalog/moodle` (F5):
+  `IndeksKorak` (`posaljiKod`), `KodKorak` (`prijavi`, `posaljiPonovo`, `neStize`, `promeniIndeks`; `slanjeBroj` restarts the
+  60 s wait of "Pošalji ponovo", `CEKANJE_PONOVO_S`; the field has `inputmode="numeric"`, `autocomplete="one-time-code"`,
+  `maxlength="6"`, and a pasted code with spaces or a dash is reduced to its 6 digits before `maxlength` cuts it),
+  `NalogPregled` (index, name, masked e-mail, Moodle, devices, "Odjavi se", "Odjavi sve uređaje"). `pages/nalog.page.ts`: step
+  signal `'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen'`; first load `GET stanje` (+ `GET ja` when signed in;
+  `ja` 401 = index step); after a successful code `navigateByUrl(bezbednoNazad(nazad))`, otherwise the account screen; an
+  already signed-in student with a safe `nazad` gets a "Nastavi" button, never an automatic jump (no loop). Server texts are
+  shown verbatim ("Ako nalog postoji, kod je poslat.", 401 "Kod nije ispravan ili je istekao.", 429, 503, "Javili smo
+  nastavniku."); "Odjavi sve uređaje" confirms with `ConfirmDialog`. Focus moves to the step heading (`h2`) after each step change.
+- **Tests:** `core/auth/sesija.testing.ts` `prijaviNastavnika()` signs the real `SesijaStore` in for specs that go through the
+  real routes. e2e: `MockApi.prijavljen` (teacher cookie; `false` = every teacher API answers 401 before overrides, as the
+  server), `MockApi.LOZINKA`, `MockApi.studentPrijavljen` and `MockApi.KOD_NALOGA` (student cookie and the only accepted code
+  for `podaci.nalogStudenta`, fixture `e2e/fixtures/nalozi.json`, which also holds notifications and teacher sessions). Before
+  revoking the teacher session in a test wait for the top bar (`trakaSpremna` in `prijava.spec.ts`): the deferred bell's first
+  `GET obavestenja/broj` would otherwise get the 401. Specs: `prijava.spec.ts`, `nalog-nastavnika.spec.ts`, `nalog.spec.ts`.
 
 ## Uživo (`features/uzivo`)
 
@@ -320,7 +388,8 @@ over STOMP; teacher commands are REST.
   `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
   (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
-  the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 785 000 B; the editor page
+  the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 790 000 B (`BUDZET_POCETNO`,
+raised by 5 kB for the teacher session, see "Prijava"); the editor page
   file (contains `uz-ed-zaglavlje`) <= 215 000 B; the editor's own closure (its closure minus initial and page closure)
   <= 450 000 B and <= 140 000 B gzip since 4b (it carries ProseMirror, the text editor of F12; 4a alone was
   <= 160 000 B). Public routes load none of it (`e2e/javna-mreza.ts` also checks every JS body for those strings).

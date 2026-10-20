@@ -44,11 +44,13 @@ describe('Shell', () => {
   let brojaciNapravljeni: number;
   let ucitajReferentne: ReturnType<typeof vi.fn>;
   let pokreniObavestenja: ReturnType<typeof vi.fn>;
+  let pokreniBrojace: ReturnType<typeof vi.fn>;
 
   function podesi(sirina: number) {
     brojaciNapravljeni = 0;
     ucitajReferentne = vi.fn();
     pokreniObavestenja = vi.fn();
+    pokreniBrojace = vi.fn();
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes, withComponentInputBinding()), // kao app.config (data -> input, npr. NotFound.javna)
@@ -63,7 +65,7 @@ describe('Shell', () => {
           provide: DashboardCountsStore,
           useFactory: () => {
             brojaciNapravljeni++;
-            return { testovi: signal(2), domaci: signal(1), prijave: signal(4) };
+            return { testovi: signal(2), domaci: signal(1), prijave: signal(4), pokreni: pokreniBrojace };
           },
         },
         provideAppInitializer(() => {
@@ -156,6 +158,9 @@ describe('Shell', () => {
     await vi.waitFor(() => expect(el.querySelector('app-obavestenja-meni [data-znacka]')).not.toBeNull());
     expect(el.querySelector('app-korisnik-meni')).not.toBeNull();
     expect(pokreniObavestenja).toHaveBeenCalledOnce();
+    // brojači navigacije osvežavaju samo dok ljuska živi (DestroyRef ljuske), kao zvono
+    expect(pokreniBrojace).toHaveBeenCalledOnce();
+    expect(typeof (pokreniBrojace.mock.calls[0][0] as { onDestroy?: unknown }).onDestroy).toBe('function');
   });
 
   it('javna ruta /upis/x: bez ljuske, bez brojača, bez referentnih podataka; samo env.json i api/public/upis', async () => {
@@ -168,6 +173,7 @@ describe('Shell', () => {
     expect(brojaciNapravljeni).toBe(0);
     expect(ucitajReferentne).not.toHaveBeenCalled();
     expect(pokreniObavestenja).not.toHaveBeenCalled();
+    expect(pokreniBrojace).not.toHaveBeenCalled();
 
     const zahtevi = TestBed.inject(HttpTestingController).match(() => true).map(r => r.request.url);
     expect(zahtevi.length).toBeGreaterThan(0);

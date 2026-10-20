@@ -17,6 +17,13 @@ export const PORUKA_OSTAO = 'Prijava je istekla, pa se izmene ne čuvaju. Prijav
 const jePrijava = (url: string) => url === '/prijava' || url.startsWith('/prijava?');
 
 /**
+ * Javne rute studenta (`PublicLayout`, bez sesije nastavnika). Nastavnički zahtev tu ne bi smeo ni da postoji (ljuska i
+ * njeni store-ovi osvežavaju samo dok ljuska živi), ali zakasneli odgovor (npr. zahtev ljuske poslat pre odjave i prelaska
+ * na `/nalog` u istoj kartici) ne sme studenta da odvede na `/prijava`.
+ */
+const JAVNA_RUTA = /^\/(upis|uzivo|nalog)(?:[/?#]|$)/;
+
+/**
  * Šta se radi kad server odbije sesiju nastavnika (401 sa nastavničkog API-ja), jednom za sve paralelne zahteve:
  * `SesijaStore.ponisti()` i navigacija **kroz ruter** na `/prijava?nazad=<trenutni URL>`, pa posle prijave nastavnik
  * stiže tačno gde je bio.
@@ -45,6 +52,12 @@ export class IstekSesije {
   obradi(): void {
     const router = this.injector.get(Router);
     const url = router.url;
+    // i navigacija koja još traje (npr. odjava -> /nalog): njen cilj odlučuje, ne URL koji se upravo napušta
+    const cilj = router.currentNavigation()?.finalUrl ?? router.currentNavigation()?.extractedUrl;
+    if ([url, cilj ? router.serializeUrl(cilj) : null].some(u => u !== null && JAVNA_RUTA.test(u))) {
+      this.injector.get(SesijaStore).ponisti();
+      return;
+    }
     if (this.uToku || jePrijava(url) || this.ostaoNa === url) {
       return;
     }

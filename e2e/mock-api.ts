@@ -88,6 +88,11 @@ interface Obavestenje {
 }
 /** `SesijaInfo` (`GET api/auth/sesije`): prijavljeni uređaji nastavnika. */
 interface SesijaNastavnika { id: number; opis: string; kreirano: string; poslednjiUlaz: string; trenutna: boolean }
+/** `UredjajInfo` i `StudentJaInfo` naloga studenta (`api/public/nalog/*`). */
+interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
+interface NalogStudenta {
+  indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
+}
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
@@ -114,6 +119,8 @@ export interface Podaci extends BankaPodaci {
   obavestenja: Obavestenje[];
   /** Prijavljeni uređaji nastavnika (`trenutna` = ovaj pregledač). */
   sesijeNastavnika: SesijaNastavnika[];
+  /** Jedini student sa nalogom (javna ruta `/nalog`); uređaj ovog pregledača se dodaje prijavom kodom. */
+  nalogStudenta: NalogStudenta;
   // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
@@ -129,7 +136,7 @@ export function ucitajPodatke(): Podaci {
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
   const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
-  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[] }>('nalozi.json');
+  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[]; nalogStudenta: NalogStudenta }>('nalozi.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -149,6 +156,7 @@ export function ucitajPodatke(): Podaci {
     ucesnici: [],
     obavestenja: nalozi.obavestenja,
     sesijeNastavnika: nalozi.sesijeNastavnika,
+    nalogStudenta: nalozi.nalogStudenta,
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
@@ -247,6 +255,13 @@ export class MockApi {
   prijavljen = true;
   /** Izmišljena lozinka koju mok prihvata za korisnika `nastavnik`. */
   static readonly LOZINKA = 'lozinka-za-e2e';
+  /**
+   * Kolačić studenta `gfs_student` (javna ruta `/nalog`): `false` dok se student ne prijavi kodom {@link MockApi.KOD_NALOGA}
+   * za indeks iz `podaci.nalogStudenta`. Nezavisan od sesije nastavnika.
+   */
+  studentPrijavljen = false;
+  /** Jedini kod koji mok prihvata pri prijavi studenta (kao da je stigao mejlom). */
+  static readonly KOD_NALOGA = '246810';
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -1119,6 +1134,48 @@ export class MockApi {
       d.ucesnici.push(ucesnik);
       return { status: 201, telo: ucesnik };
     });
+
+    // nalog studenta (javno, spec prijave 5.1): isti odgovor na "kod" za svaki indeks; prijava samo kodom KOD_NALOGA za
+    // indeks studenta iz fiksture; `ja` i odjave traže kolačić studenta (`studentPrijavljen`)
+    const bezSesijeStudenta = () => greska(401, 'Potrebna je prijava.');
+    get('public/nalog/stanje', () => ok({ prijavljen: this.studentPrijavljen }));
+    post('public/nalog/kod', z => {
+      const indeks = String((z.telo as { indeks?: unknown } | null)?.indeks ?? '');
+      const maska = indeks === d.nalogStudenta.indeks ? d.nalogStudenta.maskaMejla : `${(indeks[0] ?? 'x').toLowerCase()}***@example.test`;
+      return ok({ poruka: 'Ako nalog postoji, kod je poslat.', maska });
+    });
+    post('public/nalog/prijava', z => {
+      const telo = z.telo as { indeks?: unknown; kod?: unknown } | null;
+      if (telo?.indeks !== d.nalogStudenta.indeks || telo.kod !== MockApi.KOD_NALOGA) {
+        return greska(401, 'Kod nije ispravan ili je istekao.');
+      }
+      this.studentPrijavljen = true;
+      const n = d.nalogStudenta;
+      n.uredjaji = [
+        { id: this.sledeciId++, opis: 'Linux · Chrome', nacin: 'KOD', prviUlaz: lokalnoVreme(new Date()), poslednjiUlaz: lokalnoVreme(new Date()), trenutni: true },
+        ...n.uredjaji.filter(u => !u.trenutni),
+      ];
+      return { status: 204 };
+    });
+    get('public/nalog/ja', () => (this.studentPrijavljen ? ok(d.nalogStudenta) : bezSesijeStudenta()));
+    post('public/nalog/odjava', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      this.studentPrijavljen = false;
+      d.nalogStudenta.uredjaji = d.nalogStudenta.uredjaji.filter(u => !u.trenutni);
+      return { status: 204 };
+    });
+    post('public/nalog/odjava-svuda', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      this.studentPrijavljen = false;
+      const odjavljeno = d.nalogStudenta.uredjaji.length;
+      d.nalogStudenta.uredjaji = [];
+      return ok({ odjavljeno });
+    });
+    post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
 
     // nastavničko izvođenje (iza basic-auth-a): stanje i komande; snimci kroz STOMP idu preko `lazni-stomp.ts`
     const izvodjenje = (id: string) => Number(id) === this.izvodjenje.id;

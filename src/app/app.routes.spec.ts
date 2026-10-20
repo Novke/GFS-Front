@@ -5,6 +5,7 @@ import { ActivatedRouteSnapshot, provideRouter, Router } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { routes } from './app.routes';
+import { NotFound } from './core/layout/not-found';
 import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 
@@ -70,7 +71,7 @@ describe('rute i sesija nastavnika', () => {
     http.expectNone(() => true);
   });
 
-  it.each(['/upis/abc', '/uzivo', '/uzivo/123456', '/prijava', '/prijava?nazad=studenti'])(
+  it.each(['/upis/abc', '/uzivo', '/uzivo/123456', '/prijava', '/prijava?nazad=studenti', '/nalog', '/nalog?nazad=uzivo%2FABC123'])(
     'javna ruta %s ne pita za sesiju',
     async url => {
       await router.navigateByUrl(url);
@@ -79,6 +80,19 @@ describe('rute i sesija nastavnika', () => {
       http.expectNone('api/auth/ja');
     },
   );
+
+  it.each(['/nalog/nepostoji', '/nalog/a/b'])('pogrešan link pod /nalog (%s) ostaje javni 404 u PublicLayout-u', async url => {
+    await router.navigateByUrl(url);
+    expect(router.url).toBe(url);
+    expect(layout(router)).toBe(PublicLayout);
+    let list = router.routerState.snapshot.root;
+    while (list.firstChild) {
+      list = list.firstChild;
+    }
+    expect(list.component).toBe(NotFound);
+    expect(list.data['javna']).toBe(true);
+    http.expectNone(() => true);
+  });
 
   it('sa sesijom ljuska se otvara (jedan GET ja za više navigacija)', async () => {
     const prva = router.navigateByUrl('/grupe');

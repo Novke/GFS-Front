@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { DOCUMENT } from '@angular/core';
+import { createEnvironmentInjector, DestroyRef, DOCUMENT, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { NavigationEnd, provideRouter, Router } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -37,6 +37,8 @@ describe('DashboardCountsStore', () => {
   let http: HttpTestingController;
   let dogadjaji: Subject<unknown>;
   let vidljivost: DocumentVisibilityState;
+  /** Kao ljuska: osvežavanje traje dok ovaj injektor (njegov `DestroyRef`) živi. */
+  let ljuska: EnvironmentInjector;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -50,6 +52,7 @@ describe('DashboardCountsStore', () => {
     const doc = TestBed.inject(DOCUMENT);
     vi.spyOn(doc, 'visibilityState', 'get').mockImplementation(() => vidljivost);
     http = TestBed.inject(HttpTestingController);
+    ljuska = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
   });
 
   afterEach(() => {
@@ -57,13 +60,54 @@ describe('DashboardCountsStore', () => {
   });
 
   const navigacija = () => dogadjaji.next(new NavigationEnd(1, '/a', '/a'));
+  /** Store kako ga ljuska koristi: injektuje ga i pokrene sa svojim `DestroyRef`. */
+  const pokrenut = () => {
+    const store = TestBed.inject(DashboardCountsStore);
+    store.pokreni(ljuska.get(DestroyRef));
+    return store;
+  };
 
   it('ne zove ništa dok ga niko ne injektuje', () => {
     http.expectNone(URL);
   });
 
-  it('pri nastanku učita brojače iz ukupnih vrednosti (ne iz dužine lista od najviše 10); zahtev je tih', () => {
-    const store = TestBed.inject(DashboardCountsStore);
+  it('sam nastanak ne zove ništa (javna ruta posle odjave, npr. /nalog, ne sme da dobije nastavnički zahtev)', () => {
+    TestBed.inject(DashboardCountsStore);
+    http.expectNone(URL);
+    navigacija();
+    vi.advanceTimersByTime(PERIOD_MS * 2);
+    http.expectNone(URL);
+  });
+
+  it('osvežavanje živi koliko i ljuska: posle uništenja nema ni navigacionog ni periodičnog zahteva, zahtev u toku se otkazuje', () => {
+    const store = pokrenut();
+    http.expectOne(URL).flush(tabla(1, 0, []));
+    vi.advanceTimersByTime(PERIOD_MS);
+    const uToku = http.expectOne(URL);
+    ljuska.destroy();
+    expect(uToku.cancelled).toBe(true);
+    vi.advanceTimersByTime(RAZMAK_NAVIGACIJA_MS);
+    navigacija();
+    vi.advanceTimersByTime(PERIOD_MS * 3);
+    http.expectNone(URL);
+    expect(store.testovi()).toBe(1);
+  });
+
+  it('ponovo pokrenut (nova ljuska posle prijave): odmah učita i opet osvežava; drugi poziv ne pravi drugi tajmer', () => {
+    const store = pokrenut();
+    http.expectOne(URL).flush(tabla(1, 0, []));
+    ljuska.destroy();
+    ljuska = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+    store.pokreni(ljuska.get(DestroyRef));
+    store.pokreni(ljuska.get(DestroyRef));
+    http.expectOne(URL).flush(tabla(2, 0, []));
+    vi.advanceTimersByTime(PERIOD_MS);
+    http.expectOne(URL).flush(tabla(3, 0, []));
+    expect(store.testovi()).toBe(3);
+  });
+
+  it('pokreni učita brojače iz ukupnih vrednosti (ne iz dužine lista od najviše 10); zahtev je tih', () => {
+    const store = pokrenut();
     const req = http.expectOne(URL);
     expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
     req.flush(tabla(14, 2, [4, 1]));
@@ -73,7 +117,7 @@ describe('DashboardCountsStore', () => {
   });
 
   it('navigacija osvežava najviše jednom u 15 s', () => {
-    TestBed.inject(DashboardCountsStore);
+    pokrenut();
     http.expectOne(URL).flush(tabla(0, 0, []));
     navigacija();
     http.expectNone(URL);
@@ -85,7 +129,7 @@ describe('DashboardCountsStore', () => {
   });
 
   it('na 60 s osvežava samo dok je tab vidljiv', () => {
-    TestBed.inject(DashboardCountsStore);
+    pokrenut();
     http.expectOne(URL).flush(tabla(0, 0, []));
     vi.advanceTimersByTime(PERIOD_MS);
     http.expectOne(URL).flush(tabla(0, 0, []));
@@ -98,7 +142,7 @@ describe('DashboardCountsStore', () => {
   });
 
   it('greška (npr. 404 na starom backendu) je tiha i ostavlja poslednje brojače', () => {
-    const store = TestBed.inject(DashboardCountsStore);
+    const store = pokrenut();
     http.expectOne(URL).flush(tabla(2, 2, [3]));
     vi.advanceTimersByTime(PERIOD_MS);
     http.expectOne(URL).flush(null, { status: 404, statusText: 'Not Found' });
@@ -107,13 +151,13 @@ describe('DashboardCountsStore', () => {
   });
 
   it('neočekivan oblik odgovora daje nule umesto izuzetka', () => {
-    const store = TestBed.inject(DashboardCountsStore);
+    const store = pokrenut();
     http.expectOne(URL).flush({});
     expect([store.testovi(), store.domaci(), store.prijave()]).toEqual([0, 0, 0]);
   });
 
   it('čuva ceo odgovor i status; greška se pamti, a stara tabla ostaje', () => {
-    const store = TestBed.inject(DashboardCountsStore);
+    const store = pokrenut();
     expect(store.status()).toBe('loading');
     http.expectOne(URL).flush(tabla(2, 0, []));
     expect(store.status()).toBe('loaded');
@@ -126,8 +170,8 @@ describe('DashboardCountsStore', () => {
   });
 
   it('osveziSada ne pravi drugi zahtev dok je upravo počeo jedan; posle odgovora i greške šalje novi', () => {
-    const store = TestBed.inject(DashboardCountsStore);
-    store.osveziSada(); // zahtev iz nastanka je u toku
+    const store = pokrenut();
+    store.osveziSada(); // zahtev iz `pokreni` je u toku
     store.osveziSada();
     http.expectOne(URL).flush(tabla(1, 0, []));
     store.osveziSada();
@@ -138,7 +182,7 @@ describe('DashboardCountsStore', () => {
   });
 
   it('osveziSada šalje novi zahtev ako je prethodni zapeo duže od SVEZ_ZAHTEV_MS', () => {
-    const store = TestBed.inject(DashboardCountsStore);
+    const store = pokrenut();
     const prvi = http.expectOne(URL);
     vi.advanceTimersByTime(SVEZ_ZAHTEV_MS + 1);
     store.osveziSada();

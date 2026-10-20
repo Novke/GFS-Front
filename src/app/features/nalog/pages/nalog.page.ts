@@ -1,0 +1,380 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  signal,
+} from '@angular/core';
+import { MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+
+import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { bezbednoNazad } from '../../../shared/util/nazad';
+import { NalogApi } from '../data-access/nalog.api';
+import { PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
+import { porukaGreske } from '../data-access/nalog.pravila';
+import { IndeksKorak } from '../ui/indeks-korak.component';
+import { KodKorak } from '../ui/kod-korak.component';
+import { NalogPregled } from '../ui/nalog-pregled.component';
+
+export type KorakNaloga = 'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen';
+
+const NASLOV: Record<KorakNaloga, string> = {
+  ucitavanje: 'Nalog',
+  greska: 'Nalog',
+  indeks: 'Prijava',
+  kod: 'Unesi kod',
+  prijavljen: 'Prijavljen si',
+};
+
+/** `1 uređaj`, `2 uređaja`, `5 uređaja`, `21 uređaj` (genitiv množine i paukal su isti). */
+const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređaj' : 'uređaja'}`;
+
+/**
+ * Javni nalog studenta (`/nalog`, u `PublicLayout`-u: student na telefonu, bez sesije nastavnika; spec prijave 5.1):
+ * indeks -> kod na mejl -> prijavljen na ovom telefonu (kolačić `gfs_student`, 365 dana). Zove **samo** `api/public/nalog/*`
+ * (`NalogApi`); ESLint `gfs/javna-ruta-uvozi` drži uvoze, e2e `nalog.spec.ts` mrežu.
+ *
+ * Na prvom učitavanju `GET stanje` (i `GET ja` kad je prijavljen) bira početni korak. Posle uspešne prijave ide na `nazad`
+ * (query, `withComponentInputBinding`) ako ga `bezbednoNazad` pusti (samo relativna putanja aplikacije, npr. `uzivo/ABC123`),
+ * inače pokazuje nalog; spoljni ili apsolutni URL se nikad ne otvara. Već prijavljen student sa `nazad` dobija "Nastavi"
+ * (bez automatskog skoka, pa nema petlje ako ga ciljna strana vrati ovde). Greške servera (401, 429, 503) su doslovno u
+ * baneru koraka; mreža i ostale 5xx opšte poruke.
+ */
+@Component({
+  selector: 'app-nalog-page',
+  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogPregled],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <article class="nalog">
+      <header class="zaglavlje">
+        <span class="znak" aria-hidden="true"><img src="assets/images/gfs-logo.png" alt="" width="170" height="128"></span>
+        <div class="naslovi">
+          <p class="nadnaslov">Građevinski fakultet Subotica</p>
+          <h1>Nalog studenta</h1>
+        </div>
+      </header>
+
+      <div class="telo">
+        <h2 #naslovKoraka tabindex="-1">{{ naslov() }}</h2>
+        @switch (korak()) {
+          @case ('ucitavanje') {
+            <p class="stanje" role="status">
+              <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
+            </p>
+          }
+          @case ('greska') {
+            <p class="poruka opasnost" role="alert">{{ greskaUcitavanja() }}</p>
+            <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>
+          }
+          @case ('indeks') {
+            @if (info(); as poruka) {
+              <p class="poruka uspeh" role="status">{{ poruka }}</p>
+            }
+            <app-nalog-indeks-korak
+              [indeks]="indeks()"
+              [salje]="salje()"
+              [greska]="greska()"
+              (posaljiKod)="posaljiKod($event)"
+            />
+          }
+          @case ('kod') {
+            <app-nalog-kod-korak
+              [indeks]="indeks()"
+              [maska]="maska()"
+              [poruka]="porukaKoda()"
+              [slanjeBroj]="slanjeBroj()"
+              [salje]="salje()"
+              [greska]="greska()"
+              [pomoc]="pomoc()"
+              [pomocSalje]="pomocSalje()"
+              (prijavi)="prijavi($event)"
+              (posaljiPonovo)="posaljiKod(indeks())"
+              (neStize)="neStize()"
+              (promeniIndeks)="idiNa('indeks')"
+            />
+          }
+          @case ('prijavljen') {
+            <app-form-error-banner [poruka]="greska()" />
+            @if (ja(); as s) {
+              <app-nalog-pregled
+                [ja]="s"
+                [nastaviNa]="nastaviNa()"
+                [salje]="salje()"
+                (odjavi)="odjavi()"
+                (odjaviSvuda)="odjaviSvuda()"
+                (nastavi)="nastavi()"
+              />
+            }
+          }
+        }
+      </div>
+    </article>
+  `,
+  styles: `
+    :host { display: block; padding-block: clamp(0px, 4vh, 48px); }
+
+    .nalog {
+      max-width: 480px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .zaglavlje {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 20px;
+      background: var(--hero-bg);
+      color: var(--hero-ink);
+    }
+
+    /* znak iz logoa (kao na upisu i na prijavi nastavnika), beo na tamnoj podlozi */
+    .znak {
+      flex: none;
+      width: 39px;
+      height: 57px;
+      overflow: hidden;
+      filter: var(--logo-filter);
+      mix-blend-mode: screen;
+    }
+    .znak img { display: block; max-width: none; margin: -36px 0 0 -66px; }
+
+    .naslovi { min-width: 0; }
+    .nadnaslov {
+      margin: 0 0 4px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      opacity: .8;
+    }
+    h1 { margin: 0; color: inherit; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
+
+    .telo { padding: 20px; }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    h2:focus { outline: none; }
+
+    .stanje { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 24px 0;
+      color: var(--muted); }
+    .dugme { width: 100%; min-height: 48px; font-size: 16px; }
+    .poruka { margin: 0 0 16px; padding: 12px 16px; border: 1px solid transparent; border-radius: var(--radius-sm); }
+    .poruka.opasnost { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+    .poruka.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  `,
+})
+export class NalogPage {
+  /** Query `nazad` (relativna putanja aplikacije); proverava ga `bezbednoNazad` tek pri upotrebi. */
+  readonly nazad = input<string | null | undefined>(null);
+
+  private readonly api = inject(NalogApi);
+  private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  protected readonly korak = signal<KorakNaloga>('ucitavanje');
+  protected readonly naslov = computed(() => NASLOV[this.korak()]);
+  protected readonly indeks = signal('');
+  protected readonly maska = signal('');
+  protected readonly porukaKoda = signal(PORUKA_KOD_POSLAT);
+  protected readonly slanjeBroj = signal(0);
+  protected readonly salje = signal(false);
+  /** Greška servera za baner trenutnog koraka. */
+  protected readonly greska = signal<string | null>(null);
+  protected readonly greskaUcitavanja = signal('');
+  protected readonly pomoc = signal<string | null>(null);
+  protected readonly pomocSalje = signal(false);
+  protected readonly ja = signal<StudentJa | null>(null);
+  /** Poruka posle odjave (na koraku indeksa). */
+  protected readonly info = signal<string | null>(null);
+  protected readonly nastaviNa = computed(() => bezbednoNazad(this.nazad()));
+
+  private zahtev?: Subscription;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.zahtev?.unsubscribe());
+    this.ucitaj(false);
+  }
+
+  /** `GET stanje`, pa (prijavljen) `GET ja`: bira početni korak. */
+  protected ucitaj(fokus = true): void {
+    this.zahtev?.unsubscribe();
+    this.korak.set('ucitavanje');
+    this.zahtev = this.api.stanje().subscribe({
+      next: s => (s?.prijavljen ? this.ucitajJa(fokus) : this.idiNa('indeks', fokus)),
+      error: (e: unknown) => this.greskaPriUcitavanju(e, fokus),
+    });
+  }
+
+  protected posaljiKod(indeks: string): void {
+    if (this.salje()) {
+      return;
+    }
+    this.pocni();
+    this.zahtev = this.api.posaljiKod(indeks).subscribe({
+      next: odg => {
+        this.salje.set(false);
+        this.indeks.set(indeks);
+        this.maska.set(odg?.maska ?? '');
+        this.porukaKoda.set(odg?.poruka || PORUKA_KOD_POSLAT);
+        this.slanjeBroj.update(n => n + 1);
+        this.pomoc.set(null);
+        if (this.korak() !== 'kod') {
+          this.idiNa('kod');
+        }
+      },
+      error: (e: unknown) => this.neuspeh(e),
+    });
+  }
+
+  protected prijavi(kod: string): void {
+    if (this.salje()) {
+      return;
+    }
+    this.pocni();
+    this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
+      next: () => {
+        this.salje.set(false);
+        const cilj = bezbednoNazad(this.nazad());
+        if (cilj) {
+          void this.router.navigateByUrl(cilj);
+        } else {
+          this.ucitajJa(true);
+        }
+      },
+      error: (e: unknown) => this.neuspeh(e),
+    });
+  }
+
+  protected neStize(): void {
+    if (this.pomocSalje()) {
+      return;
+    }
+    this.pomocSalje.set(true);
+    this.greska.set(null);
+    this.pomoc.set(null);
+    this.api.pomoc(this.indeks()).subscribe({
+      next: odg => {
+        this.pomocSalje.set(false);
+        this.pomoc.set(odg?.poruka || PORUKA_POMOC);
+      },
+      error: (e: unknown) => {
+        this.pomocSalje.set(false);
+        this.greska.set(porukaGreske(e));
+      },
+    });
+  }
+
+  protected odjavi(): void {
+    if (this.salje()) {
+      return;
+    }
+    this.pocni();
+    this.zahtev = this.api.odjavi().subscribe({
+      next: () => this.odjavljen('Odjavljen si sa ovog uređaja.'),
+      error: (e: unknown) => this.neuspehOdjave(e),
+    });
+  }
+
+  protected odjaviSvuda(): void {
+    if (this.salje()) {
+      return;
+    }
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: 'Odjaviti sve uređaje?',
+      tekst: 'Odjavićeš se na svim uređajima, i na ovom. Na svakom posle možeš ponovo da se prijaviš kodom sa mejla.',
+      potvrdi: 'Odjavi sve',
+      destruktivno: true,
+    }).subscribe(da => {
+      if (!da) {
+        return;
+      }
+      this.pocni();
+      this.zahtev = this.api.odjaviSvuda().subscribe({
+        next: odg => this.odjavljen(`Odjavljeno: ${uredjaja(Math.max(0, Number(odg?.odjavljeno) || 0))}.`),
+        error: (e: unknown) => this.neuspehOdjave(e),
+      });
+    });
+  }
+
+  protected nastavi(): void {
+    const cilj = this.nastaviNa();
+    if (cilj) {
+      void this.router.navigateByUrl(cilj);
+    }
+  }
+
+  /** Prelaz na korak; posle radnje korisnika fokus ide na naslov koraka (čitač ekrana čuje gde je). */
+  protected idiNa(korak: KorakNaloga, fokus = true): void {
+    this.greska.set(null);
+    this.korak.set(korak);
+    if (korak !== 'indeks') {
+      this.info.set(null);
+    }
+    if (fokus) {
+      afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>('h2')?.focus(), { injector: this.injector });
+    }
+  }
+
+  private ucitajJa(fokus: boolean): void {
+    this.zahtev?.unsubscribe();
+    this.zahtev = this.api.ja().subscribe({
+      next: ja => {
+        this.ja.set(ja);
+        this.indeks.set(ja.indeks);
+        this.idiNa('prijavljen', fokus);
+      },
+      // kolačić je istekao ili je opozvan u međuvremenu: prijava ispočetka
+      error: (e: unknown) =>
+        e instanceof HttpErrorResponse && e.status === 401 ? this.idiNa('indeks', fokus) : this.greskaPriUcitavanju(e, fokus),
+    });
+  }
+
+  private pocni(): void {
+    this.zahtev?.unsubscribe();
+    this.salje.set(true);
+    this.greska.set(null); // ista poruka dvaput zaredom: baner mora prvo da nestane (FormErrorBanner)
+  }
+
+  private neuspeh(e: unknown): void {
+    this.salje.set(false);
+    this.greska.set(porukaGreske(e));
+  }
+
+  private neuspehOdjave(e: unknown): void {
+    if (e instanceof HttpErrorResponse && e.status === 401) {
+      // sesije studenta već nema: za odjavu je to uspeh
+      this.odjavljen('Odjavljen si sa ovog uređaja.');
+      return;
+    }
+    this.neuspeh(e);
+  }
+
+  private odjavljen(poruka: string): void {
+    this.salje.set(false);
+    this.ja.set(null);
+    this.pomoc.set(null);
+    this.idiNa('indeks');
+    this.info.set(poruka);
+  }
+
+  private greskaPriUcitavanju(e: unknown, fokus: boolean): void {
+    this.greskaUcitavanja.set(porukaGreske(e));
+    this.idiNa('greska', fokus);
+  }
+}

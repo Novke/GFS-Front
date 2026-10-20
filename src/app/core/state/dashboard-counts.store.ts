@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { DOCUMENT, inject } from '@angular/core';
+import { DestroyRef, DOCUMENT, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { patchState, signalStore, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
 import { Subscription } from 'rxjs';
@@ -34,11 +34,13 @@ export function brojaciIz(tabla: KontrolnaTablaInfo | null): DashboardCounts {
 
 /**
  * Brojači na stavkama bočne navigacije (Domaći, Testovi, Grupe), iz agregata kontrolne table ("čeka na tebe").
- * Učitava se pri nastanku, posle navigacije (najviše jednom u 15 s) i na 60 s dok je tab vidljiv. Greške su tihe
- * (`LOCAL_ERRORS`, bez snackbara): brojači ostaju na poslednjoj vrednosti. Čuva i ceo poslednji odgovor (`tabla`, `status`,
- * `greska`): stranica Početna ga prikazuje, pa ceo ekran ima jedan zahtev (`osveziSada`).
+ * Učitava se kad ga `pokreni` uključi, posle navigacije (najviše jednom u 15 s) i na 60 s dok je tab vidljiv, ali samo dok
+ * živi ono što ga je uključilo (`DestroyRef` ljuske, kao `ObavestenjaStore`). Store je root, pa bi inače posle odjave i
+ * prelaska na javnu rutu (`/nalog`, `/upis`, `/uzivo`) u istoj kartici i dalje zvao zaključan `/api/*`: 401 bi tada pokrenuo
+ * istek sesije. Greške su tihe (`LOCAL_ERRORS`, bez snackbara): brojači ostaju na poslednjoj vrednosti. Čuva i ceo poslednji
+ * odgovor (`tabla`, `status`, `greska`): stranica Početna ga prikazuje, pa ceo ekran ima jedan zahtev (`osveziSada`).
  *
- * Instancira ga samo `Shell`: na javnoj ruti `/upis` ne sme da postoji (zove zaključan `/api/*`).
+ * Instancira ga i pokreće samo `Shell`.
  */
 export const DashboardCountsStore = signalStore(
   { providedIn: 'root' },
@@ -73,6 +75,30 @@ export const DashboardCountsStore = signalStore(
     return {
       osvezi,
       /**
+       * Uključuje osvežavanje dok `trajanje` (`DestroyRef` ljuske) ne istekne; odmah učitava. Drugi poziv dok osvežavanje
+       * radi ne pravi drugi tajmer. Po isteku otkazuje i zahtev u toku.
+       */
+      pokreni(trajanje: DestroyRef): void {
+        if (store._zahtev.periodicno) {
+          return;
+        }
+        osvezi();
+        const periodicno = periodicnoOsvezavanje({
+          router: store._router,
+          document: store._document,
+          osvezi,
+          poslednje: () => store._poslednje.vreme,
+        });
+        store._zahtev.periodicno = periodicno;
+        trajanje.onDestroy(() => {
+          periodicno.unsubscribe();
+          store._zahtev.veza?.unsubscribe();
+          if (store._zahtev.periodicno === periodicno) {
+            store._zahtev.periodicno = null;
+          }
+        });
+      },
+      /**
        * Za stranicu Početna: svež odgovor, ali bez drugog zahteva ako je jedan upravo počeo (npr. pri nastanku store-a ili iz
        * navigacije), pa `/` šalje jedan `GET pregled/kontrolna-tabla`.
        */
@@ -85,15 +111,6 @@ export const DashboardCountsStore = signalStore(
     };
   }),
   withHooks({
-    onInit(store) {
-      store.osvezi();
-      store._zahtev.periodicno = periodicnoOsvezavanje({
-        router: store._router,
-        document: store._document,
-        osvezi: () => store.osvezi(),
-        poslednje: () => store._poslednje.vreme,
-      });
-    },
     onDestroy(store) {
       store._zahtev.veza?.unsubscribe();
       store._zahtev.periodicno?.unsubscribe();

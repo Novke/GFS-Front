@@ -34,6 +34,12 @@ interface Opcije {
   /** Dozvoljeni `/api/` pozivi ove javne stranice (`METOD /api/...`); sve ostalo obara test. */
   dozvoljeniApi: RegExp;
   /**
+   * Putanje na kojima je 401 odgovor **aplikacije**, ne zaključavanje (nalog studenta: pogrešan kod na
+   * `/api/public/nalog/prijava`, istekao kolačić na `/api/public/nalog/ja`). Važi samo za javnu putanju (`JAVNA_PUTANJA`):
+   * 401 sa zaključane putanje (basic-auth, dijalog za lozinku) obara test i kad odgovara ovom izrazu. Podrazumevano ništa.
+   */
+  dozvoljeni401: RegExp;
+  /**
    * Stranica sme da crta formule (5a: uživo sa formulom u tekstu pitanja ili opcije). Tada teardown umesto svih nizova
    * editora proverava `zabranjeniJavno` (`ML__latex` sme samo bez `NIZ_MATHLIVE_CEO`) i pušta `assets/mathlive/`.
    * Podrazumevano `false`: upis i uživo bez formule ostaju strogi (nijedan JS sa `ML__latex`, nijedan zahtev na
@@ -50,9 +56,10 @@ interface Opcije {
  */
 export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
   dozvoljeniApi: [/^$/, { option: true }],
+  dozvoljeni401: [/^$/, { option: true }],
   formule: [false, { option: true }],
   javnaMreza: [
-    async ({ page, mock, baseURL, dozvoljeniApi, formule }, use) => {
+    async ({ page, mock, baseURL, dozvoljeniApi, dozvoljeni401, formule }, use) => {
       void mock; // mok mora biti instaliran pre ove rute: `route.fallback()` ide na njega
       const origin = new URL(baseURL!).origin;
       interface Procitano { putanja: string; nizovi: string[]; editor: string[]; zabranjeni: string[]; pdf: string[] }
@@ -105,7 +112,10 @@ export const test = osnova.extend<{ javnaMreza: JavnaMreza } & Opcije>({
       });
       await use(mreza);
       expect(mreza.api.filter(z => !dozvoljeniApi.test(z)), 'pozivi van dozvoljenih javnih putanja').toEqual([]);
-      expect(mreza.odgovori401, 'odgovori 401 (zaključana putanja)').toEqual([]);
+      expect(
+        mreza.odgovori401.filter(p => !(JAVNA_PUTANJA.test(p) && dozvoljeni401.test(p))),
+        'odgovori 401 (zaključana putanja)',
+      ).toEqual([]);
       expect(mreza.ws.filter(p => !JAVNA_PUTANJA.test(p)), 'WebSocket van javnih putanja').toEqual([]);
       const skripte = await mreza.skripte();
       expect(skripte.saUvozom, 'JS sa fflate-om ili kodom uvoza PPTX-a na javnoj ruti').toEqual([]);

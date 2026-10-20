@@ -15,9 +15,13 @@
  */
 export const HESIRANA_GRANA = String.raw`[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`;
 
-/** Javne putanje (izraz nad `$uri`), kopija serverskog izraza; grana starog webpack builder-a ostaje radi starih linkova. */
+/**
+ * Javne putanje (izraz nad `$uri`), kopija serverskog izraza; grana starog webpack builder-a ostaje radi starih linkova.
+ * `nalog(/|$)` (nalog studenta, spec prijave 12.4) je izraz koji stejdžing **dobija** sa izdanjem prijave: Novica ga dodaje
+ * kroz `staging public gfs` (README wrapper-a, "Prijava"); do tada je ovde ispred servera, da e2e već proverava budući izraz.
+ */
 // jedan red, doslovno kao na serveru (lakše poređenje); spec proverava da sadrži HESIRANA_GRANA
-export const JAVNI_IZRAZ = String.raw`^/(uzivo(/|$)|upis(/|$)|api/public(/|$)|assets/|media/|favicon\.ico$|[A-Za-z0-9_.-]+\.[0-9a-f]{8,}\.(js|css|woff2?)$|[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$)`;
+export const JAVNI_IZRAZ = String.raw`^/(uzivo(/|$)|upis(/|$)|nalog(/|$)|api/public(/|$)|assets/|media/|favicon\.ico$|[A-Za-z0-9_.-]+\.[0-9a-f]{8,}\.(js|css|woff2?)$|[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$)`;
 
 export const JAVNA_PUTANJA = new RegExp(JAVNI_IZRAZ);
 

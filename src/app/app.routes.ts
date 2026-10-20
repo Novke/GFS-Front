@@ -12,6 +12,7 @@ import { BANKA_RUTE } from './features/banka/banka.routes';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
+import { NALOG_RUTE } from './features/nalog/nalog.routes';
 import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
@@ -156,6 +157,17 @@ export const routes: Routes = [
     children: UZIVO_JAVNE_RUTE,
   },
 
+  // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/* i api/public/nalog/*. Pogrešan link pod
+  // /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  {
+    path: 'nalog',
+    component: PublicLayout,
+    children: [
+      ...NALOG_RUTE,
+      { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
+    ],
+  },
+
   // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.
   {
     path: 'prijava',
@@ -170,7 +182,7 @@ export const routes: Routes = [
   },
 
   // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
-  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `prijava`; kasnije `nalog`, `render/slajd`) su bez njega.
+  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `prijava`; kasnije `render/slajd`) su bez njega.
 
   // Projektor (bez ljuske, uvek svetao)
   {

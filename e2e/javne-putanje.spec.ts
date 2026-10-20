@@ -41,10 +41,11 @@ test.describe('javne putanje i keš nad produkcionim buildom', () => {
       expect(HESIRAN_FAJL.test(p), p).toBe(false);
     }
     for (const p of ['/api/predmeti', '/api/ws', '/index.html', '/prezentacije', '/', '/grupe/1', '/api/chunk-CtOh0Kox.js', '/api/publicx',
-      '/izvodjenja/7/daljinski', '/prijava', '/api/auth/ja', '/api/auth/prijava']) {
+      '/izvodjenja/7/daljinski', '/prijava', '/api/auth/ja', '/api/auth/prijava', '/nalozi', '/naloga/x', '/studenti/1/nalog']) {
       expect(JAVNA_PUTANJA.test(p), p).toBe(false);
     }
-    for (const p of ['/upis/x', '/uzivo', '/uzivo/123456', '/api/public/ws', '/api/public/upis/abc', '/assets/env.json']) {
+    for (const p of ['/upis/x', '/uzivo', '/uzivo/123456', '/nalog', '/nalog/', '/nalog/moodle', '/api/public/nalog/kod', '/api/public/ws',
+      '/api/public/upis/abc', '/assets/env.json']) {
       expect(JAVNA_PUTANJA.test(p), p).toBe(true);
     }
   });
