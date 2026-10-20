@@ -821,8 +821,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   (`ZadatakSlajdaInfo.upozorenja`), the editor only shows them.
 - **Console / remote:** `pages/zadatak-panel.component` (count for the next opening, `BROJ_VARIJANTI` in CEKA, drawn variants with
   assigned/answered/correct), `Shift+R` = `RESENJE` (`tastatura.ts`; plain `r`/`R` stays `PONOVI`, so Caps Lock never shows the
-  solution), the remote has the same toggle. A scored run (`PokreniCmd.boduje`) is offered but the server answers 409 until
-  student login exists.
+  solution), the remote has the same toggle. A scored run (`PokreniCmd.boduje`) works with student login (the backend's
+  `NalogIdentitet`): a phone without a student session goes to `nalog?nazad=uzivo/<kod>` and comes back; activities from a scored
+  run (backend BE-8) are not recorded yet, so do not rely on it for grades.
 - **Projector:** renders only `NastavnickiZadatak.javniRezultat` (`ui/zadatak-rezultat.component`, `ui/zadatak-prikaz.component`), whose
   numbers, correctness and solution follow three independent switches on the server; the console's `rezultat` is never on the
   projector.
