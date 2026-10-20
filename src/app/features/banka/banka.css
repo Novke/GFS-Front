@@ -1,7 +1,8 @@
 /*
- * Banka zadataka, stranica /banka: zaglavlje sa izborom predmeta i namene, raspored u dva stuba (stablo levo, grupa
- * desno; ispod 900 px jedan stub) i panel izabrane grupe. Stil stranice (`styleUrl` stranice, lenj sa njom); stablo,
- * kartica i dijalozi imaju svoje stilove. Boje samo kroz tokene.
+ * Banka zadataka, stranica /banka: zaglavlje sa izborom predmeta i namene, raspored u dva stuba (levo stablo pa isključene
+ * teme i serije, grupa desno; ispod 900 px jedan stub redom iz DOM-a: stablo, grupa, teme, serije) i panel izabrane grupe.
+ * Stil stranice (`styleUrl` stranice, lenj sa njom); stablo, kartica, sekcije tema i serija i dijalozi imaju svoje stilove.
+ * Boje samo kroz tokene.
  */
 
 :host { display: block; }
@@ -22,9 +23,16 @@
 .bk-raspored {
   display: grid;
   grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
-  gap: 16px;
+  /* poslednji red levog stuba je fleksibilan: višak visine grupe ide u njega, ne u razmak između stabla i tema */
+  grid-template-rows: auto auto 1fr;
+  column-gap: 16px;
   align-items: start;
 }
+
+/* grupa desno preko sva tri reda levog stuba; teme i serije same nose razmak iznad sebe (prazne se ne vide) */
+.bk-panel-grupe { grid-column: 2; grid-row: 1 / span 3; }
+
+.bk-sekcije { max-width: 680px; }
 
 .bk-panel-naslov {
   margin: 0;
@@ -37,7 +45,8 @@
 }
 
 @media (max-width: 899.98px) {
-  .bk-raspored { grid-template-columns: minmax(0, 1fr); }
+  .bk-raspored { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .bk-panel-grupe { grid-column: auto; grid-row: auto; margin-top: 16px; }
 }
 
 .bk-zaglavlje-grupe {

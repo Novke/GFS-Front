@@ -19,12 +19,16 @@ interface Vidljiva {
   roditeljId: number | null;
 }
 
-/** "1 aktivna, 2 nacrta, 1 greška" (samo brojači veći od nule) ili prazno. */
-export function opisBrojaca(c: Pick<GrupaCvor, 'brojAktivnih' | 'brojNacrta' | 'brojGresaka'>): string {
+/**
+ * "1 aktivna, 3 nacrta, 2 Klodova nacrta, 1 greška, isključeno" (samo brojači veći od nule, pa isključenje teme) ili prazno.
+ */
+export function opisBrojaca(c: Pick<GrupaCvor, 'brojAktivnih' | 'brojNacrta' | 'brojGresaka' | 'brojClaudeNacrta' | 'iskljucena'>): string {
   return [
     c.brojAktivnih ? sRecju(c.brojAktivnih, 'aktivna', 'aktivne', 'aktivnih') : null,
     c.brojNacrta ? sRecju(c.brojNacrta, 'nacrt', 'nacrta', 'nacrta') : null,
+    c.brojClaudeNacrta ? sRecju(c.brojClaudeNacrta, 'Klodov nacrt', 'Klodova nacrta', 'Klodovih nacrta') : null,
     c.brojGresaka ? sRecju(c.brojGresaka, 'greška', 'greške', 'grešaka') : null,
+    c.iskljucena ? 'isključeno' : null,
   ].filter(Boolean).join(', ');
 }
 
@@ -38,7 +42,9 @@ export function mozePodgrupu(c: GrupaCvor, dubina: number): boolean {
  * `aria-selected`, deca u `role="group"`. Jedna stavka je u Tab redu (roving tabindex), uz nju i njeno dugme menija.
  * Tasteri na stavci: gore/dole (vidljive stavke), Home/End, levo (sklopi, pa roditelj), desno (rasklopi, pa prvo dete), Enter
  * i razmak (izaberi), F2 (preimenuj u stablu: Enter čuva, Esc odustaje, izlazak iz polja čuva). Meni stavke: Dodaj podgrupu,
- * Preimenuj, Premesti u…, Obriši. Komponenta ništa ne menja sama: emituje nameru, stranica zove store.
+ * Preimenuj, Premesti u…, Obriši. Bedževi (samo vizuelni, brojevi su i u imenu stavke): aktivne, nacrti, "Klod: N" (Klodovi
+ * nacrti), greške; isključena grupa (sopstvena tema ili tema pretka, Klod je ne nudi) je prigušena (`bk-iskljucen`) sa oznakom
+ * "Isključeno". Komponenta ništa ne menja sama: emituje nameru, stranica zove store.
  */
 @Component({
   selector: 'app-stablo-grupa',
@@ -55,7 +61,7 @@ export function mozePodgrupu(c: GrupaCvor, dubina: number): boolean {
         <li role="treeitem" class="bk-stavka" [attr.data-id]="c.id" [attr.aria-label]="ime(c)"
           [attr.aria-expanded]="c.deca.length ? !skupljen(c.id) : null" [attr.aria-selected]="c.id === izabrano()"
           [tabindex]="c.id === tabStop() ? 0 : -1" (focus)="fokusId.set(c.id)" (click)="klik($event, c)" (keydown)="tipka($event, c)">
-          <div class="bk-red" [class.bk-izabran]="c.id === izabrano()" [style.--bk-dubina]="dubina - 1">
+          <div class="bk-red" [class.bk-izabran]="c.id === izabrano()" [class.bk-iskljucen]="c.iskljucena" [style.--bk-dubina]="dubina - 1">
             <span class="bk-strelica" aria-hidden="true">
               @if (c.deca.length) {
                 <mat-icon [svgIcon]="skupljen(c.id) ? 'chevron_right' : 'expand_more'" />
@@ -74,8 +80,14 @@ export function mozePodgrupu(c: GrupaCvor, dubina: number): boolean {
               @if (c.brojNacrta) {
                 <span class="bk-bedz bk-bedz-nacrti" title="Nacrti"><mat-icon svgIcon="edit" />{{ c.brojNacrta }}</span>
               }
+              @if (c.brojClaudeNacrta) {
+                <span class="bk-bedz bk-bedz-claude" title="Klodovi nacrti">Klod: {{ c.brojClaudeNacrta }}</span>
+              }
               @if (c.brojGresaka) {
                 <span class="bk-bedz bk-bedz-greske" title="Greške u LaTeX-u"><mat-icon svgIcon="error" />{{ c.brojGresaka }}</span>
+              }
+              @if (c.iskljucena) {
+                <span class="bk-bedz bk-bedz-iskljuceno" title="Klod ne nudi ovu temu">Isključeno</span>
               }
             </span>
             <button matIconButton type="button" class="bk-meni-dugme" [matMenuTriggerFor]="meni" [matMenuTriggerData]="{ c: c, dubina: dubina }"

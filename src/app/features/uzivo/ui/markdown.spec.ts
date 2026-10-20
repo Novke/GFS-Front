@@ -1,6 +1,55 @@
 import { GRANICA_MARKDOWN_MS, GRANICA_PROLAZI_MS } from './formula-vreme.testing';
 import { MAX_TEKST_SA_FORMULAMA, markdownSaFormulama, renderMarkdown } from './markdown';
 
+/** Slika otpremljena u GFS (izmišljen UUID): jedini cilj slike koji Markdown crta, isto pravilo kao backend (`SlajdPP`). */
+const MEDIJ = 'api/public/mediji/3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
+
+describe('Markdown slike samo iz GFS-a (obe instance)', () => {
+  const obe: [string, (src: string) => string][] = [
+    ['renderMarkdown', renderMarkdown],
+    ['markdownSaFormulama', (src) => markdownSaFormulama(src).html],
+  ];
+
+  for (const [ime, md] of obe) {
+    it(`${ime}: spoljna slika se izbacuje, tekst oko nje ostaje`, () => {
+      const html = md('levo ![a](https://x.invalid/a.png) desno');
+      expect(html).not.toContain('<img');
+      expect(html).not.toContain('x.invalid');
+      expect(html).toContain('levo');
+      expect(html).toContain('desno');
+    });
+
+    it(`${ime}: slika iz GFS-a (api/public/mediji/<uuid>) se crta`, () => {
+      expect(md(`![a](${MEDIJ})`)).toContain(`<img src="${MEDIJ}" alt="a"`);
+      expect(md(`![a](<${MEDIJ}> "naslov")`)).toContain(`<img src="${MEDIJ}" alt="a" title="naslov"`);
+    });
+
+    it(`${ime}: referentni oblik prati isto pravilo`, () => {
+      expect(md('![a][r]\n\n[r]: https://x.invalid/a.png')).not.toContain('<img');
+      expect(md(`![a][r]\n\n[r]: ${MEDIJ}`)).toContain(`<img src="${MEDIJ}"`);
+    });
+
+    it(`${ime}: sve što nije tačno api/public/mediji/<uuid> malim slovima se izbacuje`, () => {
+      const ciljevi = [
+        `/${MEDIJ}`, `./${MEDIJ}`, `${MEDIJ}?x=1`, `${MEDIJ}#x`, `${MEDIJ}/`, `${MEDIJ}0`, `https://x.invalid/${MEDIJ}`,
+        'api/public/mediji/3F2A9C1E-5B7D-4E8F-9A0B-1C2D3E4F5A6B', 'api/public/mediji/3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6',
+        'api/public/mediji/../predmeti', 'api/predmeti', 'data:image/png;base64,iVBORw0KGgo=', 'blob:http://127.0.0.1/x',
+        '//x.invalid/a.png', 'javascript:alert(1)', 'x.png',
+      ];
+      for (const cilj of ciljevi) {
+        expect(md(`![a](${cilj})`), cilj).not.toContain('<img');
+      }
+    });
+
+    it(`${ime}: slika u vezi: slika se izbacuje, veza ostaje`, () => {
+      const html = md('[![a](https://x.invalid/a.png) tekst](https://primer.rs)');
+      expect(html).not.toContain('<img');
+      expect(html).toContain('<a href="https://primer.rs">');
+      expect(html).toContain('tekst');
+    });
+  }
+});
+
 describe('renderMarkdown', () => {
   it('stavka liste "- a" postaje <li>', () => {
     expect(renderMarkdown('- a')).toContain('<li>a</li>');
@@ -116,10 +165,10 @@ describe('markdownSaFormulama', () => {
   });
 
   it('alt slike sa formulom je LaTeX izvor, ne tekst markupa', () => {
-    const html = markdownSaFormulama('![graf $x^2$ i &lt; "c"](http://a/b.png)').html;
+    const html = markdownSaFormulama(`![graf $x^2$ i &lt; "c"](${MEDIJ})`).html;
     expect(html).toContain('alt="graf x^2 i &lt; &quot;c&quot;"');
     expect(html).not.toContain('uz-formula');
-    expect(markdownSaFormulama('![obična](http://a/b.png)').html).toContain('alt="obična"');
+    expect(markdownSaFormulama(`![obična](${MEDIJ})`).html).toContain('alt="obična"');
   });
 
   it(`granica: tekst duži od ${MAX_TEKST_SA_FORMULAMA} znakova je običan Markdown (bez formula i bez maske)`, () => {

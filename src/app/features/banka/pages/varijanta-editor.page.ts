@@ -42,6 +42,16 @@ export const MAX_TEKST_VARIJANTE = 20_000;
 const ID_GRESKE: Record<RenderDeo, string> = { tekst: 'bk-ve-greska-tekst', resenje: 'bk-ve-greska-resenje' };
 /** Indeks kartice (`mat-tab-group`) po delu. */
 const KARTICA: Record<RenderDeo, number> = { tekst: 0, resenje: 1 };
+/** Pregled nacrta (`/banka/pregled`, sa upitom ili bez): jedino odredište `?povratak` posle čuvanja. */
+const PREGLED_NACRTA = /^\/banka\/pregled(?:\?[^\\#]*)?$/;
+
+/**
+ * `?povratak` iz pregleda nacrta ("Uredi" šalje URL pregleda sa `od=<id>`) ako je baš putanja pregleda, inače `null` (tada se
+ * posle čuvanja ide u banku kao i bez njega): spoljni URL, druga stranica aplikacije ili putanja sa `..` se ne poštuju.
+ */
+export function povratakNaPregled(url: string | undefined): string | null {
+  return url !== undefined && PREGLED_NACRTA.test(url) ? url : null;
+}
 
 /** Sadržaj forme kako ide u `VarijantaCmd` (naziv bez razmaka na krajevima, prazno rešenje `null`, odgovori po šemi). */
 interface Sadrzaj {
@@ -144,7 +154,9 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
  * čuva se. "Sačuvaj i odobri" posle uspelog rendera zove `odobri`. Svako čuvanje čiji render nije uspeo (ili odobravanje
  * odbijeno) ostavlja korisnika na varijanti, sa porukom u traci i istaknutom linijom u kartici dela sa greškom
  * (`renderGreska` + `renderDeo`); nova varijanta tada prelazi na svoj editor (bez novog unosa u istoriji), a poruku mu
- * jednokratno predaje `PorukaPosleCuvanja` (samo u memoriji, ne u istoriji pregledača). Samo uspeo render vodi nazad na `/banka` sa grupom. Greška sačuvanog rendera važi dok je ulaz rendera
+ * jednokratno predaje `PorukaPosleCuvanja` (samo u memoriji, ne u istoriji pregledača). Samo uspeo render vodi nazad na `/banka` sa grupom
+ * (ili, kad je editor otvoren iz pregleda nacrta, na `?povratak`, vidi `povratakNaPregled`). Klodova varijanta ima u zaglavlju
+ * oznaku "Claude" uz status. Greška sačuvanog rendera važi dok je ulaz rendera
  * (tekst, rešenje, prilozi) isti kao sačuvani; živi pregled ima prednost čim stigne. Dok je taj ulaz isti kao sačuvani,
  * pregled je sačuvan render (SVG-ovi varijante, bez render-probe); proba kreće tek posle prve izmene ili na Ctrl+Enter.
  * Izmenjeno = drugačije od poslednjeg stanja sa servera; napuštanje tada pita (ruter kroz `unsavedChangesGuard`, zatvaranje
@@ -190,6 +202,9 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
           @if (v) {
             @let s = prikazStatusa(v.status);
             <app-status-chip [tekst]="s.tekst" [ton]="s.ton" [ikona]="s.ikona" />
+            @if (v.izvor === 'CLAUDE') {
+              <span class="oznaka" title="Varijantu je napravio Claude" data-izvor>Claude</span>
+            }
           }
         </div>
         <div akcije class="bk-ve-akcije">
@@ -293,6 +308,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   readonly id = input<string>();
   /** `?grupa=` nove varijante. */
   readonly grupa = input<string>();
+  /** `?povratak=`: URL pregleda nacrta na koji se ide posle uspelog čuvanja (`povratakNaPregled`). */
+  readonly povratak = input<string>();
 
   protected readonly imeVarijante = imeVarijante;
   protected readonly prikazStatusa = prikazStatusa;
@@ -621,7 +638,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   }
 
   /**
-   * Posle uspelog čuvanja: uspeh (render OK, odobrena ako je traženo) vodi nazad u banku na grupu; inače korisnik ostaje na
+   * Posle uspelog čuvanja: uspeh (render OK, odobrena ako je traženo) vodi nazad u banku na grupu (ili na pregled nacrta iz
+   * `?povratak`); inače korisnik ostaje na
    * varijanti sa porukom u traci (fokus na nju), karticom dela sa greškom i istaknutom linijom. Nova varijanta tada prelazi na
    * svoj editor (`replaceUrl`, poruku mu predaje `PorukaPosleCuvanja`), jer postoji kao nacrt. Ako je korisnik otišao,
    * ishod je samo obaveštenje.
@@ -641,7 +659,12 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     if (p.uspeh) {
       this.obavestenja.uspeh(p.poruka);
       // sa "nova" bez novog unosa: Nazad ne sme da otvori praznu formu (izgleda kao da čuvanje nije uspelo)
-      void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id }, replaceUrl: nova });
+      const povratak = povratakNaPregled(this.povratak());
+      if (povratak) {
+        void this.router.navigateByUrl(povratak, { replaceUrl: nova });
+      } else {
+        void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id }, replaceUrl: nova });
+      }
     } else if (nova) {
       this.porukePosleCuvanja.ostavi(v.id, p.poruka);
       void this.router.navigate(['/banka/varijante', v.id], { replaceUrl: true });

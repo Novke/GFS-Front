@@ -8,7 +8,6 @@ import { ProjectorLayout } from './core/layout/projector-layout';
 import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 import { neprazanParametar, putanjaSaId } from './core/route-matchers';
-import { BANKA_RUTE } from './features/banka/banka.routes';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
@@ -88,12 +87,13 @@ const nastavnickeRute: Routes = [
     data: stalne(m('Nastava'), m('Prezentacije')),
     children: PREZENTACIJE_RUTE,
   },
-  // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe i editor varijante
+  // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe, editor varijante i pregled nacrta. Rute dece su lenje
+  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 785 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'banka',
     title: 'Banka zadataka',
     data: stalne(m('Nastava'), m('Banka zadataka')),
-    children: BANKA_RUTE,
+    loadChildren: () => import('./features/banka/banka.routes').then(x => x.BANKA_RUTE),
   },
   {
     path: 'izvodjenja',

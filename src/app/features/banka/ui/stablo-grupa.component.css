@@ -28,6 +28,9 @@
 
 .bk-red:hover { background: var(--surface-2); }
 
+/* isključena tema: prigušeno (--muted ima 4.7:1 i na --surface-2); izbor ispod ima prednost (na --primary-soft bi bilo < 4.5:1) */
+.bk-red.bk-iskljucen { color: var(--muted); }
+
 .bk-red.bk-izabran {
   background: var(--primary-soft);
   color: var(--primary-soft-ink);
@@ -87,6 +90,9 @@
 
 .bk-bedz .mat-icon { width: 14px; height: 14px; }
 .bk-bedz-aktivne { background: var(--ok-soft); color: var(--ok); }
+.bk-bedz-claude,
+.bk-bedz-iskljuceno { padding: 0 6px; font-family: var(--font); }
+.bk-bedz-iskljuceno { background: none; box-shadow: inset 0 0 0 1px currentColor; color: inherit; }
 /* jedini signal u stablu: ćilibar Nacrta */
 .bk-bedz-greske { background: var(--accent); color: var(--accent-ink); }
 

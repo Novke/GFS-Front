@@ -17,6 +17,15 @@
 }
 
 .bk-gd-putanja li + li::before { content: "›"; margin: 0 6px 0 4px; }
+
+.bk-gd-iskljuceno {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.bk-gd-iskljuceno-tekst { color: var(--muted); font-size: 13px; }
 .bk-gd-veza { color: var(--primary); text-decoration: none; overflow-wrap: anywhere; }
 .bk-gd-veza:hover { text-decoration: underline; }
 

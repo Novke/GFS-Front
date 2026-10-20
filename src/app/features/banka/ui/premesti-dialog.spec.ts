@@ -6,7 +6,7 @@ import { odredista } from './premesti-dialog';
 function cvor(id: number, deca: GrupaCvor[] = [], izmena: Partial<GrupaCvor> = {}): GrupaCvor {
   return {
     id, naziv: `G${id}`, rb: id, tezina: deca.length ? null : 2, list: deca.length === 0, brojVarijanti: 0, brojAktivnih: 0,
-    brojNacrta: 0, brojGresaka: 0, deca, ...izmena,
+    brojNacrta: 0, brojGresaka: 0, deca, izvor: 'RUCNO', brojClaudeNacrta: 0, iskljucena: false, iskljucenjeId: null, ...izmena,
   };
 }
 

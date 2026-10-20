@@ -5,7 +5,8 @@ import { expect, test } from './fixture';
 
 /*
  * Banka zadataka (`/banka`) nad mokom `mock-banka.ts` (fixture `banka.json`: predmet 1, PREDAVANJE "Konverzije brojeva" ->
- * "2 → 10" (varijante 11 NACRT, 12 AKTIVNA, 13 NACRT sa greškom) i "16 → 2" (14 AKTIVNA); TEST je prazno).
+ * "2 → 10" (varijante 11 NACRT, 12 AKTIVNA, 13 NACRT sa greškom), "16 → 2" (14 AKTIVNA), "8 → 2 (Klod)" (15 AKTIVNA, 16-18
+ * Klodovi nacrti serije uvoz-kol1-2024) i "Razlomljeni brojevi (demo)" (bez varijanti, isključena tema); TEST je prazno).
  */
 
 const stablo = (page: Page) => page.getByRole('tree', { name: 'Grupe zadataka' });
@@ -25,12 +26,12 @@ async function dijalog(page: Page, naslov: string | RegExp): Promise<Locator> {
 test.describe('banka zadataka', () => {
   test('stablo iz fixture-a; klik na list pokazuje kartice, filter "Nacrt" i Odobri', async ({ page, mock }) => {
     await page.goto('banka?predmet=1&grupa=1');
-    await expect(stablo(page).getByRole('treeitem')).toHaveCount(3);
+    await expect(stablo(page).getByRole('treeitem')).toHaveCount(5);
     await expect(stavka(page, 'Konverzije brojeva')).toHaveAttribute('aria-expanded', 'true');
     await expect(stavka(page, 'Konverzije brojeva')).toHaveAttribute('aria-selected', 'true');
     await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 1 aktivna, 2 nacrta, 1 greška');
-    // unutrašnji čvor: zbir podstabla, bez kartica
-    await expect(page.locator('[data-zbir]')).toContainText('4');
+    // unutrašnji čvor: zbir podstabla (8 varijanti u četiri lista), bez kartica
+    await expect(page.locator('[data-zbir]')).toContainText('8');
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(0);
 
     await red(stavka(page, '2 → 10')).click();
@@ -218,7 +219,7 @@ test.describe('banka zadataka', () => {
       { preambula: '\\usepackage{tikz}\n\\newcommand{\\R}{\\mathbb{R}}' },
     ]);
     expect(mock.zahteviZa('banka/predmeti/1/renderuj-sve', 'POST')).toHaveLength(1);
-    await expect(page.getByText('Preambula je sačuvana. Renderovano varijanti: 4.')).toBeVisible();
+    await expect(page.getByText('Preambula je sačuvana. Renderovano varijanti: 8.')).toBeVisible();
   });
 
   test('preambula: neprevodiva se ne čuva (400); ispravna, a varijante sa svojom greškom: upozorenje, statusi ostaju', async ({ page, mock }) => {
@@ -250,12 +251,12 @@ test.describe('banka zadataka', () => {
     // ništa se ne vraća u nacrt (renderuj-sve ne menja status), samo render je GRESKA
     const v12 = mock.podaci.bankaVarijante.find(v => v.id === 12)!;
     expect([v12.status, v12.renderStatus]).toEqual(['AKTIVNA', 'GRESKA']);
-    expect(mock.podaci.bankaVarijante.filter(v => v.status === 'AKTIVNA').map(v => v.id)).toEqual([12, 14]);
+    expect(mock.podaci.bankaVarijante.filter(v => v.status === 'AKTIVNA').map(v => v.id)).toEqual([12, 14, 15]);
 
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toBeHidden();
     await expect(page.getByText('Preambula je sačuvana, ali 2 varijante nisu renderovane (greška u preambuli ili u samoj varijanti). '
-      + 'Renderovano 2.')).toBeVisible();
+      + 'Renderovano 6.')).toBeVisible();
     await expect(page.getByText(/Preambula je sačuvana\. Renderovano/)).toHaveCount(0);
     await expect(stavka(page, '2 → 10')).toHaveAccessibleName('2 → 10, 1 aktivna, 2 nacrta, 2 greške');
   });
@@ -277,6 +278,86 @@ test.describe('banka zadataka', () => {
     await potvrda.getByRole('button', { name: 'Obriši varijantu' }).click();
     await expect.poll(() => mock.zahteviZa('banka/varijante/12', 'DELETE').length).toBe(1);
     await expect(page.locator('app-varijanta-kartica')).toHaveCount(2);
+  });
+});
+
+test.describe('banka zadataka: Klodovi nacrti, isključene teme i serije', () => {
+  test('Klodova grupa: bedž "Klod: 3" u stablu; čip "Izvor: Claude" ostavlja samo Klodove kartice', async ({ page }) => {
+    await page.goto('banka?predmet=1&grupa=4');
+    const kartice = page.locator('app-varijanta-kartica');
+    await expect(kartice).toHaveCount(4);
+    const klod = stavka(page, '8 → 2 (Klod)');
+    await expect(klod).toHaveAccessibleName('8 → 2 (Klod), 1 aktivna, 3 nacrta, 3 Klodova nacrta');
+    await expect(red(klod).locator('.bk-bedz-claude')).toHaveText('Klod: 3');
+    // zbir podstabla: koren nosi Klodove nacrte svih listova
+    await expect(red(stavka(page, 'Konverzije brojeva')).locator('.bk-bedz-claude')).toHaveText('Klod: 3');
+
+    await page.getByRole('button', { name: 'Izvor', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'Claude' }).click();
+    await expect(kartice).toHaveCount(3);
+    await expect(kartice.filter({ hasText: 'Claude' })).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'Izvor: Claude' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Izvor: Claude' }).click();
+    await page.getByRole('menuitemradio', { name: 'Ručno' }).click();
+    await expect(kartice).toHaveCount(1);
+    await expect(kartice).toContainText('17 u binarni');
+
+    await page.getByRole('button', { name: 'Očisti filtere' }).click();
+    await expect(kartice).toHaveCount(4);
+  });
+
+  test('isključene teme ispod stabla: "Uključi" posle potvrde zove DELETE, a čvor više nije prigušen', async ({ page, mock }) => {
+    await page.goto('banka?predmet=1');
+    const teme = page.getByRole('region', { name: 'Isključene teme' });
+    await expect(teme.getByRole('listitem')).toHaveCount(2);
+    await expect(teme.getByRole('listitem').first()).toContainText('Konverzije brojeva › Razlomljeni brojevi (demo)');
+    await expect(teme.getByRole('listitem').nth(1)).toContainText('bez grupe');
+    const cvor = stavka(page, 'Razlomljeni brojevi (demo)');
+    await expect(cvor).toHaveAccessibleName('Razlomljeni brojevi (demo), isključeno');
+    await expect(red(cvor)).toHaveClass(/bk-iskljucen/);
+    await expect(red(cvor)).toContainText('Isključeno');
+
+    const ukljuci = teme.getByRole('button', { name: 'Uključi temu Razlomljeni (decimalni) brojevi 10 → 2 i 2 → 10' });
+    await ukljuci.click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Uključi temu ponovo?' });
+    await expect(potvrda).toContainText('Klod je opet može nuditi.');
+    await potvrda.getByRole('button', { name: 'Odustani' }).click();
+    await expect(potvrda).toBeHidden();
+    await expect(ukljuci).toBeFocused();
+    expect(mock.zahteviZa('iskljucene-teme/1', 'DELETE')).toHaveLength(0);
+
+    await ukljuci.click();
+    await potvrda.getByRole('button', { name: 'Uključi', exact: true }).click();
+    await expect.poll(() => mock.zahteviZa('iskljucene-teme/1', 'DELETE').length).toBe(1);
+    await expect(teme.getByRole('listitem')).toHaveCount(1);
+    await expect(red(cvor)).not.toHaveClass(/bk-iskljucen/);
+    await expect(cvor).toHaveAccessibleName('Razlomljeni brojevi (demo)');
+    // dugme koje je imalo fokus je nestalo sa temom: fokus na temu koja je došla na njeno mesto
+    await expect(teme.getByRole('button', { name: /^Uključi temu Brojni sistemi/ })).toBeFocused();
+  });
+
+  test('Klodove serije ispod stabla: brojači i "Pregledaj" na pregled nacrta serije', async ({ page }) => {
+    await page.goto('banka?predmet=1');
+    const serija = page.getByRole('region', { name: 'Klodove serije' }).getByRole('listitem').filter({ hasText: 'uvoz-kol1-2024' });
+    await expect(serija).toContainText('3 nacrta, 0 odobrenih, 1 grupa, 0 slajdova');
+    // mok kao server (`SerijaService.serije`): nepoznat predmet je 404, ne prazna lista
+    expect(await page.evaluate(() => fetch('api/banka/serije?predmetId=999').then(async r => [r.status, (await r.json()).reason])))
+      .toEqual([404, 'Predmet nije pronađen.']);
+    await serija.getByRole('link', { name: 'Pregledaj seriju uvoz-kol1-2024' }).click();
+    await expect(page).toHaveURL(/\/banka\/pregled\?predmet=1&serija=uvoz-kol1-2024$/);
+  });
+
+  test('detalj isključene grupe: oznaka "Isključeno" i "Uključi" (DELETE teme), oznaka nestaje', async ({ page, mock }) => {
+    await page.goto('banka/grupe/5');
+    await expect(page.getByRole('heading', { level: 1, name: 'Razlomljeni brojevi (demo)' })).toBeVisible();
+    const oznaka = page.locator('[data-iskljuceno]');
+    await expect(oznaka).toContainText('Isključeno');
+    await oznaka.getByRole('button', { name: 'Uključi' }).click();
+    await page.getByRole('alertdialog', { name: 'Uključi temu ponovo?' }).getByRole('button', { name: 'Uključi', exact: true }).click();
+    await expect.poll(() => mock.zahteviZa('iskljucene-teme/1', 'DELETE').length).toBe(1);
+    await expect(oznaka).toHaveCount(0);
+    await expect(page.getByLabel('Naziv', { exact: true })).toBeFocused();
   });
 });
 
