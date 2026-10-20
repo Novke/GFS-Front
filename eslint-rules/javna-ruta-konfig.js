@@ -43,8 +43,9 @@ const DOZVOLJENO_PO_FEATURE = {
     'features/uzivo/ui/tekst-formule.component', // formule $...$: uvozi @angular/core, ui/tekst-formule, ui/markdown i ui/formula-ucitavanje; mathlive/ssr samo dinamički (ui/formula-markup), stil i fontovi iz assets/mathlive/
     'features/uzivo/ui/tekst-formule', // čiste funkcije (tekstZaCitac), samo `import type` iz marked
   ],
-  // Nalog studenta (spec prijave 10, 2026-10-20): stranica `nalog` zove samo api/public/nalog/*. Oba modula su proverena sa
-  // svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API ni ljusku.
+  // Nalog studenta (spec prijave 10, 2026-10-20): stranice `nalog` i `nalog/moodle` zovu samo api/public/nalog/* i
+  // api/public/lti/povezi. Oba modula su proverena sa svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API
+  // ni ljusku.
   'features/nalog': [
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core

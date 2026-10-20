@@ -268,6 +268,52 @@ describe('NalogPage', () => {
       },
     );
 
+    it.each(['predavanja/3', 'studenti/1/pregled', 'prijava?nazad=uzivo', 'nalozi'])(
+      'nazad=%s (nastavnička ruta) se ignoriše kao da ga nema: ekran naloga, bez navigacije',
+      async nazad => {
+        await otvoriStranu(nazad);
+        await doKoda();
+        await prijaviKodom();
+        http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+        await stabilno();
+        http.expectOne(JA).flush(JA_ODGOVOR);
+        await stabilno();
+        expect(navigacija).not.toHaveBeenCalled();
+        expect(el().textContent).toContain('Ana Primerović');
+        expect(dugme('Nastavi')).toBeUndefined();
+      },
+    );
+
+    it('već prijavljen sa nazad na nastavničku rutu: bez "Nastavi"', async () => {
+      await otvoriStranu('predavanja/3', true);
+      expect(dugme('Nastavi')).toBeUndefined();
+    });
+
+    it.each(['upis/tok_en', 'nalog/moodle'])('nazad=%s (javna ruta) posle prijave: navigateByUrl', async nazad => {
+      await otvoriStranu(nazad);
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith(nazad);
+    });
+
+    it.each(['nalog', 'nalog/', 'nalog?x=1'])(
+      'nazad=%s (ista stranica): posle prijave ekran naloga (GET ja), bez navigacije i bez "Nastavi"',
+      async nazad => {
+        await otvoriStranu(nazad);
+        await doKoda();
+        await prijaviKodom();
+        http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+        await stabilno();
+        http.expectOne(JA).flush(JA_ODGOVOR);
+        await stabilno();
+        expect(navigacija).not.toHaveBeenCalled();
+        expect(el().querySelector('h2')?.textContent).toBe('Prijavljen si');
+        expect(dugme('Nastavi')).toBeUndefined();
+      },
+    );
+
     it('već prijavljen sa bezbednim nazad: "Nastavi" vodi tamo (bez automatskog skoka)', async () => {
       await otvoriStranu('uzivo/ABC123', true);
       expect(navigacija).not.toHaveBeenCalled();

@@ -112,6 +112,25 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
   });
 
+  test('nazad na nastavničku rutu se ignoriše: posle prijave ekran naloga, bez nastavničkih zahteva', async ({ page, javnaMreza }) => {
+    await page.goto('nalog?nazad=predavanja%2F3');
+    await posaljiKod(page);
+    await unesiKod(page, MockApi.KOD_NALOGA);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog$/);
+    await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
+    ocekuj(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/') && !z.startsWith('POST /api/public/'))).toEqual([]);
+  });
+
+  test('nazad=nalog (ista stranica): posle prijave ekran naloga, ne ostaje na kodu', async ({ page }) => {
+    await page.goto('nalog?nazad=nalog');
+    await posaljiKod(page);
+    await unesiKod(page, MockApi.KOD_NALOGA);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    await ocekuj(page.getByText('Ana Primerović')).toBeVisible();
+    await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
+  });
+
   test('prijavljen: ime, uređaji; "Odjavi sve uređaje" uz potvrdu, pa "Odjavi se" posle nove prijave', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     await page.goto('nalog');
@@ -161,6 +180,110 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
       mock.studentPrijavljen = true;
       await page.goto('nalog');
       await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+    });
+  }
+});
+
+/*
+ * Moodle (`/nalog/moodle`, spec prijave 8.3): backend posle ulaska iz Moodle-a preusmerava ovde studenta bez veze (uparivanje
+ * kodom, pa `POST api/public/lti/povezi`), nastavnika (`?uloga=nastavnik`) ili grešku (`?greska=<kod>`). Ista pravila mreže
+ * kao `/nalog`, plus `api/public/lti/povezi`.
+ */
+test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
+  test.use({
+    viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    dozvoljeniApi: new RegExp(`${API_NALOGA.source}|^POST /api/public/lti/povezi$`),
+    dozvoljeni401: /^\/api\/public\/nalog\/(prijava|ja)$/,
+  });
+
+  test('uparivanje: indeks -> kod -> povezi -> "Moodle nalog je povezan", pa nalog kaže "povezan"', async ({ page, mock, javnaMreza }) => {
+    await page.goto('nalog/moodle');
+    await ocekuj(page).toHaveTitle('Moodle · GFS');
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Poveži Moodle nalog sa GFS-om' })).toBeVisible();
+    await ocekuj(page.getByRole('navigation', { name: 'Glavna navigacija' })).toHaveCount(0); // bez ljuske
+
+    await posaljiKod(page);
+    await unesiKod(page, MockApi.KOD_NALOGA);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Moodle nalog je povezan' })).toBeVisible();
+    ocekuj(mock.podaci.nalogStudenta.moodlePovezan).toBe(true);
+    ocekuj(mock.moodlePar).toBe(false);
+
+    await page.getByRole('link', { name: 'Otvori nalog' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    await ocekuj(page.getByText('povezan', { exact: true })).toBeVisible();
+
+    ocekuj(javnaMreza.api).toEqual([
+      'GET /api/public/nalog/stanje',
+      'POST /api/public/nalog/kod',
+      'POST /api/public/nalog/prijava',
+      'POST /api/public/lti/povezi',
+      'GET /api/public/nalog/stanje',
+      'GET /api/public/nalog/ja',
+    ]);
+    ocekuj(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
+  test('već prijavljen: "Poveži" (bez automatskog povezivanja); 409 je tekst servera', async ({ page, mock }) => {
+    mock.studentPrijavljen = true;
+    const PORUKA = 'Ovaj Moodle nalog je već povezan sa drugim studentom. Javi se nastavniku.';
+    mock.na('POST', 'public/lti/povezi', () => ({ status: 409, telo: { reason: PORUKA, time: '2026-10-20T10:00:00' } }));
+    await page.goto('nalog/moodle');
+    await ocekuj(page.getByText('Na ovom uređaju si prijavljen kao Ana Primerović (GD1).')).toBeVisible();
+    ocekuj(mock.zahteviZa('public/lti/povezi')).toHaveLength(0);
+    await page.getByRole('button', { name: 'Poveži', exact: true }).click();
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Povezivanje nije uspelo' })).toBeVisible();
+    await ocekuj(page.getByRole('alert')).toHaveText(PORUKA);
+    await page.getByRole('link', { name: 'Otvori GFS' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog$/);
+  });
+
+  test('veza iz Moodle-a je istekla (nema gfs_lti_par): 410 "Povezivanje je isteklo."', async ({ page, mock }) => {
+    mock.studentPrijavljen = true;
+    mock.moodlePar = false;
+    await page.goto('nalog/moodle');
+    await page.getByRole('button', { name: 'Poveži', exact: true }).click();
+    await ocekuj(page.getByRole('alert')).toHaveText('Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.');
+    ocekuj(mock.podaci.nalogStudenta.moodlePovezan).toBe(false);
+  });
+
+  test('?greska=bez-kolacica: jasna poruka i "Otvori GFS" (prijava kodom), bez API poziva pre klika', async ({ page, javnaMreza }) => {
+    await page.goto('nalog/moodle?greska=bez-kolacica');
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijava iz Moodle-a nije uspela' })).toBeVisible();
+    await ocekuj(page.getByRole('alert')).toContainText('kolačić');
+    ocekuj(javnaMreza.api).toEqual([]);
+    await page.getByRole('link', { name: 'Otvori GFS' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog$/);
+    await ocekuj(page.getByLabel('Broj indeksa')).toBeVisible();
+  });
+
+  test('?uloga=nastavnik: "Alat je ispravno registrovan.", bez API poziva', async ({ page, javnaMreza }) => {
+    await page.goto('nalog/moodle?uloga=nastavnik');
+    await ocekuj(page.getByRole('status')).toHaveText('Alat je ispravno registrovan.');
+    await ocekuj(page.getByLabel('Broj indeksa')).toHaveCount(0);
+    await page.waitForLoadState('networkidle');
+    ocekuj(javnaMreza.api).toEqual([]);
+  });
+
+  for (const rezim of ['dan', 'noc'] as const) {
+    test(`axe (${rezim}), 360 px: uparivanje, povezan, greška ulaska, nastavnik; bez serious/critical`, async ({ page }) => {
+      test.info().annotations.push({ type: 'rezim', description: rezim });
+      await page.emulateMedia({ colorScheme: rezim === 'noc' ? 'dark' : 'light' });
+      await page.setViewportSize({ width: 360, height: 740 });
+      await page.goto('nalog/moodle');
+      await ocekuj(page.getByLabel('Broj indeksa')).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+      await posaljiKod(page);
+      await unesiKod(page, MockApi.KOD_NALOGA);
+      await ocekuj(page.getByRole('heading', { level: 2, name: 'Moodle nalog je povezan' })).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+
+      await page.goto('nalog/moodle?greska=neispravan-token');
+      await ocekuj(page.getByRole('alert')).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+      await page.goto('nalog/moodle?uloga=nastavnik');
+      await ocekuj(page.getByRole('status')).toBeVisible();
       await bezOzbiljnihKrsenja(page);
     });
   }

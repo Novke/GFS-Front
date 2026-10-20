@@ -19,12 +19,12 @@ import { Subscription } from 'rxjs';
 
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
-import { bezbednoNazad } from '../../../shared/util/nazad';
 import { NalogApi } from '../data-access/nalog.api';
 import { PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
-import { porukaGreske } from '../data-access/nalog.pravila';
+import { javnoNazad, porukaGreske, putanjaCilja } from '../data-access/nalog.pravila';
 import { IndeksKorak } from '../ui/indeks-korak.component';
 import { KodKorak } from '../ui/kod-korak.component';
+import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NalogPregled } from '../ui/nalog-pregled.component';
 
 export type KorakNaloga = 'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen';
@@ -46,126 +46,73 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
  * (`NalogApi`); ESLint `gfs/javna-ruta-uvozi` drži uvoze, e2e `nalog.spec.ts` mrežu.
  *
  * Na prvom učitavanju `GET stanje` (i `GET ja` kad je prijavljen) bira početni korak. Posle uspešne prijave ide na `nazad`
- * (query, `withComponentInputBinding`) ako ga `bezbednoNazad` pusti (samo relativna putanja aplikacije, npr. `uzivo/ABC123`),
- * inače pokazuje nalog; spoljni ili apsolutni URL se nikad ne otvara. Već prijavljen student sa `nazad` dobija "Nastavi"
- * (bez automatskog skoka, pa nema petlje ako ga ciljna strana vrati ovde). Greške servera (401, 429, 503) su doslovno u
- * baneru koraka; mreža i ostale 5xx opšte poruke.
+ * (query, `withComponentInputBinding`) ako ga `javnoNazad` pusti (samo relativna putanja javne rute: `uzivo`, `upis`, `nalog`,
+ * npr. `uzivo/ABC123`), inače pokazuje nalog; spoljni ili apsolutni URL i nastavnička ruta se nikad ne otvaraju, a `nazad` na
+ * ovu istu stranicu (`nalog`) je ekran naloga. Već prijavljen student sa `nazad` dobija "Nastavi" (bez automatskog skoka,
+ * pa nema petlje ako ga ciljna strana vrati ovde). Greške servera (401, 429, 503) su doslovno u baneru koraka; mreža i
+ * ostale 5xx opšte poruke.
  */
 @Component({
   selector: 'app-nalog-page',
-  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogPregled],
+  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <article class="nalog">
-      <header class="zaglavlje">
-        <span class="znak" aria-hidden="true"><img src="assets/images/gfs-logo.png" alt="" width="170" height="128"></span>
-        <div class="naslovi">
-          <p class="nadnaslov">Građevinski fakultet Subotica</p>
-          <h1>Nalog studenta</h1>
-        </div>
-      </header>
-
-      <div class="telo">
-        <h2 #naslovKoraka tabindex="-1">{{ naslov() }}</h2>
-        @switch (korak()) {
-          @case ('ucitavanje') {
-            <p class="stanje" role="status">
-              <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
-            </p>
+    <app-nalog-okvir>
+      <h2 tabindex="-1">{{ naslov() }}</h2>
+      @switch (korak()) {
+        @case ('ucitavanje') {
+          <p class="stanje" role="status">
+            <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
+          </p>
+        }
+        @case ('greska') {
+          <p class="poruka opasnost" role="alert">{{ greskaUcitavanja() }}</p>
+          <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>
+        }
+        @case ('indeks') {
+          @if (info(); as poruka) {
+            <p class="poruka uspeh" role="status">{{ poruka }}</p>
           }
-          @case ('greska') {
-            <p class="poruka opasnost" role="alert">{{ greskaUcitavanja() }}</p>
-            <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>
-          }
-          @case ('indeks') {
-            @if (info(); as poruka) {
-              <p class="poruka uspeh" role="status">{{ poruka }}</p>
-            }
-            <app-nalog-indeks-korak
-              [indeks]="indeks()"
+          <app-nalog-indeks-korak
+            [indeks]="indeks()"
+            [salje]="salje()"
+            [greska]="greska()"
+            (posaljiKod)="posaljiKod($event)"
+          />
+        }
+        @case ('kod') {
+          <app-nalog-kod-korak
+            [indeks]="indeks()"
+            [maska]="maska()"
+            [poruka]="porukaKoda()"
+            [slanjeBroj]="slanjeBroj()"
+            [salje]="salje()"
+            [greska]="greska()"
+            [pomoc]="pomoc()"
+            [pomocSalje]="pomocSalje()"
+            (prijavi)="prijavi($event)"
+            (posaljiPonovo)="posaljiKod(indeks())"
+            (neStize)="neStize()"
+            (promeniIndeks)="idiNa('indeks')"
+          />
+        }
+        @case ('prijavljen') {
+          <app-form-error-banner [poruka]="greska()" />
+          @if (ja(); as s) {
+            <app-nalog-pregled
+              [ja]="s"
+              [nastaviNa]="nastaviNa()"
               [salje]="salje()"
-              [greska]="greska()"
-              (posaljiKod)="posaljiKod($event)"
+              (odjavi)="odjavi()"
+              (odjaviSvuda)="odjaviSvuda()"
+              (nastavi)="nastavi()"
             />
-          }
-          @case ('kod') {
-            <app-nalog-kod-korak
-              [indeks]="indeks()"
-              [maska]="maska()"
-              [poruka]="porukaKoda()"
-              [slanjeBroj]="slanjeBroj()"
-              [salje]="salje()"
-              [greska]="greska()"
-              [pomoc]="pomoc()"
-              [pomocSalje]="pomocSalje()"
-              (prijavi)="prijavi($event)"
-              (posaljiPonovo)="posaljiKod(indeks())"
-              (neStize)="neStize()"
-              (promeniIndeks)="idiNa('indeks')"
-            />
-          }
-          @case ('prijavljen') {
-            <app-form-error-banner [poruka]="greska()" />
-            @if (ja(); as s) {
-              <app-nalog-pregled
-                [ja]="s"
-                [nastaviNa]="nastaviNa()"
-                [salje]="salje()"
-                (odjavi)="odjavi()"
-                (odjaviSvuda)="odjaviSvuda()"
-                (nastavi)="nastavi()"
-              />
-            }
           }
         }
-      </div>
-    </article>
+      }
+    </app-nalog-okvir>
   `,
   styles: `
-    :host { display: block; padding-block: clamp(0px, 4vh, 48px); }
-
-    .nalog {
-      max-width: 480px;
-      margin: 0 auto;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .zaglavlje {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 18px 20px;
-      background: var(--hero-bg);
-      color: var(--hero-ink);
-    }
-
-    /* znak iz logoa (kao na upisu i na prijavi nastavnika), beo na tamnoj podlozi */
-    .znak {
-      flex: none;
-      width: 39px;
-      height: 57px;
-      overflow: hidden;
-      filter: var(--logo-filter);
-      mix-blend-mode: screen;
-    }
-    .znak img { display: block; max-width: none; margin: -36px 0 0 -66px; }
-
-    .naslovi { min-width: 0; }
-    .nadnaslov {
-      margin: 0 0 4px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      opacity: .8;
-    }
-    h1 { margin: 0; color: inherit; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
-
-    .telo { padding: 20px; }
     h2 { margin: 0 0 14px; font-size: 18px; }
     h2:focus { outline: none; }
 
@@ -202,7 +149,11 @@ export class NalogPage {
   protected readonly ja = signal<StudentJa | null>(null);
   /** Poruka posle odjave (na koraku indeksa). */
   protected readonly info = signal<string | null>(null);
-  protected readonly nastaviNa = computed(() => bezbednoNazad(this.nazad()));
+  /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to ekran naloga). */
+  protected readonly nastaviNa = computed(() => {
+    const cilj = javnoNazad(this.nazad());
+    return cilj !== null && putanjaCilja(cilj) !== 'nalog' ? cilj : null;
+  });
 
   private zahtev?: Subscription;
 
@@ -250,7 +201,7 @@ export class NalogPage {
     this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
       next: () => {
         this.salje.set(false);
-        const cilj = bezbednoNazad(this.nazad());
+        const cilj = this.nastaviNa();
         if (cilj) {
           void this.router.navigateByUrl(cilj);
         } else {

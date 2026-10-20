@@ -35,8 +35,10 @@ interface Opcije {
   dozvoljeniApi: RegExp;
   /**
    * Putanje na kojima je 401 odgovor **aplikacije**, ne zaključavanje (nalog studenta: pogrešan kod na
-   * `/api/public/nalog/prijava`, istekao kolačić na `/api/public/nalog/ja`). Važi samo za javnu putanju (`JAVNA_PUTANJA`):
-   * 401 sa zaključane putanje (basic-auth, dijalog za lozinku) obara test i kad odgovara ovom izrazu. Podrazumevano ništa.
+   * `/api/public/nalog/prijava`, istekao kolačić na `/api/public/nalog/ja`; `/nalog/moodle`: `/api/public/lti/povezi` bez
+   * kolačića studenta). Važi samo za javnu putanju (`JAVNA_PUTANJA`): 401 sa zaključane putanje (basic-auth, dijalog za
+   * lozinku) obara test i kad odgovara ovom izrazu. Podrazumevano ništa. Javne stranice naloga (`/nalog`, `/nalog/moodle`)
+   * proverava `nalog.spec.ts`.
    */
   dozvoljeni401: RegExp;
   /**

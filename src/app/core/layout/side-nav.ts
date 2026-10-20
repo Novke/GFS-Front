@@ -34,13 +34,17 @@ export const LJUDI: readonly NavStavka[] = [
   { label: 'Studenti', url: '/studenti', ikona: 'person' },
 ];
 
+export const PODESAVANJA: readonly NavStavka[] = [
+  { label: 'Moodle', url: '/podesavanja/moodle', ikona: 'settings' },
+];
+
 const OPIS_BROJACA: Record<keyof DashboardCounts, string> = {
   domaci: 'za pregled',
   testovi: 'za evidentiranje',
   prijave: 'prijava na čekanju',
 };
 
-/** Bočna navigacija (tamna ljuska): sekcije iz spec-a 2, brojači, predmeti, dno sa nalogom, režimom i okruženjem. */
+/** Bočna navigacija (tamna ljuska): sekcije iz spec-a 2 i Podešavanja, brojači, predmeti, dno sa nalogom, režimom i okruženjem. */
 @Component({
   selector: 'app-side-nav',
   imports: [RouterLink, RouterLinkActive, MatIcon, ThemeToggle],
@@ -60,6 +64,7 @@ export class SideNav {
   protected readonly sekcije = [
     { id: 'nav-nastava', naslov: 'Nastava', stavke: NASTAVA },
     { id: 'nav-ljudi', naslov: 'Ljudi', stavke: LJUDI },
+    { id: 'nav-podesavanja', naslov: 'Podešavanja', stavke: PODESAVANJA },
   ] as const;
   protected readonly opisBrojaca = OPIS_BROJACA;
 

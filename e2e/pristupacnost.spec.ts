@@ -36,6 +36,8 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
   // prijava nastavnika (bez ljuske; nastavnik je u moku prijavljen, a stranica ionako ne pita za sesiju)
   { putanja: 'prijava?nazad=studenti', spremno: p => p.getByRole('button', { name: 'Prijavi se' }) },
+  // podešavanja -> Moodle: registracije (aktivna i isključena), vrednosti sa "Kopiraj", uputstvo
+  { putanja: 'podesavanja/moodle', spremno: p => p.locator('[data-vrednosti] code').first() },
   // banka zadataka: list sa karticama (i greškom rendera) i unutrašnji čvor sa zbirom
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
   { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
@@ -132,6 +134,19 @@ for (const rezim of ['dan', 'noc'] as const) {
 
     // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
     // i dijalog "Prijavljeni uređaji"
+    test('/podesavanja/moodle (forma registracije sa porukama provere): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('podesavanja/moodle');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-registracija]').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Nova registracija' }).first().click();
+      const dijalog = page.getByRole('dialog', { name: 'Nova registracija' });
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
+      await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
+      await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
+    });
+
     test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('./');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);

@@ -126,9 +126,10 @@ without it.
 
 ## Public routes
 
-`upis/:token`, `uzivo`, `uzivo/:kod` and `nalog` are opened by students on a phone **without basic-auth** and without a
-teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
-`api/public/uzivo/*`, `api/public/mediji/*`, `api/public/ws`; nalog: `api/public/nalog/*`); any other `/api/*` call returns
+`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog` and `nalog/moodle` are opened by students on a phone **without basic-auth**
+and without a teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
+`api/public/uzivo/*`, `api/public/mediji/*`, `api/public/ws`; nalog: `api/public/nalog/*`, and `nalog/moodle` also
+`api/public/lti/povezi`); any other `/api/*` call returns
 401 and pops the browser's password dialog. All live in `PublicLayout` (no shell; a wrong link under `/upis`, `/uzivo` or
 `/nalog` stays a public 404). `gfs/javna-ruta-uvozi` enforces this fail-closed: a public feature (`features/upis`,
 `features/uzivo/javno`, `features/nalog`) may import only itself plus
@@ -208,16 +209,39 @@ the front only routes and shows.
   `maxlength="6"`, and a pasted code with spaces or a dash is reduced to its 6 digits before `maxlength` cuts it),
   `NalogPregled` (index, name, masked e-mail, Moodle, devices, "Odjavi se", "Odjavi sve uređaje"). `pages/nalog.page.ts`: step
   signal `'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen'`; first load `GET stanje` (+ `GET ja` when signed in;
-  `ja` 401 = index step); after a successful code `navigateByUrl(bezbednoNazad(nazad))`, otherwise the account screen; an
-  already signed-in student with a safe `nazad` gets a "Nastavi" button, never an automatic jump (no loop). Server texts are
+  `ja` 401 = index step); after a successful code `navigateByUrl(javnoNazad(nazad))`, otherwise the account screen; an
+  already signed-in student with a safe `nazad` gets a "Nastavi" button, never an automatic jump (no loop). `javnoNazad`
+  (`nalog.pravila.ts`) is `bezbednoNazad` plus a public first segment (`uzivo`, `upis`, `nalog`): a teacher route
+  (`predavanja/3`) is ignored as if absent (the student has no teacher session), and a `nazad` to the same page
+  (`nalog`, `nalog?...`) shows the account screen instead of navigating (the reused component would stay on the code step). Server texts are
   shown verbatim ("Ako nalog postoji, kod je poslat.", 401 "Kod nije ispravan ili je istekao.", 429, 503, "Javili smo
   nastavniku."); "Odjavi sve uređaje" confirms with `ConfirmDialog`. Focus moves to the step heading (`h2`) after each step change.
+- **Moodle, student side** (`features/nalog/pages/moodle.page.ts`, public child `nalog/moodle`, spec prijave 8.3): the backend
+  redirects here after a Moodle launch. `?greska=<kod>` shows a fixed text per code (`nepoznata-registracija`,
+  `istekla-sesija`, `bez-kolacica`, `neispravan-token`, `nepodrzana-poruka`; unknown code = generic text, the code itself is
+  never shown) and a link "Otvori GFS" (`/nalog`); `?uloga=nastavnik` shows "Alat je ispravno registrovan."; both make no
+  request. Without them it is the pairing flow: `GET stanje` (+ `ja`), the same `IndeksKorak`/`KodKorak`, then right after
+  the code `POST api/public/lti/povezi` (`NalogApi.poveziMoodle`, cookie `gfs_lti_par`) -> "Moodle nalog je povezan". An
+  already signed-in student sees "prijavljen kao ..." and presses "Poveži" (never automatic). 409/410 are the server text
+  verbatim (fallbacks `PORUKA_VEC_POVEZAN`, `PORUKA_POVEZIVANJE_ISTEKLO`) with "Otvori GFS"; 401 goes back to the index step;
+  network/5xx keep the signed-in student on "Poveži" with the error. `nazad` (public only) gives "Nastavi" after pairing.
+  Both pages share the card frame `ui/nalog-okvir.component.ts`. The page requests only `api/public/nalog/*` and
+  `api/public/lti/povezi` (`e2e/nalog.spec.ts`, "nalog/moodle").
+- **Moodle, teacher side** (`features/podesavanja/`, route `podesavanja` in the shell via `loadChildren`, `podesavanja` ->
+  `podesavanja/moodle`; side nav section "Podešavanja" -> "Moodle"): `MoodleRegistracijePage` lists registrations
+  (`LtiApi`, `api/lti/registracije`), "Nova registracija"/"Izmeni" open `RegistracijaDialog` (typed form; empty auth/JWKS
+  URL = derived from the issuer, the hint shows the derived address, `lti.pravila.uFormu` blanks a stored URL equal to the
+  derived one so it follows issuer edits; 400/409 server text in the form banner), "Obriši" with `ConfirmDialog`. "Vrednosti
+  za Moodle" (`GET api/lti/registracije/vrednosti`) has a "Kopiraj" button per address (`shared/util/kopiraj`, snackbar
+  confirmation) and the short Moodle guide (More -> LTI External tools -> Add tool; LTI 1.3, Keyset URL, New window,
+  services off, name Always, e-mail Never). e2e: `podesavanja-moodle.spec.ts`; mock routes `lti/registracije*` and
+  `public/lti/povezi` (`MockApi.moodlePar` = cookie `gfs_lti_par`), fixture `e2e/fixtures/lti.json`.
 - **Tests:** `core/auth/sesija.testing.ts` `prijaviNastavnika()` signs the real `SesijaStore` in for specs that go through the
   real routes. e2e: `MockApi.prijavljen` (teacher cookie; `false` = every teacher API answers 401 before overrides, as the
   server), `MockApi.LOZINKA`, `MockApi.studentPrijavljen` and `MockApi.KOD_NALOGA` (student cookie and the only accepted code
   for `podaci.nalogStudenta`, fixture `e2e/fixtures/nalozi.json`, which also holds notifications and teacher sessions). Before
   revoking the teacher session in a test wait for the top bar (`trakaSpremna` in `prijava.spec.ts`): the deferred bell's first
-  `GET obavestenja/broj` would otherwise get the 401. Specs: `prijava.spec.ts`, `nalog-nastavnika.spec.ts`, `nalog.spec.ts`.
+  `GET obavestenja/broj` would otherwise get the 401. Specs: `prijava.spec.ts`, `nalog-nastavnika.spec.ts`, `nalog.spec.ts`, `podesavanja-moodle.spec.ts`.
 
 ## Uživo (`features/uzivo`)
 

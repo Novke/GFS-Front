@@ -126,6 +126,13 @@ const nastavnickeRute: Routes = [
     children: PREDMETI_RUTE,
   },
 
+  // Podešavanja (prijava, Moodle LTI): registracije alata i vrednosti za Moodle formu; deca su lenja
+  {
+    path: 'podesavanja',
+    title: 'Podešavanja',
+    loadChildren: () => import('./features/podesavanja/podesavanja.routes').then(x => x.PODESAVANJA_RUTE),
+  },
+
   { path: '**', title: 'Stranica nije pronađena', data: stalne(m('Stranica nije pronađena')), component: NotFound },
 ];
 
@@ -157,8 +164,8 @@ export const routes: Routes = [
     children: UZIVO_JAVNE_RUTE,
   },
 
-  // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/* i api/public/nalog/*. Pogrešan link pod
-  // /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
+  // api/public/lti/povezi. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
   {
     path: 'nalog',
     component: PublicLayout,

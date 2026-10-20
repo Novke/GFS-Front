@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { NalogApi } from './nalog.api';
 
-/** Javni nalog studenta: samo `api/public/nalog/*`, svaka greška lokalna (nikad nastavnički snackbar). */
+/** Javni nalog studenta: samo `api/public/nalog/*` i `api/public/lti/povezi`, svaka greška lokalna (nikad nastavnički snackbar). */
 describe('NalogApi', () => {
   let api: NalogApi;
   let http: HttpTestingController;
@@ -26,6 +26,7 @@ describe('NalogApi', () => {
     ['odjavi', () => api.odjavi(), 'POST', 'api/public/nalog/odjava', null],
     ['odjaviSvuda', () => api.odjaviSvuda(), 'POST', 'api/public/nalog/odjava-svuda', null],
     ['pomoc', () => api.pomoc('GD12'), 'POST', 'api/public/nalog/pomoc', { indeks: 'GD12' }],
+    ['poveziMoodle', () => api.poveziMoodle(), 'POST', 'api/public/lti/povezi', null],
   ] as const)('%s -> %s %s, LOCAL_ERRORS', (_ime, poziv, metod, url, telo) => {
     (poziv() as Observable<unknown>).subscribe();
     const req = http.expectOne(url);

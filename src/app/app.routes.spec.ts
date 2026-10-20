@@ -62,6 +62,8 @@ describe('rute i sesija nastavnika', () => {
     ['/onboarding/7', 'onboarding/7'],
     ['/onboarding/7/qr', 'onboarding/7/qr'],
     ['/predavanje/5', 'predavanje/5'],
+    ['/podesavanja/moodle', 'podesavanja/moodle'],
+    ['/podesavanja', 'podesavanja'],
   ])('nastavnička ruta %s bez sesije -> /prijava (nazad=%s), bez učitavanja ekrana', async (url, nazad) => {
     await idiBezSesije(url);
     const stablo = router.parseUrl(router.url);
@@ -71,7 +73,8 @@ describe('rute i sesija nastavnika', () => {
     http.expectNone(() => true);
   });
 
-  it.each(['/upis/abc', '/uzivo', '/uzivo/123456', '/prijava', '/prijava?nazad=studenti', '/nalog', '/nalog?nazad=uzivo%2FABC123'])(
+  it.each(['/upis/abc', '/uzivo', '/uzivo/123456', '/prijava', '/prijava?nazad=studenti', '/nalog', '/nalog?nazad=uzivo%2FABC123',
+    '/nalog/moodle', '/nalog/moodle?greska=bez-kolacica', '/nalog/moodle?uloga=nastavnik'])(
     'javna ruta %s ne pita za sesiju',
     async url => {
       await router.navigateByUrl(url);
@@ -81,7 +84,7 @@ describe('rute i sesija nastavnika', () => {
     },
   );
 
-  it.each(['/nalog/nepostoji', '/nalog/a/b'])('pogrešan link pod /nalog (%s) ostaje javni 404 u PublicLayout-u', async url => {
+  it.each(['/nalog/nepostoji', '/nalog/a/b', '/nalog/moodle/x'])('pogrešan link pod /nalog (%s) ostaje javni 404 u PublicLayout-u', async url => {
     await router.navigateByUrl(url);
     expect(router.url).toBe(url);
     expect(layout(router)).toBe(PublicLayout);

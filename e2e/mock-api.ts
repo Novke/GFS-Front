@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Page, Request, Route } from '@playwright/test';
 
 import type { BankaPretragaStavka, GrupaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd } from '../src/app/features/banka/data-access/banka.models';
+import type { LtiRegistracijaCmd, LtiRegistracijaInfo, LtiVrednostiZaMoodle } from '../src/app/features/podesavanja/data-access/lti.models';
 import { type BankaGrupa, type BankaPodaci, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 
@@ -128,6 +129,9 @@ export interface Podaci extends BankaPodaci {
   nalogStudenta: NalogStudenta;
   /** Uređaji i Moodle veza studenata na kartici (sekcija "Nalog"); student bez reda nema ništa. */
   naloziStudenata: NalogNaKartici[];
+  /** Registracije alata na Moodle-u (Podešavanja -> Moodle) i vrednosti za Moodle formu (`e2e/fixtures/lti.json`). */
+  ltiRegistracije: LtiRegistracijaInfo[];
+  ltiVrednosti: LtiVrednostiZaMoodle;
   // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
@@ -144,6 +148,7 @@ export function ucitajPodatke(): Podaci {
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
   const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
   const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[]; nalogStudenta: NalogStudenta; naloziStudenata: NalogNaKartici[] }>('nalozi.json');
+  const lti = ucitaj<{ registracije: LtiRegistracijaInfo[]; vrednosti: LtiVrednostiZaMoodle }>('lti.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -165,6 +170,8 @@ export function ucitajPodatke(): Podaci {
     sesijeNastavnika: nalozi.sesijeNastavnika,
     nalogStudenta: nalozi.nalogStudenta,
     naloziStudenata: nalozi.naloziStudenata,
+    ltiRegistracije: lti.registracije,
+    ltiVrednosti: lti.vrednosti,
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
@@ -270,6 +277,11 @@ export class MockApi {
   studentPrijavljen = false;
   /** Jedini kod koji mok prihvata pri prijavi studenta (kao da je stigao mejlom). */
   static readonly KOD_NALOGA = '246810';
+  /**
+   * Kolačić `gfs_lti_par` (ulazak iz Moodle-a bez veze, 30 min): `POST public/lti/povezi` ga troši; bez njega 410 kao
+   * server. Podrazumevano postoji (stranica `/nalog/moodle` posle preusmerenja).
+   */
+  moodlePar = true;
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -1241,6 +1253,75 @@ export class MockApi {
       return ok({ odjavljeno });
     });
     post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
+    // povezivanje Moodle naloga (javno, STUDENT + `gfs_lti_par`, spec prijave 8.3): 401 bez studenta, 410 bez para, pa veza
+    post('public/lti/povezi', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      if (!this.moodlePar) {
+        return greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.');
+      }
+      this.moodlePar = false;
+      d.nalogStudenta.moodlePovezan = true;
+      return { status: 204 };
+    });
+
+    // registracije alata na Moodle-u (nastavnik, Podešavanja -> Moodle, spec prijave 8.1): adrese kao `LtiUrl` na serveru
+    // (samo https://, prazne se izvode iz issuer-a), duplikat trojke je 409
+    const ltiAdresa = (url: string, polje: string): string | Odgovor =>
+      /^https:\/\/[^\s/]\S*$/iu.test(url.trim()) ? url.trim() : greska(400, `${polje} mora biti adresa koja počinje sa https://.`);
+    const ltiRegistracija = (cmd: LtiRegistracijaCmd, id: number, kreirano: string): LtiRegistracijaInfo | Odgovor => {
+      const izdavac = ltiAdresa(cmd.izdavac ?? '', 'Izdavač (issuer)');
+      if (jeOdgovor(izdavac)) {
+        return izdavac;
+      }
+      const osnova = izdavac.replace(/\/+$/u, '');
+      const authUrl = ltiAdresa(cmd.authUrl?.trim() ? cmd.authUrl : `${osnova}/mod/lti/auth.php`, 'Auth URL');
+      const jwksUrl = ltiAdresa(cmd.jwksUrl?.trim() ? cmd.jwksUrl : `${osnova}/mod/lti/certs.php`, 'JWKS URL');
+      if (jeOdgovor(authUrl)) {
+        return authUrl;
+      }
+      if (jeOdgovor(jwksUrl)) {
+        return jwksUrl;
+      }
+      const r: LtiRegistracijaInfo = {
+        id, naziv: cmd.naziv.trim(), izdavac, clientId: cmd.clientId.trim(), deploymentId: cmd.deploymentId.trim(), authUrl, jwksUrl,
+        aktivna: cmd.aktivna, kreirano,
+      };
+      return d.ltiRegistracije.some(x => x.id !== id && x.izdavac === r.izdavac && x.clientId === r.clientId && x.deploymentId === r.deploymentId)
+        ? greska(409, 'Registracija za ovaj Moodle, Client ID i Deployment ID već postoji.')
+        : r;
+    };
+    get('lti/registracije', () => ok(d.ltiRegistracije));
+    get('lti/registracije/vrednosti', () => ok(d.ltiVrednosti));
+    post('lti/registracije', z => {
+      const r = ltiRegistracija(z.telo as LtiRegistracijaCmd, this.sledeciId++, lokalnoVreme(new Date()));
+      if (jeOdgovor(r)) {
+        return r;
+      }
+      d.ltiRegistracije.push(r);
+      return { status: 201, telo: r };
+    });
+    put('lti/registracije/:id', (z, p) => {
+      const postoji = nadji(d.ltiRegistracije, p['id'], 'Registracija');
+      if (jeOdgovor(postoji)) {
+        return postoji;
+      }
+      const r = ltiRegistracija(z.telo as LtiRegistracijaCmd, postoji.id, postoji.kreirano);
+      if (jeOdgovor(r)) {
+        return r;
+      }
+      Object.assign(postoji, r);
+      return ok(postoji);
+    });
+    del('lti/registracije/:id', (_z, p) => {
+      const postoji = nadji(d.ltiRegistracije, p['id'], 'Registracija');
+      if (jeOdgovor(postoji)) {
+        return postoji;
+      }
+      d.ltiRegistracije = d.ltiRegistracije.filter(x => x.id !== postoji.id);
+      return { status: 204 };
+    });
 
     // nastavničko izvođenje (iza basic-auth-a): stanje i komande; snimci kroz STOMP idu preko `lazni-stomp.ts`
     const izvodjenje = (id: string) => Number(id) === this.izvodjenje.id;

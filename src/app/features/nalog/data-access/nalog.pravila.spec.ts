@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { describe, expect, it } from 'vitest';
 
-import { KOD, normalizujIndeks, porukaGreske, samoCifreKoda } from './nalog.pravila';
+import { javnoNazad, KOD, normalizujIndeks, porukaGreske, putanjaCilja, samoCifreKoda } from './nalog.pravila';
 
 describe('nalog.pravila', () => {
   it('normalizujIndeks: bez razmaka, velika slova', () => {
@@ -28,5 +28,23 @@ describe('nalog.pravila', () => {
     expect(porukaGreske(e(500, { reason: 'detalj servera' }))).toBe('Sistemska greška. Pokušaj ponovo.');
     expect(porukaGreske(e(0, null))).toBe('Nema veze sa serverom.');
     expect(porukaGreske(new Error('x'))).toBe('Sistemska greška. Pokušaj ponovo.');
+  });
+
+  it.each(['uzivo', 'uzivo/ABC123', 'upis/tok_en-1', 'nalog', 'nalog/moodle', 'nalog?x=1', 'uzivo?kod=1'])(
+    'javnoNazad(%s): javna ruta prolazi',
+    v => expect(javnoNazad(v)).toBe(v),
+  );
+
+  it.each([
+    'predavanja/3', 'studenti', '', 'prijava?nazad=nalog', 'nalozi', 'uzivox/1', 'upisi', 'uzivo%2F1', '//evil.com', 'https://x',
+    '/\\evil', 'javascript:alert(1)', 'nalog/../predavanja', null, undefined,
+  ])('javnoNazad(%s): nastavnička ili nebezbedna putanja je null (kao da je nema)', v => {
+    expect(javnoNazad(v)).toBeNull();
+  });
+
+  it('putanjaCilja: bez query-ja i završne kose crte', () => {
+    expect(putanjaCilja('nalog')).toBe('nalog');
+    expect(putanjaCilja('nalog/?x=1')).toBe('nalog');
+    expect(putanjaCilja('nalog/moodle?greska=x')).toBe('nalog/moodle');
   });
 });

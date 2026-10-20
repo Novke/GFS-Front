@@ -49,3 +49,7 @@ export interface OdjavaSvudaOdgovor {
 /** Tekstovi koje server šalje (spec prijave 5.1); front ih koristi kad odgovor nema svoj tekst. */
 export const PORUKA_KOD_POSLAT = 'Ako nalog postoji, kod je poslat.';
 export const PORUKA_POMOC = 'Javili smo nastavniku.';
+
+/** `POST api/public/lti/povezi` 410 i 409 (spec prijave 8.3, odluka R6): front ih koristi kad odgovor nema svoj tekst. */
+export const PORUKA_POVEZIVANJE_ISTEKLO = 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.';
+export const PORUKA_VEC_POVEZAN = 'Ovaj Moodle nalog je već povezan sa drugim studentom. Javi se nastavniku.';
