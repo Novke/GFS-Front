@@ -180,7 +180,17 @@ describe('UzivoStudentPage: Zadatak slajd', () => {
     const el = await napravi('stize', null, { ...jz, faza: 'CEKA', rundaId: null });
     expect(el.textContent).toContain('Zadatak stiže…');
     expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('app-zadatak-ekran')).toBeNull();
     expect(el.querySelector('app-zadatak-unos')).toBeNull();
+  });
+
+  it('ekrani zadatka: red stanja i unos su u lenjom app-zadatak-ekran (stanje iz store-a stranice, bez ulaza)', async () => {
+    const el = await napravi('zadatak');
+    const ekran = el.querySelector('app-zadatak-ekran')!;
+    expect(ekran).not.toBeNull();
+    expect(ekran.querySelector('.uz-st-zd-vrh app-tajmer')).not.toBeNull();
+    expect(ekran.querySelector('app-zadatak-unos img[data-zadatak-svg]')).not.toBeNull();
+    expect(el.textContent).not.toContain('Učitavanje zadatka…');
   });
 
   it('otvoreno: svoja slika, tajmer i polja; "Pošalji" ide u odgovoriZadatak', async () => {

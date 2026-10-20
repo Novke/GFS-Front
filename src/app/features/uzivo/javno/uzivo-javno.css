@@ -458,27 +458,6 @@
   font-weight: 600;
 }
 
-/* Zadatak slajd: okvir i red stanja runde (tajmer, "Odgovor primljen", ishod). Sama varijanta (`app-zadatak-unos`) nosi
-   svoje stilove u lenjem chunk-u: ovaj fajl je u početnom paketu, a on je na granici budžeta `e2e/lenji-editor.spec.ts`. */
-.uz-st-zd-okvir {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 40rem;
-}
-
-.uz-st-zd-vrh {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.uz-st-zd-vrh > p {
-  flex: 1;
-}
-
 /* ---------- Tačan odgovor, rang ---------- */
 
 .uz-st .uz-st-tacna {

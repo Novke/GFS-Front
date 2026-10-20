@@ -8,7 +8,7 @@ import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, tekst, zatvorenje, zbir, zbirGzip,
 } from './chunkovi';
 import {
-  NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_STUDENTA, NIZ_ZADATKA_STUDENTA, NIZOVI_CRTEZA, nizoviEditora,
+  NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_REDA_ZADATKA, NIZ_STUDENTA, NIZ_ZADATKA_STUDENTA, NIZOVI_CRTEZA, nizoviEditora,
 } from './nizovi-editora';
 
 /**
@@ -19,19 +19,22 @@ import {
  * naglašavanje, stil koji ne pamti grešku, jedno upozorenje po prozoru) i 114 615 B posle kruga 2 (tabindex -1 u dugmetu,
  * granica dužine teksta sa formulama).
  *
- * Zadatak slajd na telefonu (projekat B, FE-5) dodaje statički samo stanja zadatka u store-u i stranici, prijavu studenta
- * i ulaz u lenji blok (`@defer`); sama komponenta zadatka je lenji chunk (ispod). Na početku FE-5 rezerva je bila 729 B
- * (115 489 B), pa FE-5 dobija svoj deo: izmereno 2026-10-20 +3 397 B (118 886 B).
+ * Zadatak slajd na telefonu (projekat B, FE-5): ceo ekran zadatka (red stanja runde, slika, polja, ishod, rešenje i njihovi
+ * stilovi) je lenji chunk (ispod). Statički ostaje samo ono što mora da radi pre tog chunk-a: prijava studenta (bodovan run
+ * vodi na `nalog?nazad=`, prijavljen student ulazi bez forme imena), ekrani zadatka u store-u (`Zadatak stiže…`, koji ekran,
+ * tajmer, potvrda i greške iste runde, `odgovoriZadatak`, nacrt polja) i ulaz u `@defer` sa porukom učitavanja i greške.
+ * Na početku FE-5 rezerva je bila 729 B (115 489 B); izmereno 2026-10-20 posle premeštanja reda stanja u lenji chunk:
+ * +1 893 B (117 382 B), pa `RAST_ZADATKA` pokriva višak iznad rezerve (1 164 B) uz malo prostora.
  */
 const OSNOVA_STUDENTA = 108_218;
-const RAST_ZADATKA = 3_600;
+const RAST_ZADATKA = 1_300;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA;
 /**
- * `app-zadatak-unos` (slika svoje varijante, polja, ishod, rešenje; stilovi u komponenti, ne u globalnom CSS-u početnog
- * paketa): samo dinamički uvoz iz studentske stranice, telefon ga vuče tek na Zadatak slajdu. Izmereno 2026-10-20 (FE-5):
- * 11 293 B; granica + 10 %.
+ * Ekran zadatka (`app-zadatak-ekran` sa redom stanja i `app-zadatak-unos`: slika svoje varijante, polja, ishod, rešenje;
+ * stilovi u komponentama, ne u globalnom CSS-u početnog paketa): samo dinamički uvoz iz studentske stranice, telefon ga
+ * vuče tek na Zadatak slajdu. Izmereno 2026-10-20 (FE-5): 13 544 B; granica + 10 %.
  */
-const IZMERENO_ZADATAK = 11_293;
+const IZMERENO_ZADATAK = 13_544;
 const BUDZET_ZADATKA = Math.floor(IZMERENO_ZADATAK * 1.1);
 /**
  * `mathlive/ssr` (formula u tekstu na telefonu, lenji chunk) kao sopstveno zatvorenje posle početnog i studentske stranice.
@@ -72,6 +75,8 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
     expect(src).toContain(NIZ_STUDENTA);
     const zadatak = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'zadatak-unos.component.ts'), 'utf8');
     expect(zadatak).toContain(NIZ_ZADATKA_STUDENTA);
+    const ekran = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'zadatak-ekran.component.ts'), 'utf8');
+    expect(ekran).toContain(NIZ_REDA_ZADATKA);
     // ceo mathlive (dijalog formule editora) ima niz, a ssr ne: bez toga bi filter `ssrFajlovi` bio prazan ili pogrešan
     expect(js.filter(f => tekst(f).includes(NIZ_MATHLIVE_CEO) && tekst(f).includes(NIZ_MATHLIVE)).length, 'ceo mathlive').toBe(1);
     expect(ssrFajlovi.length, 'tačno jedan chunk sa mathlive/ssr').toBe(1);
@@ -96,6 +101,9 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
     expect(ucitano.has(zadatak), 'zadatak u početnom zatvorenju ili zatvorenju studentske stranice').toBe(false);
     expect(js.filter(u => statickiUvozi(tekst(u)).includes(zadatak)), 'statički uvoz zadatka').toEqual([]);
     expect(dinamickiUvozi(tekst(student)), 'dinamički uvoz iz studentske stranice').toContain(zadatak);
+    // red stanja (tajmer, "Odgovor primljen ✓", ishod) je u istom lenjom chunk-u, ne u stranici (budžet iznad)
+    expect(tekst(zadatak)).toContain(NIZ_REDA_ZADATKA);
+    expect([...ucitano].filter(f => tekst(f).includes(NIZ_REDA_ZADATKA)), 'red stanja zadatka u statičkom zatvorenju').toEqual([]);
     const sopstveno = sopstvenoZatvorenje([zadatak], ucitano);
     zapisi('zadatak na telefonu (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
     expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_ZADATKA);

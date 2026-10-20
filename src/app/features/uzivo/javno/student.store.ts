@@ -10,7 +10,7 @@ import { STOMP_FABRIKA } from '../data-access/stomp';
 import {
   JavniZadatak, JavnoIzvodjenjeInfo, JavnoPitanje, JavnoStanje, LicnoStanje, OdgovorCmd, PocetnoStanje, UcesnikInfo,
 } from '../data-access/uzivo.models';
-import { decimalni } from '../ui/format';
+import { decimalni, grupisiCifre } from '../ui/format';
 import { JavnoApi } from './javno.api';
 import type { NacrtOdgovora } from './odgovor-unos.component';
 import type { NacrtZadatka } from './zadatak-unos.component';
@@ -157,6 +157,16 @@ export function tacanOdgovor(p: JavnoPitanje): TacanOdgovor | null {
   return null;
 }
 
+/** Naslov ličnog ishoda posle `C` (i svog zadatka posle zatvaranja): "Tačno! +850", "Netačno", "Nisi odgovorio". */
+export function naslovIshoda(
+  ishod: { odgovorio: boolean; tacno: boolean | null; poeni: number | null }, takmicenje: boolean,
+): string {
+  if (!ishod.odgovorio) return 'Nisi odgovorio';
+  if (ishod.tacno === null) return 'Odgovor primljen';
+  if (!ishod.tacno) return 'Netačno';
+  return 'Tačno!' + (takmicenje && ishod.poeni ? ` +${grupisiCifre(ishod.poeni)}` : '');
+}
+
 const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : 0);
 const je404 = (e: unknown) => status(e) === 404;
 
@@ -195,7 +205,7 @@ export const StudentStore = signalStore(
       sat: computed(() => store._sat),
       pitanje,
       runda,
-      /** Svoja varijanta (lično stanje); stranica je crta samo na ekranima zadatka, gde je iz trenutne runde. */
+      /** Svoja varijanta (lično stanje); `app-zadatak-ekran` je crta samo na ekranima zadatka, gde je iz trenutne runde. */
       zadatak: computed(() => store.licno()?.zadatak ?? null),
       ekran,
       unosZakljucan: computed(() => ekran() !== 'unos' && ekran() !== 'zadatak'),
@@ -541,7 +551,7 @@ export const StudentStore = signalStore(
         if (store.faza() === 'uzivo' && n.rundaId === store.pitanje()?.rundaId) patchState(store, { nacrt: n });
       },
 
-      /** Nacrt polja svog zadatka trenutne runde (iz `app-zadatak-unos`). */
+      /** Nacrt polja svog zadatka trenutne runde (iz `app-zadatak-unos`; preživi i ponovno montiranje `app-zadatak-ekran`). */
       sacuvajNacrtZadatka(n: NacrtZadatka): void {
         if (store.faza() === 'uzivo' && n.rundaId === store.runda()?.rundaId) patchState(store, { nacrtZadatka: n });
       },
