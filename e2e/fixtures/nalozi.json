@@ -34,5 +34,16 @@
       { "id": 11, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00", "trenutni": false },
       { "id": 12, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00", "trenutni": false }
     ]
-  }
+  },
+  "naloziStudenata": [
+    {
+      "studentId": 1,
+      "uredjaji": [
+        { "id": 21, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00" },
+        { "id": 22, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00" }
+      ],
+      "moodle": { "povezan": true, "poslednjiUlaz": "2026-10-02T09:15:00" },
+      "poslednjaPrijava": "2026-10-19T08:30:00"
+    }
+  ]
 }

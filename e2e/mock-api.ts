@@ -93,6 +93,11 @@ interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prvi
 interface NalogStudenta {
   indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
 }
+/** Nalog studenta na kartici (`GET api/studenti/:id/nalog`); `imaMejl` se računa iz mejla studenta. */
+interface NalogNaKartici {
+  studentId: number; uredjaji: Omit<UredjajStudenta, 'trenutni'>[]; moodle: { povezan: boolean; poslednjiUlaz: string | null };
+  poslednjaPrijava: string | null;
+}
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
@@ -121,6 +126,8 @@ export interface Podaci extends BankaPodaci {
   sesijeNastavnika: SesijaNastavnika[];
   /** Jedini student sa nalogom (javna ruta `/nalog`); uređaj ovog pregledača se dodaje prijavom kodom. */
   nalogStudenta: NalogStudenta;
+  /** Uređaji i Moodle veza studenata na kartici (sekcija "Nalog"); student bez reda nema ništa. */
+  naloziStudenata: NalogNaKartici[];
   // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
@@ -136,7 +143,7 @@ export function ucitajPodatke(): Podaci {
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
   const banka = ucitaj<{ grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null> }>('banka.json');
-  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[]; nalogStudenta: NalogStudenta }>('nalozi.json');
+  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[]; nalogStudenta: NalogStudenta; naloziStudenata: NalogNaKartici[] }>('nalozi.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -157,6 +164,7 @@ export function ucitajPodatke(): Podaci {
     obavestenja: nalozi.obavestenja,
     sesijeNastavnika: nalozi.sesijeNastavnika,
     nalogStudenta: nalozi.nalogStudenta,
+    naloziStudenata: nalozi.naloziStudenata,
     bankaGrupe: banka.grupe,
     bankaVarijante: banka.varijante,
     preambule: banka.preambule,
@@ -909,6 +917,63 @@ export class MockApi {
     get('studenti/:id', (_z, p) => {
       const s = nadji(d.studenti, p['id'], 'Student');
       return jeOdgovor(s) ? s : ok(this.studentPregled(s));
+    });
+    put('studenti/:id', (z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      Object.assign(s, z.telo);
+      return ok(this.studentInfo(s));
+    });
+    // sekcija "Nalog" na kartici studenta (spec prijave, 5.3)
+    const nalogKartice = (id: number): NalogNaKartici => {
+      let n = d.naloziStudenata.find(x => x.studentId === id);
+      if (!n) {
+        n = { studentId: id, uredjaji: [], moodle: { povezan: false, poslednjiUlaz: null }, poslednjaPrijava: null };
+        d.naloziStudenata.push(n);
+      }
+      return n;
+    };
+    get('studenti/:id/nalog', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      const n = nalogKartice(s.id);
+      return ok({ imaMejl: !!s.email, uredjaji: n.uredjaji, moodle: n.moodle, poslednjaPrijava: n.poslednjaPrijava });
+    });
+    post('studenti/:id/nalog/posalji-kod', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      if (!s.email) {
+        return greska(409, 'Student nema mejl.');
+      }
+      // kao server: slanje koda sa kartice rešava otvorena obaveštenja "Ne stiže mi kod" tog studenta
+      d.obavestenja
+        .filter(o => o.studentId === s.id && o.vrsta === 'NE_STIZE_KOD' && o.reseno === null)
+        .forEach(o => (o.reseno = lokalnoVreme(new Date())));
+      return { status: 204 };
+    });
+    post('studenti/:id/nalog/opozovi-uredjaje', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      const n = nalogKartice(s.id);
+      const opozvano = n.uredjaji.length;
+      n.uredjaji = [];
+      return ok({ opozvano });
+    });
+    del('studenti/:id/nalog/moodle', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      nalogKartice(s.id).moodle = { povezan: false, poslednjiUlaz: null };
+      return { status: 204 };
     });
     get('studenti/:id/predmeti', (_z, p) => {
       const s = nadji(d.studenti, p['id'], 'Student');

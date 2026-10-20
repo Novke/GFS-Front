@@ -40,6 +40,8 @@ const grupa = (ids: number[]) => ({
   studenti: ids.map(id => ({ id, ime: 'S', prezime: String(id), indeks: `GD${id}`, godina: 2025, brojTelefona: null, email: null })),
 });
 
+const NALOG = { imaMejl: true, uredjaji: [], moodle: { povezan: false, poslednjiUlaz: null }, poslednjaPrijava: null };
+
 const kartica: StudentPredmetKartica = {
   predmet: { id: 2, naziv: 'UPR' }, prisutan: 12, predavanja: 14, zadaci: 5, zvezdice: 2, domaciUradjeno: 6, domaciUkupno: 8,
   domaciProsek: 7.4, testovi: [{ tipTesta: { id: 1, naziv: 'Kolokvijum 1' }, ostvarenoPoena: 40 }], ukupno: 72.633, predlogOcene: 8, doSledeceOcene: 8.367,
@@ -84,6 +86,13 @@ describe('StudentProfil', () => {
     harness.detectChanges();
   };
 
+  /** Odgovara na `GET studenti/{id}/nalog` sekcije "Nalog" (pravi se kad student stigne). */
+  async function nalogStudenta(id: number, imaMejl = true) {
+    harness.detectChanges();
+    http.expectOne(`api/studenti/${id}/nalog`).flush({ ...NALOG, imaMejl });
+    await stani();
+  }
+
   /** Otvara profil i odgovara na zahteve: student (sa zaglavljem) i, ako ima grupu, studenti grupe. Nema `pretraga` poziva. */
   async function otvori(opcije: { d?: StudentPregledDetails; ids?: number[]; url?: string } = {}) {
     harness = await RouterTestingHarness.create();
@@ -95,6 +104,8 @@ describe('StudentProfil', () => {
     }
     http.expectNone(r => r.url === 'api/studenti/pretraga');
     await stani();
+    // sekcija "Nalog" se pravi tek kad stigne student
+    await nalogStudenta(5, !!d.email);
   }
 
   const kartice = (zahtev: TestRequest, k: StudentPredmetKartica[] = [kartica]) => zahtev.flush(k);
@@ -109,6 +120,16 @@ describe('StudentProfil', () => {
     expect(el().querySelector('[data-godina]')!.textContent).toContain('2025');
     expect(el().querySelector('a[data-mail]')!.getAttribute('href')).toBe('mailto:ana@gf.uns.ac.rs');
     expect(el().querySelector('a[data-tel]')!.getAttribute('href')).toBe('tel:064123456');
+  });
+
+  it('sekcija "Nalog" je na kartici nezavisno od taba; student bez mejla dobija objašnjenje i onemogućeno "Pošalji kod"', async () => {
+    await otvori({ d: student({ email: null }) });
+    http.expectOne('api/studenti/5/predmeti').flush([]);
+    await stani();
+    const nalog = el().querySelector('app-student-nalog')!;
+    expect(nalog.querySelector('h2')!.textContent).toBe('Nalog');
+    expect(nalog.querySelector('[data-bez-mejla]')!.textContent).toContain('Student nema mejl');
+    expect(nalog.querySelector<HTMLButtonElement>('[data-posalji-kod]')!.disabled).toBe(true);
   });
 
   it('student bez emaila (i telefona) nema mailto ni tel link, nego "—"', async () => {
@@ -148,6 +169,7 @@ describe('StudentProfil', () => {
     http.expectOne('api/studenti/5').flush(student());
     http.expectOne('api/grupe/4').flush('greška', { status: 500, statusText: 'Server Error' });
     await stani();
+    await nalogStudenta(5);
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
     expect(el().querySelector('h1')!.textContent).toBe('Ana Radić');
@@ -246,6 +268,7 @@ describe('StudentProfil', () => {
     http.expectOne('api/studenti/5').flush(student());
     http.expectOne('api/grupe/4').flush(grupa([3, 5, 9]));
     await stani();
+    await nalogStudenta(5);
     http.expectOne('api/studenti/5/predmeti').flush([]);
     await stani();
     expect(el().querySelector('h1')!.textContent).toBe('Ana Radić');
@@ -259,6 +282,7 @@ describe('StudentProfil', () => {
     http.expectOne('api/studenti/9').flush(student({ id: 9, ime: 'Marko', prezime: 'Ilić', indeks: 'GD9' }));
     http.expectOne('api/grupe/4').flush(grupa([3, 5, 9]));
     await stani();
+    await nalogStudenta(9);
     http.expectOne('api/studenti/9/predmeti').flush([]);
     await stani();
     expect(el().querySelector('h1')!.textContent).toBe('Marko Ilić');

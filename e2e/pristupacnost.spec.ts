@@ -19,7 +19,9 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'predavanja/1', spremno: p => p.locator('app-studentska-plocica').first() },
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
-  { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
+  // kartica studenta sa sekcijom "Nalog" (uređaji i Moodle) i student bez mejla (objašnjenje, onemogućeno "Pošalji kod")
+  { putanja: 'studenti/1', spremno: p => p.locator('[data-nalog] [data-uredjaj]').first() },
+  { putanja: 'studenti/2', spremno: p => p.locator('[data-nalog] [data-bez-mejla]') },
   // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',
