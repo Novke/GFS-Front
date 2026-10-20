@@ -10,16 +10,23 @@ import type { Page, WebSocketRoute } from '@playwright/test';
 export const okvir = (komanda: string, zaglavlja: Record<string, string>, telo = ''): string =>
   `${komanda}\n${Object.entries(zaglavlja).map(([k, v]) => `${k}:${v}`).join('\n')}\n\n${telo}\0`;
 
-/** Prvi red i zaglavlja primljenog okvira. */
-export function procitaj(poruka: string): { komanda: string; zaglavlja: Record<string, string> } {
-  const [glava] = poruka.split('\n\n');
+/** Prvi red, zaglavlja i telo primljenog okvira (telo bez `\0` na kraju). */
+export function procitaj(poruka: string): { komanda: string; zaglavlja: Record<string, string>; telo: string } {
+  const kraj = poruka.indexOf('\n\n');
+  const glava = kraj < 0 ? poruka : poruka.slice(0, kraj);
   const [komanda, ...redovi] = glava.split('\n');
-  return { komanda, zaglavlja: Object.fromEntries(redovi.map(r => [r.slice(0, r.indexOf(':')), r.slice(r.indexOf(':') + 1)])) };
+  return {
+    komanda,
+    zaglavlja: Object.fromEntries(redovi.map(r => [r.slice(0, r.indexOf(':')), r.slice(r.indexOf(':') + 1)])),
+    telo: kraj < 0 ? '' : poruka.slice(kraj + 2).replace(/\0$/, ''),
+  };
 }
 
 export interface LazniBroker {
   /** Sva odredišta pretplata, redom, kroz sve veze. */
   readonly pretplate: string[];
+  /** Svi `SEND` okviri stranice (odredište i telo kako je poslato), redom, kroz sve veze. */
+  readonly slanja: { odrediste: string; telo: string }[];
   /** Koliko je veza otvoreno do sada. */
   readonly veze: number;
   /** MESSAGE svim pretplatama tog odredišta na poslednjoj vezi. */
@@ -51,6 +58,7 @@ export async function lazniBroker(
   naVezu?: (url: string) => void,
 ): Promise<LazniBroker> {
   const pretplate: string[] = [];
+  const slanja: { odrediste: string; telo: string }[] = [];
   const veze: Veza[] = [];
   let poruka = 0;
 
@@ -69,7 +77,7 @@ export async function lazniBroker(
       if (v.tiha) return;
       const tekst = typeof m === 'string' ? m : m.toString('utf8');
       if (tekst === '\n') return; // heartbeat
-      const { komanda, zaglavlja } = procitaj(tekst.replace(/^\n+/, ''));
+      const { komanda, zaglavlja, telo } = procitaj(tekst.replace(/^\n+/, ''));
       if (komanda === 'CONNECT' || komanda === 'STOMP') {
         ws.send(okvir('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }));
       } else if (komanda === 'SUBSCRIBE') {
@@ -78,6 +86,8 @@ export async function lazniBroker(
         v.pretplate.set(zaglavlja['id'], odrediste);
         const telo = naPretplatu?.(odrediste);
         if (telo !== undefined) posaljiVezi(v, zaglavlja['id'], odrediste, telo);
+      } else if (komanda === 'SEND') {
+        slanja.push({ odrediste: zaglavlja['destination'], telo });
       } else if (komanda === 'UNSUBSCRIBE') {
         v.pretplate.delete(zaglavlja['id']);
       } else if (komanda === 'DISCONNECT' && zaglavlja['receipt']) {
@@ -88,6 +98,7 @@ export async function lazniBroker(
 
   return {
     pretplate,
+    slanja,
     get veze() {
       return veze.length;
     },

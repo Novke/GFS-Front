@@ -1,5 +1,8 @@
 import { platno } from './platno-podaci.testing';
-import { NastavnickoStanje, PitanjeDetails, SlajdDetails, TipPitanja } from './uzivo.models';
+import {
+  NastavnickiZadatak, NastavnickoStanje, PitanjeDetails, PoljeZadatka, RezultatVarijante, SlajdDetails, TipPitanja, VarijantaRunde,
+  ZadatakSlajdaInfo,
+} from './uzivo.models';
 
 /** Zajednički podaci za testove izvođenja (nije spec, nema `describe`). */
 export function pitanjeSlajd(tip: TipPitanja = 'JEDAN_TACAN', izmene: Partial<PitanjeDetails> = {}): SlajdDetails {
@@ -54,4 +57,68 @@ export function naPitanju(faza: 'CEKA' | 'OTVORENO' | 'ZATVORENO', izmene: Parti
     runda: faza === 'CEKA' ? null : { id: 9, redniBroj: 1, rokMs: null, preostaloMs: null, tajmerRadi: false },
     ...izmene,
   });
+}
+
+/** BROJ polje `a` šeme zadatka (lista `2 → 10`). */
+export function poljeBroj(izmene: Partial<PoljeZadatka> = {}): PoljeZadatka {
+  return {
+    kljuc: 'a', oznaka: 'a', tip: 'BROJ', odstupanje: 0, odstupanjeTip: 'APSOLUTNO', jedinica: null, zanemariVelicinu: null,
+    zanemariRazmake: null, opcije: null, ...izmene,
+  };
+}
+
+/** Opis Zadatak slajda kao sa servera: list `2 → 10`, jedno BROJ polje, 2 aktivne varijante, bez upozorenja. */
+export function zadatakInfo(izmene: Partial<ZadatakSlajdaInfo> = {}): ZadatakSlajdaInfo {
+  return {
+    grupaId: 2, vremeSekunde: 120, brojVarijanti: null, grupaNaziv: '2 → 10',
+    putanja: [{ id: 1, naziv: 'Konverzije brojeva (demo)' }, { id: 2, naziv: '2 → 10' }], list: true, brojAktivnihVarijanti: 2,
+    polja: [poljeBroj()], iskljucena: false, iskljucenePodgrupe: [], upozorenja: [], ...izmene,
+  };
+}
+
+export function zadatakSlajd(izmene: Partial<ZadatakSlajdaInfo> = {}): SlajdDetails {
+  return {
+    id: 22, rb: 2, tip: 'ZADATAK', naslov: null, sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+    platno: null, prelaz: null, zadatak: zadatakInfo(izmene),
+  };
+}
+
+/** Izvučena varijanta runde (`svg-V<id>`, rešenje `res-V<id>` ili bez njega). */
+export function varijantaRunde(varijantaId: number, saResenjem = true): VarijantaRunde {
+  return {
+    varijantaId, naziv: `V${varijantaId}`, svgId: `svg-V${varijantaId}`, resenjeSvgId: saResenjem ? `res-V${varijantaId}` : null,
+    dodeljeno: 1, odgovorilo: 0, tacnih: 0,
+  };
+}
+
+/** Rezultat varijante za konzolu (sve vidljivo); `polja` = šema varijante (prazna = rad na papiru). */
+export function rezultatVarijante(v: VarijantaRunde, polja: PoljeZadatka[] = [poljeBroj()]): RezultatVarijante {
+  return {
+    varijantaId: v.varijantaId, naziv: v.naziv, svgId: v.svgId, resenjeSvgId: v.resenjeSvgId, dodeljeno: v.dodeljeno,
+    odgovorilo: v.odgovorilo, tacnih: v.tacnih,
+    polja: polja.map(p => ({
+      kljuc: p.kljuc, oznaka: p.oznaka, tip: p.tip, jedinica: p.jedinica, vrednosti: [], opcije: null,
+      tacno: { broj: 45, prihvatljivi: null, tacna: null, tacne: null },
+    })),
+  };
+}
+
+/**
+ * Zadatak slajd na mestu 2 u zadatoj fazi (sa rundom i dve izvučene varijante kad nije CEKA). `varijante` i `polja` menjaju
+ * izvučene varijante i šemu (npr. bez rešenja, rad na papiru).
+ */
+export function naZadatku(faza: 'CEKA' | 'OTVORENO' | 'ZATVORENO', opcije: {
+  zadatak?: Partial<NastavnickiZadatak>; varijante?: VarijantaRunde[]; polja?: PoljeZadatka[]; stanje?: Partial<NastavnickoStanje>;
+} = {}): NastavnickoStanje {
+  const slajd = zadatakSlajd(opcije.polja ? { polja: opcije.polja } : {});
+  const varijante = faza === 'CEKA' ? null : (opcije.varijante ?? [varijantaRunde(11), varijantaRunde(12)]);
+  const zadatak: NastavnickiZadatak = {
+    slajd: slajd.zadatak!, izmenaBrojaVarijanti: null, brojZaOtvaranje: 2, resenjePrikazano: false, varijante,
+    rezultat: varijante
+      ? { ukupno: 0, varijante: varijante.map(v => rezultatVarijante(v, opcije.polja)), odgovoriPrikazani: true }
+      : null,
+    javniRezultat: null,
+    ...opcije.zadatak,
+  };
+  return naPitanju(faza, { zadatak, ...opcije.stanje }, slajd);
 }

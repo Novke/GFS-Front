@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, li
 import { StanjePrelaza, animacijaPrelaza, napredNaSlajd } from '../data-access/platno-koraci';
 import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { ServerskiSat } from '../data-access/sat';
-import { Faza, NastavnickoStanje, Prelaz, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, NastavnickoStanje, Prelaz, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
 import { smanjenoKretanje } from '../ui/kretanje';
 import { PostoljeComponent } from '../ui/postolje.component';
@@ -29,18 +29,21 @@ export interface UlaziSlajda {
   prikaziRezultat: boolean;
   tacanPrikazan: boolean;
   brojOdgovora: number | null;
+  /** Zadatak slajd (inače `null`): prikaz iz njega čita samo `javniRezultat`. */
+  zadatak: NastavnickiZadatak | null;
   tajmer: TajmerUlaz | null;
   kodTraka: KodTraka;
 }
 
-/** Javne projekcije snimka za prikaz slajda (`javniRezultat`, nikad nastavnički `rezultat`). */
+/** Javne projekcije snimka za prikaz slajda (`javniRezultat`, nikad nastavnički `rezultat`; Zadatak: `zadatak.javniRezultat`). */
 export function ulaziSlajda(s: NastavnickoStanje, sat: ServerskiSat | null, host: string): UlaziSlajda | null {
   const sl = s.trenutniSlajd;
   if (!sl) return null;
   return {
     slajd: sl, korak: s.korak, postepeno: sl.postepeno, faza: s.faza, rezultat: s.javniRezultat,
     prikaziRezultat: s.rezultatiPrikazani, tacanPrikazan: s.tacanPrikazan,
-    brojOdgovora: sl.tip === 'PITANJE' && s.runda && s.faza !== 'CEKA' ? s.brojOdgovora : null,
+    brojOdgovora: (sl.tip === 'PITANJE' || sl.tip === 'ZADATAK') && s.runda && s.faza !== 'CEKA' ? s.brojOdgovora : null,
+    zadatak: sl.tip === 'ZADATAK' ? s.zadatak ?? null : null,
     tajmer: s.faza === 'OTVORENO' && s.runda && sat ? { rokMs: s.runda.rokMs, preostaloMs: s.runda.preostaloMs, sat } : null,
     kodTraka: { host, kod: s.izvodjenje.kod },
   };
@@ -99,7 +102,7 @@ interface Omotac {
               @if (o.u; as u) {
                 <app-slajd-prikaz [slajd]="u.slajd" [korak]="u.korak" [postepeno]="u.postepeno" [faza]="u.faza"
                                   [rezultat]="u.rezultat" [prikaziRezultat]="u.prikaziRezultat" [tacanPrikazan]="u.tacanPrikazan"
-                                  [brojOdgovora]="u.brojOdgovora" [tajmer]="u.tajmer" [kodTraka]="u.kodTraka"
+                                  [brojOdgovora]="u.brojOdgovora" [zadatak]="u.zadatak" [tajmer]="u.tajmer" [kodTraka]="u.kodTraka"
                                   [tema]="tema()" [animacija]="o.animacija" />
               } @else {
                 <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>

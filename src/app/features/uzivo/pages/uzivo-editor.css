@@ -717,6 +717,15 @@ p.uz-ed-upozorenje {
   margin-left: 12px;
 }
 
+/* Pregled zadatka: tabela učesnika ispod rezultata po varijanti */
+.uz-pr-ucesnici {
+  margin-top: 16px;
+}
+
+.uz-pr-ucesnici caption {
+  text-align: left;
+}
+
 /* Koraci režima "Pregled" editora platna (F18; do tada bočni pregled stranice za PLATNO) */
 .uz-ep-koraci {
   display: flex;

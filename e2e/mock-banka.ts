@@ -3,6 +3,7 @@ import type {
   OdgovorPolja, Polje, PonistavanjeInfo, PreambulaInfo, PremestiCmd, PrilogInfo, RenderDeo, RenderGreskaInfo, RenderProbaInfo,
   RenderujSveInfo, SerijaInfo, StatusVarijante, StavkaPonistavanja, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from '../src/app/features/banka/data-access/banka.models';
+import type { ZadatakSlajda, ZadatakSlajdaInfo } from '../src/app/features/uzivo/data-access/uzivo.models';
 
 /*
  * Mok banke zadataka za e2e: stablo grupa i varijante u memoriji (`Podaci.bankaGrupe`, `bankaVarijante`, `preambule`,
@@ -11,7 +12,8 @@ import type {
  * render uspeva uvek, osim kad tekst (ili rešenje) sadrži `\foo`, što daje "Undefined control sequence \foo" u liniji tog
  * teksta. Preambulu sa `\foo` `PUT` odbija (400 "Preambula se ne kompajlira (linija N): ...", kao probni render servera) i ništa
  * ne upisuje. Klodove serije: grupe i varijante nose `izvor` i `serija` (prezentacije u moku nemaju seriju, pa su njihovi brojači
- * 0); odobravanje kopije (`zamenjuje`) arhivira original. Rute registruje `mock-api.ts`.
+ * 0); odobravanje kopije (`zamenjuje`) arhivira original. Za Uživo editor računa opis Zadatak slajda nad stablom
+ * (`zadatakSlajda`: putanja, kandidati, isključenja, upozorenja kao server). Rute registruje `mock-api.ts`.
  */
 
 /** Grupa kako je mok čuva; bez `izvor` / `serija` (npr. grupa koju test doda) je ručna, bez serije. */
@@ -737,5 +739,61 @@ export class MockBanka {
     if (!this.d.iskljuceneTeme.some(t => t.id === id)) return greska(404, 'Isključena tema nije pronađena.');
     this.d.iskljuceneTeme = this.d.iskljuceneTeme.filter(t => t.id !== id);
     return { status: 204 };
+  }
+
+  // -------------------------------------------------------------------------------------------- Zadatak slajd (Uživo)
+
+  /**
+   * Grupa Zadatak slajda pri `POST`/`PUT` slajda (`PrezentacijaService.proveriZadatak`): mora postojati, u predmetu prezentacije
+   * i nameni PREDAVANJE. `null` = u redu.
+   */
+  proveriZadatak(predmetId: number, z: ZadatakSlajda | null | undefined): Ishod | null {
+    if (z?.grupaId == null) return greska(400, 'Zadatak slajd mora imati grupu zadataka.');
+    const g = this.grupa(z.grupaId);
+    if (!g) return greska(400, 'Grupa zadataka nije pronađena.');
+    if (g.predmetId !== predmetId || g.namena !== 'PREDAVANJE') return greska(400, 'Grupa mora biti iz banke ovog predmeta, namena Predavanja.');
+    return null;
+  }
+
+  /**
+   * Opis Zadatak slajda kako ga server računa pri svakom čitanju (`ZadaciSlajdova`, `KandidatiZadatka.Opis`): putanja od korena,
+   * šema polja samo za list, `iskljucena` (tema grupe ili pretka), kandidati = AKTIVNE sa SVG-om u listovima koji se izvlače (od
+   * grupe naniže dete sa sopstvenom temom se preskače sa celim podstablom i ulazi u `iskljucenePodgrupe`; grupa koja je i sama
+   * list se izvlači i kad je isključena) i upozorenja istim tekstom i redom. Grupa koje više nema (FK `ON DELETE SET NULL`) daje
+   * `grupaId` null i samo upozorenje o brisanju.
+   */
+  zadatakSlajda(z: ZadatakSlajda): ZadatakSlajdaInfo {
+    const g = z.grupaId == null ? undefined : this.grupa(z.grupaId);
+    const izbor = { vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti };
+    if (!g) {
+      return {
+        grupaId: null, ...izbor, grupaNaziv: null, putanja: [], list: false, brojAktivnihVarijanti: 0, polja: null, iskljucena: false,
+        iskljucenePodgrupe: [], upozorenja: ['Grupa zadataka je obrisana; izaberi drugu.'],
+      };
+    }
+    const imaTemu = (x: BankaGrupa) => this.d.iskljuceneTeme.some(t => t.grupaId === x.id);
+    const listovi: BankaGrupa[] = [];
+    const iskljucenePodgrupe: GrupaPutanja[] = [];
+    const obidji = (x: BankaGrupa): void => {
+      const deca = this.braca(x.predmetId, x.namena, x.id);
+      if (!deca.length) listovi.push(x);
+      for (const c of deca) {
+        if (imaTemu(c)) iskljucenePodgrupe.push({ id: c.id, naziv: c.naziv });
+        else obidji(c);
+      }
+    };
+    obidji(g);
+    const list = this.braca(g.predmetId, g.namena, g.id).length === 0;
+    const iskljucena = this.iskljucenje(g).iskljucena;
+    const brojAktivnihVarijanti = listovi.flatMap(l => this.varijanteGrupe(l.id)).filter(v => v.status === 'AKTIVNA' && v.svgId).length;
+    const upozorenja = [
+      ...(iskljucena ? ['Tema je isključena.'] : []),
+      ...(brojAktivnihVarijanti === 0 ? ['Grupa nema aktivnih varijanti; odobri nacrte u banci pre časa.'] : []),
+      ...(iskljucenePodgrupe.length ? [`Isključene podgrupe se ne izvlače: ${iskljucenePodgrupe.map(p => p.naziv).join(', ')}.`] : []),
+    ];
+    return {
+      grupaId: g.id, ...izbor, grupaNaziv: g.naziv, putanja: this.putanja(g), list, brojAktivnihVarijanti,
+      polja: list ? kopija(g.polja) : null, iskljucena, iskljucenePodgrupe, upozorenja,
+    };
   }
 }

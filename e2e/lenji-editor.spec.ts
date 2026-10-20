@@ -37,6 +37,8 @@ const NIZ_STRANICE = 'uz-ed-zaglavlje';
 const NIZ_FROM_EVENT = 'Invalid event target';
 /** Niz koji ima samo modul pretvaranja INFO -> PLATNO (`OPISI_GUBITAKA.VEZE`, 5c). */
 const NIZ_PRETVARANJA = 'Veze postaju običan tekst';
+/** Niz koji ima samo dijalog izbora grupe Zadatak slajda (prazna banka, FE-2). */
+const NIZ_IZBORA_GRUPE = 'Banka ovog predmeta još nema grupa za predavanja.';
 
 /** Izmerena vrednost ide u izveštaj testa (i u opis PR-a). */
 function zapisi(opis: string, bajtova: number, gzip?: number): void {
@@ -85,6 +87,19 @@ test.describe('editor platna samo u lenjom chunk-u, budžeti (produkcioni build)
     expect(dinamickiUvozi(tekst(stranica)), 'stranica ga uvozi dinamički').toContain(pretvaranje);
     expect(new Set([...pocetno, ...zatvorenje([stranica])]).has(pretvaranje)).toBe(false);
     zapisi('fajl chunk-a pretvaranja u platno', zbir([pretvaranje]));
+  });
+
+  test('izbor grupe Zadatak slajda (FE-2): samo dinamički uvoz (`IzborGrupeOtvarac`), van početnog zatvorenja i zatvorenja stranice', () => {
+    const izvor = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'pages', 'izbor-grupe.dialog.ts'), 'utf8');
+    expect(izvor).toContain(NIZ_IZBORA_GRUPE);
+    const dijalog = fajlSa(NIZ_IZBORA_GRUPE, js);
+    const stranica = fajlSa(NIZ_STRANICE, js);
+    const uStranici = new Set([...pocetno, ...zatvorenje([stranica])]);
+    expect(js.filter(f => tekst(f).includes(NIZ_IZBORA_GRUPE)), 'niz izbora grupe samo u jednom chunk-u').toEqual([dijalog]);
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(dijalog)), `${dijalog}: statički uvoz`).toEqual([]);
+    expect([...uStranici].filter(f => dinamickiUvozi(tekst(f)).includes(dijalog)).length, 'stranica ga uvozi dinamički').toBeGreaterThan(0);
+    expect(uStranici.has(dijalog)).toBe(false);
+    zapisi('fajl chunk-a izbora grupe zadataka', zbir([dijalog]));
   });
 
   test('editor platna: samo dinamički uvoz, sopstveno zatvorenje (sa ProseMirror-om) staje u budžet 4b', () => {

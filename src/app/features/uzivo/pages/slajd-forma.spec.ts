@@ -2,9 +2,14 @@ import { provideHttpClient } from '@angular/common/http';
 import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { platno } from '../data-access/platno-podaci.testing';
+import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
+import { zadatakSlajd } from '../data-access/izvodjenje-podaci.testing';
 import { PORUKE } from '../data-access/slajd-pravila';
 import { Prelaz, SlajdCmd, SlajdDetails } from '../data-access/uzivo.models';
+import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { ZadatakFormaComponent } from './zadatak-forma.component';
 
 function platnoSlajd(): SlajdDetails {
   return {
@@ -294,5 +299,88 @@ describe('SlajdFormaComponent: prelaz (F16)', () => {
     await f.whenStable();
     expect(poslednji().pitanje!.tekst).toBe('Koliko je sati?');
     expect(poslednji().prelaz).toEqual(p);
+  });
+});
+
+describe('SlajdFormaComponent: ZADATAK', () => {
+  let f: ComponentFixture<SlajdFormaComponent>;
+  let emitovano: SlajdCmd[];
+  let izaberi: ReturnType<typeof vi.fn>;
+  const el = () => f.nativeElement as HTMLElement;
+  const poslednji = () => emitovano[emitovano.length - 1];
+  const polje = (oznaka: string) => [...el().querySelectorAll<HTMLElement>('mat-form-field')]
+    .find(p => p.querySelector('mat-label')?.textContent?.trim() === oznaka)!.querySelector('input')!;
+
+  async function napravi(s: SlajdDetails): Promise<void> {
+    izaberi = vi.fn(() => of({ id: 3, naziv: '16 → 2', list: true, brojAktivnih: 1, iskljucena: false, deca: [] }));
+    TestBed.configureTestingModule({
+      imports: [SlajdFormaComponent],
+      providers: [
+        provideHttpClient(), provideRouter([]), { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        { provide: IzborGrupeOtvarac, useValue: { izaberi } },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Manual,
+    });
+    f = TestBed.createComponent(SlajdFormaComponent);
+    f.componentRef.setInput('slajd', s);
+    f.componentRef.setInput('predmetId', 1);
+    emitovano = [];
+    f.componentInstance.izmena.subscribe(c => emitovano.push(c));
+    f.detectChanges();
+    await f.whenStable();
+  }
+
+  async function upisi(oznaka: string, v: string): Promise<void> {
+    const input = polje(oznaka);
+    input.value = v;
+    input.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    await f.whenStable();
+  }
+
+  it('forma zadatka umesto pitanja (predmet, opis sa servera), beleške ostaju', async () => {
+    await napravi(zadatakSlajd());
+    expect(el().querySelector('app-pitanje-forma')).toBeNull();
+    const forma = f.debugElement.query(d => d.componentInstance instanceof ZadatakFormaComponent).componentInstance as ZadatakFormaComponent;
+    expect(forma.predmetId()).toBe(1);
+    expect(forma.info()?.grupaNaziv).toBe('2 → 10');
+    expect(el().querySelector('textarea[formcontrolname=beleske]')).not.toBeNull();
+    expect(el().querySelector('.uz-ed-greske')).toBeNull();
+  });
+
+  it('vreme i broj različitih: komanda nosi zadatak (ostala polja null), neispravno daje poruku servera ispod forme', async () => {
+    await napravi({ ...zadatakSlajd({ vremeSekunde: null }), beleske: 'Na tabli' });
+    await upisi('Broj različitih zadataka', '4');
+    expect(poslednji()).toEqual({
+      tip: 'ZADATAK', naslov: null, sadrzaj: null, slikaId: null, beleske: 'Na tabli', postepeno: false, pitanje: null,
+      platno: null, prelaz: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: 4 },
+    });
+    await upisi('Vreme (s)', '4');
+    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: 4, brojVarijanti: 4 });
+    expect(el().querySelector('.uz-ed-greske')!.textContent).toContain(PORUKE.vreme);
+    await upisi('Vreme (s)', '');
+    await upisi('Broj različitih zadataka', '51');
+    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: null, brojVarijanti: 51 });
+    expect(el().querySelector('.uz-ed-greske')!.textContent).toContain(PORUKE.brojVarijanti);
+    expect(el().querySelector('.uz-ed-greske')!.textContent).not.toContain(PORUKE.vreme);
+  });
+
+  it('"Promeni grupu…" emituje komandu sa novom grupom (vreme i broj ostaju)', async () => {
+    await napravi(zadatakSlajd({ vremeSekunde: 120, brojVarijanti: 2 }));
+    [...el().querySelectorAll('button')].find(b => b.textContent?.trim() === 'Promeni grupu…')!.click();
+    await f.whenStable();
+    expect(izaberi).toHaveBeenCalledWith({ predmetId: 1, grupaId: 2 });
+    expect(poslednji().zadatak).toEqual({ grupaId: 3, vremeSekunde: 120, brojVarijanti: 2 });
+  });
+
+  it('INFO: komanda nosi zadatak null', async () => {
+    await napravi({
+      id: 5, rb: 1, tip: 'INFO', naslov: 'Uvod', sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null,
+      platno: null, prelaz: null,
+    });
+    const naslov = el().querySelector('input[formcontrolname=naslov]') as HTMLInputElement;
+    naslov.value = 'Novi';
+    naslov.dispatchEvent(new Event('input'));
+    expect(poslednji()).toEqual(expect.objectContaining({ tip: 'INFO', naslov: 'Novi', zadatak: null }));
   });
 });

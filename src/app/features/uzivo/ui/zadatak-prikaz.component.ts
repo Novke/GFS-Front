@@ -1,0 +1,93 @@
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { Faza, NastavnickiZadatak, SlajdDetails } from '../data-access/uzivo.models';
+import type { TajmerUlaz } from './slajd-prikaz.component';
+import { TajmerComponent } from './tajmer.component';
+import { ZadatakRezultatComponent } from './zadatak-rezultat.component';
+
+/**
+ * Zadatak slajd na platnu 16:9 (projektor, umanjeni prikaz u konzoli): zaglavlje "Zadatak" sa nazivom grupe, brojem odgovora
+ * i tajmerom, ispod njega opis "N različitih varijanti" (CEKA, OTVORENO i zatvorena runda dok ništa nije prikazano) ili, kad
+ * snimak nosi `javniRezultat` (bar jedan od tri nezavisna prekidača: rezultati, `TACAN`, `RESENJE`), mreža `app-zadatak-rezultat`.
+ * Čita **samo** `javniRezultat`: nastavnički `rezultat` i `varijante` (sa id-jevima svih rešenja i tačnim vrednostima) se ovde
+ * ne crtaju (iz `varijante` se uzima samo broj izvučenih), pa slika rešenja ne postoji u DOM-u (ni zahtev na nju) dok nastavnik
+ * ne uključi `RESENJE`. Imena učesnika se ne prikazuju. Bez stanja izvođenja (`zadatak` je `null`, npr. pregled u editoru i panel "Sledeće") statična kartica sa opisom
+ * sa slajda: naziv grupe i "Različitih: N" (prazno = sve).
+ */
+@Component({
+  selector: 'app-zadatak-prikaz',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TajmerComponent, ZadatakRezultatComponent],
+  host: { class: 'uz-zad', '[attr.data-faza]': 'faza()' },
+  // u komponenti (lenji chunkovi projektora, konzole i editora), ne u globalnom `uzivo-tokeni.css`: početni paket je na granici
+  // budžeta `e2e/lenji-editor.spec.ts`, a ove stilove telefon i ostatak aplikacije ne trebaju
+  styles: `
+    /* prilagođeni element je podrazumevano inline, a u platnu (kolona) puni preostalu visinu */
+    :host { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1.8cqw; }
+    .uz-zad-zaglavlje { display: flex; align-items: center; gap: 2cqw; }
+    .uz-zad-naslovi { flex: 1; min-width: 0; }
+    .uz-zad-grupa { margin-top: 0.4cqw; font-size: 2.6cqw; font-weight: 600; line-height: 1.2; color: var(--muted); overflow-wrap: anywhere; }
+    .uz-zad-odgovori { flex: none; font-size: 1.9cqw; color: var(--muted); }
+    .uz-zad-odgovori strong { color: var(--ink); font-size: 1.35em; font-variant-numeric: tabular-nums; }
+    .uz-zad-opis { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
+    .uz-zad-broj { font-size: 6.5cqw; font-weight: 700; line-height: 1.15; }
+    /* mreža rezultata puni ostatak (apsolutno u okviru): redovi su jednake visine bez obzira na sadržaj kartica */
+    .uz-zad-rezultat { position: relative; flex: 1 1 0; min-height: 0; }
+  `,
+  template: `
+    @if (zadatak(); as z) {
+      <header class="uz-zad-zaglavlje">
+        <div class="uz-zad-naslovi">
+          <h1 class="uz-slajd-naslov">Zadatak</h1>
+          <p class="uz-zad-grupa">{{ grupa() }}</p>
+        </div>
+        @if (brojOdgovora() !== null) {
+          <span class="uz-zad-odgovori">Odgovora: <strong>{{ brojOdgovora() }}</strong></span>
+        }
+        @if (aktivanTajmer(); as t) {
+          <app-tajmer class="uz-slajd-tajmer" [rokMs]="t.rokMs" [preostaloMs]="t.preostaloMs" [sat]="t.sat" [ukupnoMs]="ukupnoMs()" />
+        }
+      </header>
+      @if (z.javniRezultat; as r) {
+        <app-zadatak-rezultat class="uz-zad-rezultat" [rezultat]="r" />
+      } @else {
+        <div class="uz-zad-opis" data-zadatak><p class="uz-zad-broj">{{ brojVarijanti() }} različitih varijanti</p></div>
+      }
+    } @else {
+      <h1 class="uz-slajd-naslov">Zadatak</h1>
+      <div class="uz-slajd-telo">
+        <div class="uz-md uz-slajd-md" data-zadatak>
+          <p>{{ grupa() }}</p>
+          <p>Različitih: {{ slajd().zadatak?.brojVarijanti ?? 'sve' }}</p>
+        </div>
+      </div>
+    }
+  `,
+})
+export class ZadatakPrikazComponent {
+  readonly slajd = input.required<SlajdDetails>();
+  /** Nastavnički snimak Zadatak slajda; `null` bez stanja izvođenja. */
+  readonly zadatak = input<NastavnickiZadatak | null>(null);
+  readonly faza = input<Faza | null>(null);
+  readonly brojOdgovora = input<number | null>(null);
+  readonly tajmer = input<TajmerUlaz | null>(null);
+
+  /** Opis sa slajda (kad je grupa obrisana, naziv je `null`); u stanju isti opis stiže u `zadatak.slajd`. */
+  private readonly opis = computed(() => this.zadatak()?.slajd ?? this.slajd().zadatak ?? null);
+  protected readonly grupa = computed(() => {
+    const o = this.opis();
+    return o?.grupaNaziv ?? (o && o.grupaId !== null ? 'Grupa zadataka' : 'Grupa nije izabrana');
+  });
+  /** Pre otvaranja koliko će se izvući, posle otvaranja koliko je izvučeno. */
+  protected readonly brojVarijanti = computed(() => {
+    const z = this.zadatak();
+    return z ? (z.varijante?.length ?? z.brojZaOtvaranje) : 0;
+  });
+  protected readonly ukupnoMs = computed(() => {
+    const s = this.opis()?.vremeSekunde;
+    return s ? s * 1000 : null;
+  });
+  protected readonly aktivanTajmer = computed(() => {
+    const t = this.tajmer();
+    return t && (t.rokMs !== null || t.preostaloMs !== null) ? t : null;
+  });
+}

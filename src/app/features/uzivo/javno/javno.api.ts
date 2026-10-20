@@ -12,7 +12,10 @@ export class JavnoApi {
   private readonly http = inject(HttpClient);
   private readonly osnova = 'api/public/uzivo';
 
-  /** Naziv izvođenja; 404 za nepoznat ili završen kod. */
+  /**
+   * Naziv izvođenja, `prijavaObavezna` (bodovan run) i `prijavljenStudent` (kolačić prijave studenta); 404 za nepoznat ili
+   * završen kod.
+   */
   info(kod: string): Observable<JavnoIzvodjenjeInfo> {
     return this.http.get<JavnoIzvodjenjeInfo>(`${this.osnova}/${encodeURIComponent(kod)}`);
   }
@@ -22,7 +25,10 @@ export class JavnoApi {
     return this.http.get<UcesnikInfo>(`${this.osnova}/${encodeURIComponent(kod)}/ja`);
   }
 
-  /** Prijava imenom (1-40 znakova); postavlja kolačić. 409 kad je izvođenje puno. */
+  /**
+   * Prijava imenom (1-40 znakova); postavlja kolačić. Prijavljen student šalje prazno ime (server uzima "Ime Prezime" iz baze).
+   * 409 kad je izvođenje puno, 403 kad bodovan run traži prijavu studenta.
+   */
   prijava(kod: string, ime: string): Observable<UcesnikInfo> {
     return this.http.post<UcesnikInfo>(`${this.osnova}/${encodeURIComponent(kod)}/prijava`, { ime });
   }

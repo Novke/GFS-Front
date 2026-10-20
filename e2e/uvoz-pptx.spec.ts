@@ -132,7 +132,9 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     // lista se ponovo čita i nema obrisane prezentacije
     await expect.poll(() => mock.zahteviZa('prezentacije', 'GET').length).toBe(liste + 1);
     await expect(page).toHaveURL(/\/prezentacije$/);
-    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(1);
+    // samo prezentacije iz fiksture (obrisana je izbačena iz moka)
+    expect(mock.podaci.prezentacije.some(x => x.id === NOVA)).toBe(false);
+    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(mock.podaci.prezentacije.length);
   });
 
   test('nova prezentacija, nepoznat ishod (veza prekinuta): bez brisanja, poruka "možda ipak dodati", lista se ponovo čita', async ({ page, mock }) => {
@@ -154,8 +156,9 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
     await expect.poll(() => mock.zahteviZa('prezentacije', 'GET').length).toBe(liste + 1);
-    // nova prezentacija ostaje (možda ima slajdove): nikakav DELETE, vidi se u listi
-    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(2);
+    // nova prezentacija ostaje (možda ima slajdove): nikakav DELETE, vidi se u listi (uz prezentacije iz fiksture)
+    expect(mock.podaci.prezentacije.some(x => x.id === NOVA)).toBe(true);
+    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(mock.podaci.prezentacije.length);
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
   });
 

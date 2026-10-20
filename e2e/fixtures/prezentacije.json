@@ -1,5 +1,5 @@
 {
- "_napomena": "Prezentacija sa PLATNO slajdom (izmišljen sadržaj): sve vrste slojeva, 3 KLIK animacije (koraci 1-3); treći slajd: CRTEZ sa 2 izmišljena poteza i ISCRTAJ (5b, vektor u editoru).",
+ "_napomena": "Prezentacija sa PLATNO slajdom (izmišljen sadržaj): sve vrste slojeva, 3 KLIK animacije (koraci 1-3); treći slajd: CRTEZ sa 2 izmišljena poteza i ISCRTAJ (5b, vektor u editoru). Prezentacija 6 (FE-2, Zadatak slajd): INFO i ZADATAK nad listom banke „2 → 10“ (grupa 2 iz banka.json, 120 s, sve aktivne); mok šalje samo izbor, opis grupe računa MockBanka.",
  "prezentacije": [
   {
    "id": 5,
@@ -473,6 +473,58 @@
         "kasnjenjeMs": 0
        }
       ]
+     }
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "naziv": "Vežbe 1 – zadaci (demo)",
+   "opis": null,
+   "predmet": {
+    "id": 1,
+    "naziv": "Programiranje u građevinarstvu"
+   },
+   "brojSlajdova": 2,
+   "brojPitanja": 1,
+   "izmenjeno": "2026-10-18T10:00:00",
+   "tema": "NACRT",
+   "takmicenje": false,
+   "telefonPrikaz": "DUGMAD",
+   "detaljiDozvoljeni": false,
+   "brojIzvodjenja": 0,
+   "aktivnoIzvodjenjeId": null,
+   "slajdovi": [
+    {
+     "id": 61,
+     "rb": 1,
+     "tip": "INFO",
+     "naslov": "Zadaci na času (demo)",
+     "sadrzaj": "Svako dobija svoj zadatak na telefonu.",
+     "slika": null,
+     "beleske": null,
+     "postepeno": false,
+     "pitanje": null,
+     "platno": null,
+     "prelaz": null,
+     "zadatak": null
+    },
+    {
+     "id": 62,
+     "rb": 2,
+     "tip": "ZADATAK",
+     "naslov": null,
+     "sadrzaj": null,
+     "slika": null,
+     "beleske": "Pre otvaranja proveri broj prisutnih.",
+     "postepeno": false,
+     "pitanje": null,
+     "platno": null,
+     "prelaz": null,
+     "zadatak": {
+      "grupaId": 2,
+      "vremeSekunde": 120,
+      "brojVarijanti": null
      }
     }
    ]

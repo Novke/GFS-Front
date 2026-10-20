@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { naPitanju } from '../data-access/izvodjenje-podaci.testing';
+import { naPitanju, naZadatku } from '../data-access/izvodjenje-podaci.testing';
 import { dozvoljeneKomande } from '../data-access/izvodjenje-pravila';
 import { TasterAkcija } from '../tastatura';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
@@ -72,5 +72,41 @@ describe('KonzolaKontroleComponent', () => {
     const el = f.nativeElement as HTMLElement;
     expect(dugme(el, 'Pokreni tajmer').disabled).toBe(true);
     expect(dugme(el, 'Tačan odgovor').disabled).toBe(false);
+  });
+
+  it('Rešenje (Shift+R): onemogućeno u CEKA i na pitanju, prekidač posle zatvaranja Zadatak runde', () => {
+    const f = TestBed.createComponent(DomacinKontrola);
+    const postavi = (s: ReturnType<typeof naZadatku>) => {
+      f.componentInstance.stanje.set(s);
+      f.componentInstance.dozvoljene.set(dozvoljeneKomande(s));
+      f.detectChanges();
+    };
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const resenje = () => dugme(el, 'Rešenje');
+    // pitanje: dugme postoji, ali nema šta da prikaže
+    expect(resenje().disabled).toBe(true);
+    expect(resenje().getAttribute('aria-keyshortcuts')).toBe('Shift+R');
+    expect(resenje().querySelector('kbd')?.textContent).toBe('Shift+R');
+
+    postavi(naZadatku('CEKA'));
+    expect(resenje().disabled).toBe(true);
+    expect(resenje().getAttribute('aria-pressed')).toBe('false');
+    expect(dugme(el, 'Ponovi zadatak')).toBeDefined();
+
+    postavi(naZadatku('ZATVORENO'));
+    expect(resenje().disabled).toBe(false);
+    expect(resenje().getAttribute('aria-pressed')).toBe('false');
+    resenje().click();
+    expect(f.componentInstance.kliknuto.at(-1)).toEqual({ tip: 'RESENJE', vrednost: undefined });
+
+    postavi(naZadatku('ZATVORENO', { zadatak: { resenjePrikazano: true } }));
+    expect(resenje().getAttribute('aria-pressed')).toBe('true');
+    expect(resenje().classList).toContain('uz-kon-dugme--ukljuceno');
+
+    document.body.appendChild(el);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(f.componentInstance.precice.at(-1)).toEqual({ komanda: 'RESENJE' });
+    el.remove();
   });
 });

@@ -103,6 +103,14 @@ describe('IzvodjenjaListaPage', () => {
     http.expectNone('api/izvodjenja/2');
   });
 
+  it('bodovan run ima čip "Boduje se" uz čuvanje', () => {
+    const el = otvori([izv(2, { boduje: true }), izv(1)]).nativeElement as HTMLElement;
+    const [bodovan, obican] = redovi(el);
+    expect(bodovan.querySelector('.uz-boduje')?.textContent?.trim()).toBe('Boduje se');
+    expect(tekst(bodovan)).toContain('Sačuvano');
+    expect(obican.querySelector('.uz-boduje')).toBeNull();
+  });
+
   it('tabela ima skriven naslov', () => {
     const el = otvori([izv(1)]).nativeElement as HTMLElement;
     expect(el.querySelector('table caption')?.textContent).toBe('Izvođenja prezentacije');

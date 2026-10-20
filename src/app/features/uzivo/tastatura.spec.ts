@@ -55,6 +55,35 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
   });
 });
 
+describe('Shift+R = RESENJE (rešenje zadatka), R bez Shift-a = PONOVI', () => {
+  const sa = (key: string, shiftKey: boolean, code?: string) => ({ ...taster(key), shiftKey, ...(code ? { code } : {}) });
+
+  it('Shift+R (i Shift sa malim r, Caps Lock uključen) -> RESENJE', () => {
+    expect(tasterUAkciju(sa('R', true), 10)).toEqual({ komanda: 'RESENJE' });
+    expect(tasterUAkciju(sa('r', true), 10)).toEqual({ komanda: 'RESENJE' });
+  });
+
+  it('R bez Shift-a (Caps Lock) i r -> PONOVI', () => {
+    expect(tasterUAkciju(sa('R', false), 10)).toEqual({ komanda: 'PONOVI' });
+    expect(tasterUAkciju(taster('r'), 10)).toEqual({ komanda: 'PONOVI' });
+  });
+
+  it('ćirilica: Shift+Р (KeyR) -> RESENJE, р -> PONOVI', () => {
+    expect(tasterUAkciju(sa('Р', true, 'KeyR'), 10)).toEqual({ komanda: 'RESENJE' });
+    expect(tasterUAkciju(sa('р', true, 'KeyR'), 10)).toEqual({ komanda: 'RESENJE' });
+    expect(tasterUAkciju(sa('р', false, 'KeyR'), 10)).toEqual({ komanda: 'PONOVI' });
+  });
+
+  it('Shift ne menja druge prečice (Shift+O je i dalje OTVORI_ZATVORI)', () => {
+    expect(tasterUAkciju(sa('O', true), 10)).toEqual({ komanda: 'OTVORI_ZATVORI' });
+    expect(tasterUAkciju(sa('?', true), 10)).toEqual({ lokalno: 'POMOC' });
+  });
+
+  it('Ctrl+Shift+R se ne hvata (osvežavanje stranice)', () => {
+    expect(tasterUAkciju({ ...sa('R', true), ctrlKey: true }, 10)).toBeNull();
+  });
+});
+
 describe('prečice na srpskoj ćirilici (e.key ćirilično, e.code latinični taster)', () => {
   const cir = (key: string, code: string, mod: { ctrlKey?: boolean } = {}) => ({ ...taster(key, mod), code });
   // srpski ćirilični raspored: C=ц, L=л, O=о, R=р, T=т, M=м, D=д, Q=љ, B=б, W=њ, F=ф, P=п

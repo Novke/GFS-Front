@@ -12,17 +12,8 @@ import { RangListaComponent } from '../ui/rang-lista.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
-import { StudentStore } from './student.store';
-
-/** Naslov ličnog ishoda posle `C`: "Tačno! +850", "Netačno", "Nisi odgovorio". */
-export function naslovIshoda(
-  ishod: { odgovorio: boolean; tacno: boolean | null; poeni: number | null }, takmicenje: boolean,
-): string {
-  if (!ishod.odgovorio) return 'Nisi odgovorio';
-  if (ishod.tacno === null) return 'Odgovor primljen';
-  if (!ishod.tacno) return 'Netačno';
-  return 'Tačno!' + (takmicenje && ishod.poeni ? ` +${grupisiCifre(ishod.poeni)}` : '');
-}
+import { StudentStore, naslovIshoda } from './student.store';
+import { ZadatakEkranComponent } from './zadatak-ekran.component';
 
 /**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
@@ -30,12 +21,18 @@ export function naslovIshoda(
  * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first. Tekst pitanja i opcija (i tačne opcije)
  * ide kroz `app-tekst-formule` (formule `$...$`): lenji `mathlive/ssr` chunk i `assets/mathlive/` traže se samo kad tekst
  * ima formulu. Prihvatljivi odgovori, jedinica i oznake skale ostaju običan tekst (plan faze 5, odluka 2).
+ * Zadatak slajd: "Zadatak stiže…", pa `app-zadatak-ekran` (stanje runde i svoja varijanta u `app-zadatak-unos`) u
+ * lenjom bloku (`@defer`): telefon vuče njegov chunk tek na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu, pa ovde
+ * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`).
  */
 @Component({
   selector: 'app-uzivo-student',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [StudentStore],
-  imports: [RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent],
+  imports: [
+    RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
+    ZadatakEkranComponent,
+  ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
     @let s = store;
@@ -107,6 +104,15 @@ export function naslovIshoda(
               }
               <app-rang-lista [stavke]="rang" [istakni]="l?.mesto ?? null" />
             </section>
+          } @else if (s.ekran().startsWith('zadatak')) {
+            <!-- ekrani svoje varijante (zadatak, zadatakPrimljen, zadatakIshod): jedna instanca kroz sva tri -->
+            @defer (on immediate) {
+              <app-zadatak-ekran />
+            } @placeholder {
+              <p class="uz-st-tekst" role="status">Učitavanje zadatka…</p>
+            } @error {
+              <p class="uz-st-tekst" role="alert">Zadatak nije učitan. Osveži stranicu i pokušaj ponovo.</p>
+            }
           } @else {
             @switch (s.ekran()) {
               @case ('povezivanje') { <p class="uz-st-veliko" role="status">Povezivanje…</p> }
@@ -117,7 +123,7 @@ export function naslovIshoda(
                 </div>
               }
               @case ('tabla') { <p class="uz-st-veliko" role="status">Gledaj u tablu</p> }
-              @case ('stize') { <p class="uz-st-veliko" role="status">Pitanje stiže…</p> }
+              @case ('stize') { <p class="uz-st-veliko" role="status">{{ j?.slajdTip === 'ZADATAK' ? 'Zadatak' : 'Pitanje' }} stiže…</p> }
               @case ('unos') {
                 @if (p) {
                   <div class="uz-st-pitanje">
@@ -233,7 +239,7 @@ export class UzivoStudentPage {
   /** Rang-lista zamenjuje sadržaj, osim dok student odgovara i na kraju (tamo je deo ekrana). */
   protected readonly rangVidljiv = computed(() => {
     const e = this.store.ekran();
-    return !!this.store.javno()?.rangLista && e !== 'unos' && e !== 'kraj';
+    return !!this.store.javno()?.rangLista && e !== 'unos' && e !== 'zadatak' && e !== 'kraj';
   });
 
   private readonly zatvoriDetalje = viewChild<ElementRef<HTMLButtonElement>>('zatvoriDetalje');
