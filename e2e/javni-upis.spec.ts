@@ -1,4 +1,5 @@
 import { expect, test } from './javna-mreza';
+import { NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA } from './nizovi-editora';
 
 /** Token otvorene sesije iz `fixtures/onboarding.json` (izmišljen). */
 const TOKEN = 'e2eTokenZaUpis_0123456789abcdefg';
@@ -31,10 +32,15 @@ test.describe('javni upis (telefon studenta, bez basic-auth-a)', () => {
     expect(mock.podaci.prijave.at(-1)).toMatchObject({ indeks: 'GD11', status: 'NA_CEKANJU' });
 
     expect(javnaMreza.api).toEqual([`GET /api/public/upis/${TOKEN}`, `POST /api/public/upis/${TOKEN}`]);
-    // nijedan učitan JS (glavni bundle i lenji chunk-ovi upisa) nema fflate ni kod uvoza PPTX-a
+    // nijedan učitan JS (glavni bundle i lenji chunk-ovi upisa) nema fflate, kod uvoza PPTX-a ni kod editora platna
     const skripte = await javnaMreza.skripte();
     expect(skripte.putanje.some(p => /\/main-[^/]+\.js$/.test(p)), 'provera je pročitala glavni bundle').toBe(true);
     expect(skripte.saUvozom).toEqual([]);
+    expect(skripte.saEditorom).toEqual([]);
+    // provera nizova pokriva i biblioteke 4b (ProseMirror, MathLive), a formule se ovde ne učitavaju (ni stil ni fontovi)
+    expect(NIZOVI_EDITORA).toEqual(expect.arrayContaining([NIZ_PROSEMIRROR, NIZ_MATHLIVE]));
+    expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/'))).toEqual([]);
+    expect(javnaMreza.zahtevi.length, 'zahtevi su zabeleženi').toBeGreaterThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 

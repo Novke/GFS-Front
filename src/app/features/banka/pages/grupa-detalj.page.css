@@ -1,0 +1,120 @@
+/*
+ * Detalj grupe banke: putanja u zaglavlju, forma (naziv i težina u redu, opis, uputstvo, šema polja, posledice izmene) i
+ * mreža kartica varijanti. Boje samo kroz tokene.
+ */
+
+:host { display: block; }
+
+.bk-gd-putanja {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-gd-putanja li + li::before { content: "›"; margin: 0 6px 0 4px; }
+
+.bk-gd-iskljuceno {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.bk-gd-iskljuceno-tekst { color: var(--muted); font-size: 13px; }
+.bk-gd-veza { color: var(--primary); text-decoration: none; overflow-wrap: anywhere; }
+.bk-gd-veza:hover { text-decoration: underline; }
+
+.bk-gd-forma {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 920px;
+  margin-bottom: 20px;
+  padding: 20px 16px 12px;
+}
+
+.bk-gd-forma > mat-form-field { width: 100%; }
+
+.bk-gd-red {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
+.bk-gd-naziv { flex: 3 1 280px; min-width: 0; }
+.bk-gd-tezina { flex: 1 1 160px; min-width: 0; }
+
+.bk-gd-sema { margin: 12px 0 4px; }
+
+.bk-gd-podnaslov { margin: 0; font-size: 17px; }
+
+.bk-gd-objasnjenje {
+  margin: 4px 0 12px;
+  max-width: 72ch;
+  color: var(--muted);
+}
+
+.bk-gd-posledice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* prazna oblast ostaje u DOM-u (role=status najavljuje tek dodata upozorenja), samo bez razmaka */
+.bk-gd-posledice:empty { margin-top: 0; }
+
+.bk-gd-upozorenje {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+
+.bk-gd-upozorenje > .mat-icon { flex: none; color: var(--warn); }
+
+.bk-gd-akcije {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.bk-gd-akcije mat-progress-spinner { display: inline-block; margin-right: 8px; }
+
+.bk-gd-zaglavlje {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bk-gd-brojac { color: var(--muted); font-size: 13px; }
+.bk-gd-zaglavlje > [data-nova-varijanta] { margin-left: auto; }
+.bk-gd-varijante app-error-panel { display: block; margin: 0 16px; }
+
+.bk-gd-mreza {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  list-style: none;
+}
+
+@media (max-width: 599.98px) {
+  .bk-gd-akcije .mat-mdc-button-base { min-height: 44px; }
+}

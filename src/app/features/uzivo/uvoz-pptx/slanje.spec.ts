@@ -6,7 +6,8 @@ import type { FormulaSloj, Platno, Sloj } from '../data-access/platno.models';
 import type { MedijInfo, PrezentacijaDetails, SlajdCmd, UvozSlajdovaCmd } from '../data-access/uzivo.models';
 import { praznaStatistika } from './izvestaj';
 import {
-  ApiUvoza, GreskaSlanja, MAX_SLIKA, MAX_TELO_UVOZA, Napredak, posaljiUvoz, velicinaTela, ZavisnostiSlanja, zameniMedije,
+  ApiUvoza, GreskaSlanja, greskaUvozaSlajdova, MAX_SLIKA, MAX_TELO_UVOZA, Napredak, posaljiSliku, posaljiUvoz, sha256, velicinaTela,
+  ZavisnostiSlanja, zameniMedije,
 } from './slanje';
 import type { MedijUvoza, RezultatUvoza, UvezenSlajd } from './uvoz';
 
@@ -36,7 +37,7 @@ const platno = (slojevi: Sloj[], pozadina: string | null = null): Platno =>
   ({ verzija: 1, pozadina: { boja: '#FFFFFF', medijId: pozadina }, slojevi, animacije: [] });
 
 function slajd(indeks: number, slojevi: Sloj[], mediji: string[] = []): UvezenSlajd {
-  const cmd: SlajdCmd = { tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: platno(slojevi) };
+  const cmd: SlajdCmd = { tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: platno(slojevi), prelaz: null };
   return { indeks, cmd, mediji, statistika: praznaStatistika() };
 }
 
@@ -445,5 +446,75 @@ describe('zameniMedije', () => {
     expect((z.slojevi[3] as FormulaSloj).slikaIzvora).toBeNull();
     expect(z.slojevi[4]).toBe(p.slojevi[4]);
     expect((z.slojevi[5] as { medijId: string }).medijId).toBe('nepoznat');
+  });
+});
+
+describe('posaljiSliku', () => {
+  // `ime` (u poruci) i `imeFajla` (na uploadu) se razlikuju, da test uhvati zamenu jednog drugim
+  const ulaz = { bajtovi: png(1), imeFajla: 'a.png', mime: 'image/png', ime: 'Slika A' };
+
+  it('dva puta 503 pa uspeh -> jedan MedijInfo, 3 poziva, čeka 1000 pa 3000 ms', async () => {
+    let poziva = 0;
+    const api = new LazniApi();
+    api.upload = vi.fn<(f: File) => Observable<MedijInfo>>(() => {
+      poziva++;
+      return poziva < 3 ? new Observable<MedijInfo>((s) => s.error(greska(503))) : of(medij('ok'));
+    });
+    const cekaj = vi.fn<(ms: number) => Observable<unknown>>(() => of(0));
+    const izlaz: MedijInfo[] = [];
+    posaljiSliku(api, ulaz, cekaj).subscribe((m) => izlaz.push(m));
+    await tik();
+    expect(izlaz).toEqual([medij('ok')]);
+    expect(poziva).toBe(3);
+    expect(cekaj.mock.calls.map((c) => c[0])).toEqual([1000, 3000]);
+  });
+
+  it('šalje fajl sa imenom i tipom iz ulaza', async () => {
+    const api = new LazniApi();
+    posaljiSliku(api, ulaz, () => of(0)).subscribe();
+    await tik();
+    expect(api.uploadi[0].fajl.name).toBe('a.png');
+    expect(api.uploadi[0].fajl.type).toBe('image/png');
+  });
+
+  it('400 -> odmah GreskaSlanja sa imenom slike i razlogom servera', async () => {
+    let poziva = 0;
+    const api = new LazniApi();
+    api.upload = vi.fn(() => {
+      poziva++;
+      return new Observable<MedijInfo>((s) => s.error(greska(400, 'Dozvoljene su samo slike.')));
+    });
+    const cekaj = vi.fn<(ms: number) => Observable<unknown>>(() => of(0));
+    let e: unknown;
+    posaljiSliku(api, ulaz, cekaj).subscribe({ error: (x) => (e = x) });
+    await tik();
+    expect(poziva).toBe(1);
+    expect(cekaj).not.toHaveBeenCalled();
+    expect(e).toBeInstanceOf(GreskaSlanja);
+    expect((e as GreskaSlanja).message).toBe('Slika Slika A nije poslata: Dozvoljene su samo slike.');
+  });
+});
+
+describe('greskaUvozaSlajdova', () => {
+  it('400 `Slajd 2: Loše.` -> oznaka(2): Loše.', () => {
+    const e = greskaUvozaSlajdova(greska(400, 'Slajd 2: Loše.'), (n) => `Strana ${n + 4}`);
+    expect(e).toBeInstanceOf(GreskaSlanja);
+    expect(e.message).toBe('Strana 6: Loše.');
+    expect(e.nepoznatIshod).toBe(false);
+  });
+
+  it('oznaka koja vrati null -> poruka servera bez preslikavanja', () => {
+    expect(greskaUvozaSlajdova(greska(400, 'Slajd 9: Loše.'), () => null).message).toBe('Slajd 9: Loše.');
+  });
+
+  it('status 0 -> nepoznatIshod', () => {
+    const e = greskaUvozaSlajdova(greska(0), () => null);
+    expect(e.nepoznatIshod).toBe(true);
+  });
+});
+
+describe('sha256', () => {
+  it('hex SHA-256 poznatog ulaza', async () => {
+    expect(await sha256(new TextEncoder().encode('abc'))).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   });
 });

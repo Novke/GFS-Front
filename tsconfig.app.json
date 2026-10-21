@@ -11,6 +11,9 @@
   "include": [
     "src/**/*.d.ts"
   ],
+  "exclude": [
+    "src/**/*.worker.ts"
+  ],
   "angularCompilerOptions": {
     "extendedDiagnostics": {
       "checks": {

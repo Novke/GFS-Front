@@ -2,7 +2,7 @@ import { TipKomande } from './data-access/uzivo.models';
 
 export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC';
 export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija };
-type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string };
+type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string; shiftKey?: boolean };
 
 export function uPoljuZaUnos(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
@@ -25,7 +25,10 @@ export function kljucPrecice(e: Pick<Taster, 'key' | 'code'>): string {
   return k;
 }
 
-/** Mapa iz spec-a 6.4. `G` + cifre + Enter vodi `GotoBafer`; ovde ga ne obrađujemo. Slova i na ćirilici (`kljucPrecice`). */
+/**
+ * Mapa iz spec-a 6.4. `G` + cifre + Enter vodi `GotoBafer`; ovde ga ne obrađujemo. Slova i na ćirilici (`kljucPrecice`).
+ * `Shift+R` je rešenje zadatka; `R` bez Shift-a (i veliko pod Caps Lock-om) ostaje ponavljanje, pa Caps Lock ne pali rešenje.
+ */
 export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
   switch (kljucPrecice(e)) {
@@ -37,7 +40,7 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 'c': case 'C': return { komanda: 'TACAN' };
     case 'l': case 'L': return { komanda: 'RANG_LISTA' };
     case 'o': case 'O': return { komanda: 'OTVORI_ZATVORI' };
-    case 'r': case 'R': return { komanda: 'PONOVI' };
+    case 'r': case 'R': return { komanda: e.shiftKey ? 'RESENJE' : 'PONOVI' };
     case 't': case 'T': return { komanda: 'TAJMER' };
     case '+': case '=': return { komanda: 'TAJMER_PLUS' };
     case '-': return { komanda: 'TAJMER_MINUS' };

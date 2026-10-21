@@ -1,4 +1,4 @@
-import { bezProtokola, decimalni, grupisiCifre, kodSaRazmakom } from './format';
+import { bezProtokola, decimalni, grupisiCifre, kodSaRazmakom, tacanBroj } from './format';
 
 const NBSP = ' ';
 
@@ -30,6 +30,40 @@ describe('decimalni', () => {
 
   it('negativni', () => {
     expect(decimalni(-0.75)).toBe('-0,75');
+  });
+});
+
+describe('tacanBroj', () => {
+  it('sve decimale, bez zaokruživanja (binarni razlomci iz konverzija)', () => {
+    expect(tacanBroj(0.0625)).toBe('0,0625');
+    expect(tacanBroj(0.625)).toBe('0,625');
+    expect(tacanBroj(0.1015625)).toBe('0,1015625');
+    expect(tacanBroj(3.14159)).toBe('3,14159');
+  });
+
+  it('celi i okrugli brojevi bez decimala', () => {
+    expect(tacanBroj(4)).toBe('4');
+    expect(tacanBroj(2.5)).toBe('2,5');
+    expect(tacanBroj(0)).toBe('0');
+    expect(tacanBroj(-0)).toBe('0');
+  });
+
+  it('hiljade razdvojene razmakom, negativni', () => {
+    expect(tacanBroj(1234.5678)).toBe(`1${NBSP}234,5678`);
+    expect(tacanBroj(-1200.25)).toBe(`-1${NBSP}200,25`);
+    expect(tacanBroj(-0.75)).toBe('-0,75');
+  });
+
+  it('veoma mali i veoma veliki brojevi nemaju eksponent', () => {
+    expect(tacanBroj(1e-7)).toBe('0,0000001');
+    expect(tacanBroj(1.5e-7)).toBe('0,00000015');
+    expect(tacanBroj(1e21)).toBe(['1', '000', '000', '000', '000', '000', '000', '000'].join(NBSP));
+    expect(tacanBroj(1.25e21)).toBe(['1', '250', '000', '000', '000', '000', '000', '000'].join(NBSP));
+  });
+
+  it('nije broj: prazan tekst', () => {
+    expect(tacanBroj(Number.NaN)).toBe('');
+    expect(tacanBroj(Number.POSITIVE_INFINITY)).toBe('');
   });
 });
 

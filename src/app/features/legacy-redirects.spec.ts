@@ -5,6 +5,7 @@ import { ActivatedRouteSnapshot, provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { prijaviNastavnika } from '../core/auth/sesija.testing';
 import { routes } from '../app.routes';
 import { NotFound } from '../core/layout/not-found';
 import { ProjectorLayout } from '../core/layout/projector-layout';
@@ -32,12 +33,14 @@ describe('preusmerenja starih ruta', () => {
   let router: Router;
   let http: HttpTestingController;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     TestBed.configureTestingModule({
       providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
     });
     router = TestBed.inject(Router);
     http = TestBed.inject(HttpTestingController);
+    // čuvar nastavničkih ruta: nastavnik je prijavljen (jedan GET api/auth/ja, posle keširano)
+    await prijaviNastavnika();
   });
 
   /** Navigira; privremeni izbor stare stranice po stanju (GET predavanja/domaci/test) dobija "nije završeno". */

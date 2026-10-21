@@ -1,5 +1,6 @@
 import { Route, Routes } from '@angular/router';
 
+import { nastavnikGuard } from './core/auth/nastavnik.guard';
 import { Mrvica, MrviceFn } from './core/layout/breadcrumbs';
 import { mrvica as m } from './core/layout/mrvica';
 import { NotFound } from './core/layout/not-found';
@@ -10,6 +11,7 @@ import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
+import { NALOG_RUTE } from './features/nalog/nalog.routes';
 import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
@@ -85,6 +87,14 @@ const nastavnickeRute: Routes = [
     data: stalne(m('Nastava'), m('Prezentacije')),
     children: PREZENTACIJE_RUTE,
   },
+  // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe, editor varijante i pregled nacrta. Rute dece su lenje
+  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 790 000 B, `e2e/lenji-editor.spec.ts`).
+  {
+    path: 'banka',
+    title: 'Banka zadataka',
+    data: stalne(m('Nastava'), m('Banka zadataka')),
+    loadChildren: () => import('./features/banka/banka.routes').then(x => x.BANKA_RUTE),
+  },
   {
     path: 'izvodjenja',
     title: 'Izvođenja',
@@ -114,6 +124,13 @@ const nastavnickeRute: Routes = [
     title: 'Predmeti',
     data: stalne(m('Predmeti'), m('Svi predmeti')),
     children: PREDMETI_RUTE,
+  },
+
+  // Podešavanja (prijava, Moodle LTI): registracije alata i vrednosti za Moodle formu; deca su lenja
+  {
+    path: 'podesavanja',
+    title: 'Podešavanja',
+    loadChildren: () => import('./features/podesavanja/podesavanja.routes').then(x => x.PODESAVANJA_RUTE),
   },
 
   { path: '**', title: 'Stranica nije pronađena', data: stalne(m('Stranica nije pronađena')), component: NotFound },
@@ -147,9 +164,37 @@ export const routes: Routes = [
     children: UZIVO_JAVNE_RUTE,
   },
 
+  // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
+  // api/public/lti/povezi i api/public/lti/povezivanje. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  {
+    path: 'nalog',
+    component: PublicLayout,
+    children: [
+      ...NALOG_RUTE,
+      { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
+    ],
+  },
+
+  // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.
+  {
+    path: 'prijava',
+    component: PublicLayout,
+    children: [
+      {
+        path: '',
+        title: 'Prijava',
+        loadComponent: () => import('./features/prijava/pages/prijava.page').then(x => x.PrijavaPage),
+      },
+    ],
+  },
+
+  // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
+  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `prijava`; kasnije `render/slajd`) su bez njega.
+
   // Projektor (bez ljuske, uvek svetao)
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     children: [
       {
@@ -161,6 +206,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     children: [
       {
@@ -174,6 +220,7 @@ export const routes: Routes = [
   // Izvođenje uživo na projektoru, konzola (desktop i telefon) i daljinski: bez ljuske, ceo ekran; uvek svetlo osim daljinskog.
   {
     matcher: putanjaSaId('izvodjenja/:id/publika'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true },
     children: [
@@ -182,6 +229,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('izvodjenja/:id/konzola'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true },
     children: [
@@ -190,6 +238,7 @@ export const routes: Routes = [
   },
   {
     matcher: putanjaSaId('izvodjenja/:id/daljinski'),
+    canMatch: [nastavnikGuard],
     component: ProjectorLayout,
     data: { celaStrana: true, pratiRezim: true },
     children: [
@@ -197,5 +246,5 @@ export const routes: Routes = [
     ],
   },
 
-  { path: '', component: Shell, children: nastavnickeRute },
+  { path: '', component: Shell, canMatch: [nastavnikGuard], children: nastavnickeRute },
 ];

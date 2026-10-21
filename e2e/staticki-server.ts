@@ -2,7 +2,8 @@
  * Statički server za e2e: služi produkcioni build (`dist/gfs-front/browser`) po istim pravilima kao nginx u kontejneru
  * (`docker/nginx.conf`): postojeći fajl ide kakav jeste; heširan fajl (`main-AB12CD34.js`, `chunk-CtOh0Kox.js`) koji ne
  * postoji je 404 (`try_files $uri =404`, isti izraz `DUGI_KES` iz `javne-putanje.ts`); sve ostalo je `index.html` (SPA
- * fallback, `try_files $uri $uri/ /index.html`). `/api/*` i `assets/env.json` ovde nikad ne stižu: presreće ih mok u
+ * fallback, `try_files $uri $uri/ /index.html`). Svaki odgovor nosi isti `Content-Security-Policy` kao nginx (`CSP` iz
+ * `csp.ts`), pa ceo e2e radi pod njim. `/api/*` i `assets/env.json` ovde nikad ne stižu: presreće ih mok u
  * pregledaču (`e2e/mock-api.ts`). Pokreće ga `playwright.config.ts` (webServer), bez zavisnosti.
  *
  *   node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON e2e/staticki-server.ts [port]
@@ -11,6 +12,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 
+import { CSP } from './csp.ts';
 import { DUGI_KES } from './javne-putanje.ts';
 
 const KOREN = resolve('dist/gfs-front/browser');
@@ -28,6 +30,7 @@ const TIPOVI: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm', // kao nginx mime.types (pdf.js, faza 5d): inače pdf.js upozori i prevodi wasm sporije
 };
 
 if (!existsSync(INDEX)) {
@@ -54,13 +57,14 @@ createServer((req, res) => {
   const putanja = new URL(req.url ?? '/', 'http://localhost').pathname;
   const postojeci = fajl(putanja);
   if (!postojeci && DUGI_KES.test(putanja)) {
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nema fajla.');
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Security-Policy': CSP }).end('Nema fajla.');
     return;
   }
   const pronadjen = postojeci ?? INDEX;
   res.writeHead(200, {
     'Content-Type': TIPOVI[extname(pronadjen)] ?? 'application/octet-stream',
     'Cache-Control': 'no-store',
+    'Content-Security-Policy': CSP,
   });
   createReadStream(pronadjen).pipe(res);
 }).listen(PORT, '127.0.0.1', () => console.log(`e2e: dist na http://127.0.0.1:${PORT}`));

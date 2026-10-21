@@ -17,7 +17,8 @@ export const PNG_1X1 = Uint8Array.from(atob(
 export interface VezaFabrike { id: string; tip: string; cilj: string; spoljna?: boolean; }
 export interface SlajdFabrike {
   spTree: string; timing?: string; beleske?: string; veze?: VezaFabrike[];
-  skriven?: boolean; bg?: string; showMasterSp?: boolean; bezLayouta?: boolean; prelaz?: boolean;
+  skriven?: boolean; bg?: string; showMasterSp?: boolean; bezLayouta?: boolean;
+  prelaz?: string;     // sirov XML posle p:clrMapOvr (`<p:transition>…` ili `<mc:AlternateContent>…`)
   clrMapOvr?: string;   // ceo <p:clrMapOvr>…</p:clrMapOvr>; podrazumevano masterClrMapping
 }
 export interface OpcijeFabrike {
@@ -113,7 +114,7 @@ export function napraviPptx(o: OpcijeFabrike): Uint8Array {
     const n = i + 1;
     const atributi = `${s.skriven ? ' show="0"' : ''}${s.showMasterSp === false ? ' showMasterSp="0"' : ''}`;
     delovi[`ppt/slides/slide${n}.xml`] = `${XML}<p:sld ${NS_DEKL}${atributi}><p:cSld>${s.bg ?? ''}<p:spTree>${NV_GRUPE}${s.spTree}</p:spTree></p:cSld>`
-      + `${s.clrMapOvr ?? '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>'}${s.prelaz ? '<p:transition><p:fade/></p:transition>' : ''}${s.timing ?? ''}</p:sld>`;
+      + `${s.clrMapOvr ?? '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>'}${s.prelaz ?? ''}${s.timing ?? ''}</p:sld>`;
     const v: VezaFabrike[] = [...(s.bezLayouta ? [] : [{ id: 'rIdL', tip: 'slideLayout', cilj: '../slideLayouts/slideLayout1.xml' }]), ...(s.veze ?? [])];
     if (s.beleske !== undefined) {
       v.push({ id: 'rIdN', tip: 'notesSlide', cilj: `../notesSlides/notesSlide${n}.xml` });

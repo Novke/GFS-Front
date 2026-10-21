@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { Rezultat, RezultatTekst, TekstPrikaz, TipPitanja } from '../data-access/uzivo.models';
 import { decimalni } from './format';
+import { meriFormule } from './mera-formule';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
+import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
 const MAKS_OBLAK = 60;
 const MAKS_LISTA = 50;
@@ -95,7 +97,9 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
 @Component({
   selector: 'app-rezultat-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OpcijaOblikComponent],
+  // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
+  providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
+  imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()' },
   template: `
     @switch (vrsta()) {
@@ -105,9 +109,11 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
             <li class="uz-rez-opcija" [class.uz-rez-opcija--tacna]="o.tacna" [class.uz-rez-opcija--prigusena]="o.prigusena"
                 [style.--uz-boja]="o.boja">
               <app-opcija-oblik class="uz-rez-opcija-oblik" [indeks]="o.indeks" />
+              <!-- značka je van bloka formule (flex red): kad stigne uživo, blok formule se suzi, pa ga merenje vidi -->
               <span class="uz-rez-opcija-tekst">
-                @if (o.tacna) { <span class="uz-tacno-znak">✓ tačno</span> }
-                {{ o.tekst }}
+                <!-- razmak kao tekst: Angular briše čvor sa samim razmakom između dva elementa -->
+                @if (o.tacna) {<span class="uz-tacno-znak">✓ tačno</span>{{ ' ' }}}
+                <app-tekst-formule class="uz-rez-opcija-formula" [tekst]="o.tekst" />
               </span>
               <span class="uz-rez-opcija-vrednost">{{ o.broj }} · {{ o.procenat }} %</span>
               <span class="uz-rez-traka" aria-hidden="true"><span class="uz-rez-ispuna" [style.--uz-udeo]="o.procenat + '%'"></span></span>

@@ -9,7 +9,10 @@ const PREZENTACIJA = 5;
 /** Prvi id koji mok dodeljuje (nova prezentacija). */
 const NOVA = 10_000;
 
-interface SlajdUvoza { tip: string; beleske: string | null; platno: { slojevi: { tip: string; medijId?: string }[]; animacije: unknown[] } }
+interface SlajdUvoza {
+  tip: string; beleske: string | null; platno: { slojevi: { tip: string; medijId?: string }[]; animacije: unknown[] };
+  prelaz: { efekat: string; smer: string | null; trajanjeMs: number } | null;
+}
 interface TeloUvoza { posle: number | null; slajdovi: SlajdUvoza[] }
 
 const dijalog = (page: Page) => page.locator('mat-dialog-container').filter({ has: page.getByRole('heading', { name: 'Uvoz iz PowerPointa' }) });
@@ -75,6 +78,8 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
       expect(s.platno.slojevi.filter(x => x.tip === 'SLIKA').map(x => x.medijId)).toEqual([medijId]);
     }
     expect(telo.slajdovi[0].platno.animacije).toHaveLength(3);
+    // prelaz (5e): `<p:transition spd="med"><p:push dir="u"/>` na drugom slajdu; prvi je bez prelaza (ključ `null`)
+    expect(telo.slajdovi.map(s => s.prelaz)).toEqual([null, { efekat: 'GURANJE', smer: 'DOLE', trajanjeMs: 750 }]);
 
     await d.getByRole('button', { name: 'Kopiraj izveštaj' }).click();
     await expect(page.getByText('Izveštaj je kopiran.')).toBeVisible();
@@ -83,11 +88,11 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
 
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
-    // lista editora: 1, dva nova PLATNO slajda, pa stari drugi; izabran je prvi uvezeni
+    // lista editora: 1, dva nova PLATNO slajda, pa stari drugi i treći; izabran je prvi uvezeni
     const stavke = page.locator('.uz-ed-stavka-dugme');
-    await expect(stavke).toHaveCount(4);
+    await expect(stavke).toHaveCount(5);
     const tipovi = await stavke.locator('.uz-ed-ikona').evaluateAll(el => el.map(e => e.getAttribute('aria-label')));
-    expect(tipovi).toEqual(['Info slajd', 'Platno', 'Platno', 'Platno']);
+    expect(tipovi).toEqual(['Info slajd', 'Platno', 'Platno', 'Platno', 'Platno']);
     await expect(stavke.nth(1)).toHaveAttribute('aria-current', 'true');
     await expect(stavke.nth(1)).toBeFocused();
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
@@ -127,7 +132,9 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     // lista se ponovo čita i nema obrisane prezentacije
     await expect.poll(() => mock.zahteviZa('prezentacije', 'GET').length).toBe(liste + 1);
     await expect(page).toHaveURL(/\/prezentacije$/);
-    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(1);
+    // samo prezentacije iz fiksture (obrisana je izbačena iz moka)
+    expect(mock.podaci.prezentacije.some(x => x.id === NOVA)).toBe(false);
+    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(mock.podaci.prezentacije.length);
   });
 
   test('nova prezentacija, nepoznat ishod (veza prekinuta): bez brisanja, poruka "možda ipak dodati", lista se ponovo čita', async ({ page, mock }) => {
@@ -149,8 +156,9 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
     await expect.poll(() => mock.zahteviZa('prezentacije', 'GET').length).toBe(liste + 1);
-    // nova prezentacija ostaje (možda ima slajdove): nikakav DELETE, vidi se u listi
-    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(2);
+    // nova prezentacija ostaje (možda ima slajdove): nikakav DELETE, vidi se u listi (uz prezentacije iz fiksture)
+    expect(mock.podaci.prezentacije.some(x => x.id === NOVA)).toBe(true);
+    await expect(page.locator('.uz-ed-tabela tbody tr')).toHaveCount(mock.podaci.prezentacije.length);
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
   });
 
@@ -167,7 +175,7 @@ test.describe('uživo: uvoz iz PowerPointa (mokovan API)', () => {
     await d.getByRole('button', { name: 'Zatvori' }).click();
     await expect(d).toHaveCount(0);
     await expect.poll(() => mock.zahteviZa(`prezentacije/${PREZENTACIJA}`, 'GET').length).toBe(citanja + 1);
-    await expect(page.locator('.uz-ed-stavka-dugme')).toHaveCount(2);
+    await expect(page.locator('.uz-ed-stavka-dugme')).toHaveCount(3);
     expect(mock.zahtevi.filter(z => z.metod === 'DELETE')).toEqual([]);
   });
 });

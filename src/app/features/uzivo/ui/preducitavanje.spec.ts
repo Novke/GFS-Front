@@ -3,7 +3,8 @@ import { platno } from '../data-access/platno-podaci.testing';
 import { FormulaSloj, SlikaSloj } from '../data-access/platno.models';
 import { MedijInfo, medijUrl } from '../data-access/uzivo.models';
 import {
-  fontoviZaPrikaz, preducitajFontove, preducitajSlike, resetujPreducitavanje, sacekajFontove, slikeSlajda,
+  fontoviZaPrikaz, imaFormuluZaCrtanje, preducitajFontove, preducitajFormule, preducitajFormuleSa, preducitajSlike,
+  resetujPreducitavanje, sacekajFontove, slikeSlajda,
 } from './preducitavanje';
 
 beforeEach(() => resetujPreducitavanje());
@@ -147,5 +148,71 @@ describe('sacekajFontove', () => {
     expect(load.mock.calls.map((c) => c[0])).toEqual([
       '400 32px "Tinos"', '700 32px "Tinos"', '400 32px "Cousine"', '700 32px "Cousine"',
     ]);
+  });
+});
+
+describe('formule', () => {
+  const saFormulom = (slikaIzvora: string | null = null) => {
+    const p = platno();
+    p.slojevi = p.slojevi.map((s) => (s.tip === 'FORMULA' ? { ...s, slikaIzvora } : s));
+    return platnoSlajd({ platno: p });
+  };
+  const bezFormule = () => {
+    const p = platno();
+    p.slojevi = p.slojevi.filter((s) => s.tip !== 'FORMULA');
+    return platnoSlajd({ platno: p });
+  };
+  const linkovi = () => document.head.querySelectorAll('link[data-gfs="mathlive"]');
+
+  // keš učitavanja formula i <link> čisti globalni afterEach u test-setup.ts
+
+  it('imaFormuluZaCrtanje: PLATNO sa formulom bez slike izvora', () => {
+    expect(imaFormuluZaCrtanje(saFormulom())).toBe(true);
+    expect(imaFormuluZaCrtanje(saFormulom('slika-formule'))).toBe(false);
+    expect(imaFormuluZaCrtanje(bezFormule())).toBe(false);
+    expect(imaFormuluZaCrtanje(infoSlajd())).toBe(false);
+    expect(imaFormuluZaCrtanje(null)).toBe(false);
+  });
+
+  it('imaFormuluZaCrtanje: PITANJE sa formulom u tekstu ili u opciji; INFO sa $x$ ne', () => {
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { tekst: 'Koliko je $x$?' }))).toBe(true);
+    const opcije = [{ id: 1, rb: 1, tekst: '$11$', tacna: true }, { id: 2, rb: 2, tekst: '3', tacna: false }];
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { opcije }))).toBe(true);
+    expect(imaFormuluZaCrtanje(pitanjeSlajd('JEDAN_TACAN', { tekst: 'Cena je 5$ i 10$' }))).toBe(false);
+    expect(imaFormuluZaCrtanje(pitanjeSlajd())).toBe(false);
+    expect(imaFormuluZaCrtanje(infoSlajd({ sadrzaj: 'Formula $x$', naslov: '$y$' }))).toBe(false);
+  });
+
+  it('preducitajFormule: PITANJE sa formulom učitava modul i stil', () => {
+    const ucitaj = vi.fn(() => Promise.resolve({} as never));
+    const stil = vi.fn(() => Promise.resolve());
+    preducitajFormuleSa(ucitaj, stil, [pitanjeSlajd('JEDAN_TACAN', { tekst: '$1011_2$' })]);
+    expect(ucitaj).toHaveBeenCalledTimes(1);
+    expect(stil).toHaveBeenCalledTimes(1);
+  });
+
+  it('preducitajFormule: bez formule ništa; kad bar jedan slajd ima formulu, modul i stil po jednom', async () => {
+    const ucitaj = vi.fn(() => Promise.resolve({} as never));
+    const stil = vi.fn(() => Promise.resolve());
+    preducitajFormuleSa(ucitaj, stil, [infoSlajd(), bezFormule(), null]);
+    expect(ucitaj).not.toHaveBeenCalled();
+    expect(stil).not.toHaveBeenCalled();
+    preducitajFormuleSa(ucitaj, stil, [bezFormule(), saFormulom()]);
+    expect(ucitaj).toHaveBeenCalledTimes(1);
+    expect(stil).toHaveBeenCalledTimes(1);
+  });
+
+  it('preducitajFormule (pravi učitavači): dva poziva -> jedan <link> stila (keš u formula-ucitavanje)', async () => {
+    preducitajFormule(null, saFormulom());
+    preducitajFormule(saFormulom());
+    expect(linkovi().length).toBe(1);
+  });
+
+  it('preducitajFormule: greške učitavanja se gutaju', async () => {
+    const ucitaj = vi.fn(() => Promise.reject(new Error('mreža')));
+    const stil = vi.fn(() => Promise.reject(new Error('mreža')));
+    expect(() => preducitajFormuleSa(ucitaj, stil, [saFormulom()])).not.toThrow();
+    await new Promise((r) => setTimeout(r));
+    expect(ucitaj).toHaveBeenCalledTimes(1);
   });
 });

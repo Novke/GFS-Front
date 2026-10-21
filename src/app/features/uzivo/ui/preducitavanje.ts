@@ -1,6 +1,9 @@
 import type { Tema } from '../data-access/platno.models';
 import { SlajdDetails, medijUrl } from '../data-access/uzivo.models';
+import { sacekajFontove, skupFontova, ucitajRezove } from './cekanje-fontova';
+import { ModulFormule, resetujUcitavanjeFormula, ucitajFormule, ucitajStilFormula } from './formula-ucitavanje';
 import { FONTOVI_PLATNA, fontoviPlatna } from './platno-fontovi';
+import { imaFormulu } from './tekst-formule';
 import { TEME, vazecaTema } from './teme';
 
 /**
@@ -66,39 +69,8 @@ export function fontoviZaPrikaz(tema: Tema | null | undefined, slajdovi: readonl
   return fontovi;
 }
 
-/** Znakovi za `document.fonts.load`: latinica i latin-ext (`unicode-range` deli fajlove; č ć đ š ž su u latin-ext). */
-const UZORAK = 'AaZz09 čćđšž ČĆĐŠŽ';
-const REZOVI = ['400', '700'];
-
-interface SkupFontova { load(font: string, tekst?: string): Promise<unknown>; }
-
-function skupFontova(): SkupFontova | null {
-  const fonts = (document as Document & { fonts?: SkupFontova }).fonts;
-  return typeof fonts?.load === 'function' ? fonts : null;
-}
-
-/** Normalan i podebljan rez fonta (kurziv se učita sam pri prvom crtanju). */
-function ucitaj(skup: SkupFontova, font: string): Promise<unknown>[] {
-  return REZOVI.map((rez) => skup.load(`${rez} 32px "${font}"`, UZORAK));
-}
-
-/**
- * Čeka da se fontovi učitaju, najviše `maxMs`. Nikad ne odbija: greška učitavanja ili pregledač bez `document.fonts`
- * znači da se prikaz crta odmah (sa rezervnim fontom ili kad font stigne).
- */
-export function sacekajFontove(fontovi: Iterable<string>, maxMs = 3000): Promise<void> {
-  const skup = skupFontova();
-  if (!skup) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((razresi) => {
-    const tajmer = setTimeout(razresi, maxMs);
-    void Promise.allSettled([...new Set(fontovi)].flatMap((f) => ucitaj(skup, f))).then(() => {
-      clearTimeout(tajmer);
-      razresi();
-    });
-  });
-}
+/** Čekanje fontova je u `cekanje-fontova.ts` (bez uvoza); ovde se izvozi i dalje, za publiku i specove. */
+export { sacekajFontove };
 
 const trazeniFontovi = new Set<string>();
 
@@ -111,13 +83,48 @@ export function preducitajFontove(fontovi: Iterable<string>): void {
   for (const f of fontovi) {
     if (trazeniFontovi.has(f)) continue;
     trazeniFontovi.add(f);
-    void Promise.all(ucitaj(skup, f)).catch(() => trazeniFontovi.delete(f));
+    void Promise.all(ucitajRezove(skup, f)).catch(() => trazeniFontovi.delete(f));
   }
 }
 
-/** Samo za testove: zaboravlja učitane slike i tražene fontove (keševi traju koliko i prozor). */
+/**
+ * PLATNO slajd sa bar jednom formulom bez slike izvora (nju `platno-prikaz` crta MathLive-om, `formula-prikaz`) ili
+ * pitanje sa formulom `$...$` u tekstu ili u nekoj opciji (`app-tekst-formule`). INFO ne tumači `$`. Tekst pitanja je
+ * Markdown, ali za unapred učitavanje je dovoljno pravilo običnog teksta (jeftino posle svakog snimka): retka razlika
+ * (`` `$x$` `` u kodu) samo učita modul bez potrebe, a obrnuto prikaz sam učita modul.
+ */
+export function imaFormuluZaCrtanje(s: SlajdDetails | null): boolean {
+  if (s?.tip === 'PITANJE') {
+    return !!s.pitanje && (imaFormulu(s.pitanje.tekst) || s.pitanje.opcije.some((o) => imaFormulu(o.tekst)));
+  }
+  return s?.tip === 'PLATNO' && !!s.platno?.slojevi.some((sloj) => sloj.tip === 'FORMULA' && !sloj.slikaIzvora);
+}
+
+/** `preducitajFormule` sa zadatim učitavačima (testovi); stranice zovu `preducitajFormule`. */
+export function preducitajFormuleSa(
+  ucitaj: () => Promise<ModulFormule>, ucitajStil: () => Promise<void>, slajdovi: readonly (SlajdDetails | null)[],
+): void {
+  if (!slajdovi.some(imaFormuluZaCrtanje)) {
+    return;
+  }
+  // greške se gutaju: prikaz sam ponovo pokuša i, ako ne uspe, crta LaTeX izvor
+  ucitaj().catch(() => undefined);
+  ucitajStil().catch(() => undefined);
+}
+
+/**
+ * Unapred učitava `mathlive/ssr` (modul `formula-markup`), CSS i KaTeX fontove kad neki od slajdova ima formulu za
+ * crtanje (odluka 6 i 32: publika i konzola za trenutni i sledeći slajd). Keš je u `formula-ucitavanje` (jednom po
+ * prozoru), pa je poziv posle svakog snimka jeftin.
+ */
+export function preducitajFormule(...slajdovi: (SlajdDetails | null)[]): void {
+  preducitajFormuleSa(ucitajFormule, ucitajStilFormula, slajdovi);
+}
+
+/** Samo za testove: zaboravlja učitane slike, tražene fontove i učitavanje formula (keševi traju koliko i prozor). */
 export function resetujPreducitavanje(): void {
   ucitaneSlike.clear();
   trazeniFontovi.clear();
+  resetujUcitavanjeFormula();
 }
 

@@ -1,5 +1,6 @@
-import { RezultatTekst } from '../data-access/uzivo.models';
-import { oblakReci, procenti, procentiOpcija, velicinaReci } from './rezultat-prikaz.component';
+import { TestBed } from '@angular/core/testing';
+import { Rezultat, RezultatTekst } from '../data-access/uzivo.models';
+import { RezultatPrikazComponent, oblakReci, procenti, procentiOpcija, velicinaReci } from './rezultat-prikaz.component';
 
 const zbir = (niz: number[]) => niz.reduce((a, b) => a + b, 0);
 
@@ -106,5 +107,60 @@ describe('oblakReci', () => {
 
   it('prazno -> prazno', () => {
     expect(oblakReci([])).toEqual([]);
+  });
+});
+
+describe('RezultatPrikazComponent: formule', () => {
+  async function prikazi(rezultat: Rezultat, tekstPrikaz: 'OBLAK' | 'LISTA' | null = null) {
+    const fixture = TestBed.createComponent(RezultatPrikazComponent);
+    fixture.componentRef.setInput('rezultat', rezultat);
+    fixture.componentRef.setInput('tekstPrikaz', tekstPrikaz);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('tekst opcije u stubićima je app-tekst-formule (formula $11$)', async () => {
+    const el = await prikazi({
+      tip: 'JEDAN_TACAN', ukupno: 2, brojevi: null, tekstovi: null, skala: null,
+      opcije: [{ id: 1, tekst: '$11$', broj: 1, tacna: true }, { id: 2, tekst: 'Deset', broj: 1, tacna: false }],
+    });
+    const tekstovi = el.querySelectorAll('.uz-rez-opcija-tekst app-tekst-formule');
+    expect(tekstovi.length).toBe(2);
+    expect(tekstovi[0].querySelector('span.uz-formula')?.textContent).toBe('$11$');
+    expect(tekstovi[1].textContent).toBe('Deset');
+    expect(el.querySelector('.uz-rez-opcija-tekst')?.textContent).toContain('✓ tačno');
+  });
+
+  it('tačna opcija bez formule: razmak između značke "✓ tačno" i teksta (čitač ekrana, kopiranje)', async () => {
+    const el = await prikazi({
+      tip: 'JEDAN_TACAN', ukupno: 2, brojevi: null, tekstovi: null, skala: null,
+      opcije: [{ id: 1, tekst: '$11$', broj: 1, tacna: false }, { id: 2, tekst: 'Deset', broj: 1, tacna: true }],
+    });
+    const tacna = el.querySelector('.uz-rez-opcija--tacna .uz-rez-opcija-tekst')!;
+    expect(tacna.textContent).toContain('✓ tačno Deset');
+  });
+
+  it('značka "✓ tačno" je van bloka formule (brat domaćina, ne u njemu): uživo stigla značka suzi blok, merenje to vidi', async () => {
+    const el = await prikazi({
+      tip: 'JEDAN_TACAN', ukupno: 2, brojevi: null, tekstovi: null, skala: null,
+      opcije: [{ id: 1, tekst: '$11$', broj: 1, tacna: true }, { id: 2, tekst: 'Deset', broj: 1, tacna: false }],
+    });
+    const znak = el.querySelector('.uz-rez-opcija--tacna .uz-tacno-znak')!;
+    expect(znak.parentElement!.classList).toContain('uz-rez-opcija-tekst');
+    expect(znak.closest('app-tekst-formule')).toBeNull();
+    expect(znak.parentElement!.querySelector(':scope > app-tekst-formule.uz-rez-opcija-formula')).not.toBeNull();
+  });
+
+  it('kratki odgovori (oblak i lista) ostaju običan tekst: $x$ nije formula (odgovori studenata)', async () => {
+    const tekstovi: RezultatTekst[] = [{ kljuc: 'x', tekst: '$x$', broj: 2, sakriven: false, tacan: null }];
+    const rezultat: Rezultat = { tip: 'KRATAK_TEKST', ukupno: 2, opcije: null, brojevi: null, tekstovi, skala: null };
+    const oblak = await prikazi(rezultat);
+    expect(oblak.querySelector('app-tekst-formule')).toBeNull();
+    expect(oblak.querySelector('.uz-formula')).toBeNull();
+    expect(oblak.textContent).toContain('$x$');
+    const lista = await prikazi(rezultat, 'LISTA');
+    expect(lista.querySelector('app-tekst-formule')).toBeNull();
+    expect(lista.textContent).toContain('$x$');
   });
 });

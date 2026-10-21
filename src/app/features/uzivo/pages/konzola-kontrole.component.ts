@@ -6,7 +6,8 @@ import { NastavnickoStanje, TipKomande } from '../data-access/uzivo.models';
 import { pustiFokusPosleKlika } from './precice';
 import type { NazivIkone } from '../../../core/layout/icons';
 
-export interface KomandaZahtev { tip: TipKomande; vrednost?: number; }
+/** `vrednost: null` je smislena za `BROJ_VARIJANTI` ("kao na slajdu"); server je i inače dobija kao `null`. */
+export interface KomandaZahtev { tip: TipKomande; vrednost?: number | null; }
 
 interface Dugme {
   tip: TipKomande; vrednost?: number; oznaka: string; taster: string; ikona: NazivIkone;
@@ -25,6 +26,8 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule],
   host: { class: 'uz-kon-kontrole' },
+  // na uključenom prekidaču (svetla podloga) prigušen taster (`.uz-kbd`, opacity 0.75) pada ispod 4.5:1
+  styles: `.uz-kon-dugme--ukljuceno .uz-kbd { opacity: 1; }`,
   template: `
     @for (g of grupe(); track g.naslov) {
       <section class="uz-kon-grupa" [attr.aria-label]="g.naslov">
@@ -55,6 +58,7 @@ export class KonzolaKontroleComponent {
 
   protected readonly grupe = computed<Grupa[]>(() => {
     const s = this.stanje();
+    const zadatak = s.trenutniSlajd?.tip === 'ZADATAK';
     return [
       {
         naslov: 'Kretanje',
@@ -71,8 +75,10 @@ export class KonzolaKontroleComponent {
           { tip: 'OTVORI_ZATVORI', oznaka: oznakaOtvoriZatvori(s), taster: 'O', ikona: s.faza === 'OTVORENO' ? 'lock' : 'lock_open', ukljuceno: null },
           { tip: 'REZULTATI', oznaka: 'Rezultati', taster: 'Space', ikona: 'bar_chart', ukljuceno: s.rezultatiPrikazani },
           { tip: 'TACAN', oznaka: 'Tačan odgovor', taster: 'C', ikona: 'check_circle', ukljuceno: s.tacanPrikazan },
+          // rešenje Zadatak runde (prekidač); na pitanju je uvek onemogućeno
+          { tip: 'RESENJE', oznaka: 'Rešenje', taster: 'Shift+R', ikona: 'task_alt', ukljuceno: s.zadatak?.resenjePrikazano ?? false },
           { tip: 'RANG_LISTA', oznaka: 'Rang-lista', taster: 'L', ikona: 'leaderboard', ukljuceno: s.rangListaPrikazana },
-          { tip: 'PONOVI', oznaka: 'Ponovi pitanje', taster: 'R', ikona: 'replay', ukljuceno: null },
+          { tip: 'PONOVI', oznaka: zadatak ? 'Ponovi zadatak' : 'Ponovi pitanje', taster: 'R', ikona: 'replay', ukljuceno: null },
         ],
       },
       {

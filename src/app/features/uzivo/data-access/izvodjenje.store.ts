@@ -222,7 +222,7 @@ export const IzvodjenjeStore = signalStore(
         if (skrivenoMs >= PONOVO_POVEZI_POSLE_MS) ponovoPovezi();
       },
 
-      komanda(tip: TipKomande, vrednost?: number): void {
+      komanda(tip: TipKomande, vrednost?: number | null): void {
         posalji(() => api.komanda(izvodjenjeId!, { tip, vrednost: vrednost ?? null }), 'Komanda nije izvršena.');
       },
 

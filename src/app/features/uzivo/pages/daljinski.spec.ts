@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BravaEkrana } from '../data-access/budan-ekran';
 import { dozvoljeneKomande } from '../data-access/izvodjenje-pravila';
-import { infoSlajd, naPitanju, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
+import { infoSlajd, naPitanju, naZadatku, platnoSlajd, stanje } from '../data-access/izvodjenje-podaci.testing';
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { ServerskiSat } from '../data-access/sat';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
@@ -174,6 +174,36 @@ describe('DaljinskiPage', () => {
       expect(lazniStore.komanda).toHaveBeenCalledWith('TACAN');
       await zavrsi(f);
     }));
+
+  it('Zadatak: red Otvori/Zatvori, Rezultati, Tačan i Rešenje; Rešenje tek posle zatvaranja, aria-pressed prati stanje',
+    saLaznimSatom(async () => {
+      stanjeS.set(naZadatku('CEKA'));
+      const f = await prikazi();
+      expect(el(f).querySelector('.uz-dalj-pitanje')?.getAttribute('aria-label')).toBe('Zadatak');
+      expect(dugme(f, 'Otvori')?.disabled).toBe(false);
+      expect(dugme(f, 'Rešenje')?.disabled).toBe(true);
+      expect(napred(f)?.getAttribute('aria-label')).toBe('Napred: Otvori zadatak');
+
+      stanjeS.set(naZadatku('ZATVORENO'));
+      await osvezi(f);
+      expect(dugme(f, 'Rešenje')?.disabled).toBe(false);
+      expect(dugme(f, 'Rešenje')?.getAttribute('aria-pressed')).toBe('false');
+      dugme(f, 'Rešenje')!.click();
+      expect(lazniStore.komanda).toHaveBeenCalledWith('RESENJE');
+
+      stanjeS.set(naZadatku('ZATVORENO', { zadatak: { resenjePrikazano: true } }));
+      await osvezi(f);
+      expect(dugme(f, 'Rešenje')?.getAttribute('aria-pressed')).toBe('true');
+      await zavrsi(f);
+    }));
+
+  it('pitanje nema dugme Rešenje', saLaznimSatom(async () => {
+    stanjeS.set(naPitanju('ZATVORENO'));
+    const f = await prikazi();
+    expect(el(f).querySelector('.uz-dalj-pitanje')?.getAttribute('aria-label')).toBe('Pitanje');
+    expect(dugme(f, 'Rešenje')).toBeUndefined();
+    await zavrsi(f);
+  }));
 
   it('greška komande se vidi u traci (role=alert) 6 s; ista greška posle nove komande se ponovo prikaže', saLaznimSatom(async () => {
     const f = await prikazi();

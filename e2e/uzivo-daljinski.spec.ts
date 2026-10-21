@@ -47,15 +47,15 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
 
     await dodirni(page, napred(page));
     expect(mock.zahteviZa(KOMANDE, 'POST').at(-1)?.telo).toEqual({ tip: 'SLEDECI', vrednost: null });
-    await expect(polozaj(page)).toHaveText('1/4 · 0/3');
-    for (const ocekivano of ['1/4 · 1/3', '1/4 · 2/3', '1/4 · 3/3']) {
+    await expect(polozaj(page)).toHaveText('1/6 · 0/3');
+    for (const ocekivano of ['1/6 · 1/3', '1/6 · 2/3', '1/6 · 3/3']) {
       await dodirni(page, napred(page));
       await expect(polozaj(page)).toHaveText(ocekivano);
     }
     expect(await beleske(page).innerText()).toContain('\n\n');
 
     await dodirni(page, nazad(page));
-    await expect(polozaj(page)).toHaveText('1/4 · 2/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 2/3');
     expect(tipoviKomandi(mock)).toEqual(['SLEDECI', 'SLEDECI', 'SLEDECI', 'SLEDECI', 'PRETHODNI']);
 
     await expect(page.getByRole('timer', { name: 'Štoperica' })).toHaveText(/^12:\d\d$/);
@@ -66,7 +66,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await nastavnickiBroker(page, mock);
     await otvori(page);
     await napred(page).dblclick();
-    await expect(polozaj(page)).toHaveText('1/4 · 0/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 0/3');
     // Nazad ide u isti red komandi iza svega pre njega: kad stigne, i eventualni drugi SLEDECI je već obrađen.
     await page.waitForTimeout(RAZMAK_DODIRA_MS);
     await dodirni(page, nazad(page));
@@ -78,7 +78,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     pomeriServer(mock, 8); // prijava -> slajd 1 (3 koraka) -> slajd 2 (2 koraka) -> slajd 3 (pitanje, CEKA)
     await nastavnickiBroker(page, mock);
     await otvori(page);
-    await expect(polozaj(page)).toHaveText('3/4');
+    await expect(polozaj(page)).toHaveText('3/6');
     const pitanje = page.getByRole('group', { name: 'Pitanje' });
     await expect(pitanje).toBeVisible();
     await expect(beleske(page)).toHaveText('Pitaj pa sačekaj.');
@@ -106,7 +106,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await expect.poll(() => broker.pretplate).toContain('/topic/izvodjenja/7/nastavnik');
 
     broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('SLEDECI').telo);
-    await expect(polozaj(page)).toHaveText('1/4 · 0/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 0/3');
     expect(mock.zahteviZa(KOMANDE, 'POST')).toEqual([]);
   });
 
@@ -150,7 +150,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await page.clock.fastForward(6_000);
     await vidljivost(page, 'visible');
 
-    await expect(polozaj(page)).toHaveText('1/4 · 0/3'); // GET odmah po povratku
+    await expect(polozaj(page)).toHaveText('1/6 · 0/3'); // GET odmah po povratku
     await expect.poll(() => broker.veze, { timeout: 8_000 }).toBe(2);
     await expect(veza(page)).toHaveText('Povezano');
   });
@@ -159,7 +159,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     pomeriServer(mock, 2);
     await nastavnickiBroker(page, mock);
     await otvori(page);
-    await expect(polozaj(page)).toHaveText('1/4 · 1/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 1/3');
 
     mock.na('POST', 'izvodjenja/:id/komande', () => ({ status: 409, telo: { reason: 'Prvo zatvori pitanje.', time: '' } }));
     await dodirni(page, napred(page));
@@ -171,7 +171,7 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await expect(page.locator('.uz-dalj-greska')).toHaveText(PORUKA_VEZA);
     await expect(napred(page)).toBeEnabled();
     await expect(nazad(page)).toBeEnabled();
-    await expect(polozaj(page)).toHaveText('1/4 · 1/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 1/3');
   });
 
   test('kraj: komanda posle završetka sa laptopa (410) -> "Izvođenje je završeno.", bez dugmadi, brava puštena', async ({ page, mock }) => {
@@ -262,7 +262,7 @@ test.describe('daljinski: vrlo duge beleške na 360 x 740', () => {
     await nastavnickiBroker(page, mock);
     await otvori(page);
     await dodirni(page, napred(page));
-    await expect(polozaj(page)).toHaveText('1/4 · 0/3');
+    await expect(polozaj(page)).toHaveText('1/6 · 0/3');
 
     const vece = page.getByRole('button', { name: 'Veća slova beležaka' });
     // posle svakog klika sačekati novu veličinu: inače `isEnabled` pročita stanje pre renderovanja, a klik na dugme

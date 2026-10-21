@@ -16,15 +16,19 @@ import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { kopirajTekst } from '../../../shared/util/kopiraj';
 import { brojAdresaTekst } from '../../../shared/util/mnozina';
 import { GrupaStore } from '../data-access/grupa.store';
+import { GrupeApi } from '../../../core/api/grupe.api';
 import {
   emailoviZaKopiranje,
   GrupaStudentStat,
   imeStudenta,
+  mailtoWaLinka,
   procenat,
   SEPARATOR_EMAILOVA,
   StudentInfo,
+  WaLinkInfo,
 } from '../../../core/api/grupe.models';
 import { NacinStudentDialoga, StudentDialog } from '../ui/student-dialog';
+import { WaLinkDialog } from '../ui/wa-link-dialog';
 
 export const POLJA_SORTA_STUDENATA = ['indeks', 'ime', 'prisutnost', 'domaci'] as const;
 export type PoljeSortaStudenata = (typeof POLJA_SORTA_STUDENATA)[number];
@@ -95,6 +99,9 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
  * Tab Studenti grupe (G2, G6, G7, G8): tabela (ime, indeks, prisutnost, domaći, poslednji test, kontakt) sa sortom po
  * zaglavlju i pretragom (`?sort`, `?q`; neispravna vrednost je podrazumevana, bez navigacije), "Dodaj studenta",
  * po redu "Izmeni" i "Premesti u grupu" (dijalozi), "Kopiraj emailove" (`; `) i "Štampaj spisak" (print CSS).
+ * Telefon i WhatsApp: "Kontakti za telefon" preuzima vCard grupe (telefon ponudi uvoz u Kontakte), "Pošalji WA link"
+ * otvara nastavnikov klijent pošte sa linkom i prikazanim studentima u BCC-u, a "Poveži WhatsApp grupu" / "WhatsApp
+ * link" čuva link grupe (vide ga i studenti posle prijave preko QR forme).
  */
 @Component({
   selector: 'app-grupa-studenti-tab',
@@ -111,6 +118,26 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
       <button matButton="outlined" type="button" (click)="stampaj()" data-stampaj>
         <mat-icon svgIcon="print" aria-hidden="true" />Štampaj spisak
       </button>
+    </div>
+
+    <div class="alati ne-stampaj" role="group" aria-label="Telefon i WhatsApp" data-wa-alati>
+      <a matButton="outlined" [href]="kontaktiUrl()" download data-kontakti>
+        <mat-icon svgIcon="download" aria-hidden="true" />Kontakti za telefon
+      </a>
+      @if (store.waLink()) {
+        @if (mejlAdrese().length > 0) {
+          <a matButton="outlined" [href]="mailtoWa()" data-wa-mejl>
+            <mat-icon svgIcon="mail" aria-hidden="true" />Pošalji WA link ({{ brojAdresa() }})
+          </a>
+        }
+        <button matButton type="button" (click)="podesiWaLink()" data-wa-podesi>
+          <mat-icon svgIcon="link" aria-hidden="true" />WhatsApp link
+        </button>
+      } @else {
+        <button matButton="outlined" type="button" (click)="podesiWaLink()" data-wa-podesi>
+          <mat-icon svgIcon="link" aria-hidden="true" />Poveži WhatsApp grupu
+        </button>
+      }
     </div>
 
     <h2 class="samo-stampa">Spisak studenata · {{ store.naziv() }}</h2>
@@ -237,6 +264,7 @@ export class GrupaStudentiTab {
   private readonly obavestenja = inject(NotificationStore);
   private readonly reference = inject(ReferenceStore);
   private readonly dokument = inject(DOCUMENT);
+  private readonly api = inject(GrupeApi);
 
   /** Query parametri (`withComponentInputBinding`). */
   readonly q = input<string | null>();
@@ -251,6 +279,15 @@ export class GrupaStudentiTab {
     const n = this.prikazani().length;
     const ukupno = this.store.studenti().length;
     return n === ukupno ? `${n} studenata` : `${n} od ${ukupno} studenata`;
+  });
+
+  /** Adrese za "Pošalji WA link": prikazani studenti (pretraga sužava i mejl), kao "Kopiraj emailove". */
+  protected readonly mejlAdrese = computed(() => emailoviZaKopiranje(this.prikazani().map(r => r.student)));
+  protected readonly brojAdresa = computed(() => brojAdresaTekst(this.mejlAdrese().length));
+  protected readonly mailtoWa = computed(() => mailtoWaLinka(this.mejlAdrese(), this.store.naziv(), this.store.waLink() ?? ''));
+  protected readonly kontaktiUrl = computed(() => {
+    const g = this.store.grupa();
+    return g ? this.api.kontaktiUrl(g.id) : null;
   });
 
   protected postavi(izmene: { q?: string | null; sort?: string | null }): void {
@@ -317,6 +354,19 @@ export class GrupaStudentiTab {
     void kopirajTekst(adrese.join(SEPARATOR_EMAILOVA), this.dokument).then(ok =>
       ok ? this.obavestenja.uspeh(`Kopirano: ${brojAdresaTekst(adrese.length)}`) : this.obavestenja.greska('Kopiranje nije uspelo. Pregledač ne dozvoljava pristup clipboardu.'),
     );
+  }
+
+  protected podesiWaLink(): void {
+    const g = this.store.grupa();
+    if (!g) {
+      return;
+    }
+    WaLinkDialog.otvori(this.dialog, { grupa: { id: g.id, naziv: this.store.naziv() }, waLink: this.store.waLink() })
+      .pipe(filter((x): x is WaLinkInfo => !!x))
+      .subscribe(x => {
+        this.obavestenja.uspeh(x.waLink ? 'WhatsApp link je sačuvan.' : 'WhatsApp link je uklonjen.');
+        this.store.osvezi();
+      });
   }
 
   protected stampaj(): void {

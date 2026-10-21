@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  MAX_NEDAVNO, NedavnoStavka, PREFS_KLJUC, PreferencesStore, manjaVelicinaBeleski, ucitajPreference, vecaVelicinaBeleski,
+  MAX_BOJA, MAX_NEDAVNO, NedavnoStavka, PREFS_KLJUC, PreferencesStore, manjaVelicinaBeleski, ucitajPreference,
+  vecaVelicinaBeleski,
 } from './preferences.store';
 
 type Slusalac = (e: { matches: boolean }) => void;
@@ -217,6 +218,64 @@ describe('PreferencesStore', () => {
       expect(JSON.parse(localStorage.getItem(PREFS_KLJUC) ?? '{}').velicinaBeleski).toBe(28);
       store.postaviVelicinuBeleski(29);
       expect(store.velicinaBeleski()).toBe(28);
+    });
+  });
+  describe('poslednje boje (paleta editora platna)', () => {
+    it("zapamtiBoju('#ed7d31') pamti velikim slovima", () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      expect(store.poslednjeBoje()).toEqual([]);
+      store.zapamtiBoju('#ed7d31');
+      expect(store.poslednjeBoje()).toEqual(['#ED7D31']);
+    });
+
+    it('9 različitih boja -> najviše 8, najnovija prva', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      const boje = Array.from({ length: 9 }, (_, i) => `#00000${i + 1}`);
+      for (const b of boje) store.zapamtiBoju(b);
+      expect(MAX_BOJA).toBe(8);
+      expect(store.poslednjeBoje()).toHaveLength(8);
+      expect(store.poslednjeBoje()[0]).toBe('#000009');
+      expect(store.poslednjeBoje()[7]).toBe('#000002');
+    });
+
+    it('ponovljena boja ide na početak bez duplikata (i u drugom zapisu slova)', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      store.zapamtiBoju('#112233');
+      store.zapamtiBoju('#AABBCC');
+      store.zapamtiBoju('#aabbcc');
+      store.zapamtiBoju('#112233');
+      expect(store.poslednjeBoje()).toEqual(['#112233', '#AABBCC']);
+    });
+
+    it('neispravna boja se ne pamti', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      store.zapamtiBoju('#12345');
+      store.zapamtiBoju('crvena');
+      expect(store.poslednjeBoje()).toEqual([]);
+    });
+
+    it('ucitajPreference prihvata samo niz boja #RRGGBB (najviše 8)', () => {
+      localStorage.setItem(PREFS_KLJUC, JSON.stringify({ poslednjeBoje: ['#GGGGGG', 5, '#000000'] }));
+      expect(ucitajPreference(localStorage).poslednjeBoje).toEqual(['#000000']);
+      localStorage.setItem(PREFS_KLJUC, JSON.stringify({ poslednjeBoje: '#000000' }));
+      expect(ucitajPreference(localStorage).poslednjeBoje).toEqual([]);
+      localStorage.setItem(PREFS_KLJUC, JSON.stringify({ poslednjeBoje: ['#ed7d31'] }));
+      expect(ucitajPreference(localStorage).poslednjeBoje).toEqual([]);
+      const deset = Array.from({ length: 10 }, (_, i) => `#0000${String(i).padStart(2, '0')}`);
+      localStorage.setItem(PREFS_KLJUC, JSON.stringify({ poslednjeBoje: deset }));
+      expect(ucitajPreference(localStorage).poslednjeBoje).toEqual(deset.slice(0, 8));
+    });
+
+    it('upis u localStorage sadrži poslednjeBoje', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      store.zapamtiBoju('#ED7D31');
+      TestBed.tick();
+      expect(JSON.parse(localStorage.getItem(PREFS_KLJUC) ?? '{}').poslednjeBoje).toEqual(['#ED7D31']);
     });
   });
 });

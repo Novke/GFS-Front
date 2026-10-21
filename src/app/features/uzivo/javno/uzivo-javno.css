@@ -464,6 +464,8 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  /* stavka centrirane kolone (`.uz-st-poruka`) bi inače bila široka koliko cela formula (preliv na 360 px) */
+  max-width: 100%;
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
@@ -531,4 +533,25 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* Formula na telefonu (`app-tekst-formule`): bez smanjivanja (meru daju samo nastavnički prikazi, `MERA_FORMULE`); šira od
+   mesta se skroluje u sebi (overlay trake telefona ne pomeraju raspored). `padding-inline-end` (osnovno pravilo) drži
+   prepust MathLive-a (~2 px van `.ML__latex`) u kutiji, pa kratka formula nema skrol; margina se ovde ne poništava, jer bi
+   domaćin koji se skuplja na sadržaj (dugme opcije, "tačan odgovor") bio uži od kutije formule za taj padding, a
+   `max-width: 100%` bi je onda suzio u skrol. Skrol kontejner seče i po visini: indeksi izlaze ~0,1em ispod `.ML__latex`,
+   pa `padding-block` daje mesto, a negativna margina vraća visinu reda. */
+.uz-st .uz-formula--spremna {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25em;
+  margin-block: -0.25em;
+  margin-inline-end: 0;
+}
+
+/* Široka formula ima tab stop (`tekst-formule.component.ts`); prsten fokusa ide unutra, jer domaćin seče vodoravno
+   (`overflow-x: clip`). */
+.uz-st .uz-formula--spremna:focus-visible {
+  outline-offset: -3px;
 }

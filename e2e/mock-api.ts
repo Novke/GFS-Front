@@ -3,6 +3,12 @@ import { join } from 'node:path';
 
 import type { Page, Request, Route } from '@playwright/test';
 
+import type {
+  BankaPretragaStavka, GrupaCmd, IskljucenaTemaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd,
+} from '../src/app/features/banka/data-access/banka.models';
+import type { LtiRegistracijaCmd, LtiRegistracijaInfo, LtiVrednostiZaMoodle } from '../src/app/features/podesavanja/data-access/lti.models';
+import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
+import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 
 /*
@@ -19,7 +25,7 @@ type StatusPrijave = 'NA_CEKANJU' | 'PRIHVACENA' | 'ODBIJENA';
 
 interface Predmet { id: number; naziv: string }
 interface TipTesta { id: number; naziv: string; predmetId: number; aktivan: boolean }
-interface Grupa { id: number; naziv: string; godinaUpisa: number | null }
+interface Grupa { id: number; naziv: string; godinaUpisa: number | null; waLink?: string | null }
 interface Student {
   id: number; ime: string; prezime: string; indeks: string; godina: number | null; email: string | null;
   brojTelefona: string | null; grupaId: number | null; datumRodjenja: string | null; opstina: string | null;
@@ -53,22 +59,65 @@ interface Prijava {
 }
 interface UzivoSlajd {
   id: number; rb: number; tip: string; naslov: string | null; sadrzaj: string | null; slika: unknown; beleske: string | null;
-  postepeno: boolean; pitanje: unknown; platno: unknown;
+  postepeno: boolean; pitanje: unknown; platno: unknown; prelaz?: Prelaz | null;
+  /** ZADATAK: samo izbor (`SlajdCmd.zadatak`); opis (`ZadatakSlajdaInfo`) mok računa pri svakom odgovoru, kao server. */
+  zadatak?: ZadatakSlajda | null;
+}
+/** Prelaz na slajd (faza 5, Ugovor 4); slajd koji test doda bez polja front čita kao `null`. */
+interface Prelaz { efekat: string; smer: string | null; trajanjeMs: number }
+
+/** Kao `SlajdPP.normalizuj(Prelaz)`: bez efekta -> null, FADE bez smera, inače DESNO, trajanje 500. */
+function normalizujPrelaz(p: Partial<Prelaz> | null | undefined): Prelaz | null {
+  if (!p?.efekat) return null;
+  return { efekat: p.efekat, smer: p.efekat === 'FADE' ? null : (p.smer ?? 'DESNO'), trajanjeMs: p.trajanjeMs ?? 500 };
+}
+
+/** Kao `SlajdPP.normalizuj`: zadatak (izbor grupe, vreme, broj različitih) nosi samo ZADATAK slajd. */
+function zadatakIzCmd(cmd: { tip: string; zadatak?: ZadatakSlajda | null }): ZadatakSlajda | null {
+  const z = cmd.tip === 'ZADATAK' ? cmd.zadatak : null;
+  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null } : null;
 }
 interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
   telefonPrikaz: string; detaljiDozvoljeni: boolean; slajdovi: UzivoSlajd[]; [ostalo: string]: unknown;
 }
-interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO' }
+/** `prijavaObavezna`: bodovan run (bez prijavljenog studenta prijava je 403); fikstura bez polja = nebodovan. */
+interface UzivoIzvodjenje { id: number; kod: string; naziv: string; status: 'AKTIVNO' | 'ZAVRSENO'; prijavaObavezna?: boolean }
+/** `SlajdCmd` (telo `POST prezentacije/:id/slajdovi` i `PUT slajdovi/:id`); pitanje samo sa poljima koja mok čita. */
+interface SlajdCmd {
+  tip: string; naslov: string | null; sadrzaj: string | null; slikaId: string | null; beleske: string | null; postepeno: boolean;
+  pitanje: ({ slikaId: string | null; opcije: { tekst: string; tacna: boolean }[] } & Record<string, unknown>) | null;
+  platno: unknown;
+  /** Kao server: PUT je puna zamena, pa komanda bez `prelaz` briše prelaz. */
+  prelaz?: Partial<Prelaz> | null;
+  zadatak?: ZadatakSlajda | null;
+}
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
+/** `ObavestenjeInfo` (`GET api/obavestenja`), kao backend. */
+interface Obavestenje {
+  id: number; vrsta: 'NE_STIZE_KOD' | 'PREVISE_KODOVA'; studentId: number | null; studentIme: string | null; indeks: string | null;
+  podaci: Record<string, unknown> | null; kreirano: string; procitano: string | null; reseno: string | null;
+}
+/** `SesijaInfo` (`GET api/auth/sesije`): prijavljeni uređaji nastavnika. */
+interface SesijaNastavnika { id: number; opis: string; kreirano: string; poslednjiUlaz: string; trenutna: boolean }
+/** `UredjajInfo` i `StudentJaInfo` naloga studenta (`api/public/nalog/*`). */
+interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
+interface NalogStudenta {
+  indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
+}
+/** Nalog studenta na kartici (`GET api/studenti/:id/nalog`); `imaMejl` se računa iz mejla studenta. */
+interface NalogNaKartici {
+  studentId: number; uredjaji: Omit<UredjajStudenta, 'trenutni'>[]; moodle: { povezan: boolean; poslednjiUlaz: string | null };
+  poslednjaPrijava: string | null;
+}
 interface KontrolnaTablaPodesavanje {
   sledece: { predmetId: number; grupaId: number; rb: number; brojStarijih: number };
   nedelja: { tip: 'PREDAVANJE' | 'DOMACI' | 'TEST'; id: number; naslov: string; predmetId: number; grupaId: number; danUNedelji: number }[];
 }
 
-export interface Podaci {
+export interface Podaci extends BankaPodaci {
   predmeti: Predmet[];
   tipoviTesta: TipTesta[];
   grupe: Grupa[];
@@ -85,6 +134,23 @@ export interface Podaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
+  /** Obaveštenja za nastavnika (značka, padajuća lista, kartica "Nalozi"); `reseno` != null nisu otvorena. */
+  obavestenja: Obavestenje[];
+  /** Prijavljeni uređaji nastavnika (`trenutna` = ovaj pregledač). */
+  sesijeNastavnika: SesijaNastavnika[];
+  /** Jedini student sa nalogom (javna ruta `/nalog`); uređaj ovog pregledača se dodaje prijavom kodom. */
+  nalogStudenta: NalogStudenta;
+  /** Uređaji i Moodle veza studenata na kartici (sekcija "Nalog"); student bez reda nema ništa. */
+  naloziStudenata: NalogNaKartici[];
+  /** Registracije alata na Moodle-u (Podešavanja -> Moodle) i vrednosti za Moodle formu (`e2e/fixtures/lti.json`). */
+  ltiRegistracije: LtiRegistracijaInfo[];
+  ltiVrednosti: LtiVrednostiZaMoodle;
+  /**
+   * "Ime Prezime" prijavljenog studenta (kao kolačić `gfs_student`); `null` = student nije prijavljen. Isto stanje kao
+   * `MockApi.studentPrijavljen` (javna ruta `/nalog`).
+   */
+  prijavljenStudent: string | null;
+  // banka zadataka (`bankaGrupe`, `bankaVarijante`, `preambule`, `iskljuceneTeme`): vidi `BankaPodaci` u `mock-banka.ts`
 }
 
 /** PNG 1 x 1, providan. */
@@ -98,6 +164,11 @@ export function ucitajPodatke(): Podaci {
   const predmeti = ucitaj<{ predmeti: Predmet[]; tipoviTesta: TipTesta[] }>('predmeti.json');
   const studenti = ucitaj<{ studenti: Student[]; beleske: Beleska[] }>('studenti.json');
   const onboarding = ucitaj<{ sesije: Sesija[]; prijave: Prijava[] }>('onboarding.json');
+  const banka = ucitaj<{
+    grupe: BankaGrupa[]; varijante: BankaVarijanta[]; preambule: Record<number, string | null>; iskljuceneTeme: BankaTema[];
+  }>('banka.json');
+  const nalozi = ucitaj<{ obavestenja: Obavestenje[]; sesijeNastavnika: SesijaNastavnika[]; nalogStudenta: NalogStudenta; naloziStudenata: NalogNaKartici[] }>('nalozi.json');
+  const lti = ucitaj<{ registracije: LtiRegistracijaInfo[]; vrednosti: LtiVrednostiZaMoodle }>('lti.json');
   return {
     predmeti: predmeti.predmeti,
     tipoviTesta: predmeti.tipoviTesta,
@@ -111,8 +182,21 @@ export function ucitajPodatke(): Podaci {
     prijave: onboarding.prijave,
     kontrolnaTabla: ucitaj('kontrolna-tabla.json'),
     izvodjenja: ucitaj<{ izvodjenja: UzivoIzvodjenje[] }>('uzivo.json').izvodjenja,
-    prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije,
+    // server uvek šalje `prelaz` (i kad je null); fikstura ga ima na svakom slajdu, normalizacija je kao na serveru
+    prezentacije: ucitaj<{ prezentacije: UzivoPrezentacija[] }>('prezentacije.json').prezentacije
+      .map(x => ({ ...x, slajdovi: x.slajdovi.map(s => ({ ...s, prelaz: normalizujPrelaz(s.prelaz) })) })),
     ucesnici: [],
+    obavestenja: nalozi.obavestenja,
+    sesijeNastavnika: nalozi.sesijeNastavnika,
+    nalogStudenta: nalozi.nalogStudenta,
+    naloziStudenata: nalozi.naloziStudenata,
+    ltiRegistracije: lti.registracije,
+    ltiVrednosti: lti.vrednosti,
+    prijavljenStudent: null,
+    bankaGrupe: banka.grupe,
+    bankaVarijante: banka.varijante,
+    preambule: banka.preambule,
+    iskljuceneTeme: banka.iskljuceneTeme,
   };
 }
 
@@ -144,7 +228,10 @@ interface Ruta {
   rukovalac: Rukovalac;
 }
 
-/** `predavanja/:id/prisustvo/:sid` -> regex; `:param` je samo ceo broj, `:token` bilo koji segment. */
+/**
+ * `predavanja/:id/prisustvo/:sid` -> regex; `:param` je samo ceo broj, `:token` i `:serija` bilo koji segment (kako stigne,
+ * URL-enkodovan).
+ */
 function napraviRutu(metod: string, sablon: string, rukovalac: Rukovalac): Ruta {
   const imena: string[] = [];
   const izraz = sablon
@@ -154,7 +241,7 @@ function napraviRutu(metod: string, sablon: string, rukovalac: Rukovalac): Ruta 
         return deo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }
       imena.push(deo.slice(1));
-      return deo === ':token' ? '([^/]+)' : '(\\d+)';
+      return deo === ':token' || deo === ':serija' ? '([^/]+)' : '(\\d+)';
     })
     .join('/');
   return { metod, sablon: new RegExp(`^${izraz}$`), imena, rukovalac };
@@ -175,6 +262,10 @@ function pogodi(rute: readonly Ruta[], z: Zahtev): { ruta: Ruta; p: Parametri } 
 
 const greska = (status: number, reason: string): Odgovor => ({ status, telo: { reason, time: new Date().toISOString() } });
 
+/** Kao `PristupMatrica` na serveru: bez sesije nastavnika prolaze samo `public/*`, `auth/prijava` i `auth/ja`. */
+const trazeSesiju = (putanja: string): boolean =>
+  !(putanja === 'public' || putanja.startsWith('public/') || putanja === 'auth/prijava' || putanja === 'auth/ja');
+
 /** Zadržan odgovor: `stigao` se razrešava kad zahtev stigne do moka, a odgovor ide tek posle `pusti()`. */
 export interface Zadrzan {
   stigao: Promise<Zahtev>;
@@ -193,6 +284,38 @@ export class MockApi {
   readonly nepoznati: string[] = [];
   /** Slike otpremljene kroz `POST mediji`, redom (id-jevi su UUID-i iz brojača, isti u svakom pokretanju). */
   readonly mediji: Medij[] = [];
+  /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
+  readonly banka = new MockBanka(this.podaci, id => this.predmet(id) !== null, this.mediji);
+  /**
+   * Sesija nastavnika (kao kolačić `gfs_nastavnik`). Podrazumevano je nastavnik prijavljen, pa specovi pre prijave rade kao
+   * ranije. Bez nje mok odgovara kao server: svaki nastavnički API (sve osim `public/*`, `auth/prijava` i `auth/ja`) daje 401
+   * `Potrebna je prijava.`, pre zamena (`na`) i podrazumevanih ruta. Test je menja direktno (istek usred rada) ili kroz
+   * `POST auth/prijava` sa {@link MockApi.LOZINKA}.
+   */
+  prijavljen = true;
+  /** Izmišljena lozinka koju mok prihvata za korisnika `nastavnik`. */
+  static readonly LOZINKA = 'lozinka-za-e2e';
+  /**
+   * Kolačić studenta `gfs_student` (javna ruta `/nalog`): `false` dok se student ne prijavi kodom {@link MockApi.KOD_NALOGA}
+   * za indeks iz `podaci.nalogStudenta`. Nezavisan od sesije nastavnika. Isti kolačić kao `podaci.prijavljenStudent` (uživo,
+   * bodovan run): prijava kodom upisuje ime studenta iz `nalogStudenta`, odjava `null`, pa se oba pogleda nikad ne razilaze.
+   */
+  get studentPrijavljen(): boolean {
+    return this.podaci.prijavljenStudent !== null;
+  }
+  set studentPrijavljen(da: boolean) {
+    const n = this.podaci.nalogStudenta;
+    this.podaci.prijavljenStudent = da ? `${n.ime} ${n.prezime}` : null;
+  }
+  /** Jedini kod koji mok prihvata pri prijavi studenta (kao da je stigao mejlom). */
+  static readonly KOD_NALOGA = '246810';
+  /**
+   * Kolačić `__Host-gfs_lti_par` (ulazak iz Moodle-a bez veze, 30 min): `POST public/lti/povezi` ga troši; bez njega 410 kao
+   * server. Podrazumevano postoji (stranica `/nalog/moodle` posle preusmerenja).
+   */
+  moodlePar = true;
+  /** Ime Moodle naloga iz ulaska (`GET public/lti/povezivanje`); `null` = Moodle ga nije podelio. Izmišljeno, nije stvaran nalog. */
+  moodleIme: string | null = 'Pera Test';
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -232,12 +355,27 @@ export class MockApi {
     );
   }
 
+  /**
+   * Brojač zahteva `GET slajdovi/:id/potezi` za jedan slajd (projektor i konzola traže poteze jednom po slajdu, pa
+   * posle greške tek za 10 s; plan faze 5 odluka 8). Broji i zahteve na koje je test odgovorio zamenom (`na`).
+   */
+  brojZahtevaPoteza(slajdId: number): number {
+    return this.zahteviZa(`slajdovi/${slajdId}/potezi`, 'GET').length;
+  }
+
   async instaliraj(page: Page): Promise<void> {
     // okruženje (Dockerfile ga pravi u slici; lokalni dist ga nema): bez oznake STAGING
     await page.route('**/assets/env.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"env":"prod"}' }));
     await page.route('**/api/**', (route, request) => this.obradi(route, request));
-    // slike slojeva platna: jedan providan piksel za svaki medij (ruta je kasnije dodata, pa ima prednost pred `api/**`)
-    await page.route('**/api/public/mediji/*', route => route.fulfill({ status: 200, contentType: 'image/png', body: PIKSEL_PNG }));
+    // slike slojeva platna: jedan providan piksel za svaki medij, a za SVG rendera banke njegov (probni) SVG (ruta je kasnije
+    // dodata, pa ima prednost pred `api/**`)
+    await page.route('**/api/public/mediji/*', route => {
+      const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+      const svg = this.banka.svgovi.get(id);
+      return svg === undefined
+        ? route.fulfill({ status: 200, contentType: 'image/png', body: PIKSEL_PNG })
+        : route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg });
+    });
   }
 
   private async obradi(route: Route, request: Request): Promise<void> {
@@ -255,7 +393,9 @@ export class MockApi {
 
     const izbor = pogodi(this.zamene, z) ?? pogodi(this.rute, z);
     let odgovor: Odgovor;
-    if (!izbor) {
+    if (!this.prijavljen && trazeSesiju(putanja)) {
+      odgovor = greska(401, 'Potrebna je prijava.');
+    } else if (!izbor) {
       this.nepoznati.push(`${z.metod} api/${putanja}${url.search}`);
       odgovor = greska(404, 'Mok nema ovu rutu.');
     } else {
@@ -443,6 +583,7 @@ export class MockApi {
       brojStudenata: studenti.length,
       brojPredavanja: predavanja.length,
       prosecnaPrisutnost: prisutnost,
+      waLink: g.waLink ?? null,
       otvorenOnboarding: otvorena
         ? { id: otvorena.id, token: otvorena.token, istice: otvorena.istice, brojPrijava: otvorena.brojPrijava, brojNaCekanju: otvorena.brojNaCekanju, maxPrijava: otvorena.maxPrijava }
         : null,
@@ -516,6 +657,35 @@ export class MockApi {
     });
   }
 
+  /**
+   * `SlajdDetails` iz `SlajdCmd` (kao `SlajdMapper.uDetails`): `slika` je otpremljen medij sa `slikaId` (ili null),
+   * pitanje dobija id-jeve (svoj i opcija) i redne brojeve opcija.
+   */
+  private slajdIzCmd(cmd: SlajdCmd, id: number): UzivoSlajd {
+    const medij = (medijId: string | null) => this.mediji.find(m => m.id === medijId) ?? null;
+    const { slikaId, ...q } = cmd.pitanje ?? { slikaId: null };
+    return {
+      id, rb: 0, tip: cmd.tip, naslov: cmd.naslov, sadrzaj: cmd.sadrzaj, slika: medij(cmd.slikaId), beleske: cmd.beleske,
+      postepeno: cmd.postepeno, platno: cmd.platno, prelaz: normalizujPrelaz(cmd.prelaz), zadatak: zadatakIzCmd(cmd),
+      pitanje: cmd.pitanje
+        ? {
+            ...q, id: this.sledeciId++, slika: medij(slikaId),
+            opcije: cmd.pitanje.opcije.map((o, i) => ({ id: this.sledeciId++, rb: i + 1, tekst: o.tekst, tacna: o.tacna })),
+          }
+        : null,
+    };
+  }
+
+  /** Slajd kako ga server šalje: ZADATAK dobija opis grupe nad trenutnim stanjem banke (`ZadaciSlajdova`, pri svakom čitanju). */
+  private slajdOdgovor(s: UzivoSlajd): unknown {
+    if (s.tip !== 'ZADATAK') return s;
+    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null }) };
+  }
+
+  private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
+    return { ...x, slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
+  }
+
   private kontrolnaTabla() {
     const k = this.podaci.kontrolnaTabla;
     const g = this.grupa(k.sledece.grupaId);
@@ -566,6 +736,69 @@ export class MockApi {
       lista.find(x => x.id === Number(id)) ?? greska(404, `${sta} ne postoji.`);
     const jeOdgovor = (x: unknown): x is Odgovor => typeof x === 'object' && x !== null && 'status' in x;
 
+    // sesija nastavnika (`api/auth/*`); prijava prima samo `nastavnik` / `MockApi.LOZINKA`
+    get('auth/ja', () => (this.prijavljen ? ok({ uloga: 'NASTAVNIK', korisnik: 'nastavnik' }) : greska(401, 'Potrebna je prijava.')));
+    post('auth/prijava', z => {
+      const telo = z.telo as { korisnik?: unknown; lozinka?: unknown } | null;
+      if (telo?.korisnik !== 'nastavnik' || telo.lozinka !== MockApi.LOZINKA) {
+        return greska(401, 'Pogrešno korisničko ime ili lozinka.');
+      }
+      this.prijavljen = true;
+      return { status: 204 };
+    });
+    post('auth/odjava', () => {
+      this.prijavljen = false;
+      return { status: 204 };
+    });
+    // prijavljeni uređaji nastavnika (meni korisnika); odjava ovog uređaja ide kroz `auth/odjava`
+    get('auth/sesije', () => ok(d.sesijeNastavnika));
+    del('auth/sesije/:id', (_z, p) => {
+      const s = nadji(d.sesijeNastavnika, p['id'], 'Sesija');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      d.sesijeNastavnika = d.sesijeNastavnika.filter(x => x.id !== s.id);
+      return { status: 204 };
+    });
+    post('auth/sesije/odjavi-sve', () => {
+      const pre = d.sesijeNastavnika.length;
+      d.sesijeNastavnika = d.sesijeNastavnika.filter(x => x.trenutna);
+      return ok({ odjavljeno: pre - d.sesijeNastavnika.length });
+    });
+
+    // obaveštenja za nastavnika (spec prijave, sekcija 6): otvorena = nerešena; najnovija prva
+    const otvorenaObavestenja = () => d.obavestenja.filter(o => o.reseno === null);
+    get('obavestenja', z => {
+      const lista = (z.query.get('stanje') === 'sva' ? [...d.obavestenja] : otvorenaObavestenja())
+        .sort((a, b) => b.kreirano.localeCompare(a.kreirano));
+      return strana(lista, z.query);
+    });
+    get('obavestenja/broj', () => {
+      const otvorena = otvorenaObavestenja();
+      return ok({ neprocitana: otvorena.filter(o => o.procitano === null).length, otvorena: otvorena.length });
+    });
+    post('obavestenja/procitaj-sve', () => {
+      const neprocitana = d.obavestenja.filter(o => o.procitano === null);
+      neprocitana.forEach(o => (o.procitano = lokalnoVreme(new Date())));
+      return ok({ procitano: neprocitana.length });
+    });
+    post('obavestenja/:id/procitano', (_z, p) => {
+      const o = nadji(d.obavestenja, p['id'], 'Obaveštenje');
+      if (jeOdgovor(o)) {
+        return o;
+      }
+      o.procitano ??= lokalnoVreme(new Date());
+      return { status: 204 };
+    });
+    post('obavestenja/:id/reseno', (_z, p) => {
+      const o = nadji(d.obavestenja, p['id'], 'Obaveštenje');
+      if (jeOdgovor(o)) {
+        return o;
+      }
+      o.reseno ??= lokalnoVreme(new Date());
+      return { status: 204 };
+    });
+
     // predmeti, grupe, tipovi testa
     get('predmeti', () => ok(d.predmeti));
     get('predmeti/:id', (_z, p) => {
@@ -586,6 +819,20 @@ export class MockApi {
     get('grupe/:id/pregled', (_z, p) => {
       const g = nadji(d.grupe, p['id'], 'Grupa');
       return jeOdgovor(g) ? g : ok(this.grupaPregled(g));
+    });
+    patch('grupe/:id/wa-link', (z, p) => {
+      const g = nadji(d.grupe, p['id'], 'Grupa');
+      if (jeOdgovor(g)) {
+        return g;
+      }
+      const unos = ((z.telo as { waLink?: string | null } | null)?.waLink ?? '').trim();
+      // isto pravilo kao WaLink na serveru (skraćeno): kanonski oblik ili 400
+      const m = /^(?:https?:\/\/)?(?:www\.)?chat\.whatsapp\.com\/(?:invite\/)?([A-Za-z0-9]{10,40})\/?(?:[?#].*)?$/i.exec(unos);
+      if (unos && !m) {
+        return greska(400, 'Link mora biti poziv u WhatsApp grupu (https://chat.whatsapp.com/...). U WhatsApp-u: Info grupe → Pozovi putem linka.');
+      }
+      g.waLink = m ? `https://chat.whatsapp.com/${m[1]}` : null;
+      return ok({ waLink: g.waLink });
     });
     get('grupe/:id/prisustvo', (z, p) => {
       const predmetId = Number(z.query.get('predmetId'));
@@ -727,6 +974,65 @@ export class MockApi {
       const s = nadji(d.studenti, p['id'], 'Student');
       return jeOdgovor(s) ? s : ok(this.studentPregled(s));
     });
+    put('studenti/:id', (z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      Object.assign(s, z.telo);
+      return ok(this.studentInfo(s));
+    });
+    // sekcija "Nalog" na kartici studenta (spec prijave, 5.3)
+    const nalogKartice = (id: number): NalogNaKartici => {
+      let n = d.naloziStudenata.find(x => x.studentId === id);
+      if (!n) {
+        n = { studentId: id, uredjaji: [], moodle: { povezan: false, poslednjiUlaz: null }, poslednjaPrijava: null };
+        d.naloziStudenata.push(n);
+      }
+      return n;
+    };
+    get('studenti/:id/nalog', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      const n = nalogKartice(s.id);
+      return ok({ imaMejl: !!s.email, uredjaji: n.uredjaji, moodle: n.moodle, poslednjaPrijava: n.poslednjaPrijava });
+    });
+    post('studenti/:id/nalog/posalji-kod', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      if (!s.email) {
+        return greska(409, 'Student nema mejl.');
+      }
+      // kao server: slanje koda sa kartice rešava otvorena obaveštenja "Ne stiže mi kod" tog studenta
+      d.obavestenja
+        .filter(o => o.studentId === s.id && o.vrsta === 'NE_STIZE_KOD' && o.reseno === null)
+        .forEach(o => (o.reseno = lokalnoVreme(new Date())));
+      return { status: 204 };
+    });
+    post('studenti/:id/nalog/opozovi-uredjaje', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      const n = nalogKartice(s.id);
+      const opozvano = n.uredjaji.length;
+      n.uredjaji = [];
+      return ok({ opozvano });
+    });
+    del('studenti/:id/nalog/moodle', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      const n = nalogKartice(s.id);
+      n.moodle = { povezan: false, poslednjiUlaz: null };
+      n.uredjaji = n.uredjaji.filter(u => u.nacin !== 'LTI'); // B9: odjavljuju se i uređaji prijavljeni preko Moodle-a
+      return { status: 204 };
+    });
     get('studenti/:id/predmeti', (_z, p) => {
       const s = nadji(d.studenti, p['id'], 'Student');
       return jeOdgovor(s) ? s : ok(this.studentKartice(s));
@@ -768,7 +1074,8 @@ export class MockApi {
     get('izvodjenja', () => ok([]));
     const info = (x: UzivoPrezentacija) => {
       const { slajdovi, ...ostalo } = x;
-      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE').length };
+      // kao server: slajdovi sa rundama (PITANJE i ZADATAK)
+      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length };
     };
     get('prezentacije', z => {
       const predmetId = z.query.get('predmetId');
@@ -796,17 +1103,18 @@ export class MockApi {
       d.prezentacije.splice(i, 1);
       return { status: 204 };
     });
-    post('mediji', z => {
-      // multipart: mok ne raspakuje telo, samo ime fajla iz zaglavlja dela (`filename="..."`)
+    // multipart: mok ne raspakuje telo, samo ime fajla i tip iz zaglavlja dela (`filename="..."`, `Content-Type`)
+    const otpremi = (z: Zahtev, tipovi: string): Odgovor => {
       const telo = typeof z.telo === 'string' ? z.telo : '';
       const m: Medij = {
         id: `00000000-0000-4000-8000-${(this.mediji.length + 1).toString(16).padStart(12, '0')}`,
-        naziv: /filename="([^"]*)"/.exec(telo)?.[1] ?? 'slika', mime: /Content-Type: (image\/[a-z]+)/i.exec(telo)?.[1] ?? 'image/png',
+        naziv: /filename="([^"]*)"/.exec(telo)?.[1] ?? 'slika', mime: new RegExp(`Content-Type: (${tipovi})`, 'i').exec(telo)?.[1] ?? 'image/png',
         velicina: telo.length,
       };
       this.mediji.push(m);
       return { status: 201, telo: m };
-    });
+    };
+    post('mediji', z => otpremi(z, 'image/[a-z]+'));
     post('prezentacije/:id/slajdovi/uvoz', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
       if (jeOdgovor(x)) {
@@ -827,18 +1135,23 @@ export class MockApi {
       const mesto = posle + 1;
       // kao backend: novi slajdovi dobijaju id, `slika` ostaje prazna (mok ne vodi medije), redni brojevi se prenumerišu
       const novi = cmd.slajdovi.map(s => {
-        const slajd = { ...s, id: this.sledeciId++, rb: 0, slika: null };
+        const slajd = { ...s, id: this.sledeciId++, rb: 0, slika: null, prelaz: normalizujPrelaz(s.prelaz) };
         delete slajd.slikaId;
         return slajd as UzivoSlajd;
       });
       x.slajdovi.splice(mesto, 0, ...novi);
       x.slajdovi.forEach((s, i) => (s.rb = i + 1));
       x.brojSlajdova = x.slajdovi.length;
-      return { status: 201, telo: x };
+      return { status: 201, telo: this.prezentacijaOdgovor(x) };
+    });
+    // dijalog "Pokreni" (prezentacija sa pitanjem): predavanja za izbor; mok ih nema (izbor "Uz predavanje" je onemogućen)
+    get('prezentacije/:id/predavanja', (_z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      return jeOdgovor(x) ? x : ok([]);
     });
     get('prezentacije/:id', (_z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
-      return jeOdgovor(x) ? x : ok(x);
+      return jeOdgovor(x) ? x : ok(this.prezentacijaOdgovor(x));
     });
     put('prezentacije/:id', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
@@ -846,7 +1159,7 @@ export class MockApi {
         return x;
       }
       Object.assign(x, z.telo);
-      return ok(x);
+      return ok(this.prezentacijaOdgovor(x));
     });
     put('slajdovi/:id', (z, p) => {
       for (const pr of d.prezentacije) {
@@ -854,18 +1167,101 @@ export class MockApi {
         if (i >= 0) {
           const cmd = { ...(z.telo as UzivoSlajd & { slikaId?: string | null }) };
           delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
-          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd };
-          return ok(pr.slajdovi[i]);
+          if (cmd.tip === 'ZADATAK') {
+            const odbijeno = this.banka.proveriZadatak(pr.predmet.id, cmd.zadatak);
+            if (odbijeno) return odbijeno;
+          }
+          // puna zamena prelaza (i zadatka) kao na serveru: PUT bez `prelaz` ga briše (regresija F16)
+          pr.slajdovi[i] = { ...pr.slajdovi[i], ...cmd, prelaz: normalizujPrelaz(cmd.prelaz), zadatak: zadatakIzCmd(cmd) };
+          return ok(this.slajdOdgovor(pr.slajdovi[i]));
+        }
+      }
+      return greska(404, 'Slajd ne postoji.');
+    });
+    // nov slajd (editor: "+ Info", "+ Pitanje", "+ Platno", "Zadatak"): kao backend, na kraj ili odmah posle `?posle=`, prenumeracija
+    post('prezentacije/:id/slajdovi', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      if (x.slajdovi.length >= 200) {
+        return greska(400, 'Prezentacija može imati najviše 200 slajdova.');
+      }
+      const posle = z.query.get('posle');
+      const i = posle === null ? x.slajdovi.length - 1 : x.slajdovi.findIndex(s => s.id === Number(posle));
+      if (posle !== null && i < 0) {
+        return greska(400, 'Slajd posle kog se dodaje nije u ovoj prezentaciji.');
+      }
+      const cmd = z.telo as SlajdCmd;
+      if (cmd.tip === 'ZADATAK') {
+        const odbijeno = this.banka.proveriZadatak(x.predmet.id, cmd.zadatak);
+        if (odbijeno) return odbijeno;
+      }
+      const slajd = this.slajdIzCmd(cmd, this.sledeciId++);
+      x.slajdovi.splice(i + 1, 0, slajd);
+      x.slajdovi.forEach((s, rb) => (s.rb = rb + 1));
+      return { status: 201, telo: this.slajdOdgovor(slajd) };
+    });
+    del('slajdovi/:id', (_z, p) => {
+      for (const pr of d.prezentacije) {
+        const i = pr.slajdovi.findIndex(s => s.id === Number(p['id']));
+        if (i >= 0) {
+          pr.slajdovi.splice(i, 1);
+          pr.slajdovi.forEach((s, rb) => (s.rb = rb + 1));
+          return { status: 204 };
         }
       }
       return greska(404, 'Slajd ne postoji.');
     });
 
-    // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec
+    // banka zadataka (nastavnik, iza basic-auth-a): stablo i grupe, varijante, render, prilozi, preambula i pretraga (`mock-banka.ts`)
+    const b = this.banka;
+    get('banka/stablo', z => b.stablo(Number(z.query.get('predmetId')), z.query.get('namena')));
+    post('banka/grupe', z => b.kreirajGrupu(z.telo as GrupaCmd));
+    put('banka/grupe/redosled', z => {
+      const roditelj = z.query.get('roditeljId');
+      return b.redosled(Number(z.query.get('predmetId')), z.query.get('namena'), roditelj === null ? null : Number(roditelj), z.telo);
+    });
+    get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
+    put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
+    del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
+    post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
+    get('banka/grupe/:id/varijante', (z, p) => b.lista(Number(p['id']), z.query.get('status')));
+    post('banka/grupe/:id/varijante', (z, p) => b.kreirajVarijantu(Number(p['id']), z.telo as VarijantaCmd));
+    get('banka/varijante/:id', (_z, p) => b.varijantaDetalji(Number(p['id'])));
+    put('banka/varijante/:id', (z, p) => b.izmeniVarijantu(Number(p['id']), z.telo as VarijantaCmd));
+    del('banka/varijante/:id', (_z, p) => b.obrisiVarijantu(Number(p['id'])));
+    post('banka/varijante/:id/odobri', (_z, p) => b.promeniStatus(Number(p['id']), 'AKTIVNA'));
+    post('banka/varijante/:id/arhiviraj', (_z, p) => b.promeniStatus(Number(p['id']), 'ARHIVIRANA'));
+    post('banka/varijante/:id/vrati-u-nacrt', (_z, p) => b.promeniStatus(Number(p['id']), 'NACRT'));
+    post('banka/varijante/:id/render', (_z, p) => b.renderVarijante(Number(p['id'])));
+    post('banka/varijante/:id/dupliraj', (_z, p) => b.dupliraj(Number(p['id'])));
+    // živi pregled u editoru: `\foo` u tekstu ili rešenju je greška sa linijom, sve ostalo uspeva; 429/503 zamenom (`na`)
+    post('banka/render-proba', z => b.renderProba(z.telo as RenderProbaCmd));
+    post('banka/prilozi', z => otpremi(z, 'image/[a-z]+|application/pdf'));
+    get('predmeti/:id/latex-preambula', (_z, p) => b.preambula(Number(p['id'])));
+    put('predmeti/:id/latex-preambula', (z, p) => b.postaviPreambulu(Number(p['id']), z.telo as { preambula?: string | null } | null));
+    post('banka/predmeti/:id/renderuj-sve', (_z, p) => b.renderujSve(Number(p['id'])));
+    get('banka/pretraga', z => {
+      const r = b.pretraga(z.query);
+      return r.status ? r : strana(r.telo as BankaPretragaStavka[], z.query);
+    });
+    // Klodove serije (brojači i odbacivanje nacrta) i isključene teme predmeta
+    get('banka/serije', z => b.serije(z.query.get('predmetId')));
+    post('banka/serije/:serija/odbaci', (_z, p) => b.odbaciSeriju(decodeURIComponent(p['serija'])));
+    get('predmeti/:id/iskljucene-teme', (_z, p) => b.iskljuceneTeme(Number(p['id'])));
+    post('predmeti/:id/iskljucene-teme', (z, p) => b.iskljuciTemu(Number(p['id']), z.telo as IskljucenaTemaCmd | null));
+    del('iskljucene-teme/:id', (_z, p) => b.ukljuciTemu(Number(p['id'])));
+
+    // javni uživo (student): samo info po kodu, "ja" po kolačiću i prijava imenom; STOMP (`api/public/ws`) mokuje spec.
+    // Bodovan run (`prijavaObavezna`) bez prijavljenog studenta: prijava 403; prijavljen student ulazi pod svojim imenom
+    // (ukucano se ignoriše), kao `IdentitetStudenta` na serveru.
     const aktivnoZaKod = (kod: string) => d.izvodjenja.find(i => i.kod === kod && i.status === 'AKTIVNO');
     get('public/uzivo/:token', (_z, p) => {
       const i = aktivnoZaKod(p['token']);
-      return i ? ok({ naziv: i.naziv }) : greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
+      return i
+        ? ok({ naziv: i.naziv, prijavaObavezna: !!i.prijavaObavezna, prijavljenStudent: d.prijavljenStudent !== null })
+        : greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
     });
     get('public/uzivo/:token/ja', (_z, p) => {
       const i = aktivnoZaKod(p['token']);
@@ -877,9 +1273,127 @@ export class MockApi {
       if (!i) {
         return greska(404, 'Izvođenje sa tim kodom ne postoji ili je završeno.');
       }
-      const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime: (z.telo as { ime: string }).ime, izvodjenjeId: i.id };
+      if (i.prijavaObavezna && d.prijavljenStudent === null) {
+        return greska(403, 'Potrebna je prijava studenta.');
+      }
+      const ime = d.prijavljenStudent ?? (z.telo as { ime: string }).ime;
+      const ucesnik: Ucesnik = { ucesnikId: this.sledeciId++, ime, izvodjenjeId: i.id };
       d.ucesnici.push(ucesnik);
       return { status: 201, telo: ucesnik };
+    });
+
+    // nalog studenta (javno, spec prijave 5.1): isti odgovor na "kod" za svaki indeks; prijava samo kodom KOD_NALOGA za
+    // indeks studenta iz fiksture; `ja` i odjave traže kolačić studenta (`studentPrijavljen`)
+    const bezSesijeStudenta = () => greska(401, 'Potrebna je prijava.');
+    get('public/nalog/stanje', () => ok({ prijavljen: this.studentPrijavljen }));
+    post('public/nalog/kod', z => {
+      const indeks = String((z.telo as { indeks?: unknown } | null)?.indeks ?? '');
+      const maska = indeks === d.nalogStudenta.indeks ? d.nalogStudenta.maskaMejla : `${(indeks[0] ?? 'x').toLowerCase()}***@example.test`;
+      return ok({ poruka: 'Ako nalog postoji, kod je poslat.', maska });
+    });
+    post('public/nalog/prijava', z => {
+      const telo = z.telo as { indeks?: unknown; kod?: unknown } | null;
+      if (telo?.indeks !== d.nalogStudenta.indeks || telo.kod !== MockApi.KOD_NALOGA) {
+        return greska(401, 'Kod nije ispravan ili je istekao.');
+      }
+      this.studentPrijavljen = true;
+      const n = d.nalogStudenta;
+      n.uredjaji = [
+        { id: this.sledeciId++, opis: 'Linux · Chrome', nacin: 'KOD', prviUlaz: lokalnoVreme(new Date()), poslednjiUlaz: lokalnoVreme(new Date()), trenutni: true },
+        ...n.uredjaji.filter(u => !u.trenutni),
+      ];
+      return { status: 204 };
+    });
+    get('public/nalog/ja', () => (this.studentPrijavljen ? ok(d.nalogStudenta) : bezSesijeStudenta()));
+    post('public/nalog/odjava', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      this.studentPrijavljen = false;
+      d.nalogStudenta.uredjaji = d.nalogStudenta.uredjaji.filter(u => !u.trenutni);
+      return { status: 204 };
+    });
+    post('public/nalog/odjava-svuda', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      this.studentPrijavljen = false;
+      const odjavljeno = d.nalogStudenta.uredjaji.length;
+      d.nalogStudenta.uredjaji = [];
+      return ok({ odjavljeno });
+    });
+    post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
+    // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
+    get('public/lti/povezivanje', () =>
+      this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));
+    // povezivanje Moodle naloga (javno, STUDENT + `__Host-gfs_lti_par`, spec prijave 8.3): 401 bez studenta, 410 bez para, pa veza
+    post('public/lti/povezi', () => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      if (!this.moodlePar) {
+        return greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.');
+      }
+      this.moodlePar = false;
+      d.nalogStudenta.moodlePovezan = true;
+      return { status: 204 };
+    });
+
+    // registracije alata na Moodle-u (nastavnik, Podešavanja -> Moodle, spec prijave 8.1): adrese kao `LtiUrl` na serveru
+    // (samo https://, prazne se izvode iz issuer-a), duplikat trojke je 409
+    const ltiAdresa = (url: string, polje: string): string | Odgovor =>
+      /^https:\/\/[^\s/]\S*$/iu.test(url.trim()) ? url.trim() : greska(400, `${polje} mora biti adresa koja počinje sa https://.`);
+    const ltiRegistracija = (cmd: LtiRegistracijaCmd, id: number, kreirano: string): LtiRegistracijaInfo | Odgovor => {
+      const izdavac = ltiAdresa(cmd.izdavac ?? '', 'Izdavač (issuer)');
+      if (jeOdgovor(izdavac)) {
+        return izdavac;
+      }
+      const osnova = izdavac.replace(/\/+$/u, '');
+      const authUrl = ltiAdresa(cmd.authUrl?.trim() ? cmd.authUrl : `${osnova}/mod/lti/auth.php`, 'Auth URL');
+      const jwksUrl = ltiAdresa(cmd.jwksUrl?.trim() ? cmd.jwksUrl : `${osnova}/mod/lti/certs.php`, 'JWKS URL');
+      if (jeOdgovor(authUrl)) {
+        return authUrl;
+      }
+      if (jeOdgovor(jwksUrl)) {
+        return jwksUrl;
+      }
+      const r: LtiRegistracijaInfo = {
+        id, naziv: cmd.naziv.trim(), izdavac, clientId: cmd.clientId.trim(), deploymentId: cmd.deploymentId.trim(), authUrl, jwksUrl,
+        aktivna: cmd.aktivna, kreirano,
+      };
+      return d.ltiRegistracije.some(x => x.id !== id && x.izdavac === r.izdavac && x.clientId === r.clientId && x.deploymentId === r.deploymentId)
+        ? greska(409, 'Registracija za ovaj Moodle, Client ID i Deployment ID već postoji.')
+        : r;
+    };
+    get('lti/registracije', () => ok(d.ltiRegistracije));
+    get('lti/registracije/vrednosti', () => ok(d.ltiVrednosti));
+    post('lti/registracije', z => {
+      const r = ltiRegistracija(z.telo as LtiRegistracijaCmd, this.sledeciId++, lokalnoVreme(new Date()));
+      if (jeOdgovor(r)) {
+        return r;
+      }
+      d.ltiRegistracije.push(r);
+      return { status: 201, telo: r };
+    });
+    put('lti/registracije/:id', (z, p) => {
+      const postoji = nadji(d.ltiRegistracije, p['id'], 'Registracija');
+      if (jeOdgovor(postoji)) {
+        return postoji;
+      }
+      const r = ltiRegistracija(z.telo as LtiRegistracijaCmd, postoji.id, postoji.kreirano);
+      if (jeOdgovor(r)) {
+        return r;
+      }
+      Object.assign(postoji, r);
+      return ok(postoji);
+    });
+    del('lti/registracije/:id', (_z, p) => {
+      const postoji = nadji(d.ltiRegistracije, p['id'], 'Registracija');
+      if (jeOdgovor(postoji)) {
+        return postoji;
+      }
+      d.ltiRegistracije = d.ltiRegistracije.filter(x => x.id !== postoji.id);
+      return { status: 204 };
     });
 
     // nastavničko izvođenje (iza basic-auth-a): stanje i komande; snimci kroz STOMP idu preko `lazni-stomp.ts`
@@ -892,6 +1406,20 @@ export class MockApi {
       }
       const cmd = z.telo as { tip: string; vrednost?: number | null };
       return this.izvodjenje.primeni(cmd.tip, cmd.vrednost);
+    });
+    // potezi CRTEZ slojeva slajda (projektor i konzola, `PoteziCrteza`): kao backend, redom slojeva iz dokumenta slajda u
+    // fiksturi (prvo slajd izvođenja, pa prezentacije; snimak izvođenja ih nema, `bezPoteza`); prazno bez crteža, 404 bez
+    // slajda; broj zahteva: `brojZahtevaPoteza`
+    get('slajdovi/:id/potezi', (_z, p) => {
+      const id = Number(p['id']);
+      const sl = this.izvodjenje.slajdPoId(id) ?? d.prezentacije.flatMap(x => x.slajdovi).find(s => s.id === id);
+      if (!sl) {
+        return greska(404, 'Slajd ne postoji.');
+      }
+      const slojevi = (sl.platno as { slojevi?: Record<string, unknown>[] } | null)?.slojevi ?? [];
+      return ok(slojevi.filter(x => x['tip'] === 'CRTEZ').map(x => ({
+        slojId: x['id'], medijId: x['medijId'], sirina: x['sirina'], visina: x['visina'], potezi: x['potezi'] ?? null,
+      })));
     });
 
     return r;

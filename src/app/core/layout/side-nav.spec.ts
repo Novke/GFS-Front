@@ -18,6 +18,7 @@ describe('SideNav: istaknuta stavka', () => {
           { path: 'prezentacije', component: Prazno },
           { path: 'izvodjenja/:id/pregled', component: Prazno },
           { path: 'predavanja', component: Prazno },
+          { path: 'podesavanja/moodle', component: Prazno },
         ]),
       ],
     });
@@ -43,5 +44,15 @@ describe('SideNav: istaknuta stavka', () => {
     expect(stavka('Predavanja').classList).toContain('aktivna');
     expect(stavka('Prezentacije').classList).not.toContain('aktivna');
     expect(stavka('Prezentacije').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('sekcija "Podešavanja" sa stavkom "Moodle" (/podesavanja/moodle), istaknuta na toj stranici', async () => {
+    const { stavka } = await na('/podesavanja/moodle');
+    const nav = document.querySelector('app-side-nav') ?? stavka('Moodle').closest('nav')!;
+    expect([...nav.querySelectorAll('h2')].map(h => h.textContent?.trim())).toContain('Podešavanja');
+    expect(stavka('Moodle').getAttribute('href')).toBe('/podesavanja/moodle');
+    expect(stavka('Moodle').classList).toContain('aktivna');
+    expect(stavka('Moodle').getAttribute('aria-current')).toBe('page');
+    expect(stavka('Predavanja').classList).not.toContain('aktivna');
   });
 });

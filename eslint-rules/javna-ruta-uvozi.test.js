@@ -17,6 +17,7 @@ const opcije = (feature) => [{ feature, dozvoljeno: dozvoljenoZa(feature) }];
 const upis = path.join(APP, 'features/upis/pages/javni-upis.ts');
 const upisKoren = path.join(APP, 'features/upis/upis.api.ts');
 const uzivo = path.join(APP, 'features/uzivo/javno/pages/ekran.ts');
+const nalog = path.join(APP, 'features/nalog/pages/nalog.page.ts');
 
 new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta-uvozi', pravilo, {
   valid: [
@@ -38,6 +39,13 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "import { a } from '../../ui/rang-lista.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from 'src/app/features/uzivo/ui/tajmer.component';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from '../../uzivo-putanje';", filename: uzivo, options: opcije('features/uzivo/javno') },
+    // nalog studenta: sopstveni moduli, zajednički spisak (i `shared/util/nazad`) i sopstveni dodatak
+    { code: "import { NalogApi } from '../data-access/nalog.api';", filename: nalog, options: opcije('features/nalog') },
+    { code: "import { KodKorak } from '../ui/kod-korak.component';", filename: nalog, options: opcije('features/nalog') },
+    { code: "import { bezbednoNazad } from '../../../shared/util/nazad';", filename: nalog, options: opcije('features/nalog') },
+    { code: "import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';", filename: nalog, options: opcije('features/nalog') },
+    { code: "import { formatDatum } from '../../../shared/util/datum.pipe';", filename: nalog, options: opcije('features/nalog') },
+    { code: "import { bezbednoNazad } from '../../../shared/util/nazad';", filename: upis, options: opcije('features/upis') },
     // paketi van spiska zabranjenih su slobodni; granica imena paketa je '/', ne prefiks
     { code: "import { marked } from 'marked';", filename: uzivo, options: opcije('features/uzivo/javno') },
     { code: "import { a } from 'fflatex';", filename: uzivo, options: opcije('features/uzivo/javno') },
@@ -87,6 +95,18 @@ new RuleTester({ languageOptions: { parser: tseslint.parser } }).run('javna-ruta
     { code: "export * from 'fflate';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjenPaket' }] },
     { code: "import { unzipSync } from 'fflate';", filename: uzivo, options: [{ feature: 'features/uzivo/javno' }], errors: [{ messageId: 'zabranjenPaket' }] },
     { code: "import { E } from '@tiptap/core';", filename: uzivo, options: [{ feature: 'features/uzivo/javno', zabranjeniPaketi: ['@tiptap/*'] }], errors: [{ messageId: 'zabranjenPaket' }] },
+    // nalog studenta: ništa nastavničko (store-ovi, nastavnički API, kartica studenta), ni drugi javni feature
+    { code: "import { S } from '../../../core/state/obavestenja.store';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { S } from '../../../core/state/notification.store';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { S } from '../../../core/api/studenti.api';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { S } from '../../../core/auth/sesija.store';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { S } from '../../studenti/pages/student-profil';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "const m = () => import('../../studenti/studenti.routes');", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../upis/upis.pravila';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { a } from '../../uzivo/javno/javno.api';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjen' }] },
+    { code: "import { unzipSync } from 'fflate';", filename: nalog, options: opcije('features/nalog'), errors: [{ messageId: 'zabranjenPaket' }] },
+    // dodatak naloga (ConfirmDialog, datum) ne važi za upis
+    { code: "import { C } from '../../../shared/ui/confirm-dialog';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
     // dodatak uživa ne važi za upis
     { code: "import { a } from '../../uzivo/data-access/uzivo.models';", filename: upis, options: opcije('features/upis'), errors: [{ messageId: 'zabranjen' }] },
   ],

@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -58,7 +60,9 @@ describe('PublikaPage', () => {
 
   async function prikazi() {
     TestBed.configureTestingModule({
-      providers: [{ provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+      providers: [
+        provideHttpClient(), provideHttpClientTesting(),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
     });
     TestBed.overrideComponent(PublikaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
     const fixture = TestBed.createComponent(PublikaPage);
@@ -166,7 +170,9 @@ describe('PublikaPage', () => {
         sledeciSlajd: platnoSlajd({ id: 31 }),
       }));
       TestBed.configureTestingModule({
-        providers: [{ provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
+        providers: [
+          provideHttpClient(), provideHttpClientTesting(),
+          { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '5' })) } }],
       });
       TestBed.overrideComponent(PublikaPage, { set: { providers: [{ provide: IzvodjenjeStore, useValue: lazniStore }] } });
       const f = TestBed.createComponent(PublikaPage);
@@ -199,6 +205,19 @@ describe('PublikaPage', () => {
         sledeciSlajd: platnoSlajd({ platno: p }) }));
       await osvezi(f);
       expect(ucitane).toContain(medijUrl('pub-pozadina'));
+    });
+
+    it('formula bez slike na sledećem slajdu: unapred stil formula (MathLive) iako trenutni slajd nema formulu', async () => {
+      vi.stubGlobal('Image', class { set src(v: string) { /* bez mreže */ } });
+      const linkovi = () => document.head.querySelectorAll('link[data-gfs="mathlive"]');
+      lazniStore.stanje.set(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), sledeciSlajd: infoSlajd() }));
+      const f = await prikazi();
+      expect(linkovi().length).toBe(0);
+      // fabričko platno ima FORMULA x^2 bez slike izvora
+      lazniStore.stanje.set(stanje({ verzija: 2, prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(),
+        sledeciSlajd: platnoSlajd() }));
+      await osvezi(f);
+      expect(linkovi().length).toBe(1);
     });
   });
 });

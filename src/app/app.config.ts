@@ -9,6 +9,7 @@ import { provideRouter, TitleStrategy, withComponentInputBinding } from '@angula
 
 import { routes } from './app.routes';
 import { errorInterceptor } from './core/api/error.interceptor';
+import { sesijaInterceptor } from './core/auth/sesija.interceptor';
 import { registrujIkone } from './core/layout/icons';
 import { GfsTitleStrategy } from './core/title-strategy';
 import { PreferencesStore } from './core/state/preferences.store';
@@ -23,7 +24,7 @@ export const appConfig: ApplicationConfig = {
     { provide: LOCALE_ID, useValue: 'sr-Latn' },
     { provide: MAT_DATE_LOCALE, useValue: 'sr-Latn' },
     provideNativeDateAdapter(),
-    provideHttpClient(withXhr(), withInterceptors([errorInterceptor]), withInterceptorsFromDi()),
+    provideHttpClient(withXhr(), withInterceptors([sesijaInterceptor, errorInterceptor]), withInterceptorsFromDi()),
     provideAppInitializer(() => {
       registrujIkone(inject(MatIconRegistry), inject(DomSanitizer));
       // Store odmah preuzima data-mode od inline skripte iz index.html i prati promenu sistemske teme.

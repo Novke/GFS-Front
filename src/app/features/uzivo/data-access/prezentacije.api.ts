@@ -4,7 +4,7 @@ import { Observable, map } from 'rxjs';
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
 import {
-  CreatePrezentacijaCmd, GrupaKratko, MedijInfo, PredavanjeZaPokretanje, PredmetKratko, PrezentacijaDetails,
+  CreatePrezentacijaCmd, GrupaKratko, MedijInfo, PoteziSloja, PredavanjeZaPokretanje, PredmetKratko, PrezentacijaDetails,
   PrezentacijaInfo, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, UvozSlajdovaCmd,
 } from './uzivo.models';
 
@@ -67,6 +67,11 @@ export class PrezentacijeApi {
 
   duplirajSlajd(slajdId: number): Observable<SlajdDetails> {
     return this.http.post<SlajdDetails>(`${this.api}/slajdovi/${slajdId}/dupliraj`, null, { context: this.context });
+  }
+
+  /** Potezi CRTEZ slojeva slajda (projektor i konzola; snimak izvođenja ih ne nosi). Prazno za slajd bez crteža, 404 bez slajda. */
+  potezi(slajdId: number): Observable<PoteziSloja[]> {
+    return this.http.get<PoteziSloja[]>(`${this.api}/slajdovi/${slajdId}/potezi`, { context: this.context });
   }
 
   /** `slajdIds` mora biti tačna permutacija postojećih slajdova, inače 400. */

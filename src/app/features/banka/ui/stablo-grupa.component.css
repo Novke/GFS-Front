@@ -1,0 +1,108 @@
+/* Stablo grupa banke (app-stablo-grupa): redovi sa uvlakom po dubini, izbor, fokus, polje za naziv, bedževi i meni. */
+
+.bk-stablo,
+.bk-stablo ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bk-stablo { padding: 4px 6px 8px; }
+
+.bk-stavka { outline: none; }
+
+.bk-stavka:focus-visible > .bk-red {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.bk-red {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 2px 0 calc(4px + var(--bk-dubina, 0) * 18px);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.bk-red:hover { background: var(--surface-2); }
+
+/* isključena tema: prigušeno (--muted ima 4.7:1 i na --surface-2); izbor ispod ima prednost (na --primary-soft bi bilo < 4.5:1) */
+.bk-red.bk-iskljucen { color: var(--muted); }
+
+.bk-red.bk-izabran {
+  background: var(--primary-soft);
+  color: var(--primary-soft-ink);
+  font-weight: 600;
+}
+
+.bk-strelica {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+}
+
+.bk-izabran .bk-strelica { color: inherit; }
+.bk-strelica .mat-icon { width: 20px; height: 20px; }
+
+.bk-naziv {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bk-preimenuj {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.bk-preimenuj:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+
+.bk-bedzevi {
+  flex: none;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.bk-bedz {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 4px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.bk-bedz .mat-icon { width: 14px; height: 14px; }
+.bk-bedz-aktivne { background: var(--ok-soft); color: var(--ok); }
+.bk-bedz-claude,
+.bk-bedz-iskljuceno { padding: 0 6px; font-family: var(--font); }
+.bk-bedz-iskljuceno { background: none; box-shadow: inset 0 0 0 1px currentColor; color: inherit; }
+/* jedini signal u stablu: ćilibar Nacrta */
+.bk-bedz-greske { background: var(--accent); color: var(--accent-ink); }
+
+.bk-meni-dugme.mat-mdc-icon-button {
+  flex: none;
+  color: var(--muted);
+}
+
+.bk-izabran .bk-meni-dugme.mat-mdc-icon-button { color: inherit; }
+
+@media (max-width: 599.98px) {
+  .bk-red { min-height: 44px; }
+}

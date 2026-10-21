@@ -1,7 +1,7 @@
 # GFS-Front
 
 Angular 22 frontend za sistem Građevinskog fakulteta Subotica (evidencija predavanja, domaćih, testova i predlog ocena,
-interaktivne prezentacije uživo) sa dve javne studentske stranice: prijava u grupu (`upis/:token`) i uživo (`uzivo`, `uzivo/:kod`).
+interaktivne prezentacije uživo, banka zadataka u LaTeX-u) sa dve javne studentske stranice: prijava u grupu (`upis/:token`) i uživo (`uzivo`, `uzivo/:kod`).
 
 ## Pokretanje
 

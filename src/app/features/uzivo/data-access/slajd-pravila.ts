@@ -1,7 +1,10 @@
 import {
-  MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda,
+  MedijInfo, OpcijaCmd, OpcijaDetails, PitanjeCmd, PitanjeDetails, Prelaz, SlajdCmd, SlajdDetails, TipPitanja, TipSlajda, ZadatakSlajda,
+  ZadatakSlajdaInfo,
 } from './uzivo.models';
 import type { NazivIkone } from '../../../core/layout/icons';
+import type { Platno } from './platno.models';
+import { greskePlatna, prekoGranica } from './platno-provera';
 
 /**
  * Pravila editora slajdova: podrazumevane vrednosti, prevođenje SlajdDetails <-> SlajdCmd i klijentska validacija.
@@ -18,6 +21,11 @@ export const MIN_VREME = 5;
 export const MAX_VREME = 600;
 /** Podrazumevano vreme kad nastavnik uključi ograničenje. */
 export const PODRAZUMEVANO_VREME = 20;
+/** Broj različitih zadataka na Zadatak slajdu (`SlajdPP.MIN_BROJ_VARIJANTI`, `MAX_BROJ_VARIJANTI`); `null` = sve aktivne. */
+export const MIN_BROJ_VARIJANTI = 1;
+export const MAX_BROJ_VARIJANTI = 50;
+/** Trajanje prelaza u ms (`SlajdPP.MIN_PRELAZ_MS`, `MAX_PRELAZ_MS`, `PODRAZUMEVANO_PRELAZ_MS`). */
+export const PRELAZ = { min: 100, max: 5000, podrazumevano: 500 } as const;
 
 const MAX_NASLOV = 300;
 const MAX_SADRZAJ = 20_000;
@@ -55,6 +63,9 @@ export const PORUKE = {
   brojSlajdova: 'Prezentacija može imati najviše 200 slajdova.',
   naziv: 'Naziv je obavezan (najviše 200 znakova).',
   opis: 'Opis može imati najviše 1000 znakova.',
+  prelaz: 'Trajanje prelaza mora biti od 0,1 do 5 sekundi.',
+  zadatakBezGrupe: 'Zadatak slajd mora imati grupu zadataka.',
+  brojVarijanti: 'Broj različitih zadataka mora biti od 1 do 50.',
 } as const;
 
 export interface TipPitanjaOpis { readonly tip: TipPitanja; readonly naziv: string; readonly ikona: NazivIkone; }
@@ -96,6 +107,24 @@ function nijeKonacan(n: number | null | undefined): boolean {
   return n !== null && n !== undefined && !Number.isFinite(n);
 }
 
+/** Ceo broj u granicama ili `null`/`undefined` (bez ograničenja); `NaN` iz neispravnog unosa je greška. */
+function vanGranica(n: number | null | undefined, min: number, max: number): boolean {
+  return n !== null && n !== undefined && (!Number.isInteger(n) || n < min || n > max);
+}
+
+/**
+ * Greške Zadatak slajda (posle zajedničkih), istim redom i tekstom kao `SlajdPP.proveri` za ZADATAK: grupa, vreme (kao kod pitanja),
+ * broj različitih. Postojanje grupe, predmet i namenu proverava samo server (400).
+ */
+function greskeZadatka(z: ZadatakSlajda | null | undefined): string[] {
+  if (!z) return [PORUKE.zadatakBezGrupe];
+  const greske: string[] = [];
+  if (z.grupaId === null || z.grupaId === undefined) greske.push(PORUKE.zadatakBezGrupe);
+  if (vanGranica(z.vremeSekunde, MIN_VREME, MAX_VREME)) greske.push(PORUKE.vreme);
+  if (vanGranica(z.brojVarijanti, MIN_BROJ_VARIJANTI, MAX_BROJ_VARIJANTI)) greske.push(PORUKE.brojVarijanti);
+  return greske;
+}
+
 /** Greške pitanja, istim redom i tekstom kao `SlajdPP.proveri(PitanjeCmd)`; prazan niz = ispravno. */
 export function greskePitanja(p: PitanjeCmd): string[] {
   if (!p.tip) {
@@ -106,8 +135,7 @@ export function greskePitanja(p: PitanjeCmd): string[] {
   if (!tekst || duzina(tekst) > MAX_TEKST_PITANJA) {
     greske.push(PORUKE.tekstPitanja);
   }
-  const v = p.vremeSekunde;
-  if (v !== null && v !== undefined && (!Number.isInteger(v) || v < MIN_VREME || v > MAX_VREME)) {
+  if (vanGranica(p.vremeSekunde, MIN_VREME, MAX_VREME)) {
     greske.push(PORUKE.vreme);
   }
   const opcije = p.opcije ?? [];
@@ -160,6 +188,21 @@ export function greskePitanja(p: PitanjeCmd): string[] {
   return greske;
 }
 
+/**
+ * Trajanje prelaza iz polja "Trajanje (s)" (tekst, ne `type="number"`: decimalni zarez bi tamo dao prazno polje): zarez ili
+ * tačka; prazan ili neispravan unos daje 0 ms, pa `PORUKE.prelaz`.
+ */
+export function trajanjeIzSekundi(tekst: string): number {
+  const t = tekst.trim().replace(',', '.');
+  return /^(\d+(\.\d*)?|\.\d+)$/.test(t) ? Math.round(Number(t) * 1000) : 0;
+}
+
+/** Isto kao `SlajdPP.normalizuj(Prelaz)`: bez efekta -> null, FADE bez smera, inače DESNO, trajanje 500. */
+export function normalizujPrelaz(p: Prelaz | null | undefined): Prelaz | null {
+  if (!p?.efekat) return null;
+  return { efekat: p.efekat, smer: p.efekat === 'FADE' ? null : (p.smer ?? 'DESNO'), trajanjeMs: p.trajanjeMs ?? PRELAZ.podrazumevano };
+}
+
 /** Greške celog slajda, istim redom kao `SlajdPP.proveri(SlajdCmd)`. */
 export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (!cmd?.tip) {
@@ -169,8 +212,14 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
   if (duzina(ociscen(cmd.naslov)) > MAX_NASLOV) greske.push(PORUKE.naslov);
   if (duzina(ociscen(cmd.sadrzaj)) > MAX_SADRZAJ) greske.push(PORUKE.sadrzaj);
   if (duzina(ociscen(cmd.beleske)) > MAX_BELESKE) greske.push(PORUKE.beleske);
+  // prelaz važi za svaki tip (server ga proverava posle beleški, pre grane po tipu)
+  const pr = normalizujPrelaz(cmd.prelaz);
+  if (pr && (!Number.isInteger(pr.trajanjeMs) || pr.trajanjeMs < PRELAZ.min || pr.trajanjeMs > PRELAZ.max)) greske.push(PORUKE.prelaz);
   if (cmd.tip === 'PLATNO') {
-    return cmd.platno ? greske : [...greske, PORUKE.bezPlatna];
+    // jeftino (lista slajdova je računa za svaki slajd pri svakoj izmeni): samo brojevi; puna provera je u greskeSlajdaZaSlanje
+    if (!cmd.platno) return [...greske, PORUKE.bezPlatna];
+    const g = prekoGranica(cmd.platno);
+    return g ? [...greske, g] : greske;
   }
   if (cmd.tip === 'INFO') {
     if (prazan(cmd.naslov) && prazan(cmd.sadrzaj) && prazan(cmd.slikaId)) {
@@ -178,10 +227,21 @@ export function greskeSlajda(cmd: SlajdCmd): string[] {
     }
     return greske;
   }
+  if (cmd.tip === 'ZADATAK') {
+    return [...greske, ...greskeZadatka(cmd.zadatak)];
+  }
   if (!cmd.pitanje) {
     return [...greske, PORUKE.bezPitanja];
   }
   return [...greske, ...greskePitanja(cmd.pitanje)];
+}
+
+/** Pred slanje (`EditorStore`): sve iz `greskeSlajda` i puna provera dokumenta platna kao na serveru (uključujući 1 MB). */
+export function greskeSlajdaZaSlanje(cmd: SlajdCmd): string[] {
+  const greske = greskeSlajda(cmd);
+  if (greske.length || cmd?.tip !== 'PLATNO' || !cmd.platno) return greske;
+  const g = greskePlatna(cmd.platno);
+  return g ? [g] : [];
 }
 
 /** Greške naziva i opisa prezentacije (isto kao `PrezentacijaService`). */
@@ -219,11 +279,27 @@ export function novoPitanje(tip: TipPitanja, tekst = ''): PitanjeCmd {
   };
 }
 
-/** Komanda za nov slajd (`dodaj`): INFO je prazan, PITANJE ima podrazumevano pitanje izabranog tipa. */
-export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN'): SlajdCmd {
+/**
+ * Komanda za nov slajd (`dodaj`): INFO je prazan, PITANJE ima podrazumevano pitanje izabranog tipa, PLATNO nosi dati
+ * dokument (`novoPlatno` iz teme prezentacije), ZADATAK dati zadatak (izabranu grupu).
+ */
+export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN', platno: Platno | null = null,
+                          zadatak: ZadatakSlajda | null = null): SlajdCmd {
   return {
     tip, naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false,
-    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: null,
+    pitanje: tip === 'PITANJE' ? novoPitanje(tipPitanja) : null, platno: tip === 'PLATNO' ? platno : null, prelaz: null,
+    zadatak: tip === 'ZADATAK' ? zadatak : null,
+  };
+}
+
+/**
+ * Lokalni opis Zadatak slajda dok server ne odgovori (nova ili promenjena grupa): naziv, putanju, kandidate, polja i upozorenja
+ * zna samo server (`ZadatakSlajdaInfo`).
+ */
+export function prazanZadatakInfo(z: ZadatakSlajda): ZadatakSlajdaInfo {
+  return {
+    grupaId: z.grupaId, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, grupaNaziv: null, putanja: [], list: false,
+    brojAktivnihVarijanti: 0, polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
   };
 }
 
@@ -267,7 +343,20 @@ export function slajdUCmd(s: SlajdDetails): SlajdCmd {
     postepeno: s.postepeno, pitanje: s.pitanje ? pitanjeUCmd(s.pitanje) : null,
     // platno ide nazad neizmenjeno: PUT iz starog toka (beleške, naslov) ne sme da obriše slojeve PLATNO slajda
     platno: s.platno,
+    // isto za prelaz (PUT je puna zamena, odluka 10): komanda bez njega bi ga obrisala; JSON bez polja -> null
+    prelaz: s.prelaz ?? null,
+    // komanda nosi samo izbor; opis (naziv, putanja, kandidati, upozorenja) računa server
+    zadatak: s.tip === 'ZADATAK' && s.zadatak
+      ? { grupaId: s.zadatak.grupaId, vremeSekunde: s.zadatak.vremeSekunde, brojVarijanti: s.zadatak.brojVarijanti }
+      : null,
   };
+}
+
+/** Ista grupa: opis sa servera ostaje (menjaju se samo vreme i broj); druga grupa: prazan opis dok server ne odgovori. */
+function zadatakIzCmd(z: ZadatakSlajda, staro: ZadatakSlajdaInfo | null | undefined): ZadatakSlajdaInfo {
+  return staro && staro.grupaId === z.grupaId
+    ? { ...staro, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti }
+    : prazanZadatakInfo(z);
 }
 
 function slika(id: string | null, postojeca: MedijInfo | null | undefined): MedijInfo | null {
@@ -295,25 +384,39 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
       skalaMinOznaka: p.skalaMinOznaka, skalaMaxOznaka: p.skalaMaxOznaka,
     } : null,
     platno: cmd.tip === 'PLATNO' ? cmd.platno : null,
+    prelaz: normalizujPrelaz(cmd.prelaz),
+    zadatak: cmd.tip === 'ZADATAK' && cmd.zadatak ? zadatakIzCmd(cmd.zadatak, osnova.zadatak) : null,
   };
 }
 
-/** Kratka oznaka slajda za listu: naslov ili početak teksta (bez Markdown znakova). */
+/**
+ * Kratka oznaka slajda za listu: naslov ili početak teksta (bez Markdown znakova). U tekstu pitanja `$...$` je formula
+ * (5a), pa `_` i `*` u njoj ostaju (`$1011_2$`, ne `$10112$`); INFO ne tumači `$` (kao `renderMarkdown`).
+ */
 export function oznakaSlajda(s: SlajdDetails, max = 60): string {
   if (s.tip === 'PLATNO') {
     return platnoOznaka(s, max);
   }
-  const izvor = s.tip === 'PITANJE' ? s.pitanje?.tekst : s.naslov || s.sadrzaj;
+  if (s.tip === 'ZADATAK') {
+    const naziv = s.zadatak?.grupaNaziv?.trim();
+    return skrati(naziv ? `Zadatak: ${naziv}` : 'Zadatak', max);
+  }
+  const pitanje = s.tip === 'PITANJE';
+  const izvor = pitanje ? s.pitanje?.tekst : s.naslov || s.sadrzaj;
   const tekst = (izvor ?? '')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')            // slike
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')         // veze -> tekst
     .replace(/^\s*(?:#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '') // naslovi, citati, stavke liste
-    .replace(/[*_`~]+/g, '')
+    .replace(/(\$[^$\n]+\$)|[*_`~]+/g, (_, f?: string) => (!f ? '' : pitanje ? f : f.replace(/[*_`~]+/g, '')))
     .replace(/\s+/g, ' ')
     .trim();
   if (!tekst) {
     return s.tip === 'PITANJE' ? 'Novo pitanje' : s.slika ? 'Slika' : 'Nov slajd';
   }
+  return skrati(tekst, max);
+}
+
+function skrati(tekst: string, max: number): string {
   return duzina(tekst) > max ? [...tekst].slice(0, max - 1).join('') + '…' : tekst;
 }
 
@@ -325,5 +428,5 @@ function platnoOznaka(s: SlajdDetails, max: number): string {
     : undefined;
   const tekst = (deo?.tekst ?? '').replace(/\s+/g, ' ').trim();
   if (!tekst) return 'Platno';
-  return duzina(tekst) > max ? [...tekst].slice(0, max - 1).join('') + '…' : tekst;
+  return skrati(tekst, max);
 }

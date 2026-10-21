@@ -97,6 +97,13 @@ export interface GrupaPregledInfo {
   prosecnaPrisutnost: number | null;
   otvorenOnboarding: OtvorenaSesija | null;
   studenti: GrupaStudentStat[];
+  /** Link za poziv u WhatsApp grupu (`https://chat.whatsapp.com/...`) ili `null`; stariji backend ga ne šalje. */
+  waLink?: string | null;
+}
+
+/** Odgovor `PATCH grupe/{id}/wa-link`: sačuvan (kanonski) link ili `null` kad je uklonjen. */
+export interface WaLinkInfo {
+  waLink: string | null;
 }
 
 export type TipAktivnostiMatrice = 'PRISUSTVO' | 'ZADATAK' | 'SA_ZVEZDICOM';
@@ -149,6 +156,25 @@ export function emailoviZaKopiranje(studenti: readonly Pick<StudentInfo, 'email'
 
 /** Separator adresa za klijente pošte (Outlook prihvata `;`, ostali i `;` i `,`). */
 export const SEPARATOR_EMAILOVA = '; ';
+
+/**
+ * `mailto:` sa WhatsApp linkom za sve adrese u BCC-u (studenti ne vide tuđe adrese): otvara nastavnikov klijent pošte
+ * (Gmail na telefonu) sa gotovim nacrtom, a nastavnik samo pošalje. Po RFC 6068: vrednosti percent-enkodovane, adrese
+ * odvojene zarezom, novi red `%0D%0A`.
+ */
+export function mailtoWaLinka(adrese: readonly string[], nazivGrupe: string, waLink: string): string {
+  const naslov = `WhatsApp grupa ${nazivGrupe}`;
+  const telo = [
+    'Pozdrav,',
+    '',
+    `link za WhatsApp grupu ${nazivGrupe}, gde stižu obaveštenja za predmet:`,
+    waLink,
+    '',
+    'Link otvori na telefonu na kom je WhatsApp.',
+  ].join('\r\n');
+  const bcc = adrese.map(a => encodeURIComponent(a)).join(',');
+  return `mailto:?bcc=${bcc}&subject=${encodeURIComponent(naslov)}&body=${encodeURIComponent(telo)}`;
+}
 
 /** Grupe u koje se student može premestiti: sve osim trenutne, po nazivu. */
 export function grupeZaPremestanje(grupe: readonly GrupaInfo[], trenutnaId: number | null): GrupaInfo[] {

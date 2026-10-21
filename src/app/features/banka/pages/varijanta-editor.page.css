@@ -1,0 +1,109 @@
+/*
+ * Editor varijante: zaglavlje (putanja, status, dugmad), traka greške, napredak ili šta nedostaje, pa tri kolone od 1100 px
+ * (LaTeX | pregled | odgovori i prilozi), ispod jedna ispod druge. Pregled je lepljiv dok se skroluje dugačak tekst ili šema.
+ * Boje samo kroz tokene.
+ */
+
+:host { display: block; }
+
+.bk-ve-kontekst {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.bk-ve-putanja {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-ve-putanja li + li::before { content: "›"; margin: 0 6px 0 4px; }
+.bk-ve-veza { color: var(--primary); overflow-wrap: anywhere; }
+.bk-ve-putanja .bk-ve-veza { text-decoration: none; }
+.bk-ve-putanja .bk-ve-veza:hover { text-decoration: underline; }
+
+.bk-ve-akcije {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bk-ve-upozorenje {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+
+.bk-ve-upozorenje > .mat-icon { flex: none; color: var(--warn); }
+
+.bk-ve-napredak { margin-bottom: 6px; }
+
+/* živa oblast ostaje u DOM-u i kad je prazna, samo bez razmaka */
+.bk-ve-status {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-ve-status:empty { margin: 0; }
+
+.bk-ve-nedostaje {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-ve-mreza {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.bk-ve-kolona {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lista-kartica.bk-ve-kolona,
+.bk-ve-odeljak { padding: 14px 16px 16px; }
+
+.bk-ve-desno { gap: 16px; }
+
+.bk-ve-odeljak {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bk-ve-podnaslov { margin: 0; font-size: 17px; }
+.bk-ve-naziv { width: 100%; }
+.bk-ve-kartice { min-width: 0; }
+.bk-ve-kartice app-latex-editor { padding-top: 12px; }
+.bk-ve-greska-kartice { color: var(--danger); font-weight: 600; }
+.bk-ve-pregledi { gap: 20px; }
+
+@media (min-width: 1100px) {
+  .bk-ve-mreza { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .9fr); }
+  .bk-ve-pregledi { position: sticky; top: 16px; }
+}
+
+@media (max-width: 599.98px) {
+  .bk-ve-akcije .mat-mdc-button-base { min-height: 44px; }
+}

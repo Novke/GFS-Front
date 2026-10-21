@@ -1,0 +1,427 @@
+{
+ "_napomena": "Banka zadataka (izmišljen sadržaj): predmet 1; PREDAVANJE: 'Konverzije brojeva' -> '2 → 10' (3 varijante: NACRT/OK, AKTIVNA/OK sa rešenjem, NACRT/GRESKA u tekstu, linija 3), '16 → 2' (1 AKTIVNA, polja TEKST i JEDAN_TACAN), '8 → 2 (Klod)' (Klodova grupa serije uvoz-kol1-2024: 15 AKTIVNA ručna, 16-18 Klodovi nacrti serije, 16 zamenjuje 15) i 'Razlomljeni brojevi (demo)' (bez varijanti, isključena tema 1); tema 2 je isključena bez grupe. TEST je prazno. Bez preambula (podrazumevana).",
+ "grupe": [
+  {
+   "id": 1,
+   "predmetId": 1,
+   "roditeljId": null,
+   "namena": "PREDAVANJE",
+   "naziv": "Konverzije brojeva",
+   "opis": "Prevođenje između brojnih sistema (izmišljen primer).",
+   "rb": 1,
+   "tezina": null,
+   "uputstvo": null,
+   "polja": [],
+   "izmenjeno": "2026-10-15T09:00:00",
+   "izvor": "RUCNO",
+   "serija": null
+  },
+  {
+   "id": 2,
+   "predmetId": 1,
+   "roditeljId": 1,
+   "namena": "PREDAVANJE",
+   "naziv": "2 → 10",
+   "opis": "Binarni broj u dekadni.",
+   "rb": 1,
+   "tezina": 2,
+   "uputstvo": "Kratki zadaci sa jednim binarnim brojem do 8 cifara.",
+   "polja": [
+    {
+     "kljuc": "a",
+     "oznaka": "Vrednost u dekadnom sistemu",
+     "tip": "BROJ",
+     "odstupanje": 0.0,
+     "odstupanjeTip": "APSOLUTNO",
+     "jedinica": null,
+     "zanemariVelicinu": true,
+     "zanemariRazmake": true,
+     "opcije": null
+    }
+   ],
+   "izmenjeno": "2026-10-15T09:05:00",
+   "izvor": "RUCNO",
+   "serija": null
+  },
+  {
+   "id": 3,
+   "predmetId": 1,
+   "roditeljId": 1,
+   "namena": "PREDAVANJE",
+   "naziv": "16 → 2",
+   "opis": null,
+   "rb": 2,
+   "tezina": 3,
+   "uputstvo": null,
+   "polja": [
+    {
+     "kljuc": "a",
+     "oznaka": "Binarni zapis",
+     "tip": "TEKST",
+     "odstupanje": 0.0,
+     "odstupanjeTip": "APSOLUTNO",
+     "jedinica": null,
+     "zanemariVelicinu": true,
+     "zanemariRazmake": true,
+     "opcije": null
+    },
+    {
+     "kljuc": "b",
+     "oznaka": "Broj cifara binarnog zapisa",
+     "tip": "JEDAN_TACAN",
+     "odstupanje": 0.0,
+     "odstupanjeTip": "APSOLUTNO",
+     "jedinica": null,
+     "zanemariVelicinu": true,
+     "zanemariRazmake": true,
+     "opcije": [
+      {
+       "id": 1,
+       "tekst": "4"
+      },
+      {
+       "id": 2,
+       "tekst": "8"
+      },
+      {
+       "id": 3,
+       "tekst": "12"
+      }
+     ]
+    }
+   ],
+   "izmenjeno": "2026-10-15T09:10:00",
+   "izvor": "RUCNO",
+   "serija": null
+  },
+  {
+   "id": 4,
+   "predmetId": 1,
+   "roditeljId": 1,
+   "namena": "PREDAVANJE",
+   "naziv": "8 → 2 (Klod)",
+   "opis": "Oktalni broj u binarni (Klodov uvoz iz kolokvijuma, izmišljen primer).",
+   "rb": 3,
+   "tezina": 2,
+   "uputstvo": null,
+   "polja": [
+    {
+     "kljuc": "a",
+     "oznaka": "Binarni zapis",
+     "tip": "TEKST",
+     "odstupanje": 0.0,
+     "odstupanjeTip": "APSOLUTNO",
+     "jedinica": null,
+     "zanemariVelicinu": true,
+     "zanemariRazmake": true,
+     "opcije": null
+    }
+   ],
+   "izmenjeno": "2026-10-18T10:00:00",
+   "izvor": "CLAUDE",
+   "serija": "uvoz-kol1-2024"
+  },
+  {
+   "id": 5,
+   "predmetId": 1,
+   "roditeljId": 1,
+   "namena": "PREDAVANJE",
+   "naziv": "Razlomljeni brojevi (demo)",
+   "opis": "Decimalni razlomci između brojnih sistema (izmišljen primer).",
+   "rb": 4,
+   "tezina": 3,
+   "uputstvo": null,
+   "polja": [
+    {
+     "kljuc": "a",
+     "oznaka": "Vrednost u dekadnom sistemu",
+     "tip": "BROJ",
+     "odstupanje": 0.01,
+     "odstupanjeTip": "APSOLUTNO",
+     "jedinica": null,
+     "zanemariVelicinu": true,
+     "zanemariRazmake": true,
+     "opcije": null
+    }
+   ],
+   "izmenjeno": "2026-10-17T12:00:00",
+   "izvor": "RUCNO",
+   "serija": null
+  }
+ ],
+ "varijante": [
+  {
+   "id": 11,
+   "grupaId": 2,
+   "rb": 1,
+   "naziv": "1011 u dekadni",
+   "tekst": "Pretvori binarni broj $1011_2$ u dekadni.",
+   "resenje": null,
+   "odgovori": {
+    "a": {
+     "broj": 11.0,
+     "prihvatljivi": null,
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "NACRT",
+   "izvor": "RUCNO",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000011",
+   "resenjeSvgId": null,
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-15T10:00:00",
+   "izmenjeno": "2026-10-15T10:00:00",
+   "ikadOdobrena": false,
+   "zamenjuje": null,
+   "serija": null
+  },
+  {
+   "id": 12,
+   "grupaId": 2,
+   "rb": 2,
+   "naziv": "110010 u dekadni",
+   "tekst": "Pretvori binarni broj $110010_2$ u dekadni.",
+   "resenje": "Cifre množimo stepenima dvojke: $32+16+2=50$.",
+   "odgovori": {
+    "a": {
+     "broj": 50.0,
+     "prihvatljivi": null,
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "AKTIVNA",
+   "izvor": "RUCNO",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000012",
+   "resenjeSvgId": "b0000000-0000-4000-8000-000000000112",
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-15T10:00:00",
+   "izmenjeno": "2026-10-15T10:00:00",
+   "ikadOdobrena": true,
+   "zamenjuje": null,
+   "serija": null
+  },
+  {
+   "id": 13,
+   "grupaId": 2,
+   "rb": 3,
+   "naziv": "100111 u dekadni",
+   "tekst": "Pretvori binarni broj\n$100111_2$\n\\foo u dekadni.",
+   "resenje": null,
+   "odgovori": {
+    "a": {
+     "broj": 39.0,
+     "prihvatljivi": null,
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "NACRT",
+   "izvor": "RUCNO",
+   "renderStatus": "GRESKA",
+   "svgId": null,
+   "resenjeSvgId": null,
+   "renderGreska": {
+    "linija": 3,
+    "poruka": "Undefined control sequence \\foo"
+   },
+   "renderDeo": "tekst",
+   "kreirano": "2026-10-15T10:00:00",
+   "izmenjeno": "2026-10-15T10:00:00",
+   "ikadOdobrena": false,
+   "zamenjuje": null,
+   "serija": null
+  },
+  {
+   "id": 14,
+   "grupaId": 3,
+   "rb": 1,
+   "naziv": "AF u binarni",
+   "tekst": "Pretvori heksadekadni broj $\\mathrm{AF}_{16}$ u binarni.",
+   "resenje": null,
+   "odgovori": {
+    "a": {
+     "broj": null,
+     "prihvatljivi": [
+      "10101111"
+     ],
+     "tacna": null,
+     "tacne": null
+    },
+    "b": {
+     "broj": null,
+     "prihvatljivi": null,
+     "tacna": 2,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "AKTIVNA",
+   "izvor": "RUCNO",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000014",
+   "resenjeSvgId": null,
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-15T10:00:00",
+   "izmenjeno": "2026-10-15T10:00:00",
+   "ikadOdobrena": true,
+   "zamenjuje": null,
+   "serija": null
+  },
+  {
+   "id": 15,
+   "grupaId": 4,
+   "rb": 1,
+   "naziv": "17 u binarni",
+   "tekst": "Pretvori oktalni broj $17_8$ u binarni.",
+   "resenje": "Svaka oktalna cifra daje tri binarne: $1 \\to 001$, $7 \\to 111$.",
+   "odgovori": {
+    "a": {
+     "broj": null,
+     "prihvatljivi": [
+      "1111",
+      "001111"
+     ],
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "AKTIVNA",
+   "izvor": "RUCNO",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000015",
+   "resenjeSvgId": "b0000000-0000-4000-8000-000000000115",
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-16T09:00:00",
+   "izmenjeno": "2026-10-16T09:00:00",
+   "ikadOdobrena": true,
+   "zamenjuje": null,
+   "serija": null
+  },
+  {
+   "id": 16,
+   "grupaId": 4,
+   "rb": 2,
+   "naziv": "Kol. 1, 2024/25, zad. 2",
+   "tekst": "Pretvori oktalni broj $17_8$ u binarni zapis bez vodećih nula.",
+   "resenje": "Cifre $1$ i $7$ daju $001$ i $111$; bez vodećih nula ostaje $1111$.",
+   "odgovori": {
+    "a": {
+     "broj": null,
+     "prihvatljivi": [
+      "1111"
+     ],
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "NACRT",
+   "izvor": "CLAUDE",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000016",
+   "resenjeSvgId": "b0000000-0000-4000-8000-000000000116",
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-18T10:10:00",
+   "izmenjeno": "2026-10-18T10:10:00",
+   "ikadOdobrena": false,
+   "zamenjuje": 15,
+   "serija": "uvoz-kol1-2024"
+  },
+  {
+   "id": 17,
+   "grupaId": 4,
+   "rb": 3,
+   "naziv": "Kol. 1, 2024/25, zad. 3",
+   "tekst": "Pretvori oktalni broj $345_8$ u binarni.",
+   "resenje": null,
+   "odgovori": {
+    "a": {
+     "broj": null,
+     "prihvatljivi": [
+      "11100101"
+     ],
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "NACRT",
+   "izvor": "CLAUDE",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000017",
+   "resenjeSvgId": null,
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-18T10:20:00",
+   "izmenjeno": "2026-10-18T10:20:00",
+   "ikadOdobrena": false,
+   "zamenjuje": null,
+   "serija": "uvoz-kol1-2024"
+  },
+  {
+   "id": 18,
+   "grupaId": 4,
+   "rb": 4,
+   "naziv": "Kol. 1, 2024/25, zad. 4",
+   "tekst": "Pretvori oktalni broj $1072_8$ u binarni.",
+   "resenje": null,
+   "odgovori": {
+    "a": {
+     "broj": null,
+     "prihvatljivi": [
+      "1000111010"
+     ],
+     "tacna": null,
+     "tacne": null
+    }
+   },
+   "prilozi": [],
+   "status": "NACRT",
+   "izvor": "CLAUDE",
+   "renderStatus": "OK",
+   "svgId": "b0000000-0000-4000-8000-000000000018",
+   "resenjeSvgId": null,
+   "renderGreska": null,
+   "renderDeo": null,
+   "kreirano": "2026-10-18T10:30:00",
+   "izmenjeno": "2026-10-18T10:30:00",
+   "ikadOdobrena": false,
+   "zamenjuje": null,
+   "serija": "uvoz-kol1-2024"
+  }
+ ],
+ "iskljuceneTeme": [
+  {
+   "id": 1,
+   "predmetId": 1,
+   "opis": "Razlomljeni (decimalni) brojevi 10 → 2 i 2 → 10",
+   "grupaId": 5,
+   "izvor": "CLAUDE",
+   "serija": "uvoz-kol1-2024",
+   "kreirano": "2026-10-18T10:40:00"
+  },
+  {
+   "id": 2,
+   "predmetId": 1,
+   "opis": "Brojni sistemi sa osnovom 3 i 5 (nisu u gradivu)",
+   "grupaId": null,
+   "izvor": "RUCNO",
+   "serija": null,
+   "kreirano": "2026-10-17T12:00:00"
+  }
+ ],
+ "preambule": {}
+}

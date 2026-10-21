@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output, signal, untracked } from '@angular/core';
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import { OpcijaOblikComponent, oblikOpcije } from '../ui/opcija-oblik';
+import { TekstFormuleComponent } from '../ui/tekst-formule.component';
+import { tekstZaCitac } from '../ui/tekst-formule';
 
 /** Isto pravilo kao `Normalizacija.broj` na serveru: razmaci su razdvajači hiljada, decimalni znak tačka ili zarez. */
 const BROJ = /^[+-]?\d+([.,]\d+)?$/;
@@ -49,7 +51,8 @@ export function tekstOpcije(p: JavnoPitanje, indeks: number): string | null {
 function oznakaOpcije(p: JavnoPitanje, indeks: number): string {
   const o = oblikOpcije(indeks);
   const t = tekstOpcije(p, indeks);
-  return `${o.slovo}, ${o.naziv}` + (t ? `: ${t}` : '');
+  // čitač ekrana dobija tekst bez `$` ("A, crveni trougao: 1011_2"); vidljiv tekst (sa formulom) je aria-hidden
+  return `${o.slovo}, ${o.naziv}` + (t ? `: ${tekstZaCitac(t)}` : '');
 }
 
 const SKALA = [1, 2, 3, 4, 5] as const;
@@ -68,7 +71,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
 @Component({
   selector: 'app-odgovor-unos',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OpcijaOblikComponent],
+  imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-st-unos', '[class.uz-st-unos--celo]': 'celoPitanje()' },
   template: `
     @let p = pitanje();
@@ -119,7 +122,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
                     [attr.aria-pressed]="p.tip === 'VISE_TACNIH' ? izabrane().includes(o.id) : null"
                     [attr.aria-label]="oznaka(i)" (click)="dodir(o.id)">
               <app-opcija-oblik [indeks]="i" aria-hidden="true" />
-              @if (tekst1(i); as t) { <span class="uz-st-opcija-tekst" aria-hidden="true">{{ t }}</span> }
+              @if (tekst1(i); as t) { <app-tekst-formule class="uz-st-opcija-tekst" aria-hidden="true" [tekst]="t" /> }
               @if (p.tip === 'VISE_TACNIH') {
                 <span class="uz-st-opcija-kvacica" aria-hidden="true">{{ izabrane().includes(o.id) ? '✓' : '' }}</span>
               }

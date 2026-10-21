@@ -7,7 +7,7 @@ export const IME_PPTX = 'statika-uvod.pptx';
 
 /**
  * Dva slajda: 1 = naslov + tekst sa 2 pasusa koji se otkrivaju na klik + slika sa efektom 6 (Circle, uvoz ga zamenjuje
- * sa FADE i upozorava); 2 = naslov + ista slika + beleške. Ista slika na oba slajda ide na server jednom.
+ * sa FADE i upozorava); 2 = naslov + ista slika + beleške + prelaz Push nagore (`spd="med"`). Ista slika na oba slajda ide na server jednom.
  */
 export function uzorakPptx(): { name: string; mimeType: string; buffer: Buffer } {
   const slika = { id: 'rIdI', tip: 'image', cilj: '../media/image1.png' };
@@ -29,6 +29,8 @@ export function uzorakPptx(): { name: string; mimeType: string; buffer: Buffer }
           + oblik.slika(3, 'rIdI', 838200, 1905000, 2540000, 2540000),
         veze: [slika],
         beleske: pasus('Pokazati primer na tabli.'),
+        // prelaz (5e): Push nagore, srednja brzina -> GURANJE odozdo, 750 ms
+        prelaz: '<p:transition spd="med"><p:push dir="u"/></p:transition>',
       },
     ],
     delovi: { 'ppt/media/image1.png': PNG_1X1 },

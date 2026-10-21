@@ -13,21 +13,25 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { distinctUntilChanged, from, map, switchMap } from 'rxjs';
+import { Observable, distinctUntilChanged, finalize, from, map, of, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
+import { greskePlatna } from '../data-access/platno-provera';
 import { razlogGreske } from '../data-access/razlog-greske';
-import { TIPOVI_PITANJA, opisTipa, oznakaSlajda } from '../data-access/slajd-pravila';
-import { IzvodjenjeInfo, PokreniCmd, SlajdDetails, UpdatePrezentacijaCmd } from '../data-access/uzivo.models';
-import { brojKoraka } from '../data-access/platno-koraci';
+import { TIPOVI_PITANJA, opisTipa, oznakaSlajda, slajdUCmd } from '../data-access/slajd-pravila';
+import { IzvodjenjeInfo, PokreniCmd, PrezentacijaDetails, SlajdCmd, SlajdDetails, UpdatePrezentacijaCmd, medijUrl } from '../data-access/uzivo.models';
 import type { Tema } from '../data-access/platno.models';
 import { kodSaRazmakom } from '../ui/format';
+import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
+import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
+import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component';
+import { UvozPdfOtvarac } from './uvoz-pdf-otvarac';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -39,9 +43,9 @@ import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
 /**
- * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje"), u sredini
+ * Editor prezentacije (spec 6.3): levo lista slajdova (CDK drag-drop, meni po slajdu, "+ Info", "+ Pitanje", "+ Platno" (meni: Prazno, Naslov i tekst), "Zadatak" (izbor grupe iz banke)), u sredini
  * forma izabranog slajda, desno živi pregled istom komponentom kao projektor (uvek dnevne boje, `rezim-dan uz-dan`). Ispod
- * 1200 px pregled ide ispod forme. Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
+ * 1200 px pregled ide ispod forme. PLATNO slajd: iznad forme je lenji editor platna (`@defer`), bez bočnog pregleda (koraci su u režimu "Pregled" editora, F18). Zaglavlje: naziv i opis (izmena na mestu), indikator čuvanja, Izvođenja, Dupliraj,
  * Obriši, Pokreni; traka za izvođenje u toku; podešavanja u panelu. Ctrl+S čuva odmah.
  */
 @Component({
@@ -51,6 +55,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
   imports: [
     CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatExpansionModule, MatIconModule, MatMenuModule,
     MatProgressBarModule, MatRadioModule, MatSlideToggleModule, SlajdFormaComponent, SlajdPrikazComponent,
+    // samo u @defer bloku: kompajler pravi dinamički uvoz, editor platna je zaseban (lenj) chunk
+    PlatnoEditorComponent,
   ],
   host: {
     '(document:keydown)': 'tastatura($event)',
@@ -119,7 +125,8 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             </mat-slide-toggle>
             <div class="uz-ed-grupa">
               <span class="uz-ed-oznaka-grupe" id="uz-ed-tema">Tema</span>
-              <mat-radio-group aria-labelledby="uz-ed-tema" [value]="vazeca(p.tema)" (change)="podesi({ tema: $event.value })">
+              <mat-radio-group aria-labelledby="uz-ed-tema" aria-describedby="uz-ed-tema-napomena" [value]="vazeca(p.tema)"
+                               (change)="podesi({ tema: $event.value })">
                 @for (t of teme; track t.tema) {
                   <mat-radio-button [value]="t.tema">
                     <span class="uz-ed-tema-naziv">{{ t.naziv }}</span>
@@ -132,11 +139,14 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 }
               </mat-radio-group>
             </div>
+            <!-- odluka 23: model nosi eksplicitne boje i fontove, pa tema ne prebojava postojeće slojeve -->
+            <p class="uz-ed-napomena" id="uz-ed-tema-napomena">Tema menja izgled Info i Pitanje slajdova i podrazumevane
+              boje i fontove novih slojeva platna; postojeći slojevi zadržavaju svoje boje i fontove.</p>
             <p class="uz-ed-napomena">Režim telefona i „Detalji“ menjaju se i uživo (tasteri M i D).</p>
           </div>
         </mat-expansion-panel>
 
-        <div class="uz-ed-telo">
+        <div class="uz-ed-telo" [class.uz-ed-telo--platno]="store.izabrani()?.tip === 'PLATNO'">
           <nav class="uz-ed-lista" aria-label="Slajdovi">
             <ol class="uz-ed-slajdovi" cdkDropList (cdkDropListDropped)="spusteno($event)">
               @for (s of store.slajdovi(); track store.kljuc(s.id); let i = $index) {
@@ -145,6 +155,13 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                   <mat-icon class="uz-ed-rucka" cdkDragHandle aria-hidden="true" svgIcon="drag_indicator" />
                   <button class="uz-ed-stavka-dugme" type="button" (click)="store.izaberi(s.id)"
                           [attr.aria-current]="s.id === store.izabraniId() ? 'true' : null">
+                    <span class="uz-ed-slicica rezim-dan uz-dan" aria-hidden="true" inert>
+                      @defer (on viewport) {
+                        <app-slajd-prikaz [slajd]="slicica(s)" [tema]="vazeca(p.tema)" [korak]="0" />
+                      } @placeholder {
+                        <span class="uz-ed-slicica-mesto"></span>
+                      }
+                    </span>
                     <span class="uz-ed-rb">{{ s.rb }}</span>
                     <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)" [svgIcon]="ikona(s)" />
                     <span class="uz-ed-oznaka">{{ oznaka(s) }}</span>
@@ -158,13 +175,17 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
               }
             </ol>
             @if (!store.slajdovi().length) {
-              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd ili pitanje.</p>
+              <p class="uz-ed-napomena">Prezentacija još nema slajdova. Dodaj info slajd, pitanje, platno ili zadatak.</p>
             }
             <div class="uz-ed-dodaj">
               <button mat-stroked-button type="button" (click)="store.dodaj('INFO')"><mat-icon svgIcon="add" />Info</button>
               <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPitanja"><mat-icon svgIcon="add" />Pitanje</button>
+              <button mat-stroked-button type="button" [matMenuTriggerFor]="meniPlatna"><mat-icon svgIcon="layers" />Platno</button>
+              <button mat-stroked-button type="button" (click)="dodajZadatak()"><mat-icon svgIcon="assignment" />Zadatak</button>
               <button mat-stroked-button type="button" aria-label="Uvezi iz PowerPointa" title="Uvezi iz PowerPointa"
                       [disabled]="radi()" disabledInteractive (click)="uveziIzPowerPointa()"><mat-icon svgIcon="upload_file" />PowerPoint</button>
+              <button mat-stroked-button type="button" aria-label="Uvezi iz PDF-a" title="Uvezi iz PDF-a"
+                      [disabled]="radi()" disabledInteractive (click)="uveziIzPdf()"><mat-icon svgIcon="picture_as_pdf" />PDF</button>
             </div>
           </nav>
 
@@ -174,6 +195,10 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                 <mat-icon [svgIcon]="t.ikona" />{{ t.naziv }}
               </button>
             }
+          </mat-menu>
+          <mat-menu #meniPlatna="matMenu">
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO')">Prazno</button>
+            <button mat-menu-item type="button" (click)="store.dodaj('PLATNO', undefined, 'NASLOV_I_TEKST')">Naslov i tekst</button>
           </mat-menu>
           <mat-menu #meniSlajda="matMenu">
             <ng-template matMenuContent let-s="s" let-i="i">
@@ -189,32 +214,34 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </mat-menu>
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
-            @for (s of izabraniNiz(); track store.kljuc(s.id)) {
-              <app-slajd-forma [slajd]="s" (izmena)="store.izmeniSlajd(s.id, $event)" />
+            @for (s of izabraniNiz(); track store.kljuc(s.id) + ':' + s.tip) {
+              <!-- jedna instanca editora po slajdu (track kljuc: ista i kad nacrt dobije pravi id); lenj chunk; promena tipa
+                   (Pretvori u platno, Poništi) pravi novu formu i editor, jer forma gradi kontrole jednom -->
+              @if (s.tip === 'PLATNO' && s.platno) {
+                @defer (on immediate) {
+                  <app-platno-editor [slajd]="s" [tema]="vazeca(p.tema)" />
+                } @loading (after 150ms; minimum 300ms) {
+                  <mat-progress-bar mode="indeterminate" aria-label="Učitavanje editora platna" />
+                } @error {
+                  <p class="uz-ed-greska" role="alert">Editor platna nije učitan. Osveži stranicu i pokušaj ponovo.</p>
+                }
+              }
+              <app-slajd-forma [slajd]="s" [predmetId]="p.predmet.id" (izmena)="izmenaForme(s.id, $event)" (pretvori)="pretvoriUPlatno(s)"
+                               (pregledPrelaza)="pregledajPrelaz(s)" />
             } @empty {
               <p class="uz-ed-napomena">Izaberi slajd levo ili dodaj nov.</p>
             }
           </section>
 
-          <aside class="uz-ed-pregled" aria-label="Pregled slajda">
-            @if (store.izabrani(); as s) {
-              <div class="rezim-dan uz-dan uz-ed-platno">
-                <app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" [korak]="korak()" [animacija]="animacijaPregleda()" />
-              </div>
-              @if (s.tip === 'PLATNO') {
-                <div class="uz-ed-koraci">
-                  <button mat-stroked-button type="button" [disabled]="korak() <= 0" (click)="pomeriKorak(-1)">
-                    <mat-icon svgIcon="arrow_back" />Korak nazad
-                  </button>
-                  <span class="uz-ed-korak" role="status">Korak {{ korak() }} / {{ ukupnoKoraka() }}</span>
-                  <button mat-stroked-button type="button" [disabled]="korak() >= ukupnoKoraka()" (click)="pomeriKorak(1)">
-                    Korak napred<mat-icon svgIcon="arrow_forward" />
-                  </button>
-                </div>
-              }
-              <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+          <!-- PLATNO: bez bočnog pregleda, koraci i animacije su u režimu "Pregled" editora platna (F18) -->
+          @if (store.izabrani(); as s) {
+            @if (s.tip !== 'PLATNO') {
+              <aside class="uz-ed-pregled" aria-label="Pregled slajda">
+                <div class="rezim-dan uz-dan uz-ed-platno"><app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" /></div>
+                <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+              </aside>
             }
-          </aside>
+          }
         </div>
       </div>
     } @else if (store.greska(); as g) {
@@ -237,34 +264,37 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   private readonly obavestenja = inject(NotificationStore);
   private readonly mrvice = inject(BreadcrumbService);
   private readonly otvaracUvoza = inject(UvozPptxOtvarac);
+  private readonly otvaracPdf = inject(UvozPdfOtvarac);
+  private readonly izborGrupe = inject(IzborGrupeOtvarac);
   private readonly greske = inject(ErrorHandler);
   private readonly registar = inject(RegistarCuvanja);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly dimenzije = inject(DIMENZIJE_SLIKE);
+  /** Pretvaranje je zaseban lenj chunk (odluka 21): stranica editora ne raste. */
+  protected ucitajPretvaranje = () => import('../data-access/pretvori-u-platno');
+  /** Ključevi (`kljuc`) slajdova čije pretvaranje u platno upravo traje (od klika do potvrde, odustajanja ili greške). */
+  private readonly pretvaranja = new Set<number>();
 
   protected readonly rute = UzivoPutanje;
   protected readonly tipovi = TIPOVI_PITANJA;
   protected readonly kod = kodSaRazmakom;
   protected readonly oznaka = (s: SlajdDetails) => oznakaSlajda(s, 48);
   protected readonly teme = Object.values(TEME);
+  private readonly slicice = new WeakMap<SlajdDetails, SlajdDetails>();
+  /** Slajd za sličicu: PLATNO bez animacija (svi slojevi vidljivi), ostali isti objekat; keš po objektu slajda. */
+  protected slicica(s: SlajdDetails): SlajdDetails {
+    if (s.tip !== 'PLATNO' || !s.platno) return s;
+    let k = this.slicice.get(s);
+    if (!k) {
+      k = { ...s, platno: { ...s.platno, animacije: [] } };
+      this.slicice.set(s, k);
+    }
+    return k;
+  }
   protected readonly vazeca = (t: Tema | null | undefined) => vazecaTema(t);
   protected readonly promenljive = promenljiveTeme;
-  /** Korak pregleda PLATNO slajda, vezan za slajd: promena izabranog slajda ga vraća na 0. */
-  private readonly korakSlajda = signal<{ id: number; k: number } | null>(null);
-  protected readonly ukupnoKoraka = computed(() => {
-    const p = this.store.izabrani()?.platno;
-    return p ? brojKoraka(p) : 0;
-  });
-  protected readonly korak = computed(() => {
-    const s = this.store.izabrani();
-    const k = this.korakSlajda();
-    // izmena slajda može smanjiti broj koraka: korak se ograničava
-    return s && k?.id === s.id ? Math.min(k.k, this.ukupnoKoraka()) : 0;
-  });
-  /** Animacija pregleda: nov ključ pri svakom "Korak napred" (grupa = novi korak); nazad i promena slajda je gase. */
-  protected readonly animacijaPregleda = signal<{ kljuc: number; grupa: number } | null>(null);
-  private brojacAnimacije = 0;
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
   /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje, uvoz). */
   protected readonly radi = signal(false);
@@ -293,14 +323,6 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
         this.aktivno.set(null);
         if (id > 0) this.store.ucitaj(id);
       });
-    // Promena izabranog slajda vraća korak pregleda na 0 (i kad se posle vraćanja izabere isti slajd).
-    effect(() => {
-      this.store.izabraniId();
-      untracked(() => {
-        this.korakSlajda.set(null);
-        this.animacijaPregleda.set(null);
-      });
-    });
     effect(onCleanup => {
       const id = this.aktivnoZa();
       if (id === null) return;
@@ -315,30 +337,51 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     });
   }
 
-  /** Nepotpuni nacrti i neispravni slajdovi: store ih ne šalje, pa bi se napuštanjem izgubili (ispravne izmene šalje sam). */
-  private nesacuvaniSlajdovi(): number {
-    return this.store.slajdovi().filter(s => s.id < 0 || this.store.neispravni().has(s.id)).length;
+  /**
+   * Nepotpuni slajdovi (novi i postojeći): store ih ne šalje, pa bi se napuštanjem izgubile njihove izmene. Ispravne izmene i
+   * nacrte store šalje sam i posle napuštanja (i izmenu nacrta stiglu dok njegov POST traje), pa se ovde ne broje; ako
+   * takav upis ne uspe kad editor više nije na ekranu, store to javlja globalnom porukom.
+   */
+  private nepotpuni(): { novi: number; postojeci: number } {
+    const neispravni = this.store.neispravni();
+    const lista = this.store.slajdovi().filter(s => neispravni.has(s.id));
+    const novi = lista.filter(s => s.id < 0).length;
+    return { novi, postojeci: lista.length - novi };
   }
 
-  /** Dijalog uvoza upravo šalje slike ili slajdove (sesija `uvoz-<id>` u `RegistarCuvanja`). */
-  private uvozUToku(): boolean {
+  private nesacuvaniSlajdovi(): number {
+    const { novi, postojeci } = this.nepotpuni();
+    return novi + postojeci;
+  }
+
+  /** Dijalog uvoza upravo šalje (sesija `uvoz-<id>` ili `uvoz-pdf-<id>` u `RegistarCuvanja`): odakle je uvoz, ili `null`. */
+  private uvozUToku(): string | null {
     const p = this.store.prezentacija();
-    return !!p && this.registar.zauzet(`uvoz-${p.id}`);
+    if (!p) return null;
+    return this.registar.zauzet(`uvoz-${p.id}`) ? 'PowerPointa' : this.registar.zauzet(`uvoz-pdf-${p.id}`) ? 'PDF-a' : null;
   }
 
   /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
   imaNesacuvanihIzmena(): boolean {
-    return this.nesacuvaniSlajdovi() > 0 || this.uvozUToku();
+    return this.nesacuvaniSlajdovi() > 0 || !!this.uvozUToku();
   }
 
   tekstNapustanja(): string {
     const delovi: string[] = [];
-    if (this.uvozUToku()) {
-      delovi.push('Uvoz iz PowerPointa još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.');
+    const uvoz = this.uvozUToku();
+    if (uvoz) {
+      delovi.push(`Uvoz iz ${uvoz} još traje i završiće se i ako napustiš editor. Prozor uvoza ostaje otvoren dok se uvoz ne završi.`);
     }
-    if (this.nesacuvaniSlajdovi() > 0) {
-      delovi.push(`Nesačuvanih slajdova: ${this.nesacuvaniSlajdovi()} (nisu potpuni, vidi upozorenja u listi). `
-        + 'Ako napustiš editor, odbacuju se.');
+    const { novi, postojeci } = this.nepotpuni();
+    if (novi + postojeci > 0) {
+      const posledice: string[] = [];
+      if (novi) posledice.push(novi === 1 ? 'novi slajd se ne pravi' : 'novi slajdovi se ne prave');
+      if (postojeci) {
+        const ostaje = postojeci === 1 ? 'ostaje u poslednjoj sačuvanoj verziji' : 'ostaju u poslednjoj sačuvanoj verziji';
+        posledice.push(novi ? `a postojeći ${ostaje}` : `${postojeci === 1 ? 'slajd' : 'slajdovi'} ${ostaje}`);
+      }
+      delovi.push(`Nesačuvanih slajdova: ${novi + postojeci} (nisu potpuni, vidi upozorenja u listi). `
+        + `Ako napustiš editor, ${posledice.join(', ')}.`);
     }
     return delovi.join(' ');
   }
@@ -350,29 +393,135 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     }
   }
 
+  /** Zatvaranje ili osvežavanje kartice: otvorena sesija editora platna prvo ide u dokument, pa se proverava šta je nesačuvano. */
   protected preIzlaska(e: BeforeUnloadEvent): void {
+    this.store.isprazni();
     if (this.store.imaNesacuvano()) {
       this.store.sacuvajOdmah();
       e.preventDefault();
     }
   }
 
-  protected ikona(s: SlajdDetails): NazivIkone {
-    if (s.tip === 'PLATNO') return 'layers';
-    return s.tip === 'PITANJE' && s.pitanje ? opisTipa(s.pitanje.tip).ikona : 'article';
+  /**
+   * Izmena iz forme slajda. PLATNO: forma menja samo beleške, a dokument platna uvek ide iz store-a (forma pamti platno
+   * iz trenutka pravljenja, a editor platna ga menja nezavisno od nje).
+   */
+  protected izmenaForme(id: number, cmd: SlajdCmd): void {
+    const platno = cmd.tip === 'PLATNO' ? this.store.izabrani()?.platno ?? cmd.platno : cmd.platno;
+    this.store.izmeniSlajd(id, { ...cmd, platno });
   }
 
-  protected pomeriKorak(razlika: number): void {
-    const s = this.store.izabrani();
-    if (!s) return;
-    const novi = Math.max(0, Math.min(this.ukupnoKoraka(), this.korak() + razlika));
-    this.korakSlajda.set({ id: s.id, k: novi });
-    this.animacijaPregleda.set(razlika > 0 && novi > 0 ? { kljuc: ++this.brojacAnimacije, grupa: novi } : null);
+  /**
+   * INFO -> PLATNO (odluka 20): jedna izmena slajda; potvrda samo uz gubitke; "Poništi pretvaranje" je druga izmena istim
+   * putem i vraća INFO komandu iz trenutka pretvaranja (sa beleškama otkucanim posle njega). Jedno pretvaranje po slajdu od
+   * klika do ishoda (`pretvaranja`: drugi klik ne otvara drugi dijalog). Posle čekanja na chunk važi slajd iz store-a
+   * (kucanje za to vreme, nacrt sa pravim id-jem); ako više nije INFO ili je editor napušten, ništa. Dokument koji
+   * `proveriKaoServer` odbija se ne primenjuje (poruka sa razlogom). Fokus posle promene tipa ide na stavku slajda u listi,
+   * a posle poništavanja na "Pretvori u platno" (forma i editor se prave ponovo, fokus bi pao na body).
+   */
+  protected async pretvoriUPlatno(s: SlajdDetails): Promise<void> {
+    const k = this.store.kljuc(s.id);
+    if (this.pretvaranja.has(k)) return;
+    this.pretvaranja.add(k);
+    const kraj = () => this.pretvaranja.delete(k);
+    const nadji = () => this.store.slajdovi().find(x => this.store.kljuc(x.id) === k);
+    const trenutni = () => {
+      const t = nadji();
+      return t?.tip === 'INFO' && !this.destroyRef.destroyed ? t : null;
+    };
+    let dalje = false;
+    try {
+      // merenje slike najviše 3 s (zahtev koji visi), pa 16:9
+      const [modul, dim] = await Promise.all([
+        this.ucitajPretvaranje(),
+        s.slika ? Promise.race([this.dimenzije(medijUrl(s.slika.id)).catch(() => null), new Promise<null>(r => setTimeout(r, 3000, null))]) : null,
+      ]);
+      const t = trenutni();
+      const p = this.store.prezentacija();
+      if (!t || !p) return;
+      const original = slajdUCmd(t);
+      // veličina važi samo za sliku za koju je merena
+      const d = t.slika?.id === s.slika?.id ? dim : null;
+      const slika = t.slika && { id: t.slika.id, naziv: t.slika.naziv, sirina: d?.sirina ?? 1600, visina: d?.visina ?? 900 };
+      const r = modul.infoUPlatno({ naslov: t.naslov, sadrzaj: t.sadrzaj, postepeno: t.postepeno, slika }, vazecaTema(p.tema));
+      // dokument koji server ne bi primio (npr. > 400 stavki uz "Otkrivaj stavke") se ne pravi: INFO ostaje netaknut
+      const odbijeno = greskePlatna(r.platno);
+      if (odbijeno) {
+        this.obavestenja.greska(`Slajd ne može da se pretvori u platno: ${odbijeno}`);
+        return;
+      }
+      const nastavi$ = r.gubici.length === 0 ? of(true) : ConfirmDialog.otvori(this.dialog, {
+        naslov: 'Pretvoriti slajd u platno?',
+        tekst: ['Deo sadržaja se ne prenosi tačno:', ...r.gubici.map(g => modul.OPISI_GUBITAKA[g]), 'Posle pretvaranja možeš da poništiš.'],
+        potvrdi: 'Pretvori',
+      });
+      dalje = true;
+      nastavi$.pipe(finalize(kraj)).subscribe(da => {
+        if (!da || !trenutni()) return;
+        this.store.izmeniSlajd(t.id, {
+          ...original, tip: 'PLATNO', naslov: null, sadrzaj: null, slikaId: null, postepeno: false, pitanje: null, platno: r.platno,
+        });
+        this.fokusiraj(k, '.uz-ed-stavka-dugme[aria-current="true"]');
+        this.obavestenja.uspeh('Slajd je pretvoren u platno.', {
+          label: 'Poništi pretvaranje',
+          run: () => {
+            // uništen store više ne čuva (sesija je zatvorena pri napuštanju)
+            if (this.destroyRef.destroyed) {
+              this.obavestenja.info('Editor je zatvoren, pa pretvaranje više ne može da se poništi.');
+              return;
+            }
+            this.store.isprazni(); // otvoren tekst ili gest editora platna ide u dokument pre vraćanja (odluka 9c faze 4)
+            // beleške i prelaz su isti u oba tipa: ostaje ono što je izmenjeno posle pretvaranja (PUT bez prelaza bi ga
+            // obrisao, a forma platna ga menja); slika sa pravim nazivom do odgovora
+            const sada = nadji();
+            this.store.izmeniSlajd(t.id, {
+              ...original, beleske: sada?.beleske ?? original.beleske, prelaz: sada ? sada.prelaz ?? null : original.prelaz,
+            }, t.slika);
+            this.fokusiraj(k, 'app-slajd-forma .uz-ed-pretvori');
+          },
+        }, { grupa: 'uzivo-pretvori' });
+      });
+    } catch (e) {
+      // neučitan chunk ili izuzetak pretvaranja: INFO ostaje
+      this.greske.handleError(e);
+      this.obavestenja.greska('Pretvaranje nije uspelo. Osveži stranicu i pokušaj ponovo.');
+    } finally {
+      if (!dalje) kraj();
+    }
+  }
+
+  /** Posle sledećeg crtanja fokus na `selektor` u stranici, ako je slajd `k` i dalje izabran (inače bi otišao na drugi). */
+  private fokusiraj(k: number, selektor: string): void {
+    afterNextRender(() => {
+      const id = this.store.izabraniId();
+      if (id !== null && this.store.kljuc(id) === k) this.host.nativeElement.querySelector<HTMLElement>(selektor)?.focus();
+    }, { injector: this.injector });
+  }
+
+  protected ikona(s: SlajdDetails): NazivIkone {
+    if (s.tip === 'PLATNO') return 'layers';
+    if (s.tip === 'ZADATAK') return 'assignment';
+    return s.tip === 'PITANJE' && s.pitanje ? opisTipa(s.pitanje.tip).ikona : 'article';
   }
 
   protected nazivTipa(s: SlajdDetails): string {
     if (s.tip === 'PLATNO') return 'Platno';
+    if (s.tip === 'ZADATAK') return 'Zadatak';
     return s.tip === 'PITANJE' && s.pitanje ? `Pitanje: ${opisTipa(s.pitanje.tip).naziv}` : 'Info slajd';
+  }
+
+  /**
+   * "Zadatak": izbor čvora iz banke predmeta prezentacije (lenji dijalog, jedan u isto vreme), pa nov Zadatak slajd posle
+   * slajda koji je bio izabran pri kliku.
+   */
+  protected dodajZadatak(): void {
+    const p = this.store.prezentacija();
+    if (!p) return;
+    const posle = this.store.izabraniId() ?? undefined;
+    this.izborGrupe.izaberi({ predmetId: p.predmet.id, grupaId: null })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      // druga prezentacija učitana dok je dijalog bio otvoren: čvor pripada predmetu prve
+      .subscribe(c => c && this.store.prezentacija()?.id === p.id && this.store.dodajZadatak(c, posle));
   }
 
   protected spusteno(e: CdkDragDrop<unknown>): void {
@@ -467,19 +616,44 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     });
   }
 
-  /**
-   * Uvoz iz PowerPointa (spec 7.7): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan
-   * dijalog sa izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store i fokus na prvi uvezen slajd, a
-   * nepoznat ishod slanja (`'osvezi'`) ponovo učitava prezentaciju, pa lista nikad ne ostaje zastarela.
-   */
+  /** Uvoz iz PowerPointa (spec 7.7). */
   protected uveziIzPowerPointa(): void {
+    this.uvezi(podaci => this.otvaracUvoza.otvori(this.dialog, podaci));
+  }
+
+  /** "Pregledaj prelaz" (F17): prethodni i izabrani slajd (lokalno, sa prelazom iz forme) u lenjom dijalogu. */
+  /** Dvoklik (ili klik dok se chunk učitava) ne otvara drugi dijalog (recenzija F17, Minor 5). */
+  private pregledSeOtvara = false;
+
+  protected pregledajPrelaz(s: SlajdDetails): void {
+    if (this.pregledSeOtvara || this.dialog.openDialogs.length) return;
+    this.pregledSeOtvara = true;
+    const l = this.store.slajdovi(), i = l.findIndex(x => x.id === s.id);
+    import('./prelaz-pregled.dialog')
+      .then(m => m.otvoriPregledPrelaza(this.dialog, { pre: l[i - 1] ?? null, slajd: l[i] ?? s, tema: vazecaTema(this.store.prezentacija()?.tema) }))
+      .catch(() => this.obavestenja.greska('Pregled prelaza nije učitan. Osveži stranicu i pokušaj ponovo.'))
+      .finally(() => (this.pregledSeOtvara = false));
+  }
+
+  /** Uvoz iz PDF-a (faza 5d): isti tok kao PowerPoint; dijalog i pdf.js su lenji chunk-ovi (`UvozPdfOtvarac`). */
+  protected uveziIzPdf(): void {
+    this.uvezi(podaci => this.otvaracPdf.otvori(this.dialog, { ...podaci, tema: vazecaTema(this.store.prezentacija()?.tema) }));
+  }
+
+  /**
+   * Uvoz (PowerPoint, PDF): prvo `sacuvajSve` (nesačuvan ili neispravan slajd zaustavlja uvoz), pa lenjo učitan dijalog sa
+   * izabranim slajdom kao mestom; rezultat (cela prezentacija) ide u store i fokus na prvi uvezen slajd, a nepoznat ishod
+   * slanja (`'osvezi'`) ponovo učitava prezentaciju, pa lista nikad ne ostaje zastarela.
+   */
+  private uvezi(otvori: (podaci: { prezentacijaId: number; brojSlajdova: number; izabraniId: number | null; izabraniRb: number | null })
+    => Promise<Observable<PrezentacijaDetails | 'osvezi' | undefined>>): void {
     const p = this.store.prezentacija();
     if (!p || this.radi()) return;
     this.radi.set(true);
     this.store.sacuvajSve().pipe(
       switchMap(() => {
         const s = this.store.izabrani();
-        return from(this.otvaracUvoza.otvori(this.dialog, {
+        return from(otvori({
           prezentacijaId: p.id, brojSlajdova: this.store.slajdovi().length, izabraniId: s?.id ?? null, izabraniRb: s?.rb ?? null,
         }));
       }),
@@ -489,7 +663,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
       next: rezultat => {
         if (rezultat === 'osvezi') {
           // nepoznat ishod slanja: slajdovi su možda upisani, lista se čita ponovo sa servera (prikazana prezentacija
-          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu "PowerPoint" ostaju)
+          // ostaje dok nova ne stigne, pa editor i fokus na dugmetu uvoza ostaju)
           this.store.ucitaj(p.id);
         } else if (rezultat) {
           this.store.primeniUvoz(rezultat);

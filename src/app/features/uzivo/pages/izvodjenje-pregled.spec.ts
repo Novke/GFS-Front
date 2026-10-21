@@ -2,8 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, RezultatPitanja } from '../data-access/uzivo.models';
-import { IzvodjenjePregledPage, oznakeRundi, procenatTacnihTekst } from './izvodjenje-pregled.page';
+import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, PregledZadatka, RezultatPitanja } from '../data-access/uzivo.models';
+import { IzvodjenjePregledPage, ishodPoPolju, ishodUkupno, oznakeRundi, procenatTacnihTekst } from './izvodjenje-pregled.page';
 
 function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 + 2?'): PitanjeSnimak {
   return {
@@ -23,6 +23,34 @@ function runda(rundaId: number, redniBroj: number, slajdId: number | null, izmen
       opcije: [{ id: 1, tekst: '3', broj: 1, tacna: false }, { id: 2, tekst: '4', broj: 3, tacna: true }],
     },
     brojOdgovora: 4, procenatTacnih: 75, ...izmene,
+  };
+}
+
+function pregledZadatka(slajdId: number): PregledZadatka {
+  return {
+    slajdId, grupaNaziv: '2 → 10', putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 3, naziv: '2 → 10' }],
+    rezultat: {
+      ukupno: 2, odgovoriPrikazani: true,
+      varijante: [{
+        varijantaId: 12, naziv: 'V1', svgId: 'svg-1', resenjeSvgId: 'res-1', dodeljeno: 2, odgovorilo: 2, tacnih: 1,
+        polja: [{
+          kljuc: 'a', oznaka: 'a)', tip: 'BROJ', jedinica: null, opcije: null, tacno: { broj: 45, prihvatljivi: null, tacna: null, tacne: null },
+          vrednosti: [{ kljuc: '45.0', tekst: '45', broj: 1, sakriven: false, tacan: true }, { kljuc: '44.0', tekst: '44', broj: 1, sakriven: false, tacan: false }],
+        }],
+      }],
+    },
+    ucesnici: [
+      { ucesnikId: 1, ime: 'Ana', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: true, polja: { a: true } },
+      { ucesnikId: 2, ime: 'Bojan', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: false, polja: { a: false } },
+    ],
+  };
+}
+
+/** Runda Zadatak slajda: `pitanje` i `rezultat` su null, sve je u `zadatak`. */
+function zadatakRunda(rundaId: number, slajdId: number | null, zadatakSlajdId: number): RezultatPitanja {
+  return {
+    rundaId, slajdId, rbSlajda: slajdId, redniBroj: 1, pitanje: null, rezultat: null, brojOdgovora: 2, procenatTacnih: 50,
+    zadatak: pregledZadatka(zadatakSlajdId),
   };
 }
 
@@ -62,6 +90,19 @@ describe('oznakeRundi', () => {
     const b = runda(2, 2, null, { pitanje: snimak(77, null) });
     const c = runda(3, 1, null, { pitanje: snimak(78, null) });
     expect(oznakeRundi([a, b, c])).toEqual([{ runda: 1, ukupno: 2 }, { runda: 2, ukupno: 2 }, { runda: 1, ukupno: 1 }]);
+  });
+
+  it('obrisani zadatak slajdovi nad istom grupom ostaju zasebni, a id grupe se ne meša sa id-jem živog slajda', () => {
+    // dva obrisana ZADATAK slajda (7 i 8): slajdId null, zadatak.slajdId iz snimka
+    expect(oznakeRundi([zadatakRunda(1, null, 7), zadatakRunda(2, null, 8)])).toEqual([
+      { runda: 1, ukupno: 1 }, { runda: 1, ukupno: 1 },
+    ]);
+    // obrisan zadatak slajd 9 (grupa id 3) i živ slajd 3: ne spajaju se
+    expect(oznakeRundi([zadatakRunda(1, null, 9), runda(2, 1, 3)])).toEqual([{ runda: 1, ukupno: 1 }, { runda: 1, ukupno: 1 }]);
+    // isti zadatak slajd ponovljen posle brisanja: runde se spajaju po slajdId iz snimka
+    expect(oznakeRundi([zadatakRunda(1, null, 7), zadatakRunda(2, null, 7)])).toEqual([
+      { runda: 1, ukupno: 2 }, { runda: 2, ukupno: 2 },
+    ]);
   });
 
   it('prazna lista', () => {
@@ -116,6 +157,43 @@ describe('IzvodjenjePregledPage', () => {
     expect(karte[2].textContent).not.toContain('Za poene važi');
     expect(karte[3].querySelector('h2')?.textContent).toBe('Rang-lista');
     expect(karte[3].textContent).toContain('Ana');
+  });
+
+  it('tekst pitanja je app-tekst-formule (Markdown sa formulom), klase uz-md i uz-pr-tekst', () => {
+    const r = runda(1, 1, 10);
+    r.pitanje = snimak(60, 10, 'Koliko je **tačno** $1011_2$?');
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [r], rangLista: [] });
+    const tekst = el.querySelector<HTMLElement>('app-tekst-formule.uz-pr-tekst')!;
+    expect(tekst).not.toBeNull();
+    expect(tekst.classList).toContain('uz-md');
+    expect(tekst.querySelector('strong')?.textContent).toBe('tačno');
+    expect(tekst.querySelector('span.uz-formula')?.textContent).toBe('$1011_2$');
+  });
+
+  it('zadatak runda i pitanje runda: obe kartice, putanja, rezultat po varijanti i tabela učesnika', () => {
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [zadatakRunda(1, 20, 20), runda(2, 1, 10)], rangLista: [] });
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    expect(karte.length).toBe(2);
+    expect(karte[0].querySelector('h2')?.textContent).toBe('Zadatak 1');
+    expect(karte[1].querySelector('h2')?.textContent).toBe('Pitanje 2');
+    expect(karte[0].textContent).toContain('Konverzije › 2 → 10');
+    expect(karte[0].querySelector('app-zadatak-rezultat')).not.toBeNull();
+    expect(karte[0].textContent).toContain('V1');
+    expect(karte[0].textContent).toContain('Odgovora 2 · tačnih 50 %');
+    const redovi = Array.from(karte[0].querySelectorAll('tbody tr')).map(tr => tr.textContent?.replace(/\s+/g, ' ').trim());
+    expect(redovi[0]).toContain('Ana');
+    expect(redovi[0]).toContain('a) ✓');
+    expect(redovi[0]).toContain('tačno');
+    expect(redovi[1]).toContain('netačno');
+    expect(karte[1].textContent).toContain('Koliko je 2 + 2?');
+  });
+
+  it('ishod učesnika po polju i ukupno', () => {
+    const z = pregledZadatka(7);
+    expect(ishodPoPolju(z, z.ucesnici[0])).toBe('a) ✓');
+    expect(ishodPoPolju(z, { ...z.ucesnici[0], polja: null })).toBe('—');
+    expect(ishodUkupno({ ...z.ucesnici[0], odgovorio: false, tacno: null, polja: null })).toBe('bez odgovora');
+    expect(ishodUkupno(z.ucesnici[1])).toBe('netačno');
   });
 
   it('bez takmičenja nema rang-liste, ni kad server šalje učesnike', () => {

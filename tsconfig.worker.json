@@ -1,0 +1,10 @@
+/* Radnik pdf.js za uvoz PDF-a (src/app/features/uzivo/uvoz-pdf/pdf.worker.ts). */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/worker",
+    "lib": ["es2022", "webworker"],
+    "types": []
+  },
+  "include": ["src/**/*.worker.ts"]
+}

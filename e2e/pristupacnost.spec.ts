@@ -1,7 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+import { posleOtvaranjaDijaloga } from './dijalog';
 import { expect, test } from './fixture';
+import { napraviPdf } from './fixtures/pdf-fabrika';
+import { lazniBroker } from './lazni-stomp';
+import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
 import { uzorakPptx } from './pptx-uzorak';
 import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
@@ -15,14 +19,47 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'predavanja/1', spremno: p => p.locator('app-studentska-plocica').first() },
   { putanja: 'testovi/1', spremno: p => p.locator('tbody tr').first() },
   { putanja: 'grupe/1/studenti', spremno: p => p.locator('tbody tr').first() },
-  { putanja: 'studenti/1', spremno: p => p.getByRole('heading', { level: 1, name: 'Ana Primerović' }) },
-  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; pregled je uvek dnevnih boja)
+  // kartica studenta sa sekcijom "Nalog" (uređaji i Moodle) i student bez mejla (objašnjenje, onemogućeno "Pošalji kod")
+  { putanja: 'studenti/1', spremno: p => p.locator('[data-nalog] [data-uredjaj]').first() },
+  { putanja: 'studenti/2', spremno: p => p.locator('[data-nalog] [data-bez-mejla]') },
+  // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',
-    spremno: p => p.locator('.uz-ed-platno [data-sloj="naslov"]'),
-    pripremi: async p => { await p.getByRole('button', { name: /^2\s/ }).click(); },
+    spremno: p => p.locator('.uz-ep-platno [data-sloj="naslov"]'),
+    pripremi: async p => {
+      await p.getByRole('button', { name: /^2\s/ }).click();
+      // sličica INFO slajda (sa linkom u markdown-u) je lenja (`@defer (on viewport)`): skenira se tek kad je iscrtana
+      await expect(p.locator('.uz-ed-slicica a')).toHaveCount(1);
+      await expect(p.locator('[data-oznaka="gfs-editor-platna"]')).toBeVisible();
+    },
   },
   { putanja: `upis/${TOKEN}`, spremno: p => p.getByRole('button', { name: 'Pošalji' }) },
+  // prijava nastavnika (bez ljuske; nastavnik je u moku prijavljen, a stranica ionako ne pita za sesiju)
+  { putanja: 'prijava?nazad=studenti', spremno: p => p.getByRole('button', { name: 'Prijavi se' }) },
+  // podešavanja -> Moodle: registracije (aktivna i isključena), vrednosti sa "Kopiraj", uputstvo
+  { putanja: 'podesavanja/moodle', spremno: p => p.locator('[data-vrednosti] code').first() },
+  // banka zadataka: list sa karticama (i greškom rendera), ispod stabla isključene teme i Klodove serije; unutrašnji čvor sa
+  // zbirom; Klodova grupa (bedž "Klod: N", oznake "Claude", prigušen isključen čvor u stablu)
+  { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
+  { putanja: 'banka?predmet=1&grupa=1', spremno: p => p.locator('[data-zbir]') },
+  { putanja: 'banka?predmet=1&grupa=4', spremno: p => p.locator('app-serije [data-serija]') },
+  // detalj grupe: list sa poljem BROJ (tip zaključan aktivnom varijantom) i karticama, list sa poljima TEKST i JEDAN_TACAN,
+  // unutrašnji čvor (samo naziv i opis)
+  { putanja: 'banka/grupe/2', spremno: p => p.locator('app-varijanta-kartica').first() },
+  { putanja: 'banka/grupe/3', spremno: p => p.locator('app-polja-editor input[data-opcija]').first() },
+  { putanja: 'banka/grupe/1', spremno: p => p.locator('textarea[data-opis]') },
+  // isključena grupa: oznaka "Isključeno" i "Uključi" u zaglavlju
+  { putanja: 'banka/grupe/5', spremno: p => p.locator('[data-iskljuceno]') },
+  // pregled nacrta: traka napretka i radnje, Klodova kopija (render, odgovori) sa originalom pored; ručni nacrt sa greškom
+  // rendera i onemogućenim "Odobri" (13, drugi redom nastanka, zato `od`); kraj liste
+  { putanja: 'banka/pregled?serija=uvoz-kol1-2024', spremno: p => p.locator('[data-original] img').first() },
+  { putanja: 'banka/pregled?predmet=1&izvor=RUCNO&od=13', spremno: p => p.locator('[data-nacrt] .bk-pn-greska') },
+  { putanja: 'banka/pregled?predmet=2', spremno: p => p.locator('[data-kraj]') },
+  // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
+  // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
+  { putanja: 'banka/varijante/nova?grupa=2', spremno: p => p.locator('[data-nedostaje]') },
+  { putanja: 'banka/varijante/13', spremno: p => p.locator('#bk-ve-greska-tekst') },
+  { putanja: 'banka/varijante/14', spremno: p => p.getByRole('img', { name: 'Pregled: Zadatak' }) },
 ];
 
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
@@ -54,6 +91,193 @@ for (const rezim of ['dan', 'noc'] as const) {
     }
 
     // Uživo za nastavnika (mok izvođenja + lažni STOMP broker): konzola je uvek svetla, daljinski prati dan/noć (`pratiRezim`).
+    // 5a: forma pitanja sa uputstvom i upozorenjem za formule (`--warn`, jedini nov element 5a koji prati noćni režim);
+    // nijedan fixture editora nema PITANJE, pa se ovde dodaje (proba recenzenta B4)
+    test('/prezentacije/5 (forma pitanja sa upozorenjem za formulu): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.prezentacije.find(x => x.id === 5)!.slajdovi.push({
+        id: 777, rb: 4, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, postepeno: false, platno: null, beleske: null,
+        pitanje: {
+          id: 551, tip: 'JEDAN_TACAN', tekst: 'Koliko je $1011_2$ i $\\nepostoji{x}$?', slika: null, vremeSekunde: null,
+          opcije: [{ id: 1, rb: 1, tekst: '$\\nepostoji{y}$', tacna: true }, { id: 2, rb: 2, tekst: '$13$', tacna: false }],
+          brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
+          prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null,
+        },
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const dugme = page.getByRole('button', { name: /^4\s/ });
+      await expect(dugme).toBeEnabled();
+      await dugme.click();
+      const upozorenja = page.locator('p.uz-ed-upozorenje');
+      await expect(upozorenja).toHaveCount(2, { timeout: 15_000 });
+      await expect(upozorenja.first()).toContainText('u tekstu pitanja');
+      await expect(page.getByText('odmah posle cifre $ ne otvara formulu', { exact: false })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma pitanja sa upozorenjem (${rezim})`).toEqual([]);
+    });
+
+    // banka zadataka: dijalozi nove grupe (naziv, težina), premeštanja (radio stablo sa onemogućenim mestima) i preambule
+    test('/banka (dijalozi nove grupe, premeštanja i preambule): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka?predmet=1');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('app-varijanta-kartica')).toHaveCount(3);
+      const kontejner = page.locator('mat-dialog-container');
+      const proveri = async (naziv: string) => {
+        await expect(kontejner).toBeVisible();
+        await posleOtvaranjaDijaloga(page, kontejner);
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: ${naziv} (${rezim})`).toEqual([]);
+        await page.getByRole('button', { name: 'Odustani' }).click();
+        await expect(kontejner).toHaveCount(0);
+      };
+
+      await page.getByRole('button', { name: 'Nova grupa' }).click();
+      await proveri('nova grupa');
+      await page.getByRole('button', { name: 'Radnje za grupu 2 → 10' }).click();
+      await page.getByRole('menuitem', { name: 'Premesti u…' }).click();
+      await proveri('premesti');
+      await page.getByRole('button', { name: 'Podešavanja LaTeX-a' }).click();
+      await expect(page.getByRole('textbox', { name: 'Preambula' })).toBeVisible();
+      await proveri('preambula');
+    });
+
+    // Podešavanja -> Moodle: dijalog registracije sa porukom provere
+    test('/podesavanja/moodle (forma registracije sa porukama provere): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('podesavanja/moodle');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-registracija]').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Nova registracija' }).first().click();
+      const dijalog = page.getByRole('dialog', { name: 'Nova registracija' });
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
+      await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
+      await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
+    });
+
+    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
+    // i dijalog "Prijavljeni uređaji"
+    test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('./');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.getByRole('region', { name: 'Nalozi' })).toBeVisible();
+      await page.locator('app-obavestenja-meni button').click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-obavestenje]').first()).toBeVisible();
+      await posleOtvaranjaDijaloga(page, kontejner);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: lista obaveštenja (${rezim})`).toEqual([]);
+    });
+
+    test('meni nastavnika i dijalog "Prijavljeni uređaji": bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('grupe');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: 'Nalog: nastavnik' }).click();
+      await expect(page.getByRole('menuitem', { name: 'Odjava' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, '.mat-mdc-menu-panel'), `axe: meni nastavnika (${rezim})`).toEqual([]);
+      await page.getByRole('menuitem', { name: 'Prijavljeni uređaji' }).click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.locator('[data-sesija]')).toHaveCount(3);
+      await posleOtvaranjaDijaloga(page, kontejner);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: prijavljeni uređaji (${rezim})`).toEqual([]);
+    });
+
+    // detalj grupe banke: dodato polje daje upozorenje (aktivne varijante postaju nacrti) i poruku provere šeme
+    test('/banka/grupe/2 (dodato polje: upozorenje i poruka provere šeme): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka/grupe/2');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('app-varijanta-kartica').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Dodaj polje' }).click();
+      await expect(page.locator('[data-posledice]')).toContainText('Aktivne varijante će postati nacrti');
+      // poruka provere stiže kad se izađe iz prazne oznake (sa aria-invalid na njoj)
+      await page.keyboard.press('Tab');
+      await expect(page.locator('[data-greska-polja]')).toHaveText(/Oznaka polja/);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: detalj grupe sa dodatim poljem (${rezim})`).toEqual([]);
+    });
+
+    // 5c: forma INFO slajda sa dugmetom "Pretvori u platno" i potvrda pretvaranja uz gubitke (veza)
+    test('/prezentacije/5 (forma INFO sa "Pretvori u platno" i dijalog potvrde): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const pretvori = page.getByRole('button', { name: 'Pretvori u platno' });
+      await expect(pretvori).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma INFO sa dugmetom (${rezim})`).toEqual([]);
+
+      await page.getByRole('textbox', { name: 'Tekst (Markdown)' }).fill('Vidi [vezu](https://primer.rs).');
+      await expect(pretvori).toBeEnabled();
+      await pretvori.click();
+      const dijalog = page.getByRole('alertdialog', { name: 'Pretvoriti slajd u platno?' });
+      await expect(dijalog).toContainText('Veze postaju običan tekst');
+      // fokus na potvrdi postavlja CDK posle animacije otvaranja (ConfirmDialog, autoFocus '[data-potvrdi]')
+      await expect(dijalog.getByRole('button', { name: 'Pretvori' })).toBeFocused();
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: potvrda pretvaranja (${rezim})`).toEqual([]);
+      const odustani = dijalog.getByRole('button', { name: 'Odustani' });
+      await expect(odustani).toBeEnabled();
+      await odustani.click();
+      await expect(dijalog).toHaveCount(0);
+    });
+
+    // 5e: polja prelaza u formi (Efekat, Smer, Trajanje sa greškom na polju, "Pregledaj prelaz") i dijalog pregleda prelaza
+    test('/prezentacije/5 (polja prelaza i dijalog "Pregled prelaza"): bez serious/critical kršenja', async ({ page, mock }) => {
+      const p = mock.podaci.prezentacije.find(x => x.id === 5)!;
+      p.slajdovi.push({
+        id: 54, rb: 4, tip: 'INFO', naslov: 'Zaključak', sadrzaj: 'Sile su u ravnoteži.', slika: null, beleske: null,
+        postepeno: false, pitanje: null, platno: null, prelaz: { efekat: 'GURANJE', smer: 'GORE', trajanjeMs: 5000 },
+      });
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^4\s/ }).click();
+      const grupa = page.getByRole('group', { name: 'Prelaz na ovaj slajd' });
+      await expect(grupa.getByRole('combobox', { name: 'Smer' })).toContainText('Odozgo');
+      // greška na samom polju (crveno, aria-invalid, mat-error) mora da ima kontrast i u noćnom režimu
+      const trajanje = grupa.getByRole('textbox', { name: 'Trajanje (s)' });
+      await trajanje.fill('9');
+      await expect(trajanje).toHaveAttribute('aria-invalid', 'true');
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page, 'app-slajd-forma'), `axe: polja prelaza sa greškom (${rezim})`).toEqual([]);
+      await trajanje.fill('5');
+      await expect(trajanje).not.toHaveAttribute('aria-invalid', 'true');
+      expect(await ozbiljnaKrsenja(page, 'app-slajd-forma'), `axe: polja prelaza (${rezim})`).toEqual([]);
+
+      await grupa.getByRole('button', { name: 'Pregledaj prelaz' }).click();
+      const dijalog = page.getByRole('dialog', { name: 'Pregled prelaza' });
+      await expect(dijalog.getByRole('button', { name: 'Ponovi' })).toBeFocused();
+      // fokus stiže pre kraja animacije otvaranja (afterNextRender), a providan kontejner daje pogrešan kontrast
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      // prelaz od 5 s: odlazni (aria-hidden) i ulazni slajd su oba u dijalogu dok axe radi
+      await expect(dijalog.locator('app-slajd-prikaz')).toHaveCount(2);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: pregled prelaza (${rezim})`).toEqual([]);
+      await dijalog.getByRole('button', { name: 'Zatvori' }).click();
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+    });
+
+    // Zadatak slajd (FE-2): forma sa upozorenjima servera (`--warn`) i vezom na banku (grupa 5: isključena, bez aktivnih),
+    // bočni pregled (kartica zadatka) i dijalog izbora grupe (stablo radio dugmadi, čip "Isključeno")
+    test('/prezentacije/6 (Zadatak slajd sa upozorenjima i dijalog izbora grupe): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.prezentacije.find(x => x.id === 6)!.slajdovi.find(s => s.id === 62)!.zadatak =
+        { grupaId: 5, vremeSekunde: 120, brojVarijanti: null };
+      await page.goto('prezentacije/6');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      const forma = page.locator('app-zadatak-forma');
+      await expect(forma.getByRole('status').locator('p')).toHaveCount(2);
+      await expect(forma.getByRole('link', { name: 'Otvori u banci' })).toBeVisible();
+      await expect(page.locator('.uz-ed-pregled [data-zadatak]')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: forma Zadatak slajda (${rezim})`).toEqual([]);
+
+      await forma.getByRole('button', { name: 'Promeni grupu…' }).click();
+      const kontejner = page.locator('mat-dialog-container');
+      await expect(kontejner.getByRole('radio')).toHaveCount(5);
+      await expect(kontejner.getByText('Isključeno', { exact: true })).toBeVisible();
+      await posleOtvaranjaDijaloga(page, kontejner);
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: izbor grupe zadataka (${rezim})`).toEqual([]);
+      await kontejner.getByRole('button', { name: 'Otkaži' }).click();
+      await expect(kontejner).toHaveCount(0);
+    });
+
     test('/izvodjenja/7/konzola (1280 px): bez serious/critical kršenja', async ({ page, mock }) => {
       await nastavnickiBroker(page, mock);
       await page.goto('izvodjenja/7/konzola');
@@ -62,6 +286,29 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('app-projector-layout')).toHaveClass(/\brezim-dan\b/);
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/konzola (${rezim})`).toEqual([]);
+    });
+
+    // Zadatak slajd (106): panel sa izborom broja različitih (CEKA), pa zatvorena runda sa karticama varijanti, varijantom i
+    // ishodom uz učesnike i uključenim rešenjem (dugme Rešenje pritisnuto); konzola je i noću svetla
+    test('/izvodjenja/7/konzola na Zadatak slajdu (CEKA i zatvorena runda sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.izvodjenje.primeni('IDI_NA', 5);
+      const broker = await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/konzola');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const panel = page.getByRole('region', { name: 'Zadatak' });
+      await expect(panel.getByLabel('Broj različitih zadataka')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola, Zadatak u CEKA (${rezim})`).toEqual([]);
+
+      // otvaranje, zatvaranje i rešenje stižu sa drugog prozora kroz STOMP
+      mock.izvodjenje.primeni('OTVORI_ZATVORI');
+      mock.izvodjenje.primeni('OTVORI_ZATVORI');
+      broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
+      await expect(panel.getByText('Rešenje prikazano')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Rešenje', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('region', { name: 'Učesnici' })).toContainText('nije odgovorio');
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola, Zadatak zatvoren sa rešenjem (${rezim})`).toEqual([]);
     });
 
     test.describe('daljinski na telefonu', () => {
@@ -87,6 +334,124 @@ for (const rezim of ['dan', 'noc'] as const) {
       });
     });
 
+    // editor platna (lenji chunk) nad PLATNO slajdom 52: panel Svojstva sa izabranim oblikom i slikom, otvorena paleta
+    // boja (CDK popover), tekst, tabela (F14: popover "Tabela", panel tabele, uređivanje ćelije), formula (F16: panel i
+    // dijalog) i panel Slojevi
+    test('editor platna (svojstva oblika i slike, paleta boja, slojevi): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      await expect(page.locator('.uz-ed-slicica a')).toHaveCount(1);
+      const editor = page.locator('[data-oznaka="gfs-editor-platna"]');
+      const sloj = (id: string) => editor.locator(`.uz-ep-platno [data-sloj="${id}"]`);
+      // sloj izbora (overlay) leži preko prikaza i prima pokazivač: klik mišem u centar sloja
+      const izaberi = async (id: string) => {
+        await sloj(id).scrollIntoViewIfNeeded(); // fokus u panelu (paleta) može da pomeri stranu: mere tek posle
+        const b = (await sloj(id).boundingBox())!;
+        await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      };
+      await expect(sloj('oblik')).toBeVisible();
+
+      await izaberi('oblik');
+      await expect(editor.getByText('Izabrano: Elipsa 1')).toBeAttached();
+      const popuna = editor.getByRole('button', { name: /^Popuna:/ });
+      await expect(popuna).toBeVisible();
+      // kao i ostali testovi ovog fajla: axe tek kad stanu zahtevi (slike i fontovi platna, lenji chunk-ovi panela), jer
+      // nema jednog vidljivog stanja koje bi pokazalo da su svi stigli (slika sloja može da stigne posle teksta)
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva oblika (${rezim})`).toEqual([]);
+
+      await popuna.click();
+      const paleta = page.getByRole('dialog', { name: 'Popuna' });
+      await expect(paleta).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, paleta boja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(paleta).toBeHidden();
+      await expect(popuna).toBeFocused();
+
+      await izaberi('slika');
+      await expect(editor.getByText('Izabrano: Slika 1')).toBeAttached();
+      await expect(editor.getByRole('heading', { name: 'Isečak' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva slike (${rezim})`).toEqual([]);
+
+      // F13: svojstva teksta (radiogroup poravnanja i sidra, aria-pressed), pa isto tokom uređivanja teksta
+      await izaberi('naslov');
+      await expect(editor.getByRole('radiogroup', { name: 'Poravnanje' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta (${rezim})`).toEqual([]);
+      const b = (await sloj('naslov').boundingBox())!;
+      await page.mouse.dblclick(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(editor.getByRole('textbox', { name: /^Tekst sloja/ })).toBeFocused();
+      await expect(editor.getByText('Uređuje se tekst.')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva teksta tokom uređivanja (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
+      // F16: panel formule, pa dijalog formule (math-field MathLive-a u fokusu posle učitavanja)
+      await izaberi('formula');
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva formule (${rezim})`).toEqual([]);
+      await editor.getByRole('button', { name: 'Uredi formulu' }).click();
+      const formula = page.locator('[data-oznaka="gfs-formula-editor"]');
+      await expect(formula.locator('math-field')).toBeFocused();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: dijalog formule (${rezim})`).toEqual([]);
+      await formula.getByRole('button', { name: 'Otkaži' }).click();
+      await expect(formula).toHaveCount(0);
+      await expect(editor.getByRole('button', { name: 'Uredi formulu' })).toBeFocused();
+
+      // F14: "Tabela" (CDK popover sa poljima), panel tabele, pa uređivanje ćelije
+      await editor.getByRole('button', { name: 'Tabela', exact: true }).click();
+      const ubaci = page.getByRole('dialog', { name: 'Ubaci tabelu' });
+      await expect(ubaci.getByLabel('Redova')).toBeFocused();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, ubacivanje tabele (${rezim})`).toEqual([]);
+      await ubaci.getByRole('button', { name: 'Ubaci' }).click();
+      await expect(ubaci).toBeHidden();
+      await expect(editor.getByRole('group', { name: 'Ćelije' })).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, svojstva tabele (${rezim})`).toEqual([]);
+      const td = editor.locator('.uz-ep-platno td[data-celija="1-1"]').last();
+      await td.scrollIntoViewIfNeeded();
+      const c = (await td.boundingBox())!;
+      await page.mouse.dblclick(c.x + c.width / 2, c.y + c.height / 2);
+      await expect(editor.getByRole('textbox', { name: 'Tekst ćelije 2, 2' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(editor.getByText('Uređuje se tekst.')).toBeHidden();
+
+      await editor.getByRole('tab', { name: 'Slojevi' }).click();
+      await expect(editor.locator('[data-sloj-panel="oblik"]')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, slojevi (${rezim})`).toEqual([]);
+    });
+
+    // F19: tab "Animacije" sa izabranom animacijom (detalji, značke grupa na platnu) i režim "Pregled" (koraci, tabovi
+    // onemogućeni, sadržaj panela sakriven), nad PLATNO slajdom 52 sa tri KLIK animacije
+    test('editor platna (animacije sa izabranom animacijom, režim Pregled): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.getByRole('button', { name: /^2\s/ }).click();
+      await expect(page.locator('.uz-ed-slicica a')).toHaveCount(1);
+      const editor = page.locator('[data-oznaka="gfs-editor-platna"]');
+      await expect(editor.locator('.uz-ep-platno [data-sloj="naslov"]')).toBeVisible();
+
+      await editor.getByRole('tab', { name: 'Animacije' }).click();
+      // kraj animacije tela taba pre klika u panelu (Material tada skida privremenu visinu omotača)
+      await expect(editor.locator('.mat-tab-body-animating')).toHaveCount(0);
+      const red = editor.locator('[data-animacija="a2"] > button');
+      await red.click();
+      await expect(red).toHaveAttribute('aria-pressed', 'true');
+      await expect(editor.getByRole('textbox', { name: 'Trajanje (s)' })).toBeVisible();
+      await expect(editor.locator('.uz-ep-znacka')).toHaveText(['1', '2', '3']);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, animacije (${rezim})`).toEqual([]);
+
+      await editor.getByRole('group', { name: 'Alati platna' }).getByRole('button', { name: 'Pregled' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 0 / 3');
+      await editor.getByRole('button', { name: 'Korak napred' }).click();
+      await expect(editor.locator('.uz-ep-korak')).toHaveText('Korak 1 / 3');
+      await expect(editor.getByRole('tab', { name: 'Animacije' })).toBeDisabled();
+      await expect(editor.locator('app-panel-animacije')).toBeHidden();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: editor platna, režim Pregled (${rezim})`).toEqual([]);
+    });
+
     // dijalog uvoza iz PowerPointa (lenji chunk) u stanju pregleda i izveštaja, nad editorom prezentacije
     test('dijalog uvoza iz PowerPointa (pregled, izveštaj): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('prezentacije/5');
@@ -105,5 +470,237 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog uvoza, izveštaj (${rezim})`).toEqual([]);
     });
+
+    // dijalog uvoza iz PDF-a (5d, lenji chunk + pdf.js) u stanju pregleda i slanja (slika strane zadržana u moku)
+    test('dijalog uvoza iz PDF-a (pregled, slanje): bez serious/critical kršenja', async ({ page, mock }) => {
+      const zadrzan = mock.zadrzi('POST', 'mediji');
+      try {
+        await page.goto('prezentacije/5');
+        await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+        const pdf = page.getByRole('button', { name: 'Uvezi iz PDF-a' });
+        await expect(pdf).toBeEnabled();
+        await pdf.click();
+        const dijalog = page.locator('mat-dialog-container');
+        await expect(dijalog.getByRole('heading', { name: 'Uvoz iz PDF-a' })).toBeVisible();
+        await dijalog.locator('input[type=file]').setInputFiles({ name: 'Sinteticki.pdf', mimeType: 'application/pdf', buffer: napraviPdf([{ sirina: 960, visina: 540 }]) });
+
+        await expect(dijalog.locator('[data-faza="pregled"]')).toBeVisible();
+        await expect(dijalog.locator('.uz-uv-zbir')).toBeFocused();
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog PDF-a, pregled (${rezim})`).toEqual([]);
+
+        const uvezi = dijalog.getByRole('button', { name: 'Uvezi' });
+        await expect(uvezi).toBeEnabled();
+        await uvezi.click();
+        await expect(dijalog.locator('[data-faza="slanje"]')).toBeVisible();
+        await zadrzan.stigao;
+        await expect(dijalog.locator('.uz-uv-status')).toBeFocused();
+        expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog PDF-a, slanje (${rezim})`).toEqual([]);
+      } finally {
+        zadrzan.pusti();
+      }
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+    });
   });
 }
+
+// 5a: pitanje sa formulama (nacrtane i izvor `$...$`) na telefonu studenta i na projektoru. Javne strane i projektor su
+// uvek dnevni, pa jedan prolaz (dan).
+test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
+  test.use({ colorScheme: 'light' });
+
+  test.describe('telefon', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    test('/uzivo/123456 (pitanje sa formulom, 390 x 844): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+      await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno' ? {
+        javno: {
+          izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas',
+          kod: '123456', prikaz: 'SLAJD', slajdTip: 'PITANJE', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'PITANJE',
+          detaljiDozvoljeni: false, brojUcesnika: 1, rezultat: null, rangLista: null,
+          pitanje: {
+            tip: 'JEDAN_TACAN', faza: 'OTVORENO', rundaId: 31, brojOpcija: OPCIJE_SA_FORMULOM.length,
+            opcije: OPCIJE_SA_FORMULOM.map((tekst, i) => ({ id: i + 1, tekst })), tekst: TEKST_SA_FORMULOM, slikaId: null,
+            jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null, tacneOpcije: null,
+            tacanBroj: null, prihvatljiviOdgovori: null,
+          },
+        },
+        licno: { verzija: 1, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null },
+      } : undefined));
+      await page.goto('uzivo/123456');
+      await expect(page.locator('.uz-formula--spremna .ML__latex')).toHaveCount(SPREMNIH_FORMULA);
+      await expect(page.locator('.uz-formula--izvor')).toHaveCount(IZVORI_TEKSTA.length);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), 'axe: telefon, pitanje sa formulom').toEqual([]);
+    });
+
+    /*
+     * Talas ispravki 5a (završna recenzija B, Important 2): šira formula se na telefonu skroluje u sebi, pa je skrol region
+     * (`scrollable-region-focusable`, serious) koji tastatura mora da dohvati. Tab stop (`tabindex="0"`) dobija samo
+     * nacrtana formula koja stvarno prelazi širinu; kratka ne, a formula u dugmetu opcije (`aria-hidden`, ime dugmeta iz
+     * `tekstZaCitac`) nikad (`nested-interactive`). Ime je `aria-label` = LaTeX uz `role="img"`.
+     */
+    const SIROKA = '$\\frac{a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9}{b_1+b_2+b_3+b_4+b_5+b_6+b_7+b_8+b_9}=x_1+x_2+x_3+x_4+x_5+x_6+x_7+x_8$';
+    for (const ekran of ['unos', 'tačan odgovor'] as const) {
+      test(`/uzivo/123456 (široka formula, 360 x 740, ${ekran}): bez serious/critical kršenja, skrol formule dostupan tastaturi`, async ({ page, mock }) => {
+        await page.setViewportSize({ width: 360, height: 740 });
+        mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+        const tacan = ekran === 'tačan odgovor';
+        await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno' ? {
+          javno: {
+            izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas',
+            kod: '123456', prikaz: 'SLAJD', slajdTip: 'PITANJE', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'PITANJE',
+            detaljiDozvoljeni: false, brojUcesnika: 1, rezultat: null, rangLista: null,
+            pitanje: {
+              tip: 'JEDAN_TACAN', faza: tacan ? 'ZATVORENO' : 'OTVORENO', rundaId: 31, brojOpcija: 2,
+              opcije: [{ id: 1, tekst: SIROKA }, { id: 2, tekst: '$13$' }], tekst: `Izračunaj ${SIROKA} ako je $13$.`,
+              slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+              tacneOpcije: tacan ? [1, 2] : null, tacanBroj: null, prihvatljiviOdgovori: null,
+            },
+          },
+          licno: { verzija: 1, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null },
+        } : undefined));
+        await page.goto('uzivo/123456');
+        const okvir = tacan ? '.uz-st-tacna' : '.uz-st-md';
+        const siroka = page.locator(`${okvir} .uz-formula--spremna`).first();
+        await expect(siroka.locator('.ML__latex')).toBeVisible();
+        await page.waitForLoadState('networkidle');
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+        expect(await ozbiljnaKrsenja(page), `axe: telefon, široka formula (${ekran})`).toEqual([]);
+        // široka formula: skrol region sa tab stopom; kratka ($13$) i formule u dugmadima opcija bez tab stopa
+        await expect(siroka).toHaveAttribute('tabindex', '0');
+        expect(await siroka.evaluate(f => f.scrollWidth > f.clientWidth), 'široka formula prelazi širinu').toBe(true);
+        const kratke = page.locator('.uz-formula--spremna[aria-label="13"]');
+        await expect(kratke.first()).toBeVisible();
+        for (const k of await kratke.all()) await expect(k).not.toHaveAttribute('tabindex');
+        // u dugmetu opcije: nikad tab stop (samo -1 kad formula prelazi) i bez uloge i imena (dugme ga daje)
+        await expect(page.locator('button [tabindex]:not([tabindex="-1"]), button .uz-formula[role], button .uz-formula[aria-label]'))
+          .toHaveCount(0);
+        if (!tacan) await expect(page.locator('button .uz-formula--spremna[tabindex="-1"]')).toHaveCount(1);
+        // tab red (re-recenzija B, I1): Chromium 130+ sam stavlja skrol kontejner bez fokusabilnih potomaka u tab red, pa bi
+        // široka formula u dugmetu opcije (`aria-hidden`) bila prazan stop; formula iz teksta pitanja ostaje stop
+        const stopovi: { opis: string; skriven: boolean; uDugmetu: boolean; tekstPitanja: boolean }[] = [];
+        for (let i = 0; i < 30; i++) {
+          await page.keyboard.press('Tab');
+          const s = await page.evaluate((sel) => {
+            const a = document.activeElement as HTMLElement | null;
+            if (!a || a === document.body || a.dataset['tabProba'] !== undefined) return null; // krug je završen
+            a.dataset['tabProba'] = '';
+            return {
+              opis: `${a.tagName}.${[...a.classList].join('.')}`,
+              skriven: !!a.closest('[aria-hidden="true"]'),
+              uDugmetu: a.matches('.uz-formula') && !!a.parentElement?.closest('button'),
+              tekstPitanja: a.matches('.uz-formula') && !!a.closest(sel),
+            };
+          }, okvir);
+          if (!s) break;
+          stopovi.push(s);
+        }
+        test.info().annotations.push({ type: 'tab red', description: stopovi.map(x => x.opis).join(' -> ') });
+        expect(stopovi.filter(x => x.skriven || x.uDugmetu).map(x => x.opis), 'stop u aria-hidden ili formula u dugmetu').toEqual([]);
+        expect(stopovi.some(x => x.tekstPitanja), 'široka formula iz teksta je tab stop').toBe(true);
+        // tastatura: fokus na formuli, strelica je skroluje
+        await siroka.focus();
+        await expect(siroka).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect.poll(() => siroka.evaluate(f => f.scrollLeft)).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  test('/izvodjenja/7/publika (projektor, pitanje sa formulom): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.izvodjenje.izmeniSlajd(2, { pitanje: pitanjeSaFormulom() });
+    for (let i = 0; i < 8; i++) mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (3) -> slajd 2 (3) -> slajd 3
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--spremna .ML__latex')).toHaveCount(1);
+    await expect(page.locator('.uz-plocica-tekst .uz-formula--spremna .ML__latex')).toHaveCount(OPCIJE_SA_FORMULOM.length);
+    await expect(page.locator('.uz-pitanje-tekst .uz-formula--izvor')).toHaveCount(IZVORI_TEKSTA.length);
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
+  });
+
+  // Zadatak slajd (FE-4): opis u CEKA, pa zatvorena runda sa uključenim rezultatima, tačnim i rešenjem (mreža 2 kartice)
+  test('/izvodjenja/7/publika (projektor, Zadatak slajd, opis i rezultati sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.izvodjenje.primeni('IDI_NA', 5);
+    mock.izvodjenje.primeni('BROJ_VARIJANTI', 2);
+    const broker = await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    await expect(page.locator('app-publika-scena [data-zadatak]')).toHaveText('Zadatak stiže na telefone');
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak u CEKA').toEqual([]);
+
+    mock.izvodjenje.primeni('OTVORI_ZATVORI');
+    mock.izvodjenje.odgovori(1, { a: '11' });
+    mock.izvodjenje.odgovori(2, { a: '49' });
+    mock.izvodjenje.primeni('OTVORI_ZATVORI');
+    for (const tip of ['REZULTATI', 'TACAN']) mock.izvodjenje.primeni(tip);
+    broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
+    await expect(page.locator('app-publika-scena .uz-zr-kartica')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena img[alt^="Rešenje"]')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena .uz-zr-red')).toHaveCount(2);
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak sa rezultatima i rešenjem').toEqual([]);
+  });
+});
+
+// FE-5: Zadatak slajd na telefonu studenta (javne strane su uvek dnevne): unos sa sva četiri tipa polja (opcija sa formulom),
+// uvećan prikaz slike i ishod posle zatvaranja sa tačnim vrednostima i rešenjem, na 390 px.
+test.describe('pristupačnost (axe): Zadatak na telefonu, dan', () => {
+  test.use({ colorScheme: 'light', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('/uzivo/123456 (Zadatak: unos, uvećan prikaz, ishod sa rešenjem, 390 x 844): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: 7 });
+    const polje = (kljuc: string, oznaka: string, tip: string, izmene: Record<string, unknown> = {}) => ({
+      kljuc, oznaka, tip, odstupanje: null, odstupanjeTip: null, jedinica: null, zanemariVelicinu: null, zanemariRazmake: null,
+      opcije: null, ...izmene,
+    });
+    const opcije = [{ id: 1, tekst: '$2^3$' }, { id: 2, tekst: '9' }, { id: 3, tekst: '10' }];
+    const polja = [
+      polje('a', 'a) Dekadno', 'BROJ', { jedinica: 'm' }),
+      polje('b', 'b) Binarno', 'TEKST'),
+      polje('c', 'c) Koliko je 8?', 'JEDAN_TACAN', { opcije }),
+      polje('d', 'd) Parni', 'VISE_TACNIH', { opcije }),
+    ];
+    const javno = (verzija: number, faza: string) => ({
+      izvodjenjeId: 7, verzija, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas', kod: '123456',
+      prikaz: 'SLAJD', slajdTip: 'ZADATAK', ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
+      brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null,
+      zadatak: { faza, rundaId: 55, rokMs: null, preostaloMs: 90_000, brojVarijanti: 2, grupaNaziv: '2 → 10', resenjePrikazano: faza === 'ZATVORENO' },
+    });
+    const licno = (verzija: number, zadatak: Record<string, unknown>) => ({
+      verzija, ucesnikId: 10_000, ime: 'Mina', poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null,
+      zadatak: {
+        rundaId: 55, varijantaId: 12, svgId: '00000000-0000-4000-8000-00000000000a', polja, faza: 'OTVORENO', primljen: false,
+        ishod: null, tacno: null, tacneVrednosti: null, resenjeSvgId: null, ...zadatak,
+      },
+    });
+    const broker = await lazniBroker(page, 'api/public/ws', o => (o === '/app/izvodjenja/7/pocetno'
+      ? { javno: javno(1, 'OTVORENO'), licno: licno(1, {}) } : undefined));
+    await page.goto('uzivo/123456');
+    await expect(page.locator('img[data-zadatak-svg]')).toBeVisible();
+    await page.getByLabel('a) Dekadno').fill('8');
+    await page.getByRole('group', { name: 'd) Parni' }).getByRole('button', { name: '10' }).click();
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, unos zadatka').toEqual([]);
+
+    await page.getByRole('button', { name: 'Uvećaj', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Zadatak' })).toBeVisible();
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, uvećan zadatak').toEqual([]);
+    await page.keyboard.press('Escape');
+
+    const bez = { broj: null, prihvatljivi: null, tacna: null, tacne: null };
+    broker.posalji('/topic/izvodjenja/7/javno', javno(2, 'ZATVORENO'));
+    broker.posalji('/user/queue/licno', licno(2, {
+      faza: 'ZATVORENO', primljen: true, tacno: false, ishod: { a: true, b: false, c: true, d: false },
+      tacneVrednosti: { a: { ...bez, broj: 8 }, b: { ...bez, prihvatljivi: ['1000'] }, c: { ...bez, tacna: 1 }, d: { ...bez, tacne: [1, 3] } },
+      resenjeSvgId: '00000000-0000-4000-8000-0000000000aa',
+    }));
+    await expect(page.getByRole('img', { name: 'Rešenje' })).toBeVisible();
+    await expect(page.getByText('Tačno: 8 m')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    expect(await ozbiljnaKrsenja(page), 'axe: telefon, ishod zadatka sa rešenjem').toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+});

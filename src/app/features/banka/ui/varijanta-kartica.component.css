@@ -1,0 +1,87 @@
+/* Kartica varijante (app-varijanta-kartica): render na beloj podlozi (`.rezim-dan`), cela kartica je link, meni iznad. */
+
+:host {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+:host:hover { border-color: var(--primary); }
+
+:host:has(.bk-kartica-veza:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bk-kartica-slika {
+  display: grid;
+  place-items: center;
+  height: 150px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.bk-kartica-slika img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.bk-zamena {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bk-zamena .mat-icon { width: 18px; height: 18px; }
+.bk-zamena-greska { color: var(--danger); font-weight: 600; }
+
+.bk-kartica-dno {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 4px;
+  padding: 8px 4px 8px 12px;
+}
+
+.bk-kartica-veza {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.bk-kartica-veza:focus-visible { outline: none; }
+
+/* cela kartica je link na editor; meni je iznad */
+.bk-kartica-veza::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.bk-rb { color: var(--muted); font-family: var(--font-mono); font-weight: 500; }
+
+.bk-kartica-oznake {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bk-kartica-meni.mat-mdc-icon-button {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--muted);
+}

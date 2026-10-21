@@ -1,12 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { Component } from '@angular/core';
+import { Component, DestroyRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ObavestenjeInfo } from '../../../core/api/obavestenja.api';
 import { KontrolnaTablaInfo } from '../../../core/api/pregled.api';
+import { ObavestenjaStore } from '../../../core/state/obavestenja.store';
 import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
 import { PREFS_KLJUC } from '../../../core/state/preferences.store';
 import { DomaciListItem } from '../../../core/api/domaci.models';
@@ -45,18 +47,29 @@ describe('Pocetna', () => {
   let http: HttpTestingController;
   let harness: RouterTestingHarness;
   let router: Router;
+  let obavestenja: {
+    broj: ReturnType<typeof signal<{ neprocitana: number; otvorena: number }>>;
+    otvorena: ReturnType<typeof signal<ObavestenjeInfo[]>>;
+    ucitaj: ReturnType<typeof vi.fn>;
+    procitano: ReturnType<typeof vi.fn>;
+    reseno: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     localStorage.clear();
     // utorak 14. 10. 2025. u 9:30; samo Date je lažan, tajmeri rade normalno
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2025, 9, 14, 9, 30));
+    obavestenja = { broj: signal({ neprocitana: 0, otvorena: 0 }), otvorena: signal([]), ucitaj: vi.fn(), procitano: vi.fn(), reseno: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
+        // obaveštenja (kartica "Nalozi") imaju svoj store i spec; ovde samo veza sa stranicom
+        { provide: ObavestenjaStore, useValue: obavestenja },
         provideRouter([
           { path: '', component: Pocetna },
           { path: 'predavanja/:id', component: Stub },
           { path: 'predavanja', component: Stub },
+          { path: 'studenti/:id', component: Stub },
         ]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -234,7 +247,8 @@ describe('Pocetna', () => {
   });
 
   it('Početna ne pravi drugi zahtev kad je ljuska već pokrenula učitavanje (isti odgovor za ekran i brojače)', async () => {
-    const brojaci = TestBed.inject(DashboardCountsStore); // kao Shell: zahtev kreće pri nastanku
+    const brojaci = TestBed.inject(DashboardCountsStore);
+    brojaci.pokreni(TestBed.inject(DestroyRef)); // kao Shell: zahtev kreće kad ga ljuska pokrene
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');
     http.expectOne('api/pregled/kontrolna-tabla').flush({ ...PRAZNA, ceka: { ...PRAZNA.ceka, brojTestova: 4 } });
@@ -242,5 +256,32 @@ describe('Pocetna', () => {
     harness.detectChanges();
     expect(brojaci.testovi()).toBe(4);
     expect(el().querySelector('[data-ceka="testovi"]')).not.toBeNull();
+  });
+
+  describe('kartica "Nalozi" (obaveštenja za naloge studenata)', () => {
+    const NALOG: ObavestenjeInfo = {
+      id: 9, vrsta: 'NE_STIZE_KOD', studentId: 4, studentIme: 'Ana Primerović', indeks: 'GD1', podaci: { imaMejl: false },
+      kreirano: '2025-10-13T18:00:00', procitano: null, reseno: null,
+    };
+
+    it('stranica učitava otvorena obaveštenja; bez njih nema kartice', async () => {
+      await otvori(PRAZNA);
+      expect(obavestenja.ucitaj).toHaveBeenCalledOnce();
+      expect(el().querySelector('app-nalozi-kartica')).toBeNull();
+    });
+
+    it('sa otvorenim obaveštenjima: kartica "Nalozi" uz "Čeka na tebe"; "Rešeno" i veza idu kroz store', async () => {
+      obavestenja.otvorena.set([NALOG]);
+      obavestenja.broj.set({ neprocitana: 1, otvorena: 1 });
+      await otvori(PRAZNA);
+      const kartica = el().querySelector('app-nalozi-kartica')!;
+      expect(kartica.querySelector('h2')!.textContent?.trim()).toBe('Nalozi');
+      expect(kartica.textContent).toContain('Ne stiže kod: Ana Primerović · nema mejl');
+      expect(kartica.previousElementSibling?.tagName.toLowerCase()).toBe('app-ceka-na-tebe');
+      kartica.querySelector<HTMLButtonElement>('button[data-reseno]')!.click();
+      expect(obavestenja.reseno).toHaveBeenCalledExactlyOnceWith(9);
+      kartica.querySelector<HTMLAnchorElement>('a')!.click();
+      expect(obavestenja.procitano).toHaveBeenCalledExactlyOnceWith(9);
+    });
   });
 });
