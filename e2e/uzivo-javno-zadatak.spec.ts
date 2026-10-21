@@ -121,6 +121,10 @@ test.describe('javni uživo: Zadatak slajd na telefonu', () => {
     await page.getByRole('group', { name: 'c) Broj cifara' }).getByRole('button', { name: '6' }).click();
     await posalji.click();
     await expect(page.getByText('Odgovor primljen ✓')).toBeVisible();
+    // posle slanja polja i "Pošalji" nestaju; ostaje šta je poslato
+    await expect(posalji).toHaveCount(0);
+    await expect(page.getByLabel('a) Dekadno')).toHaveCount(0);
+    await expect(page.locator('[data-poslato]')).toContainText('a) Dekadno: 45');
     await expect.poll(() => cas.broker.slanja.length).toBe(1);
     const [poslato] = cas.broker.slanja;
     expect(poslato.odrediste).toBe(`/app/izvodjenja/${IZVODJENJE}/odgovor`);
@@ -135,7 +139,8 @@ test.describe('javni uživo: Zadatak slajd na telefonu', () => {
     await expect(page.getByText('Veza prekinuta, povezujem…')).toBeHidden();
     await expect(slika).toHaveAttribute('src', `api/public/mediji/${A}`);
     await expect(page.getByText('Odgovor primljen ✓')).toBeVisible();
-    await expect(page.getByLabel('a) Dekadno')).toBeDisabled();
+    await expect(page.getByLabel('a) Dekadno')).toHaveCount(0);
+    await expect(page.locator('[data-poslato]')).toContainText('a) Dekadno: 45');
 
     // ZATVORENO: ishod po poljima, još bez tačnih vrednosti i bez rešenja
     cas.posalji(javniZadatak('ZATVORENO'), licniZadatak({ faza: 'ZATVORENO', primljen: true, ishod: { a: true, c: false }, tacno: false }));

@@ -207,11 +207,12 @@ describe('UzivoStudentPage: Zadatak slajd', () => {
     expect(lazni.odgovoriZadatak).toHaveBeenCalledWith({ a: '45' });
   });
 
-  it('poslato: "Odgovor primljen ✓", slika ostaje, polja zaključana', async () => {
+  it('poslato: "Odgovor primljen ✓", slika ostaje, polja i "Pošalji" nestaju', async () => {
     const el = await napravi('zadatakPrimljen');
     expect(el.textContent).toContain('Odgovor primljen ✓');
     expect(el.querySelector('img[data-zadatak-svg]')).not.toBeNull();
-    expect(el.querySelector<HTMLInputElement>('input[data-polje="a"]')!.disabled).toBe(true);
+    expect(el.querySelector('input[data-polje="a"]')).toBeNull();
+    expect(Array.from(el.querySelectorAll('button')).some(b => b.textContent!.trim() === 'Pošalji')).toBe(false);
   });
 
   it('ishod: naslov "Tačno!" ili "Nisi odgovorio"; rad na papiru bez naslova ishoda', async () => {

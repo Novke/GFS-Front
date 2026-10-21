@@ -21,7 +21,7 @@ export interface KodTraka { host: string; kod: string; }
  * INFO: naslov, Markdown, slika; uz `postepeno` su sakrivene stavke liste najvišeg nivoa sa indeksom ≥ `korak`.
  * PITANJE: tekst, slika, pločice opcija, tajmer i broj odgovora; uz `prikaziRezultat` rezultati zauzimaju mesto pločica.
  * Tekst pitanja i opcija može imati formule `$...$` (`app-tekst-formule`); INFO ih ne tumači.
- * ZADATAK: `app-zadatak-prikaz` (opis "N različitih varijanti", tajmer i broj odgovora, a uz `javniRezultat` mreža rezultata po
+ * ZADATAK: `app-zadatak-prikaz` (uputstvo po fazi, tajmer i broj odgovora, a uz `javniRezultat` mreža rezultata po
  * varijanti; bez stanja izvođenja, npr. pregled u editoru, statična kartica "Zadatak", naziv grupe i broj različitih).
  * PLATNO: `app-platno-prikaz` preko celog okvira (slojevi posle koraka `korak`, animacija prelaza `animacija`), bez
  * trake "host/uzivo · kod" (pokrila bi sadržaj uvezenog slajda; kasni studenti imaju QR).
@@ -52,7 +52,8 @@ export interface KodTraka { host: string; kod: string; }
           @if (slajd().slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
         </div>
       } @else if (slajd().tip === 'ZADATAK') {
-        <app-zadatak-prikaz [slajd]="slajd()" [zadatak]="zadatak()" [faza]="faza()" [brojOdgovora]="brojOdgovora()" [tajmer]="tajmer()" />
+        <app-zadatak-prikaz [slajd]="slajd()" [zadatak]="zadatak()" [faza]="faza()" [brojOdgovora]="brojOdgovora()"
+                            [odgovoriliOd]="odgovoriliOd()" [prikaziRezultat]="prikaziRezultat()" [tajmer]="tajmer()" />
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
           <app-tekst-formule class="uz-md uz-pitanje-tekst" [tekst]="p.tekst" [markdown]="true" />
@@ -94,6 +95,8 @@ export class SlajdPrikazComponent {
   readonly prikaziRezultat = input<boolean>(false);
   readonly tacanPrikazan = input<boolean>(false);
   readonly brojOdgovora = input<number | null>(null);
+  /** Zadatak slajd: imenilac "Odgovorilo x od y" (`null` bez runde). */
+  readonly odgovoriliOd = input<number | null>(null);
   /** Nastavnički snimak Zadatak slajda (samo ZADATAK sa stanjem izvođenja); projektor iz njega čita samo `javniRezultat`. */
   readonly zadatak = input<NastavnickiZadatak | null>(null);
   readonly tajmer = input<TajmerUlaz | null>(null);

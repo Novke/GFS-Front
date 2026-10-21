@@ -626,7 +626,7 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     mock.izvodjenje.primeni('BROJ_VARIJANTI', 2);
     const broker = await nastavnickiBroker(page, mock);
     await page.goto('izvodjenja/7/publika');
-    await expect(page.locator('app-publika-scena [data-zadatak]')).toHaveText('2 različitih varijanti');
+    await expect(page.locator('app-publika-scena [data-zadatak]')).toHaveText('Zadatak stiže na telefone');
     await page.waitForLoadState('networkidle');
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak u CEKA').toEqual([]);
 

@@ -49,8 +49,9 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
  *
  * Lenja (`@defer` u stranici studenta): telefon je učitava tek na Zadatak slajdu, pa ni stilovi nisu u globalnom CSS-u
  * (početni paket je na granici budžeta `e2e/lenji-editor.spec.ts`). Uvozi samo module dozvoljene javnom delu.
- * `zakljucan` (poslato, primljeno ili server više ne prima) gasi polja; posle prvog slanja instanca se zaključava i sama
- * (dvostruki dodir šalje jednom), a otključava se kad roditelj skine pa vrati `zakljucan` (greška provere, rok potvrde).
+ * `zakljucan` (poslato, primljeno ili server više ne prima) sklanja polja i "Pošalji": umesto njih ostaje "Tvoj odgovor" (šta je
+ * poslato, dok runda nije zatvorena). Posle prvog slanja instanca se zaključava i sama (dvostruki dodir šalje jednom), a polja se
+ * vraćaju sa istim vrednostima kad roditelj skine pa vrati `zakljucan` (greška provere, rok potvrde).
  */
 @Component({
   selector: 'app-zadatak-unos',
@@ -79,6 +80,7 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
     .uz-st-zd-opcija:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
     .uz-st-zd-opcija app-tekst-formule { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .uz-st-zd-kvacica { flex: none; width: 1.5rem; font-size: 1.5rem; text-align: center; }
+    .uz-st-zd-poslato { display: flex; flex-direction: column; gap: 0.375rem; }
     .uz-st-zd-ishod p { margin: 0; font-size: 1.125rem; overflow-wrap: anywhere; }
     .uz-st-zd-ishod strong { font-weight: 800; }
     .uz-st-zd-uvecano {
@@ -94,6 +96,17 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
     <button type="button" class="uz-st-dugme uz-st-zd-uvecaj" aria-haspopup="dialog" (click)="otvori(z.svgId, 'Zadatak')">Uvećaj</button>
     @if (!z.polja.length) {
       <p class="uz-st-tekst">Reši na papiru.</p>
+    } @else if (z.faza !== 'ZATVORENO' && onemoguceno()) {
+      @if (poslatiRedovi(); as redovi) {
+        <div class="uz-st-zd-poslato" data-poslato>
+          <p class="uz-st-oznaka">Tvoj odgovor</p>
+          <ul class="uz-st-zd-ishod">
+            @for (r of redovi; track r.kljuc) {
+              <li><p>{{ r.oznaka }}: @if (r.opcija) { <app-tekst-formule [tekst]="r.vrednost" /> } @else { <strong>{{ r.vrednost }}</strong> }</p></li>
+            }
+          </ul>
+        </div>
+      }
     } @else if (z.faza !== 'ZATVORENO') {
       <form class="uz-st-zd-polja" (submit)="$event.preventDefault(); posalji1()">
         @for (p of z.polja; track p.kljuc; let i = $index) {
@@ -185,6 +198,21 @@ export class ZadatakUnosComponent {
   private readonly poslato = linkedSignal({ source: () => `${this.rundaId()}:${this.zakljucan()}`, computation: () => false });
   protected readonly onemoguceno = computed(() => this.zakljucan() || this.poslato() || this.zadatak().faza !== 'OTVORENO');
   protected readonly sve = computed(() => this.zadatak().polja.every(p => popunjeno(p, this.vrednosti()[p.kljuc])));
+  /**
+   * Poslat (ili zaključan) odgovor umesto polja: `oznaka: vrednost` iz unetih vrednosti (opcije njihovim tekstom, redom opcija).
+   * Posle ponovnog učitavanja stranice vrednosti nema (server ih ne vraća telefonu), pa ni spiska: ostaje "Odgovor primljen ✓".
+   */
+  protected readonly poslatiRedovi = computed(() => {
+    const v = this.vrednosti();
+    const redovi = this.zadatak().polja.flatMap(p => {
+      const x = v[p.kljuc];
+      const vrednost = Array.isArray(x)
+        ? (p.opcije ?? []).filter(o => x.includes(o.id)).map(o => o.tekst).join(', ')
+        : (x ?? '').trim() + (p.jedinica && x?.trim() ? ' ' + p.jedinica : '');
+      return vrednost ? [{ kljuc: p.kljuc, oznaka: p.oznaka, vrednost, opcija: jeOpcija(p) }] : [];
+    });
+    return redovi.length ? redovi : null;
+  });
 
   /** Slika preko celog ekrana (zadatak ili rešenje); fokus ide na "Zatvori", a po zatvaranju nazad na dugme. */
   protected readonly uvecano = signal<{ id: string; naziv: string } | null>(null);

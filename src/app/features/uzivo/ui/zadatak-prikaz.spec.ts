@@ -26,28 +26,47 @@ function javni(izmene: Partial<ZadatakRezultat> = {}): ZadatakRezultat {
 }
 
 describe('ZadatakPrikazComponent', () => {
-  it('CEKA: "Zadatak", naziv grupe i "2 različitih varijanti" (brojZaOtvaranje), bez tajmera i rezultata', async () => {
+  it('CEKA: "Zadatak", naziv grupe i uputstvo (bez broja varijanti), bez tajmera i rezultata', async () => {
     const { el } = await prikazi(ulaziIz(naZadatku('CEKA')));
     expect(tekst(el.querySelector('.uz-slajd-naslov'))).toBe('Zadatak');
     expect(tekst(el.querySelector('.uz-zad-grupa'))).toBe('2 → 10');
-    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('Zadatak stiže na telefone');
     expect(el.querySelector('app-tajmer')).toBeNull();
     expect(el.querySelector('app-zadatak-rezultat')).toBeNull();
     expect(el.dataset['faza']).toBe('CEKA');
   });
 
-  it('brojZaOtvaranje 4: "4 različitih varijanti"', async () => {
+  it('tabla nikad ne pokazuje broj varijanti (ni brojZaOtvaranje ni broj izvučenih)', async () => {
     const { el } = await prikazi(ulaziIz(naZadatku('CEKA', { zadatak: { brojZaOtvaranje: 4 } })));
-    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('4 različitih varijanti');
+    expect(tekst(el)).not.toMatch(/\d+ različit|varijant/);
+    const z = await prikazi(ulaziIz(naZadatku('ZATVORENO')));
+    expect(tekst(z.el.querySelector('[data-zadatak]'))).toBe('Odgovaranje je završeno');
+    expect(tekst(z.el)).not.toMatch(/varijant/);
   });
 
-  it('OTVORENO: broj izvučenih varijanti, broj odgovora i tajmer', async () => {
+  it('OTVORENO: uputstvo i tajmer; "Odgovorilo x od y" tek uz prekidač rezultata', async () => {
     const s = naZadatku('OTVORENO', { zadatak: { brojZaOtvaranje: 5 } });
     const sat = new ServerskiSat();
-    const { el } = await prikazi(ulaziIz(s, { brojOdgovora: 3, tajmer: { rokMs: 1_030_000, preostaloMs: null, sat } }));
-    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
-    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovora: 3');
+    const { fixture, el } = await prikazi(ulaziIz(s, { brojOdgovora: 3, odgovoriliOd: 20, tajmer: { rokMs: 1_030_000, preostaloMs: null, sat } }));
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('Svako ima svoj zadatak na telefonu');
+    expect(el.querySelector('[data-odgovorilo]')).toBeNull();
     expect(el.querySelector('app-tajmer')).not.toBeNull();
+    fixture.componentRef.setInput('prikaziRezultat', true);
+    fixture.detectChanges();
+    expect(tekst(el.querySelector('[data-odgovorilo]'))).toBe('Odgovorilo 3 od 20');
+  });
+
+  it('OTVORENO uz Space: samo koliko je odgovorilo, bez kartica, ni kad snimak nosi javniRezultat', async () => {
+    const s = naZadatku('OTVORENO', { zadatak: { javniRezultat: javni() } });
+    const { el } = await prikazi(ulaziIz(s, { brojOdgovora: 2, odgovoriliOd: 5, prikaziRezultat: true }));
+    expect(el.querySelector('app-zadatak-rezultat')).toBeNull();
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('Svako ima svoj zadatak na telefonu');
+    expect(tekst(el.querySelector('[data-odgovorilo]'))).toBe('Odgovorilo 2 od 5');
+  });
+
+  it('imenilac nikad manji od broja odgovora', async () => {
+    const { el } = await prikazi(ulaziIz(naZadatku('OTVORENO'), { brojOdgovora: 4, odgovoriliOd: 3, prikaziRezultat: true }));
+    expect(tekst(el.querySelector('[data-odgovorilo]'))).toBe('Odgovorilo 4 od 4');
   });
 
   it('bez javniRezultat nema slike zadatka ni rešenja, ni kad nastavnički snimak ima sve (varijante i rezultat)', async () => {
@@ -60,13 +79,13 @@ describe('ZadatakPrikazComponent', () => {
     expect(tekst(el)).not.toContain('tačno');
   });
 
-  it('javniRezultat prisutan: mreža rezultata umesto opisa, a zaglavlje (naziv grupe, odgovori, tajmer) ostaje', async () => {
+  it('ZATVORENO uz javniRezultat: mreža rezultata umesto opisa, a zaglavlje (naziv grupe, odgovori, tajmer) ostaje', async () => {
     const s = naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni() } });
-    const { el } = await prikazi(ulaziIz(s, { brojOdgovora: 2 }));
+    const { el } = await prikazi(ulaziIz(s, { brojOdgovora: 2, odgovoriliOd: 3, prikaziRezultat: true }));
     expect(el.querySelector('[data-zadatak]')).toBeNull();
     expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);
     expect(tekst(el.querySelector('.uz-zad-grupa'))).toBe('2 → 10');
-    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovora: 2');
+    expect(tekst(el.querySelector('[data-odgovorilo]'))).toBe('Odgovorilo 2 od 3');
   });
 
   it('projektor čita samo javniRezultat: nastavnički rezultat sa tačnim vrednostima se ne crta', async () => {
