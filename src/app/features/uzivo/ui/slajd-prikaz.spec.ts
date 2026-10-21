@@ -243,11 +243,12 @@ describe('SlajdPrikazComponent: ZADATAK sa stanjem izvođenja (projektor)', () =
   it('OTVORENO: app-zadatak-prikaz sa opisom, brojem odgovora u zaglavlju i kodom u podnožju (broj odgovora jednom)', async () => {
     const s = naZadatku('OTVORENO');
     const { el } = await prikazi({
-      slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'OTVORENO', brojOdgovora: 4, kodTraka,
+      slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'OTVORENO', brojOdgovora: 4, odgovoriliOd: 6, prikaziRezultat: true, kodTraka,
     });
     expect(el.querySelector('app-zadatak-prikaz')).not.toBeNull();
-    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('Svako ima svoj zadatak na telefonu');
     expect(el.querySelectorAll('.uz-zad-odgovori').length).toBe(1);
+    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovorilo 4 od 6');
     expect(el.querySelector('.uz-slajd-podnozje .uz-slajd-odgovori')).toBeNull();
     expect(tekst(el.querySelector('.uz-kod-traka'))).toContain('gfs.trif.rs/uzivo · kod 123 456');
     expect(el.querySelector('app-pitanje-plocice')).toBeNull();

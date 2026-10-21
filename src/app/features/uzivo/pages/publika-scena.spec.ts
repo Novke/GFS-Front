@@ -120,16 +120,16 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
   });
   const slike = (el: Element) => Array.from(el.querySelectorAll('img')).map(i => i.getAttribute('src'));
 
-  it('CEKA: "Zadatak", grupa i "2 različitih varijanti"; bez broja odgovora i bez slika', async () => {
+  it('CEKA: "Zadatak", grupa i uputstvo (bez broja varijanti); bez broja odgovora i bez slika', async () => {
     const el = await prikazi(naZadatku('CEKA'));
     expect(tekst(el.querySelector('.uz-slajd-naslov'))).toBe('Zadatak');
-    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('2 različitih varijanti');
+    expect(tekst(el.querySelector('[data-zadatak]'))).toBe('Zadatak stiže na telefone');
     expect(el.querySelector('.uz-zad-odgovori')).toBeNull();
     expect(el.querySelector('img')).toBeNull();
   });
 
-  it('OTVORENO: broj odgovora (brojOdgovora snimka) i tajmer runde, na slajdu sa vremenom', async () => {
-    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3 } });
+  it('OTVORENO uz Space: "Odgovorilo x od y" (imenilac kao u konzoli) i tajmer runde, bez kartica', async () => {
+    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3, ucesnici: [], brojPovezanih: 7, rezultatiPrikazani: true } });
     s.runda = { id: 9, redniBroj: 1, rokMs: s.serverVremeMs + 60_000, preostaloMs: null, tajmerRadi: true };
     const fixture = TestBed.createComponent(PublikaScenaComponent);
     fixture.componentRef.setInput('stanje', s);
@@ -138,8 +138,12 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovora: 3');
+    expect(tekst(el.querySelector('.uz-zad-odgovori'))).toBe('Odgovorilo 3 od 7');
     expect(el.querySelector('.uz-zad-zaglavlje app-tajmer')).not.toBeNull();
+    expect(el.querySelector('app-zadatak-rezultat')).toBeNull();
+    fixture.componentRef.setInput('stanje', { ...s, rezultatiPrikazani: false, verzija: s.verzija + 1 });
+    fixture.detectChanges();
+    expect(el.querySelector('.uz-zad-odgovori')).toBeNull();
   });
 
   it('nastavnički rezultat i varijante (sa rešenjima) se ne crtaju dok javniRezultat nije tu', async () => {

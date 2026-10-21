@@ -99,7 +99,12 @@ describe('ZadatakUnosComponent', () => {
     expect(poslato).toEqual([{ a: '45', c: [2] }]);
     expect(JSON.stringify(poslato[0])).toBe('{"a":"45","c":[2]}');
     fixture.detectChanges();
-    expect(dugme('Pošalji')!.disabled).toBe(true);
+    // posle slanja polja i "Pošalji" nestaju, a ostaje šta je poslato
+    expect(dugme('Pošalji')).toBeNull();
+    expect(el().querySelectorAll('input').length).toBe(0);
+    const poslatoBlok = el().querySelector('[data-poslato]')!;
+    expect(poslatoBlok.querySelector('.uz-st-oznaka')?.textContent?.trim()).toBe('Tvoj odgovor');
+    expect(Array.from(poslatoBlok.querySelectorAll('li'), li => li.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['a: 45', 'c: $11$']);
     expect(nacrti.at(-1)).toEqual({ rundaId: 55, polja: { a: ' 45 ', c: [2] } });
   });
 
@@ -137,13 +142,17 @@ describe('ZadatakUnosComponent', () => {
     expect(el().querySelectorAll('input').length).toBe(0);
   });
 
-  it('zaključan: polja i "Pošalji" onemogućeni; nacrt iste runde vraća unete vrednosti', () => {
-    napravi(zadatak(), true, { rundaId: 55, polja: { a: '45', c: [2] } });
-    const broj = el().querySelector<HTMLInputElement>('input[data-polje="a"]')!;
-    expect(broj.value).toBe('45');
-    expect(broj.disabled).toBe(true);
-    expect(el().querySelector('[data-polje="c"] button[aria-pressed="true"]')?.textContent).toContain('11');
-    expect(dugme('Pošalji')!.disabled).toBe(true);
+  it('zaključan: bez polja i "Pošalji", "Tvoj odgovor" iz nacrta iste runde (jedinica uz broj)', () => {
+    napravi(zadatak({ polja: [polje('a', 'BROJ', { jedinica: 'm' }), polje('c', 'JEDAN_TACAN')] }), true,
+      { rundaId: 55, polja: { a: '45', c: [2] } });
+    expect(el().querySelectorAll('input').length).toBe(0);
+    expect(dugme('Pošalji')).toBeNull();
+    const redovi = Array.from(el().querySelectorAll<HTMLElement>('[data-poslato] li')).map(r => r.textContent!.replace(/\s+/g, ' ').trim());
+    expect(redovi).toEqual(['a: 45 m', 'c: $11$']);
+    // bez nacrta (npr. posle ponovnog učitavanja) nema ni spiska
+    napravi(zadatak(), true);
+    expect(el().querySelector('[data-poslato]')).toBeNull();
+    expect(dugme('Pošalji')).toBeNull();
     // nacrt druge runde se ne prenosi
     napravi(zadatak({ rundaId: 56 }), false, { rundaId: 55, polja: { a: '45' } });
     expect(el().querySelector<HTMLInputElement>('input[data-polje="a"]')!.value).toBe('');
@@ -157,6 +166,7 @@ describe('ZadatakUnosComponent', () => {
     fixture.detectChanges();
     fixture.componentRef.setInput('zakljucan', false);
     fixture.detectChanges();
+    expect(el().querySelector<HTMLInputElement>('input[data-polje="a"]')!.value).toBe('45');
     expect(dugme('Pošalji')!.disabled).toBe(false);
     dugme('Pošalji')!.click();
     expect(poslato).toEqual([{ a: '45' }, { a: '45' }]);

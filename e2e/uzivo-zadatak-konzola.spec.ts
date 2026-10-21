@@ -135,7 +135,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     mock.izvodjenje.odgovori(2, { a: '49' });
   }
 
-  test('CEKA i OTVORENO: "Zadatak", grupa i broj različitih varijanti, broj odgovora; nikad slike ni imena', async ({ page, mock }) => {
+  test('CEKA i OTVORENO: "Zadatak", grupa i uputstvo (nikad broj varijanti), Space samo "Odgovorilo x od y"; nikad slike ni imena', async ({ page, mock }) => {
     naZadatak(mock);
     expect(mock.izvodjenje.primeni('BROJ_VARIJANTI', 2).status).toBe(200);
     const resenja = pratiResenja(page);
@@ -143,7 +143,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await page.goto('izvodjenja/7/publika');
     await expect(scena(page).locator('.uz-slajd-naslov')).toHaveText('Zadatak');
     await expect(scena(page).locator('.uz-zad-grupa')).toHaveText('2 → 10');
-    await expect(scena(page).locator('[data-zadatak]')).toHaveText('2 različitih varijanti');
+    await expect(scena(page).locator('[data-zadatak]')).toHaveText('Zadatak stiže na telefone');
     await expect(scena(page).locator('app-zadatak-prikaz')).toHaveAttribute('data-faza', 'CEKA');
     await expect(scena(page).locator('.uz-zad-odgovori')).toHaveCount(0);
 
@@ -152,9 +152,16 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     mock.izvodjenje.odgovori(1, { a: '11' });
     broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.stanje());
     await expect(scena(page).locator('app-zadatak-prikaz')).toHaveAttribute('data-faza', 'OTVORENO');
-    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveText('Odgovora: 1');
-    await expect(scena(page).locator('[data-zadatak]')).toHaveText('2 različitih varijanti');
+    await expect(scena(page).locator('[data-zadatak]')).toHaveText('Svako ima svoj zadatak na telefonu');
+    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveCount(0);
+    // Space dok se odgovara: samo koliko je odgovorilo, bez kartica
+    await page.keyboard.press(' ');
+    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveText('Odgovorilo 1 od 2');
+    await expect(kartice(page)).toHaveCount(0);
+    await expect(scena(page).locator('[data-zadatak]')).toHaveText('Svako ima svoj zadatak na telefonu');
     await expect(scena(page).locator('img')).toHaveCount(0);
+    await page.keyboard.press(' ');
+    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveCount(0);
     await expect(scena(page)).not.toContainText(/Ana|Bojan/);
     expect(resenja).toEqual([]);
   });
@@ -168,7 +175,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await nastavnickiBroker(page, mock);
     await page.goto('izvodjenja/7/publika');
     await expect(scena(page).locator('app-zadatak-prikaz')).toHaveAttribute('data-faza', 'OTVORENO');
-    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveText('Odgovora: 2');
+    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveCount(0);
 
     await page.keyboard.press('o'); // zatvaranje
     await expect(scena(page).locator('app-zadatak-prikaz')).toHaveAttribute('data-faza', 'ZATVORENO');
@@ -199,6 +206,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
 
     // 3. Space: brojevi dodeljeno · odgovorilo · tačno i trake vrednosti (tačna vrednost označena)
     await page.keyboard.press(' ');
+    await expect(scena(page).locator('.uz-zad-odgovori')).toHaveText('Odgovorilo 2 od 2');
     await expect(kartice(page).first().locator('.uz-zr-brojevi')).toHaveText('dodeljeno 1 · odgovorilo 1 · tačno 1');
     await expect(kartice(page).nth(1).locator('.uz-zr-brojevi')).toHaveText('dodeljeno 1 · odgovorilo 1 · tačno 0');
     const prvi = kartice(page).first().locator('.uz-zr-red');

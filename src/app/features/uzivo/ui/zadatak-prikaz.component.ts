@@ -5,11 +5,12 @@ import { TajmerComponent } from './tajmer.component';
 import { ZadatakRezultatComponent } from './zadatak-rezultat.component';
 
 /**
- * Zadatak slajd na platnu 16:9 (projektor, umanjeni prikaz u konzoli): zaglavlje "Zadatak" sa nazivom grupe, brojem odgovora
- * i tajmerom, ispod njega opis "N različitih varijanti" (CEKA, OTVORENO i zatvorena runda dok ništa nije prikazano) ili, kad
- * snimak nosi `javniRezultat` (bar jedan od tri nezavisna prekidača: rezultati, `TACAN`, `RESENJE`), mreža `app-zadatak-rezultat`.
+ * Zadatak slajd na platnu 16:9 (projektor, umanjeni prikaz u konzoli): zaglavlje "Zadatak" sa nazivom grupe, tajmerom i,
+ * uz prekidač rezultata (Space), "Odgovorilo x od y"; ispod njega uputstvo po fazi (CEKA, OTVORENO i zatvorena runda dok ništa nije prikazano; bez broja varijanti) ili, kad
+ * snimak nosi `javniRezultat` (bar jedan od tri nezavisna prekidača: rezultati, `TACAN`, `RESENJE`) i runda je zatvorena, mreža
+ * `app-zadatak-rezultat` (dok se odgovara, tabla ne pokazuje šta je ko odgovorio).
  * Čita **samo** `javniRezultat`: nastavnički `rezultat` i `varijante` (sa id-jevima svih rešenja i tačnim vrednostima) se ovde
- * ne crtaju (iz `varijante` se uzima samo broj izvučenih), pa slika rešenja ne postoji u DOM-u (ni zahtev na nju) dok nastavnik
+ * ne crtaju, pa slika rešenja ne postoji u DOM-u (ni zahtev na nju) dok nastavnik
  * ne uključi `RESENJE`. Imena učesnika se ne prikazuju. Bez stanja izvođenja (`zadatak` je `null`, npr. pregled u editoru i panel "Sledeće") statična kartica sa opisom
  * sa slajda: naziv grupe i "Različitih: N" (prazno = sve).
  */
@@ -40,17 +41,17 @@ import { ZadatakRezultatComponent } from './zadatak-rezultat.component';
           <h1 class="uz-slajd-naslov">Zadatak</h1>
           <p class="uz-zad-grupa">{{ grupa() }}</p>
         </div>
-        @if (brojOdgovora() !== null) {
-          <span class="uz-zad-odgovori">Odgovora: <strong>{{ brojOdgovora() }}</strong></span>
+        @if (odgovorilo(); as o) {
+          <span class="uz-zad-odgovori" data-odgovorilo>Odgovorilo <strong>{{ o.broj }}</strong> od <strong>{{ o.od }}</strong></span>
         }
         @if (aktivanTajmer(); as t) {
           <app-tajmer class="uz-slajd-tajmer" [rokMs]="t.rokMs" [preostaloMs]="t.preostaloMs" [sat]="t.sat" [ukupnoMs]="ukupnoMs()" />
         }
       </header>
-      @if (z.javniRezultat; as r) {
+      @if (karticeVidljive() && z.javniRezultat; as r) {
         <app-zadatak-rezultat class="uz-zad-rezultat" [rezultat]="r" />
       } @else {
-        <div class="uz-zad-opis" data-zadatak><p class="uz-zad-broj">{{ brojVarijanti() }} različitih varijanti</p></div>
+        <div class="uz-zad-opis" data-zadatak><p class="uz-zad-broj">{{ uputstvo() }}</p></div>
       }
     } @else {
       <h1 class="uz-slajd-naslov">Zadatak</h1>
@@ -69,6 +70,10 @@ export class ZadatakPrikazComponent {
   readonly zadatak = input<NastavnickiZadatak | null>(null);
   readonly faza = input<Faza | null>(null);
   readonly brojOdgovora = input<number | null>(null);
+  /** Imenilac "Odgovorilo x od y" (učesnici povezani ili koji su već odgovorili, kao u konzoli); `null` bez runde. */
+  readonly odgovoriliOd = input<number | null>(null);
+  /** Prekidač "rezultati" (Space): pali "Odgovorilo x od y", a posle zatvaranja i kartice rezultata. */
+  readonly prikaziRezultat = input<boolean>(false);
   readonly tajmer = input<TajmerUlaz | null>(null);
 
   /** Opis sa slajda (kad je grupa obrisana, naziv je `null`); u stanju isti opis stiže u `zadatak.slajd`. */
@@ -77,11 +82,27 @@ export class ZadatakPrikazComponent {
     const o = this.opis();
     return o?.grupaNaziv ?? (o && o.grupaId !== null ? 'Grupa zadataka' : 'Grupa nije izabrana');
   });
-  /** Pre otvaranja koliko će se izvući, posle otvaranja koliko je izvučeno. */
-  protected readonly brojVarijanti = computed(() => {
-    const z = this.zadatak();
-    return z ? (z.varijante?.length ?? z.brojZaOtvaranje) : 0;
+  /**
+   * Uputstvo za tablu po fazi. Broj izvučenih varijanti se ne prikazuje (studentima ne znači ništa); nastavnik ga vidi u panelu
+   * konzole ("Različitih: N od M").
+   */
+  protected readonly uputstvo = computed(() => {
+    switch (this.faza() ?? 'CEKA') {
+      case 'CEKA': return 'Zadatak stiže na telefone';
+      case 'OTVORENO': return 'Svako ima svoj zadatak na telefonu';
+      case 'ZATVORENO': return 'Odgovaranje je završeno';
+    }
   });
+  /** "Odgovorilo x od y" samo uz prekidač rezultata (Space), da nastavnik bira kad razred vidi koliko je odgovorilo. */
+  protected readonly odgovorilo = computed(() => {
+    const broj = this.brojOdgovora();
+    return this.prikaziRezultat() && broj !== null ? { broj, od: Math.max(this.odgovoriliOd() ?? 0, broj) } : null;
+  });
+  /**
+   * Kartice rezultata tek posle zatvaranja: dok je runda otvorena (još se odgovara) tabla uz Space pokazuje samo koliko je
+   * odgovorilo, ne i šta.
+   */
+  protected readonly karticeVidljive = computed(() => this.faza() === 'ZATVORENO');
   protected readonly ukupnoMs = computed(() => {
     const s = this.opis()?.vremeSekunde;
     return s ? s * 1000 : null;
