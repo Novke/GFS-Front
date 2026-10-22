@@ -166,6 +166,15 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       assert.ok(JAVNO_DOZVOLJENO.includes('shared/util/nazad'));
     });
 
+    for (const feature of ['features/nalog', 'features/upis']) {
+      for (const dozvoljen of ['shared/util/indeks', 'shared/forms/indeks-polja']) {
+        it(`indeks u tri dela: ${feature} sme ${dozvoljen}`, async () => {
+          const kod = `import * as X from '${dubina(feature)}${dozvoljen}';\nexport const y = X;\n`;
+          assert.deepEqual(await poruke(feature, kod), []);
+        });
+      }
+    }
+
     it('stvarni fajlovi naloga uvoze samo dozvoljeno (stranica, korak, API)', async () => {
       const stranica = `import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';\n` +
         `import { bezbednoNazad } from '../../../shared/util/nazad';\n` +

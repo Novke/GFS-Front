@@ -39,10 +39,9 @@
           <dl class="pregled">
             <dt>Ime</dt><dd>{{ p.ime }}</dd>
             <dt>Prezime</dt><dd>{{ p.prezime }}</dd>
-            <dt>Indeks</dt><dd class="mono">{{ p.indeks }}</dd>
-            <dt>Godina upisa</dt><dd class="mono">{{ p.godina }}</dd>
+            <dt>Indeks</dt><dd class="mono">{{ indeksZaPrikaz(p) }}</dd>
             <dt>Email</dt><dd>{{ p.email }}</dd>
-            <dt>Telefon</dt><dd class="mono">{{ p.brojTelefona }}</dd>
+            <dt>Telefon</dt><dd class="mono">{{ telefonZaPrikaz(p.brojTelefona) }}</dd>
           </dl>
           @if (waLink(); as wa) {
             <p class="wa-uvod">Pridruži se WhatsApp grupi generacije, tamo stižu obaveštenja.</p>
@@ -69,24 +68,11 @@
             }
           </mat-form-field>
 
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Indeks</mat-label>
-            <input matInput type="text" formControlName="indeks" class="mono" autocomplete="off" autocapitalize="characters"
-              autocorrect="off" spellcheck="false" maxlength="20">
-            <mat-hint>Latinicom, npr. GD12</mat-hint>
-            @if (poruka('indeks'); as m) {
-              <mat-error>{{ m }}</mat-error>
-            }
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Godina upisa</mat-label>
-            <input matInput type="number" formControlName="godina" inputmode="numeric" step="1" [attr.min]="2000"
-              [attr.max]="granice.maxGodina">
-            @if (poruka('godina'); as m) {
-              <mat-error>{{ m }}</mat-error>
-            }
-          </mat-form-field>
+          <fieldset class="grupa-polja">
+            <legend>Indeks</legend>
+            <app-indeks-polja [grupa]="forma.controls.indeks"
+              hintGodine="Predložena je godina tvoje grupe; promeni je ako si upisan ranije." />
+          </fieldset>
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Email</mat-label>
@@ -97,13 +83,42 @@
             }
           </mat-form-field>
 
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Broj telefona</mat-label>
-            <input matInput type="tel" formControlName="brojTelefona" inputmode="tel" autocomplete="tel">
-            @if (poruka('brojTelefona'); as m) {
-              <mat-error>{{ m }}</mat-error>
-            }
-          </mat-form-field>
+          <fieldset class="grupa-polja" formGroupName="telefon">
+            <legend>Telefon</legend>
+            <div class="telefon" [class.druga]="telefonVrednost().zemlja === drugaZemlja">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="zemlja">
+                <mat-label>Zemlja</mat-label>
+                <select matNativeControl formControlName="zemlja" name="zemlja-telefona" autocomplete="tel-country-code">
+                  @for (z of zemlje; track z.kod) {
+                    <option [value]="z.kod">{{ oznakaZemlje(z.kod) }}</option>
+                  }
+                </select>
+              </mat-form-field>
+              @if (telefonVrednost().zemlja === drugaZemlja) {
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pozivni">
+                  <mat-label>Pozivni broj</mat-label>
+                  <span matTextPrefix aria-hidden="true">+&nbsp;</span>
+                  <input matInput type="text" formControlName="pozivni" name="pozivni-broj" inputmode="numeric"
+                    class="mono" autocomplete="off" maxlength="4" aria-label="Pozivni broj zemlje, bez plusa">
+                  @if (porukaTelefona('pozivni'); as m) {
+                    <mat-error>{{ m }}</mat-error>
+                  }
+                </mat-form-field>
+              }
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="broj">
+                <mat-label>Broj telefona</mat-label>
+                <input matInput type="tel" formControlName="broj" name="broj-telefona" inputmode="tel" autocomplete="tel"
+                  class="mono" maxlength="24" (blur)="prepoznajZemlju()" (paste)="nalepljenTelefon()">
+                @if (porukaTelefona('broj'); as m) {
+                  <mat-error>{{ m }}</mat-error>
+                } @else if (e164(); as e) {
+                  <mat-hint>Biće sačuvan kao <span class="mono">{{ e }}</span></mat-hint>
+                } @else {
+                  <mat-hint>npr. 064 1234567</mat-hint>
+                }
+              </mat-form-field>
+            </div>
+          </fieldset>
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Datum rođenja (opciono)</mat-label>
