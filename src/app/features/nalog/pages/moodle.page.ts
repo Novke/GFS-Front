@@ -20,8 +20,10 @@ import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
+import { prikazIndeksa, tekucaSkolska } from '../../../shared/util/indeks';
 import { NalogApi } from '../data-access/nalog.api';
 import {
+  IndeksIGodina,
   PORUKA_KOD_POSLAT, PORUKA_POMOC, PORUKA_POVEZIVANJE_ISTEKLO, PORUKA_VEC_POVEZAN, StudentJa,
 } from '../data-access/nalog.models';
 import { javnoNazad, porukaGreske, putanjaCilja, razlogServera } from '../data-access/nalog.pravila';
@@ -122,14 +124,17 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
           </p>
           <app-nalog-indeks-korak
             [indeks]="indeks()"
+            [godina]="godina()"
             [salje]="salje()"
             [greska]="greskaKoraka()"
             (posaljiKod)="posaljiKod($event)"
+            (imamKod)="imamKod($event)"
           />
         }
         @case ('kod') {
           <app-nalog-kod-korak
-            [indeks]="indeks()"
+            [indeks]="prikazIndeksa()"
+            [odNastavnika]="odNastavnika()"
             [maska]="maska()"
             [poruka]="porukaKoda()"
             [slanjeBroj]="slanjeBroj()"
@@ -138,7 +143,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
             [pomoc]="pomoc()"
             [pomocSalje]="pomocSalje()"
             (prijavi)="prijavi($event)"
-            (posaljiPonovo)="posaljiKod(indeks())"
+            (posaljiPonovo)="posaljiKod(student())"
             (neStize)="neStize()"
             (promeniIndeks)="idiNa('indeks')"
           />
@@ -148,7 +153,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
           <p class="uvod">Na ovom uređaju si prijavljen u GFS-u. Proveri da li se nalozi poklapaju pre nego što ih povežeš.</p>
           <div class="nalozi" id="moodle-nalozi" role="group" aria-label="Nalozi koji se povezuju">
             @if (ja(); as s) {
-              <span class="nalog-red"><span class="oznaka">GFS nalog:</span> {{ s.ime }} {{ s.prezime }} ({{ s.indeks }})</span>
+              <span class="nalog-red"><span class="oznaka">GFS nalog:</span> {{ s.ime }} {{ s.prezime }} ({{ s.indeks }}@if (s.godina) {/{{ s.godina }}})</span>
             }
             @if (moodleIme(); as ime) {
               <span class="nalog-red"><span class="oznaka">Moodle nalog:</span> {{ ime }}</span>
@@ -243,6 +248,13 @@ export class MoodlePage {
   });
 
   protected readonly indeks = signal('');
+  /** Godina upisa koju je student uneo; do tada tekuća školska godina (iz Moodle-a nema grupe). */
+  private readonly unetaGodina = signal<number | null>(null);
+  protected readonly godina = computed(() => this.unetaGodina() ?? tekucaSkolska());
+  protected readonly student = computed<IndeksIGodina>(() => ({ indeks: this.indeks(), godina: this.godina() }));
+  protected readonly prikazIndeksa = computed(() => prikazIndeksa(this.indeks(), this.godina()));
+  /** Korak koda bez slanja mejla ("Imam kod od nastavnika"). */
+  protected readonly odNastavnika = signal(false);
   protected readonly maska = signal('');
   protected readonly porukaKoda = signal(PORUKA_KOD_POSLAT);
   protected readonly slanjeBroj = signal(0);
@@ -303,6 +315,7 @@ export class MoodlePage {
   protected drugiIndeks(): void {
     this.api.odjavi().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => undefined });
     this.indeks.set('');
+    this.unetaGodina.set(null);
     this.ja.set(null);
     this.idiNa('indeks');
   }
@@ -315,15 +328,17 @@ export class MoodlePage {
     });
   }
 
-  protected posaljiKod(indeks: string): void {
+  protected posaljiKod(s: IndeksIGodina): void {
     if (this.salje()) {
       return;
     }
     this.pocni();
-    this.zahtev = this.api.posaljiKod(indeks).subscribe({
+    this.zahtev = this.api.posaljiKod(s).subscribe({
       next: odg => {
         this.salje.set(false);
-        this.indeks.set(indeks);
+        this.indeks.set(s.indeks);
+        this.unetaGodina.set(s.godina);
+        this.odNastavnika.set(false);
         this.maska.set(odg?.maska ?? '');
         this.porukaKoda.set(odg?.poruka || PORUKA_KOD_POSLAT);
         this.slanjeBroj.update(n => n + 1);
@@ -336,6 +351,19 @@ export class MoodlePage {
     });
   }
 
+  /** "Imam kod od nastavnika": korak koda za uneti indeks i godinu, bez slanja mejla. */
+  protected imamKod(s: IndeksIGodina): void {
+    if (this.salje()) {
+      return;
+    }
+    this.indeks.set(s.indeks);
+    this.unetaGodina.set(s.godina);
+    this.maska.set('');
+    this.pomoc.set(null);
+    this.odNastavnika.set(true);
+    this.idiNa('kod');
+  }
+
   /**
    * Prijava kodom, pa uvek korak "potvrda" (R19): kod dokazuje samo GFS identitet, a Moodle nalog u pregledaču može biti tuđ
    * (zajednički računar), pa se `povezi` šalje tek klikom na "Poveži". `salje` ostaje `true` dok `GET ja` ne završi
@@ -346,7 +374,7 @@ export class MoodlePage {
       return;
     }
     this.pocni();
-    this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
+    this.zahtev = this.api.prijavi(this.student(), kod).subscribe({
       next: () => this.ucitajJa(true),
       error: (e: unknown) => this.neuspeh(e),
     });
@@ -359,7 +387,7 @@ export class MoodlePage {
     this.pomocSalje.set(true);
     this.greskaKoraka.set(null);
     this.pomoc.set(null);
-    this.api.pomoc(this.indeks()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.api.pomoc(this.student()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: odg => {
         this.pomocSalje.set(false);
         this.pomoc.set(odg?.poruka || PORUKA_POMOC);
@@ -433,6 +461,7 @@ export class MoodlePage {
         this.salje.set(false);
         this.ja.set(ja);
         this.indeks.set(ja.indeks);
+        this.unetaGodina.set(typeof ja.godina === 'number' ? ja.godina : null);
         this.idiNa('potvrda', fokus);
         this.greskaKoraka.set(greska);
       },

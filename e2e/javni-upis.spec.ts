@@ -19,16 +19,27 @@ test.describe('javni upis (telefon studenta, bez basic-auth-a)', () => {
 
     await page.getByLabel('Ime', { exact: true }).fill('Nikola');
     await page.getByLabel('Prezime').fill('Upisić');
-    await page.getByLabel('Indeks').fill('gd 11');
-    await page.getByLabel('Godina upisa').fill('2025');
+    // indeks u tri dela: GD je stalno, broj posebno, godina predložena iz grupe (menja se)
+    await expect(page.getByLabel('Godina upisa')).toHaveValue('2025');
+    await page.getByLabel('Broj indeksa').fill('011');
+    await expect(page.getByText('Indeks: GD11/2025')).toBeVisible();
     await page.getByLabel('Email').fill('nikola.upisic@primer.test');
-    await page.getByLabel('Broj telefona').fill('000 000 0011');
+    // telefon: Srbija je podrazumevana; pun broj sa pozivnim brojem druge zemlje bira zemlju sam
+    await expect(page.getByLabel('Zemlja')).toHaveValue('RS');
+    await page.getByLabel('Broj telefona').fill('+387 60 000 011');
+    await page.getByLabel('Broj telefona').blur();
+    await expect(page.getByLabel('Zemlja')).toHaveValue('BA');
+    await expect(page.getByLabel('Broj telefona')).toHaveValue('60000011');
+    await expect(page.getByText('Biće sačuvan kao +387 60 000011')).toBeVisible();
     await page.getByRole('button', { name: 'Pošalji' }).click();
 
     await expect(page.getByText('Prijava primljena. Asistent će je odobriti.')).toBeVisible();
     const poslato = mock.zahteviZa(`public/upis/${TOKEN}`, 'POST');
     expect(poslato).toHaveLength(1);
-    expect(poslato[0].telo).toMatchObject({ ime: 'Nikola', prezime: 'Upisić', indeks: 'GD11', godina: 2025 });
+    expect(poslato[0].telo).toMatchObject({
+      ime: 'Nikola', prezime: 'Upisić', indeks: 'GD11', godina: 2025, brojTelefona: '+38760000011',
+    });
+    await expect(page.getByText('GD11/2025')).toBeVisible();
     expect(mock.podaci.prijave.at(-1)).toMatchObject({ indeks: 'GD11', status: 'NA_CEKANJU' });
 
     expect(javnaMreza.api).toEqual([`GET /api/public/upis/${TOKEN}`, `POST /api/public/upis/${TOKEN}`]);

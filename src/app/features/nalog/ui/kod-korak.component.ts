@@ -26,16 +26,26 @@ export const CEKANJE_PONOVO_S = 60;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-form-error-banner [poruka]="greska()" />
-    <p class="poslato">{{ poruka() }}</p>
-    <dl class="podaci">
-      <dt>Indeks</dt><dd class="mono">{{ indeks() }}</dd>
-      <dt>Mejl</dt><dd>{{ maska() }}</dd>
-    </dl>
-    <p class="savet">Kod ide na mejl koji si dao pri upisu. Proveri i Spam. Ako ga nemaš, nastavnik može da upiše novi.</p>
+    @if (odNastavnika()) {
+      <p class="poslato">Upiši kod koji ti je nastavnik izdiktirao. Kod važi 10 minuta.</p>
+      <dl class="podaci">
+        <dt>Indeks</dt><dd class="mono">{{ indeks() }}</dd>
+      </dl>
+    } @else {
+      <p class="poslato">{{ poruka() }}</p>
+      <dl class="podaci">
+        <dt>Indeks</dt><dd class="mono">{{ indeks() }}</dd>
+        <dt>Mejl</dt><dd>{{ maska() }}</dd>
+      </dl>
+      <p class="savet">
+        Kod ide na mejl koji si dao pri upisu. Proveri i Spam (Neželjena pošta); ako je tamo, označi ga sa „Nije spam“.
+        Ako mejl ne stiže, nastavnik može da ti izdiktira kod.
+      </p>
+    }
 
     <form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Kod iz mejla</mat-label>
+        <mat-label>{{ odNastavnika() ? 'Kod od nastavnika' : 'Kod iz mejla' }}</mat-label>
         <input matInput type="text" name="kod" formControlName="kod" class="mono kod" inputmode="numeric"
           autocomplete="one-time-code" maxlength="6" spellcheck="false" (paste)="nalepi($event)" (input)="ocisti()">
         <mat-hint>6 cifara</mat-hint>
@@ -52,10 +62,14 @@ export const CEKANJE_PONOVO_S = 60;
     </form>
 
     <div class="akcije">
-      <button type="button" matButton="outlined" [disabled]="preostalo() > 0 || salje()" (click)="ponovo()">
-        Pošalji ponovo@if (preostalo() > 0) { (za {{ preostalo() }} s)}
-      </button>
-      <button type="button" matButton="outlined" [disabled]="pomocSalje()" (click)="neStize.emit()">Ne stiže mi kod</button>
+      @if (odNastavnika()) {
+        <button type="button" matButton="outlined" [disabled]="salje()" (click)="posaljiPonovo.emit()">Pošalji kod na mejl</button>
+      } @else {
+        <button type="button" matButton="outlined" [disabled]="preostalo() > 0 || salje()" (click)="ponovo()">
+          Pošalji ponovo@if (preostalo() > 0) { (za {{ preostalo() }} s)}
+        </button>
+        <button type="button" matButton="outlined" [disabled]="pomocSalje()" (click)="neStize.emit()">Ne stiže mi kod</button>
+      }
       <button type="button" matButton (click)="promeniIndeks.emit()">Drugi indeks</button>
     </div>
     <p class="pomoc" role="status">{{ pomoc() }}</p>
@@ -81,7 +95,10 @@ export const CEKANJE_PONOVO_S = 60;
   `,
 })
 export class KodKorak {
+  /** Indeks za prikaz (`GD5/2026`). */
   readonly indeks = input('');
+  /** Kod od nastavnika ("Imam kod od nastavnika"): mejl nije poslat, nema maske ni čekanja; "Pošalji kod na mejl" šalje prvi. */
+  readonly odNastavnika = input(false);
   readonly maska = input('');
   /** Poruka servera posle slanja koda. */
   readonly poruka = input('');

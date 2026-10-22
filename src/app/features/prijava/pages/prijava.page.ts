@@ -5,12 +5,12 @@ import { MatButton } from '@angular/material/button';
 import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { SesijaStore } from '../../../core/auth/sesija.store';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
-import { bezbednoNazad } from '../../../shared/util/nazad';
+import { bezbednoNazad, javnoNazad } from '../../../shared/util/nazad';
 
 /** Tekst za baner forme: 401, 429 i 503 nose tekst servera (`reason`); mreža i ostale 5xx opšte poruke. */
 export function porukaPrijave(e: unknown): string {
@@ -28,10 +28,15 @@ export function porukaPrijave(e: unknown): string {
  * Posle uspeha ide na `nazad` (query, `withComponentInputBinding`) ako ga `bezbednoNazad` pusti, inače na početnu; spoljni
  * ili apsolutni URL se nikad ne otvara. Već prijavljen nastavnik vidi "Već si prijavljen kao ..." i "Nastavi" umesto forme
  * (bez zahteva: `prijavljen` je keširano stanje). Greške (401, 429, 503, mreža) su u baneru forme, nikad u snackbar-u.
+ * Strana jasno kaže da je za nastavnike (korisničko ime i lozinka), a studentima koji ovde zalutaju (i sa golog `/` bez
+ * sesije) daje krupnu vezu "Student si? Prijavi se brojem indeksa" na `/nalog` (samo `routerLink`, bez uvoza iz
+ * `features/nalog`), uz `nazad` kad je javna putanja.
  */
 @Component({
   selector: 'app-prijava-page',
-  imports: [FormErrorBanner, MatButton, MatError, MatFormField, MatInput, MatLabel, MatProgressSpinner, ReactiveFormsModule],
+  imports: [
+    FormErrorBanner, MatButton, MatError, MatFormField, MatInput, MatLabel, MatProgressSpinner, ReactiveFormsModule, RouterLink,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="prijava">
@@ -39,7 +44,7 @@ export function porukaPrijave(e: unknown): string {
         <span class="znak" aria-hidden="true"><img src="assets/images/gfs-logo.png" alt="" width="170" height="128"></span>
         <div class="naslovi">
           <p class="nadnaslov">Građevinski fakultet Subotica</p>
-          <h1>Prijava nastavnika</h1>
+          <h1>Prijava za nastavnike</h1>
         </div>
       </header>
 
@@ -50,6 +55,15 @@ export function porukaPrijave(e: unknown): string {
             <button type="button" mat-flat-button class="dugme" (click)="nastavi()">Nastavi</button>
           </div>
         } @else {
+          <section class="studentu" aria-labelledby="studentu-naslov">
+            <p id="studentu-naslov" class="studentu-naslov">Student si?</p>
+            <p class="studentu-tekst">Ova stranica je samo za nastavnike. Studenti se prijavljuju brojem indeksa i kodom, bez lozinke.</p>
+            <a matButton="filled" class="dugme studentu-dugme" routerLink="/nalog" [queryParams]="upitZaStudenta()">
+              Student si? Prijavi se brojem indeksa
+            </a>
+          </section>
+
+          <h2 class="podnaslov">Nastavnik: korisničko ime i lozinka</h2>
           <app-form-error-banner [poruka]="greska()" />
           <form class="forma" [formGroup]="forma" (ngSubmit)="posalji()" novalidate>
             <mat-form-field appearance="outline" subscriptSizing="dynamic">
@@ -125,6 +139,18 @@ export function porukaPrijave(e: unknown): string {
     h1 { margin: 0; color: inherit; font-size: 22px; line-height: 1.25; overflow-wrap: anywhere; }
 
     .telo { padding: 20px; }
+    .studentu {
+      margin: 0 0 22px;
+      padding: 14px 16px 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--primary-soft);
+      color: var(--primary-soft-ink);
+    }
+    .studentu-naslov { margin: 0 0 4px; font-weight: 600; font-size: 16px; }
+    .studentu-tekst { margin: 0 0 12px; font-size: 14px; }
+    .studentu-dugme { display: flex; text-align: center; white-space: normal; height: auto; padding-block: 10px; }
+    .podnaslov { margin: 0 0 14px; font-size: 16px; font-weight: 600; color: var(--ink); }
     .vec { display: flex; flex-direction: column; gap: 18px; }
     .vec-tekst { margin: 0; overflow-wrap: anywhere; }
     .forma { display: flex; flex-direction: column; gap: 18px; }
@@ -147,6 +173,11 @@ export class PrijavaPage {
   });
   protected readonly salje = signal(false);
   protected readonly greska = signal<string | null>(null);
+  /** Veza za studente: `/nalog`, sa `nazad` samo kad je javna putanja (`uzivo/...`, `upis/...`, `nalog`). */
+  protected readonly upitZaStudenta = computed(() => {
+    const cilj = javnoNazad(this.nazad());
+    return cilj === null ? {} : { nazad: cilj };
+  });
   /** Prijava je upravo uspela i traje navigacija: forma ne ustupa mesto panelu "Već si prijavljen". */
   private readonly prelazi = signal(false);
   /** Nastavnik koji već ima sesiju otvori `/prijava` (obeleživač, dugme Nazad): bez druge sesije na novom slanju. */

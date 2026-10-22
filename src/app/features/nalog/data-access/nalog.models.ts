@@ -2,6 +2,15 @@
  * DTO-i javnog naloga studenta (`api/public/nalog/*`, spec prijave 5.1). Imena polja su kao na serveru. Bez uvoza.
  */
 
+/**
+ * Student u zahtevima za kod, prijavu i "Ne stiže mi kod": kanonski indeks (`GD5`) i godina upisa. Server traži studenta
+ * tačno po tom paru (broj indeksa se ponavlja iz generacije u generaciju).
+ */
+export interface IndeksIGodina {
+  indeks: string;
+  godina: number;
+}
+
 /** Odgovor na `POST api/public/nalog/kod`: uvek isti oblik, i za nepostojeći indeks (maska je tada lažna, ali stalna). */
 export interface KodOdgovor {
   /** "Ako nalog postoji, kod je poslat." */
@@ -34,6 +43,8 @@ export interface StudentJa {
   maskaMejla: string | null;
   uredjaji: UredjajInfo[];
   moodlePovezan: boolean;
+  /** Godina upisa (stari backend je ne šalje). */
+  godina?: number;
 }
 
 /** `POST api/public/nalog/pomoc`: uvek "Javili smo nastavniku." (stvarno obaveštenje najviše 1/h po indeksu). */

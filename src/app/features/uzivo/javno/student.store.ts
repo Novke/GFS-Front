@@ -78,6 +78,15 @@ const ZAVRSENO = 'Izvođenje je završeno.';
 /** Prijava studenta (ruta agenta prijave): bodovan run bez prijavljenog studenta ide tamo, pa se vraća na `uzivo/<kod>`. */
 const NALOG = 'nalog?nazad=uzivo/';
 
+/**
+ * Prijava studenta za bodovan run: `nalog?nazad=uzivo/<kod>`, i `&godina=<Y>` kad izvođenje zna godinu upisa grupe svog
+ * predavanja (predlog godine u formi za prijavu; `/nalog` je i sam proverava).
+ */
+export function nalogUrl(kod: string, info: JavnoIzvodjenjeInfo | null | undefined): string {
+  const g = info?.godinaUpisa ?? 0; // kratko: studentsko zatvorenje ima tesan budžet (e2e/lenji-formule.spec.ts)
+  return NALOG + kod + (g > 999 ? '&godina=' + g : ''); // /nalog sam odbacuje godinu koja nije četvorocifrena
+}
+
 const POCETNO: StudentState = {
   faza: 'kod', kod: null, info: null, ucesnik: null, javno: null, licno: null, veza: 'povezivanje',
   poslato: null, zakljucano: null, greska: null, salje: false, nacrt: null, nacrtZadatka: null,
@@ -461,7 +470,7 @@ export const StudentStore = signalStore(
         next: info => {
           patchState(store, { info });
           if (info.prijavaObavezna && !info.prijavljenStudent) {
-            void router.navigateByUrl(NALOG + kod);
+            void router.navigateByUrl(nalogUrl(kod, info));
             return;
           }
           z.add(api.ja(kod).subscribe({
@@ -484,7 +493,7 @@ export const StudentStore = signalStore(
         next: udji,
         error: e => {
           patchState(store, { salje: false });
-          if (status(e) === 403) void router.navigateByUrl(NALOG + kod);
+          if (status(e) === 403) void router.navigateByUrl(nalogUrl(kod, store.info()));
           else if (je404(e)) fazaGreska(e, 'Izvođenje sa ovim kodom ne postoji ili je završeno.');
           else if (store.faza() === 'ime') postaviGresku(razlogGreske(e, 'Prijava nije uspela. Pokušaj ponovo.'));
           else fazaGreska(e, 'Prijava nije uspela. Pokušaj ponovo.');
@@ -501,7 +510,7 @@ export const StudentStore = signalStore(
       const info = store.info();
       if (info?.prijavaObavezna && !info.prijavljenStudent) {
         zatvoriVezu();
-        void router.navigateByUrl(NALOG + kod);
+        void router.navigateByUrl(nalogUrl(kod, info));
       } else if (info?.prijavljenStudent) {
         zatvoriVezu();
         patchState(store, { faza: 'kod', ...BEZ_UCESNIKA });

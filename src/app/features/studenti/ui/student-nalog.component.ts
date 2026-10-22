@@ -6,6 +6,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { finalize, Observable, Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
+import { KodZaDiktiranjeApi } from '../../../core/api/kod-za-diktiranje.api';
+import { KodZaDiktiranjeDialog } from '../../../core/layout/kod-za-diktiranje-dialog';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ObavestenjaStore } from '../../../core/state/obavestenja.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
@@ -19,7 +21,7 @@ let brojac = 0;
 /**
  * Sekcija "Nalog" na kartici studenta (spec prijave, 5.3): da li student ima mejl, zapamćeni uređaji (opis, način `Kod` /
  * `Moodle`, poslednji ulaz), Moodle veza i akcije "Pošalji kod", "Opozovi uređaje" i "Raskini Moodle vezu" (poslednje dve uz
- * `ConfirmDialog`). Učitavanje je tiho (greška je u sekciji), akcije nisu tihe: razlog servera (409 `Student nema mejl.`,
+ * `ConfirmDialog`) i "Kod za diktiranje" (plan C: kod se prikaže jednom, bez mejla, pa radi i za studenta bez mejla). Učitavanje je tiho (greška je u sekciji), akcije nisu tihe: razlog servera (409 `Student nema mejl.`,
  * 429) prikazuje snackbar. `email` je samo ključ osvežavanja: kad se mejl studenta izmeni na istoj stranici, nalog se
  * učitava ponovo, pa `imaMejl` ostaje tačan. Posle "Pošalji kod" server rešava otvorena obaveštenja "Ne stiže mi kod" tog
  * studenta, pa se značka u gornjoj traci osvežava.
@@ -84,6 +86,8 @@ let brojac = 0;
             <div class="akcije">
               <button matButton="filled" type="button" data-posalji-kod [disabled]="!n.imaMejl || radi()"
                       [attr.aria-describedby]="n.imaMejl ? null : mejlId" (click)="posaljiKod()">Pošalji kod</button>
+              <button matButton="outlined" type="button" data-kod-za-diktiranje [disabled]="radi()"
+                      (click)="kodZaDiktiranje()">Kod za diktiranje</button>
               <button matButton="outlined" type="button" data-opozovi [disabled]="n.uredjaji.length === 0 || radi()"
                       [attr.aria-describedby]="n.uredjaji.length === 0 ? uredjajiId : null" (click)="opozovi()">Opozovi uređaje</button>
               <button matButton="outlined" type="button" data-raskini-moodle [disabled]="!n.moodle.povezan || radi()"
@@ -120,6 +124,7 @@ export class StudentNalogComponent {
   private readonly dialog = inject(MatDialog);
   private readonly poruke = inject(NotificationStore);
   private readonly obavestenja = inject(ObavestenjaStore);
+  private readonly kodovi = inject(KodZaDiktiranjeApi);
 
   readonly studentId = input.required<number>();
   /** Mejl studenta sa kartice: ne prikazuje se, samo njegova promena ponovo učitava nalog. */
@@ -200,6 +205,14 @@ export class StudentNalogComponent {
       },
       false,
     );
+  }
+
+  /** Kod za diktiranje: prikazuje se jednom u dijalogu; server rešava otvorena obaveštenja studenta. */
+  protected kodZaDiktiranje(): void {
+    this.izvrsi(this.kodovi.izdaj(this.studentId()), k => {
+      KodZaDiktiranjeDialog.otvori(this.dialog, k);
+      this.obavestenja.osveziBroj();
+    });
   }
 
   protected opozovi(): void {
