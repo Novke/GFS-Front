@@ -4,8 +4,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { tekucaSkolska } from '../../../shared/util/indeks';
 import type { StudentJa } from '../data-access/nalog.models';
 import { MoodlePage } from './moodle.page';
+
+/** Predlog godine upisa na /nalog/moodle: početna godina tekuće školske godine. */
+const G = tekucaSkolska();
 
 const STANJE = 'api/public/nalog/stanje';
 const JA = 'api/public/nalog/ja';
@@ -87,7 +91,7 @@ describe('MoodlePage', () => {
 
   /** Indeks -> kod -> 204 prijave -> `GET ja` -> korak "potvrda" (nikad automatsko povezivanje, R19). */
   async function prijaviKodomDoPotvrde(): Promise<void> {
-    upisi('indeks', 'gd12');
+    upisi('broj-indeksa', '12');
     dugme('Pošalji kod')!.click();
     http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'a***@example.test' });
     await stabilno();
@@ -95,7 +99,7 @@ describe('MoodlePage', () => {
     upisi('kod', '123456');
     dugme('Prijavi se')!.click();
     const prijava = http.expectOne(PRIJAVA);
-    expect(prijava.request.body).toEqual({ indeks: 'GD12', kod: '123456' });
+    expect(prijava.request.body).toEqual({ indeks: 'GD12', godina: G, kod: '123456' });
     prijava.flush(null, bezSadrzaja);
     await stabilno();
     http.expectNone(POVEZI);
@@ -180,7 +184,7 @@ describe('MoodlePage', () => {
       expect(el().querySelector('[role="status"]')?.textContent?.trim()).toBe('Alat je ispravno registrovan.');
       expect(el().textContent).toContain('Podešavanja → Moodle');
       expect(el().querySelector('h1')?.textContent?.trim()).toBe('GFS i Moodle');
-      expect(polje('indeks')).toBeNull();
+      expect(polje('broj-indeksa')).toBeNull();
       http.expectNone(() => true);
     });
 
@@ -199,7 +203,7 @@ describe('MoodlePage', () => {
       expect(el().querySelector('h1')?.textContent?.trim()).toBe('Nalog studenta');
       expect(naslov()).toBe('Poveži Moodle nalog sa GFS-om');
       expect(el().textContent).toContain('prijavi se jednom kodom sa mejla');
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
       http.expectNone(POVEZI);
 
       const povezi = await prijaviKodom();
@@ -261,7 +265,7 @@ describe('MoodlePage', () => {
 
     /** Indeks -> kod -> 204 prijave; `GET ja` ostaje bez odgovora (vraća ga). */
     async function prijavaBezJa() {
-      upisi('indeks', 'GD12');
+      upisi('broj-indeksa', '12');
       dugme('Pošalji kod')!.click();
       http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'a***@example.test' });
       await stabilno();
@@ -293,7 +297,7 @@ describe('MoodlePage', () => {
       const ja = await prijavaBezJa();
       ja.flush(null, greska(401, 'Unauthorized'));
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
       expect(dugme('Pošalji kod')!.disabled).toBe(false);
     });
 
@@ -314,7 +318,7 @@ describe('MoodlePage', () => {
 
     it('pogrešan kod: tekst servera, ostaje na kodu, bez povezi', async () => {
       await otvoriTok();
-      upisi('indeks', 'GD12');
+      upisi('broj-indeksa', '12');
       dugme('Pošalji kod')!.click();
       http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'a***@example.test' });
       await stabilno();
@@ -359,7 +363,7 @@ describe('MoodlePage', () => {
       const povezi = await prijaviKodom();
       povezi.flush({ reason: 'Potrebna je prijava.' }, greska(401, 'Unauthorized'));
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
       expect(banner()).toBe('Prijava na ovom uređaju je istekla. Prijavi se ponovo kodom sa mejla.');
     });
 
@@ -401,8 +405,8 @@ describe('MoodlePage', () => {
       expect(odjava.request.method).toBe('POST');
       odjava.flush(null, bezSadrzaja);
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
-      expect(polje('indeks')!.value).toBe('');
+      expect(polje('broj-indeksa')).not.toBeNull();
+      expect(polje('broj-indeksa')!.value).toBe('');
       const povezi = await prijaviKodom();
       povezi.flush(null, bezSadrzaja);
       await stabilno();
@@ -414,7 +418,7 @@ describe('MoodlePage', () => {
       dugme('Drugi indeks')!.click();
       http.expectOne(ODJAVA).error(new ProgressEvent('error'));
       await stabilno();
-      expect(polje('indeks')!.value).toBe('');
+      expect(polje('broj-indeksa')!.value).toBe('');
       expect(banner()).toBeNull();
     });
 
@@ -471,7 +475,7 @@ describe('MoodlePage', () => {
       http.expectOne(STANJE).flush({ prijavljen: true });
       http.expectOne(JA).flush({ reason: 'Potrebna je prijava.' }, greska(401, 'Unauthorized'));
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
 
     it('mreža ne radi pri učitavanju: poruka i "Pokušaj ponovo"', async () => {
@@ -484,7 +488,7 @@ describe('MoodlePage', () => {
       await imeMoodla();
       http.expectOne(STANJE).flush({ prijavljen: false });
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
   });
 

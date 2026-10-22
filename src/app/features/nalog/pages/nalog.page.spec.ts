@@ -6,6 +6,7 @@ import { provideRouter, Router } from '@angular/router';
 import { of, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { tekucaSkolska } from '../../../shared/util/indeks';
 import type { StudentJa } from '../data-access/nalog.models';
 import { NalogPage } from './nalog.page';
 
@@ -26,6 +27,9 @@ const JA_ODGOVOR: StudentJa = {
     { id: 2, opis: 'Windows · Firefox', nacin: 'LTI', prviUlaz: '2026-09-20T12:00:00', poslednjiUlaz: '2026-10-02T09:15:00', trenutni: false },
   ],
 };
+
+/** Predlog godine bez `?godina=`: početna godina tekuće školske godine. */
+const G = tekucaSkolska();
 
 const greska = (status: number, statusText: string) => ({ status, statusText });
 
@@ -68,8 +72,8 @@ describe('NalogPage', () => {
     fixture.detectChanges();
   }
 
-  async function doKoda(indeks = 'gd 12'): Promise<void> {
-    upisi('indeks', indeks);
+  async function doKoda(indeks = '12'): Promise<void> {
+    upisi('broj-indeksa', indeks);
     dugme('Pošalji kod')!.click();
     http.expectOne(KOD).flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'n***@example.test' });
     await stabilno();
@@ -104,7 +108,7 @@ describe('NalogPage', () => {
   describe('prvo učitavanje', () => {
     it('nije prijavljen: GET stanje, pa ekran indeksa (bez GET ja)', async () => {
       await otvoriStranu();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
       expect(dugme('Pošalji kod')).toBeDefined();
       http.expectNone(JA);
     });
@@ -128,7 +132,7 @@ describe('NalogPage', () => {
       http.expectOne(STANJE).flush({ prijavljen: true });
       http.expectOne(JA).flush({ reason: 'Potrebna je prijava.' }, greska(401, 'Unauthorized'));
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
 
     it('mreža ne radi: poruka i "Pokušaj ponovo" ponovo pita stanje', async () => {
@@ -140,7 +144,7 @@ describe('NalogPage', () => {
       dugme('Pokušaj ponovo')!.click();
       http.expectOne(STANJE).flush({ prijavljen: false });
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
   });
 
@@ -155,10 +159,10 @@ describe('NalogPage', () => {
 
     it('"Pošalji kod": normalizovan indeks, pa ekran koda sa maskom i tekstom servera', async () => {
       await otvoriStranu();
-      upisi('indeks', ' gd 12 ');
+      upisi('broj-indeksa', ' 012 ');
       dugme('Pošalji kod')!.click();
       const req = http.expectOne(KOD);
-      expect(req.request.body).toEqual({ indeks: 'GD12' });
+      expect(req.request.body).toEqual({ indeks: 'GD12', godina: G });
       req.flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: 'n***@example.test' });
       await stabilno();
       expect(el().textContent).toContain('Ako nalog postoji, kod je poslat.');
@@ -173,17 +177,17 @@ describe('NalogPage', () => {
       [503, 'Service Unavailable', 'Slanje koda trenutno nije moguće. Javi se nastavniku.'],
     ])('POST kod %i: tekst servera doslovno, ostaje na indeksu', async (status, statusText, reason) => {
       await otvoriStranu();
-      upisi('indeks', 'GD12');
+      upisi('broj-indeksa', '12');
       dugme('Pošalji kod')!.click();
       http.expectOne(KOD).flush({ reason }, greska(status, statusText));
       await stabilno();
       expect(banner()).toBe(reason);
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
 
     it('5xx bez poruke i mreža: opšti tekst', async () => {
       await otvoriStranu();
-      upisi('indeks', 'GD12');
+      upisi('broj-indeksa', '12');
       dugme('Pošalji kod')!.click();
       http.expectOne(KOD).flush('x', greska(500, 'Server Error'));
       await stabilno();
@@ -204,7 +208,7 @@ describe('NalogPage', () => {
       await doKoda();
       await prijaviKodom();
       const req = http.expectOne(PRIJAVA);
-      expect(req.request.body).toEqual({ indeks: 'GD12', kod: '123456' });
+      expect(req.request.body).toEqual({ indeks: 'GD12', godina: G, kod: '123456' });
       req.flush({ reason }, greska(status, statusText));
       await stabilno();
       expect(banner()).toBe(reason);
@@ -217,7 +221,7 @@ describe('NalogPage', () => {
       await doKoda();
       dugme('Ne stiže mi kod')!.click();
       const req = http.expectOne(POMOC);
-      expect(req.request.body).toEqual({ indeks: 'GD12' });
+      expect(req.request.body).toEqual({ indeks: 'GD12', godina: G });
       req.flush({ poruka: 'Javili smo nastavniku.' });
       await stabilno();
       expect(el().querySelector('[role="status"]')?.textContent).toContain('Javili smo nastavniku.');
@@ -237,7 +241,8 @@ describe('NalogPage', () => {
       await doKoda();
       dugme('Drugi indeks')!.click();
       await stabilno();
-      expect(polje('indeks').value).toBe('GD12');
+      expect(polje('broj-indeksa').value).toBe('12');
+      expect(polje('godina-upisa').value).toBe(String(G));
     });
   });
 
@@ -380,7 +385,7 @@ describe('NalogPage', () => {
       dugme('Odjavi se')!.click();
       http.expectOne('api/public/nalog/odjava').flush(null, { status: 204, statusText: 'No Content' });
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
     });
 
     it('"Odjavi sve uređaje": ConfirmDialog (destruktivno), pa POST odjava-svuda i ekran indeksa sa brojem', async () => {
@@ -392,7 +397,7 @@ describe('NalogPage', () => {
       expect(cfg.data.destruktivno).toBe(true);
       http.expectOne('api/public/nalog/odjava-svuda').flush({ odjavljeno: 2 });
       await stabilno();
-      expect(polje('indeks')).not.toBeNull();
+      expect(polje('broj-indeksa')).not.toBeNull();
       expect(el().querySelector('[role="status"]')?.textContent).toContain('Odjavljeno: 2 uređaja.');
     });
 
@@ -401,7 +406,7 @@ describe('NalogPage', () => {
       dugme('Odjavi se')!.click();
       http.expectOne('api/public/nalog/odjava').flush(null, { status: 204, statusText: 'No Content' });
       await stabilno();
-      expect(polje('indeks').value).toBe('');
+      expect(polje('broj-indeksa').value).toBe('');
     });
 
     it('posle "Odjavi sve uređaje" polje indeksa je prazno', async () => {
@@ -409,7 +414,7 @@ describe('NalogPage', () => {
       dugme('Odjavi sve uređaje')!.click();
       http.expectOne('api/public/nalog/odjava-svuda').flush({ odjavljeno: 2 });
       await stabilno();
-      expect(polje('indeks').value).toBe('');
+      expect(polje('broj-indeksa').value).toBe('');
     });
 
     it('drugi klik na "Odjavi sve uređaje" dok je potvrda otvorena ne otvara drugi dijalog', async () => {
@@ -440,6 +445,62 @@ describe('NalogPage', () => {
       await stabilno();
       expect(banner()).toBe('Nema veze sa serverom.');
       expect(el().textContent).toContain('Ana Primerović');
+    });
+  });
+
+  describe('godina upisa i kod od nastavnika', () => {
+    async function otvoriSaGodinom(godina: string): Promise<void> {
+      fixture = TestBed.createComponent(NalogPage);
+      fixture.componentRef.setInput('godina', godina);
+      fixture.detectChanges();
+      http.expectOne(STANJE).flush({ prijavljen: false });
+      await stabilno();
+    }
+
+    it('?godina= iz Uživo predlaže godinu; student je menja i ona ide u zahtev', async () => {
+      await otvoriSaGodinom('2025');
+      expect(polje('godina-upisa').value).toBe('2025');
+      expect(el().textContent).toContain('Godina grupe sa časa');
+      upisi('broj-indeksa', '7');
+      upisi('godina-upisa', '2024');
+      dugme('Pošalji kod')!.click();
+      const req = http.expectOne(KOD);
+      expect(req.request.body).toEqual({ indeks: 'GD7', godina: 2024 });
+      req.flush({ poruka: 'Ako nalog postoji, kod je poslat.', maska: null });
+      await stabilno();
+    });
+
+    it('neispravna ?godina= se ignoriše: predlog je tekuća školska godina', async () => {
+      for (const g of ['20x5', '1999', '12345', '3000']) {
+        await otvoriSaGodinom(g);
+        expect(polje('godina-upisa').value, g).toBe(String(G));
+        fixture.destroy();
+      }
+    });
+
+    it('"Imam kod od nastavnika": korak koda bez slanja mejla, prijava sa indeksom i godinom', async () => {
+      await otvoriStranu();
+      upisi('broj-indeksa', '12');
+      dugme('Imam kod od nastavnika')!.click();
+      await stabilno();
+      http.expectNone(KOD);
+      expect(el().textContent).toContain('Kod od nastavnika');
+      expect(el().textContent).not.toContain('Ne stiže mi kod');
+      upisi('kod', '654321');
+      dugme('Prijavi se')!.click();
+      const req = http.expectOne(PRIJAVA);
+      expect(req.request.body).toEqual({ indeks: 'GD12', godina: G, kod: '654321' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(JA).flush(JA_ODGOVOR);
+      await stabilno();
+    });
+
+    it('"Imam kod od nastavnika" bez broja indeksa: poruka ispod polja, ostaje na indeksu', async () => {
+      await otvoriStranu();
+      dugme('Imam kod od nastavnika')!.click();
+      fixture.detectChanges();
+      expect(el().textContent).toContain('Unesi broj indeksa.');
+      expect(polje('kod')).toBeNull();
     });
   });
 });
