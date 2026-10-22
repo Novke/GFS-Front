@@ -29,7 +29,18 @@ async function unesiKod(page: Page, kod: string): Promise<void> {
   await page.getByRole('button', { name: 'Prijavi se' }).click();
 }
 
+/**
+ * Čeka da se završe konačne CSS/Web animacije (npr. `mat-error` ulazi providno pa se izoštrava), pa tek onda axe:
+ * usred animacije axe meri kontrast poluprovidnog teksta i prijavi `color-contrast` (povremeno u CI-ju).
+ */
+async function posleAnimacija(page: Page): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).length), { timeout: 5_000 })
+    .toBe(0);
+}
+
 async function bezOzbiljnihKrsenja(page: Page): Promise<void> {
+  await posleAnimacija(page);
   const rezultat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
   const ozbiljna = rezultat.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => v.id);
   ocekuj(ozbiljna).toEqual([]);

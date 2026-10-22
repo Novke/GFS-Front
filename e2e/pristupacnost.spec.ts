@@ -65,6 +65,16 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
 const OZNAKE = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 
 /** Serious/critical kršenja axe-a (cela stranica ili samo `ukljuci`), sa prvih 5 elemenata svakog. */
+/**
+ * Čeka da se završe konačne CSS/Web animacije (npr. `mat-error` ulazi providno pa se izoštrava), pa tek onda axe:
+ * usred animacije axe meri kontrast poluprovidnog teksta i prijavi `color-contrast` (povremeno u CI-ju).
+ */
+async function posleAnimacija(page: Page): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).length), { timeout: 5_000 })
+    .toBe(0);
+}
+
 async function ozbiljnaKrsenja(page: Page, ukljuci?: string) {
   const axe = new AxeBuilder({ page }).withTags(OZNAKE);
   const rezultat = await (ukljuci ? axe.include(ukljuci) : axe).analyze();
@@ -152,6 +162,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
       await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
       await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      await posleAnimacija(page);
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
     });
 
