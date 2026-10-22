@@ -136,7 +136,8 @@ call returns 401 and pops the browser's password dialog. All live in `PublicLayo
 `features/uzivo/javno`, `features/nalog`) may import only itself plus
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
-own imports (the comment next to each entry says why it is safe). Never add teacher-shell code (stores, `core/state`,
+own imports (the comment next to each entry says why it is safe). `JAVNO_DOZVOLJENO` today also holds `shared/util/nazad`,
+`shared/util/indeks` and `shared/forms/indeks-polja` (three-part index, see below). Never add teacher-shell code (stores, `core/state`,
 shell, teacher API clients) to it. npm packages are free for public features except `ZABRANJENI_PAKETI_JAVNO` in the same
 file (heavy slide-builder editor/import libraries, today `fflate`, the seven `prosemirror-*` packages, `mathlive` (with
 `mathlive/ssr`) and `pdfjs-dist`; subpaths such as `fflate/esm` count too): the rule reports them as `zabranjenPaket`. The
@@ -150,6 +151,22 @@ directly, the rule tests keep it). Transitively the component statically reaches
 the text has a formula; its CSS and the KaTeX fonts come from `assets/mathlive/`, so nginx and the public regex need no change.
 The rule sees direct imports only, so `e2e/lenji-formule.spec.ts` guards the graph over the build (below, "Uživo"). On the backend, anything mapped under `/public/**` is reachable from the internet
 without auth.
+
+**Index in three parts and phone (`upis`, `nalog`, `nalog/moodle`; branch `feature/prijava-indeks-mejl`):** both forms use
+`shared/forms/indeks-polja` (`IndeksPolja`, `indeksKontrole`, `vrednostIndeksa`) and `shared/util/indeks` (no imports): the study
+programme `GD` is fixed and shown as the prefix of the number field (`SMEROVI`, same list as backend `IndeksUtil.SMEROVI`), the number is
+1-3 digits (`inputmode="numeric"`, letters dropped, `05` = `5`), the year is a separate 4-digit field (2000 to current school year + 1),
+**proposed but editable**, errors directly under each field and a live line "Indeks: GD5/2026"; a pasted full index (`GD05/2026`) fills
+both fields. Both files are on `JAVNO_DOZVOLJENO` (they import only Angular, Material and each other). The request is
+`{indeks: 'GD5', godina: 2026}`. Year proposal: `upis` = the session group's year; `nalog` = `?godina=` when it is a valid 4-digit year
+(the Uživo phone adds it from `JavnoIzvodjenjeInfo.godinaUpisa`, `nalogUrl` in `student.store.ts`), otherwise the start year of the
+current school year (`tekucaSkolska`); an invalid `?godina=` is ignored. **Phone on `upis`** (`features/upis/telefon.ts`, pure functions,
+own small list instead of `libphonenumber-js`, which would put tens of kB of metadata into the public chunk): a native
+`<select matNativeControl>` with Srbija +381 (default), BiH +387, Crna Gora +382, Hrvatska +385, Mađarska +36 (prefix `06`), Severna
+Makedonija +389, Slovenija +386 and "Druga zemlja" (manual 1-3 digit code), plus the number field; `uE164` strips spaces, dashes, dots,
+slashes and parentheses, drops the national prefix (`0`) and adds the code, keeps `+...`/`00...` as international, and on blur or paste a
+full international number of a listed country selects the country itself (`razdvojiMedjunarodni`). The form sends E.164 and shows "Biće
+sačuvan kao +381 64 1234567"; the server applies the same rule (`Telefon.uE164`).
 
 After a successful submit `upis` shows "Pridruži se WhatsApp grupi" when the `POST` response carries `waLink`; it renders
 only a canonical `https://chat.whatsapp.com/<code>` (`waLinkZaPrikaz` in `upis.pravila`, the server enforces the same), so
@@ -203,16 +220,18 @@ the front only routes and shows.
   `core/layout`). Allow-list: `JAVNO_DOZVOLJENO` plus `DOZVOLJENO_PO_FEATURE['features/nalog']` = `shared/ui/confirm-dialog`
   (Angular Material dialog/button and rxjs only) and `shared/util/datum.pipe` (`@angular/core` only); never `core/state`,
   `core/auth`, teacher API clients or `features/studenti`. `data-access/`: `nalog.api.ts` (only `api/public/nalog/*`, all
-  `LOCAL_ERRORS`), `nalog.models.ts` (DTOs as on the server), `nalog.pravila.ts` (index normalisation like `upis`, code digits,
-  `porukaGreske`). `ui/`: presentational steps with inputs/outputs and no HTTP, reused by `nalog/moodle` (F5):
-  `IndeksKorak` (`posaljiKod`), `KodKorak` (`prijavi`, `posaljiPonovo`, `neStize`, `promeniIndeks`; `slanjeBroj` restarts the
+  `LOCAL_ERRORS`; bodies carry `{indeks, godina}`), `nalog.models.ts` (DTOs as on the server), `nalog.pravila.ts` (code digits,
+  `porukaGreske`; `javnoNazad` now lives in `shared/util/nazad.ts`). `ui/`: presentational steps with inputs/outputs and no HTTP, reused by `nalog/moodle` (F5):
+  `IndeksKorak` (`posaljiKod`, `imamKod`: "Imam kod od nastavnika" goes to the code step **without** sending a mail, plan C), `KodKorak`
+  (`odNastavnika` = dictated code: label "Kod od nastavnika", no mask, no "Ne stiže mi kod", the resend button is "Pošalji kod na mejl";
+  `prijavi`, `posaljiPonovo`, `neStize`, `promeniIndeks`; `slanjeBroj` restarts the
   60 s wait of "Pošalji ponovo", `CEKANJE_PONOVO_S`; the field has `inputmode="numeric"`, `autocomplete="one-time-code"`,
   `maxlength="6"`, and a pasted code with spaces or a dash is reduced to its 6 digits before `maxlength` cuts it),
   `NalogPregled` (index, name, masked e-mail, Moodle, devices, "Odjavi se", "Odjavi sve uređaje"). `pages/nalog.page.ts`: step
   signal `'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen'`; first load `GET stanje` (+ `GET ja` when signed in;
   `ja` 401 = index step); after a successful code `navigateByUrl(javnoNazad(nazad))`, otherwise the account screen; an
   already signed-in student with a safe `nazad` gets a "Nastavi" button, never an automatic jump (no loop). `javnoNazad`
-  (`nalog.pravila.ts`) is `bezbednoNazad` plus a public first segment (`uzivo`, `upis`, `nalog`): a teacher route
+  (`shared/util/nazad.ts`, re-exported by `nalog.pravila.ts`, also used by `/prijava`) is `bezbednoNazad` plus a public first segment (`uzivo`, `upis`, `nalog`): a teacher route
   (`predavanja/3`) is ignored as if absent (the student has no teacher session), and a `nazad` to the same page
   (`nalog`, `nalog?...`) shows the account screen instead of navigating (the reused component would stay on the code step). Server texts are
   shown verbatim ("Ako nalog postoji, kod je poslat.", 401 "Kod nije ispravan ili je istekao.", 429, 503, "Javili smo
@@ -235,6 +254,13 @@ the front only routes and shows.
   signed-in student on "Poveži" with the error. `nazad` (public only) gives "Nastavi" after pairing. Both pages share the card
   frame `ui/nalog-okvir.component.ts`. The page requests only `api/public/nalog/*`, `api/public/lti/povezi` and
   `api/public/lti/povezivanje` (`e2e/nalog.spec.ts`, "nalog/moodle").
+- **`/prijava` is for teachers only** (h1 "Prijava za nastavnike", "korisničko ime i lozinka"); a large link "Student si? Prijavi se brojem
+  indeksa" goes to `/nalog` (`routerLink`, no import from `features/nalog`) and passes `nazad` only when `javnoNazad` accepts it.
+- **Dictated code, teacher side (plan C):** "Kod za diktiranje" on the student card (`app-student-nalog`, also for a student without mail)
+  and on notification items with a student (`obavestenja-panel`) calls `core/api/kod-za-diktiranje.api` (`POST
+  api/studenti/{id}/nalog/kod-za-diktiranje`, shared by a feature and `core`, hence in `core`) and shows the result once in
+  `core/layout/kod-za-diktiranje-dialog` (large code "123 456", valid until HH:mm, the index and year the student types, the server's
+  warning if the index is not `GD` + number); the server resolves the student's open notifications, so the badge and list refresh.
 - **Moodle, teacher side** (`features/podesavanja/`, route `podesavanja` in the shell via `loadChildren`, `podesavanja` ->
   `podesavanja/moodle`; side nav section "Podešavanja" -> "Moodle"): `MoodleRegistracijePage` lists registrations
   (`LtiApi`, `api/lti/registracije`), "Nova registracija"/"Izmeni" open `RegistracijaDialog` (typed form; empty auth/JWKS
