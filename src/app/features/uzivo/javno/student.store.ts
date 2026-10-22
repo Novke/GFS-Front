@@ -83,8 +83,8 @@ const NALOG = 'nalog?nazad=uzivo/';
  * predavanja (predlog godine u formi za prijavu; `/nalog` je i sam proverava).
  */
 export function nalogUrl(kod: string, info: JavnoIzvodjenjeInfo | null | undefined): string {
-  const g = info?.godinaUpisa;
-  return NALOG + kod + (typeof g === 'number' && Number.isInteger(g) && g >= 1000 && g <= 9999 ? `&godina=${g}` : '');
+  const g = info?.godinaUpisa ?? 0; // kratko: studentsko zatvorenje ima tesan budžet (e2e/lenji-formule.spec.ts)
+  return NALOG + kod + (g > 999 ? '&godina=' + g : ''); // /nalog sam odbacuje godinu koja nije četvorocifrena
 }
 
 const POCETNO: StudentState = {
