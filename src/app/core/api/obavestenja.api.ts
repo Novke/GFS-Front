@@ -29,6 +29,8 @@ export interface ObavestenjeInfo {
   /** "Ime Prezime". */
   studentIme: string | null;
   indeks: string | null;
+  /** Godina upisa iz zahteva studenta (indeks u tri dela); `null`/bez polja za stara obaveštenja. */
+  godina?: number | null;
   podaci: PodaciObavestenja | null;
   kreirano: string;
   procitano: string | null;
@@ -49,7 +51,9 @@ export const NAJVISE_OTVORENIH = 10;
  * `PREVISE_KODOVA` -> "Previše zahteva za kod: <ime>".
  */
 export function tekstObavestenja(o: ObavestenjeInfo): string {
-  const ko = o.studentIme?.trim() || o.indeks?.trim() || o.podaci?.indeks?.trim() || '—';
+  const indeks = o.indeks?.trim() || o.podaci?.indeks?.trim();
+  const saGodinom = indeks && typeof o.godina === 'number' && !indeks.includes('/') ? `${indeks}/${o.godina}` : indeks;
+  const ko = o.studentIme?.trim() || saGodinom || '—';
   if (o.vrsta === 'PREVISE_KODOVA') {
     return `Previše zahteva za kod: ${ko}`;
   }

@@ -3,8 +3,10 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, Router } from '@angular/router';
+import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { KodZaDiktiranjeApi } from '../api/kod-za-diktiranje.api';
 import { ObavestenjeInfo } from '../api/obavestenja.api';
 import { ObavestenjaStore } from '../state/obavestenja.store';
 import { ObavestenjaPanel } from './obavestenja-panel';
@@ -27,6 +29,7 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
   let overlay: HTMLElement;
   let dialog: MatDialog;
   let router: Router;
+  let izdaj: ReturnType<typeof vi.fn>;
   let stanje: {
     broj: ReturnType<typeof signal<{ neprocitana: number; otvorena: number }>>;
     otvorena: ReturnType<typeof signal<ObavestenjeInfo[]>>;
@@ -39,6 +42,7 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
   };
 
   beforeEach(() => {
+    izdaj = vi.fn(() => of({ kod: '123456', istice: '2026-10-22T09:10:00', indeks: 'GD1', godina: 2025, upozorenje: null }));
     stanje = {
       broj: signal({ neprocitana: 2, otvorena: 3 }),
       otvorena: signal(STAVKE),
@@ -53,6 +57,7 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
       providers: [
         provideRouter([{ path: 'studenti/:id', component: Prazna }]),
         { provide: ObavestenjaStore, useValue: stanje },
+        { provide: KodZaDiktiranjeApi, useValue: { izdaj } },
       ],
     });
     dialog = TestBed.inject(MatDialog);
@@ -123,6 +128,18 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
     expect(overlay.querySelector('mat-dialog-container')).not.toBeNull();
     // pročitana stavka nema dugme "Pročitano"
     expect(stavka(3).querySelector('[data-procitano]')).toBeNull();
+  });
+
+  it('"Kod za diktiranje" samo uz studenta: izdaje kod, prikazuje ga u dijalogu i osvežava listu', async () => {
+    await otvori();
+    expect(stavka(2).querySelector('[data-kod-za-diktiranje]')).toBeNull();
+    stavka(1).querySelector<HTMLButtonElement>('[data-kod-za-diktiranje]')!.click();
+    await tick();
+    expect(izdaj).toHaveBeenCalledWith(4);
+    const dijalog = overlay.querySelector('app-kod-za-diktiranje-dialog')!;
+    expect(dijalog.querySelector('[data-kod]')?.textContent?.trim()).toBe('123 456');
+    expect(dijalog.textContent).toContain('Važi do 09:10');
+    expect(stanje.ucitaj).toHaveBeenCalledTimes(2); // otvaranje panela + posle izdavanja
   });
 
   it('"Označi sve kao pročitano" zove procitajSve; isključeno kad nema nepročitanih', async () => {

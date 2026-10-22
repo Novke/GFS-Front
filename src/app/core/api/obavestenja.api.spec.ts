@@ -30,6 +30,9 @@ describe('tekstObavestenja', () => {
     expect(tekstObavestenja(obavestenje({ studentId: null, studentIme: null, indeks: null, podaci: { indeks: 'YY1' } })))
       .toBe('Ne stiže kod: YY1');
     expect(tekstObavestenja(obavestenje({ studentId: null, studentIme: '  ', indeks: null, podaci: {} }))).toBe('Ne stiže kod: —');
+    // indeks u tri dela: nepoznat student se prikazuje sa godinom iz zahteva
+    expect(tekstObavestenja(obavestenje({ studentId: null, studentIme: null, indeks: 'GD9', godina: 2025, podaci: null })))
+      .toBe('Ne stiže kod: GD9/2025');
   });
 
   it('PREVISE_KODOVA', () => {
