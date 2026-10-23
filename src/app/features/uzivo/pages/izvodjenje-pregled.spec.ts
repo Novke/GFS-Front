@@ -28,7 +28,7 @@ function runda(rundaId: number, redniBroj: number, slajdId: number | null, izmen
 
 function pregledZadatka(slajdId: number): PregledZadatka {
   return {
-    slajdId, grupaNaziv: '2 → 10', putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 3, naziv: '2 → 10' }],
+    slajdId, grupaNaziv: '2 → 10', nivo: 3, nivoi: { '12': 3 }, putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 3, naziv: '2 → 10' }],
     rezultat: {
       ukupno: 2, odgovoriPrikazani: true,
       varijante: [{
@@ -186,6 +186,27 @@ describe('IzvodjenjePregledPage', () => {
     expect(redovi[0]).toContain('tačno');
     expect(redovi[1]).toContain('netačno');
     expect(karte[1].textContent).toContain('Koliko je 2 + 2?');
+  });
+
+  it('nivo runde i nivo varijante uz učesnika; runda od pre nivoa ih nema', () => {
+    const nova = zadatakRunda(1, 20, 20);
+    const stara = zadatakRunda(2, 21, 21);
+    nova.zadatak = { ...nova.zadatak!, nivo: 3, nivoi: { '12': 3 } };
+    stara.zadatak = { ...stara.zadatak!, nivo: null, nivoi: {} };
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [nova, stara], rangLista: [] });
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    expect(karte[0].querySelector('[data-nivo-runde] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 3 od 3 (teži)');
+    expect(karte[0].querySelector('tbody tr [data-nivo-varijante] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 3 od 3 (teži)');
+    expect(karte[1].querySelector('[data-nivo-runde]')).toBeNull();
+    expect(karte[1].querySelector('[data-nivo-varijante]')).toBeNull();
+  });
+
+  it('runda sa svim nivoima: "Svi nivoi" uz runde, nivoi varijanti po id-ju', () => {
+    const r = zadatakRunda(1, 20, 20);
+    r.zadatak = { ...r.zadatak!, nivo: null, nivoi: { '12': 2 } };
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [r], rangLista: [] });
+    expect(el.querySelector('[data-nivo-runde] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Svi nivoi');
+    expect(el.querySelector('tbody tr [data-nivo-varijante] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji)');
   });
 
   it('ishod učesnika po polju i ukupno', () => {

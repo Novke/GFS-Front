@@ -152,6 +152,7 @@
  "varijante": [
   {
    "id": 11,
+   "nivo": 2,
    "grupaId": 2,
    "rb": 1,
    "naziv": "1011 u dekadni",
@@ -181,6 +182,7 @@
   },
   {
    "id": 12,
+   "nivo": 2,
    "grupaId": 2,
    "rb": 2,
    "naziv": "110010 u dekadni",
@@ -210,6 +212,7 @@
   },
   {
    "id": 13,
+   "nivo": 3,
    "grupaId": 2,
    "rb": 3,
    "naziv": "100111 u dekadni",
@@ -242,6 +245,7 @@
   },
   {
    "id": 14,
+   "nivo": 2,
    "grupaId": 3,
    "rb": 1,
    "naziv": "AF u binarni",
@@ -279,6 +283,7 @@
   },
   {
    "id": 15,
+   "nivo": 1,
    "grupaId": 4,
    "rb": 1,
    "naziv": "17 u binarni",
@@ -311,6 +316,7 @@
   },
   {
    "id": 16,
+   "nivo": 2,
    "grupaId": 4,
    "rb": 2,
    "naziv": "Kol. 1, 2024/25, zad. 2",
@@ -342,6 +348,7 @@
   },
   {
    "id": 17,
+   "nivo": 3,
    "grupaId": 4,
    "rb": 3,
    "naziv": "Kol. 1, 2024/25, zad. 3",
@@ -373,6 +380,7 @@
   },
   {
    "id": 18,
+   "nivo": 1,
    "grupaId": 4,
    "rb": 4,
    "naziv": "Kol. 1, 2024/25, zad. 4",

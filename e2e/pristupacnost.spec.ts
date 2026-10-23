@@ -54,6 +54,7 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   // rendera i onemogućenim "Odobri" (13, drugi redom nastanka, zato `od`); kraj liste
   { putanja: 'banka/pregled?serija=uvoz-kol1-2024', spremno: p => p.locator('[data-original] img').first() },
   { putanja: 'banka/pregled?predmet=1&izvor=RUCNO&od=13', spremno: p => p.locator('[data-nacrt] .bk-pn-greska') },
+  { putanja: 'banka/pregled?predmet=1&nivo=2', spremno: p => p.locator('[data-filter-nivo]') },
   { putanja: 'banka/pregled?predmet=2', spremno: p => p.locator('[data-kraj]') },
   // editor varijante: nova (šta nedostaje), sačuvana greška rendera (istaknuta linija, poruka u pregledu), živi pregled sa
   // poljima TEKST (čipovi) i JEDAN_TACAN (radio)
@@ -152,6 +153,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
       await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
       await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      // poruke provere ulaze prelazom providnosti; axe usred prelaza meri slabiji kontrast (povremeni pad u CI-ju)
+      await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
     });
 
@@ -257,7 +260,7 @@ for (const rezim of ['dan', 'noc'] as const) {
     // bočni pregled (kartica zadatka) i dijalog izbora grupe (stablo radio dugmadi, čip "Isključeno")
     test('/prezentacije/6 (Zadatak slajd sa upozorenjima i dijalog izbora grupe): bez serious/critical kršenja', async ({ page, mock }) => {
       mock.podaci.prezentacije.find(x => x.id === 6)!.slajdovi.find(s => s.id === 62)!.zadatak =
-        { grupaId: 5, vremeSekunde: 120, brojVarijanti: null };
+        { grupaId: 5, vremeSekunde: 120, brojVarijanti: null, nivo: null };
       await page.goto('prezentacije/6');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       await page.getByRole('button', { name: /^2\s/ }).click();

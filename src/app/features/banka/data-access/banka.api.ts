@@ -7,7 +7,7 @@ import { API_URL } from '../../../core/api/api-url';
 import type { OpcijeZahteva } from '../../../core/api/opcije-zahteva';
 import { Strana } from '../../../shared/models/strana';
 import {
-  BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, IskljucenaTemaCmd, IskljucenaTemaInfo, MedijInfo, Namena,
+  BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, IskljucenaTemaCmd, IskljucenaTemaInfo, MedijInfo, Namena, NivoCmd,
   PonistavanjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, SerijaInfo,
   StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from './banka.models';
@@ -101,6 +101,14 @@ export class BankaApi {
     return this.http.put<VarijantaDetails>(`${API_URL}/banka/varijante/${id}`, cmd, { context: this.kontekst(o) });
   }
 
+  /**
+   * `PATCH banka/varijante/{id}/nivo`: nivo 1-3 u svakom statusu; ne renderuje i ne menja status (400 van opsega).
+   */
+  promeniNivo(id: number, nivo: number, o: OpcijeZahteva = {}): Observable<VarijantaDetails> {
+    const cmd: NivoCmd = { nivo };
+    return this.http.patch<VarijantaDetails>(`${API_URL}/banka/varijante/${id}/nivo`, cmd, { context: this.kontekst(o) });
+  }
+
   /** `DELETE banka/varijante/{id}`. */
   obrisiVarijantu(id: number, o: OpcijeZahteva = {}): Observable<void> {
     return this.http.delete<void>(`${API_URL}/banka/varijante/${id}`, { context: this.kontekst(o) });
@@ -177,7 +185,7 @@ export class BankaApi {
    */
   pretraga(f: BankaFilter, strana: StranaPretrage = {}, o: OpcijeZahteva = {}): Observable<Strana<BankaPretragaStavka>> {
     let params = new HttpParams();
-    const filteri = { predmetId: f.predmetId, namena: f.namena, q: f.q, status: f.status, izvor: f.izvor, serija: f.serija, ...strana };
+    const filteri = { predmetId: f.predmetId, namena: f.namena, q: f.q, status: f.status, izvor: f.izvor, serija: f.serija, nivo: f.nivo, ...strana };
     for (const [kljuc, vrednost] of Object.entries(filteri)) {
       if (vrednost !== null && vrednost !== undefined && vrednost !== '') {
         params = params.set(kljuc, vrednost);

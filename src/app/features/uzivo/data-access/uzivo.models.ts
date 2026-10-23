@@ -19,8 +19,11 @@ export interface Prelaz { efekat: TipPrelaza; smer: SmerPrelaza | null; trajanje
 export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' | 'REZULTATI' | 'TACAN' | 'RANG_LISTA'
   | 'PONOVI' | 'TAJMER' | 'TAJMER_PLUS' | 'TAJMER_MINUS' | 'TELEFON_PRIKAZ' | 'DETALJI' | 'EKRAN_CRN' | 'EKRAN_BEO'
   | 'QR' | 'ZAVRSI'
-  /** Zadatak slajd: prekidač rešenja (uključenje posle zatvaranja) i broj različitih varijanti za sledeće otvaranje (u CEKA). */
-  | 'RESENJE' | 'BROJ_VARIJANTI';
+  /**
+   * Zadatak slajd: prekidač rešenja (uključenje posle zatvaranja), broj različitih varijanti i nivo varijanti za sledeće
+   * otvaranje (oba samo u CEKA).
+   */
+  | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -174,21 +177,30 @@ export interface PoljeZadatka {
 }
 /** Tačan odgovor jednog polja: postavljeno je samo svojstvo tipa polja (BROJ `broj`, TEKST `prihvatljivi`, JEDAN `tacna`, VISE `tacne`). */
 export interface OdgovorPolja { broj: number | null; prihvatljivi: string[] | null; tacna: number | null; tacne: number[] | null; }
-/** Zadatak na slajdu (komanda): `vremeSekunde` 5-600 ili `null` (bez tajmera), `brojVarijanti` 1-50 ili `null` (sve aktivne). */
-export interface ZadatakSlajda { grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; }
 /**
- * Zadatak na slajdu sa opisom sa servera. `grupaId` je `null` kad je grupa obrisana; `brojAktivnihVarijanti` = kandidati (AKTIVNE
- * sa SVG-om u listovima koji se izvlače); `polja` je šema lista (`null` za unutrašnji čvor); `upozorenja` su tekstovi servera, redom.
+ * Zadatak na slajdu (komanda): `vremeSekunde` 5-600 ili `null` (bez tajmera), `brojVarijanti` 1-50 ili `null` (sve aktivne),
+ * `nivo` 1-3 ili `null` (svi nivoi). `PUT` slajda je puna zamena, pa se `nivo` šalje uvek.
+ */
+export interface ZadatakSlajda { grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null; }
+/**
+ * Zadatak na slajdu sa opisom sa servera. `grupaId` je `null` kad je grupa obrisana; `nivo` = izabrani nivo slajda (`null` = svi);
+ * `brojAktivnihVarijanti` = kandidati (AKTIVNE sa SVG-om u listovima koji se izvlače) izabranog nivoa (`nivo` `null` = zbir);
+ * `brojAktivnihPoNivou` = isti kandidati po nivoima, tačno tri broja (nivo 1, 2, 3; server ih uvek šalje, `null` je samo lokalni opis
+ * dok server ne odgovori); `polja` je šema lista (`null` za unutrašnji
+ * čvor); `upozorenja` su tekstovi servera, redom.
  */
 export interface ZadatakSlajdaInfo {
-  grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; grupaNaziv: string | null;
-  putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; polja: PoljeZadatka[] | null; iskljucena: boolean;
-  iskljucenePodgrupe: GrupaPutanja[]; upozorenja: string[];
+  grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null; grupaNaziv: string | null;
+  putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; brojAktivnihPoNivou: number[] | null; polja: PoljeZadatka[] | null;
+  iskljucena: boolean; iskljucenePodgrupe: GrupaPutanja[]; upozorenja: string[];
 }
-/** Izvučena varijanta trenutne runde (konzola): slika zadatka i rešenja i brojevi dodela, odgovora i tačnih. */
+/**
+ * Izvučena varijanta trenutne runde (konzola): slika zadatka i rešenja, brojevi dodela, odgovora i tačnih i `nivo` varijante iz
+ * snimka runde (`null` za rundu od pre nivoa).
+ */
 export interface VarijantaRunde {
   varijantaId: number; naziv: string | null; svgId: string; resenjeSvgId: string | null; dodeljeno: number; odgovorilo: number;
-  tacnih: number;
+  tacnih: number; nivo: number | null;
 }
 /**
  * Rezultat jednog polja varijante: `vrednosti` (BROJ, TEKST; grupisane, najviše 10) ili `opcije` (JEDAN_TACAN, VISE_TACNIH).
@@ -207,11 +219,14 @@ export interface RezultatVarijante {
 export interface ZadatakRezultat { ukupno: number; varijante: RezultatVarijante[]; odgovoriPrikazani: boolean; }
 /**
  * Zadatak u nastavničkom snimku (`null` van Zadatak slajda). `izmenaBrojaVarijanti`: izbor iz konzole za ovu rundu (`null` = kao na
- * slajdu, `0` = sve); `brojZaOtvaranje` = koliko će se izvući; `varijante` `null` dok runde nema; `rezultat` je konzolin (sve vidljivo),
- * `javniRezultat` projektorov (po pravilima vidljivosti, `null` dok nijedan od rezultata, `TACAN` i `RESENJE` nije uključen).
+ * slajdu, `0` = sve); `izmenaNivoa` isto za nivo (`null` = kao na slajdu, `0` = svi, `1..3`); `nivoZaOtvaranje` = važeći nivo
+ * (izmena ili nivo slajda, `null` = svi); `brojZaOtvaranje` = koliko će se izvući; `varijante` `null` dok runde nema; `rezultat` je
+ * konzolin (sve vidljivo), `javniRezultat` projektorov (po pravilima vidljivosti, `null` dok nijedan od rezultata, `TACAN` i
+ * `RESENJE` nije uključen; bez nivoa).
  */
 export interface NastavnickiZadatak {
-  slajd: ZadatakSlajdaInfo; izmenaBrojaVarijanti: number | null; brojZaOtvaranje: number; resenjePrikazano: boolean;
+  slajd: ZadatakSlajdaInfo; izmenaBrojaVarijanti: number | null; izmenaNivoa: number | null; nivoZaOtvaranje: number | null;
+  brojZaOtvaranje: number; resenjePrikazano: boolean;
   varijante: VarijantaRunde[] | null; rezultat: ZadatakRezultat | null; javniRezultat: ZadatakRezultat | null;
 }
 /** Zadatak u javnom snimku: samo faza, rok i brojevi, bez sadržaja; `brojVarijanti` u CEKA koliko će se izvući, posle koliko jeste. */
@@ -233,9 +248,14 @@ export interface UcesnikZadatka {
   ucesnikId: number; ime: string; varijantaId: number | null; varijantaNaziv: string | null; odgovorio: boolean;
   tacno: boolean | null; polja: Record<string, boolean> | null;
 }
-/** Zadatak runda u pregledu (sve vidljivo); `slajdId` iz snimka ostaje i kad slajda više nema (`RezultatPitanja.slajdId` je tada `null`). */
+/**
+ * Zadatak runda u pregledu (sve vidljivo); `slajdId` iz snimka ostaje i kad slajda više nema (`RezultatPitanja.slajdId` je tada
+ * `null`). `nivo` = nivo runde (`null` = svi nivoi ili runda od pre nivoa), `nivoi` = varijantaId -> nivo varijante (prazno za
+ * rundu od pre nivoa).
+ */
 export interface PregledZadatka {
   slajdId: number; grupaNaziv: string; putanja: GrupaPutanja[]; rezultat: ZadatakRezultat; ucesnici: UcesnikZadatka[];
+  nivo: number | null; nivoi: Record<string, number>;
 }
 
 export const medijUrl = (id: string) => `api/public/mediji/${encodeURIComponent(id)}`;

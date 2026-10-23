@@ -121,9 +121,9 @@
       "id": 106, "rb": 6, "tip": "ZADATAK", "naslov": null, "sadrzaj": null, "slika": null, "pitanje": null, "platno": null, "postepeno": false,
       "beleske": "Svako dobija svoju varijantu; posle zatvaranja pokaži rešenje (Shift+R).",
       "zadatak": {
-        "grupaId": 2, "vremeSekunde": null, "brojVarijanti": 1, "grupaNaziv": "2 → 10",
+        "grupaId": 2, "vremeSekunde": null, "brojVarijanti": 1, "nivo": null, "grupaNaziv": "2 → 10",
         "putanja": [{ "id": 1, "naziv": "Konverzije brojeva" }, { "id": 2, "naziv": "2 → 10" }],
-        "list": true, "brojAktivnihVarijanti": 2,
+        "list": true, "brojAktivnihVarijanti": 2, "brojAktivnihPoNivou": [1, 0, 1],
         "polja": [
           { "kljuc": "a", "oznaka": "Vrednost u dekadnom sistemu", "tip": "BROJ", "odstupanje": 0, "odstupanjeTip": "APSOLUTNO", "jedinica": null, "zanemariVelicinu": null, "zanemariRazmake": null, "opcije": null }
         ],
@@ -133,12 +133,12 @@
   ],
   "varijanteZadatka": [
     {
-      "varijantaId": 31, "naziv": "1011 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000031",
+      "varijantaId": 31, "nivo": 1, "naziv": "1011 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000031",
       "resenjeSvgId": "c0000000-0000-4000-8000-000000000131",
       "odgovori": { "a": { "broj": 11, "prihvatljivi": null, "tacna": null, "tacne": null } }
     },
     {
-      "varijantaId": 32, "naziv": "110010 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000032",
+      "varijantaId": 32, "nivo": 3, "naziv": "110010 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000032",
       "resenjeSvgId": "c0000000-0000-4000-8000-000000000132",
       "odgovori": { "a": { "broj": 50, "prihvatljivi": null, "tacna": null, "tacne": null } }
     }

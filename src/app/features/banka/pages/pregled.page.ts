@@ -11,6 +11,7 @@ import { filter } from 'rxjs';
 import { JE_ID } from '../../../core/route-matchers';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
+import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { sRecju } from '../../../shared/util/mnozina';
@@ -64,12 +65,16 @@ function opisGreske(v: VarijantaDetails): string {
  * sledeći), Preskoči (`→`) i Nazad (`←`); posle odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je
  * fokus u polju za unos ili u CDK overlay-u (meni), dok je otvoren dijalog i uz Ctrl/Alt/Meta/Shift. Uz seriju u filteru, pri vrhu
  * "Odbaci celu seriju" (potvrda bez broja: server briše sve neodobrene Klodove nacrte serije, ne samo ove iz filtera). Na
- * kraju liste "Nema više nacrta." sa vezom na banku. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija
+ * kraju liste "Nema više nacrta." sa vezom na banku. Nivo prikazane varijante (★ do ★★★) se menja na mestu pre odobravanja, a
+ * filter "Prikaži nivo" (`?nivo=1|2|3`, "Svi" ga skida) sužava listu na jedan nivo. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija
  * pod `prefers-reduced-motion`.
  */
 @Component({
   selector: 'app-pregled-page',
-  imports: [EmptyState, ErrorPanel, MatButton, MatIcon, NgTemplateOutlet, OdgovoriPregledComponent, PageHeader, RouterLink, SkeletonRows, StatusChip],
+  imports: [
+    EmptyState, ErrorPanel, MatButton, MatIcon, NgTemplateOutlet, NivoComponent, OdgovoriPregledComponent, PageHeader, RouterLink, SkeletonRows,
+    StatusChip,
+  ],
   providers: [PregledNacrtaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'tastatura($event)' },
@@ -105,6 +110,10 @@ function opisGreske(v: VarijantaDetails): string {
         Učitano je najviše {{ najvise }} varijanti, pa lista nije cela. Kad ove pregledaš, učitaj stranicu ponovo za ostale.
       </p>
     }
+
+    <div class="bk-pn-filter" data-filter-nivo>
+      <app-nivo [nivo]="f.nivo" izbor saSvima natpisTekst="Prikaži nivo" (promena)="filtrirajNivo($event)" />
+    </div>
 
     @if (store.greska(); as g) {
       <app-error-panel naslov="Pregled nije učitan." [poruka]="g" (ponovo)="store.ucitajPonovo()" />
@@ -173,6 +182,7 @@ function opisGreske(v: VarijantaDetails): string {
                   <span class="oznaka" data-serija>Serija <code>{{ v.serija }}</code></span>
                 }
               </div>
+              <app-nivo class="bk-pn-nivo" [nivo]="v.nivo" izbor (promena)="promeniNivo($event)" data-nivo-varijante />
               @if (v.zamenjuje !== null) {
                 <p class="bk-pn-zamenjuje" data-zamenjuje>Zamenjuje: {{ o ? ime(o) : '#' + v.zamenjuje }}</p>
               }
@@ -188,6 +198,7 @@ function opisGreske(v: VarijantaDetails): string {
                   @let so = prikazStatusa(o.status);
                   <app-status-chip [tekst]="so.tekst" [ton]="so.ton" [ikona]="so.ikona" />
                 </div>
+                <app-nivo [nivo]="o.nivo" data-nivo-originala />
               </header>
               <ng-container *ngTemplateOutlet="sadrzaj; context: { $implicit: o, uz: ' (original)' }" />
             </section>
@@ -248,6 +259,7 @@ export class PregledPage {
   readonly serija = input<string>();
   readonly grupa = input<string>();
   readonly status = input<string>();
+  readonly nivo = input<string>();
   /** `?od=`: varijanta od koje pregled počinje (povratak iz editora, `pocetakPregleda`); menja samo početak, ne listu. */
   readonly od = input<string>();
 
@@ -258,7 +270,7 @@ export class PregledPage {
   protected readonly najvise = NAJVISE_U_PREGLEDU;
 
   protected readonly filterV = computed(
-    () => filterPregleda({ predmet: this.predmet(), izvor: this.izvor(), serija: this.serija(), grupa: this.grupa(), status: this.status() }),
+    () => filterPregleda({ predmet: this.predmet(), izvor: this.izvor(), serija: this.serija(), grupa: this.grupa(), status: this.status(), nivo: this.nivo() }),
     { equal: istiFilter },
   );
   /** URL ovog pregleda sa `od` = prikazana varijanta: editor se posle čuvanja vraća tu (`?povratak`). */
@@ -374,6 +386,18 @@ export class PregledPage {
     if (v && povratak) {
       void this.router.navigate(['/banka/varijante', v.id], { queryParams: { povratak } });
     }
+  }
+
+  /** Izbor nivoa prikazane varijante (optimistično, `PregledNacrtaStore.promeniNivo`). */
+  protected promeniNivo(nivo: number | null): void {
+    if (nivo !== null) {
+      this.store.promeniNivo(nivo);
+    }
+  }
+
+  /** Filter po nivou: nov URL (bez `od`), pa lista iznova; `null` = svi nivoi. */
+  protected filtrirajNivo(nivo: number | null): void {
+    void this.router.navigate(['/banka/pregled'], { queryParams: upitPregleda({ ...this.filterV(), nivo }) });
   }
 
   protected preskoci(): void {

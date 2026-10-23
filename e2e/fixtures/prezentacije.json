@@ -524,7 +524,8 @@
      "zadatak": {
       "grupaId": 2,
       "vremeSekunde": 120,
-      "brojVarijanti": null
+      "brojVarijanti": null,
+      "nivo": null
      }
     }
    ]

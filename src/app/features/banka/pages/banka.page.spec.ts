@@ -49,7 +49,7 @@ function varijanta(
   return {
     id, grupaId: 2, rb: id - 10, naziv: `Varijanta ${id}`, status, izvor, renderStatus,
     svgId: renderStatus === 'OK' ? `svg-${id}` : null, resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00',
-    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null,
+    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null, nivo: 2,
   };
 }
 
@@ -178,7 +178,7 @@ describe('BankaPage', () => {
     expect(e.querySelector('#bk-naslov-grupe')!.textContent).toBe('2 → 10');
     expect(e.querySelectorAll('app-varijanta-kartica')).toHaveLength(3);
     expect(e.querySelector('[data-zbir]')).toBeNull();
-    expect(e.querySelector('[data-tezina]')!.textContent!.trim()).toBe('Težina 2');
+    expect(e.querySelector('[data-tezina]')!.textContent!.trim()).toBe('Težina tipa 2');
     expect(e.querySelector('a[data-nova-varijanta]')!.getAttribute('href')).toBe('/banka/varijante/nova?grupa=2');
 
     e.querySelector<HTMLButtonElement>('app-chip-select [data-otvori]')!.click();

@@ -39,7 +39,7 @@ function varijanta(izmena: Partial<VarijantaDetails> = {}): VarijantaDetails {
     resenje: null, odgovori: { a: { ...prazno, broj: 39 } }, polja: [POLJE_A], prilozi: [], status: 'NACRT', izvor: 'RUCNO',
     renderStatus: 'GRESKA', svgId: null, resenjeSvgId: null, renderGreska: { linija: 3, poruka: 'Undefined control sequence \\foo' },
     renderDeo: 'tekst', kreirano: '2026-10-17T10:00:00', izmenjeno: '2026-10-17T10:00:00', ikadOdobrena: false, zamenjuje: null, serija: null,
-    ...izmena,
+    nivo: 2, ...izmena,
   };
 }
 
@@ -56,6 +56,7 @@ describe('VarijantaEditorPage', () => {
     varijanta: vi.fn(),
     kreirajVarijantu: vi.fn(),
     izmeniVarijantu: vi.fn(),
+    promeniNivo: vi.fn(),
     odobri: vi.fn(),
     render: vi.fn(),
     renderProba: vi.fn(),
@@ -158,11 +159,55 @@ describe('VarijantaEditorPage', () => {
 
     expect(api.kreirajVarijantu).toHaveBeenCalledExactlyOnceWith(2, {
       naziv: null, tekst: 'Pretvori $101101_2$ u dekadni.', resenje: null, odgovori: { a: { ...prazno, broj: 45 } },
-      prilozi: [{ ime: 'graf', medijId: 'm9' }], izvor: 'RUCNO',
+      prilozi: [{ ime: 'graf', medijId: 'm9' }], izvor: 'RUCNO', nivo: 2,
     }, { tiho: true });
     expect(api.odobri).not.toHaveBeenCalled();
     expect(uspeh).toHaveBeenCalledWith('Varijanta je sačuvana kao nacrt.');
     expect(router.url).toBe('/banka?predmet=7&namena=PREDAVANJE&grupa=2');
+  });
+
+  const nivoDugme = (n: number) => el().querySelector<HTMLButtonElement>(`[data-nivo-varijante] [role=radio][data-nivo="${n}"]`)!;
+  const izabranNivo = () => [1, 2, 3].find(n => nivoDugme(n).getAttribute('aria-checked') === 'true');
+
+  it('nova: nivo je podrazumevano 2, izbor ide u komandi kreiranja, a izbor nije nesačuvana izmena', async () => {
+    await otvori('/banka/varijante/nova?grupa=2');
+    expect(izabranNivo()).toBe(2);
+    await klik(nivoDugme(3));
+    expect(izabranNivo()).toBe(3);
+    expect(api.promeniNivo).not.toHaveBeenCalled();
+    expect(stranica().imaNesacuvanihIzmena()).toBe(false);
+    await unesi(editor('tekst'), 'Zadatak');
+    await unesi(brojOdgovora(), '1');
+    await klik(dugme('data-sacuvaj'));
+    expect(api.kreirajVarijantu.mock.calls[0][1]).toMatchObject({ izvor: 'RUCNO', nivo: 3 });
+  });
+
+  it('izmena: nivo se menja odmah kroz PATCH (ne kroz PUT), bez nesačuvanih izmena, a "Sačuvaj" ne šalje nivo', async () => {
+    api.varijanta.mockImplementation(() => of(varijanta({ ...OK, nivo: 1 })));
+    api.promeniNivo.mockImplementation((id: number, nivo: number) => of(varijanta({ ...OK, id, nivo })));
+    await otvori('/banka/varijante/13');
+    expect(izabranNivo()).toBe(1);
+
+    await klik(nivoDugme(3));
+    expect(izabranNivo()).toBe(3);
+    expect(api.promeniNivo).toHaveBeenCalledExactlyOnceWith(13, 3, { tiho: true });
+    expect(stranica().imaNesacuvanihIzmena()).toBe(false);
+    expect(api.izmeniVarijantu).not.toHaveBeenCalled();
+
+    await unesi(editor('tekst'), 'Nov tekst');
+    await klik(dugme('data-sacuvaj'));
+    expect(api.izmeniVarijantu).toHaveBeenCalledOnce();
+    expect(api.izmeniVarijantu.mock.calls[0][1]).not.toHaveProperty('nivo');
+  });
+
+  it('izmena: greška PATCH-a vraća prethodni nivo i javlja razlog', async () => {
+    api.varijanta.mockImplementation(() => of(varijanta({ ...OK, nivo: 1 })));
+    api.promeniNivo.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 400, error: { reason: 'Nivo mora biti od 1 do 3.' } })));
+    await otvori('/banka/varijante/13');
+    const greska = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    await klik(nivoDugme(2));
+    expect(izabranNivo()).toBe(1);
+    expect(greska).toHaveBeenCalledWith('Nivo mora biti od 1 do 3.');
   });
 
   it('posle uspelog čuvanja nove varijante Nazad ne otvara opet praznu formu (replaceUrl)', async () => {

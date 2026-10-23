@@ -161,7 +161,7 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
                 <h2 id="bk-naslov-grupe">{{ c.naziv }}</h2>
                 @if (c.list) {
                   @if (c.tezina !== null) {
-                    <span class="oznaka" data-tezina>Težina {{ c.tezina }}</span>
+                    <span class="oznaka" data-tezina>Težina tipa {{ c.tezina }}</span>
                   } @else {
                     <span class="oznaka ton-warn" data-tezina>Bez težine</span>
                   }
@@ -192,7 +192,7 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
               @if (c.tezina === null) {
                 <div class="bk-upozorenje" data-bez-tezine>
                   <mat-icon svgIcon="info" aria-hidden="true" />
-                  <span>Grupa nema težinu, pa još ne prima varijante. Težina (1-5) je zajednička svim varijantama grupe.</span>
+                  <span>Grupa nema težinu, pa još ne prima varijante. Težina tipa (1-5) je zajednička svim varijantama grupe.</span>
                   <button matButton="outlined" type="button" (click)="izmeniGrupu(c, true)">Zadaj težinu</button>
                 </div>
               }
@@ -218,7 +218,7 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
                     <li>
                       <app-varijanta-kartica [varijanta]="v" [zauzeto]="store.zauzeto()" (odobri)="promenaStatusa(v, 'odobri')"
                         (arhiviraj)="promenaStatusa(v, 'arhiviraj')" (vratiUNacrt)="promenaStatusa(v, 'vratiUNacrt')"
-                        (dupliraj)="store.dupliraj(v.id)" (obrisi)="obrisiVarijantu(v)" />
+                        (dupliraj)="store.dupliraj(v.id)" (obrisi)="obrisiVarijantu(v)" (nivoPromena)="store.promeniNivo(v.id, $event)" />
                     </li>
                   }
                 </ul>

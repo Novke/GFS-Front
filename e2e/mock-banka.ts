@@ -69,6 +69,9 @@ const MAX_DUBINA = 6;
 const SERIJA = /^[a-z0-9-]{3,60}$/;
 const PORUKA_SERIJE = 'Serija mora imati 3 do 60 malih slova, cifara ili crtica.';
 const MAX_OPIS_TEME = 300;
+const NIVOI: readonly number[] = [1, 2, 3];
+const PODRAZUMEVANI_NIVO = 2;
+const NEISPRAVAN_NIVO = 'Nivo mora biti od 1 do 3.';
 
 const greska = (status: number, reason: string): Ishod => ({ status, telo: { reason, time: new Date().toISOString() } });
 const vreme = () => new Date().toISOString().slice(0, 19);
@@ -355,7 +358,7 @@ export class MockBanka {
 
   private info(v: BankaVarijanta): VarijantaInfo {
     return {
-      id: v.id, grupaId: v.grupaId, rb: v.rb, naziv: v.naziv, status: v.status, izvor: v.izvor, renderStatus: v.renderStatus,
+      id: v.id, grupaId: v.grupaId, rb: v.rb, naziv: v.naziv, nivo: v.nivo, status: v.status, izvor: v.izvor, renderStatus: v.renderStatus,
       svgId: v.svgId, resenjeSvgId: v.resenjeSvgId, izmenjeno: v.izmenjeno, ikadOdobrena: v.ikadOdobrena, zamenjuje: v.zamenjuje,
       serija: v.serija,
     };
@@ -458,6 +461,8 @@ export class MockBanka {
   kreirajVarijantu(grupaId: number, cmd: VarijantaCmd): Ishod {
     const neispravno = this.proveriVarijantu(cmd);
     if (neispravno) return neispravno;
+    const nivo = cmd.nivo ?? PODRAZUMEVANI_NIVO;
+    if (!NIVOI.includes(nivo)) return greska(400, NEISPRAVAN_NIVO);
     const g = this.grupa(grupaId);
     if (!g) return greska(404, 'Grupa nije pronađena.');
     if (this.braca(g.predmetId, g.namena, g.id).length > 0) return greska(409, 'Grupa sa podgrupama ne može imati varijante.');
@@ -469,6 +474,7 @@ export class MockBanka {
     const sada = vreme();
     const v: BankaVarijanta = {
       id: this.sledeciVarijanta++, grupaId, rb: Math.max(0, ...this.varijanteGrupe(grupaId).map(x => x.rb)) + 1, naziv: cmd.naziv || null,
+      nivo,
       tekst: cmd.tekst, resenje: cmd.resenje || null, odgovori: kopija(cmd.odgovori ?? {}), prilozi, status: 'NACRT',
       izvor: cmd.izvor ?? 'RUCNO', renderStatus: 'CEKA', svgId: null, resenjeSvgId: null, renderGreska: null, renderDeo: null,
       kreirano: sada, izmenjeno: sada, ikadOdobrena: false, zamenjuje: null, serija: null,
@@ -495,6 +501,17 @@ export class MockBanka {
       izmenjeno: vreme(),
     });
     if (promenjen || v.renderStatus !== 'OK' || v.zastareo) this.renderuj(v);
+    return { telo: this.varijantaDetails(v) };
+  }
+
+  /** `PATCH banka/varijante/{id}/nivo`: menja samo nivo (bez rendera i bez promene statusa), radi i za AKTIVNE i ARHIVIRANE. */
+  promeniNivo(id: number, telo: { nivo?: unknown } | null): Ishod {
+    const v = this.varijanta(id);
+    if (!v) return greska(404, 'Varijanta nije pronađena.');
+    const nivo = telo?.nivo;
+    if (typeof nivo !== 'number' || !NIVOI.includes(nivo)) return greska(400, NEISPRAVAN_NIVO);
+    v.nivo = nivo;
+    v.izmenjeno = vreme();
     return { telo: this.varijantaDetails(v) };
   }
 
@@ -617,6 +634,8 @@ export class MockBanka {
     if (serija !== null && !SERIJA.test(serija)) return greska(400, PORUKA_SERIJE);
     const poredak = poredakPretrage(q.getAll('sort'));
     if (!poredak) return greska(400, 'Neispravan parametar: sort.');
+    const nivoParam = q.get('nivo');
+    if (nivoParam !== null && nivoParam !== '' && !NIVOI.includes(Number(nivoParam))) return greska(400, 'Neispravan parametar: nivo.');
     const namena = q.get('namena');
     const status = q.get('status');
     const stavke: BankaPretragaStavka[] = this.d.bankaVarijante
@@ -624,14 +643,14 @@ export class MockBanka {
         const g = this.grupa(v.grupaId);
         const naslov = `${v.naziv ?? ''} ${v.tekst} ${g?.naziv ?? ''}`.toLowerCase();
         return g !== undefined && (predmetId === null || g.predmetId === predmetId) && (!namena || g.namena === namena)
-          && (!status || v.status === status) && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija)
+          && (!status || v.status === status) && (!nivoParam || v.nivo === Number(nivoParam)) && (!izvor || v.izvor === izvor) && (!serija || v.serija === serija)
           && (upit === '' || naslov.includes(upit.toLowerCase()));
       })
       .sort(poredak)
       .map(v => {
         const g = this.grupa(v.grupaId) as BankaGrupa;
         return {
-          varijantaId: v.id, grupaId: g.id, grupaNaziv: g.naziv, putanja: this.putanja(g), naziv: v.naziv, status: v.status,
+          varijantaId: v.id, grupaId: g.id, grupaNaziv: g.naziv, putanja: this.putanja(g), naziv: v.naziv, nivo: v.nivo, status: v.status,
           renderStatus: v.renderStatus, isecak: [...v.tekst].slice(0, 160).join(''), izvor: v.izvor, serija: v.serija,
         };
       });
@@ -764,10 +783,10 @@ export class MockBanka {
    */
   zadatakSlajda(z: ZadatakSlajda): ZadatakSlajdaInfo {
     const g = z.grupaId == null ? undefined : this.grupa(z.grupaId);
-    const izbor = { vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti };
+    const izbor = { vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, nivo: z.nivo ?? null };
     if (!g) {
       return {
-        grupaId: null, ...izbor, grupaNaziv: null, putanja: [], list: false, brojAktivnihVarijanti: 0, polja: null, iskljucena: false,
+        grupaId: null, ...izbor, grupaNaziv: null, putanja: [], list: false, brojAktivnihVarijanti: 0, brojAktivnihPoNivou: [0, 0, 0], polja: null, iskljucena: false,
         iskljucenePodgrupe: [], upozorenja: ['Grupa zadataka je obrisana; izaberi drugu.'],
       };
     }
@@ -785,14 +804,17 @@ export class MockBanka {
     obidji(g);
     const list = this.braca(g.predmetId, g.namena, g.id).length === 0;
     const iskljucena = this.iskljucenje(g).iskljucena;
-    const brojAktivnihVarijanti = listovi.flatMap(l => this.varijanteGrupe(l.id)).filter(v => v.status === 'AKTIVNA' && v.svgId).length;
+    const aktivne = listovi.flatMap(l => this.varijanteGrupe(l.id)).filter(v => v.status === 'AKTIVNA' && v.svgId);
+    const brojAktivnihPoNivou = NIVOI.map(n => aktivne.filter(v => v.nivo === n).length);
+    const brojAktivnihVarijanti = aktivne.filter(v => izbor.nivo === null || v.nivo === izbor.nivo).length;
     const upozorenja = [
       ...(iskljucena ? ['Tema je isključena.'] : []),
-      ...(brojAktivnihVarijanti === 0 ? ['Grupa nema aktivnih varijanti; odobri nacrte u banci pre časa.'] : []),
+      ...(aktivne.length === 0 ? ['Grupa nema aktivnih varijanti; odobri nacrte u banci pre časa.']
+        : brojAktivnihVarijanti === 0 ? [`Nema aktivnih varijanti nivoa ${'★'.repeat(izbor.nivo ?? 0)}; odobri nacrte ili izaberi drugi nivo.`] : []),
       ...(iskljucenePodgrupe.length ? [`Isključene podgrupe se ne izvlače: ${iskljucenePodgrupe.map(p => p.naziv).join(', ')}.`] : []),
     ];
     return {
-      grupaId: g.id, ...izbor, grupaNaziv: g.naziv, putanja: this.putanja(g), list, brojAktivnihVarijanti,
+      grupaId: g.id, ...izbor, grupaNaziv: g.naziv, putanja: this.putanja(g), list, brojAktivnihVarijanti, brojAktivnihPoNivou,
       polja: list ? kopija(g.polja) : null, iskljucena, iskljucenePodgrupe, upozorenja,
     };
   }

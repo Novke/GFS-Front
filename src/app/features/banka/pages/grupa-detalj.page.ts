@@ -14,7 +14,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
-import { catchError, EMPTY, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
+import { catchError, concatMap, EMPTY, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
@@ -31,6 +31,7 @@ import {
   GrupaCmd, GrupaDetails, MAX_NAZIV_GRUPE, MAX_OPIS_GRUPE, MAX_UPUTSTVO_GRUPE, Polje, TEZINE, VarijantaInfo,
 } from '../data-access/banka.models';
 import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
+import { PromeneNivoa } from '../data-access/promene-nivoa';
 import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja } from '../data-access/polja';
 import { potvrdiUkljucivanje, pretakIskljucenja } from '../ui/iskljucene-teme.component';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
@@ -125,7 +126,7 @@ interface GreskaUcitavanja {
           </mat-form-field>
           @if (g.list) {
             <mat-form-field appearance="outline" class="bk-gd-tezina">
-              <mat-label>Težina</mat-label>
+              <mat-label>Težina tipa</mat-label>
               <mat-select formControlName="tezina" data-tezina>
                 @if (brojaci().brojVarijanti === 0) {
                   <mat-option [value]="null">Bez težine</mat-option>
@@ -215,7 +216,7 @@ interface GreskaUcitavanja {
                   <li>
                     <app-varijanta-kartica [varijanta]="v" [zauzeto]="zauzeto()" (odobri)="promeniStatus(v, 'odobri')"
                       (arhiviraj)="promeniStatus(v, 'arhiviraj')" (vratiUNacrt)="promeniStatus(v, 'vratiUNacrt')"
-                      (dupliraj)="dupliraj(v)" (obrisi)="obrisi(v)" />
+                      (dupliraj)="dupliraj(v)" (obrisi)="obrisi(v)" (nivoPromena)="promeniNivo(v, $event)" />
                   </li>
                 }
               </ul>
@@ -266,6 +267,9 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   protected readonly ukljucuje = signal(false);
   /** Dupliranja i brisanja varijanti u letu: dok nije 0, ta dugmad čekaju (ponovljen zahtev pravi duplikat ili 404). */
   private readonly zauzetih = signal(0);
+  /** Promene nivoa u letu: zahtevi idu redom (važi poslednji klik), a prikaz se vraća na potvrđeni nivo ({@link PromeneNivoa}). */
+  private readonly nivoi = new PromeneNivoa();
+  private readonly nivoRed = new Subject<{ id: number; nivo: number }>();
   protected readonly zauzeto = computed(() => this.zauzetih() > 0);
 
   protected readonly forma = new FormGroup({
@@ -330,6 +334,24 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
   private nestajeKartica: { id: number; indeks: number } | null = null;
 
   constructor() {
+    this.nivoRed
+      .pipe(
+        concatMap(({ id, nivo }) => this.api.promeniNivo(id, nivo, TIHO).pipe(
+          tap(v => this.nivoi.potvrdi(id, v.nivo)),
+          catchError((e: unknown) => {
+            this.obavestenja.greska(razlogBanke(e, UPIS));
+            return EMPTY;
+          }),
+          finalize(() => {
+            const prikaz = this.nivoi.zavrsi(id);
+            if (prikaz !== null) {
+              this.postaviNivo(id, prikaz);
+            }
+          }),
+        )),
+      )
+      .subscribe(); // bez `takeUntilDestroyed`: izbor nivoa ne sme da se izgubi ako korisnik odmah napusti stranicu
+
     this.zahtevGrupe
       .pipe(
         switchMap(id => this.api.grupa(id, TIHO).pipe(
@@ -574,6 +596,24 @@ export class GrupaDetaljPage implements NemaNesacuvanih {
 
   protected promeniStatus(v: VarijantaInfo, radnja: RadnjaStatusa): void {
     this.radnja(this.api[radnja](v.id, TIHO));
+  }
+
+  /**
+   * Nivo varijante (`PATCH`): kartica odmah pokazuje novi, a kad zahtev padne vraća se poslednji potvrđeni i javlja razlog. Lista se
+   * ne učitava iznova (nivo ne menja ni status ni brojače), pa fokus ostaje na izabranom nivou.
+   */
+  protected promeniNivo(v: VarijantaInfo, nivo: number): void {
+    const trenutni = this.varijante()?.find(x => x.id === v.id);
+    if (!trenutni || trenutni.nivo === nivo) {
+      return;
+    }
+    this.nivoi.pocni(v.id, trenutni.nivo);
+    this.postaviNivo(v.id, nivo);
+    this.nivoRed.next({ id: v.id, nivo });
+  }
+
+  private postaviNivo(id: number, nivo: number): void {
+    this.varijante.update(l => l && l.map(x => (x.id === id ? { ...x, nivo } : x)));
   }
 
   protected dupliraj(v: VarijantaInfo): void {

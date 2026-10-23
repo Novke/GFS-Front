@@ -13,6 +13,10 @@
   margin-top: 4px;
 }
 
+.bk-pn-filter { margin: 0 0 12px; }
+
+.bk-pn-nivo { align-self: flex-start; }
+
 .bk-pn-napomena {
   margin: 0 0 12px;
   color: var(--ink-2);

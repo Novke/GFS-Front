@@ -5,6 +5,7 @@ import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { RouterLink } from '@angular/router';
 
 import { NazivIkone } from '../../../core/layout/icons';
+import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { StatusChip, TonStatusa } from '../../../shared/ui/status-chip';
 import { StatusVarijante, svgUrl, VarijantaInfo } from '../data-access/banka.models';
 
@@ -34,11 +35,12 @@ export function imeVarijante(v: Pick<VarijantaInfo, 'naziv' | 'rb'>): string {
  * Kartica varijante u mreži grupe: renderovan zadatak (SVG sa `api/public/mediji/{id}`, uvek na beloj podlozi) ili zamena
  * ("Greška u LaTeX-u", "Nije renderovano"), naziv kao link na editor (cela kartica je klikabilna), status i meni ⋮ sa
  * radnjama koje status dozvoljava: Uredi, Odobri (nacrt sa uspelim renderom), Arhiviraj (aktivna), Vrati u nacrt
- * (arhivirana), Dupliraj, Obriši. Emituje nameru; potvrdu brisanja i poziv servera radi stranica.
+ * (arhivirana), Dupliraj, Obriši. Uz status je nivo (★ do ★★★) koji se bira na mestu, u svakom statusu (nije deo cele-kartice
+ * veze). Emituje nameru; potvrdu brisanja i poziv servera radi stranica.
  */
 @Component({
   selector: 'app-varijanta-kartica',
-  imports: [MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, StatusChip],
+  imports: [MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, NivoComponent, RouterLink, StatusChip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[attr.data-varijanta]': 'varijanta().id' },
   styleUrl: './varijanta-kartica.component.css',
@@ -57,6 +59,7 @@ export function imeVarijante(v: Pick<VarijantaInfo, 'naziv' | 'rb'>): string {
       <a class="bk-kartica-veza" [routerLink]="['/banka/varijante', v.id]">
         <span class="bk-rb">{{ v.rb }}.</span> {{ ime() }}
       </a>
+      <app-nivo class="bk-kartica-nivo" [nivo]="v.nivo" izbor [natpis]="false" (promena)="promeniNivo($event)" />
       <span class="bk-kartica-oznake">
         <app-status-chip [tekst]="status().tekst" [ton]="status().ton" [ikona]="status().ikona" />
         @if (v.izvor === 'CLAUDE') {
@@ -98,6 +101,14 @@ export class VarijantaKarticaComponent {
   readonly vratiUNacrt = output<void>();
   readonly dupliraj = output<void>();
   readonly obrisi = output<void>();
+  /** Izabran drugi nivo varijante (1-3); poziv servera i vraćanje na grešku radi `BankaStore.promeniNivo`. */
+  readonly nivoPromena = output<number>();
+
+  protected promeniNivo(nivo: number | null): void {
+    if (nivo !== null) {
+      this.nivoPromena.emit(nivo);
+    }
+  }
 
   protected readonly ime = computed(() => imeVarijante(this.varijanta()));
   protected readonly status = computed(() => prikazStatusa(this.varijanta().status));

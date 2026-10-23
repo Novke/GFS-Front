@@ -52,7 +52,7 @@ function varijanta(
   return {
     id, grupaId: 2, rb: id, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus,
     svgId: renderStatus === 'OK' ? `svg-${id}` : null, resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00',
-    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null, ...izmena,
+    ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null, nivo: 2, ...izmena,
   };
 }
 
@@ -103,6 +103,7 @@ describe('BankaStore', () => {
     vratiUNacrt: vi.fn(),
     obrisiVarijantu: vi.fn(),
     dupliraj: vi.fn(),
+    promeniNivo: vi.fn(),
     serije: vi.fn(),
     iskljuceneTeme: vi.fn(),
     ukljuciTemu: vi.fn(),
@@ -733,6 +734,63 @@ describe('BankaStore', () => {
       expect(store.zauzeto()).toBe(true);
       druga.stigni({} as VarijantaDetails);
       expect(store.zauzeto()).toBe(false);
+    });
+
+    describe('promeniNivo', () => {
+      const nivoVarijante = (id: number) => store.varijante().find(v => v.id === id)!.nivo;
+
+      it('odmah menja nivo na kartici, šalje PATCH i ne učitava ništa ponovo (izbor i filter ostaju)', () => {
+        const odgovor = kasni<VarijantaDetails>();
+        api.promeniNivo.mockImplementationOnce(() => odgovor);
+        store.promeniNivo(12, 3);
+
+        expect(nivoVarijante(12)).toBe(3);
+        expect(api.promeniNivo).toHaveBeenCalledExactlyOnceWith(12, 3, { tiho: true });
+        odgovor.stigni({ nivo: 3 } as VarijantaDetails);
+        expect(nivoVarijante(12)).toBe(3);
+        expect(store.zauzeto()).toBe(false);
+        expect(api.stablo).not.toHaveBeenCalled();
+        expect(api.grupa).not.toHaveBeenCalled();
+        expect(api.varijante).not.toHaveBeenCalled();
+        expect(poruke).toEqual([]);
+      });
+
+      it('isti nivo ili nepoznata varijanta ne šalju ništa', () => {
+        store.promeniNivo(12, 2);
+        store.promeniNivo(999, 3);
+        expect(api.promeniNivo).not.toHaveBeenCalled();
+      });
+
+      it('greška vraća prethodni nivo i javlja razlog', () => {
+        api.promeniNivo.mockImplementationOnce(() => greskaServera(400, 'Nivo mora biti od 1 do 3.'));
+        store.promeniNivo(12, 3);
+
+        expect(nivoVarijante(12)).toBe(2);
+        expect(poruke).toEqual([{ tip: 'greska', tekst: 'Nivo mora biti od 1 do 3.', akcija: undefined }]);
+      });
+
+      it('brzi klikovi idu redom, a kad poslednji padne vraća se poslednji potvrđeni nivo', () => {
+        const prvi = kasni<VarijantaDetails>();
+        api.promeniNivo.mockImplementationOnce(() => prvi).mockImplementationOnce(() => greskaServera(500, 'x'));
+        store.promeniNivo(12, 3);
+        store.promeniNivo(12, 1);
+        expect(nivoVarijante(12)).toBe(1);
+        expect(api.promeniNivo).toHaveBeenCalledTimes(1);
+
+        prvi.stigni({ nivo: 3 } as VarijantaDetails);
+        expect(api.promeniNivo).toHaveBeenCalledTimes(2);
+        expect(api.promeniNivo).toHaveBeenLastCalledWith(12, 1, { tiho: true });
+        expect(nivoVarijante(12)).toBe(3);
+        expect(poruke).toHaveLength(1);
+      });
+
+      it('radi i za arhiviranu varijantu i ne menja status', () => {
+        api.varijante.mockImplementation(() => of([varijanta(14, 'ARHIVIRANA')]));
+        store.izaberi(3);
+        api.promeniNivo.mockImplementationOnce(() => of({ nivo: 1 } as VarijantaDetails));
+        store.promeniNivo(14, 1);
+        expect(store.varijante()[0]).toMatchObject({ id: 14, nivo: 1, status: 'ARHIVIRANA' });
+      });
     });
 
     it('5xx: 500 opšta poruka (bez detalja servera), 503 render servis, 504 istek bez poziva na ponovni pokušaj', () => {

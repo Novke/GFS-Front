@@ -17,12 +17,15 @@ interface PoljeZadatka {
 }
 /** `ZadatakSlajdaInfo` kako ga server šalje uz slajd (fikstura ga nosi gotovog: mok ne računa kandidate). */
 interface ZadatakInfo {
-  grupaId: number | null; brojVarijanti: number | null; brojAktivnihVarijanti: number; polja: PoljeZadatka[] | null;
+  grupaId: number | null; brojVarijanti: number | null; nivo?: number | null; brojAktivnihVarijanti: number;
+  brojAktivnihPoNivou?: number[]; polja: PoljeZadatka[] | null;
   [polje: string]: unknown;
 }
 /** Aktivna varijanta grupe Zadatak slajda (fikstura `varijanteZadatka`): šta se izvlači pri otvaranju runde. */
 interface VarijantaZadatka {
   varijantaId: number; naziv: string | null; svgId: string; resenjeSvgId: string | null; odgovori: Record<string, OdgovorPolja>;
+  /** Nivo 1-3; fikstura bez njega = 2 (kao server za varijante od pre nivoa). */
+  nivo?: number;
 }
 export interface Slajd {
   id: number; rb: number; tip: 'INFO' | 'PITANJE' | 'PLATNO' | 'ZADATAK'; naslov: string | null; sadrzaj: string | null;
@@ -78,10 +81,11 @@ interface Vidljivo { brojevi: boolean; tacno: boolean; resenje: boolean }
 
 /** `NastavnickiZadatak` (konzola vidi sve: tačne odgovore i rešenja svake izvučene; projektor samo `javniRezultat`). */
 interface ZadatakSnimak {
-  slajd: ZadatakInfo; izmenaBrojaVarijanti: number | null; brojZaOtvaranje: number; resenjePrikazano: boolean;
+  slajd: ZadatakInfo; izmenaBrojaVarijanti: number | null; izmenaNivoa: number | null; nivoZaOtvaranje: number | null;
+  brojZaOtvaranje: number; resenjePrikazano: boolean;
   varijante: {
     varijantaId: number; naziv: string | null; svgId: string; resenjeSvgId: string | null; dodeljeno: number; odgovorilo: number;
-    tacnih: number;
+    tacnih: number; nivo: number | null;
   }[] | null;
   rezultat: ZadatakRezultatMok | null;
   javniRezultat: ZadatakRezultatMok | null;
@@ -184,6 +188,8 @@ export class MockIzvodjenje {
   private tacanPrikazan = false;
   /** Zadatak slajd: izbor broja različitih iz konzole (`null` kao na slajdu, `0` sve), rešenje i izvučene u rundi. */
   private izmenaBrojaVarijanti: number | null = null;
+  /** Izbor nivoa iz konzole (`null` kao na slajdu, `0` svi, `1..3`); briše se napuštanjem slajda. */
+  private izmenaNivoa: number | null = null;
   private resenjePrikazano = false;
   private izvucene: VarijantaZadatka[] | null = null;
   /** Odgovori učesnika u Zadatak rundi (`odgovori`), po id-ju učesnika. */
@@ -311,6 +317,14 @@ export class MockIzvodjenje {
         this.izmenaBrojaVarijanti = n;
         break;
       }
+      case 'NIVO': {
+        if (!zadatak) return greska(409, 'Na ovom slajdu nema zadatka.');
+        if (this.faza !== 'CEKA') return greska(409, 'Nivo se menja pre otvaranja.');
+        const n = vrednost ?? null;
+        if (n !== null && (!Number.isInteger(n) || n < 0 || n > 3)) return greska(400, 'Nivo mora biti od 1 do 3 (0 = svi nivoi).');
+        this.izmenaNivoa = n;
+        break;
+      }
       default:
         return greska(409, 'Mok: komanda nije podržana.');
     }
@@ -322,9 +336,21 @@ export class MockIzvodjenje {
     return this.prikaz === 'SLAJD' ? this.f.slajdovi[this.indeks] ?? null : null;
   }
 
+  /** Važeći nivo za sledeće otvaranje: izbor iz konzole, inače nivo slajda (`null` = svi nivoi). */
+  private nivoZaOtvaranje(z: ZadatakInfo): number | null {
+    return this.izmenaNivoa === null ? (z.nivo ?? null) : this.izmenaNivoa === 0 ? null : this.izmenaNivoa;
+  }
+
+  /** Aktivne varijante važećeg nivoa (redom iz fikstura); nivo varijante bez polja je 2. */
+  private kandidati(z: ZadatakInfo): VarijantaZadatka[] {
+    const nivo = this.nivoZaOtvaranje(z);
+    return (this.f.varijanteZadatka ?? []).filter(v => nivo === null || (v.nivo ?? 2) === nivo);
+  }
+
   /** Koliko se izvlači pri otvaranju: izbor iz konzole, inače broj sa slajda (`null` = sve), najviše koliko ima aktivnih. */
   private brojZaOtvaranje(z: ZadatakInfo): number {
-    const m = z.brojAktivnihVarijanti;
+    // nivo slajda: broj sa servera (fikstura ga može menjati); drugi nivo iz konzole: kandidati tog nivoa
+    const m = this.nivoZaOtvaranje(z) === (z.nivo ?? null) ? z.brojAktivnihVarijanti : this.kandidati(z).length;
     const n = this.izmenaBrojaVarijanti === null ? (z.brojVarijanti ?? m) : this.izmenaBrojaVarijanti === 0 ? m : this.izmenaBrojaVarijanti;
     return Math.min(n, m);
   }
@@ -340,8 +366,11 @@ export class MockIzvodjenje {
     if (zadatak) {
       if (zadatak.grupaId === null) return greska(409, 'Grupa zadatka je obrisana.');
       const n = this.brojZaOtvaranje(zadatak);
-      if (n === 0) return greska(409, 'Grupa nema aktivnih varijanti.');
-      this.izvucene = (this.f.varijanteZadatka ?? []).slice(0, n);
+      if (n === 0) {
+        const nivo = this.nivoZaOtvaranje(zadatak);
+        return greska(409, nivo === null ? 'Grupa nema aktivnih varijanti.' : `Grupa nema aktivnih varijanti nivoa ${'★'.repeat(nivo)}.`);
+      }
+      this.izvucene = this.kandidati(zadatak).slice(0, n);
       this.resenjePrikazano = false;
       this.odgovoriZadatka.clear();
     }
@@ -432,7 +461,8 @@ export class MockIzvodjenje {
       brojevi: this.rezultatiPrikazani, tacno: this.tacanPrikazan && zatvoreno, resenje: this.resenjePrikazano && zatvoreno,
     };
     return {
-      slajd: z, izmenaBrojaVarijanti: this.izmenaBrojaVarijanti, brojZaOtvaranje: this.brojZaOtvaranje(z),
+      slajd: z, izmenaBrojaVarijanti: this.izmenaBrojaVarijanti, izmenaNivoa: this.izmenaNivoa,
+      nivoZaOtvaranje: this.nivoZaOtvaranje(z), brojZaOtvaranje: this.brojZaOtvaranje(z),
       resenjePrikazano: this.resenjePrikazano,
       varijante: izvucene?.map(v => ({
         varijantaId: v.varijantaId, naziv: v.naziv, svgId: v.svgId, resenjeSvgId: v.resenjeSvgId,
@@ -440,6 +470,7 @@ export class MockIzvodjenje {
         odgovorilo: [...dodele].filter(([u, vid]) => vid === v.varijantaId && this.odgovoriZadatka.has(u)).length,
         tacnih: [...dodele].filter(([u, vid]) => vid === v.varijantaId && this.odgovoriZadatka.has(u)
           && this.tacanOdgovor(z, v, this.odgovoriZadatka.get(u)!)).length,
+        nivo: v.nivo ?? 2,
       })) ?? null,
       rezultat: this.rezultatRunde(z, dodele, { brojevi: true, tacno: true, resenje: true }),
       javniRezultat: javno.brojevi || javno.tacno || javno.resenje ? this.rezultatRunde(z, dodele, javno) : null,
@@ -453,6 +484,7 @@ export class MockIzvodjenje {
     this.rezultatiPrikazani = false;
     this.tacanPrikazan = false;
     this.izmenaBrojaVarijanti = null;
+    this.izmenaNivoa = null;
     this.resenjePrikazano = false;
     this.izvucene = null;
     this.odgovoriZadatka.clear();

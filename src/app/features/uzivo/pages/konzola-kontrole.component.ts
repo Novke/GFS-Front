@@ -6,7 +6,7 @@ import { NastavnickoStanje, TipKomande } from '../data-access/uzivo.models';
 import { pustiFokusPosleKlika } from './precice';
 import type { NazivIkone } from '../../../core/layout/icons';
 
-/** `vrednost: null` je smislena za `BROJ_VARIJANTI` ("kao na slajdu"); server je i inače dobija kao `null`. */
+/** `vrednost: null` je smislena za `BROJ_VARIJANTI` i `NIVO` ("kao na slajdu"); server je i inače dobija kao `null`. */
 export interface KomandaZahtev { tip: TipKomande; vrednost?: number | null; }
 
 interface Dugme {
