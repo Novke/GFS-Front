@@ -96,7 +96,7 @@ interface OpisGrupe {
       <mat-form-field class="uz-zf-polje" subscriptSizing="dynamic">
         <mat-label>Broj različitih zadataka</mat-label>
         <input matInput inputmode="numeric" autocomplete="off" [formControl]="f.controls.brojVarijanti">
-        <mat-hint>Prazno = sve aktivne ({{ o?.brojAktivnih ?? 0 }}). Menja se i u konzoli pre otvaranja.</mat-hint>
+        <mat-hint>Prazno = sve aktivne ({{ brojZaNivo() }}). Menja se i u konzoli pre otvaranja.</mat-hint>
       </mat-form-field>
     </div>
     <div class="uz-ed-red" data-zadatak-nivo>
@@ -154,6 +154,14 @@ export class ZadatakFormaComponent {
     return c
       ? { grupaId: c.id, putanja: [{ id: c.id, naziv: c.naziv }], list: c.list, brojAktivnih: c.brojAktivnih, poNivou: null, polja: null, upozorenja: [] }
       : null;
+  });
+  /** Kandidati za nivo iz forme (ne sačuvani): iz brojeva po nivoima kad ih server dao, inače ukupan broj čvora. */
+  protected readonly brojZaNivo = computed(() => {
+    const o = this.opis();
+    if (!o) return 0;
+    const n = this.nivo();
+    if (!o.poNivou) return o.brojAktivnih;
+    return n === null ? o.poNivou.reduce((a, b) => a + b, 0) : o.poNivou[n - 1] ?? 0;
   });
   protected readonly putanja = computed(() => (this.opis()?.putanja ?? []).map(p => p.naziv).join(' › '));
 

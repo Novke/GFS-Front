@@ -1,4 +1,5 @@
 import { booleanAttribute, ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output } from '@angular/core';
+import { sRecju } from '../util/mnozina';
 
 /** Nivoi varijante zadatka unutar svog tipa: 1 = lakša, 2 = srednja, 3 = teža. */
 export const NIVOI = [1, 2, 3] as const;
@@ -123,7 +124,7 @@ export class NivoComponent {
   protected readonly zbir = computed(() => (this.brojevi() ?? []).reduce((a, b) => a + b, 0));
 
   protected opisBroja(n: number): string {
-    return n === 1 ? '1 varijanta' : `${n} varijanti`;
+    return sRecju(n, 'varijanta', 'varijante', 'varijanti');
   }
 
   protected opisSaBrojem(n: number): string {

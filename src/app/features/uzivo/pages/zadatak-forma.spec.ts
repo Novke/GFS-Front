@@ -86,9 +86,27 @@ describe('ZadatakFormaComponent', () => {
       expect(radio(el, '3').getAttribute('aria-checked')).toBe('true');
       expect(radio(el, 'svi').getAttribute('aria-checked')).toBe('false');
       expect(radio(el, '1').getAttribute('aria-label')).toBe('Nivo 1 od 3 (lakši), 1 varijanta');
-      expect(radio(el, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 4 varijanti');
+      expect(radio(el, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 4 varijante');
       expect(radio(el, 'svi').getAttribute('aria-label')).toBe('Svi nivoi, 7 varijanti');
       expect(el.querySelector('[data-zadatak-nivo]')!.textContent!.replace(/\s+/g, '')).toBe('NivoSvi7142');
+    });
+
+    it('napomena "Prazno = sve aktivne (N)" broji kandidate nivoa iz forme, ne sačuvanog', async () => {
+      const el = await napravi(zadatakInfo({ nivo: 3, brojAktivnihVarijanti: 2, brojAktivnihPoNivou: [1, 4, 2] }));
+      const napomena = () => [...el.querySelectorAll('mat-hint')].map(h => h.textContent!.trim()).find(t => t.startsWith('Prazno = sve aktivne'));
+      expect(napomena()).toContain('(2)');
+      radio(el, '2').click();
+      await osvezi();
+      expect(napomena()).toContain('(4)');
+      radio(el, 'svi').click();
+      await osvezi();
+      expect(napomena()).toContain('(7)');
+    });
+
+    it('lokalni opis bez brojeva po nivoima (nov slajd pre odgovora servera): bez brojeva uz nivoe, napomena nosi ukupan broj', async () => {
+      const el = await napravi(zadatakInfo({ nivo: null, brojAktivnihVarijanti: 5, brojAktivnihPoNivou: null }));
+      expect(el.querySelector('[data-zadatak-nivo] .nivo-broj')).toBeNull();
+      expect([...el.querySelectorAll('mat-hint')].some(h => h.textContent!.includes('Prazno = sve aktivne (5)'))).toBe(true);
     });
 
     it('izbor nivoa menja formu (zadatakIzForme.nivo), "Svi" vraća null, a prikaz prati formu', async () => {

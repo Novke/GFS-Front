@@ -304,7 +304,7 @@ describe('slajd-pravila', () => {
       const cmd = { ...slajdUCmd(s), zadatak: { grupaId: 5, vremeSekunde: 60, brojVarijanti: null, nivo: 3 } };
       const prazan: ZadatakSlajdaInfo = {
         grupaId: 5, vremeSekunde: 60, brojVarijanti: null, nivo: 3, grupaNaziv: null, putanja: [], list: false, brojAktivnihVarijanti: 0,
-        brojAktivnihPoNivou: [0, 0, 0],
+        brojAktivnihPoNivou: null,
         polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
       };
       expect(prazanZadatakInfo({ grupaId: 5, vremeSekunde: 60, brojVarijanti: null, nivo: 3 })).toEqual(prazan);

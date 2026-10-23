@@ -125,7 +125,7 @@ describe('ZadatakPanelComponent (konzola, Zadatak slajd)', () => {
     it('CEKA: izbor nivoa pokazuje nivo za otvaranje i broj kandidata po nivou; bez izmene nema "Kao na slajdu"', () => {
       const f = prikazi(naZadatku('CEKA', { zadatak: { nivoZaOtvaranje: 2 } }));
       expect(radio(f, '2').getAttribute('aria-checked')).toBe('true');
-      expect(radio(f, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 2 varijanti');
+      expect(radio(f, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 2 varijante');
       expect(radio(f, '1').getAttribute('aria-label')).toBe('Nivo 1 od 3 (lakši), 0 varijanti');
       expect(kaoNaSlajdu(f)).toBeNull();
       const svi = prikazi(naZadatku('CEKA'));

@@ -299,7 +299,7 @@ export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN'
 export function prazanZadatakInfo(z: ZadatakSlajda): ZadatakSlajdaInfo {
   return {
     grupaId: z.grupaId, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, nivo: z.nivo, grupaNaziv: null, putanja: [], list: false,
-    brojAktivnihVarijanti: 0, brojAktivnihPoNivou: [0, 0, 0], polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
+    brojAktivnihVarijanti: 0, brojAktivnihPoNivou: null, polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
   };
 }
 

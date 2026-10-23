@@ -185,12 +185,13 @@ export interface ZadatakSlajda { grupaId: number | null; vremeSekunde: number | 
 /**
  * Zadatak na slajdu sa opisom sa servera. `grupaId` je `null` kad je grupa obrisana; `nivo` = izabrani nivo slajda (`null` = svi);
  * `brojAktivnihVarijanti` = kandidati (AKTIVNE sa SVG-om u listovima koji se izvlače) izabranog nivoa (`nivo` `null` = zbir);
- * `brojAktivnihPoNivou` = isti kandidati po nivoima, tačno tri broja (nivo 1, 2, 3); `polja` je šema lista (`null` za unutrašnji
+ * `brojAktivnihPoNivou` = isti kandidati po nivoima, tačno tri broja (nivo 1, 2, 3; server ih uvek šalje, `null` je samo lokalni opis
+ * dok server ne odgovori); `polja` je šema lista (`null` za unutrašnji
  * čvor); `upozorenja` su tekstovi servera, redom.
  */
 export interface ZadatakSlajdaInfo {
   grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null; grupaNaziv: string | null;
-  putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; brojAktivnihPoNivou: number[]; polja: PoljeZadatka[] | null;
+  putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; brojAktivnihPoNivou: number[] | null; polja: PoljeZadatka[] | null;
   iskljucena: boolean; iskljucenePodgrupe: GrupaPutanja[]; upozorenja: string[];
 }
 /**
