@@ -63,7 +63,8 @@ test.describe('banka zadataka', () => {
     await page.getByRole('menuitem', { name: 'Dodaj podgrupu' }).click();
     const d = await dijalog(page, 'Nova podgrupa u „Konverzije brojeva“');
     await d.getByLabel('Naziv').fill('8 → 2');
-    await d.getByRole('combobox', { name: 'Težina' }).click();
+    // duža oznaka "Težina tipa" pokriva sredinu polja, pa se lista otvara tasterom, kao što je korisnik otvara
+    await d.getByRole('combobox', { name: 'Težina tipa' }).press('Enter');
     await page.getByRole('option', { name: '2', exact: true }).click();
     await d.getByRole('button', { name: 'Napravi grupu' }).click();
     await expect(d).toBeHidden();
@@ -175,7 +176,8 @@ test.describe('banka zadataka', () => {
 
     await page.getByRole('button', { name: 'Zadaj težinu' }).click();
     const d = await dijalog(page, 'Izmeni grupu');
-    await d.getByRole('combobox', { name: 'Težina' }).click();
+    // duža oznaka "Težina tipa" pokriva sredinu polja, pa se lista otvara tasterom, kao što je korisnik otvara
+    await d.getByRole('combobox', { name: 'Težina tipa' }).press('Enter');
     await page.getByRole('option', { name: '4', exact: true }).click();
     await d.getByRole('button', { name: 'Sačuvaj' }).click();
     await expect.poll(() => mock.zahteviZa('banka/grupe/9', 'PUT').map(z => z.telo)).toEqual([
@@ -474,7 +476,7 @@ test.describe('banka zadataka: detalj grupe', () => {
   test('unutrašnji čvor: samo naziv i opis; PUT zadržava težinu i uputstvo', async ({ page, mock }) => {
     await page.goto('banka/grupe/1');
     await expect(page.getByRole('heading', { level: 1, name: 'Konverzije brojeva' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Težina' })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Težina tipa' })).toHaveCount(0);
     await expect(page.locator('app-polja-editor')).toHaveCount(0);
     await expect(page.locator('textarea[data-uputstvo]')).toHaveCount(0);
     await page.getByLabel('Opis (opciono)').fill('Sve konverzije.');

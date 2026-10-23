@@ -836,6 +836,14 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
 - **Overview** (`pages/izvodjenje-pregled.page`): a ZADATAK round (`RezultatPitanja.zadatak`, `pitanje`/`rezultat` null) shows the group
   path, `app-zadatak-rezultat` (everything visible) and the participants table (variant, outcome per field, total). Round cards are
   keyed by slide id (`slajdId`, else the snapshot's `pitanje.slajdId` or `zadatak.slajdId`), never by group id.
+- **Level (nivo, 1-3):** the slide form (`zadatak-forma.component`, `ZadatakSlajda.nivo`, `null` = all) has the shared `app-nivo` picker with
+  "Svi" and the candidate count of every level (`ZadatakSlajdaInfo.brojAktivnihPoNivou`, also in the option's aria-label); the console
+  panel (`zadatak-panel.component`, only in `CEKA`) picks the level for the next opening with `{tip:'NIVO', vrednost}` (`0` = all, `1..3`,
+  `null` = as on the slide through the "Kao na slajdu (...)" button; the picker shows `nivoZaOtvaranje` from the server, so a 409 does not
+  move it), and each drawn variant card shows its `nivo`; the overview shows the round level (`PregledZadatka.nivo`, only when `nivoi`
+  is not empty, so a round from before levels shows none) and a level next to the participant's variant (`nivoi[varijantaId]`). No
+  shortcut key: arrows on the radios are handled by the component (`SVOJA_TASTATURA` already skips `role=radio`). Phone and projector do not
+  change (no level there).
 - **Bundle budget exception:** the student page's static part grew by ~1.9 kB for the task (student login redirect, task screens in
   the store, the `@defer` entry must work before the lazy chunk), so `e2e/lenji-formule.spec.ts` allows `RAST_ZADATKA = 1 300` B on
   top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5).
@@ -1034,6 +1042,24 @@ and Claude's series, and reviews the drafts one by one (below).
   the same position, "Uredi" + "Sačuvaj i odobri" to the next one, keys, the end, the confirmation of a manual draft while keys do
   nothing, keys while the theme menu is open, "Odbaci celu seriju"); `pristupacnost.spec.ts` the bank with both sections, the excluded group page and three review
   states, day and night.
+
+### Level of a variant (nivo)
+
+`shared/ui/nivo.component` (`app-nivo`, also exports `NIVOI`, `opisNivoa`, `zvezdiceNivoa`): ★/★★/★★★ as SVG stars (tokens `--star`,
+`--warn`, `--muted`; `aria-label` "Nivo N od 3 (lakši|srednji|teži)"; never "zvezdica" in UI text). Display mode is a `role="img"`;
+`izbor` makes it a radio group (arrows, Home/End, roving tabindex, `stopPropagation` so page shortcuts do not react), `saSvima` adds
+"Svi" (emits `null`), `brojevi` shows a count per level. The picker is controlled: the parent shows what it gets and reverts on error.
+- **Where:** variant card (`varijanta-kartica`, output `nivoPromena`; stays above the whole-card link with `z-index: 1`), review
+  (`/banka/pregled`: picker for the draft, display for the original, level filter `?nivo=` with `natpisTekst="Prikaži nivo"`), variant
+  editor (new variant: default 2, sent in the create command; existing variant: PATCH at once).
+- **Saving:** only `BankaApi.promeniNivo` = `PATCH banka/varijante/{id}/nivo` `{nivo}` (never `PUT`, which does not carry it).
+  `data-access/promene-nivoa.ts` keeps the last confirmed level and the in-flight count per variant: the request queue is serialized
+  (`concatMap`), the screen shows the chosen level at once and returns to the confirmed one after the last failed request (snackbar).
+  The stores (`BankaStore`, `PregledNacrtaStore`) do not reload the tree after it. The group label "Težina" is now "Težina tipa" (the
+  group's difficulty, not the variant's level).
+- **Tests:** `e2e/banka-nivo.spec.ts` (card, review, filter, new and existing variant), `e2e/uzivo-zadatak-konzola.spec.ts` and
+  `uzivo-zadatak-editor.spec.ts` (console and slide form); the mocks keep `nivo` per variant (`mock-banka.ts`, `PATCH`, `nivo` filter,
+  `brojAktivnihPoNivou`) and the console mock handles `NIVO` (`mock-izvodjenje.ts`).
 
 ## Routes and paths
 

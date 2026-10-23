@@ -100,7 +100,7 @@ interface OpisGrupe {
       </mat-form-field>
     </div>
     <div class="uz-ed-red" data-zadatak-nivo>
-      <gfs-nivo izbor saSvima [nivo]="nivo()" [brojevi]="o?.poNivou" (promena)="postaviNivo($event)" />
+      <app-nivo izbor saSvima [nivo]="nivo()" [brojevi]="o?.poNivou" (promena)="postaviNivo($event)" />
     </div>
     <p class="uz-ed-napomena">Kad je nivo izabran, svi studenti dobijaju varijante tog nivoa; broj uz nivo su aktivne varijante.</p>
     <!-- region postoji uvek, da čitač ekrana najavi promenu (kao upozorenja formula u formi pitanja) -->

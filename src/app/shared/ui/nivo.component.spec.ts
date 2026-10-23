@@ -6,7 +6,7 @@ import { NivoComponent, opisNivoa, zvezdiceNivoa } from './nivo.component';
 
 @Component({
   imports: [NivoComponent],
-  template: `<gfs-nivo [nivo]="nivo()" [izbor]="izbor()" [saSvima]="saSvima()" [natpis]="natpis()" [onemoguceno]="onemoguceno()"
+  template: `<app-nivo [nivo]="nivo()" [izbor]="izbor()" [saSvima]="saSvima()" [natpis]="natpis()" [onemoguceno]="onemoguceno()"
     (promena)="promena($event)" />`,
 })
 class Host {

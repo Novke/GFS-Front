@@ -59,7 +59,7 @@ export function imeVarijante(v: Pick<VarijantaInfo, 'naziv' | 'rb'>): string {
       <a class="bk-kartica-veza" [routerLink]="['/banka/varijante', v.id]">
         <span class="bk-rb">{{ v.rb }}.</span> {{ ime() }}
       </a>
-      <gfs-nivo class="bk-kartica-nivo" [nivo]="v.nivo" izbor [natpis]="false" (promena)="promeniNivo($event)" />
+      <app-nivo class="bk-kartica-nivo" [nivo]="v.nivo" izbor [natpis]="false" (promena)="promeniNivo($event)" />
       <span class="bk-kartica-oznake">
         <app-status-chip [tekst]="status().tekst" [ton]="status().ton" [ikona]="status().ikona" />
         @if (v.izvor === 'CLAUDE') {

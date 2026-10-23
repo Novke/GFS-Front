@@ -138,7 +138,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                 }
                 @if (k.p.zadatak; as z) {
                   @if (imaNivoe(z)) {
-                    <gfs-nivo [nivo]="z.nivo" natpisTekst="Nivo runde" data-nivo-runde />
+                    <app-nivo [nivo]="z.nivo" natpisTekst="Nivo runde" data-nivo-runde />
                   }
                 }
               </header>
@@ -172,7 +172,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                             <td>
                               {{ u.varijantaNaziv ?? '—' }}
                               @if (nivoVarijante(z, u.varijantaId); as nivo) {
-                                <gfs-nivo [nivo]="nivo" [natpis]="false" data-nivo-varijante />
+                                <app-nivo [nivo]="nivo" [natpis]="false" data-nivo-varijante />
                               }
                             </td>
                             <td>{{ poPolju(z, u) }}</td>

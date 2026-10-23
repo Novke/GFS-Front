@@ -201,7 +201,7 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
               }
             </ol>
           </nav>
-          <gfs-nivo [nivo]="nivo()" izbor [onemoguceno]="zauzeto() !== null" (promena)="promeniNivo($event)" data-nivo-varijante />
+          <app-nivo [nivo]="nivo()" izbor [onemoguceno]="zauzeto() !== null" (promena)="promeniNivo($event)" data-nivo-varijante />
           @if (v) {
             @let s = prikazStatusa(v.status);
             <app-status-chip [tekst]="s.tekst" [ton]="s.ton" [ikona]="s.ikona" />

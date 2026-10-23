@@ -112,7 +112,7 @@ function opisGreske(v: VarijantaDetails): string {
     }
 
     <div class="bk-pn-filter" data-filter-nivo>
-      <gfs-nivo [nivo]="f.nivo" izbor saSvima natpisTekst="Prikaži nivo" (promena)="filtrirajNivo($event)" />
+      <app-nivo [nivo]="f.nivo" izbor saSvima natpisTekst="Prikaži nivo" (promena)="filtrirajNivo($event)" />
     </div>
 
     @if (store.greska(); as g) {
@@ -182,7 +182,7 @@ function opisGreske(v: VarijantaDetails): string {
                   <span class="oznaka" data-serija>Serija <code>{{ v.serija }}</code></span>
                 }
               </div>
-              <gfs-nivo class="bk-pn-nivo" [nivo]="v.nivo" izbor (promena)="promeniNivo($event)" data-nivo-varijante />
+              <app-nivo class="bk-pn-nivo" [nivo]="v.nivo" izbor (promena)="promeniNivo($event)" data-nivo-varijante />
               @if (v.zamenjuje !== null) {
                 <p class="bk-pn-zamenjuje" data-zamenjuje>Zamenjuje: {{ o ? ime(o) : '#' + v.zamenjuje }}</p>
               }
@@ -198,7 +198,7 @@ function opisGreske(v: VarijantaDetails): string {
                   @let so = prikazStatusa(o.status);
                   <app-status-chip [tekst]="so.tekst" [ton]="so.ton" [ikona]="so.ikona" />
                 </div>
-                <gfs-nivo [nivo]="o.nivo" data-nivo-originala />
+                <app-nivo [nivo]="o.nivo" data-nivo-originala />
               </header>
               <ng-container *ngTemplateOutlet="sadrzaj; context: { $implicit: o, uz: ' (original)' }" />
             </section>

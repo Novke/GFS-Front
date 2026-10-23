@@ -28,7 +28,7 @@ const ZVEZDA = 'M12 2.8l2.75 5.8 6.35.8-4.65 4.4 1.2 6.3L12 17l-5.65 3.1 1.2-6.3
  * Boje kroz tokene (`--star`, `--warn`, `--muted`), bez hex vrednosti; zvezdice su SVG pa ne zavise od fonta.
  */
 @Component({
-  selector: 'gfs-nivo',
+  selector: 'app-nivo',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.nivo-izbor]': 'izbor()' },
   template: `
@@ -37,16 +37,16 @@ const ZVEZDA = 'M12 2.8l2.75 5.8 6.35.8-4.65 4.4 1.2 6.3L12 17l-5.65 3.1 1.2-6.3
     }
     @if (izbor()) {
       <span class="nivo-grupa" role="radiogroup" [attr.aria-labelledby]="natpis() ? natpisId : null"
-        [attr.aria-label]="natpis() ? null : natpisTekst()" (keydown)="tastatura($event)">
+        [attr.aria-label]="natpis() ? null : natpisTekst()">
         @if (saSvima()) {
           <button type="button" role="radio" class="nivo-svi" data-nivo="svi" [attr.aria-checked]="nivo() === null"
             [attr.aria-label]="brojevi() ? 'Svi nivoi, ' + opisBroja(zbir()) : null"
-            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)">Svi@if (brojevi()) {<span class="nivo-broj" aria-hidden="true">{{ zbir() }}</span>}</button>
+            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)" (keydown)="tastatura($event)">Svi@if (brojevi()) {<span class="nivo-broj" aria-hidden="true">{{ zbir() }}</span>}</button>
         }
         @for (n of nivoi; track n) {
           <button type="button" role="radio" class="nivo-dugme" [attr.data-nivo]="n" [attr.aria-checked]="nivo() === n"
             [attr.aria-label]="opisSaBrojem(n)" [attr.title]="opisSaBrojem(n)" [attr.tabindex]="fokusiran() === n ? 0 : -1"
-            [disabled]="onemoguceno()" (click)="biraj(n)">
+            [disabled]="onemoguceno()" (click)="biraj(n)" (keydown)="tastatura($event)">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" [class.puna]="nivo() !== null && n <= nivo()!">
               <path [attr.d]="zvezda" />
             </svg>
@@ -109,7 +109,7 @@ export class NivoComponent {
   protected readonly nivoi = NIVOI;
   protected readonly zvezda = ZVEZDA;
   protected readonly opis = opisNivoa;
-  protected readonly natpisId = `gfs-nivo-natpis-${NivoComponent.brojilo++}`;
+  protected readonly natpisId = `app-nivo-natpis-${NivoComponent.brojilo++}`;
 
   /** Radio sa tabindex 0 (roving): izabrani, a kad izbora nema (ili nije u ponudi) prvi u grupi (`null` = "Svi"). */
   protected readonly fokusiran = computed<number | null>(() => {

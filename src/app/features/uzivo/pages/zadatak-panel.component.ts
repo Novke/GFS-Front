@@ -70,7 +70,7 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
               <img class="uz-zp-slika" [src]="url(v.svgId)" [alt]="'Zadatak, varijanta ' + naziv(v, i)" loading="lazy">
               <span class="uz-zp-naziv">{{ naziv(v, i) }}</span>
               @if (v.nivo !== null && v.nivo !== undefined) {
-                <gfs-nivo [nivo]="v.nivo" [natpis]="false" data-nivo-varijante />
+                <app-nivo [nivo]="v.nivo" [natpis]="false" data-nivo-varijante />
               }
               <span class="uz-zp-brojevi">
                 @if (papir().has(v.varijantaId)) {
@@ -83,17 +83,17 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
           }
         </ul>
       } @else {
-        <p class="uz-zp-broj">Različitih: <strong>{{ z.brojZaOtvaranje }}</strong> od {{ z.slajd.brojAktivnihVarijanti }}</p>
+        <p class="uz-zp-broj">Različitih: <strong>{{ z.brojZaOtvaranje }}</strong> od {{ kandidata() }}</p>
         <!-- nivo za sledeće otvaranje (i PONOVI); izbor pokazuje stanje servera (efektivni nivo), 409 ga ne pomera -->
         <div class="uz-zp-nivo" data-zp-nivo>
-          <gfs-nivo izbor saSvima [nivo]="z.nivoZaOtvaranje" [brojevi]="z.slajd.brojAktivnihPoNivou" (promena)="izaberiNivo($event)" />
+          <app-nivo izbor saSvima [nivo]="z.nivoZaOtvaranje" [brojevi]="z.slajd.brojAktivnihPoNivou" (promena)="izaberiNivo($event)" />
           @if (z.izmenaNivoa !== null && z.izmenaNivoa !== undefined) {
             <button type="button" class="uz-zp-nivo-kao" data-nivo-kao-na-slajdu (click)="komanda.emit({ tip: 'NIVO', vrednost: null })">
               Kao na slajdu ({{ nivoSlajda() }})
             </button>
           }
         </div>
-        @if (z.slajd.brojAktivnihVarijanti > 0) {
+        @if (kandidata() > 0) {
           <label class="uz-zp-izbor">
             <span>Broj različitih zadataka</span>
             <!-- izbor mišem pušta fokus: u polju za unos prečice ne rade (uPoljuZaUnos), a sledeće je obično O -->
@@ -125,7 +125,7 @@ export class ZadatakPanelComponent {
   protected readonly opcije = computed<OpcijaBroja[]>(() => {
     const z = this.stanje().zadatak;
     if (!z) return [];
-    const m = z.slajd.brojAktivnihVarijanti;
+    const m = this.kandidata();
     const gornja = Math.min(m, MAKS_RAZLICITIH);
     const o: OpcijaBroja[] = [
       { kljuc: kljucBroja(null), vrednost: null, oznaka: `Kao na slajdu (${z.slajd.brojVarijanti ?? 'sve'})` },
@@ -136,6 +136,19 @@ export class ZadatakPanelComponent {
     const izmena = z.izmenaBrojaVarijanti;
     if (izmena !== null && izmena > gornja) o.push({ kljuc: kljucBroja(izmena), vrednost: izmena, oznaka: String(izmena) });
     return o;
+  });
+
+  /**
+   * Kandidati važećeg nivoa za sledeće otvaranje. Server šalje `brojAktivnihVarijanti` samo za nivo slajda; kad konzola izabere
+   * drugi nivo, broj je iz `brojAktivnihPoNivou` (`null` = zbir).
+   */
+  protected readonly kandidata = computed(() => {
+    const z = this.stanje().zadatak;
+    if (!z) return 0;
+    const nivo = z.nivoZaOtvaranje ?? null;
+    if (nivo === (z.slajd.nivo ?? null)) return z.slajd.brojAktivnihVarijanti;
+    const po = z.slajd.brojAktivnihPoNivou ?? [];
+    return nivo === null ? po.reduce((a, b) => a + b, 0) : (po[nivo - 1] ?? 0);
   });
 
   protected readonly nivoSlajda = computed(() => {

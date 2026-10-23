@@ -73,6 +73,62 @@ test.describe('konzola: Zadatak slajd (1280 x 800)', () => {
       expect(komande(mock).map(k => k.tip)).toEqual(['BROJ_VARIJANTI', 'OTVORI_ZATVORI', 'OTVORI_ZATVORI', 'RESENJE']);
     });
 
+  test('nivo pre otvaranja: izbor šalje NIVO, "Kao na slajdu" vraća, O izvlači varijante tog nivoa sa nivoom uz karticu; posle otvaranja nema izbora',
+    async ({ page, mock }) => {
+      naZadatak(mock);
+      await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/konzola');
+      await expect(page.locator('.uz-kon-veza')).toHaveText('Povezano');
+
+      const p = panel(page);
+      const nivo = (n: string) => p.locator(`[data-zp-nivo] [role=radio][data-nivo="${n}"]`);
+      await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
+      await expect(nivo('1')).toHaveAttribute('aria-label', 'Nivo 1 od 3 (lakši), 1 varijanta');
+      await expect(nivo('2')).toHaveAttribute('aria-label', 'Nivo 2 od 3 (srednji), 0 varijanti');
+      await expect(p.getByRole('button', { name: /^Kao na slajdu/ })).toHaveCount(0);
+
+      await nivo('3').click();
+      await expect(nivo('3')).toHaveAttribute('aria-checked', 'true');
+      await expect(p).toContainText('Različitih: 1 od 1');
+      expect(komande(mock)).toEqual([{ tip: 'NIVO', vrednost: 3 }]);
+      await expect(p.getByRole('button', { name: 'Kao na slajdu (svi)' })).toBeVisible();
+
+      // "Svi" je 0, "Kao na slajdu" je null
+      await nivo('svi').click();
+      await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
+      await nivo('1').click();
+      await p.getByRole('button', { name: 'Kao na slajdu (svi)' }).click();
+      await expect(p.getByRole('button', { name: /^Kao na slajdu/ })).toHaveCount(0);
+      expect(komande(mock).map(k => k.vrednost)).toEqual([3, 0, 1, null]);
+
+      // strelice na izboru nivoa pomeraju nivo, a ne slajd (prečice konzole ih ne vide)
+      await nivo('svi').focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(nivo('1')).toHaveAttribute('aria-checked', 'true');
+      await expect(page.locator('.uz-kon-meta')).toContainText('Slajd 6/6');
+
+      await nivo('3').click();
+      await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+      await page.keyboard.press('o');
+      const kartice = p.getByRole('list', { name: 'Izvučene varijante' }).getByRole('listitem');
+      await expect(kartice).toHaveCount(1);
+      await expect(kartice.first()).toContainText('110010 u dekadni');
+      await expect(kartice.first().locator('[data-nivo-prikaz]')).toHaveAttribute('aria-label', 'Nivo 3 od 3 (teži)');
+      await expect(p.locator('[data-zp-nivo]')).toHaveCount(0);
+    });
+
+  test('nivo bez kandidata: razlog servera, runda se ne otvara', async ({ page, mock }) => {
+    naZadatak(mock);
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/konzola');
+    await expect(page.locator('.uz-kon-veza')).toHaveText('Povezano');
+    await panel(page).locator('[data-zp-nivo] [role=radio][data-nivo="2"]').click();
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+    await page.keyboard.press('o');
+    await expect(page.getByText('Grupa nema aktivnih varijanti nivoa ★★.')).toBeVisible();
+    await expect(panel(page).locator('[data-zp-nivo]')).toBeVisible();
+  });
+
   test('Shift+R pre zatvaranja: razlog servera, rešenje ostaje isključeno', async ({ page, mock }) => {
     naZadatak(mock);
     mock.izvodjenje.primeni('OTVORI_ZATVORI');

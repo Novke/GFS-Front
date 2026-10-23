@@ -15,7 +15,7 @@ const PREZENTACIJA = 6;
 const INFO_SLAJD = 61;
 const ZADATAK_SLAJD = 62;
 
-interface ZadatakSlajda { grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null }
+interface ZadatakSlajda { grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null }
 interface SlajdCmd { tip: string; pitanje: unknown; platno: unknown; zadatak: ZadatakSlajda | null }
 
 const putovi = (mock: MockApi) => mock.zahteviZa(`slajdovi/${ZADATAK_SLAJD}`, 'PUT');
@@ -70,7 +70,7 @@ test.describe('uživo: Zadatak slajd u editoru (mokovan API)', () => {
     const post = mock.zahteviZa(`prezentacije/${PREZENTACIJA}/slajdovi`, 'POST')[0];
     expect(post.query.get('posle')).toBe(String(INFO_SLAJD));
     expect(post.telo).toMatchObject({
-      tip: 'ZADATAK', pitanje: null, platno: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: null },
+      tip: 'ZADATAK', pitanje: null, platno: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: null, nivo: null },
     });
     // opis sa servera: putanja od korena, kandidati lista, polja lista; bez upozorenja i bez veze na banku
     await expect(forma(page).locator('[data-putanja]')).toHaveText('Konverzije brojeva › 2 → 10');
@@ -88,15 +88,37 @@ test.describe('uživo: Zadatak slajd u editoru (mokovan API)', () => {
     await otvoriZadatak(page);
     await expect(page.getByRole('textbox', { name: 'Vreme (s)' })).toHaveValue('120');
     await brojRazlicitih(page).fill('2');
-    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 2 });
+    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 2, nivo: null });
     await expect(page.locator('.uz-ed-pregled')).toContainText('Različitih: 2');
 
     await brojRazlicitih(page).fill('51');
     await expect(page.locator('.uz-ed-greske')).toContainText('Broj različitih zadataka mora biti od 1 do 50.');
     await brojRazlicitih(page).fill('');
-    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null });
+    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: null });
     await expect(page.locator('.uz-ed-greske')).toHaveCount(0);
     expect(putovi(mock).map(z => (z.telo as SlajdCmd).zadatak?.brojVarijanti)).not.toContain(51);
+  });
+
+  test('Nivo: kandidati po nivou uz svaku opciju, izbor ★★★ ide u PUT i sužava kandidate, "Svi" ga skida', async ({ page, mock }) => {
+    // grupa 2: aktivna je samo varijanta 12 (nivo 2); 11 i 13 su nacrti
+    await otvoriZadatak(page);
+    const nivo = (n: string) => forma(page).locator(`[data-zadatak-nivo] [role=radio][data-nivo="${n}"]`);
+    await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
+    await expect(nivo('1')).toHaveAttribute('aria-label', 'Nivo 1 od 3 (lakši), 0 varijanti');
+    await expect(nivo('2')).toHaveAttribute('aria-label', 'Nivo 2 od 3 (srednji), 1 varijanta');
+    await expect(nivo('svi')).toHaveAttribute('aria-label', 'Svi nivoi, 1 varijanta');
+
+    await nivo('3').click();
+    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: 3 });
+    await expect(nivo('3')).toHaveAttribute('aria-checked', 'true');
+    await expect(forma(page)).toContainText('Aktivnih varijanti: 0');
+    await expect(upozorenja(page)).toContainText('Nema aktivnih varijanti nivoa ★★★; odobri nacrte ili izaberi drugi nivo.');
+
+    await nivo('2').click();
+    await expect.poll(() => poslednjiZadatak(mock)?.nivo).toBe(2);
+    await expect(forma(page)).toContainText('Aktivnih varijanti: 1');
+    await nivo('svi').click();
+    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: null });
   });
 
   test('"Promeni grupu…" na isključenu grupu bez aktivnih: upozorenja servera i veza "Otvori u banci" na čvor', async ({ page, mock }) => {
@@ -109,7 +131,7 @@ test.describe('uživo: Zadatak slajd u editoru (mokovan API)', () => {
     // do odgovora servera forma pokazuje izabran čvor
     await expect(forma(page).locator('[data-putanja]')).toContainText('Razlomljeni brojevi (demo)');
 
-    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 5, vremeSekunde: 120, brojVarijanti: null });
+    await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 5, vremeSekunde: 120, brojVarijanti: null, nivo: null });
     await expect(upozorenja(page).locator('p')).toHaveText([
       'Tema je isključena.', 'Grupa nema aktivnih varijanti; odobri nacrte u banci pre časa.',
     ]);
