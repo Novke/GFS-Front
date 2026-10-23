@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { NastavnickoStanje, VarijantaRunde, medijUrl } from '../data-access/uzivo.models';
 import { KomandaZahtev } from './konzola-kontrole.component';
 
@@ -18,6 +19,7 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
 @Component({
   selector: 'app-zadatak-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [NivoComponent],
   host: { class: 'uz-zp' },
   // u komponenti (lenji chunk konzole), ne u globalnom `uzivo-izvodjenje.css`: početni paket je na granici budžeta
   styles: `
@@ -32,6 +34,11 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
       color: var(--ink); font: 500 15px/1.2 var(--font);
     }
     .uz-zp-izbor select:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+    .uz-zp-nivo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
+    .uz-zp-nivo-kao { min-height: 32px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+      color: var(--ink); font: 500 13px/1.2 var(--font); cursor: pointer; }
+    .uz-zp-nivo-kao:hover { background: var(--surface-2); }
+    .uz-zp-nivo-kao:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
     .uz-zp-resenje { margin: 8px 0; }
     .uz-cip--ok { border-color: transparent; background: var(--ok-soft); color: var(--ok); font-weight: 600; }
     .uz-zp-varijante {
@@ -62,6 +69,9 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
             <li class="uz-zp-varijanta">
               <img class="uz-zp-slika" [src]="url(v.svgId)" [alt]="'Zadatak, varijanta ' + naziv(v, i)" loading="lazy">
               <span class="uz-zp-naziv">{{ naziv(v, i) }}</span>
+              @if (v.nivo !== null && v.nivo !== undefined) {
+                <gfs-nivo [nivo]="v.nivo" [natpis]="false" data-nivo-varijante />
+              }
               <span class="uz-zp-brojevi">
                 @if (papir().has(v.varijantaId)) {
                   dodeljeno {{ v.dodeljeno }} · rad na papiru
@@ -74,6 +84,15 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
         </ul>
       } @else {
         <p class="uz-zp-broj">Različitih: <strong>{{ z.brojZaOtvaranje }}</strong> od {{ z.slajd.brojAktivnihVarijanti }}</p>
+        <!-- nivo za sledeće otvaranje (i PONOVI); izbor pokazuje stanje servera (efektivni nivo), 409 ga ne pomera -->
+        <div class="uz-zp-nivo" data-zp-nivo>
+          <gfs-nivo izbor saSvima [nivo]="z.nivoZaOtvaranje" [brojevi]="z.slajd.brojAktivnihPoNivou" (promena)="izaberiNivo($event)" />
+          @if (z.izmenaNivoa !== null && z.izmenaNivoa !== undefined) {
+            <button type="button" class="uz-zp-nivo-kao" data-nivo-kao-na-slajdu (click)="komanda.emit({ tip: 'NIVO', vrednost: null })">
+              Kao na slajdu ({{ nivoSlajda() }})
+            </button>
+          }
+        </div>
         @if (z.slajd.brojAktivnihVarijanti > 0) {
           <label class="uz-zp-izbor">
             <span>Broj različitih zadataka</span>
@@ -118,6 +137,16 @@ export class ZadatakPanelComponent {
     if (izmena !== null && izmena > gornja) o.push({ kljuc: kljucBroja(izmena), vrednost: izmena, oznaka: String(izmena) });
     return o;
   });
+
+  protected readonly nivoSlajda = computed(() => {
+    const n = this.stanje().zadatak?.slajd.nivo;
+    return n === null || n === undefined ? 'svi' : '★'.repeat(n);
+  });
+
+  /** "Svi" je `0` u komandi (`null` je "kao na slajdu", vraća se posebnim dugmetom). */
+  protected izaberiNivo(n: number | null): void {
+    this.komanda.emit({ tip: 'NIVO', vrednost: n ?? 0 });
+  }
 
   protected naziv(v: VarijantaRunde, i: number): string {
     return v.naziv ?? `V${i + 1}`;

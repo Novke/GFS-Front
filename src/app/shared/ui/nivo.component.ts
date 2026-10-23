@@ -40,15 +40,19 @@ const ZVEZDA = 'M12 2.8l2.75 5.8 6.35.8-4.65 4.4 1.2 6.3L12 17l-5.65 3.1 1.2-6.3
         [attr.aria-label]="natpis() ? null : natpisTekst()" (keydown)="tastatura($event)">
         @if (saSvima()) {
           <button type="button" role="radio" class="nivo-svi" data-nivo="svi" [attr.aria-checked]="nivo() === null"
-            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)">Svi</button>
+            [attr.aria-label]="brojevi() ? 'Svi nivoi, ' + opisBroja(zbir()) : null"
+            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)">Svi@if (brojevi()) {<span class="nivo-broj" aria-hidden="true">{{ zbir() }}</span>}</button>
         }
         @for (n of nivoi; track n) {
           <button type="button" role="radio" class="nivo-dugme" [attr.data-nivo]="n" [attr.aria-checked]="nivo() === n"
-            [attr.aria-label]="opis(n)" [attr.title]="opis(n)" [attr.tabindex]="fokusiran() === n ? 0 : -1" [disabled]="onemoguceno()"
-            (click)="biraj(n)">
+            [attr.aria-label]="opisSaBrojem(n)" [attr.title]="opisSaBrojem(n)" [attr.tabindex]="fokusiran() === n ? 0 : -1"
+            [disabled]="onemoguceno()" (click)="biraj(n)">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" [class.puna]="nivo() !== null && n <= nivo()!">
               <path [attr.d]="zvezda" />
             </svg>
+            @if (brojevi()) {
+              <span class="nivo-broj" aria-hidden="true">{{ brojevi()![n - 1] ?? 0 }}</span>
+            }
           </button>
         }
       </span>
@@ -71,7 +75,8 @@ const ZVEZDA = 'M12 2.8l2.75 5.8 6.35.8-4.65 4.4 1.2 6.3L12 17l-5.65 3.1 1.2-6.3
     .nivo-svi-tekst { color: var(--ink-2); font-size: 12px; font-weight: 600; }
     svg { width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linejoin: round; }
     svg.puna { fill: var(--star); stroke: var(--warn); }
-    button { display: inline-grid; place-items: center; min-width: 28px; height: 28px; padding: 0 4px; border: 1px solid transparent;
+    .nivo-broj { margin-left: 4px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 4px; border: 1px solid transparent;
       border-radius: var(--radius-sm); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
     button svg { width: 20px; height: 20px; }
     button:hover:not(:disabled) { background: var(--surface-2); }
@@ -94,6 +99,8 @@ export class NivoComponent {
   readonly natpis = input(true, { transform: booleanAttribute });
   /** Tekst natpisa (i naziv radio grupe): "Nivo", a gde na ekranu ima više grupa, razlikovan ("Prikaži nivo"). */
   readonly natpisTekst = input('Nivo');
+  /** Uz izbor: broj kandidata po nivoima (nivo 1, 2, 3); prikazuje se uz svaku opciju ("Svi" = zbir) i ulazi u njen naziv. */
+  readonly brojevi = input<readonly number[] | null | undefined>(null);
   readonly onemoguceno = input(false, { transform: booleanAttribute });
   /** Izabrana vrednost: nivo 1-3 ili `null` ("Svi"). */
   readonly promena = output<number | null>();
@@ -112,6 +119,17 @@ export class NivoComponent {
     }
     return this.saSvima() ? null : NIVOI[0];
   });
+
+  protected readonly zbir = computed(() => (this.brojevi() ?? []).reduce((a, b) => a + b, 0));
+
+  protected opisBroja(n: number): string {
+    return n === 1 ? '1 varijanta' : `${n} varijanti`;
+  }
+
+  protected opisSaBrojem(n: number): string {
+    const b = this.brojevi();
+    return b ? `${opisNivoa(n)}, ${this.opisBroja(b[n - 1] ?? 0)}` : opisNivoa(n);
+  }
 
   protected readonly opisPrikaza = computed(() => {
     const n = this.nivo();

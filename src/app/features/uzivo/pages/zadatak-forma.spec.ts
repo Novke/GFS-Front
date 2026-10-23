@@ -10,17 +10,17 @@ import { ZadatakForma, ZadatakFormaComponent, zadatakForma, zadatakIzForme } fro
 
 describe('zadatakIzForme / zadatakForma', () => {
   it('prazno polje je null (bez tajmera, sve aktivne), broj je broj (razmaci se ne broje)', () => {
-    const f = zadatakForma({ grupaId: 2, vremeSekunde: null, brojVarijanti: null });
-    expect(f.getRawValue()).toEqual({ grupaId: 2, vremeSekunde: '', brojVarijanti: '' });
-    expect(zadatakIzForme(f)).toEqual({ grupaId: 2, vremeSekunde: null, brojVarijanti: null });
+    const f = zadatakForma({ grupaId: 2, vremeSekunde: null, brojVarijanti: null, nivo: null });
+    expect(f.getRawValue()).toEqual({ grupaId: 2, vremeSekunde: '', brojVarijanti: '', nivo: null });
+    expect(zadatakIzForme(f)).toEqual({ grupaId: 2, vremeSekunde: null, brojVarijanti: null, nivo: null });
     f.controls.vremeSekunde.setValue(' 120 ');
     f.controls.brojVarijanti.setValue('4');
-    expect(zadatakIzForme(f)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 4 });
+    expect(zadatakIzForme(f)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 4, nivo: null });
   });
 
   it('neispravan unos je NaN (greška iz greskeSlajda), ne null: "bez ograničenja" se ne dobija slučajno', () => {
-    const f = zadatakForma({ grupaId: 2, vremeSekunde: 60, brojVarijanti: 3 });
-    expect(f.getRawValue()).toEqual({ grupaId: 2, vremeSekunde: '60', brojVarijanti: '3' });
+    const f = zadatakForma({ grupaId: 2, vremeSekunde: 60, brojVarijanti: 3, nivo: 2 });
+    expect(f.getRawValue()).toEqual({ grupaId: 2, vremeSekunde: '60', brojVarijanti: '3', nivo: 2 });
     for (const s of ['abc', '4,5', '-3', '1e2']) {
       f.controls.vremeSekunde.setValue(s);
       expect(zadatakIzForme(f).vremeSekunde, s).toBeNaN();
@@ -28,7 +28,7 @@ describe('zadatakIzForme / zadatakForma', () => {
   });
 
   it('bez zadatka (slajd bez grupe): grupa null, polja prazna', () => {
-    expect(zadatakForma(null).getRawValue()).toEqual({ grupaId: null, vremeSekunde: '', brojVarijanti: '' });
+    expect(zadatakForma(null).getRawValue()).toEqual({ grupaId: null, vremeSekunde: '', brojVarijanti: '', nivo: null });
   });
 });
 
@@ -76,6 +76,36 @@ describe('ZadatakFormaComponent', () => {
     expect(labele).toEqual(['Vreme (s)', 'Broj različitih zadataka']);
     expect(el.querySelector('[role="status"]')!.textContent?.trim()).toBe('');
     expect(veza(el)).toBeUndefined();
+  });
+
+  describe('nivo', () => {
+    const radio = (el: HTMLElement, n: string) => el.querySelector<HTMLButtonElement>(`[data-zadatak-nivo] [role=radio][data-nivo="${n}"]`)!;
+
+    it('Svi/1/2/3 uz broj kandidata po nivou; izabran je nivo slajda; "Svi" nosi zbir', async () => {
+      const el = await napravi(zadatakInfo({ nivo: 3, brojAktivnihPoNivou: [1, 4, 2] }));
+      expect(radio(el, '3').getAttribute('aria-checked')).toBe('true');
+      expect(radio(el, 'svi').getAttribute('aria-checked')).toBe('false');
+      expect(radio(el, '1').getAttribute('aria-label')).toBe('Nivo 1 od 3 (lakši), 1 varijanta');
+      expect(radio(el, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 4 varijanti');
+      expect(radio(el, 'svi').getAttribute('aria-label')).toBe('Svi nivoi, 7 varijanti');
+      expect(el.querySelector('[data-zadatak-nivo]')!.textContent!.replace(/\s+/g, '')).toBe('NivoSvi7142');
+    });
+
+    it('izbor nivoa menja formu (zadatakIzForme.nivo), "Svi" vraća null, a prikaz prati formu', async () => {
+      const el = await napravi(zadatakInfo({ nivo: null }));
+      expect(radio(el, 'svi').getAttribute('aria-checked')).toBe('true');
+      radio(el, '2').click();
+      await osvezi();
+      expect(zadatakIzForme(forma).nivo).toBe(2);
+      expect(forma.dirty).toBe(true);
+      expect(radio(el, '2').getAttribute('aria-checked')).toBe('true');
+      radio(el, 'svi').click();
+      await osvezi();
+      expect(zadatakIzForme(forma).nivo).toBeNull();
+      forma.controls.nivo.setValue(1);
+      await osvezi();
+      expect(radio(el, '1').getAttribute('aria-checked')).toBe('true');
+    });
   });
 
   it('unutrašnji čvor: "Aktivnih varijanti u podgrupama: N"; list bez polja je rad na papiru', async () => {

@@ -117,6 +117,52 @@ describe('ZadatakPanelComponent (konzola, Zadatak slajd)', () => {
     expect(izbor(f)).toBeNull();
   });
 
+  describe('nivo', () => {
+    const radio = (f: ComponentFixture<unknown>, n: string) =>
+      el(f).querySelector<HTMLButtonElement>(`[data-zp-nivo] [role=radio][data-nivo="${n}"]`)!;
+    const kaoNaSlajdu = (f: ComponentFixture<unknown>) => el(f).querySelector<HTMLButtonElement>('[data-nivo-kao-na-slajdu]');
+
+    it('CEKA: izbor nivoa pokazuje nivo za otvaranje i broj kandidata po nivou; bez izmene nema "Kao na slajdu"', () => {
+      const f = prikazi(naZadatku('CEKA', { zadatak: { nivoZaOtvaranje: 2 } }));
+      expect(radio(f, '2').getAttribute('aria-checked')).toBe('true');
+      expect(radio(f, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 2 varijanti');
+      expect(radio(f, '1').getAttribute('aria-label')).toBe('Nivo 1 od 3 (lakši), 0 varijanti');
+      expect(kaoNaSlajdu(f)).toBeNull();
+      const svi = prikazi(naZadatku('CEKA'));
+      expect(radio(svi, 'svi').getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('izbor šalje NIVO: nivo 1..3, "Svi" šalje 0, "Kao na slajdu" šalje null (samo kad postoji izmena)', () => {
+      const f = prikazi(naZadatku('CEKA', { zadatak: { nivoZaOtvaranje: 2 } }));
+      radio(f, '3').click();
+      radio(f, 'svi').click();
+      expect(poslato).toEqual([{ tip: 'NIVO', vrednost: 3 }, { tip: 'NIVO', vrednost: 0 }]);
+      // izmena iz konzole 3, slajd traži 1: dugme vraća na slajd
+      const s = naZadatku('CEKA', { zadatak: { izmenaNivoa: 3, nivoZaOtvaranje: 3 } });
+      const g = prikazi({ ...s, zadatak: { ...s.zadatak!, slajd: { ...s.zadatak!.slajd, nivo: 1 } } });
+      expect(radio(g, '3').getAttribute('aria-checked')).toBe('true');
+      expect(kaoNaSlajdu(g)!.textContent!.trim()).toBe('Kao na slajdu (★)');
+      kaoNaSlajdu(g)!.click();
+      expect(poslato).toEqual([{ tip: 'NIVO', vrednost: null }]);
+    });
+
+    it('izbor prikazuje stanje servera: posle klika ostaje staro dok ne stigne novo stanje', () => {
+      const f = prikazi(naZadatku('CEKA', { zadatak: { nivoZaOtvaranje: 2 } }));
+      radio(f, '3').click();
+      expect(radio(f, '2').getAttribute('aria-checked')).toBe('true');
+      f.componentRef.setInput('stanje', naZadatku('CEKA', { zadatak: { izmenaNivoa: 3, nivoZaOtvaranje: 3 } }));
+      f.detectChanges();
+      expect(radio(f, '3').getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('posle otvaranja nema izbora nivoa, a svaka izvučena varijanta pokazuje svoj nivo', () => {
+      const f = prikazi(naZadatku('OTVORENO', { varijante: [{ ...varijantaRunde(11), nivo: 3 }, { ...varijantaRunde(12), nivo: null }] }));
+      expect(el(f).querySelector('[data-zp-nivo]')).toBeNull();
+      const prikazi_ = Array.from(el(f).querySelectorAll('li')).map(li => li.querySelector('[data-nivo-prikaz]')?.getAttribute('aria-label') ?? null);
+      expect(prikazi_).toEqual(['Nivo 3 od 3 (teži)', null]);
+    });
+  });
+
   it('posle otvaranja: kartice izvučenih varijanti (slika zadatka, naziv, brojevi), bez izbora broja', () => {
     const v11 = { ...varijantaRunde(11), dodeljeno: 2, odgovorilo: 1, tacnih: 1 };
     const v12 = { ...varijantaRunde(12), naziv: null };
