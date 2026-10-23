@@ -62,7 +62,7 @@ function slobodanNaziv(zauzeti: readonly string[]): ValidatorFn {
           </mat-form-field>
           @if (!d.bezTezine) {
             <mat-form-field appearance="outline">
-              <mat-label>Težina</mat-label>
+              <mat-label>Težina tipa</mat-label>
               <mat-select formControlName="tezina" data-tezina>
                 @if (!d.tezinaObavezna) {
                   <mat-option [value]="null">Bez težine</mat-option>

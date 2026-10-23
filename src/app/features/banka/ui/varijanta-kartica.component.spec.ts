@@ -14,14 +14,14 @@ function varijanta(izmena: Partial<VarijantaInfo> = {}): VarijantaInfo {
   return {
     id: 11, grupaId: 2, rb: 1, naziv: '1011 u dekadni', status: 'NACRT', izvor: 'RUCNO', renderStatus: 'OK',
     svgId: 'b0000000-0000-4000-8000-000000000011', resenjeSvgId: null, izmenjeno: '2026-10-15T10:00:00', ikadOdobrena: false,
-    zamenjuje: null, serija: null, ...izmena,
+    zamenjuje: null, serija: null, nivo: 2, ...izmena,
   };
 }
 
 @Component({
   imports: [VarijantaKarticaComponent],
   template: `<app-varijanta-kartica [varijanta]="v()" [zauzeto]="zauzeto()" (odobri)="odobri()" (arhiviraj)="arhiviraj()"
-    (vratiUNacrt)="vratiUNacrt()" (dupliraj)="dupliraj()" (obrisi)="obrisi()" />`,
+    (vratiUNacrt)="vratiUNacrt()" (dupliraj)="dupliraj()" (obrisi)="obrisi()" (nivoPromena)="nivoPromena($event)" />`,
 })
 class Host {
   v = signal(varijanta());
@@ -31,6 +31,7 @@ class Host {
   vratiUNacrt = vi.fn();
   dupliraj = vi.fn();
   obrisi = vi.fn();
+  nivoPromena = vi.fn();
 }
 
 describe('VarijantaKarticaComponent', () => {
@@ -128,5 +129,25 @@ describe('VarijantaKarticaComponent', () => {
   it('dugme menija ima ime sa nazivom varijante', async () => {
     const { el } = await napravi();
     expect(el.querySelector('button[data-meni]')!.getAttribute('aria-label')).toBe('Radnje za varijantu 1011 u dekadni');
+  });
+
+  it('nivo: prikazuje nivo varijante kao radio grupu, a izbor emituje samo novi nivo', async () => {
+    const { el, h } = await napravi({ nivo: 1 });
+    const radio = (n: number) => el.querySelector<HTMLButtonElement>(`[role=radio][data-nivo="${n}"]`)!;
+    expect([1, 2, 3].map(n => radio(n).getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    radio(3).click();
+    expect(h.nivoPromena).toHaveBeenCalledExactlyOnceWith(3);
+    h.nivoPromena.mockClear();
+    radio(1).click();
+    expect(h.nivoPromena).not.toHaveBeenCalled();
+  });
+
+  it('nivo je dostupan u svakom statusu, a ne menja status (arhivirana i aktivna)', async () => {
+    for (const status of ['AKTIVNA', 'ARHIVIRANA'] as const) {
+      const { el, h, f } = await napravi({ status, nivo: 2 });
+      el.querySelector<HTMLButtonElement>('[role=radio][data-nivo="3"]')!.click();
+      expect(h.nivoPromena).toHaveBeenCalledExactlyOnceWith(3);
+      f.destroy();
+    }
   });
 });

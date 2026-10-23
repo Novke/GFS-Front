@@ -8,12 +8,12 @@ import { NotificationStore, Poruka } from '../../../core/state/notification.stor
 import { Strana } from '../../../shared/models/strana';
 import { BankaApi } from './banka.api';
 import { BankaPretragaStavka, PonistavanjeInfo, VarijantaDetails } from './banka.models';
-import { filterPregleda, pocetakPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja } from './pregled-nacrta.store';
+import { filterPregleda, pocetakPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja, upitPregleda } from './pregled-nacrta.store';
 
 function stavka(id: number, izmena: Partial<BankaPretragaStavka> = {}): BankaPretragaStavka {
   return {
     varijantaId: id, grupaId: 4, grupaNaziv: '8 → 2', putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 4, naziv: '8 → 2' }],
-    naziv: `Zad. ${id}`, status: 'NACRT', renderStatus: 'OK', isecak: 'Pretvori', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', ...izmena,
+    naziv: `Zad. ${id}`, status: 'NACRT', renderStatus: 'OK', isecak: 'Pretvori', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', nivo: 2, ...izmena,
   };
 }
 
@@ -22,7 +22,7 @@ function varijanta(id: number, izmena: Partial<VarijantaDetails> = {}): Varijant
     id, grupaId: 4, putanja: [{ id: 1, naziv: 'Konverzije' }, { id: 4, naziv: '8 → 2' }], rb: id, naziv: `Zad. ${id}`, tekst: 'Pretvori',
     resenje: null, odgovori: {}, polja: [], prilozi: [], status: 'NACRT', izvor: 'CLAUDE', renderStatus: 'OK', svgId: `svg-${id}`,
     resenjeSvgId: null, renderGreska: null, renderDeo: null, kreirano: '2026-10-18T10:00:00', izmenjeno: '2026-10-18T10:00:00',
-    ikadOdobrena: false, zamenjuje: null, serija: 'uvoz-kol1-2024', ...izmena,
+    ikadOdobrena: false, zamenjuje: null, serija: 'uvoz-kol1-2024', nivo: 2, ...izmena,
   };
 }
 
@@ -33,21 +33,28 @@ function strana(stavke: BankaPretragaStavka[], broj: number, ukupnoStrana: numbe
 
 const greskaServera = (status: number, reason = 'Greška.') => throwError(() => new HttpErrorResponse({ status, error: { reason } }));
 
-const FILTER: PregledFilter = { predmet: 1, izvor: null, serija: 'uvoz-kol1-2024', grupa: null, status: 'NACRT' };
+const FILTER: PregledFilter = { predmet: 1, izvor: null, serija: 'uvoz-kol1-2024', grupa: null, status: 'NACRT', nivo: null };
+
+describe('upitPregleda', () => {
+  it('nivo ide u URL samo kad je postavljen', () => {
+    expect(upitPregleda({ ...FILTER, nivo: 3 })).toEqual({ predmet: 1, serija: 'uvoz-kol1-2024', nivo: 3 });
+    expect(upitPregleda(FILTER)).toEqual({ predmet: 1, serija: 'uvoz-kol1-2024' });
+  });
+});
 
 describe('filterPregleda', () => {
   it('podrazumevano: status NACRT, ostalo null', () => {
-    expect(filterPregleda({})).toEqual({ predmet: null, izvor: null, serija: null, grupa: null, status: 'NACRT' });
+    expect(filterPregleda({})).toEqual({ predmet: null, izvor: null, serija: null, grupa: null, status: 'NACRT', nivo: null });
   });
 
   it('ispravne vrednosti iz upita', () => {
-    expect(filterPregleda({ predmet: '1', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', grupa: '4', status: 'AKTIVNA' }))
-      .toEqual({ predmet: 1, izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', grupa: 4, status: 'AKTIVNA' });
+    expect(filterPregleda({ predmet: '1', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', grupa: '4', status: 'AKTIVNA', nivo: '3' }))
+      .toEqual({ predmet: 1, izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', grupa: 4, status: 'AKTIVNA', nivo: 3 });
   });
 
   it('nevažeće vrednosti su null (status ostaje NACRT)', () => {
-    expect(filterPregleda({ predmet: 'x', izvor: 'NEKO', serija: 'Uvoz X', grupa: '0', status: 'SVE' }))
-      .toEqual({ predmet: null, izvor: null, serija: null, grupa: null, status: 'NACRT' });
+    expect(filterPregleda({ predmet: 'x', izvor: 'NEKO', serija: 'Uvoz X', grupa: '0', status: 'SVE', nivo: '4' }))
+      .toEqual({ predmet: null, izvor: null, serija: null, grupa: null, status: 'NACRT', nivo: null });
     expect(filterPregleda({ serija: 'ab' }).serija).toBeNull();
   });
 });
@@ -87,6 +94,7 @@ describe('PregledNacrtaStore', () => {
     odobri: vi.fn(),
     obrisiVarijantu: vi.fn(),
     odbaciSeriju: vi.fn(),
+    promeniNivo: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 1, naziv: 'Statika' }, { id: 2, naziv: 'Beton' }])),
@@ -125,8 +133,8 @@ describe('PregledNacrtaStore', () => {
       store.ucitaj({ ...FILTER, izvor: 'CLAUDE' }, null);
 
       expect(api.pretraga.mock.calls).toEqual([
-        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
-        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024' }, { page: 1, size: 100, sort: 'id,asc' }, { tiho: true }],
+        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', nivo: null }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
+        [{ predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', nivo: null }, { page: 1, size: 100, sort: 'id,asc' }, { tiho: true }],
       ]);
       expect(store.ids()).toHaveLength(102);
       expect(store.ids().slice(98)).toEqual([1098, 1099, 1100, 1101]);
@@ -254,7 +262,7 @@ describe('PregledNacrtaStore', () => {
       api.pretraga.mockImplementation(() => of(strana([stavka(16), stavka(40), stavka(41), stavka(45)], 0, 1)));
       store.ucitaj({ ...FILTER, predmet: null }, null);
       expect(api.pretraga.mock.calls).toEqual([
-        [{ predmetId: null, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
+        [{ predmetId: null, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024', nivo: null }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true }],
       ]);
       expect(referenca.predmeti).not.toHaveBeenCalled();
       expect(store.ids()).toEqual([16, 40, 41, 45]);
@@ -522,6 +530,53 @@ describe('PregledNacrtaStore', () => {
       store.odbaciSeriju();
       expect(poruke.map(p => p.tekst)).toEqual(['Serija mora imati 3 do 60 malih slova, cifara ili crtica.']);
       expect(store.ids()).toEqual([16, 17, 18]);
+    });
+  });
+  describe('nivo', () => {
+    beforeEach(() => store.ucitaj(FILTER, null));
+
+    it('filter nivoa ide u pretragu', () => {
+      api.pretraga.mockClear();
+      store.ucitaj({ ...FILTER, nivo: 3 }, null);
+      expect(api.pretraga.mock.calls[0][0]).toMatchObject({ predmetId: 1, nivo: 3 });
+    });
+
+    it('promeniNivo: odmah u prikazu, PATCH, lista i mesto ostaju, a Odobri nije blokiran', () => {
+      const odgovor = new Subject<VarijantaDetails>();
+      api.promeniNivo.mockImplementationOnce(() => odgovor);
+      store.promeniNivo(3);
+
+      expect(store.trenutna()?.nivo).toBe(3);
+      expect(api.promeniNivo).toHaveBeenCalledExactlyOnceWith(16, 3, { tiho: true });
+      expect(store.radi()).toBe(false);
+      odgovor.next(varijanta(16, { nivo: 3 }));
+      odgovor.complete();
+      expect(store.trenutna()?.nivo).toBe(3);
+      expect(store.ids()).toEqual([16, 17, 18]);
+      expect(store.indeks()).toBe(0);
+      expect(poruke).toEqual([]);
+    });
+
+    it('isti nivo ne šalje ništa', () => {
+      store.promeniNivo(2);
+      expect(api.promeniNivo).not.toHaveBeenCalled();
+    });
+
+    it('greška vraća prethodni nivo i javlja razlog', () => {
+      api.promeniNivo.mockImplementationOnce((): Observable<never> => greskaServera(400, 'Nivo mora biti od 1 do 3.'));
+      store.promeniNivo(3);
+      expect(store.trenutna()?.nivo).toBe(2);
+      expect(poruke.map(p => [p.tip, p.tekst])).toEqual([['greska', 'Nivo mora biti od 1 do 3.']]);
+    });
+
+    it('odgovor za varijantu koja više nije prikazana ne dira prikazanu', () => {
+      const odgovor = new Subject<VarijantaDetails>();
+      api.promeniNivo.mockImplementationOnce(() => odgovor);
+      store.promeniNivo(3);
+      store.sledeca();
+      expect(store.trenutna()?.id).toBe(17);
+      odgovor.error(new HttpErrorResponse({ status: 500, error: { reason: 'x' } }));
+      expect(store.trenutna()).toMatchObject({ id: 17, nivo: 2 });
     });
   });
 });

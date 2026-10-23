@@ -1,7 +1,7 @@
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { catchError, EMPTY, finalize, forkJoin, map, mergeMap, Observable, of, pipe, switchMap, tap } from 'rxjs';
+import { catchError, concatMap, EMPTY, finalize, forkJoin, map, mergeMap, Observable, of, pipe, switchMap, tap } from 'rxjs';
 
 import { NotificationStore } from '../../../core/state/notification.store';
 import { setError, setLoaded, setLoading, withRequestStatus } from '../../../shared/store/request-status.feature';
@@ -11,6 +11,7 @@ import {
   putanjaDo, SerijaInfo, StatusVarijante, VarijantaInfo,
 } from './banka.models';
 import { OpcijeRazloga, razlogBanke, TIHO, UPIS } from './greske';
+import { PromeneNivoa } from './promene-nivoa';
 
 export type FilterStatusa = StatusVarijante | 'SVE';
 export type FilterIzvora = IzvorVarijante | 'SVI';
@@ -244,6 +245,31 @@ export const BankaStore = signalStore(
     );
     const bezIzbora = map((): undefined => undefined);
 
+    /** Promene nivoa u letu: optimistična izmena, pa vraćanje na potvrđeni nivo kad poslednji zahtev završi ({@link PromeneNivoa}). */
+    const nivoi = new PromeneNivoa();
+    const postaviNivo = (id: number, nivo: number): void =>
+      patchState(store, s => ({ varijante: s.varijante.map(v => (v.id === id ? { ...v, nivo } : v)) }));
+    /** Redom (`concatMap`): server ih primi onim redosledom kojim je korisnik kliknuo, pa važi poslednji klik. */
+    const posaljiNivo = rxMethod<{ id: number; nivo: number }>(
+      pipe(
+        concatMap(({ id, nivo }) =>
+          store._api.promeniNivo(id, nivo, TIHO).pipe(
+            tap(v => nivoi.potvrdi(id, v.nivo)),
+            catchError((e: unknown) => {
+              prijavi(e, UPIS);
+              return EMPTY;
+            }),
+            finalize(() => {
+              const prikaz = nivoi.zavrsi(id);
+              if (prikaz !== null) {
+                postaviNivo(id, prikaz);
+              }
+            }),
+          ),
+        ),
+      ),
+    );
+
     return {
       /**
        * Učitava stablo predmeta i namene; bira `grupaId` (povratak sa editora) ako postoji u stablu, inače prvi list. Prethodno
@@ -348,6 +374,20 @@ export const BankaStore = signalStore(
       },
       obrisiVarijantu(id: number): void {
         izmena({ poziv: store._api.obrisiVarijantu(id, TIHO).pipe(bezIzbora), zauzima: true });
+      },
+      /**
+       * Menja nivo varijante (`PATCH banka/varijante/{id}/nivo`, u svakom statusu). Optimistično: kartica odmah prikazuje novi nivo;
+       * kad zahtev padne, vraća se poslednji potvrđeni i javlja se razlog u `NotificationStore`. Ne osvežava stablo (nivo ne
+       * menja brojače), pa izbor i fokus ostaju gde jesu.
+       */
+      promeniNivo(id: number, nivo: number): void {
+        const v = store.varijante().find(x => x.id === id);
+        if (!v || v.nivo === nivo) {
+          return;
+        }
+        nivoi.pocni(id, v.nivo);
+        postaviNivo(id, nivo);
+        posaljiNivo({ id, nivo });
       },
       dupliraj(id: number): void {
         izmena({ poziv: store._api.dupliraj(id, TIHO).pipe(bezIzbora), zauzima: true });

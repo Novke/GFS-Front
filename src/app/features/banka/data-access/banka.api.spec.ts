@@ -117,6 +117,25 @@ describe('BankaApi', () => {
     req.flush({});
   });
 
+  it('promeniNivo: PATCH banka/varijante/{id}/nivo sa telom { nivo }', () => {
+    api.promeniNivo(11, 3, { tiho: true }).subscribe();
+    const req = zahtev('PATCH', 'api/banka/varijante/11/nivo');
+    expect(req.request.body).toEqual({ nivo: 3 });
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
+    req.flush({});
+  });
+
+  it('pretraga šalje filter nivoa samo kad je postavljen', () => {
+    api.pretraga({ predmetId: 7, nivo: 3 }).subscribe();
+    const sa = http.expectOne(r => r.url === 'api/banka/pretraga');
+    expect(sa.request.params.get('nivo')).toBe('3');
+    sa.flush({});
+    api.pretraga({ predmetId: 7, nivo: null }).subscribe();
+    const bez = http.expectOne(r => r.url === 'api/banka/pretraga');
+    expect(bez.request.params.has('nivo')).toBe(false);
+    bez.flush({});
+  });
+
   it('renderProba: POST banka/render-proba sa komandom', () => {
     const cmd = { predmetId: 7, tekst: '$x^2$' };
     api.renderProba(cmd).subscribe();

@@ -49,7 +49,7 @@ function tema(grupaId: number | null = 2): IskljucenaTemaInfo {
 function varijanta(id: number, status: VarijantaInfo['status']): VarijantaInfo {
   return {
     id, grupaId: 2, rb: id - 10, naziv: `Varijanta ${id}`, status, izvor: 'RUCNO', renderStatus: 'OK', svgId: `svg-${id}`,
-    resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00', ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null,
+    resenjeSvgId: null, izmenjeno: '2026-10-17T10:00:00', ikadOdobrena: status !== 'NACRT', zamenjuje: null, serija: null, nivo: 2,
   };
 }
 
