@@ -153,6 +153,8 @@ for (const rezim of ['dan', 'noc'] as const) {
       await dijalog.getByLabel('Issuer (Platform ID)').fill('http://moodle.example.test');
       await dijalog.getByRole('button', { name: 'Sačuvaj' }).click();
       await expect(dijalog.getByText('Adresa mora da počne sa https://.')).toBeVisible();
+      // poruke provere ulaze prelazom providnosti; axe usred prelaza meri slabiji kontrast (povremeni pad u CI-ju)
+      await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
     });
 
