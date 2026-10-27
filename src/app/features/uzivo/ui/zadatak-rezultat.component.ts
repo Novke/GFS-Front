@@ -163,20 +163,26 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
     :host(.uz-zad-rezultat) .uz-zr-resenje { flex: 1 1 0; min-height: 0; }
 
     /* tabla, prikazani odgovori: samo brojevi, krupno. Tačan čip je prvi u redu, pa ga prelivanje kartice ne odseca. */
-    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica { font-size: 3cqw; gap: 0.6cqw; }
-    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="3"] .uz-zr-kartica { font-size: 2.3cqw; }
-    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="4"] .uz-zr-kartica { font-size: 1.8cqw; }
+    /* veličina = manja od one po koloni (širina kartice) i one po redovima (visina): 4 varijante sa po ~6 vrednosti staju */
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza { --uz-f-k: 3cqw; --uz-f-r: 3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="3"] { --uz-f-k: 2.3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="4"] { --uz-f-k: 1.8cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="2"] { --uz-f-r: 2.4cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="3"] { --uz-f-r: 1.9cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="4"] { --uz-f-r: 1.3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="5"] { --uz-f-r: 1.05cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica { font-size: min(var(--uz-f-k), var(--uz-f-r)); gap: 0.6cqw; }
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica:only-child { font-size: 4.5cqw; }
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-naziv,
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-oznaka { font-size: 0.5em; }
-    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-cip--tacno { font-size: 1.4em; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-cip--tacno { font-size: 1.3em; }
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-prazno-sve {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 3cqw;
     }
   `,
   template: `
     @let rezim = prikaz();
-    <ul class="uz-zr-mreza" [attr.data-kolone]="brojKolona()" [style.--uz-kolone]="brojKolona()">
+    <ul class="uz-zr-mreza" [attr.data-kolone]="brojKolona()" [attr.data-redova]="brojRedova()" [style.--uz-kolone]="brojKolona()">
       @for (k of kartice(); track k.id) {
         <li class="uz-zr-kartica" [attr.data-varijanta]="k.id">
           @if (rezim === 'odgovori') {
@@ -240,6 +246,7 @@ export class ZadatakRezultatComponent {
 
   protected readonly url = medijUrl;
   protected readonly brojKolona = computed(() => kolone(this.kartice().length));
+  protected readonly brojRedova = computed(() => Math.min(5, Math.ceil(this.kartice().length / this.brojKolona())));
 
   protected readonly kartice = computed<Kartica[]>(() => {
     const r = this.rezultat();

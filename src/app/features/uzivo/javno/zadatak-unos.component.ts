@@ -40,8 +40,11 @@ export function tacnoPolja(p: PoljeZadatka, t: OdgovorPolja | null | undefined):
 
 const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE_TACNIH';
 
-/** Oznaka stavke liste na početku: `a) `, `(b) `, `1) `, `12) ` (jedno slovo ili do dve cifre, zagrada, pa razmak i tekst). */
-const OZNAKA_LISTE = /^\s*\(?(?:[A-Za-z]|\d{1,2})\)\s+(?=\S)/;
+/**
+ * Oznaka stavke liste na početku: `a) `, `(b) `, `1) `, `12) ` (jedno slovo ili do dve cifre, zagrada, pa razmak). Server oznaku
+ * skraćuje (`BankaPP.normalizujPolja`), pa posle razmaka uvek ima teksta; kratko zbog budžeta telefona (`e2e/lenji-formule.spec.ts`).
+ */
+const OZNAKA_LISTE = /^\(?([a-z]|\d\d?)\)\s+/i;
 
 /**
  * Oznaka polja na telefonu. Kad šema ima samo jedno polje, slovo liste ("a) dekadna vrednost") ništa ne znači, pa se skida
