@@ -47,7 +47,9 @@ test.describe('prijava nastavnika', () => {
     await page.goto('predavanja');
 
     await expect(page).toHaveURL(/\/prijava\?nazad=predavanja$/);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Prijava nastavnika');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Prijava za nastavnike');
+    // student koji je zalutao ovde ima veliki link na /nalog (bez nastavničkog `nazad`)
+    await expect(page.getByRole('link', { name: 'Student si? Prijavi se brojem indeksa' })).toHaveAttribute('href', '/nalog');
     await expect(page.locator('app-side-nav')).toHaveCount(0); // bez ljuske
     await page.waitForLoadState('networkidle');
     // dok nastavnik nije prijavljen, stranica ne zove ništa osim provere sesije (čuvar): ni ReferenceStore ni brojače

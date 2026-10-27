@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { expect, test as osnova } from './fixture';
 import { expect as ocekuj, test } from './javna-mreza';
 import { lazniBroker } from './lazni-stomp';
-import { MockApi } from './mock-api';
+import { MockApi, tekucaSkolskaGodina } from './mock-api';
 
 /*
  * Javni nalog studenta (`/nalog`, spec prijave 5.1 i 10): indeks -> kod na mejl -> prijavljen na ovom telefonu, povratak na
@@ -15,8 +15,10 @@ import { MockApi } from './mock-api';
 
 const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc)$/;
 const INDEKS = 'GD1';
+/** Godina koju forma predlaže bez `?godina=` (fikstura nema svoju, pa mock prihvata istu). */
+const GODINA = tekucaSkolskaGodina();
 
-async function posaljiKod(page: Page, indeks = 'gd 1'): Promise<void> {
+async function posaljiKod(page: Page, indeks = '01'): Promise<void> {
   await page.getByLabel('Broj indeksa').fill(indeks);
   await page.getByRole('button', { name: 'Pošalji kod' }).click();
   await ocekuj(page.getByRole('heading', { level: 2, name: 'Unesi kod' })).toBeVisible();
@@ -27,7 +29,18 @@ async function unesiKod(page: Page, kod: string): Promise<void> {
   await page.getByRole('button', { name: 'Prijavi se' }).click();
 }
 
+/**
+ * Čeka da se završe konačne CSS/Web animacije (npr. `mat-error` ulazi providno pa se izoštrava), pa tek onda axe:
+ * usred animacije axe meri kontrast poluprovidnog teksta i prijavi `color-contrast` (povremeno u CI-ju).
+ */
+async function posleAnimacija(page: Page): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).length), { timeout: 5_000 })
+    .toBe(0);
+}
+
 async function bezOzbiljnihKrsenja(page: Page): Promise<void> {
+  await posleAnimacija(page);
   const rezultat = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
   const ozbiljna = rezultat.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => v.id);
   ocekuj(ozbiljna).toEqual([]);
@@ -54,11 +67,10 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/nalog/kod')).toHaveLength(0);
 
     await posaljiKod(page);
-    ocekuj(mock.zahteviZa('public/nalog/kod', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS });
+    ocekuj(mock.zahteviZa('public/nalog/kod', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA });
     await ocekuj(page.getByText('Ako nalog postoji, kod je poslat.')).toBeVisible();
     await ocekuj(page.getByText('a***@example.test')).toBeVisible();
-    await ocekuj(page.getByText('Kod ide na mejl koji si dao pri upisu. Proveri i Spam. Ako ga nemaš, nastavnik može da upiše novi.'))
-      .toBeVisible();
+    await ocekuj(page.getByText('Ako mejl ne stiže, nastavnik može da ti izdiktira kod.')).toBeVisible();
     const kod = page.getByLabel('Kod iz mejla');
     await ocekuj(kod).toHaveAttribute('inputmode', 'numeric');
     await ocekuj(kod).toHaveAttribute('autocomplete', 'one-time-code');
@@ -70,12 +82,12 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
 
     await page.getByRole('button', { name: 'Ne stiže mi kod' }).click();
     await ocekuj(page.getByRole('status')).toHaveText('Javili smo nastavniku.');
-    ocekuj(mock.zahteviZa('public/nalog/pomoc', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS });
+    ocekuj(mock.zahteviZa('public/nalog/pomoc', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA });
 
     await unesiKod(page, MockApi.KOD_NALOGA);
     await ocekuj(page).toHaveURL(/\/uzivo\/123456$/);
     ocekuj(mock.studentPrijavljen).toBe(true);
-    ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, kod: MockApi.KOD_NALOGA });
+    ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA, kod: MockApi.KOD_NALOGA });
 
     // samo javni API naloga (pa uživo posle povratka), ništa nastavničko
     ocekuj(javnaMreza.api.filter(z => !/^(GET|POST) \/api\/public\/uzivo\//.test(z))).toEqual([
@@ -88,6 +100,25 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     const skripte = await javnaMreza.skripte();
     ocekuj(skripte.putanje.some(p => /\/main-[^/]+\.js$/.test(p)), 'provera je pročitala glavni bundle').toBe(true);
     ocekuj(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
+  test('"Imam kod od nastavnika": bez mejla, godina iz ?godina= se menja, pa prijava kodom', async ({ page, mock, javnaMreza }) => {
+    await page.goto(`nalog?godina=${GODINA - 1}`);
+    const godina = page.getByLabel('Godina upisa');
+    await ocekuj(godina).toHaveValue(String(GODINA - 1));
+    await ocekuj(godina).toHaveAttribute('inputmode', 'numeric');
+    await godina.fill(String(GODINA));
+    await page.getByLabel('Broj indeksa').fill('01');
+    await ocekuj(page.getByText(`Indeks: ${INDEKS}/${GODINA}`)).toBeVisible();
+    await page.getByRole('button', { name: 'Imam kod od nastavnika' }).click();
+    await ocekuj(page.getByText('Upiši kod koji ti je nastavnik izdiktirao.')).toBeVisible();
+    await ocekuj(page.getByRole('button', { name: 'Ne stiže mi kod' })).toHaveCount(0);
+    await page.getByLabel('Kod od nastavnika').fill(MockApi.KOD_NALOGA);
+    await page.getByRole('button', { name: 'Prijavi se' }).click();
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    ocekuj(mock.zahteviZa('public/nalog/kod')).toHaveLength(0); // mejl se ne šalje
+    ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA, kod: MockApi.KOD_NALOGA });
+    ocekuj(javnaMreza.api).toEqual(['GET /api/public/nalog/stanje', 'POST /api/public/nalog/prijava', 'GET /api/public/nalog/ja']);
   });
 
   test('nalepljen kod sa razmacima ulazi kao 6 cifara', async ({ page }) => {

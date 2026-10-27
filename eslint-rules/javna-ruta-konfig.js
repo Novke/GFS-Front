@@ -15,6 +15,11 @@ const JAVNO_DOZVOLJENO = [
   'core/layout/okruzenje', // assets/env.json
   'shared/forms/form-error-banner',
   'shared/util/nazad', // čista funkcija, bez uvoza (bezbednoNazad: povratak posle prijave, spec prijave 5.1 tačka 6)
+  // Indeks u tri dela (smer + broj + godina, 2026-10-22): forme `nalog` i `upis`. `shared/util/indeks` nema uvoza (čiste
+  // funkcije i SMEROVI); `shared/forms/indeks-polja` uvozi samo @angular/core, @angular/forms, @angular/material
+  // (form-field, input) i shared/util/indeks. Nijedan ne zove HTTP.
+  'shared/util/indeks',
+  'shared/forms/indeks-polja',
 ];
 
 // Dodatak po javnom feature-u (važi samo za njega): moduli iz istog feature-a van javnog dela. Svaki je proveren sa

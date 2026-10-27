@@ -75,7 +75,7 @@ function normalizujPrelaz(p: Partial<Prelaz> | null | undefined): Prelaz | null 
 /** Kao `SlajdPP.normalizuj`: zadatak (izbor grupe, vreme, broj različitih) nosi samo ZADATAK slajd. */
 function zadatakIzCmd(cmd: { tip: string; zadatak?: ZadatakSlajda | null }): ZadatakSlajda | null {
   const z = cmd.tip === 'ZADATAK' ? cmd.zadatak : null;
-  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null } : null;
+  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null, nivo: z.nivo ?? null } : null;
 }
 interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
@@ -106,6 +106,13 @@ interface SesijaNastavnika { id: number; opis: string; kreirano: string; posledn
 interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
 interface NalogStudenta {
   indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
+  /** Godina upisa; bez nje u fiksturi važi početna godina tekuće školske godine (ono što forma predlaže). */
+  godina?: number;
+}
+
+/** Početna godina tekuće školske godine (1. 10. Y do 30. 9. Y+1 = Y), kao predlog forme na `/nalog`. */
+export function tekucaSkolskaGodina(sada = new Date()): number {
+  return sada.getMonth() >= 9 ? sada.getFullYear() : sada.getFullYear() - 1;
 }
 /** Nalog studenta na kartici (`GET api/studenti/:id/nalog`); `imaMejl` se računa iz mejla studenta. */
 interface NalogNaKartici {
@@ -309,6 +316,8 @@ export class MockApi {
   }
   /** Jedini kod koji mok prihvata pri prijavi studenta (kao da je stigao mejlom). */
   static readonly KOD_NALOGA = '246810';
+  /** Kod koji vraća `kod-za-diktiranje` (izmišljen). */
+  static readonly KOD_DIKTIRAN = '135790';
   /**
    * Kolačić `__Host-gfs_lti_par` (ulazak iz Moodle-a bez veze, 30 min): `POST public/lti/povezi` ga troši; bez njega 410 kao
    * server. Podrazumevano postoji (stranica `/nalog/moodle` posle preusmerenja).
@@ -679,7 +688,7 @@ export class MockApi {
   /** Slajd kako ga server šalje: ZADATAK dobija opis grupe nad trenutnim stanjem banke (`ZadaciSlajdova`, pri svakom čitanju). */
   private slajdOdgovor(s: UzivoSlajd): unknown {
     if (s.tip !== 'ZADATAK') return s;
-    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null }) };
+    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null, nivo: null }) };
   }
 
   private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
@@ -1013,6 +1022,23 @@ export class MockApi {
         .forEach(o => (o.reseno = lokalnoVreme(new Date())));
       return { status: 204 };
     });
+    // kod za diktiranje (plan C): radi i bez mejla, vraća kod jednom i rešava otvorena obaveštenja studenta
+    post('studenti/:id/nalog/kod-za-diktiranje', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      if (jeOdgovor(s)) {
+        return s;
+      }
+      d.obavestenja
+        .filter(o => o.studentId === s.id && o.reseno === null)
+        .forEach(o => (o.reseno = lokalnoVreme(new Date())));
+      const istice = lokalnoVreme(new Date(Date.now() + 10 * 60_000));
+      const indeks = s.indeks.replace(/\/\d{4}$/u, '');
+      const javni = /^GD[1-9]\d{0,2}$/u.test(indeks);
+      return ok({
+        kod: MockApi.KOD_DIKTIRAN, istice, indeks, godina: s.godina ?? 0,
+        upozorenje: javni ? null : 'Indeks studenta nije oblika GD + broj; ispravi ga na kartici pre diktiranja.',
+      });
+    });
     post('studenti/:id/nalog/opozovi-uredjaje', (_z, p) => {
       const s = nadji(d.studenti, p['id'], 'Student');
       if (jeOdgovor(s)) {
@@ -1231,6 +1257,7 @@ export class MockApi {
     get('banka/varijante/:id', (_z, p) => b.varijantaDetalji(Number(p['id'])));
     put('banka/varijante/:id', (z, p) => b.izmeniVarijantu(Number(p['id']), z.telo as VarijantaCmd));
     del('banka/varijante/:id', (_z, p) => b.obrisiVarijantu(Number(p['id'])));
+    patch('banka/varijante/:id/nivo', (z, p) => b.promeniNivo(Number(p['id']), z.telo as { nivo?: unknown } | null));
     post('banka/varijante/:id/odobri', (_z, p) => b.promeniStatus(Number(p['id']), 'AKTIVNA'));
     post('banka/varijante/:id/arhiviraj', (_z, p) => b.promeniStatus(Number(p['id']), 'ARHIVIRANA'));
     post('banka/varijante/:id/vrati-u-nacrt', (_z, p) => b.promeniStatus(Number(p['id']), 'NACRT'));
@@ -1292,8 +1319,11 @@ export class MockApi {
       return ok({ poruka: 'Ako nalog postoji, kod je poslat.', maska });
     });
     post('public/nalog/prijava', z => {
-      const telo = z.telo as { indeks?: unknown; kod?: unknown } | null;
-      if (telo?.indeks !== d.nalogStudenta.indeks || telo.kod !== MockApi.KOD_NALOGA) {
+      const telo = z.telo as { indeks?: unknown; godina?: unknown; kod?: unknown } | null;
+      // kao server: student je par (indeks, godina); telo bez godine je stari oblik (privremeno), bez provere godine
+      const godina = d.nalogStudenta.godina ?? tekucaSkolskaGodina();
+      const godinaOk = telo?.godina === undefined || telo.godina === godina;
+      if (telo?.indeks !== d.nalogStudenta.indeks || !godinaOk || telo.kod !== MockApi.KOD_NALOGA) {
         return greska(401, 'Kod nije ispravan ili je istekao.');
       }
       this.studentPrijavljen = true;

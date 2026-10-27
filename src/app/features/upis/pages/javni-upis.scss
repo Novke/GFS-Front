@@ -72,6 +72,34 @@ h1 {
 
 mat-form-field { width: 100%; }
 
+// Indeks i telefon su grupe od više polja: legenda kao naslov grupe, bez okvira fieldset-a.
+.grupa-polja {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+
+  legend {
+    margin: 0 0 8px;
+    padding: 0;
+    color: var(--ink-2);
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+// Zemlja i broj u jednom redu (i na 360 px); sa "Druga zemlja" ručni pozivni broj staje pored zemlje, a broj ide ispod.
+.telefon {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
+  align-items: start;
+
+  &.druga .broj { grid-column: 1 / -1; }
+}
+
+.zemlja select { text-overflow: ellipsis; }
+
 // iOS Safari daje polju za datum minimalnu širinu sadržaja; bez ovoga može da izađe iz kolone.
 input[type='date'] { min-width: 0; }
 

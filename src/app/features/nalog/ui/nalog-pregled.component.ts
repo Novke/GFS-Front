@@ -17,7 +17,7 @@ import { StudentJa } from '../data-access/nalog.models';
     @let s = ja();
     <dl class="podaci">
       <dt>Ime</dt><dd>{{ s.ime }} {{ s.prezime }}</dd>
-      <dt>Indeks</dt><dd class="mono">{{ s.indeks }}</dd>
+      <dt>Indeks</dt><dd class="mono">{{ s.indeks }}@if (s.godina) {/{{ s.godina }}}</dd>
       <dt>Mejl</dt><dd>{{ s.maskaMejla ?? '—' }}</dd>
       <dt>Moodle</dt><dd>{{ s.moodlePovezan ? 'povezan' : 'nije povezan' }}</dd>
     </dl>

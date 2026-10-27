@@ -1024,7 +1024,7 @@ describe('EditorStore: ZADATAK', () => {
     expect(post.request.method).toBe('POST');
     expect(post.request.params.get('posle')).toBe('11');
     expect(post.request.body).toEqual(expect.objectContaining({
-      tip: 'ZADATAK', pitanje: null, platno: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: null },
+      tip: 'ZADATAK', pitanje: null, platno: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: null, nivo: null },
     }));
     post.flush({ ...zadatakSlajd({ vremeSekunde: null }), id: 30, rb: 2 });
     expect(ids()).toEqual([11, 30, 12]);
@@ -1061,12 +1061,12 @@ describe('EditorStore: ZADATAK', () => {
     const s = store.slajdovi()[0];
     store.izmeniSlajd(s.id, {
       tip: 'ZADATAK', naslov: null, sadrzaj: null, slikaId: null, beleske: null, postepeno: false, pitanje: null, platno: null,
-      prelaz: null, zadatak: { grupaId: 2, vremeSekunde: 120, brojVarijanti: 3 },
+      prelaz: null, zadatak: { grupaId: 2, vremeSekunde: 120, brojVarijanti: 3, nivo: null },
     });
     expect(store.slajdovi()[0].zadatak).toEqual(expect.objectContaining({ brojVarijanti: 3, grupaNaziv: '2 → 10', upozorenja: ['Tema je isključena.'] }));
     await pomeriSat(800);
     const put = http.expectOne(`api/slajdovi/${s.id}`);
-    expect(put.request.body.zadatak).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 3 });
+    expect(put.request.body.zadatak).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: 3, nivo: null });
     put.flush(zadatakSlajd({ brojVarijanti: 3 }));
   }));
 });

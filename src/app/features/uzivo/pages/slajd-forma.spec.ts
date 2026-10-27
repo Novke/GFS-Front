@@ -353,16 +353,27 @@ describe('SlajdFormaComponent: ZADATAK', () => {
     await upisi('Broj različitih zadataka', '4');
     expect(poslednji()).toEqual({
       tip: 'ZADATAK', naslov: null, sadrzaj: null, slikaId: null, beleske: 'Na tabli', postepeno: false, pitanje: null,
-      platno: null, prelaz: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: 4 },
+      platno: null, prelaz: null, zadatak: { grupaId: 2, vremeSekunde: null, brojVarijanti: 4, nivo: null },
     });
     await upisi('Vreme (s)', '4');
-    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: 4, brojVarijanti: 4 });
+    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: 4, brojVarijanti: 4, nivo: null });
     expect(el().querySelector('.uz-ed-greske')!.textContent).toContain(PORUKE.vreme);
     await upisi('Vreme (s)', '');
     await upisi('Broj različitih zadataka', '51');
-    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: null, brojVarijanti: 51 });
+    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: null, brojVarijanti: 51, nivo: null });
     expect(el().querySelector('.uz-ed-greske')!.textContent).toContain(PORUKE.brojVarijanti);
     expect(el().querySelector('.uz-ed-greske')!.textContent).not.toContain(PORUKE.vreme);
+  });
+
+  it('nivo: izbor "★★★" ide u komandu zadatka, "Svi" ga vraća na null', async () => {
+    await napravi(zadatakSlajd({ nivo: 1 }));
+    expect(el().querySelector('[data-zadatak-nivo] [role=radio][data-nivo="1"]')!.getAttribute('aria-checked')).toBe('true');
+    el().querySelector<HTMLButtonElement>('[data-zadatak-nivo] [role=radio][data-nivo="3"]')!.click();
+    await f.whenStable();
+    expect(poslednji().zadatak).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: 3 });
+    el().querySelector<HTMLButtonElement>('[data-zadatak-nivo] [role=radio][data-nivo="svi"]')!.click();
+    await f.whenStable();
+    expect(poslednji().zadatak!.nivo).toBeNull();
   });
 
   it('"Promeni grupu…" emituje komandu sa novom grupom (vreme i broj ostaju)', async () => {
@@ -370,7 +381,7 @@ describe('SlajdFormaComponent: ZADATAK', () => {
     [...el().querySelectorAll('button')].find(b => b.textContent?.trim() === 'Promeni grupu…')!.click();
     await f.whenStable();
     expect(izaberi).toHaveBeenCalledWith({ predmetId: 1, grupaId: 2 });
-    expect(poslednji().zadatak).toEqual({ grupaId: 3, vremeSekunde: 120, brojVarijanti: 2 });
+    expect(poslednji().zadatak).toEqual({ grupaId: 3, vremeSekunde: 120, brojVarijanti: 2, nivo: null });
   });
 
   it('INFO: komanda nosi zadatak null', async () => {

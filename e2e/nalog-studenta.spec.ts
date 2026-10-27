@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 
 import { posleOtvaranjaDijaloga } from './dijalog';
 import { expect, test } from './fixture';
+import { MockApi } from './mock-api';
 
 /*
  * Sekcija "Nalog" na kartici studenta (spec prijave, 5.3). Fikstura `nalozi.json`: student 1 (Ana) ima mejl, dva uređaja i
@@ -79,6 +80,22 @@ test.describe('kartica studenta: sekcija "Nalog"', () => {
     expect(mock.podaci.obavestenja.find(o => o.id === 1)!.reseno).not.toBeNull();
   });
 
+  test('"Kod za diktiranje" i bez mejla: kod jednom u dijalogu, indeks i godina za studenta, rešeno obaveštenje', async ({ page, mock }) => {
+    await page.goto('studenti/2');
+    await expect(znacka(page)).toHaveText('2');
+    await nalog(page).getByRole('button', { name: 'Kod za diktiranje' }).click();
+    const dijalog = page.getByRole('dialog', { name: 'Kod za diktiranje' });
+    await expect(dijalog.locator('[data-kod]')).toHaveText(`${MockApi.KOD_DIKTIRAN.slice(0, 3)} ${MockApi.KOD_DIKTIRAN.slice(3)}`);
+    await expect(dijalog.locator('[data-indeks]')).toHaveText('GD2');
+    await expect(dijalog.locator('[data-godina]')).toHaveText('2025');
+    await expect(dijalog).toContainText('Važi do');
+    await expect(dijalog).toContainText('Imam kod od nastavnika');
+    await expect(znacka(page)).toHaveText('1');
+    expect(mock.podaci.obavestenja.find(o => o.id === 1)!.reseno).not.toBeNull();
+    await dijalog.getByRole('button', { name: 'Zatvori' }).click();
+    await expect(dijalog).toHaveCount(0);
+  });
+
   test('prelazak na drugog studenta prikazuje njegov nalog', async ({ page }) => {
     await page.goto('studenti/1');
     await expect(nalog(page).locator('[data-uredjaj]')).toHaveCount(2);
@@ -92,7 +109,7 @@ test.describe('kartica studenta: sekcija "Nalog"', () => {
       await page.setViewportSize({ width: sirina, height: 800 });
       await page.goto('studenti/1');
       await expect(nalog(page).locator('[data-uredjaj]')).toHaveCount(2);
-      for (const ime of ['Pošalji kod', 'Opozovi uređaje', 'Raskini Moodle vezu']) {
+      for (const ime of ['Pošalji kod', 'Kod za diktiranje', 'Opozovi uređaje', 'Raskini Moodle vezu']) {
         const dugme = nalog(page).getByRole('button', { name: ime });
         await expect(dugme).toBeVisible();
         const okvir = (await dugme.boundingBox())!;

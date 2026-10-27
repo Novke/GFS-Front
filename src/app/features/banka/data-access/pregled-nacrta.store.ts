@@ -2,14 +2,15 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { catchError, defer, EMPTY, exhaustMap, finalize, map, Observable, of, pipe, switchMap, tap } from 'rxjs';
+import { catchError, concatMap, defer, EMPTY, exhaustMap, finalize, map, Observable, of, pipe, switchMap, tap } from 'rxjs';
 
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from './banka.api';
-import { BankaFilter, BankaPretragaStavka, IzvorVarijante, PonistavanjeInfo, StatusVarijante, VarijantaDetails } from './banka.models';
+import { BankaFilter, BankaPretragaStavka, IzvorVarijante, NIVOI, PonistavanjeInfo, StatusVarijante, VarijantaDetails } from './banka.models';
 import { razlogBanke, TIHO, UPIS } from './greske';
+import { PromeneNivoa } from './promene-nivoa';
 
 /** Veličina strane pretrage (najviše što server daje) i najviše strana pregleda (1 000 varijanti, i kad je bez predmeta). */
 const VELICINA_STRANE = 100;
@@ -49,7 +50,7 @@ export function pocetakPregleda(ids: readonly number[], od: number | null): numb
   return sledeca >= 0 ? sledeca : ids.length;
 }
 
-/** Šta pregled prikazuje (`/banka/pregled?predmet&izvor&serija&grupa&status`); `null` = bez tog filtera. */
+/** Šta pregled prikazuje (`/banka/pregled?predmet&izvor&serija&grupa&status&nivo`); `null` = bez tog filtera. */
 export interface PregledFilter {
   /** `null` = svi predmeti (link iz MCP-a nosi samo seriju): pretraga bez `predmetId`, server traži kroz sve. */
   predmet: number | null;
@@ -58,6 +59,8 @@ export interface PregledFilter {
   /** Grupa i njeno podstablo (po `putanja` stavke, na klijentu). */
   grupa: number | null;
   status: StatusVarijante;
+  /** Samo varijante tog nivoa (1-3); `null` = svi nivoi. */
+  nivo: number | null;
 }
 
 /** Query parametri pregleda kako ih daje ruter (`withComponentInputBinding`). */
@@ -67,6 +70,7 @@ export interface UpitPregleda {
   serija?: string;
   grupa?: string;
   status?: string;
+  nivo?: string;
 }
 
 /** Filter iz query parametara: nevažeća vrednost je "bez filtera" (`null`), a status bez ispravne vrednosti NACRT. */
@@ -78,13 +82,14 @@ export function filterPregleda(u: UpitPregleda): PregledFilter {
     serija: u.serija !== undefined && SERIJA.test(u.serija) ? u.serija : null,
     grupa: id(u.grupa),
     status: STATUSI.find(x => x === u.status) ?? 'NACRT',
+    nivo: NIVOI.find(x => String(x) === u.nivo) ?? null,
   };
 }
 
 /** Obrnuto od {@link filterPregleda}: samo postavljeni filteri (status samo kad nije NACRT), za URL pregleda. */
 export function upitPregleda(f: PregledFilter): Record<string, string | number> {
   const upit: Record<string, string | number | null> = {
-    predmet: f.predmet, izvor: f.izvor, serija: f.serija, grupa: f.grupa, status: f.status === 'NACRT' ? null : f.status,
+    predmet: f.predmet, izvor: f.izvor, serija: f.serija, grupa: f.grupa, status: f.status === 'NACRT' ? null : f.status, nivo: f.nivo,
   };
   return Object.fromEntries(Object.entries(upit).filter((x): x is [string, string | number] => x[1] !== null));
 }
@@ -171,7 +176,7 @@ export const PregledNacrtaStore = signalStore(
      * varijanta jednom: ona koja između dve strane uđe u filter (npr. vraćena u nacrt) pomera ostale, pa bi se ponovila.
      */
     const stavke = (f: PregledFilter): Observable<{ lista: BankaPretragaStavka[]; skraceno: boolean }> =>
-      strane({ predmetId: f.predmet, namena: null, q: null, status: f.status, izvor: f.izvor, serija: f.serija }).pipe(
+      strane({ predmetId: f.predmet, namena: null, q: null, status: f.status, izvor: f.izvor, serija: f.serija, nivo: f.nivo }).pipe(
         map(({ stavke: sve, ukupno }) => {
           const vidjene = new Set<number>();
           return {
@@ -277,7 +282,45 @@ export const PregledNacrtaStore = signalStore(
       ),
     );
 
+    /** Promene nivoa u letu (kao u `BankaStore`): optimistična izmena, pa vraćanje na potvrđeni nivo ({@link PromeneNivoa}). */
+    const nivoi = new PromeneNivoa();
+    const postaviNivo = (id: number, nivo: number): void =>
+      patchState(store, s => ({ trenutna: s.trenutna?.id === id ? { ...s.trenutna, nivo } : s.trenutna }));
+    const posaljiNivo = rxMethod<{ id: number; nivo: number }>(
+      pipe(
+        concatMap(({ id, nivo }) =>
+          store._api.promeniNivo(id, nivo, TIHO).pipe(
+            tap(v => nivoi.potvrdi(id, v.nivo)),
+            catchError((e: unknown) => {
+              store._obavestenja.greska(razlogBanke(e, UPIS));
+              return EMPTY;
+            }),
+            finalize(() => {
+              const prikaz = nivoi.zavrsi(id);
+              if (prikaz !== null) {
+                postaviNivo(id, prikaz);
+              }
+            }),
+          ),
+        ),
+      ),
+    );
+
     return {
+      /**
+       * Menja nivo prikazane varijante (`PATCH banka/varijante/{id}/nivo`): odmah u prikazu, a kad zahtev padne vraća se poslednji
+       * potvrđeni nivo i javlja razlog. Ne zauzima `radi` (Odobri i Obriši ostaju na raspolaganju), ne menja listu ni mesto, i
+       * ne menja status, pa varijanta ostaje u filteru; filter nivoa se primenjuje tek pri sledećem učitavanju liste.
+       */
+      promeniNivo(nivo: number): void {
+        const v = store.trenutna();
+        if (!v || v.nivo === nivo) {
+          return;
+        }
+        nivoi.pocni(v.id, v.nivo);
+        postaviNivo(v.id, nivo);
+        posaljiNivo({ id: v.id, nivo });
+      },
       /** Lista za filter iznova; počinje od varijante `od` ({@link pocetakPregleda}), bez nje od prve. */
       ucitaj,
       /** Posle greške: lista iznova, od prikazane (ili one na kojoj je stalo). */

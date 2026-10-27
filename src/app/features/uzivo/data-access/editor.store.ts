@@ -642,7 +642,7 @@ export const EditorStore = signalStore(
         const lista = store.slajdovi();
         const posleId = posle === undefined ? store.izabraniId() : razresi(posle);
         const i = lista.findIndex(s => s.id === posleId);
-        const z = { grupaId: cvor.id, vremeSekunde: null, brojVarijanti: null };
+        const z = { grupaId: cvor.id, vremeSekunde: null, brojVarijanti: null, nivo: null };
         const opis = {
           ...prazanZadatakInfo(z), grupaNaziv: cvor.naziv, putanja: [{ id: cvor.id, naziv: cvor.naziv }], list: cvor.list,
           brojAktivnihVarijanti: cvor.brojAktivnih, iskljucena: cvor.iskljucena,

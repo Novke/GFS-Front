@@ -298,8 +298,8 @@ export function noviSlajd(tip: TipSlajda, tipPitanja: TipPitanja = 'JEDAN_TACAN'
  */
 export function prazanZadatakInfo(z: ZadatakSlajda): ZadatakSlajdaInfo {
   return {
-    grupaId: z.grupaId, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, grupaNaziv: null, putanja: [], list: false,
-    brojAktivnihVarijanti: 0, polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
+    grupaId: z.grupaId, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, nivo: z.nivo, grupaNaziv: null, putanja: [], list: false,
+    brojAktivnihVarijanti: 0, brojAktivnihPoNivou: null, polja: null, iskljucena: false, iskljucenePodgrupe: [], upozorenja: [],
   };
 }
 
@@ -347,7 +347,7 @@ export function slajdUCmd(s: SlajdDetails): SlajdCmd {
     prelaz: s.prelaz ?? null,
     // komanda nosi samo izbor; opis (naziv, putanja, kandidati, upozorenja) računa server
     zadatak: s.tip === 'ZADATAK' && s.zadatak
-      ? { grupaId: s.zadatak.grupaId, vremeSekunde: s.zadatak.vremeSekunde, brojVarijanti: s.zadatak.brojVarijanti }
+      ? { grupaId: s.zadatak.grupaId, vremeSekunde: s.zadatak.vremeSekunde, brojVarijanti: s.zadatak.brojVarijanti, nivo: s.zadatak.nivo ?? null }
       : null,
   };
 }
@@ -355,7 +355,7 @@ export function slajdUCmd(s: SlajdDetails): SlajdCmd {
 /** Ista grupa: opis sa servera ostaje (menjaju se samo vreme i broj); druga grupa: prazan opis dok server ne odgovori. */
 function zadatakIzCmd(z: ZadatakSlajda, staro: ZadatakSlajdaInfo | null | undefined): ZadatakSlajdaInfo {
   return staro && staro.grupaId === z.grupaId
-    ? { ...staro, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti }
+    ? { ...staro, vremeSekunde: z.vremeSekunde, brojVarijanti: z.brojVarijanti, nivo: z.nivo }
     : prazanZadatakInfo(z);
 }
 
