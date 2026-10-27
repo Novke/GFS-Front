@@ -4,12 +4,19 @@
  * forme (`nalog`, `upis`; allow-lista `gfs/javna-ruta-uvozi`) i `shared/forms/indeks-polja`.
  */
 
+/** Smer studija: šifra je prvi deo indeksa (`GD5`), naziv je za prikaz. */
+export interface SmerStudija {
+  readonly sifra: string;
+  readonly naziv: string;
+}
+
 /**
- * Smerovi koje forma nudi kao prvi deo indeksa. Za sada samo geodezija (prikazan je i ne menja se); novi smer se dodaje ovde
- * i na backendu (`IndeksUtil.SMEROVI`). Kad ih bude više, `IndeksPolja` dobija izbor.
+ * Smerovi koje forma nudi kao prvi deo indeksa, isti redosled i šifre kao backend enum `utility/Smer`. Za sada samo geodezija
+ * (prikazana je i zaključana, bez izbora); nov smer se dodaje ovde i u enumu `Smer`. Kad ih bude više, `IndeksPolja` dobija izbor.
  */
-export const SMEROVI: readonly string[] = ['GD'];
-export const PODRAZUMEVANI_SMER = SMEROVI[0];
+export const SMEROVI: readonly SmerStudija[] = [{ sifra: 'GD', naziv: 'Geodezija' }];
+/** Šifra smera koji forma prikazuje (prvi sa liste). */
+export const PODRAZUMEVANI_SMER = SMEROVI[0].sifra;
 
 /** Broj indeksa: 1-3 cifre (prvih devet studenata ima jednocifren broj); `05` je isto što `5`. */
 export const MAX_CIFARA_BROJA = 3;

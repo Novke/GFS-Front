@@ -154,7 +154,7 @@ without auth.
 
 **Index in three parts and phone (`upis`, `nalog`, `nalog/moodle`; branch `feature/prijava-indeks-mejl`):** both forms use
 `shared/forms/indeks-polja` (`IndeksPolja`, `indeksKontrole`, `vrednostIndeksa`) and `shared/util/indeks` (no imports): the study
-programme `GD` is fixed and shown as the prefix of the number field (`SMEROVI`, same list as backend `IndeksUtil.SMEROVI`), the number is
+programme `GD` is fixed and shown as the prefix of the number field (`SMEROVI` = `{sifra, naziv}[]`, today only `{GD, Geodezija}`, same codes and order as the backend enum `utility/Smer`; no picker until there is a second programme), the number is
 1-3 digits (`inputmode="numeric"`, letters dropped, `05` = `5`), the year is a separate 4-digit field (2000 to current school year + 1),
 **proposed but editable**, errors directly under each field and a live line "Indeks: GD5/2026"; a pasted full index (`GD05/2026`) fills
 both fields. Both files are on `JAVNO_DOZVOLJENO` (they import only Angular, Material and each other). The request is
