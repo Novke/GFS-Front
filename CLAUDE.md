@@ -266,7 +266,7 @@ over STOMP; teacher commands are REST.
   lecture offers "Nastavi" (link, no second start); one running elsewhere is locked (the server allows one active run per presentation, 409).
   `ui/prezentacije-na-predavanju.ts` ("Prezentacije na ovom predavanju", live and finished view) lists `GET izvodjenja?predavanjeId` with status,
   "Nastavi" (console) or "Pregled", reloads when the browser tab becomes visible again. The API client and DTOs are in `core/api/prezentacije-predavanja.api.ts`
-  (`features/predavanja` must not import `features/uzivo/data-access`); only `features/uzivo/uzivo-putanje.ts` (plain constants) is shared. The route
+  (`features/predavanja` must not import `features/uzivo/data-access`); it does not import `features/uzivo/uzivo-putanje.ts` either (a shared chunk would grow the student closure past its e2e budget): `ui/izvodjenje-putanje.ts` holds the two paths, pinned equal to `UzivoPutanje` by `izvodjenje-putanje.spec.ts`. The route
   `prezentacije/:id?predavanje=ID` (editor, "Pokreni" without dialog) still exists and is unchanged.
 
 - **Formulas in question and option text (phase 5a).** Syntax `$...$` by pandoc's `tex_math_dollars` (`ui/tekst-formule.ts`):

@@ -4,8 +4,8 @@ import { MatButton } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
 import { StatusChip } from '../../../shared/ui/status-chip';
-import { UzivoPutanje } from '../../uzivo/uzivo-putanje';
 import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predavanja.store';
+import { konzolaIzvodjenja, pregledIzvodjenja } from './izvodjenje-putanje';
 
 /**
  * "Prezentacije na ovom predavanju": izvođenja prezentacija vezana za predavanje, sa statusom i vezom na konzolu (u toku)
@@ -96,10 +96,10 @@ export class PrezentacijeNaPredavanju {
   }
 
   protected konzola(id: number): string {
-    return UzivoPutanje.izvodjenjeKonzola(id);
+    return konzolaIzvodjenja(id);
   }
 
   protected pregled(id: number): string {
-    return UzivoPutanje.izvodjenjePregled(id);
+    return pregledIzvodjenja(id);
   }
 }

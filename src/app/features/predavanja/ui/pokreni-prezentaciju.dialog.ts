@@ -10,8 +10,8 @@ import { MatProgressBar } from '@angular/material/progress-bar';
 import { forkJoin, Observable } from 'rxjs';
 
 import { IzvodjenjeNaPredavanju, PrezentacijaZaIzbor, PrezentacijePredavanjaApi } from '../../../core/api/prezentacije-predavanja.api';
-import { UzivoPutanje } from '../../uzivo/uzivo-putanje';
 import { razlogZahteva } from '../data-access/prezentacije-predavanja.store';
+import { konzolaIzvodjenja } from './izvodjenje-putanje';
 
 /** Ishod dijaloga: pokrenuto izvođenje i da li se konzola otvorila u novoj kartici (`false` = pregledač je blokirao karticu). */
 export interface PokrenutaPrezentacija {
@@ -29,7 +29,7 @@ export const PRAG_FILTERA = 6;
 
 /** Apsolutni URL konzole izvođenja (`<base href>` + putanja), za novu karticu. */
 export function urlKonzole(dokument: Document, izvodjenjeId: number): string {
-  return new URL(UzivoPutanje.izvodjenjeKonzola(izvodjenjeId), dokument.baseURI).href;
+  return new URL(konzolaIzvodjenja(izvodjenjeId), dokument.baseURI).href;
 }
 
 /** Najskorije izmenjena prvo (ista sekunda: veći id, tj. novija); `izmenjeno` je ISO bez zone, pa se poredi kao tekst. */
