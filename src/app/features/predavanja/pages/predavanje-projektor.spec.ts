@@ -16,7 +16,7 @@ const predavanje = (aktivnosti: PredavanjeDetails['aktivnosti']): PredavanjeDeta
   tema: 'Petlje i uslovi',
   posecenost: aktivnosti.length,
   grupa: { id: 4, naziv: 'GD-2025', godinaUpisa: 2025 },
-  predmet: { naziv: 'Uvod u primenu računara' },
+  predmet: { id: 4, naziv: 'Uvod u primenu računara' },
   aktivnosti,
   zavrseno: false,
 });
