@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { NalogApi } from './nalog.api';
 
+/** Indeks u tri dela ide kao par: kanonski indeks i godina upisa. */
+const S = { indeks: 'GD12', godina: 2026 };
+
 /** Javni nalog studenta: samo `api/public/nalog/*` i `api/public/lti/povezi*`, svaka greška lokalna (nikad nastavnički snackbar). */
 describe('NalogApi', () => {
   let api: NalogApi;
@@ -19,13 +22,13 @@ describe('NalogApi', () => {
   });
 
   it.each([
-    ['posaljiKod', () => api.posaljiKod('GD12'), 'POST', 'api/public/nalog/kod', { indeks: 'GD12' }],
-    ['prijavi', () => api.prijavi('GD12', '123456'), 'POST', 'api/public/nalog/prijava', { indeks: 'GD12', kod: '123456' }],
+    ['posaljiKod', () => api.posaljiKod(S), 'POST', 'api/public/nalog/kod', { indeks: 'GD12', godina: 2026 }],
+    ['prijavi', () => api.prijavi(S, '123456'), 'POST', 'api/public/nalog/prijava', { indeks: 'GD12', godina: 2026, kod: '123456' }],
     ['stanje', () => api.stanje(), 'GET', 'api/public/nalog/stanje', null],
     ['ja', () => api.ja(), 'GET', 'api/public/nalog/ja', null],
     ['odjavi', () => api.odjavi(), 'POST', 'api/public/nalog/odjava', null],
     ['odjaviSvuda', () => api.odjaviSvuda(), 'POST', 'api/public/nalog/odjava-svuda', null],
-    ['pomoc', () => api.pomoc('GD12'), 'POST', 'api/public/nalog/pomoc', { indeks: 'GD12' }],
+    ['pomoc', () => api.pomoc(S), 'POST', 'api/public/nalog/pomoc', { indeks: 'GD12', godina: 2026 }],
     ['povezivanje', () => api.povezivanje(), 'GET', 'api/public/lti/povezivanje', null],
     ['poveziMoodle', () => api.poveziMoodle(), 'POST', 'api/public/lti/povezi', null],
   ] as const)('%s -> %s %s, LOCAL_ERRORS', (_ime, poziv, metod, url, telo) => {

@@ -32,3 +32,20 @@ export function nazadIzUrla(url: string): string | null {
   const kodirano = bezKose.replace(VAN_SKUPA, z => encodeURIComponent(z));
   return bezbednoNazad(kodirano);
 }
+
+/** Prvi segment putanje na koju javne strane (`/nalog`, `/nalog/moodle`, veza za studente na `/prijava`) smeju da vode: samo javne rute. */
+const JAVNI_PREFIKSI: readonly string[] = ['uzivo', 'upis', 'nalog'];
+
+/**
+ * `nazad` za javnu stranicu: {@link bezbednoNazad} i još prvi segment mora biti javna ruta (`uzivo`, `upis`, `nalog`).
+ * Nastavnička ruta (`predavanja/3`) se ignoriše kao da `nazad` ne postoji: student nema sesiju nastavnika, pa bi ga čuvar
+ * odveo na `/prijava`. Svaki `%` ne prolazi (`uzivo%2F1`, `nalog/%2e%2e/x`, `uzivo/%2F%2Fevil`): ruter dekodira segmente, pa bi
+ * kodirano `..` ili `//` zaobišlo proveru, a javne rute i inače nemaju razlog za kodirane znake.
+ */
+export function javnoNazad(v: string | null | undefined): string | null {
+  const cilj = bezbednoNazad(v);
+  if (cilj === null || cilj.includes('%')) {
+    return null;
+  }
+  return JAVNI_PREFIKSI.includes(cilj.split(/[/?]/u, 1)[0]) ? cilj : null;
+}

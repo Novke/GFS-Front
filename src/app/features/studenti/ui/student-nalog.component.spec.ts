@@ -127,6 +127,26 @@ describe('StudentNalogComponent', () => {
     await stani();
   });
 
+  it('"Kod za diktiranje" radi i bez mejla: POST, kod jednom u dijalogu, osvežena značka i nalog', async () => {
+    await otvori(BEZ_NALOGA, null);
+    expect(dugme('kod-za-diktiranje').disabled).toBe(false);
+    dugme('kod-za-diktiranje').click();
+    const z = http.expectOne('api/studenti/5/nalog/kod-za-diktiranje');
+    expect(z.request.method).toBe('POST');
+    z.flush({ kod: '042917', istice: '2026-10-22T14:35:00', indeks: 'GD5', godina: 2026, upozorenje: null });
+    http.expectOne('api/obavestenja/broj').flush({ neprocitana: 0, otvorena: 0 });
+    nalog().flush(BEZ_NALOGA);
+    await stani();
+    await tick();
+    const dijalog = overlay().querySelector('app-kod-za-diktiranje-dialog')!;
+    expect(dijalog.querySelector('[data-kod]')?.textContent?.trim()).toBe('042 917');
+    expect(dijalog.textContent).toContain('Važi do 14:35');
+    expect(dijalog.querySelector('[data-indeks]')?.textContent).toBe('GD5');
+    expect(dijalog.querySelector('[data-godina]')?.textContent).toBe('2026');
+    expect(dijalog.querySelector('[data-upozorenje]')).toBeNull();
+    expect(poruke).toEqual([]);
+  });
+
   it('"Pošalji kod" tokom slanja ne može dvaput', async () => {
     await otvori();
     dugme('posalji-kod').click();

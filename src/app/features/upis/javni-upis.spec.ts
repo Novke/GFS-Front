@@ -6,11 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOCAL_ERRORS } from '../../core/api/api-error';
 import { JavniUpis } from './pages/javni-upis';
 import { JavniUpisInfo } from './upis.api';
-import { greskaPolja, imeBezViskaRazmaka, lokalniDatum, normalizujIndeks } from './upis.pravila';
+import { greskaPolja, imeBezViskaRazmaka, lokalniDatum } from './upis.pravila';
 
 const TOKEN = 'abcDEF123_-xyz';
 const URL_UPISA = `api/public/upis/${TOKEN}`;
-const GRANICE = { maxGodina: 2026, danas: '2026-10-09' };
+const GRANICE = { danas: '2026-10-09' };
 
 function info(izmene: Partial<JavniUpisInfo> = {}): JavniUpisInfo {
   return { grupaNaziv: 'GD-2025', godinaUpisa: 2025, otvorena: true, istice: '2026-12-01T10:00:00', ...izmene };
@@ -22,7 +22,10 @@ describe('JavniUpis (upis/:token)', () => {
 
   const html = () => fixture.nativeElement as HTMLElement;
   const tekst = () => html().textContent?.replace(/\s+/g, ' ') ?? '';
-  const polje = (ime: string) => html().querySelector<HTMLInputElement>(`input[formControlName="${ime}"]`)!;
+  // Polja sa istim imenom kontrole u različitim grupama (broj indeksa, broj telefona) se traže po atributu `name`.
+  const polje = (ime: string) =>
+    html().querySelector<HTMLInputElement>(`input[formControlName="${ime}"], input[name="${ime}"]`)!;
+  const zemlja = () => html().querySelector<HTMLSelectElement>('select[name="zemlja-telefona"]')!;
   const dugme = (naziv: string) =>
     [...html().querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes(naziv))!;
 
@@ -47,9 +50,9 @@ describe('JavniUpis (upis/:token)', () => {
   async function popuni(): Promise<void> {
     await unesi('ime', '  Ana   Marija ');
     await unesi('prezime', 'Radić');
-    await unesi('indeks', 'gd 12');
+    await unesi('broj-indeksa', '012');
     await unesi('email', 'ana@example.com');
-    await unesi('brojTelefona', '064 123 456');
+    await unesi('broj-telefona', '064 123 456');
   }
 
   async function posalji(): Promise<void> {
@@ -77,23 +80,29 @@ describe('JavniUpis (upis/:token)', () => {
     await otvori();
     expect(html().querySelector('h1')?.textContent).toBe('Prijava za grupu GD-2025');
     expect(tekst()).toContain('Godina upisa: 2025');
-    expect(polje('godina').value).toBe('2025');
-    for (const ime of ['ime', 'prezime', 'indeks', 'godina', 'email', 'brojTelefona', 'datumRodjenja', 'opstina']) {
+    expect(polje('godina-upisa').value).toBe('2025');
+    expect(zemlja().value).toBe('RS');
+    for (const ime of ['ime', 'prezime', 'broj-indeksa', 'godina-upisa', 'email', 'broj-telefona', 'datumRodjenja', 'opstina']) {
       expect(polje(ime), ime).toBeTruthy();
     }
     expect(dugme('Pošalji')).toBeTruthy();
   });
 
-  it('labele i atributi polja kao pre (smoke test ih koristi)', async () => {
+  it('labele i atributi polja (smoke test ih koristi)', async () => {
     await otvori();
     const labele = [...html().querySelectorAll('mat-label')].map(l => l.textContent?.trim());
     expect(labele).toEqual([
-      'Ime', 'Prezime', 'Indeks', 'Godina upisa', 'Email', 'Broj telefona', 'Datum rođenja (opciono)', 'Opština (opciono)',
+      'Ime', 'Prezime', 'Broj indeksa', 'Godina upisa', 'Email', 'Zemlja', 'Broj telefona', 'Datum rođenja (opciono)',
+      'Opština (opciono)',
     ]);
+    expect([...html().querySelectorAll('legend')].map(l => l.textContent?.trim())).toEqual(['Indeks', 'Telefon']);
     expect(polje('ime').getAttribute('autocomplete')).toBe('given-name');
     expect(polje('email').getAttribute('inputmode')).toBe('email');
-    expect(polje('brojTelefona').getAttribute('inputmode')).toBe('tel');
-    expect(polje('godina').getAttribute('inputmode')).toBe('numeric');
+    expect(polje('broj-telefona').getAttribute('inputmode')).toBe('tel');
+    expect(polje('broj-indeksa').getAttribute('inputmode')).toBe('numeric');
+    expect(polje('godina-upisa').getAttribute('inputmode')).toBe('numeric');
+    expect([...zemlja().options].map(o => o.value)).toEqual(['RS', 'BA', 'ME', 'HR', 'HU', 'MK', 'SI', 'XX']);
+    expect(zemlja().options[0].textContent).toContain('+381 Srbija');
     expect(polje('datumRodjenja').getAttribute('autocomplete')).toBe('bday');
   });
 
@@ -111,7 +120,7 @@ describe('JavniUpis (upis/:token)', () => {
       indeks: 'GD12',
       godina: 2025,
       email: 'ana@example.com',
-      brojTelefona: '064 123 456',
+      brojTelefona: '+38164123456',
       datumRodjenja: null,
       opstina: null,
     });
@@ -120,8 +129,55 @@ describe('JavniUpis (upis/:token)', () => {
     fixture.detectChanges();
 
     expect(tekst()).toContain('Prijava primljena');
-    expect(tekst()).toContain('GD12');
+    expect(tekst()).toContain('GD12/2025');
+    expect(tekst()).toContain('+381 64 123456');
     expect(html().querySelector('form')).toBeNull();
+  });
+
+  it('godina je predložena, ali je student menja; neispravna godina je greška ispod polja', async () => {
+    await otvori();
+    await popuni();
+    await unesi('godina-upisa', '1999');
+    await posalji();
+    http.expectNone(URL_UPISA);
+    expect([...html().querySelectorAll('mat-error')].map(e => e.textContent?.trim())).toContainEqual(
+      expect.stringContaining('Unesi godinu 2000'),
+    );
+
+    await unesi('godina-upisa', '2024');
+    await posalji();
+    const zahtev = http.expectOne(URL_UPISA);
+    expect(zahtev.request.body).toMatchObject({ indeks: 'GD12', godina: 2024 });
+    zahtev.flush({ id: 7 });
+  });
+
+  it('pun međunarodni broj bira zemlju sam; "Druga zemlja" traži pozivni broj', async () => {
+    await otvori();
+    await popuni();
+    await unesi('broj-telefona', '00387 65 123-456');
+    polje('broj-telefona').dispatchEvent(new Event('blur'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(zemlja().value).toBe('BA');
+    expect(polje('broj-telefona').value).toBe('65123456');
+    expect(tekst()).toContain('Biće sačuvan kao +387 65 123456');
+
+    zemlja().value = 'XX';
+    zemlja().dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await posalji();
+    http.expectNone(URL_UPISA);
+    expect([...html().querySelectorAll('mat-error')].map(e => e.textContent?.trim())).toContain(
+      'Unesi pozivni broj zemlje (1-3 cifre).',
+    );
+
+    await unesi('pozivni-broj', '+44');
+    await unesi('broj-telefona', '07700 900123');
+    await posalji();
+    const zahtev = http.expectOne(URL_UPISA);
+    expect(zahtev.request.body.brojTelefona).toBe('+447700900123');
+    zahtev.flush({ id: 7 });
   });
 
   it('posle prijave nudi WhatsApp grupu samo za kanonski link iz odgovora', async () => {
@@ -168,7 +224,8 @@ describe('JavniUpis (upis/:token)', () => {
     const poruke = [...html().querySelectorAll('mat-error')].map(e => e.textContent?.trim());
     expect(poruke).toContain('Unesi ime.');
     expect(poruke).toContain('Unesi ispravan email.');
-    expect(poruke).toContain('Unesi indeks (2-20 znakova).');
+    expect(poruke).toContain('Unesi broj indeksa.');
+    expect(poruke).toContain('Unesi broj telefona.');
     expect(html().querySelector('app-form-error-banner [role="alert"]')).toBeNull();
   });
 
@@ -271,22 +328,8 @@ describe('JavniUpis (upis/:token)', () => {
 });
 
 describe('pravila javne forme', () => {
-  it('normalizuje indeks i ime', () => {
-    expect(normalizujIndeks(' gd 12 ')).toBe('GD12');
+  it('normalizuje ime', () => {
     expect(imeBezViskaRazmaka('  Ana   Marija ')).toBe('Ana Marija');
-  });
-
-  it('indeks mora biti latinica, 2-20 znakova', () => {
-    expect(greskaPolja('indeks', 'gd 12', GRANICE)).toBeNull();
-    expect(greskaPolja('indeks', 'ГД12', GRANICE)).toContain('latinicom');
-    expect(greskaPolja('indeks', '', GRANICE)).toContain('Unesi indeks');
-  });
-
-  it('godina je ceo broj od 2000 do iduće godine', () => {
-    expect(greskaPolja('godina', 2025, GRANICE)).toBeNull();
-    expect(greskaPolja('godina', 1999, GRANICE)).toContain('2000-2026');
-    expect(greskaPolja('godina', 2027, GRANICE)).toContain('2000-2026');
-    expect(greskaPolja('godina', null, GRANICE)).toBe('Unesi godinu upisa.');
   });
 
   it('opciona polja: prazno je u redu, datum ne sme u budućnost', () => {
@@ -297,9 +340,7 @@ describe('pravila javne forme', () => {
     expect(greskaPolja('opstina', 'x'.repeat(101), GRANICE)).not.toBeNull();
   });
 
-  it('telefon i email', () => {
-    expect(greskaPolja('brojTelefona', '+381 64 123/456', GRANICE)).toBeNull();
-    expect(greskaPolja('brojTelefona', 'abc', GRANICE)).not.toBeNull();
+  it('email', () => {
     expect(greskaPolja('email', 'a@b.rs', GRANICE)).toBeNull();
     expect(greskaPolja('email', 'a@b', GRANICE)).not.toBeNull();
   });

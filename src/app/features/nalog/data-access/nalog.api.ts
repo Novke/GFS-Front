@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
-import { KodOdgovor, OdjavaSvudaOdgovor, PomocOdgovor, PovezivanjeOdgovor, StanjeNaloga, StudentJa } from './nalog.models';
+import { IndeksIGodina, KodOdgovor, OdjavaSvudaOdgovor, PomocOdgovor, PovezivanjeOdgovor, StanjeNaloga, StudentJa } from './nalog.models';
 
 /**
  * Jedini API javnih ruta `/nalog` i `/nalog/moodle` (student na telefonu, bez sesije nastavnika): samo `api/public/nalog/*` i
@@ -18,13 +18,13 @@ export class NalogApi {
   private readonly koren = `${API_URL}/public/nalog`;
 
   /** Kod na mejl studenta; isti odgovor i za nepostojeći indeks. 429 i 503 nose tekst servera. */
-  posaljiKod(indeks: string): Observable<KodOdgovor> {
-    return this.http.post<KodOdgovor>(`${this.koren}/kod`, { indeks }, { context: this.lokalneGreske });
+  posaljiKod(s: IndeksIGodina): Observable<KodOdgovor> {
+    return this.http.post<KodOdgovor>(`${this.koren}/kod`, { indeks: s.indeks, godina: s.godina }, { context: this.lokalneGreske });
   }
 
   /** 204 + kolačić `gfs_student` (365 dana); 401 "Kod nije ispravan ili je istekao.", 429. */
-  prijavi(indeks: string, kod: string): Observable<void> {
-    return this.http.post<void>(`${this.koren}/prijava`, { indeks, kod }, { context: this.lokalneGreske });
+  prijavi(s: IndeksIGodina, kod: string): Observable<void> {
+    return this.http.post<void>(`${this.koren}/prijava`, { indeks: s.indeks, godina: s.godina, kod }, { context: this.lokalneGreske });
   }
 
   stanje(): Observable<StanjeNaloga> {
@@ -63,7 +63,7 @@ export class NalogApi {
   }
 
   /** "Ne stiže mi kod": obaveštenje nastavniku. */
-  pomoc(indeks: string): Observable<PomocOdgovor> {
-    return this.http.post<PomocOdgovor>(`${this.koren}/pomoc`, { indeks }, { context: this.lokalneGreske });
+  pomoc(s: IndeksIGodina): Observable<PomocOdgovor> {
+    return this.http.post<PomocOdgovor>(`${this.koren}/pomoc`, { indeks: s.indeks, godina: s.godina }, { context: this.lokalneGreske });
   }
 }

@@ -43,7 +43,7 @@ describe('KodKorak', () => {
     expect(p.getAttribute('maxlength')).toBe('6');
     expect(el().textContent).toContain('Ako nalog postoji, kod je poslat.');
     expect(el().textContent).toContain('n***@example.test');
-    expect(el().textContent).toContain('Kod ide na mejl koji si dao pri upisu. Proveri i Spam. Ako ga nemaš, nastavnik može da upiše novi.');
+    expect(el().textContent).toContain('Ako mejl ne stiže, nastavnik može da ti izdiktira kod.');
   });
 
   it('nalepljen kod sa razmacima (i crticom) postaje 6 cifara', () => {

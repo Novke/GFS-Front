@@ -9,7 +9,15 @@ import { STOMP_FABRIKA } from '../data-access/stomp';
 import {
   JavniZadatak, JavnoPitanje, JavnoStanje, LicniZadatak, LicnoStanje, PoljeZadatka, UcesnikInfo,
 } from '../data-access/uzivo.models';
-import { GRESKA_TRAJANJE_MS, KRAJ_ZADRZI_MS, POTVRDA_MS, StudentStore, ekranStudenta, tacanOdgovor } from './student.store';
+import {
+  GRESKA_TRAJANJE_MS,
+  KRAJ_ZADRZI_MS,
+  POTVRDA_MS,
+  StudentStore,
+  ekranStudenta,
+  nalogUrl,
+  tacanOdgovor,
+} from './student.store';
 import { pomeriSat, saLaznimSatom } from '../lazni-sat.testing';
 
 /** Lažna STOMP veza: po jedan Subject za svako odredište, stanje veze ručno, `publish` beleži poruke. */
@@ -442,6 +450,13 @@ describe('StudentStore', () => {
   });
 
   describe('prijava studenta (bodovan run)', () => {
+    it('nalogUrl nosi godinu upisa grupe kad je ima (predlog na /nalog), inače samo nazad', () => {
+      expect(nalogUrl('123456', { naziv: 'S', godinaUpisa: 2025 })).toBe('nalog?nazad=uzivo/123456&godina=2025');
+      expect(nalogUrl('123456', { naziv: 'S', godinaUpisa: null })).toBe('nalog?nazad=uzivo/123456');
+      expect(nalogUrl('123456', null)).toBe('nalog?nazad=uzivo/123456');
+      expect(nalogUrl('123456', { naziv: 'S', godinaUpisa: 25 })).toBe('nalog?nazad=uzivo/123456');
+    });
+
     const zabranjeno = [{ reason: 'Potrebna je prijava studenta.' }, { status: 403, statusText: 'Forbidden' }] as const;
 
     it('prijavaObavezna bez prijavljenog studenta: odmah na nalog (bez ja i bez forme imena)', () => {

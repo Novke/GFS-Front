@@ -1,11 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatDialog, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
 import { RouterLink } from '@angular/router';
 
 import { DatumPipe } from '../../shared/util/datum.pipe';
+import { KodZaDiktiranjeApi } from '../api/kod-za-diktiranje.api';
 import { ObavestenjeInfo, tekstObavestenja } from '../api/obavestenja.api';
 import { ObavestenjaStore } from '../state/obavestenja.store';
+import { KodZaDiktiranjeDialog } from './kod-za-diktiranje-dialog';
 
 const ID = 'obavestenja';
 const SIRINA_PANELA = 400;
@@ -19,7 +22,8 @@ const IVICA = 8;
  * "Pročitano", "Rešeno"), što meni (`role="menu"`) ne dozvoljava.
  *
  * Klik na stavku sa studentom označi je pročitanom, zatvori listu i otvori `studenti/<id>`; stavka bez studenta (indeks
- * koji ne postoji) nema vezu, ali ima "Pročitano" i "Rešeno".
+ * koji ne postoji) nema vezu, ali ima "Pročitano" i "Rešeno". Stavka sa studentom ima i "Kod za diktiranje" (plan C):
+ * kod se prikaže jednom u dijalogu, bez mejla, a server rešava sva otvorena obaveštenja tog studenta.
  */
 @Component({
   selector: 'app-obavestenja-panel',
@@ -60,6 +64,10 @@ const IVICA = 8;
                 </div>
               }
               <div class="akcije">
+                @if (o.studentId !== null) {
+                  <button matButton type="button" data-kod-za-diktiranje [disabled]="izdaje() !== null"
+                          [attr.aria-label]="'Kod za diktiranje: ' + tekst(o)" (click)="kodZaDiktiranje(o)">Kod za diktiranje</button>
+                }
                 @if (!o.procitano) {
                   <button matButton type="button" data-procitano [attr.aria-label]="'Označi kao pročitano: ' + tekst(o)"
                           (click)="store.procitano(o.id)">Pročitano</button>
@@ -100,6 +108,11 @@ const IVICA = 8;
 export class ObavestenjaPanel {
   protected readonly store = inject(ObavestenjaStore);
   private readonly ref = inject<MatDialogRef<ObavestenjaPanel>>(MatDialogRef);
+  private readonly dialog = inject(MatDialog);
+  private readonly kodovi = inject(KodZaDiktiranjeApi);
+  private readonly destroyRef = inject(DestroyRef);
+  /** Obaveštenje za koje se upravo izdaje kod (dugmad su isključena, nema dvostrukog izdavanja). */
+  protected readonly izdaje = signal<number | null>(null);
 
   protected readonly stavke = computed(() => this.store.otvorena());
   protected readonly jos = computed(() => Math.max(0, this.store.broj().otvorena - this.stavke().length));
@@ -114,6 +127,22 @@ export class ObavestenjaPanel {
       this.store.procitano(o.id);
     }
     this.ref.close();
+  }
+
+  /** Greška (404, 429) ide u snackbar preko interceptora; posle uspeha lista i značka se osvežavaju. */
+  protected kodZaDiktiranje(o: ObavestenjeInfo): void {
+    if (o.studentId === null || this.izdaje() !== null) {
+      return;
+    }
+    this.izdaje.set(o.id);
+    this.kodovi.izdaj(o.studentId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: k => {
+        this.izdaje.set(null);
+        KodZaDiktiranjeDialog.otvori(this.dialog, k);
+        this.store.ucitaj();
+      },
+      error: () => this.izdaje.set(null),
+    });
   }
 
   /** Otvara listu ispod `okidac` (desna ivica poravnata sa njim); ako je već otvorena, vraća nju. */

@@ -1,14 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { describe, expect, it } from 'vitest';
 
-import { javnoNazad, KOD, normalizujIndeks, porukaGreske, putanjaCilja, samoCifreKoda } from './nalog.pravila';
+import { javnoNazad, KOD, porukaGreske, putanjaCilja, samoCifreKoda } from './nalog.pravila';
 
 describe('nalog.pravila', () => {
-  it('normalizujIndeks: bez razmaka, velika slova', () => {
-    expect(normalizujIndeks(' gd 12 ')).toBe('GD12');
-    expect(normalizujIndeks('ar\t3/2025')).toBe('AR3/2025');
-  });
-
   it('samoCifreKoda: nalepljen kod sa razmacima, crticom ili tekstom oko njega', () => {
     expect(samoCifreKoda(' 123 456 ')).toBe('123456');
     expect(samoCifreKoda('123-456')).toBe('123456');

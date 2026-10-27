@@ -135,7 +135,10 @@ export interface LicnoStanje {
 export interface PocetnoStanje { javno: JavnoStanje; licno: LicnoStanje; }
 export interface UcesnikInfo { ucesnikId: number; ime: string; izvodjenjeId: number; }
 /** `prijavaObavezna` (bodovan run): bez prijavljenog studenta telefon ide na `nalog?nazad=uzivo/<kod>`. */
-export interface JavnoIzvodjenjeInfo { naziv: string; prijavaObavezna?: boolean; prijavljenStudent?: boolean; }
+/** `godinaUpisa`: godina upisa grupe predavanja izvođenja (predlog godine na `/nalog`), `null` bez predavanja ili grupe. */
+export interface JavnoIzvodjenjeInfo {
+  naziv: string; prijavaObavezna?: boolean; prijavljenStudent?: boolean; godinaUpisa?: number | null;
+}
 /**
  * Odgovor sa telefona. Za zadatak `polja`: BROJ i TEKST string, JEDAN_TACAN lista sa jednim id-jem opcije, VISE_TACNIH lista
  * id-jeva; `varijantaId` se ne šalje (server uzima dodelu).

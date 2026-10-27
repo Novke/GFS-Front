@@ -68,6 +68,20 @@ describe('PrijavaPage (/prijava)', () => {
     http.expectNone(() => true);
   });
 
+  it('stranica je za nastavnike; studenta vodi na /nalog i prosleđuje samo javni nazad', async () => {
+    const link = () => html().querySelector<HTMLAnchorElement>('a.studentu-dugme')!;
+    await otvori('uzivo/123456');
+    expect(html().querySelector('h1')?.textContent).toContain('Prijava za nastavnike');
+    expect(tekst()).toContain('korisničko ime i lozinka');
+    expect(link().textContent).toContain('Student si? Prijavi se brojem indeksa');
+    expect(link().getAttribute('href')).toBe('/nalog?nazad=uzivo%2F123456');
+    fixture.destroy();
+
+    await otvori('studenti/5');
+    expect(link().getAttribute('href')).toBe('/nalog');
+    http.expectNone(() => true);
+  });
+
   it('polja imaju autocomplete za menadžer lozinki, lozinka je type=password, dugme "Prijavi se"', async () => {
     await otvori();
     expect(polje('korisnik').getAttribute('autocomplete')).toBe('username');

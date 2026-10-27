@@ -19,9 +19,10 @@ import { Router } from '@angular/router';
 import { finalize, Subscription } from 'rxjs';
 
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
+import { godinaIzUpita, predlogGodine, prikazIndeksa } from '../../../shared/util/indeks';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { NalogApi } from '../data-access/nalog.api';
-import { PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
+import { IndeksIGodina, PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
 import { javnoNazad, porukaGreske, putanjaCilja } from '../data-access/nalog.pravila';
 import { IndeksKorak } from '../ui/indeks-korak.component';
 import { KodKorak } from '../ui/kod-korak.component';
@@ -76,14 +77,18 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
           }
           <app-nalog-indeks-korak
             [indeks]="indeks()"
+            [godina]="predlozenaGodina()"
+            [hintGodine]="hintGodine()"
             [salje]="salje()"
             [greska]="greska()"
             (posaljiKod)="posaljiKod($event)"
+            (imamKod)="imamKod($event)"
           />
         }
         @case ('kod') {
           <app-nalog-kod-korak
-            [indeks]="indeks()"
+            [indeks]="prikazIndeksa()"
+            [odNastavnika]="odNastavnika()"
             [maska]="maska()"
             [poruka]="porukaKoda()"
             [slanjeBroj]="slanjeBroj()"
@@ -92,7 +97,7 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
             [pomoc]="pomoc()"
             [pomocSalje]="pomocSalje()"
             (prijavi)="prijavi($event)"
-            (posaljiPonovo)="posaljiKod(indeks())"
+            (posaljiPonovo)="posaljiKod(student())"
             (neStize)="neStize()"
             (promeniIndeks)="idiNa('indeks')"
           />
@@ -128,6 +133,11 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
 export class NalogPage {
   /** Query `nazad` (relativna putanja aplikacije); proverava ga `bezbednoNazad` tek pri upotrebi. */
   readonly nazad = input<string | null | undefined>(null);
+  /**
+   * Query `godina` (npr. iz Uživo izvođenja: godina upisa grupe predavanja): predlog godine upisa. Nevalidna vrednost se
+   * ignoriše i predlog je početna godina tekuće školske godine (`predlogGodine`).
+   */
+  readonly godina = input<string | null | undefined>(null);
 
   private readonly api = inject(NalogApi);
   private readonly router = inject(Router);
@@ -141,6 +151,15 @@ export class NalogPage {
   protected readonly korak = signal<KorakNaloga>('ucitavanje');
   protected readonly naslov = computed(() => NASLOV[this.korak()]);
   protected readonly indeks = signal('');
+  /** Godina upisa koju je student uneo (do tada predlog iz upita ili tekuća školska godina). */
+  private readonly unetaGodina = signal<number | null>(null);
+  protected readonly predlozenaGodina = computed(() => this.unetaGodina() ?? predlogGodine(this.godina()));
+  protected readonly hintGodine = computed(() =>
+    godinaIzUpita(this.godina()) !== null ? 'Godina grupe sa časa; promeni ako si upisan ranije.' : 'Promeni ako si upisan ranije.');
+  protected readonly student = computed<IndeksIGodina>(() => ({ indeks: this.indeks(), godina: this.predlozenaGodina() }));
+  protected readonly prikazIndeksa = computed(() => prikazIndeksa(this.indeks(), this.predlozenaGodina()));
+  /** Korak koda bez slanja mejla ("Imam kod od nastavnika"). */
+  protected readonly odNastavnika = signal(false);
   protected readonly maska = signal('');
   protected readonly porukaKoda = signal(PORUKA_KOD_POSLAT);
   protected readonly slanjeBroj = signal(0);
@@ -176,15 +195,16 @@ export class NalogPage {
     });
   }
 
-  protected posaljiKod(indeks: string): void {
+  protected posaljiKod(s: IndeksIGodina): void {
     if (this.salje()) {
       return;
     }
     this.pocni();
-    this.zahtev = this.api.posaljiKod(indeks).subscribe({
+    this.zahtev = this.api.posaljiKod(s).subscribe({
       next: odg => {
         this.salje.set(false);
-        this.indeks.set(indeks);
+        this.postaviStudenta(s);
+        this.odNastavnika.set(false);
         this.maska.set(odg?.maska ?? '');
         this.porukaKoda.set(odg?.poruka || PORUKA_KOD_POSLAT);
         this.slanjeBroj.update(n => n + 1);
@@ -197,6 +217,18 @@ export class NalogPage {
     });
   }
 
+  /** "Imam kod od nastavnika": korak koda za uneti indeks i godinu, bez slanja mejla. */
+  protected imamKod(s: IndeksIGodina): void {
+    if (this.salje()) {
+      return;
+    }
+    this.postaviStudenta(s);
+    this.maska.set('');
+    this.pomoc.set(null);
+    this.odNastavnika.set(true);
+    this.idiNa('kod');
+  }
+
   /**
    * Prijava kodom, pa `nazad` ili ekran naloga. `salje` ostaje `true` dok navigacija ili `GET ja` ne završe, da dupli dodir
    * ne pošalje drugu prijavu već iskorišćenim kodom (401 bi prijavljenom studentu pokazao "Kod nije ispravan").
@@ -206,7 +238,7 @@ export class NalogPage {
       return;
     }
     this.pocni();
-    this.zahtev = this.api.prijavi(this.indeks(), kod).subscribe({
+    this.zahtev = this.api.prijavi(this.student(), kod).subscribe({
       next: () => {
         const cilj = this.nastaviNa();
         if (cilj) {
@@ -234,7 +266,7 @@ export class NalogPage {
     this.pomocSalje.set(true);
     this.greska.set(null);
     this.pomoc.set(null);
-    this.api.pomoc(this.indeks()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.api.pomoc(this.student()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: odg => {
         this.pomocSalje.set(false);
         this.pomoc.set(odg?.poruka || PORUKA_POMOC);
@@ -308,6 +340,7 @@ export class NalogPage {
         this.salje.set(false);
         this.ja.set(ja);
         this.indeks.set(ja.indeks);
+        this.unetaGodina.set(typeof ja.godina === 'number' ? ja.godina : null);
         this.idiNa('prijavljen', fokus);
       },
       // kolačić je istekao ili je opozvan u međuvremenu: prijava ispočetka
@@ -320,6 +353,11 @@ export class NalogPage {
         }
       },
     });
+  }
+
+  private postaviStudenta(s: IndeksIGodina): void {
+    this.indeks.set(s.indeks);
+    this.unetaGodina.set(s.godina);
   }
 
   private pocni(): void {
@@ -348,6 +386,7 @@ export class NalogPage {
     this.pomoc.set(null);
     // zajednički računar: indeks i maska prethodnog studenta ne smeju da ostanu u polju
     this.indeks.set('');
+    this.unetaGodina.set(null);
     this.maska.set('');
     this.idiNa('indeks');
     this.info.set(poruka);
