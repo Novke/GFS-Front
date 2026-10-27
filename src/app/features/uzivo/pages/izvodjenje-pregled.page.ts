@@ -14,6 +14,7 @@ import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { MERA_FORMULE, TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { ZadatakRezultatComponent } from '../ui/zadatak-rezultat.component';
+import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
@@ -58,6 +59,16 @@ export function putanjaTekst(z: Pick<PregledZadatka, 'putanja' | 'grupaNaziv'>):
 }
 
 /** Ishod učesnika po polju ("a) ✓ · b) ✗"), oznake iz šeme njegove varijante u rezultatu; bez odgovora "—". */
+/** Runda od pre nivoa nema `nivoi`: njen nivo se ne prikazuje (`nivo` `null` bi se pogrešno čitao kao "svi"). */
+export function imaNivoe(z: Pick<PregledZadatka, 'nivoi'>): boolean {
+  return Object.keys(z.nivoi ?? {}).length > 0;
+}
+
+/** Nivo izvučene varijante iz snimka runde (`null` za varijantu bez nivoa u snimku ili učesnika bez varijante). */
+export function nivoVarijante(z: Pick<PregledZadatka, 'nivoi'>, varijantaId: number | null): number | null {
+  return varijantaId === null ? null : (z.nivoi?.[String(varijantaId)] ?? null);
+}
+
 export function ishodPoPolju(z: PregledZadatka, u: UcesnikZadatka): string {
   if (!u.polja) return '—';
   const polja = z.rezultat.varijante.find(v => v.varijantaId === u.varijantaId)?.polja ?? [];
@@ -79,7 +90,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
-    TekstFormuleComponent, ZadatakRezultatComponent],
+    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -125,6 +136,11 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                 @if (k.oznaka.ukupno > 1) {
                   <span class="uz-cip uz-cip--jos">{{ k.oznaka.runda }}. runda</span>
                 }
+                @if (k.p.zadatak; as z) {
+                  @if (imaNivoe(z)) {
+                    <app-nivo [nivo]="z.nivo" natpisTekst="Nivo runde" data-nivo-runde />
+                  }
+                }
               </header>
               <div class="uz-pr-sadrzaj">
                 @if (k.p.pitanje; as pitanje) {
@@ -153,7 +169,12 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                         @for (u of z.ucesnici; track u.ucesnikId) {
                           <tr>
                             <td>{{ u.ime }}</td>
-                            <td>{{ u.varijantaNaziv ?? '—' }}</td>
+                            <td>
+                              {{ u.varijantaNaziv ?? '—' }}
+                              @if (nivoVarijante(z, u.varijantaId); as nivo) {
+                                <app-nivo [nivo]="nivo" [natpis]="false" data-nivo-varijante />
+                              }
+                            </td>
                             <td>{{ poPolju(z, u) }}</td>
                             <td>{{ ukupnoUcesnika(u) }}</td>
                           </tr>
@@ -203,6 +224,8 @@ export class IzvodjenjePregledPage {
   protected readonly putanja = putanjaTekst;
   protected readonly poPolju = ishodPoPolju;
   protected readonly ukupnoUcesnika = ishodUkupno;
+  protected readonly imaNivoe = imaNivoe;
+  protected readonly nivoVarijante = nivoVarijante;
   protected readonly veza = computed(() => {
     const r = this.podaci();
     return r ? opisVeze(r.izvodjenje) : '';

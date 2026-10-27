@@ -72,8 +72,11 @@ export interface OdgovorPolja {
 export const MAX_NAZIV_GRUPE = 120;
 export const MAX_OPIS_GRUPE = 5000;
 export const MAX_UPUTSTVO_GRUPE = 5000;
-/** Težina lista (zajednička svim varijantama grupe). */
+/** Težina tipa: ocena lista (zajednička svim varijantama grupe). Nije nivo varijante ({@link NIVOI}). */
 export const TEZINE = [1, 2, 3, 4, 5] as const;
+export { NIVOI } from '../../../shared/ui/nivo.component';
+/** Nivo koji nova varijanta dobija bez izbora (server isto tako). */
+export const PODRAZUMEVANI_NIVO = 2;
 
 /** Jedan korak putanje grupe (od korena do same grupe). */
 export interface GrupaPutanja {
@@ -192,6 +195,8 @@ export interface VarijantaInfo {
   ikadOdobrena: boolean;
   zamenjuje: number | null;
   serija: string | null;
+  /** Nivo varijante, 1-3 ({@link NIVOI}). */
+  nivo: number;
 }
 
 /** Puna varijanta; `ikadOdobrena`, `zamenjuje` i `serija` kao u {@link VarijantaInfo}. */
@@ -219,11 +224,14 @@ export interface VarijantaDetails {
   ikadOdobrena: boolean;
   zamenjuje: number | null;
   serija: string | null;
+  /** Nivo varijante, 1-3 ({@link NIVOI}); menja se samo kroz `PATCH banka/varijante/{id}/nivo`. */
+  nivo: number;
 }
 
 /**
  * `POST banka/grupe/{id}/varijante` i `PUT banka/varijante/{id}` (puna zamena). `odgovori` moraju pokriti svako polje šeme
- * grupe; `izvor` važi samo pri kreiranju (`null` = RUCNO).
+ * grupe; `izvor` i `nivo` važe samo pri kreiranju (`izvor` `null` = RUCNO, `nivo` izostavljen = 2); `PUT` ih ignoriše, pa
+ * editor postojeće varijante `nivo` ne šalje (nivo se menja kroz `PATCH`, {@link NivoCmd}).
  */
 export interface VarijantaCmd {
   naziv: string | null;
@@ -232,6 +240,12 @@ export interface VarijantaCmd {
   odgovori: Record<string, OdgovorPolja>;
   prilozi: PrilogCmd[];
   izvor?: IzvorVarijante | null;
+  nivo?: number | null;
+}
+
+/** `PATCH banka/varijante/{id}/nivo`: ključ je obavezan, nivo 1-3; ne renderuje i ne menja status. */
+export interface NivoCmd {
+  nivo: number;
 }
 
 // ------------------------------------------------------------------------------------------------ render
@@ -291,6 +305,8 @@ export interface BankaFilter {
   status?: StatusVarijante | null;
   izvor?: IzvorVarijante | null;
   serija?: string | null;
+  /** 1-3 ili izostavljeno = svi nivoi. */
+  nivo?: number | null;
 }
 
 export interface BankaPretragaStavka {
@@ -305,6 +321,7 @@ export interface BankaPretragaStavka {
   isecak: string;
   izvor: IzvorVarijante;
   serija: string | null;
+  nivo: number;
 }
 
 // ------------------------------------------------------------------------------------------------ serije Kloda

@@ -71,6 +71,13 @@
 
 .bk-rb { color: var(--muted); font-family: var(--font-mono); font-weight: 500; }
 
+.bk-kartica-nivo {
+  position: relative;
+  z-index: 1;
+  grid-column: 1;
+  justify-self: start;
+}
+
 .bk-kartica-oznake {
   grid-column: 1;
   display: flex;
@@ -82,6 +89,6 @@
   position: relative;
   z-index: 1;
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1 / span 3;
   color: var(--muted);
 }

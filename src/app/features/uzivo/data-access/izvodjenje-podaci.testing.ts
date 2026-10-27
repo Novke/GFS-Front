@@ -70,8 +70,8 @@ export function poljeBroj(izmene: Partial<PoljeZadatka> = {}): PoljeZadatka {
 /** Opis Zadatak slajda kao sa servera: list `2 → 10`, jedno BROJ polje, 2 aktivne varijante, bez upozorenja. */
 export function zadatakInfo(izmene: Partial<ZadatakSlajdaInfo> = {}): ZadatakSlajdaInfo {
   return {
-    grupaId: 2, vremeSekunde: 120, brojVarijanti: null, grupaNaziv: '2 → 10',
-    putanja: [{ id: 1, naziv: 'Konverzije brojeva (demo)' }, { id: 2, naziv: '2 → 10' }], list: true, brojAktivnihVarijanti: 2,
+    grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: null, grupaNaziv: '2 → 10',
+    putanja: [{ id: 1, naziv: 'Konverzije brojeva (demo)' }, { id: 2, naziv: '2 → 10' }], list: true, brojAktivnihVarijanti: 2, brojAktivnihPoNivou: [0, 2, 0],
     polja: [poljeBroj()], iskljucena: false, iskljucenePodgrupe: [], upozorenja: [], ...izmene,
   };
 }
@@ -87,7 +87,7 @@ export function zadatakSlajd(izmene: Partial<ZadatakSlajdaInfo> = {}): SlajdDeta
 export function varijantaRunde(varijantaId: number, saResenjem = true): VarijantaRunde {
   return {
     varijantaId, naziv: `V${varijantaId}`, svgId: `svg-V${varijantaId}`, resenjeSvgId: saResenjem ? `res-V${varijantaId}` : null,
-    dodeljeno: 1, odgovorilo: 0, tacnih: 0,
+    dodeljeno: 1, odgovorilo: 0, tacnih: 0, nivo: 2,
   };
 }
 
@@ -113,7 +113,7 @@ export function naZadatku(faza: 'CEKA' | 'OTVORENO' | 'ZATVORENO', opcije: {
   const slajd = zadatakSlajd(opcije.polja ? { polja: opcije.polja } : {});
   const varijante = faza === 'CEKA' ? null : (opcije.varijante ?? [varijantaRunde(11), varijantaRunde(12)]);
   const zadatak: NastavnickiZadatak = {
-    slajd: slajd.zadatak!, izmenaBrojaVarijanti: null, brojZaOtvaranje: 2, resenjePrikazano: false, varijante,
+    slajd: slajd.zadatak!, izmenaBrojaVarijanti: null, izmenaNivoa: null, nivoZaOtvaranje: null, brojZaOtvaranje: 2, resenjePrikazano: false, varijante,
     rezultat: varijante
       ? { ukupno: 0, varijante: varijante.map(v => rezultatVarijante(v, opcije.polja)), odgovoriPrikazani: true }
       : null,

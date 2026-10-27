@@ -9,7 +9,7 @@ import { MatInput } from '@angular/material/input';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, map, Observable, of, Subject, switchMap } from 'rxjs';
+import { catchError, concatMap, EMPTY, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
@@ -17,14 +17,16 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
+import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { BankaApi } from '../data-access/banka.api';
 import {
-  GrupaDetails, OdgovorPolja, Polje, PrilogCmd, RenderDeo, RenderProbaCmd, VarijantaCmd, VarijantaDetails,
+  GrupaDetails, OdgovorPolja, PODRAZUMEVANI_NIVO, Polje, PrilogCmd, RenderDeo, RenderProbaCmd, VarijantaCmd, VarijantaDetails,
 } from '../data-access/banka.models';
 import { razlogBanke, TIHO, UPIS } from '../data-access/greske';
 import { odgovorPopunjen, prazanOdgovor } from '../data-access/polja';
+import { PromeneNivoa } from '../data-access/promene-nivoa';
 import { PorukaPosleCuvanja } from '../data-access/poruka-posle-cuvanja';
 import {
   PRAZAN_PREGLED, panelResenja, panelZadatka, pregledUzivo, SacuvanRender, SadrzajPregleda, vazecaGreska,
@@ -166,7 +168,7 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
   selector: 'app-varijanta-editor-page',
   imports: [
     EmptyState, ErrorPanel, FormErrorBanner, LatexEditorComponent, MatButton, MatFormField, MatHint, MatIcon, MatInput, MatLabel,
-    MatProgressBar, MatTab, MatTabGroup, MatTabLabel, OdgovoriFormaComponent, PageHeader, PriloziComponent, ReactiveFormsModule,
+    MatProgressBar, MatTab, MatTabGroup, MatTabLabel, NivoComponent, OdgovoriFormaComponent, PageHeader, PriloziComponent, ReactiveFormsModule,
     RouterLink, SkeletonRows, StatusChip, SvgPregledComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -199,6 +201,7 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
               }
             </ol>
           </nav>
+          <app-nivo [nivo]="nivo()" izbor [onemoguceno]="zauzeto() !== null" (promena)="promeniNivo($event)" data-nivo-varijante />
           @if (v) {
             @let s = prikazStatusa(v.status);
             <app-status-chip [tekst]="s.tekst" [ton]="s.ton" [ikona]="s.ikona" />
@@ -339,6 +342,14 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   protected readonly prilozi = signal<PrilogCmd[]>([]);
   /** Prilog se otprema: dotle se ne čuva (posle čuvanja forma preuzima priloge iz odgovora, pa bi se novi izgubio). */
   protected readonly otpremaPriloga = signal(false);
+  /**
+   * Nivo varijante (1-3). Nova varijanta ga šalje u komandi kreiranja (podrazumevano 2); sačuvana ga menja odmah kroz `PATCH`
+   * (`promeniNivo`), ne kroz `PUT` ni "Sačuvaj" (nivo nije sadržaj: ne renderuje, ne vraća u nacrt i nije "nesačuvana izmena").
+   */
+  protected readonly nivo = signal<number>(PODRAZUMEVANI_NIVO);
+  /** Promene nivoa sačuvane varijante u letu; zahtevi idu redom i ne otkazuju se odlaskom sa stranice ({@link PromeneNivoa}). */
+  private readonly nivoi = new PromeneNivoa();
+  private readonly nivoRed = new Subject<{ id: number; nivo: number }>();
   /** Ctrl+Enter u editoru: pregled odmah. */
   protected readonly odmah = new Subject<void>();
 
@@ -498,6 +509,45 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
       this.zahtev();
       untracked(() => this.ucitaj());
     });
+
+    // bez `takeUntilDestroyed`: izbor nivoa ne sme da se izgubi ako korisnik odmah napusti stranicu
+    this.nivoRed
+      .pipe(concatMap(({ id, nivo }) => this.api.promeniNivo(id, nivo, TIHO).pipe(
+        tap(v => this.nivoi.potvrdi(id, v.nivo)),
+        catchError((e: unknown) => {
+          this.obavestenja.greska(razlogBanke(e, UPIS));
+          return EMPTY;
+        }),
+        finalize(() => {
+          const prikaz = this.nivoi.zavrsi(id);
+          if (prikaz !== null) {
+            this.postaviNivo(id, prikaz);
+          }
+        }),
+      )))
+      .subscribe();
+  }
+
+  /** Izbor nivoa: nova varijanta ga samo pamti za kreiranje; sačuvana ga odmah šalje (optimistično, na grešku se vraća). */
+  protected promeniNivo(nivo: number | null): void {
+    const v = this.osnova();
+    if (nivo === null || nivo === this.nivo()) {
+      return;
+    }
+    if (!v) {
+      this.nivo.set(nivo);
+      return;
+    }
+    this.nivoi.pocni(v.id, this.nivo());
+    this.postaviNivo(v.id, nivo);
+    this.nivoRed.next({ id: v.id, nivo });
+  }
+
+  private postaviNivo(id: number, nivo: number): void {
+    if (this.osnova()?.id === id) {
+      this.nivo.set(nivo);
+      this.osnova.update(o => o && { ...o, nivo });
+    }
   }
 
   /** Za `unsavedChangesGuard`: izmene, ili čuvanje u toku (njegov ishod se vidi samo ovde). */
@@ -524,6 +574,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     const z = this.zahtev();
     this.detaljiGrupe.set(null);
     this.osnova.set(null);
+    this.nivo.set(PODRAZUMEVANI_NIVO);
     this.greskaUcitavanja.set(null);
     this.greska.set(null);
     // `app-prilozi` nestaje sa grupom: otpremanje u letu više ne javlja kraj
@@ -570,7 +621,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     const s = this.sadrzaj();
     const cmd: VarijantaCmd = { naziv: s.naziv, tekst: s.tekst, resenje: s.resenje, odgovori: s.odgovori, prilozi: s.prilozi };
     const sacuvana$: Observable<VarijantaDetails> = !v
-      ? this.api.kreirajVarijantu(g.id, { ...cmd, izvor: 'RUCNO' }, TIHO)
+      ? this.api.kreirajVarijantu(g.id, { ...cmd, izvor: 'RUCNO', nivo: this.nivo() }, TIHO)
       : this.izmenjeno() || v.renderStatus !== 'OK' ? this.api.izmeniVarijantu(v.id, cmd, TIHO) : of(v);
     const promenjena = !v || this.izmenjeno();
     const aktivnaPre = v?.status === 'AKTIVNA';
@@ -692,8 +743,11 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   }
 
   private postaviOsnovu(v: VarijantaDetails | null): void {
-    this.osnova.set(v);
+    // odgovor drugog poziva (PUT, render) ne nosi nivo koji je korisnik upravo izabrao, pa dok `PATCH` traje ostaje izabrani
+    const prikaz = v && this.nivoi.imaUToku(v.id) ? { ...v, nivo: this.nivo() } : v;
+    this.osnova.set(prikaz);
     if (v) {
+      this.nivo.set(prikaz?.nivo ?? PODRAZUMEVANI_NIVO);
       this.mrvice.postavi(imeVarijante(v));
     }
   }

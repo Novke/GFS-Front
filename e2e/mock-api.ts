@@ -75,7 +75,7 @@ function normalizujPrelaz(p: Partial<Prelaz> | null | undefined): Prelaz | null 
 /** Kao `SlajdPP.normalizuj`: zadatak (izbor grupe, vreme, broj različitih) nosi samo ZADATAK slajd. */
 function zadatakIzCmd(cmd: { tip: string; zadatak?: ZadatakSlajda | null }): ZadatakSlajda | null {
   const z = cmd.tip === 'ZADATAK' ? cmd.zadatak : null;
-  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null } : null;
+  return z ? { grupaId: z.grupaId ?? null, vremeSekunde: z.vremeSekunde ?? null, brojVarijanti: z.brojVarijanti ?? null, nivo: z.nivo ?? null } : null;
 }
 interface UzivoPrezentacija {
   id: number; naziv: string; opis: string | null; predmet: { id: number; naziv: string }; tema: string; takmicenje: boolean;
@@ -688,7 +688,7 @@ export class MockApi {
   /** Slajd kako ga server šalje: ZADATAK dobija opis grupe nad trenutnim stanjem banke (`ZadaciSlajdova`, pri svakom čitanju). */
   private slajdOdgovor(s: UzivoSlajd): unknown {
     if (s.tip !== 'ZADATAK') return s;
-    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null }) };
+    return { ...s, zadatak: this.banka.zadatakSlajda(s.zadatak ?? { grupaId: null, vremeSekunde: null, brojVarijanti: null, nivo: null }) };
   }
 
   private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
@@ -1257,6 +1257,7 @@ export class MockApi {
     get('banka/varijante/:id', (_z, p) => b.varijantaDetalji(Number(p['id'])));
     put('banka/varijante/:id', (z, p) => b.izmeniVarijantu(Number(p['id']), z.telo as VarijantaCmd));
     del('banka/varijante/:id', (_z, p) => b.obrisiVarijantu(Number(p['id'])));
+    patch('banka/varijante/:id/nivo', (z, p) => b.promeniNivo(Number(p['id']), z.telo as { nivo?: unknown } | null));
     post('banka/varijante/:id/odobri', (_z, p) => b.promeniStatus(Number(p['id']), 'AKTIVNA'));
     post('banka/varijante/:id/arhiviraj', (_z, p) => b.promeniStatus(Number(p['id']), 'ARHIVIRANA'));
     post('banka/varijante/:id/vrati-u-nacrt', (_z, p) => b.promeniStatus(Number(p['id']), 'NACRT'));

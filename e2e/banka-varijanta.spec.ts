@@ -35,7 +35,7 @@ test.describe('banka zadataka: editor varijante', () => {
 
     await expect.poll(() => mock.zahteviZa('banka/grupe/2/varijante', 'POST').map(z => z.telo)).toEqual([{
       naziv: null, tekst: 'Pretvori $101101_2$ u dekadni.', resenje: null, odgovori: { a: { broj: 45, ...BEZ_ODGOVORA } }, prilozi: [],
-      izvor: 'RUCNO',
+      izvor: 'RUCNO', nivo: 2,
     }]);
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);
     await expect(page.getByText('Varijanta je sačuvana kao nacrt.')).toBeVisible();
@@ -167,7 +167,7 @@ test.describe('banka zadataka: editor varijante', () => {
     await page.getByRole('button', { name: 'Sačuvaj kao nacrt' }).click();
     await expect.poll(() => mock.zahteviZa('banka/grupe/2/varijante', 'POST').map(z => z.telo)).toEqual([{
       naziv: null, tekst: 'Pročitaj vrednost sa grafa:\n\\includegraphics[width=\\linewidth]{graf-funkcije}', resenje: null,
-      odgovori: { a: { broj: 2.5, ...BEZ_ODGOVORA } }, prilozi: [{ ime: 'graf-funkcije', medijId }], izvor: 'RUCNO',
+      odgovori: { a: { broj: 2.5, ...BEZ_ODGOVORA } }, prilozi: [{ ime: 'graf-funkcije', medijId }], izvor: 'RUCNO', nivo: 2,
     }]);
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);
   });

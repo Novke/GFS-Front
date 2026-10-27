@@ -21,7 +21,7 @@ const PUTANJA = [{ id: 1, naziv: 'Konverzije brojeva' }, { id: 4, naziv: '8 → 
 function stavka(id: number, izmena: Partial<BankaPretragaStavka> = {}): BankaPretragaStavka {
   return {
     varijantaId: id, grupaId: 4, grupaNaziv: '8 → 2 (Klod)', putanja: PUTANJA, naziv: `Kol. 1, zad. ${id}`, status: 'NACRT',
-    renderStatus: 'OK', isecak: 'Pretvori', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', ...izmena,
+    renderStatus: 'OK', isecak: 'Pretvori', izvor: 'CLAUDE', serija: 'uvoz-kol1-2024', nivo: 2, ...izmena,
   };
 }
 
@@ -34,7 +34,7 @@ function varijanta(id: number, izmena: Partial<VarijantaDetails> = {}): Varijant
       zanemariRazmake: true, opcije: null,
     }], prilozi: [], status: 'NACRT', izvor: 'CLAUDE', renderStatus: 'OK', svgId: `svg-${id}`, resenjeSvgId: `svg-r-${id}`,
     renderGreska: null, renderDeo: null, kreirano: '2026-10-18T10:00:00', izmenjeno: '2026-10-18T10:00:00', ikadOdobrena: false,
-    zamenjuje: null, serija: 'uvoz-kol1-2024', ...izmena,
+    zamenjuje: null, serija: 'uvoz-kol1-2024', nivo: 2, ...izmena,
   };
 }
 
@@ -54,6 +54,7 @@ describe('PregledPage', () => {
     odobri: vi.fn(),
     obrisiVarijantu: vi.fn(),
     odbaciSeriju: vi.fn(),
+    promeniNivo: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 1, naziv: 'Uvod u računarstvo' }])),
@@ -116,7 +117,7 @@ describe('PregledPage', () => {
   it('prvi nacrt: napredak, putanja, naziv, izvor, serija, SVG zadatka i rešenja, odgovori; kopija sa originalom pored', async () => {
     const e = await otvori('/banka/pregled?predmet=1&serija=uvoz-kol1-2024');
     expect(api.pretraga).toHaveBeenCalledWith(
-      { predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024' }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true });
+      { predmetId: 1, namena: null, q: null, status: 'NACRT', izvor: null, serija: 'uvoz-kol1-2024', nivo: null }, { page: 0, size: 100, sort: 'id,asc' }, { tiho: true });
     expect(napredak()).toBe('1 / 3');
     expect(naslov()).toBe('Kol. 1, zad. 16');
     expect([...e.querySelectorAll('[data-nacrt] [data-putanja] li')].map(li => li.textContent!.trim())).toEqual(['Konverzije brojeva', '8 → 2 (Klod)']);
@@ -132,6 +133,57 @@ describe('PregledPage', () => {
     const original = e.querySelector('[data-original]')!;
     expect(original.querySelector('img')!.getAttribute('src')).toBe('api/public/mediji/svg-15');
     expect(original.textContent).toContain('Aktivna');
+  });
+
+  const nivoVarijante = (n: number) => el().querySelector<HTMLButtonElement>(`[data-nacrt] [data-nivo-varijante] [role=radio][data-nivo="${n}"]`)!;
+  const nivoFiltera = (n: number | 'svi') => el().querySelector<HTMLButtonElement>(`[data-filter-nivo] [role=radio][data-nivo="${n}"]`)!;
+
+  it('nivo prikazanog nacrta se menja na mestu (PATCH), a strelica na izboru nivoa ne preskače nacrt', async () => {
+    api.promeniNivo.mockImplementation((id: number, nivo: number) => of({ ...VARIJANTE[id], nivo }));
+    await otvori('/banka/pregled?predmet=1');
+    expect(nivoVarijante(2).getAttribute('aria-checked')).toBe('true');
+
+    nivoVarijante(3).click();
+    await stabilno();
+    expect(api.promeniNivo).toHaveBeenCalledExactlyOnceWith(16, 3, { tiho: true });
+    expect(nivoVarijante(3).getAttribute('aria-checked')).toBe('true');
+    expect(napredak()).toBe('1 / 3');
+
+    nivoVarijante(3).focus();
+    await taster('ArrowLeft', nivoVarijante(3));
+    expect(api.promeniNivo).toHaveBeenLastCalledWith(16, 2, { tiho: true });
+    expect(napredak()).toBe('1 / 3');
+    expect(naslov()).toBe('Kol. 1, zad. 16');
+  });
+
+  it('original kopije prikazuje nivo bez izbora', async () => {
+    const e = await otvori('/banka/pregled?predmet=1');
+    const original = e.querySelector('[data-original]')!;
+    expect(original.querySelector('[data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji)');
+    expect(original.querySelector('[role=radio]')).toBeNull();
+  });
+
+  it('filter nivoa: ?nivo=3 ide u pretragu i bira se u filteru; "Svi" ga skida iz URL-a', async () => {
+    const e = await otvori('/banka/pregled?predmet=1&nivo=3');
+    expect(api.pretraga.mock.calls[0][0]).toMatchObject({ predmetId: 1, nivo: 3 });
+    expect(nivoFiltera(3).getAttribute('aria-checked')).toBe('true');
+    expect(e.querySelector('[data-filter-nivo]')!.textContent).toContain('Prikaži nivo');
+
+    api.pretraga.mockClear();
+    nivoFiltera('svi').click();
+    await stabilno();
+    expect(router.url).toBe('/banka/pregled?predmet=1');
+    expect(api.pretraga.mock.calls[0][0]).toMatchObject({ predmetId: 1, nivo: null });
+
+    nivoFiltera(1).click();
+    await stabilno();
+    expect(router.url).toBe('/banka/pregled?predmet=1&nivo=1');
+    expect(api.pretraga.mock.calls.at(-1)![0]).toMatchObject({ nivo: 1 });
+  });
+
+  it('nevažeći ?nivo se zanemaruje', async () => {
+    await otvori('/banka/pregled?predmet=1&nivo=7');
+    expect(api.pretraga.mock.calls[0][0]).toMatchObject({ nivo: null });
   });
 
   it('bez originala: nema kolone originala ni oznake "Zamenjuje"', async () => {
