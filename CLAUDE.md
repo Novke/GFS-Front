@@ -826,15 +826,25 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   run (backend BE-8) are not recorded yet, so do not rely on it for grades.
 - **Projector:** renders only `NastavnickiZadatak.javniRezultat` (`ui/zadatak-rezultat.component`, `ui/zadatak-prikaz.component`), whose
   numbers, correctness and solution follow three independent switches on the server; the console's `rezultat` is never on the
-  projector.
+  projector. Two separate use cases (`PrikazZadatka`, chosen by `zadatak-prikaz.prikazRezultata`): results on (Space) and solution off
+  = `odgovori`: no images, per variant only its name and per field the entered values as big chips in one wrapping row, most frequent
+  first (`198 · 199 (2) · 51`, the count in parentheses only above 1), neutral until `TACAN`; then the correct value comes first, larger,
+  with ✓ (a synthetic chip "niko" when nobody had it, so it is never lost behind wrong ones) and the wrong ones with ✗; variants nobody
+  answered and paper variants are left out (one "Još nema odgovora." when none remain). Solution on (Shift+R), or only `TACAN` = `resenje`:
+  task and solution images, the counters line and "✓ tačno: …", no chips; with both results and solution on the solution wins, and
+  switching it off returns to the chips. Sizes are in `cqw` per column count (`kolone`). A field label is shown only when the variant
+  has more than one field (`oznakaVidljiva`; old schemas and round snapshots carry "a) …" on single fields).
 - **Phone:** `javno/zadatak-ekran` + `javno/zadatak-unos` (lazy, `@defer`) show the participant's own variant (`LicnoStanje.zadatak`:
+  field labels through `oznakaNaTelefonu`: on a one-field schema a leading list marker `a) `, `(b) `, `1) ` is stripped, nothing else;
   SVG through `api/public/mediji/<own id>`, the fields of its schema), the outcome after closing, correct values only with `TACAN`
   and the solution only with `RESENJE`. They import only modules already allowed for `features/uzivo/javno` (the allow-list did not
   change). A scored run without a signed-in student (`prijavaObavezna && !prijavljenStudent`, or 403 on join) goes to
   `nalog?nazad=uzivo/<kod>`; after the code login `/nalog` returns to `uzivo/<kod>` (`javnoNazad`) and the phone joins under the
   student's own name without the name form (`e2e/nalog.spec.ts`, "bodovan uživo run").
 - **Overview** (`pages/izvodjenje-pregled.page`): a ZADATAK round (`RezultatPitanja.zadatak`, `pitanje`/`rezultat` null) shows the group
-  path, `app-zadatak-rezultat` (everything visible) and the participants table (variant, outcome per field, total). Round cards are
+  path, `app-zadatak-rezultat` (prikaz `sve`: images, solution, "tačno" line and the same compact chips, no bars) and the participants
+  table (variant, column "Uneto" = what was entered per field from `UcesnikZadatka.uneto`, green with ✓ when correct and red with ✗ when
+  not, `label: value` only for multi-field variants, `unetoUcesnika`; total). Round cards are
   keyed by slide id (`slajdId`, else the snapshot's `pitanje.slajdId` or `zadatak.slajdId`), never by group id.
 - **Level (nivo, 1-3):** the slide form (`zadatak-forma.component`, `ZadatakSlajda.nivo`, `null` = all) has the shared `app-nivo` picker with
   "Svi" and the candidate count of every level (`ZadatakSlajdaInfo.brojAktivnihPoNivou`, also in the option's aria-label); the console

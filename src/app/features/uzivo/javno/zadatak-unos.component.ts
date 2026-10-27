@@ -40,6 +40,17 @@ export function tacnoPolja(p: PoljeZadatka, t: OdgovorPolja | null | undefined):
 
 const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE_TACNIH';
 
+/** Oznaka stavke liste na početku: `a) `, `(b) `, `1) `, `12) ` (jedno slovo ili do dve cifre, zagrada, pa razmak i tekst). */
+const OZNAKA_LISTE = /^\s*\(?(?:[A-Za-z]|\d{1,2})\)\s+(?=\S)/;
+
+/**
+ * Oznaka polja na telefonu. Kad šema ima samo jedno polje, slovo liste ("a) dekadna vrednost") ništa ne znači, pa se skida
+ * (stare šeme i snimci rundi ga imaju); oznaka bez teksta posle slova ostaje kakva jeste. Više polja: oznake kakve jesu.
+ */
+export function oznakaNaTelefonu(p: Pick<PoljeZadatka, 'oznaka'>, brojPolja: number): string {
+  return brojPolja === 1 ? p.oznaka.replace(OZNAKA_LISTE, '') : p.oznaka;
+}
+
 /**
  * Svoj zadatak na telefonu (banka spec 4.2, tačke 3 i 6): slika svoje varijante (zum prstima, "Uvećaj" preko celog ekrana),
  * pa polja po šemi i "Pošalji" (BROJ numerička tastatura, TEKST, JEDAN_TACAN dugmad, VISE_TACNIH prekidači; tekst opcija kroz
@@ -112,7 +123,7 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
         @for (p of z.polja; track p.kljuc; let i = $index) {
           @if (opcija(p)) {
             <div class="uz-st-zd-polje" role="group" [attr.aria-labelledby]="'uz-st-zd-' + i" [attr.data-polje]="p.kljuc">
-              <span class="uz-st-oznaka" [id]="'uz-st-zd-' + i">{{ p.oznaka }}</span>
+              <span class="uz-st-oznaka" [id]="'uz-st-zd-' + i">{{ oznaka(p) }}</span>
               <div class="uz-st-zd-opcije">
                 @for (o of p.opcije ?? []; track o.id) {
                   @let izabrana = izabrane(p.kljuc).includes(o.id);
@@ -126,7 +137,7 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
             </div>
           } @else {
             <div class="uz-st-zd-polje">
-              <label class="uz-st-oznaka" [for]="'uz-st-zd-' + i">{{ p.oznaka }}</label>
+              <label class="uz-st-oznaka" [for]="'uz-st-zd-' + i">{{ oznaka(p) }}</label>
               <div class="uz-st-polje-red">
                 <input class="uz-st-polje" type="text" autocomplete="off" [id]="'uz-st-zd-' + i" [attr.data-polje]="p.kljuc"
                        [attr.inputmode]="p.tip === 'BROJ' ? 'decimal' : null" [attr.maxlength]="p.tip === 'TEKST' ? 200 : null"
@@ -148,7 +159,7 @@ const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE
           @if (o !== undefined || t) {
             <li>
               @if (o !== undefined) {
-                <p data-ishod>{{ p.oznaka }}: <strong [class.uz-st-ok]="o" [class.uz-st-lose]="!o">{{ o ? 'tačno' : 'netačno' }}</strong></p>
+                <p data-ishod>{{ oznaka(p) }}: <strong [class.uz-st-ok]="o" [class.uz-st-lose]="!o">{{ o ? 'tačno' : 'netačno' }}</strong></p>
               }
               @if (t) {
                 <p data-tacno>Tačno: @if (opcija(p)) { <app-tekst-formule [tekst]="t" /> } @else { {{ t }} }</p>
@@ -209,7 +220,7 @@ export class ZadatakUnosComponent {
       const vrednost = Array.isArray(x)
         ? (p.opcije ?? []).filter(o => x.includes(o.id)).map(o => o.tekst).join(', ')
         : (x ?? '').trim() + (p.jedinica && x?.trim() ? ' ' + p.jedinica : '');
-      return vrednost ? [{ kljuc: p.kljuc, oznaka: p.oznaka, vrednost, opcija: jeOpcija(p) }] : [];
+      return vrednost ? [{ kljuc: p.kljuc, oznaka: this.oznaka(p), vrednost, opcija: jeOpcija(p) }] : [];
     });
     return redovi.length ? redovi : null;
   });
@@ -221,6 +232,10 @@ export class ZadatakUnosComponent {
 
   constructor() {
     effect(() => this.zatvoriDugme()?.nativeElement.focus());
+  }
+
+  protected oznaka(p: PoljeZadatka): string {
+    return oznakaNaTelefonu(p, this.zadatak().polja.length);
   }
 
   protected tekst(kljuc: string): string {

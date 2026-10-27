@@ -243,10 +243,13 @@ export interface LicniZadatak {
   ishod: Record<string, boolean> | null; tacno: boolean | null; tacneVrednosti: Record<string, OdgovorPolja> | null;
   resenjeSvgId: string | null;
 }
-/** Učesnik Zadatak runde u pregledu izvođenja: dodeljena varijanta i ishod po polju i ukupno. */
+/**
+ * Učesnik Zadatak runde u pregledu izvođenja: dodeljena varijanta, ishod po polju (`polja`) i ukupno, i šta je uneo po polju
+ * (`uneto`: tekst za prikaz sa servera, BROJ sa jedinicom, opcije njihovim tekstom); bez odgovora oba `null`. Samo nastavnik.
+ */
 export interface UcesnikZadatka {
   ucesnikId: number; ime: string; varijantaId: number | null; varijantaNaziv: string | null; odgovorio: boolean;
-  tacno: boolean | null; polja: Record<string, boolean> | null;
+  tacno: boolean | null; polja: Record<string, boolean> | null; uneto: Record<string, string> | null;
 }
 /**
  * Zadatak runda u pregledu (sve vidljivo); `slajdId` iz snimka ostaje i kad slajda više nema (`RezultatPitanja.slajdId` je tada
