@@ -257,7 +257,7 @@ describe('SlajdPrikazComponent: ZADATAK sa stanjem izvođenja (projektor)', () =
   it('ZATVORENO sa javnim rezultatom: mreža kartica, čip "Zatvoreno" u podnožju', async () => {
     const v = [varijantaRunde(11), varijantaRunde(12)];
     const s = naZadatku('ZATVORENO', {
-      zadatak: { javniRezultat: { ukupno: 0, odgovoriPrikazani: true, varijante: v.map(x => rezultatVarijante(x)) } },
+      zadatak: { javniRezultat: { ukupno: 2, odgovoriPrikazani: true, varijante: v.map(x => ({ ...rezultatVarijante(x), odgovorilo: 1 })) } },
     });
     const { el } = await prikazi({ slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'ZATVORENO', brojOdgovora: 0, kodTraka });
     expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);

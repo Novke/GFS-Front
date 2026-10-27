@@ -726,6 +726,34 @@ p.uz-ed-upozorenje {
   text-align: left;
 }
 
+/* Kolona "Uneto": vrednost zeleno kad je tačna, crveno kad nije, uz ✓/✗ (ne samo boja) */
+.uz-pr-uneto {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-right: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-pr-uneto-oznaka {
+  color: var(--muted);
+}
+
+.uz-pr-uneto-vrednost {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.uz-pr-uneto--tacno .uz-pr-uneto-vrednost,
+.uz-pr-uneto--tacno .uz-pr-uneto-znak {
+  color: var(--ok);
+}
+
+.uz-pr-uneto--netacno .uz-pr-uneto-vrednost,
+.uz-pr-uneto--netacno .uz-pr-uneto-znak {
+  color: var(--danger);
+}
+
 /* Koraci režima "Pregled" editora platna (F18; do tada bočni pregled stranice za PLATNO) */
 .uz-ep-koraci {
   display: flex;

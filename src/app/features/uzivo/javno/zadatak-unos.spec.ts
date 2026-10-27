@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LicniZadatak, OdgovorPolja, PoljeZadatka } from '../data-access/uzivo.models';
-import { NacrtZadatka, ZadatakUnosComponent, popunjeno, tacnoPolja } from './zadatak-unos.component';
+import { NacrtZadatka, ZadatakUnosComponent, oznakaNaTelefonu, popunjeno, tacnoPolja } from './zadatak-unos.component';
 
 const BEZ: OdgovorPolja = { broj: null, prihvatljivi: null, tacna: null, tacne: null };
 
@@ -21,6 +21,17 @@ function zadatak(izmene: Partial<LicniZadatak> = {}): LicniZadatak {
 }
 
 describe('zadatak-unos: pravila', () => {
+  it('oznakaNaTelefonu: jedno polje bez slova liste, više polja kakve jesu, ništa drugo se ne skida', () => {
+    const o = (oznaka: string) => ({ oznaka });
+    expect(oznakaNaTelefonu(o('a) dekadna vrednost'), 1)).toBe('dekadna vrednost');
+    expect(oznakaNaTelefonu(o('(b) binarni zapis'), 1)).toBe('binarni zapis');
+    expect(oznakaNaTelefonu(o('1) Rezultat'), 1)).toBe('Rezultat');
+    expect(oznakaNaTelefonu(o('a) dekadni'), 2)).toBe('a) dekadni');
+    for (const ostaje of ['a)', 'Dekadna vrednost', 'x+y) zbir', 'abc) tekst', '123) broj', 'a.b) c', 'f(x) vrednost', 'a)dekadni']) {
+      expect(oznakaNaTelefonu(o(ostaje), 1)).toBe(ostaje);
+    }
+  });
+
   it('popunjeno: BROJ i TEKST posle skraćivanja razmaka, JEDAN_TACAN tačno jedan, VISE_TACNIH bar jedan', () => {
     expect(popunjeno(polje('a', 'BROJ'), '  ')).toBe(false);
     expect(popunjeno(polje('a', 'BROJ'), '45')).toBe(true);
@@ -179,6 +190,13 @@ describe('ZadatakUnosComponent', () => {
     expect(el().querySelectorAll('input').length).toBe(0);
     expect(dugme('Pošalji')).toBeNull();
     expect(el().textContent).not.toContain('Tačno:');
+  });
+
+  it('jedno polje sa slovom liste: label unosa, poslat odgovor i ishod bez "a) "', () => {
+    napravi(zadatak({ polja: [polje('a', 'BROJ', { oznaka: 'a) dekadna vrednost' })] }));
+    expect(el().querySelector('label.uz-st-oznaka')!.textContent!.trim()).toBe('dekadna vrednost');
+    napravi(zadatak({ faza: 'ZATVORENO', ishod: { a: true }, polja: [polje('a', 'BROJ', { oznaka: 'a) dekadna vrednost' })] }), true);
+    expect(el().querySelector('[data-ishod]')!.textContent!.replace(/\s+/g, ' ').trim()).toBe('dekadna vrednost: tačno');
   });
 
   it('TACAN: "Tačno: 45" i tekst tačne opcije kroz app-tekst-formule', () => {

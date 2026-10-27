@@ -13,7 +13,7 @@ import { IzvodjenjeRezultati, PregledZadatka, RezultatPitanja, UcesnikZadatka, m
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { MERA_FORMULE, TekstFormuleComponent } from '../ui/tekst-formule.component';
-import { ZadatakRezultatComponent } from '../ui/zadatak-rezultat.component';
+import { ZadatakRezultatComponent, oznakaVidljiva } from '../ui/zadatak-rezultat.component';
 import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
@@ -58,7 +58,6 @@ export function putanjaTekst(z: Pick<PregledZadatka, 'putanja' | 'grupaNaziv'>):
   return z.putanja.length ? z.putanja.map(g => g.naziv).join(' › ') : z.grupaNaziv;
 }
 
-/** Ishod učesnika po polju ("a) ✓ · b) ✗"), oznake iz šeme njegove varijante u rezultatu; bez odgovora "—". */
 /** Runda od pre nivoa nema `nivoi`: njen nivo se ne prikazuje (`nivo` `null` bi se pogrešno čitao kao "svi"). */
 export function imaNivoe(z: Pick<PregledZadatka, 'nivoi'>): boolean {
   return Object.keys(z.nivoi ?? {}).length > 0;
@@ -69,12 +68,28 @@ export function nivoVarijante(z: Pick<PregledZadatka, 'nivoi'>, varijantaId: num
   return varijantaId === null ? null : (z.nivoi?.[String(varijantaId)] ?? null);
 }
 
-export function ishodPoPolju(z: PregledZadatka, u: UcesnikZadatka): string {
-  if (!u.polja) return '—';
-  const polja = z.rezultat.varijante.find(v => v.varijantaId === u.varijantaId)?.polja ?? [];
-  return Object.entries(u.polja)
-    .map(([kljuc, tacno]) => `${polja.find(p => p.kljuc === kljuc)?.oznaka ?? kljuc} ${tacno ? '✓' : '✗'}`)
-    .join(' · ');
+/** Jedno uneto polje učesnika: oznaka (samo kad varijanta ima više polja), šta je uneo i da li je tačno. */
+export interface UnetoPolje { kljuc: string; oznaka: string | null; vrednost: string; tacno: boolean; formula: boolean; }
+
+/**
+ * Šta je učesnik uneo, po polju redom šeme njegove varijante (iz snimka runde u rezultatu): `uneto` sa servera (vrednost
+ * kako je uneta, opcije njihovim tekstom) i `polja` (tačnost). Oznaka polja samo kad varijanta ima više polja (kao na tabli,
+ * `oznakaVidljiva`). Bez odgovora prazna lista; polje bez unete vrednosti (stariji server) je "—".
+ */
+export function unetoUcesnika(z: PregledZadatka, u: UcesnikZadatka): UnetoPolje[] {
+  if (!u.polja) return [];
+  const ishod = u.polja;
+  const varijanta = z.rezultat.varijante.find(v => v.varijantaId === u.varijantaId);
+  const sema = varijanta?.polja ?? [];
+  const kljucevi = [...sema.map(p => p.kljuc).filter(k => k in ishod), ...Object.keys(ishod).filter(k => !sema.some(p => p.kljuc === k))];
+  const visePolja = varijanta ? oznakaVidljiva(varijanta) : kljucevi.length > 1;
+  return kljucevi.map(kljuc => {
+    const p = sema.find(x => x.kljuc === kljuc);
+    return {
+      kljuc, oznaka: visePolja ? (p?.oznaka ?? kljuc) : null, vrednost: u.uneto?.[kljuc] ?? '—', tacno: ishod[kljuc] === true,
+      formula: p?.tip === 'JEDAN_TACAN' || p?.tip === 'VISE_TACNIH',
+    };
+  });
 }
 
 /** Ukupno za učesnika: "tačno", "netačno", "bez odgovora" (rad na papiru i neodgovoreni). */
@@ -161,7 +176,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                         <tr>
                           <th scope="col">Učesnik</th>
                           <th scope="col">Varijanta</th>
-                          <th scope="col">Po polju</th>
+                          <th scope="col">Uneto</th>
                           <th scope="col">Ukupno</th>
                         </tr>
                       </thead>
@@ -175,7 +190,19 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                                 <app-nivo [nivo]="nivo" [natpis]="false" data-nivo-varijante />
                               }
                             </td>
-                            <td>{{ poPolju(z, u) }}</td>
+                            <td>
+                              @for (f of uneto(z, u); track f.kljuc) {
+                                <span class="uz-pr-uneto" [class.uz-pr-uneto--tacno]="f.tacno" [class.uz-pr-uneto--netacno]="!f.tacno"
+                                      [attr.data-uneto]="f.kljuc">
+                                  @if (f.oznaka) { <span class="uz-pr-uneto-oznaka">{{ f.oznaka }}:</span> }
+                                  <span class="uz-pr-uneto-vrednost">@if (f.formula) { <app-tekst-formule [tekst]="f.vrednost" /> } @else { {{ f.vrednost }} }</span>
+                                  <span class="uz-pr-uneto-znak" aria-hidden="true">{{ f.tacno ? '✓' : '✗' }}</span>
+                                  <span class="uz-sr">{{ f.tacno ? 'tačno' : 'netačno' }}</span>
+                                </span>
+                              } @empty {
+                                —
+                              }
+                            </td>
                             <td>{{ ukupnoUcesnika(u) }}</td>
                           </tr>
                         }
@@ -222,7 +249,7 @@ export class IzvodjenjePregledPage {
   protected readonly url = medijUrl;
   protected readonly tekst = procenatTacnihTekst;
   protected readonly putanja = putanjaTekst;
-  protected readonly poPolju = ishodPoPolju;
+  protected readonly uneto = unetoUcesnika;
   protected readonly ukupnoUcesnika = ishodUkupno;
   protected readonly imaNivoe = imaNivoe;
   protected readonly nivoVarijante = nivoVarijante;

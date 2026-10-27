@@ -174,9 +174,16 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
     expect(tekst(el)).not.toMatch(/Ana|Bojan/);
   });
 
-  it('javniRezultat sa prikazanim odgovorima: mreža kartica u sceni', async () => {
-    const el = await prikazi(naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni({ odgovoriPrikazani: true }) } }));
+  it('javniRezultat sa prikazanim odgovorima: mreža kartica u sceni, samo uneti brojevi (bez slika)', async () => {
+    const r = javni({ odgovoriPrikazani: true });
+    r.varijante = r.varijante.map(v => ({
+      ...v, dodeljeno: 1, odgovorilo: 1,
+      polja: [{ ...v.polja[0], vrednosti: [{ kljuc: '45.0', tekst: '45', broj: 1, sakriven: false, tacan: null }] }],
+    }));
+    const el = await prikazi(naZadatku('ZATVORENO', { zadatak: { javniRezultat: r } }));
     expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);
+    expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-cip').length).toBe(2);
+    expect(el.querySelector('app-zadatak-rezultat img')).toBeNull();
   });
 });
 

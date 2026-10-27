@@ -22,7 +22,7 @@ const ulaziIz = (s: NastavnickoStanje, izmene: Record<string, unknown> = {}) => 
 /** Javni rezultat dve varijante, svi prekidači uključeni (rezultati, `TACAN`, `RESENJE`). */
 function javni(izmene: Partial<ZadatakRezultat> = {}): ZadatakRezultat {
   const v = [varijantaRunde(11), varijantaRunde(12)];
-  return { ukupno: 0, odgovoriPrikazani: true, varijante: v.map(x => rezultatVarijante(x)), ...izmene };
+  return { ukupno: 2, odgovoriPrikazani: true, varijante: v.map(x => ({ ...rezultatVarijante(x), odgovorilo: 1 })), ...izmene };
 }
 
 describe('ZadatakPrikazComponent', () => {
@@ -97,6 +97,22 @@ describe('ZadatakPrikazComponent', () => {
     const { el } = await prikazi(ulaziIz(s));
     expect(tekst(el)).not.toContain('tačno:');
     expect(el.querySelectorAll('img').length).toBe(1);
+  });
+
+  it('dva slučaja table: odgovori (Space bez rešenja) bez slika, rešenje (Shift+R) ima prednost i vraća slike', async () => {
+    const s = naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni() } });
+    let { el } = await prikazi(ulaziIz(s, { brojOdgovora: 2, prikaziRezultat: true }));
+    expect(el.querySelector('app-zadatak-rezultat')!.getAttribute('data-prikaz')).toBe('odgovori');
+    expect(el.querySelectorAll('img').length).toBe(0);
+
+    const sResenjem = naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni(), resenjePrikazano: true } });
+    ({ el } = await prikazi(ulaziIz(sResenjem, { brojOdgovora: 2, prikaziRezultat: true })));
+    expect(el.querySelector('app-zadatak-rezultat')!.getAttribute('data-prikaz')).toBe('resenje');
+    expect(el.querySelectorAll('img').length).toBeGreaterThan(0);
+
+    const samoTacno = naZadatku('ZATVORENO', { zadatak: { javniRezultat: javni({ odgovoriPrikazani: false }) } });
+    ({ el } = await prikazi(ulaziIz(samoTacno)));
+    expect(el.querySelector('app-zadatak-rezultat')!.getAttribute('data-prikaz')).toBe('resenje');
   });
 
   it('nikad ime učesnika, ni kad ih snimak ima', async () => {
