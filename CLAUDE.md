@@ -283,6 +283,18 @@ Interactive presentation with live questions (spec `docs/superpowers/specs/2026-
 in `Novke/GFS-deploy`). The server is the only source of truth: every change arrives as a whole snapshot with `verzija`
 over STOMP; teacher commands are REST.
 
+- **Presentations on a lecture (`features/predavanja`, not `features/uzivo`).** The live lecture page (`/predavanja/:id` until finished) has
+  "Pokreni prezentaciju": `ui/pokreni-prezentaciju.dialog.ts` lists the subject's presentations (`GET prezentacije?predmetId`, newest edited first,
+  filter field above 6) and starts a run bound to the lecture (`POST prezentacije/{id}/izvodjenja`, `cuvanje: true`, `predavanjeId`, also for a
+  presentation without questions) and opens its console in a **new tab**, so recording continues. The tab is opened **synchronously from the click** as
+  `about:blank` and gets its address when the server answers (popup blockers refuse `window.open` after an async call); on a server error it is closed,
+  and when even the blank tab is blocked the run still starts and the page tells the teacher to use "Nastavi". A presentation with a run in progress for this
+  lecture offers "Nastavi" (link, no second start); one running elsewhere is locked (the server allows one active run per presentation, 409).
+  `ui/prezentacije-na-predavanju.ts` ("Prezentacije na ovom predavanju", live and finished view) lists `GET izvodjenja?predavanjeId` with status,
+  "Nastavi" (console) or "Pregled", reloads when the browser tab becomes visible again. The API client and DTOs are in `core/api/prezentacije-predavanja.api.ts`
+  (`features/predavanja` must not import `features/uzivo/data-access`); it does not import `features/uzivo/uzivo-putanje.ts` either (a shared chunk would grow the student closure past its e2e budget): `ui/izvodjenje-putanje.ts` holds the two paths, pinned equal to `UzivoPutanje` by `izvodjenje-putanje.spec.ts`. The route
+  `prezentacije/:id?predavanje=ID` (editor, "Pokreni" without dialog) still exists and is unchanged.
+
 - **Formulas in question and option text (phase 5a).** Syntax `$...$` by pandoc's `tex_math_dollars` (`ui/tekst-formule.ts`):
   after the opening `$` a character that is neither a space nor `$`; no newline and no unescaped `$` inside; the last character
   before the closing `$` is not a space or `\`; no digit right after the closing `$`; `\$` is always a dollar sign; no `$$...$$`.

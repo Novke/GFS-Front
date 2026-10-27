@@ -57,7 +57,7 @@ class Server {
       tema: 'Petlje',
       posecenost: this.tipovi.size,
       grupa: { id: GRUPA.id, naziv: GRUPA.naziv, godinaUpisa: GRUPA.godinaUpisa },
-      predmet: { naziv: 'Uvod u primenu računara' },
+      predmet: { id: 4, naziv: 'Uvod u primenu računara' },
       zavrseno: this.zavrseno,
       aktivnosti: [...this.tipovi].map(([sId, tip]) => ({
         id: this.ids.get(sId)!,
