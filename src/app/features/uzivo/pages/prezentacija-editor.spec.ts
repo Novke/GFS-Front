@@ -1381,4 +1381,15 @@ describe('PrezentacijaEditorPage: Zadatak slajd', () => {
     const forma = fixture.debugElement.query(d => d.componentInstance instanceof ZadatakFormaComponent).componentInstance as ZadatakFormaComponent;
     expect(forma.predmetId()).toBe(7);
   });
+  it('ZADATAK sa primerom sa servera: bočni pregled crta sliku varijante i kaže da je primer samo u editoru', () => {
+    const saPrimerom: SlajdDetails = { ...zadatak, zadatak: { ...zadatak.zadatak!, primerSvgId: 'svg-primer' } };
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, slajdovi: [slajd(11, 1, 'Uvod'), saPrimerom] });
+    store.izaberi(12);
+    fixture.detectChanges();
+    const pregled = el().querySelector('.uz-ed-pregled')!;
+    expect(pregled.querySelector('[data-primer] img')!.getAttribute('src')).toBe('api/public/mediji/svg-primer');
+    expect(pregled.textContent).toContain('Primer zadatka vidiš samo ovde.');
+    expect(pregled.textContent).not.toContain('Ovako slajd izgleda na projektoru.');
+  });
 });

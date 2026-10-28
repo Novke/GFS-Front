@@ -157,7 +157,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                           [attr.aria-current]="s.id === store.izabraniId() ? 'true' : null">
                     <span class="uz-ed-slicica rezim-dan uz-dan" aria-hidden="true" inert>
                       @defer (on viewport) {
-                        <app-slajd-prikaz [slajd]="slicica(s)" [tema]="vazeca(p.tema)" [korak]="0" />
+                        <app-slajd-prikaz [slajd]="slicica(s)" [tema]="vazeca(p.tema)" [korak]="0" primerZadatka />
                       } @placeholder {
                         <span class="uz-ed-slicica-mesto"></span>
                       }
@@ -237,8 +237,12 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           @if (store.izabrani(); as s) {
             @if (s.tip !== 'PLATNO') {
               <aside class="uz-ed-pregled" aria-label="Pregled slajda">
-                <div class="rezim-dan uz-dan uz-ed-platno"><app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" /></div>
-                <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+                <div class="rezim-dan uz-dan uz-ed-platno"><app-slajd-prikaz [slajd]="s" [tema]="vazeca(p.tema)" primerZadatka /></div>
+                @if (s.tip === 'ZADATAK' && s.zadatak?.primerSvgId) {
+                  <p class="uz-ed-napomena">Primer zadatka vidiš samo ovde. Na projektoru se zadatak pojavljuje tek uz rešenje, a svaki telefon dobija svoju varijantu.</p>
+                } @else {
+                  <p class="uz-ed-napomena">Ovako slajd izgleda na projektoru.</p>
+                }
               </aside>
             }
           }

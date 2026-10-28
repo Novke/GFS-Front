@@ -137,6 +137,36 @@ describe('ZadatakPrikazComponent', () => {
     expect(el.querySelector('app-zadatak-rezultat')).toBeNull();
   });
 
+  it('editor (primer): slika jedne varijante sa grupom i brojem različitih; bez primera ili bez ulaza opis kao ranije', async () => {
+    const slajd = zadatakSlajd({ brojVarijanti: 3, primerSvgId: 'svg-primer' });
+    const { fixture, el } = await prikazi({ slajd, zadatak: null, primer: true });
+    const img = el.querySelector<HTMLImageElement>('[data-primer] img')!;
+    expect(img.getAttribute('src')).toBe('api/public/mediji/svg-primer');
+    expect(img.getAttribute('alt')).toBe('Primer zadatka: 2 → 10');
+    expect(tekst(el.querySelector('.uz-zad-grupa'))).toBe('2 → 10');
+    expect(tekst(el.querySelector('[data-primer] figcaption'))).toBe('Primer jedne varijante · različitih: 3');
+    expect(el.querySelector('[data-zadatak]')).toBeNull();
+
+    fixture.componentRef.setInput('primer', false);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-primer]')).toBeNull();
+    expect(tekst(el.querySelector('[data-zadatak]'))).toContain('Različitih: 3');
+
+    fixture.componentRef.setInput('primer', true);
+    fixture.componentRef.setInput('slajd', zadatakSlajd({ primerSvgId: null }));
+    fixture.detectChanges();
+    expect(el.querySelector('[data-primer]')).toBeNull();
+    expect(tekst(el.querySelector('[data-zadatak]'))).toContain('Različitih: sve');
+  });
+
+  it('primer se nikad ne crta uz stanje izvođenja (projektor, konzola), ni kad je ulaz uključen', async () => {
+    const s = naZadatku('CEKA');
+    const slajd = { ...s.trenutniSlajd!, zadatak: { ...s.trenutniSlajd!.zadatak!, primerSvgId: 'svg-primer' } };
+    const { el } = await prikazi({ ...ulaziIz(s), slajd, primer: true });
+    expect(el.querySelector('[data-primer]')).toBeNull();
+    expect(el.innerHTML).not.toContain('svg-primer');
+  });
+
   it('bez stanja: obrisana grupa i grupa bez naziva', async () => {
     const { fixture, el } = await prikazi({ slajd: zadatakSlajd({ grupaId: null, grupaNaziv: null, putanja: [] }), zadatak: null });
     expect(tekst(el.querySelector('[data-zadatak] p'))).toBe('Grupa nije izabrana');

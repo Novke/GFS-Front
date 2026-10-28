@@ -209,6 +209,11 @@ export interface ZadatakSlajdaInfo {
   grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null; grupaNaziv: string | null;
   putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; brojAktivnihPoNivou: number[] | null; polja: PoljeZadatka[] | null;
   iskljucena: boolean; iskljucenePodgrupe: GrupaPutanja[]; upozorenja: string[];
+  /**
+   * SVG teksta jedne varijante koju bi izvlačenje dalo (prvi list redom stabla, najmanji id, nivo slajda), samo za primer u
+   * editoru; `null` bez kandidata. Opciono jer ga stariji server ne šalje.
+   */
+  primerSvgId?: string | null;
 }
 /**
  * Izvučena varijanta trenutne runde (konzola): slika zadatka i rešenja, brojevi dodela, odgovora i tačnih i `nivo` varijante iz
