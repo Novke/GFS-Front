@@ -14,10 +14,13 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { StudentPicker } from '../../../shared/ui/student-picker';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { IzmenaZaglavlja, PredavanjeStore, StanjeStudenta } from '../data-access/predavanje.store';
+import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predavanja.store';
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { BrziUnos } from '../ui/brzi-unos';
 import { NapomenaDialog } from '../ui/napomena-dialog';
+import { PokreniPrezentacijuDialog } from '../ui/pokreni-prezentaciju.dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';
+import { PrezentacijeNaPredavanju } from '../ui/prezentacije-na-predavanju';
 import { StudentskaPlocica } from '../ui/studentska-plocica';
 
 const TIP_TEKST: Record<TipAktivnosti, string> = { PRISUSTVO: 'Prisustvo', ZADATAK: 'Zadatak', SA_ZVEZDICOM: 'Zadatak sa zvezdicom' };
@@ -50,11 +53,12 @@ export function brojAktivnosti(n: number): string {
     MatButton,
     MatIcon,
     PredavanjeZaglavlje,
+    PrezentacijeNaPredavanju,
     RouterLink,
     SkeletonRows,
     StudentskaPlocica,
   ],
-  providers: [PredavanjeStore],
+  providers: [PredavanjeStore, PrezentacijePredavanjaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './predavanje-detalj.html',
   styleUrl: './predavanje-detalj.scss',
@@ -66,6 +70,7 @@ export class PredavanjeDetalj {
   private readonly mrvice = inject(BreadcrumbService);
   private readonly preference = inject(PreferencesStore);
   private readonly obavestenja = inject(NotificationStore);
+  private readonly prezentacije = inject(PrezentacijePredavanjaStore);
 
   /** Id iz putanje (`withComponentInputBinding`); matcher rute već propušta samo brojeve. */
   readonly id = input.required<string>();
@@ -99,7 +104,11 @@ export class PredavanjeDetalj {
     effect(() => {
       const id = this.pId();
       if (id !== null) {
-        untracked(() => this.store.ucitaj(id));
+        untracked(() => {
+          this.store.ucitaj(id);
+          this.prezentacije.resetuj();
+          this.prezentacije.ucitaj(id);
+        });
       }
     });
 
@@ -122,6 +131,25 @@ export class PredavanjeDetalj {
     if (id !== null) {
       this.store.ucitaj(id);
     }
+  }
+
+  /**
+   * "Pokreni prezentaciju": izbor prezentacije predmeta, start vezan za ovo predavanje i konzola u novoj kartici (beleženje
+   * ovde ne staje). Predmet dolazi sa predavanjem; dok nije učitano dugme ne postoji.
+   */
+  protected pokreniPrezentaciju(): void {
+    const p = this.store.predavanje();
+    if (!p?.predmet) {
+      return;
+    }
+    PokreniPrezentacijuDialog.otvori(this.dialog, { predavanjeId: p.id, predmetId: p.predmet.id }).subscribe(ishod => {
+      this.prezentacije.ucitaj(p.id);
+      if (ishod && !ishod.otvorena) {
+        this.obavestenja.info('Prezentacija je pokrenuta, ali je pregledač blokirao novu karticu. Otvori konzolu dugmetom „Nastavi“ ispod.', {
+          grupa: `predavanje-${p.id}`,
+        });
+      }
+    });
   }
 
   /** Brzi unos: Enter = prisutan; već prisutnog ne menja. */

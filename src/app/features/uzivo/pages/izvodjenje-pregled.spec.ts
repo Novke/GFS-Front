@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, PregledZadatka, RezultatPitanja } from '../data-access/uzivo.models';
-import { IzvodjenjePregledPage, ishodPoPolju, ishodUkupno, oznakeRundi, procenatTacnihTekst } from './izvodjenje-pregled.page';
+import { IzvodjenjePregledPage, ishodUkupno, oznakeRundi, procenatTacnihTekst, unetoUcesnika } from './izvodjenje-pregled.page';
 
 function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 + 2?'): PitanjeSnimak {
   return {
@@ -19,7 +19,7 @@ function runda(rundaId: number, redniBroj: number, slajdId: number | null, izmen
   return {
     rundaId, slajdId, rbSlajda: slajdId, redniBroj, pitanje: snimak(50 + (slajdId ?? 0), slajdId),
     rezultat: {
-      tip: 'JEDAN_TACAN', ukupno: 4, brojevi: null, skala: null, tekstovi: null,
+      tip: 'JEDAN_TACAN', ukupno: 4, brojevi: null, skala: null, tekstovi: null, tacnih: 3,
       opcije: [{ id: 1, tekst: '3', broj: 1, tacna: false }, { id: 2, tekst: '4', broj: 3, tacna: true }],
     },
     brojOdgovora: 4, procenatTacnih: 75, ...izmene,
@@ -40,8 +40,8 @@ function pregledZadatka(slajdId: number): PregledZadatka {
       }],
     },
     ucesnici: [
-      { ucesnikId: 1, ime: 'Ana', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: true, polja: { a: true } },
-      { ucesnikId: 2, ime: 'Bojan', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: false, polja: { a: false } },
+      { ucesnikId: 1, ime: 'Ana', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: true, polja: { a: true }, uneto: { a: '45' } },
+      { ucesnikId: 2, ime: 'Bojan', varijantaId: 12, varijantaNaziv: 'V1', odgovorio: true, tacno: false, polja: { a: false }, uneto: { a: '44' } },
     ],
   };
 }
@@ -182,7 +182,8 @@ describe('IzvodjenjePregledPage', () => {
     expect(karte[0].textContent).toContain('Odgovora 2 · tačnih 50 %');
     const redovi = Array.from(karte[0].querySelectorAll('tbody tr')).map(tr => tr.textContent?.replace(/\s+/g, ' ').trim());
     expect(redovi[0]).toContain('Ana');
-    expect(redovi[0]).toContain('a) ✓');
+    expect(redovi[0]).toContain('45 ✓');
+    expect(redovi[0]).not.toContain('a)');
     expect(redovi[0]).toContain('tačno');
     expect(redovi[1]).toContain('netačno');
     expect(karte[1].textContent).toContain('Koliko je 2 + 2?');
@@ -209,12 +210,37 @@ describe('IzvodjenjePregledPage', () => {
     expect(el.querySelector('tbody tr [data-nivo-varijante] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji)');
   });
 
-  it('ishod učesnika po polju i ukupno', () => {
+  it('uneto po polju i ukupno: jedno polje bez oznake, više polja sa oznakom, redom šeme', () => {
     const z = pregledZadatka(7);
-    expect(ishodPoPolju(z, z.ucesnici[0])).toBe('a) ✓');
-    expect(ishodPoPolju(z, { ...z.ucesnici[0], polja: null })).toBe('—');
-    expect(ishodUkupno({ ...z.ucesnici[0], odgovorio: false, tacno: null, polja: null })).toBe('bez odgovora');
+    expect(unetoUcesnika(z, z.ucesnici[0])).toEqual([{ kljuc: 'a', oznaka: null, vrednost: '45', tacno: true, formula: false }]);
+    expect(unetoUcesnika(z, { ...z.ucesnici[0], polja: null, uneto: null })).toEqual([]);
+    expect(unetoUcesnika(z, { ...z.ucesnici[1], uneto: null })[0].vrednost).toBe('—');
+    expect(ishodUkupno({ ...z.ucesnici[0], odgovorio: false, tacno: null, polja: null, uneto: null })).toBe('bez odgovora');
     expect(ishodUkupno(z.ucesnici[1])).toBe('netačno');
+
+    const polje = z.rezultat.varijante[0].polja[0];
+    z.rezultat.varijante[0].polja = [
+      { ...polje, oznaka: 'Dekadno' },
+      { ...polje, kljuc: 'b', oznaka: 'Paran?', tip: 'JEDAN_TACAN', vrednosti: null, opcije: [{ id: 1, tekst: 'da', broj: 1, tacna: false }] },
+    ];
+    const u = { ...z.ucesnici[1], polja: { b: true, a: false }, uneto: { b: 'da', a: '44' } };
+    expect(unetoUcesnika(z, u)).toEqual([
+      { kljuc: 'a', oznaka: 'Dekadno', vrednost: '44', tacno: false, formula: false },
+      { kljuc: 'b', oznaka: 'Paran?', vrednost: 'da', tacno: true, formula: true },
+    ]);
+  });
+
+  it('kolona "Uneto": vrednost uz ✓/✗ i klasu tačno/netačno, bez oznake jedinog polja', () => {
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [zadatakRunda(1, 20, 20)], rangLista: [] });
+    expect([...el.querySelectorAll('thead th')].map(th => th.textContent?.trim())).toContain('Uneto');
+    const redovi = el.querySelectorAll('tbody tr');
+    const prvi = redovi[0].querySelector('[data-uneto="a"]')!;
+    expect(prvi.classList).toContain('uz-pr-uneto--tacno');
+    expect(prvi.textContent!.replace(/\s+/g, ' ').trim()).toBe('45 ✓tačno');
+    expect(prvi.querySelector('.uz-pr-uneto-oznaka')).toBeNull();
+    const drugi = redovi[1].querySelector('[data-uneto="a"]')!;
+    expect(drugi.classList).toContain('uz-pr-uneto--netacno');
+    expect(drugi.textContent!.replace(/\s+/g, ' ').trim()).toBe('44 ✗netačno');
   });
 
   it('bez takmičenja nema rang-liste, ni kad server šalje učesnike', () => {

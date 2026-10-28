@@ -283,6 +283,18 @@ Interactive presentation with live questions (spec `docs/superpowers/specs/2026-
 in `Novke/GFS-deploy`). The server is the only source of truth: every change arrives as a whole snapshot with `verzija`
 over STOMP; teacher commands are REST.
 
+- **Presentations on a lecture (`features/predavanja`, not `features/uzivo`).** The live lecture page (`/predavanja/:id` until finished) has
+  "Pokreni prezentaciju": `ui/pokreni-prezentaciju.dialog.ts` lists the subject's presentations (`GET prezentacije?predmetId`, newest edited first,
+  filter field above 6) and starts a run bound to the lecture (`POST prezentacije/{id}/izvodjenja`, `cuvanje: true`, `predavanjeId`, also for a
+  presentation without questions) and opens its console in a **new tab**, so recording continues. The tab is opened **synchronously from the click** as
+  `about:blank` and gets its address when the server answers (popup blockers refuse `window.open` after an async call); on a server error it is closed,
+  and when even the blank tab is blocked the run still starts and the page tells the teacher to use "Nastavi". A presentation with a run in progress for this
+  lecture offers "Nastavi" (link, no second start); one running elsewhere is locked (the server allows one active run per presentation, 409).
+  `ui/prezentacije-na-predavanju.ts` ("Prezentacije na ovom predavanju", live and finished view) lists `GET izvodjenja?predavanjeId` with status,
+  "Nastavi" (console) or "Pregled", reloads when the browser tab becomes visible again. The API client and DTOs are in `core/api/prezentacije-predavanja.api.ts`
+  (`features/predavanja` must not import `features/uzivo/data-access`); it does not import `features/uzivo/uzivo-putanje.ts` either (a shared chunk would grow the student closure past its e2e budget): `ui/izvodjenje-putanje.ts` holds the two paths, pinned equal to `UzivoPutanje` by `izvodjenje-putanje.spec.ts`. The route
+  `prezentacije/:id?predavanje=ID` (editor, "Pokreni" without dialog) still exists and is unchanged.
+
 - **Formulas in question and option text (phase 5a).** Syntax `$...$` by pandoc's `tex_math_dollars` (`ui/tekst-formule.ts`):
   after the opening `$` a character that is neither a space nor `$`; no newline and no unescaped `$` inside; the last character
   before the closing `$` is not a space or `\`; no digit right after the closing `$`; `\$` is always a dollar sign; no `$$...$$`.
@@ -366,6 +378,23 @@ over STOMP; teacher commands are REST.
 - `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
   every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock
   offset), `editor.store.ts`, `izvodjenje.store.ts`, rules (`slajd-pravila`, `izvodjenje-pravila`). Only uživo uses them.
+- **Question results** (`ui/rezultat-prikaz.component`, the same component on the projector (`javniRezultat`), in the console
+  (teacher `rezultat`, `kompaktno`) and in the run overview): options (A/B/C/D) are bars with count and percent; free entry is shown
+  as **chips of the entered answers** like the Zadatak slide (`ui/cipovi-odgovora.component`, shared with `zadatak-rezultat`): BROJ
+  always (no median since 2026-10-28; every distinct value with all decimals through `tacanBroj` plus the unit, because the server
+  groups exactly equal values and rounding would show two different answers as one) and KRATAK_TEKST when the question has accepted
+  answers (`prihvatljiviOdgovori`, whatever `tekstPrikaz` says). Open KRATAK_TEKST (no accepted answers) keeps the word cloud or the
+  list (`tekstPrikaz`, `vrstaRezultata`); BROJ without a correct value (estimate) shows neutral chips. Chips are neutral until
+  correctness is visible (`Rezultat.tacnih !== null`, server rule: public result only after `TACAN` on a closed question); then the
+  correct ones come first with ✓, the wrong ones with ✗, and a chip "niko" with the correct value from the question when answers exist
+  but nobody had it (`cipoviRezultata`). At most `MAKS_CIPOVA` = 30 chips plus "+N drugih (M)", correct ones are never cut
+  (`ograniciCipove`); on the projector the font follows `data-gustina` (`gustinaCipova`, `min(cqw, cqh)` in `uzivo-tokeni.css`).
+  Whenever `tacnih` is set and there are answers, a line "✓ Tačno x od y · N %" (`tacnihTekst`) sits above every result type (options
+  included); the overview turns it off (`[prikaziTacnih]="false"`, its round header already says "tačnih N %"). Inputs: `rezultat`
+  and `pitanje` (`OpisPitanja` = `tekstPrikaz`, `jedinica`, `prihvatljiviOdgovori`, `brojTacno`; `PitanjeDetails` and
+  `PitanjeSnimak` both fit). Chip styles live in the lazy chip component, not in the global CSS; a parent enlarges the correct chip
+  with `--uz-co-tacno-f` and centers with `--uz-co-poravnanje`. The question form notes under "Rezultati na projektoru" that cloud and
+  list apply only without accepted answers.
 - `ui/`: shared views (slide, options, results, ranking, timer, QR); `pages/`: list, editor, runs, overview, audience
   (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
   `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
@@ -852,15 +881,26 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   run (backend BE-8) are not recorded yet, so do not rely on it for grades.
 - **Projector:** renders only `NastavnickiZadatak.javniRezultat` (`ui/zadatak-rezultat.component`, `ui/zadatak-prikaz.component`), whose
   numbers, correctness and solution follow three independent switches on the server; the console's `rezultat` is never on the
-  projector.
+  projector. Two separate use cases (`PrikazZadatka`, chosen by `zadatak-prikaz.prikazRezultata`): results on (Space) and solution off
+  = `odgovori`: no images, per variant only its name and per field the entered values as big chips (`app-cipovi-odgovora`, the same
+  component as free-entry question results) in one wrapping row, most frequent
+  first (`198 · 199 (2) · 51`, the count in parentheses only above 1), neutral until `TACAN`; then the correct value comes first, larger,
+  with ✓ (a synthetic chip "niko" when nobody had it, so it is never lost behind wrong ones) and the wrong ones with ✗; variants nobody
+  answered and paper variants are left out (one "Još nema odgovora." when none remain). Solution on (Shift+R), or only `TACAN` = `resenje`:
+  task and solution images, the counters line and "✓ tačno: …", no chips; with both results and solution on the solution wins, and
+  switching it off returns to the chips. Sizes are in `cqw` per column count (`kolone`). A field label is shown only when the variant
+  has more than one field (`oznakaVidljiva`; old schemas and round snapshots carry "a) …" on single fields).
 - **Phone:** `javno/zadatak-ekran` + `javno/zadatak-unos` (lazy, `@defer`) show the participant's own variant (`LicnoStanje.zadatak`:
+  field labels through `oznakaNaTelefonu`: on a one-field schema a leading list marker `a) `, `(b) `, `1) ` is stripped, nothing else;
   SVG through `api/public/mediji/<own id>`, the fields of its schema), the outcome after closing, correct values only with `TACAN`
   and the solution only with `RESENJE`. They import only modules already allowed for `features/uzivo/javno` (the allow-list did not
   change). A scored run without a signed-in student (`prijavaObavezna && !prijavljenStudent`, or 403 on join) goes to
   `nalog?nazad=uzivo/<kod>`; after the code login `/nalog` returns to `uzivo/<kod>` (`javnoNazad`) and the phone joins under the
   student's own name without the name form (`e2e/nalog.spec.ts`, "bodovan uživo run").
 - **Overview** (`pages/izvodjenje-pregled.page`): a ZADATAK round (`RezultatPitanja.zadatak`, `pitanje`/`rezultat` null) shows the group
-  path, `app-zadatak-rezultat` (everything visible) and the participants table (variant, outcome per field, total). Round cards are
+  path, `app-zadatak-rezultat` (prikaz `sve`: images, solution, "tačno" line and the same compact chips, no bars) and the participants
+  table (variant, column "Uneto" = what was entered per field from `UcesnikZadatka.uneto`, green with ✓ when correct and red with ✗ when
+  not, `label: value` only for multi-field variants, `unetoUcesnika`; total). Round cards are
   keyed by slide id (`slajdId`, else the snapshot's `pitanje.slajdId` or `zadatak.slajdId`), never by group id.
 - **Level (nivo, 1-3):** the slide form (`zadatak-forma.component`, `ZadatakSlajda.nivo`, `null` = all) has the shared `app-nivo` picker with
   "Svi" and the candidate count of every level (`ZadatakSlajdaInfo.brojAktivnihPoNivou`, also in the option's aria-label); the console
@@ -872,7 +912,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   change (no level there).
 - **Bundle budget exception:** the student page's static part grew by ~1.9 kB for the task (student login redirect, task screens in
   the store, the `@defer` entry must work before the lazy chunk), so `e2e/lenji-formule.spec.ts` allows `RAST_ZADATKA = 1 300` B on
-  top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5).
+  top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5). On
+  2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
+  free-entry chips did not change the student page, results are drawn only by teacher views).
 
 ## Banka zadataka (`features/banka`)
 

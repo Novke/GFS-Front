@@ -92,7 +92,7 @@ describe('SlajdPrikazComponent', () => {
 
   it('rezultati zauzimaju mesto pločica; broj odgovora i kod u podnožju', async () => {
     const rezultat: Rezultat = {
-      tip: 'JEDAN_TACAN', ukupno: 3, brojevi: null, tekstovi: null, skala: null,
+      tip: 'JEDAN_TACAN', ukupno: 3, brojevi: null, tekstovi: null, skala: null, tacnih: null,
       opcije: [{ id: 11, tekst: 'Jedan', broj: 1, tacna: null }, { id: 12, tekst: 'Dva', broj: 2, tacna: null }, { id: 13, tekst: 'Tri', broj: 0, tacna: null }],
     };
     const { el } = await prikazi({
@@ -257,7 +257,7 @@ describe('SlajdPrikazComponent: ZADATAK sa stanjem izvođenja (projektor)', () =
   it('ZATVORENO sa javnim rezultatom: mreža kartica, čip "Zatvoreno" u podnožju', async () => {
     const v = [varijantaRunde(11), varijantaRunde(12)];
     const s = naZadatku('ZATVORENO', {
-      zadatak: { javniRezultat: { ukupno: 0, odgovoriPrikazani: true, varijante: v.map(x => rezultatVarijante(x)) } },
+      zadatak: { javniRezultat: { ukupno: 2, odgovoriPrikazani: true, varijante: v.map(x => ({ ...rezultatVarijante(x), odgovorilo: 1 })) } },
     });
     const { el } = await prikazi({ slajd: s.trenutniSlajd, zadatak: s.zadatak, faza: 'ZATVORENO', brojOdgovora: 0, kodTraka });
     expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);

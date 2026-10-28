@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RezultatPolja, RezultatVarijante, ZadatakRezultat, medijUrl } from '../data-access/uzivo.models';
+import { Cip, CipoviOdgovoraComponent, poredjajCipove } from './cipovi-odgovora.component';
 import { tacanBroj } from './format';
 import { meriFormule } from './mera-formule';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
@@ -31,49 +32,77 @@ export function tacnoTekst(p: RezultatPolja): string {
   }
 }
 
-/** Red rezultata polja: vrednost ili opcija sa brojem odgovora i udelom (trake) među onima koji su odgovorili. */
-interface Red { kljuc: string; tekst: string; broj: number; udeo: number; tacno: boolean; formula: boolean; }
+/**
+ * Oznaka polja se prikazuje samo kad varijanta ima više polja: kod jednog polja "a) binarni zapis" ništa ne znači (oznake iz
+ * starih šema i snimaka rundi često počinju slovom liste), pa se izostavlja na tabli i u pregledu.
+ */
+export function oznakaVidljiva(v: Pick<RezultatVarijante, 'polja'>): boolean {
+  return v.polja.length > 1;
+}
+
+export type { Cip } from './cipovi-odgovora.component';
+
+/**
+ * Čipovi polja: unete vrednosti (BROJ i TEKST, grupisane na serveru) ili opcije sa bar jednim glasom, najčešće prve. Kad je
+ * tačan odgovor poznat (`tacno`), tačni idu prvi, a kad ga niko nije uneo, dodaje se čip tačnog odgovora sa brojem 0 (tačna
+ * vrednost se nikad ne gubi iza netačnih). Bez prikazanih odgovora (`vrednosti` `null`, opcije sa 0) prazna lista.
+ */
+export function cipoviPolja(p: RezultatPolja): Cip[] {
+  const poznato = p.tacno !== null;
+  const stanje = (tacan: boolean | null) => (!poznato ? null : tacan === true ? 'tacno' : 'netacno');
+  const cipovi: Cip[] = p.opcije
+    ? p.opcije
+      .filter(o => o.broj > 0 || (poznato && o.tacna === true))
+      .map(o => ({ kljuc: String(o.id), tekst: o.tekst ?? '', broj: o.broj, stanje: stanje(o.tacna), formula: true }))
+    : (p.vrednosti ?? []).map(t => ({
+      kljuc: t.kljuc, tekst: t.tekst + (p.tip === 'BROJ' && p.jedinica ? ' ' + p.jedinica : ''), broj: t.broj,
+      stanje: stanje(t.tacan), formula: false,
+    }));
+  if (!p.opcije && poznato && !cipovi.some(c => c.stanje === 'tacno')) {
+    const t = tacnoTekst(p);
+    if (t && p.vrednosti) cipovi.push({ kljuc: '\u0000tacno', tekst: t, broj: 0, stanje: 'tacno', formula: false });
+  }
+  return poredjajCipove(cipovi);
+}
+
+/**
+ * Kako kartica izgleda: `sve` (pregled izvođenja: slike, brojevi, tačno i čipovi), `resenje` (tabla uz rešenje ili samo
+ * tačan odgovor: slike zadatka i rešenja i red "tačno", bez čipova) i `odgovori` (tabla uz prikazane odgovore bez rešenja:
+ * samo uneti brojevi, krupno, bez slika).
+ */
+export type PrikazZadatka = 'sve' | 'resenje' | 'odgovori';
 
 interface PoljeKartice {
-  kljuc: string; oznaka: string; redovi: Red[] | null; tacno: string;
+  kljuc: string; oznaka: string | null; cipovi: Cip[] | null; tacno: string;
 }
 
 interface Kartica {
   id: number; naziv: string; svgId: string; resenjeSvgId: string | null; brojevi: string | null; polja: PoljeKartice[];
 }
 
-const udeoOd = (broj: number, odgovorilo: number) => (odgovorilo > 0 ? Math.min(100, Math.round((broj * 100) / odgovorilo)) : 0);
-
 function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean): PoljeKartice {
-  let redovi: Red[] | null = null;
-  if (prikazani) {
-    redovi = p.opcije
-      ? p.opcije.map(o => ({
-        kljuc: String(o.id), tekst: o.tekst ?? '', broj: o.broj, udeo: udeoOd(o.broj, v.odgovorilo), tacno: o.tacna === true, formula: true,
-      }))
-      : (p.vrednosti ?? []).map(t => ({
-        kljuc: t.kljuc, tekst: t.tekst + (p.tip === 'BROJ' && p.jedinica ? ' ' + p.jedinica : ''), broj: t.broj,
-        udeo: udeoOd(t.broj, v.odgovorilo), tacno: t.tacan === true, formula: false,
-      }));
-  }
-  return { kljuc: p.kljuc, oznaka: p.oznaka, redovi, tacno: tacnoTekst(p) };
+  return {
+    kljuc: p.kljuc, oznaka: oznakaVidljiva(v) ? p.oznaka : null, cipovi: prikazani ? cipoviPolja(p) : null,
+    tacno: tacnoTekst(p),
+  };
 }
 
 /**
- * Rezultat Zadatak runde po varijanti, u mreži kartica (2-4 kolone, `kolone`). Kartica: slika zadatka, uz `resenjeSvgId` i
- * slika rešenja ispod nje, a po polju šeme: uz `odgovoriPrikazani` trake vrednosti ili opcija i broj odgovora, uz `tacno` red
- * "tačno: …". Tri prekidača projektora su nezavisna, pa kartica crta samo ono što rezultat nosi (server javni rezultat
- * pravi po pravilima vidljivosti: bez prikazanih odgovora su brojevi 0 i `vrednosti` `null`, bez `TACAN` nema `tacnih` ni `tacno`,
- * bez `RESENJE` nema `resenjeSvgId`). Imena učesnika rezultat ne nosi. Slike su SVG iz `api/public/mediji` na beloj podlozi
- * (zadatak je crn na providnoj pozadini, pa na tamnoj temi ne bi bio čitljiv). Isti sastojak koristi pregled izvođenja.
+ * Rezultat Zadatak runde po varijanti, u mreži kartica (2-4 kolone, `kolone`). Tri prekidača projektora su nezavisna, pa
+ * kartica crta samo ono što rezultat nosi (server javni rezultat pravi po pravilima vidljivosti: bez prikazanih odgovora su
+ * brojevi 0 i `vrednosti` `null`, bez `TACAN` nema `tacnih` ni `tacno`, bez `RESENJE` nema `resenjeSvgId`), a `prikaz` bira
+ * slučaj upotrebe (`PrikazZadatka`). Uneti odgovori su čipovi u jednom redu koji se prelama (`198 · 199 (2) · 51`, broj u
+ * zagradi tek kad je više od jednog), tačan prvi i istaknut kad je poznat. Oznaka polja samo kad varijanta ima više polja
+ * (`oznakaVidljiva`). Imena učesnika rezultat ne nosi. Slike su SVG iz `api/public/mediji` na beloj podlozi (zadatak je crn
+ * na providnoj pozadini, pa na tamnoj temi ne bi bio čitljiv). Isti sastojak koristi pregled izvođenja.
  */
 @Component({
   selector: 'app-zadatak-rezultat',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
-  imports: [TekstFormuleComponent],
-  host: { class: 'uz-zr' },
+  imports: [CipoviOdgovoraComponent, TekstFormuleComponent],
+  host: { class: 'uz-zr', '[attr.data-prikaz]': 'prikaz()' },
   // u komponenti (lenji chunkovi), ne u globalnom `uzivo-tokeni.css`: početni paket je na granici budžeta `e2e/lenji-editor.spec.ts`.
   // Osnova je mreža prirodne visine (pregled izvođenja); na projektoru (host dobija klasu `uz-zad-rezultat`) mreža puni ostatak
   // platna, redovi su jednake visine, a slike dele visinu kartice. Veličine na projektoru su u `cqw` (platno), pa nisu u osnovi.
@@ -97,20 +126,11 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
       position: absolute; top: 0; left: 0; padding: 0 0.6em; border-radius: 0.3em; background: var(--ok); color: var(--ok-ink);
       font-size: 0.85em; font-weight: 700;
     }
+    .uz-zr-naziv { margin: 0; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .uz-zr-brojevi { color: var(--muted); font-variant-numeric: tabular-nums; }
     .uz-zr-polje { min-height: 0; overflow: hidden; }
     .uz-zr-oznaka { color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
     .uz-zr-tacno { margin: 0.1em 0 0.25em; font-weight: 600; }
-    .uz-zr-redovi { display: flex; flex-direction: column; gap: 0.25em; margin: 0; padding: 0; list-style: none; }
-    .uz-zr-red {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "tekst broj" "traka traka";
-      align-items: baseline; column-gap: 0.6em; row-gap: 0.1em; padding: 0 0.3em; border-radius: 0.3em;
-    }
-    .uz-zr-red-tekst { grid-area: tekst; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-    .uz-zr-red-broj { grid-area: broj; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .uz-zr-red > .uz-rez-traka { grid-area: traka; height: 0.45em; }
-    .uz-zr-red--tacna { --uz-boja: var(--ok); background: var(--ok-soft); }
-    .uz-zr-red--tacna .uz-zr-red-tekst { font-weight: 700; }
     .uz-zr-prazno { color: var(--muted); }
 
     :host(.uz-zad-rezultat) .uz-zr-mreza { position: absolute; inset: 0; grid-auto-rows: minmax(0, 1fr); gap: 1.2cqw; }
@@ -121,42 +141,56 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
     :host(.uz-zad-rezultat) .uz-zr-slike { flex: 1 1 0; min-height: 40%; gap: 0.5cqw; }
     :host(.uz-zad-rezultat) .uz-zr-slika { flex: 1 1 0; min-height: 0; max-height: none; border-radius: 0.5cqw; }
     :host(.uz-zad-rezultat) .uz-zr-resenje { flex: 1 1 0; min-height: 0; }
+
+    /* tabla, prikazani odgovori: samo brojevi, krupno. Tačan čip je prvi u redu, pa ga prelivanje kartice ne odseca. */
+    /* veličina = manja od one po koloni (širina kartice) i one po redovima (visina): 4 varijante sa po ~6 vrednosti staju */
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza { --uz-f-k: 3cqw; --uz-f-r: 3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="3"] { --uz-f-k: 2.3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-kolone="4"] { --uz-f-k: 1.8cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="2"] { --uz-f-r: 2.4cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="3"] { --uz-f-r: 1.9cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="4"] { --uz-f-r: 1.3cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-mreza[data-redova="5"] { --uz-f-r: 1.05cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica { font-size: min(var(--uz-f-k), var(--uz-f-r)); gap: 0.6cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica:only-child { font-size: 4.5cqw; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-naziv,
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-oznaka { font-size: 0.5em; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) { --uz-co-tacno-f: 1.3em; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-prazno-sve {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 3cqw;
+    }
   `,
   template: `
-    <ul class="uz-zr-mreza" [attr.data-kolone]="brojKolona()" [style.--uz-kolone]="brojKolona()">
+    @let rezim = prikaz();
+    <ul class="uz-zr-mreza" [attr.data-kolone]="brojKolona()" [attr.data-redova]="brojRedova()" [style.--uz-kolone]="brojKolona()">
       @for (k of kartice(); track k.id) {
-        <li class="uz-zr-kartica">
-          <div class="uz-zr-slike">
-            <img class="uz-zr-slika rezim-dan" [src]="url(k.svgId)" [alt]="'Zadatak, varijanta ' + k.naziv">
-            @if (k.resenjeSvgId; as r) {
-              <figure class="uz-zr-resenje">
-                <img class="uz-zr-slika rezim-dan" [src]="url(r)" [alt]="'Rešenje, varijanta ' + k.naziv">
-                <figcaption class="uz-zr-natpis" aria-hidden="true">Rešenje</figcaption>
-              </figure>
-            }
-          </div>
-          @if (k.brojevi) { <p class="uz-zr-brojevi">{{ k.brojevi }}</p> }
+        <li class="uz-zr-kartica" [attr.data-varijanta]="k.id">
+          @if (rezim === 'odgovori') {
+            <p class="uz-zr-naziv">{{ k.naziv }}</p>
+          } @else {
+            <div class="uz-zr-slike">
+              <img class="uz-zr-slika rezim-dan" [src]="url(k.svgId)" [alt]="'Zadatak, varijanta ' + k.naziv">
+              @if (k.resenjeSvgId; as r) {
+                <figure class="uz-zr-resenje">
+                  <img class="uz-zr-slika rezim-dan" [src]="url(r)" [alt]="'Rešenje, varijanta ' + k.naziv">
+                  <figcaption class="uz-zr-natpis" aria-hidden="true">Rešenje</figcaption>
+                </figure>
+              }
+            </div>
+            @if (k.brojevi) { <p class="uz-zr-brojevi">{{ k.brojevi }}</p> }
+          }
           @for (p of k.polja; track p.kljuc) {
-            @if (p.redovi || p.tacno) {
-              <div class="uz-zr-polje">
-                <p class="uz-zr-oznaka">{{ p.oznaka }}</p>
-                @if (p.tacno) {
-                  <p class="uz-zr-tacno"><span class="uz-tacno-znak"><span aria-hidden="true">✓ </span>tačno:</span>{{ ' ' }}<app-tekst-formule class="uz-zr-formula" [tekst]="p.tacno" /></p>
+            @let cipovi = rezim === 'resenje' ? null : p.cipovi;
+            @let tacno = rezim === 'odgovori' ? '' : p.tacno;
+            @if (cipovi || tacno) {
+              <div class="uz-zr-polje" [attr.data-polje]="p.kljuc">
+                @if (p.oznaka) { <p class="uz-zr-oznaka">{{ p.oznaka }}</p> }
+                @if (tacno) {
+                  <p class="uz-zr-tacno"><span class="uz-tacno-znak"><span aria-hidden="true">✓ </span>tačno:</span>{{ ' ' }}<app-tekst-formule class="uz-zr-formula" [tekst]="tacno" /></p>
                 }
-                @if (p.redovi; as redovi) {
-                  @if (redovi.length) {
-                    <ul class="uz-zr-redovi">
-                      @for (r of redovi; track r.kljuc) {
-                        <li class="uz-zr-red" [class.uz-zr-red--tacna]="r.tacno">
-                          <span class="uz-zr-red-tekst">
-                            @if (r.tacno) { <span class="uz-tacno-znak" aria-hidden="true">✓</span><span class="uz-sr">tačno </span> }
-                            @if (r.formula) { <app-tekst-formule class="uz-zr-formula" [tekst]="r.tekst" /> } @else { {{ r.tekst }} }
-                          </span>
-                          <span class="uz-zr-red-broj">{{ r.broj }}</span>
-                          <span class="uz-rez-traka" aria-hidden="true"><span class="uz-rez-ispuna" [style.--uz-udeo]="r.udeo + '%'"></span></span>
-                        </li>
-                      }
-                    </ul>
+                @if (cipovi) {
+                  @if (cipovi.length) {
+                    <app-cipovi-odgovora [cipovi]="cipovi" />
                   } @else {
                     <p class="uz-zr-prazno">Još nema odgovora.</p>
                   }
@@ -167,27 +201,36 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
         </li>
       }
     </ul>
+    @if (rezim === 'odgovori' && !kartice().length) {
+      <p class="uz-zr-prazno uz-zr-prazno-sve">Još nema odgovora.</p>
+    }
   `,
 })
 export class ZadatakRezultatComponent {
   readonly rezultat = input.required<ZadatakRezultat>();
+  /** Slučaj upotrebe (`PrikazZadatka`); pregled izvođenja ostaje na `sve`, tablu bira `app-zadatak-prikaz`. */
+  readonly prikaz = input<PrikazZadatka>('sve');
 
   protected readonly url = medijUrl;
-  protected readonly brojKolona = computed(() => kolone(this.rezultat().varijante.length));
+  protected readonly brojKolona = computed(() => kolone(this.kartice().length));
+  protected readonly brojRedova = computed(() => Math.min(5, Math.ceil(this.kartice().length / this.brojKolona())));
 
   protected readonly kartice = computed<Kartica[]>(() => {
     const r = this.rezultat();
-    return r.varijante.map((v, i) => {
+    const odgovori = this.prikaz() === 'odgovori';
+    return r.varijante.flatMap((v, i) => {
       const papir = v.polja.length === 0;
+      // tabla sa odgovorima: varijanta koju niko nije rešio (ili rad na papiru) nema šta da pokaže
+      if (odgovori && (papir || v.odgovorilo === 0)) return [];
       let brojevi: string | null = null;
       if (r.odgovoriPrikazani) {
         brojevi = papir ? `dodeljeno ${v.dodeljeno} · rad na papiru`
           : `dodeljeno ${v.dodeljeno} · odgovorilo ${v.odgovorilo}` + (v.tacnih !== null ? ` · tačno ${v.tacnih}` : '');
       }
-      return {
+      return [{
         id: v.varijantaId, naziv: v.naziv ?? `V${i + 1}`, svgId: v.svgId, resenjeSvgId: v.resenjeSvgId, brojevi,
         polja: v.polja.map(p => poljeKartice(p, v, r.odgovoriPrikazani)),
-      };
+      }];
     });
   });
 }

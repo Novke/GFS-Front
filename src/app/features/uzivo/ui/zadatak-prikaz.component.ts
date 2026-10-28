@@ -2,13 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { Faza, NastavnickiZadatak, SlajdDetails } from '../data-access/uzivo.models';
 import type { TajmerUlaz } from './slajd-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
-import { ZadatakRezultatComponent } from './zadatak-rezultat.component';
+import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.component';
 
 /**
  * Zadatak slajd na platnu 16:9 (projektor, umanjeni prikaz u konzoli): zaglavlje "Zadatak" sa nazivom grupe, tajmerom i,
  * uz prekidač rezultata (Space), "Odgovorilo x od y"; ispod njega uputstvo po fazi (CEKA, OTVORENO i zatvorena runda dok ništa nije prikazano; bez broja varijanti) ili, kad
  * snimak nosi `javniRezultat` (bar jedan od tri nezavisna prekidača: rezultati, `TACAN`, `RESENJE`) i runda je zatvorena, mreža
- * `app-zadatak-rezultat` (dok se odgovara, tabla ne pokazuje šta je ko odgovorio).
+ * `app-zadatak-rezultat` (dok se odgovara, tabla ne pokazuje šta je ko odgovorio) u jednom od dva prikaza (`prikazRezultata`).
  * Čita **samo** `javniRezultat`: nastavnički `rezultat` i `varijante` (sa id-jevima svih rešenja i tačnim vrednostima) se ovde
  * ne crtaju, pa slika rešenja ne postoji u DOM-u (ni zahtev na nju) dok nastavnik
  * ne uključi `RESENJE`. Imena učesnika se ne prikazuju. Bez stanja izvođenja (`zadatak` je `null`, npr. pregled u editoru i panel "Sledeće") statična kartica sa opisom
@@ -49,7 +49,7 @@ import { ZadatakRezultatComponent } from './zadatak-rezultat.component';
         }
       </header>
       @if (karticeVidljive() && z.javniRezultat; as r) {
-        <app-zadatak-rezultat class="uz-zad-rezultat" [rezultat]="r" />
+        <app-zadatak-rezultat class="uz-zad-rezultat" [rezultat]="r" [prikaz]="prikazRezultata()" />
       } @else {
         <div class="uz-zad-opis" data-zadatak><p class="uz-zad-broj">{{ uputstvo() }}</p></div>
       }
@@ -103,6 +103,15 @@ export class ZadatakPrikazComponent {
    * odgovorilo, ne i šta.
    */
   protected readonly karticeVidljive = computed(() => this.faza() === 'ZATVORENO');
+  /**
+   * Dva odvojena slučaja table: uz prikazane odgovore (Space) bez rešenja samo uneti brojevi, krupno (`odgovori`); uz rešenje
+   * (Shift+R) ili samo tačan odgovor (C bez Space) slike zadatka i rešenja i red "tačno" (`resenje`). Kad su uključeni i
+   * odgovori i rešenje, rešenje ima prednost, a gašenjem rešenja tabla se vraća na odgovore.
+   */
+  protected readonly prikazRezultata = computed<PrikazZadatka>(() => {
+    const z = this.zadatak();
+    return z?.javniRezultat?.odgovoriPrikazani && !z.resenjePrikazano ? 'odgovori' : 'resenje';
+  });
   protected readonly ukupnoMs = computed(() => {
     const s = this.opis()?.vremeSekunde;
     return s ? s * 1000 : null;

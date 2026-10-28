@@ -94,6 +94,12 @@ interface SlajdCmd {
 }
 /** `MedijInfo` otpremljene slike (`POST mediji`). */
 export interface Medij { id: string; naziv: string; mime: string; velicina: number }
+/** `IzvodjenjeInfo` pokrenuto kroz `POST prezentacije/:id/izvodjenja` (ili postavljeno u testu). */
+export interface IzvodjenjeNaPredavanju {
+  id: number; kod: string; prezentacija: { id: number; naziv: string; predmetId: number }; status: 'AKTIVNO' | 'ZAVRSENO'; cuvanje: boolean;
+  grupa: unknown; predavanje: { id: number; rb: number; datum: string | null; tema: string | null } | null; pocetak: string; kraj: string | null;
+  brojUcesnika: number; brojPitanja: number; boduje: boolean;
+}
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
 /** `ObavestenjeInfo` (`GET api/obavestenja`), kao backend. */
 interface Obavestenje {
@@ -289,6 +295,8 @@ export class MockApi {
   readonly zahtevi: Zahtev[] = [];
   /** Zahtevi za koje mok nema rutu (test ih proverava u `afterEach`). */
   readonly nepoznati: string[] = [];
+  /** Izvođenja vezana za predavanja (`GET izvodjenja?predavanjeId`); pokretanje ih dodaje, test ih može postaviti. */
+  readonly izvodjenjaPredavanja: IzvodjenjeNaPredavanju[] = [];
   /** Slike otpremljene kroz `POST mediji`, redom (id-jevi su UUID-i iz brojača, isti u svakom pokretanju). */
   readonly mediji: Medij[] = [];
   /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
@@ -479,7 +487,7 @@ export class MockApi {
     return {
       id: p.id, rb: p.rb, datum: p.datum, tema: p.tema, posecenost: p.posecenost,
       grupa: g ? { id: g.id, naziv: g.naziv, godinaUpisa: g.godinaUpisa } : null,
-      predmet: { naziv: this.predmet(p.predmetId)?.naziv ?? '' },
+      predmet: { id: p.predmetId, naziv: this.predmet(p.predmetId)?.naziv ?? '' },
       aktivnosti: p.aktivnosti.map(a => {
         const s = this.student(a.studentId);
         return { id: a.id, student: { id: a.studentId, ime: s?.ime ?? '', prezime: s?.prezime ?? '', indeks: s?.indeks ?? '' }, tip: a.tip, napomene: a.napomene };
@@ -1097,7 +1105,41 @@ export class MockApi {
 
     // uživo, nastavnik (lista i editor prezentacija): lista, nova, brisanje, čitanje, izmena podešavanja (tema...),
     // čuvanje slajda, slike i uvoz slajdova (PowerPoint); nema aktivnih izvođenja
-    get('izvodjenja', () => ok([]));
+    // izvođenja vezana za predavanje (odeljak "Prezentacije na ovom predavanju"): ostaju u stanju testa, najnovije prvo
+    get('izvodjenja', z => {
+      const predavanjeId = z.query.get('predavanjeId');
+      const status = z.query.get('status');
+      return ok(this.izvodjenjaPredavanja
+        .filter(i => (predavanjeId === null || i.predavanje?.id === Number(predavanjeId)) && (status === null || i.status === status))
+        .sort((a, b) => b.pocetak.localeCompare(a.pocetak) || b.id - a.id));
+    });
+    // pokretanje iz ekrana predavanja: kao server, jedno izvođenje u toku po prezentaciji (409), predavanje mora biti iz predmeta prezentacije
+    post('prezentacije/:id/izvodjenja', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const cmd = z.telo as { cuvanje: boolean; predavanjeId: number | null };
+      if (x.aktivnoIzvodjenjeId != null) {
+        return greska(409, 'Prezentacija je već u toku.');
+      }
+      const pr = cmd.predavanjeId == null ? null : d.predavanja.find(q => q.id === cmd.predavanjeId) ?? null;
+      if (cmd.predavanjeId != null && !pr) {
+        return greska(404, 'Predavanje nije pronađeno.');
+      }
+      if (pr && pr.predmetId !== x.predmet.id) {
+        return greska(400, 'Predavanje nije iz predmeta ove prezentacije.');
+      }
+      const id = this.sledeciId++;
+      const novo: IzvodjenjeNaPredavanju = {
+        id, kod: String(100000 + id), prezentacija: { id: x.id, naziv: x.naziv, predmetId: x.predmet.id }, status: 'AKTIVNO', cuvanje: cmd.cuvanje,
+        grupa: null, predavanje: pr ? { id: pr.id, rb: pr.rb, datum: pr.datum, tema: pr.tema } : null,
+        pocetak: lokalnoVreme(new Date()), kraj: null, brojUcesnika: 0, brojPitanja: 0, boduje: false,
+      };
+      this.izvodjenjaPredavanja.push(novo);
+      x.aktivnoIzvodjenjeId = id;
+      return { status: 201, telo: novo };
+    });
     const info = (x: UzivoPrezentacija) => {
       const { slajdovi, ...ostalo } = x;
       // kao server: slajdovi sa rundama (PITANJE i ZADATAK)

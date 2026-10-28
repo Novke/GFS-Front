@@ -16,6 +16,11 @@
         <li class="l-zvezdica"><mat-icon svgIcon="star" aria-hidden="true" />zvezdica</li>
       </ul>
       <div class="akcije">
+        @if (p.predmet) {
+          <button matButton="outlined" type="button" data-prezentacija (click)="pokreniPrezentaciju()">
+            <mat-icon svgIcon="slideshow" aria-hidden="true" />Pokreni prezentaciju
+          </button>
+        }
         <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" target="_blank" rel="noopener" data-projektor>
           <mat-icon svgIcon="co_present" aria-hidden="true" />Projektor<span class="sr-only"> (otvara se u novoj kartici)</span>
         </a>
@@ -54,6 +59,8 @@
       }
     </section>
   }
+
+  <app-prezentacije-na-predavanju [predavanjeId]="p.id" [zavrseno]="store.zavrseno() === true" />
 
   @if (store.zavrseno()) {
     <section class="aktivnosti" aria-labelledby="naslov-aktivnosti">

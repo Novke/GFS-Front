@@ -314,6 +314,52 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page), `axe: konzola, Zadatak zatvoren sa rešenjem (${rezim})`).toEqual([]);
     });
 
+    // Pregled izvođenja posle časa: Zadatak runda sa čipovima unetih vrednosti i kolonom "Uneto" (tačno zeleno, netačno crveno, uz ✓/✗)
+    test('/izvodjenja/7/pregled (Zadatak: čipovi i kolona "Uneto"): bez serious/critical kršenja', async ({ page, mock }) => {
+      const tacno = { broj: 11, prihvatljivi: null, tacna: null, tacne: null };
+      const polje = (kljuc: string, oznaka: string, vrednosti: { tekst: string; broj: number; tacan: boolean }[]) => ({
+        kljuc, oznaka, tip: 'BROJ', jedinica: null, opcije: null, tacno,
+        vrednosti: vrednosti.map(v => ({ kljuc: v.tekst, sakriven: false, ...v })),
+      });
+      mock.na('GET', 'izvodjenja/:id/rezultati', () => ({
+        status: 200,
+        telo: {
+          izvodjenje: {
+            id: 7, prezentacija: { id: 6, naziv: 'Konverzije', predmetId: 1 }, kod: null, status: 'ZAVRSENO', cuvanje: true,
+            grupa: null, predavanje: null, pocetak: '2026-10-07T10:00:00', kraj: '2026-10-07T10:30:00', brojUcesnika: 3, brojPitanja: 1,
+            takmicenje: false, boduje: false,
+          },
+          takmicenje: false, rangLista: [],
+          pitanja: [{
+            rundaId: 1, slajdId: 62, rbSlajda: 2, redniBroj: 1, pitanje: null, rezultat: null, brojOdgovora: 3, procenatTacnih: 33,
+            zadatak: {
+              slajdId: 62, grupaNaziv: '2 → 10', putanja: [{ id: 3, naziv: '2 → 10' }], nivo: null, nivoi: {},
+              rezultat: {
+                ukupno: 3, odgovoriPrikazani: true,
+                varijante: [{
+                  varijantaId: 31, naziv: '1011 u dekadni', svgId: 'svg-31', resenjeSvgId: 'res-31', dodeljeno: 3, odgovorilo: 3, tacnih: 1,
+                  polja: [polje('a', 'a) dekadna vrednost', [{ tekst: '13', broj: 2, tacan: false }, { tekst: '11', broj: 1, tacan: true }])],
+                }],
+              },
+              ucesnici: [
+                { ucesnikId: 1, ime: 'Ana', varijantaId: 31, varijantaNaziv: '1011 u dekadni', odgovorio: true, tacno: true, polja: { a: true }, uneto: { a: '11' } },
+                { ucesnikId: 2, ime: 'Bojan', varijantaId: 31, varijantaNaziv: '1011 u dekadni', odgovorio: true, tacno: false, polja: { a: false }, uneto: { a: '13' } },
+                { ucesnikId: 3, ime: 'Vesna', varijantaId: 31, varijantaNaziv: '1011 u dekadni', odgovorio: false, tacno: null, polja: null, uneto: null },
+              ],
+            },
+          }],
+        },
+      }));
+      await page.goto('izvodjenja/7/pregled');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('.uz-co-cip')).toHaveCount(2);
+      await expect(page.locator('.uz-zr-oznaka')).toHaveCount(0);
+      await expect(page.locator('[data-uneto="a"]')).toHaveCount(2);
+      await expect(page.getByRole('columnheader', { name: 'Uneto' })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: pregled izvođenja sa Zadatkom (${rezim})`).toEqual([]);
+    });
+
     test.describe('daljinski na telefonu', () => {
       test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -623,7 +669,8 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
   });
 
-  // Zadatak slajd (FE-4): opis u CEKA, pa zatvorena runda sa uključenim rezultatima, tačnim i rešenjem (mreža 2 kartice)
+  // Zadatak slajd (FE-4): opis u CEKA, pa zatvorena runda sa uključenim rezultatima, tačnim i rešenjem (mreža 2 kartice),
+  // pa bez rešenja (samo krupni uneti brojevi)
   test('/izvodjenja/7/publika (projektor, Zadatak slajd, opis i rezultati sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {
     mock.izvodjenje.primeni('IDI_NA', 5);
     mock.izvodjenje.primeni('BROJ_VARIJANTI', 2);
@@ -641,9 +688,16 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
     await expect(page.locator('app-publika-scena .uz-zr-kartica')).toHaveCount(2);
     await expect(page.locator('app-publika-scena img[alt^="Rešenje"]')).toHaveCount(2);
-    await expect(page.locator('app-publika-scena .uz-zr-red')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena .uz-zr-tacno')).toHaveCount(2);
     await page.waitForLoadState('networkidle');
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak sa rezultatima i rešenjem').toEqual([]);
+
+    // rešenje isključeno: samo krupni uneti brojevi (tačan i netačni čipovi)
+    broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
+    await expect(page.locator('app-publika-scena img')).toHaveCount(0);
+    await expect(page.locator('app-publika-scena .uz-co-cip--tacno')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena .uz-co-cip--netacno')).toHaveCount(1);
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak samo sa odgovorima').toEqual([]);
   });
 });
 

@@ -83,13 +83,19 @@ export interface IzvodjenjeInfo {
 }
 export interface KomandaCmd { tip: TipKomande; vrednost?: number | null; }
 export interface RezultatOpcija { id: number; tekst: string | null; broj: number; tacna: boolean | null; }
-export interface BrojStavka { vrednost: number; broj: number; }
-export interface RezultatBrojevi { medijana: number | null; uOdstupanju: number | null; najcesce: BrojStavka[]; }
+/** Uneta vrednost (tačno ista vrednost = jedna stavka); `tacan` `null` kod procene ili dok tačnost nije vidljiva. */
+export interface BrojStavka { vrednost: number; broj: number; tacan: boolean | null; }
+/** Sve različite unete vrednosti, najčešće prve (bez medijane: prikaz su čipovi). */
+export interface RezultatBrojevi { vrednosti: BrojStavka[]; }
 export interface RezultatTekst { kljuc: string; tekst: string; broj: number; sakriven: boolean; tacan: boolean | null; }
 export interface RezultatSkala { raspodela: number[]; prosek: number | null; }
+/**
+ * `tacnih`: koliko od `ukupno` je tačno; `null` kad pitanje nema tačan odgovor (anketa, skala, procena, otvoren kratak
+ * tekst) ili tačnost još nije vidljiva (javni rezultat pre `TACAN`). Nastavnički rezultat ga ima uvek kad tačan postoji.
+ */
 export interface Rezultat {
   tip: TipPitanja; ukupno: number; opcije: RezultatOpcija[] | null; brojevi: RezultatBrojevi | null;
-  tekstovi: RezultatTekst[] | null; skala: RezultatSkala | null;
+  tekstovi: RezultatTekst[] | null; skala: RezultatSkala | null; tacnih: number | null;
 }
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }
@@ -246,10 +252,13 @@ export interface LicniZadatak {
   ishod: Record<string, boolean> | null; tacno: boolean | null; tacneVrednosti: Record<string, OdgovorPolja> | null;
   resenjeSvgId: string | null;
 }
-/** Učesnik Zadatak runde u pregledu izvođenja: dodeljena varijanta i ishod po polju i ukupno. */
+/**
+ * Učesnik Zadatak runde u pregledu izvođenja: dodeljena varijanta, ishod po polju (`polja`) i ukupno, i šta je uneo po polju
+ * (`uneto`: tekst za prikaz sa servera, BROJ sa jedinicom, opcije njihovim tekstom); bez odgovora oba `null`. Samo nastavnik.
+ */
 export interface UcesnikZadatka {
   ucesnikId: number; ime: string; varijantaId: number | null; varijantaNaziv: string | null; odgovorio: boolean;
-  tacno: boolean | null; polja: Record<string, boolean> | null;
+  tacno: boolean | null; polja: Record<string, boolean> | null; uneto: Record<string, string> | null;
 }
 /**
  * Zadatak runda u pregledu (sve vidljivo); `slajdId` iz snimka ostaje i kad slajda više nema (`RezultatPitanja.slajdId` je tada

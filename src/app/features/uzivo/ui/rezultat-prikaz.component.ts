@@ -1,12 +1,18 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Rezultat, RezultatTekst, TekstPrikaz, TipPitanja } from '../data-access/uzivo.models';
-import { decimalni } from './format';
+import { PitanjeDetails, Rezultat, RezultatTekst, TipPitanja } from '../data-access/uzivo.models';
+import { Cip, CipoviOdgovoraComponent, poredjajCipove } from './cipovi-odgovora.component';
+import { decimalni, tacanBroj } from './format';
 import { meriFormule } from './mera-formule';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
 const MAKS_OBLAK = 60;
 const MAKS_LISTA = 50;
+/**
+ * Čipova slobodnog unosa najviše toliko (tačni se ne odsecaju), ostatak je "+N drugih (M)". 30 staje na projektor 16:9 (vidi
+ * `data-gustina`); konzola i pregled ih prelamaju u redove.
+ */
+export const MAKS_CIPOVA = 30;
 const VELICINA_MIN_EM = 1;
 const VELICINA_MAX_EM = 3.2;
 
@@ -78,30 +84,85 @@ export function oblakReci(tekstovi: readonly RezultatTekst[], maks = MAKS_OBLAK)
   return raspored;
 }
 
-type Vrsta = 'opcije' | 'oblak' | 'lista' | 'broj' | 'skala';
+type Vrsta = 'opcije' | 'oblak' | 'lista' | 'cipovi' | 'skala';
 
-function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta {
+/** Šta prikaz uzima iz pitanja (rezultat to ne nosi): `PitanjeDetails` (projektor, konzola) i `PitanjeSnimak` (pregled). */
+export type OpisPitanja = Pick<PitanjeDetails, 'tekstPrikaz' | 'jedinica' | 'prihvatljiviOdgovori' | 'brojTacno'>;
+
+/**
+ * Slobodan unos (broj, kratak tekst sa tačnim) su čipovi uvek; kratak tekst bez prihvatljivih odgovora (otvoreno mišljenje)
+ * ostaje oblak ili lista po `tekstPrikaz` (tamo nema tačnog, a oblak bolje pokazuje šta razred misli).
+ */
+export function vrstaRezultata(tip: TipPitanja, pitanje: OpisPitanja | null): Vrsta {
   switch (tip) {
-    case 'KRATAK_TEKST': return tekstPrikaz === 'LISTA' ? 'lista' : 'oblak';
-    case 'BROJ': return 'broj';
+    case 'KRATAK_TEKST':
+      if (pitanje?.prihvatljiviOdgovori?.length) return 'cipovi';
+      return pitanje?.tekstPrikaz === 'LISTA' ? 'lista' : 'oblak';
+    case 'BROJ': return 'cipovi';
     case 'SKALA': return 'skala';
     default: return 'opcije';
   }
 }
 
 /**
- * Rezultati pitanja bez biblioteke za grafikone (spec 2.14): stubići za opcije, oblak ili lista za kratak tekst,
- * medijana i najčešće vrednosti za broj, raspodela i prosek za skalu. Tačno se ističe znakom ✓ i rečju, ne samo bojom.
- * `tekstPrikaz` i `jedinica` dolaze iz pitanja (rezultat ih ne nosi).
+ * Čipovi slobodnog unosa (broj i kratak tekst sa tačnim), po istom pravilu kao Zadatak slajd: uneti odgovori sa brojem
+ * učesnika, neutralni dok tačnost nije vidljiva (`rezultat.tacnih` `null`), posle toga tačni prvi (✓) i netačni (✗), a tačan
+ * koji niko nije uneo dodaje se kao čip "niko" (vrednost iz pitanja). Broj se piše sa svim decimalama (`tacanBroj`): server
+ * grupiše tačno iste vrednosti, pa bi zaokruživanje dva različita odgovora prikazalo kao isti.
+ */
+export function cipoviRezultata(r: Rezultat, pitanje: OpisPitanja | null): Cip[] {
+  const poznato = r.tacnih !== null;
+  const stanje = (tacan: boolean | null) => (!poznato || tacan === null ? null : tacan ? 'tacno' : 'netacno');
+  const jedinica = pitanje?.jedinica ? ' ' + pitanje.jedinica : '';
+  let cipovi: Cip[];
+  let tacanTekst: string;
+  if (r.tip === 'BROJ') {
+    cipovi = (r.brojevi?.vrednosti ?? []).map(v => ({
+      kljuc: String(v.vrednost), tekst: tacanBroj(v.vrednost) + jedinica, broj: v.broj, stanje: stanje(v.tacan), formula: false,
+    }));
+    const t = pitanje?.brojTacno;
+    tacanTekst = t === null || t === undefined ? '' : tacanBroj(t) + jedinica;
+  } else {
+    cipovi = (r.tekstovi ?? []).map(t => ({
+      kljuc: t.kljuc, tekst: t.tekst, broj: t.broj, stanje: stanje(t.tacan), formula: false, sakriven: t.sakriven,
+    }));
+    tacanTekst = (pitanje?.prihvatljiviOdgovori ?? []).join(', ');
+  }
+  // tačan koji niko nije uneo, samo kad ima odgovora (bez njih ostaje "Još nema odgovora.", i u konzoli pre prvog odgovora)
+  if (poznato && tacanTekst && r.ukupno > 0 && !cipovi.some(c => c.stanje === 'tacno')) {
+    cipovi.push({ kljuc: '\u0000tacno', tekst: tacanTekst, broj: 0, stanje: 'tacno', formula: false });
+  }
+  return poredjajCipove(cipovi);
+}
+
+/** Gustina čipova za veličinu slova na projektoru: do 4, do 12, do 20, više. */
+export function gustinaCipova(n: number): 'malo' | 'srednje' | 'mnogo' | 'vrlo' {
+  return n <= 4 ? 'malo' : n <= 12 ? 'srednje' : n <= 20 ? 'mnogo' : 'vrlo';
+}
+
+/** "Tačno 7 od 12 · 58 %" kad je tačnost vidljiva i ima odgovora, inače `null`. */
+export function tacnihTekst(r: Rezultat): string | null {
+  if (r.tacnih === null || r.tacnih === undefined || r.ukupno <= 0) return null;
+  return `Tačno ${r.tacnih} od ${r.ukupno} · ${Math.round((r.tacnih * 100) / r.ukupno)} %`;
+}
+
+/**
+ * Rezultati pitanja bez biblioteke za grafikone (spec 2.14): stubići za opcije, čipovi unetih odgovora za broj i kratak tekst
+ * sa tačnim, oblak ili lista za otvoren kratak tekst, raspodela i prosek za skalu. Kad je tačnost vidljiva, red "Tačno x od y ·
+ * N %" (`tacnihTekst`). Tačno se ističe znakom ✓ i rečju, ne samo bojom. Iz pitanja (`OpisPitanja`) dolaze način prikaza
+ * kratkog teksta, jedinica i tačan odgovor za čip "niko".
  */
 @Component({
   selector: 'app-rezultat-prikaz',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
-  imports: [OpcijaOblikComponent, TekstFormuleComponent],
-  host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()' },
+  imports: [CipoviOdgovoraComponent, OpcijaOblikComponent, TekstFormuleComponent],
+  host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()', '[class.uz-rez--sa-tacnih]': '!!tacnih()' },
   template: `
+    @if (tacnih(); as t) {
+      <p class="uz-rez-tacnih"><span class="uz-tacno-znak" aria-hidden="true">✓</span>{{ t }}</p>
+    }
     @switch (vrsta()) {
       @case ('opcije') {
         <ul class="uz-rez-opcije" [style.--uz-n]="opcije().length">
@@ -155,33 +216,9 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
           <p class="uz-prazno">Još nema odgovora.</p>
         }
       }
-      @case ('broj') {
-        @if (brojevi(); as b) {
-          <div class="uz-rez-broj">
-            <div class="uz-rez-kljucni">
-              <p class="uz-rez-podatak">
-                <span class="uz-rez-oznaka">Medijana</span>
-                <span class="uz-rez-velika">{{ b.medijana }}{{ jedinica() ? ' ' + jedinica() : '' }}</span>
-              </p>
-              @if (b.uOdstupanju !== null) {
-                <p class="uz-rez-podatak">
-                  <span class="uz-rez-oznaka">U odstupanju</span>
-                  <span class="uz-rez-velika">{{ b.uOdstupanju }}/{{ rezultat().ukupno }}</span>
-                </p>
-              }
-            </div>
-            @if (b.najcesce.length) {
-              <ul class="uz-rez-najcesce" aria-label="Najčešći odgovori">
-                @for (n of b.najcesce; track n.vrednost) {
-                  <li class="uz-rez-najcesce-red">
-                    <span class="uz-rez-najcesce-vrednost">{{ n.vrednost }}{{ jedinica() ? ' ' + jedinica() : '' }}</span>
-                    <span class="uz-rez-traka" aria-hidden="true"><span class="uz-rez-ispuna" [style.--uz-udeo]="n.sirina + '%'"></span></span>
-                    <span class="uz-rez-najcesce-broj">{{ n.broj }}</span>
-                  </li>
-                }
-              </ul>
-            }
-          </div>
+      @case ('cipovi') {
+        @if (cipovi().length) {
+          <app-cipovi-odgovora class="uz-rez-cipovi" [attr.data-gustina]="gustina()" [cipovi]="cipovi()" [maks]="maksCipova" />
         } @else {
           <p class="uz-prazno">Još nema odgovora.</p>
         }
@@ -210,12 +247,16 @@ function vrstaRezultata(tip: TipPitanja, tekstPrikaz: TekstPrikaz | null): Vrsta
 export class RezultatPrikazComponent {
   readonly rezultat = input.required<Rezultat>();
   readonly kompaktno = input<boolean>(false);
-  /** Iz pitanja: kratak tekst kao oblak (podrazumevano) ili lista. */
-  readonly tekstPrikaz = input<TekstPrikaz | null>(null);
-  /** Iz pitanja: jedinica za broj (npr. "m"). */
-  readonly jedinica = input<string | null>(null);
+  /** Iz pitanja: način prikaza kratkog teksta, jedinica broja, prihvatljivi odgovori i tačna vrednost (`OpisPitanja`). */
+  readonly pitanje = input<OpisPitanja | null>(null);
+  /** Red "Tačno x od y · N %"; pregled izvođenja ga ima u zaglavlju runde, pa ga ovde gasi. */
+  readonly prikaziTacnih = input<boolean>(true);
 
-  protected readonly vrsta = computed(() => vrstaRezultata(this.rezultat().tip, this.tekstPrikaz()));
+  protected readonly maksCipova = MAKS_CIPOVA;
+  protected readonly vrsta = computed(() => vrstaRezultata(this.rezultat().tip, this.pitanje()));
+  protected readonly tacnih = computed(() => (this.prikaziTacnih() ? tacnihTekst(this.rezultat()) : null));
+  protected readonly cipovi = computed(() => (this.vrsta() === 'cipovi' ? cipoviRezultata(this.rezultat(), this.pitanje()) : []));
+  protected readonly gustina = computed(() => gustinaCipova(Math.min(this.cipovi().length, MAKS_CIPOVA + 1)));
 
   protected readonly opcije = computed(() => {
     const r = this.rezultat();
@@ -230,20 +271,6 @@ export class RezultatPrikazComponent {
 
   protected readonly oblak = computed(() => oblakReci(this.rezultat().tekstovi ?? []));
   protected readonly lista = computed(() => (this.rezultat().tekstovi ?? []).slice(0, MAKS_LISTA));
-
-  protected readonly brojevi = computed(() => {
-    const r = this.rezultat();
-    const b = r.brojevi;
-    if (!b || r.ukupno === 0 || b.medijana === null) {
-      return null;
-    }
-    const max = Math.max(1, ...b.najcesce.map(n => n.broj));
-    return {
-      medijana: decimalni(b.medijana),
-      uOdstupanju: b.uOdstupanju,
-      najcesce: b.najcesce.slice(0, 10).map(n => ({ vrednost: decimalni(n.vrednost), broj: n.broj, sirina: (n.broj * 100) / max })),
-    };
-  });
 
   protected readonly skala = computed(() => {
     const r = this.rezultat();

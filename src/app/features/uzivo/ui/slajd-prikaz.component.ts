@@ -64,7 +64,7 @@ export interface KodTraka { host: string; kod: string; }
         </header>
         <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat()">
           @if (prikazanRezultat(); as r) {
-            <app-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
+            <app-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [pitanje]="p" />
           } @else {
             @if (p.slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
             <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" />

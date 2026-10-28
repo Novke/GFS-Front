@@ -74,7 +74,7 @@ export interface PredavanjeDetails {
   tema: string | null;
   posecenost: number | null;
   grupa: { id: number; naziv: string; godinaUpisa: number | null } | null;
-  predmet: { naziv: string } | null;
+  predmet: { id: number; naziv: string } | null;
   aktivnosti: PredavanjeAktivnostInfo[];
   zavrseno: boolean | null;
 }
