@@ -168,6 +168,17 @@ describe('PoljaEditorComponent', () => {
     expect(h.polja()[0]).toMatchObject({ tip: 'TEKST', zanemariVelicinu: false, zanemariRazmake: true });
   });
 
+  it('TEKST: vodeće nule su podrazumevano isključene, prekidač ih uključuje; napomena o komplementu je opis prekidača', async () => {
+    const { h, red, izaberiTip, klik } = await napravi();
+    await izaberiTip('a', 'Tekst');
+    const nule = red('a').querySelector<HTMLInputElement>('[data-zanemari-nule] input')!;
+    expect(nule.checked).toBe(false);
+    const opis = document.getElementById(nule.getAttribute('aria-describedby')!.split(' ').find(id => id.startsWith('bk-pe-nule-'))!);
+    expect(opis?.textContent).toContain('komplement');
+    await klik(nule);
+    expect(h.polja()[0]).toMatchObject({ tip: 'TEKST', zanemariVodeceNule: true });
+  });
+
   it('BROJ: odstupanje prima decimalni zarez, tip odstupanja i jedinicu', async () => {
     const { h, red, unesi } = await napravi();
     const odstupanje = red('a').querySelector<HTMLInputElement>('input[data-odstupanje]')!;

@@ -1006,7 +1006,8 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Answers follow the group schema** (`odgovori`, one entry per field key, only the property of the field's type is set, the rest
   `null`): BROJ `{broj}` (decimal comma or point accepted, an invalid entry is `NaN` and counts as missing), TEKST `{prihvatljivi[]}`
   (1-10 answers of 1-200 chars; a chip is added by Enter or leaving the input, **never by a comma**: `(1,0)` or `q0, q1` are one
-  answer), JEDAN_TACAN `{tacna}` (option id), VISE_TACNIH `{tacne[]}`. Option ids are stable and **never
+  answer; the TEKST field's checkbox "Zanemari vodeće nule" (`Polje.zanemariVodeceNule`, sent only when on, like the server stores
+  it) makes `01111111` equal `1111111`: only where a leading zero does not change the result, never for complement or fixed width), JEDAN_TACAN `{tacna}` (option id), VISE_TACNIH `{tacne[]}`. Option ids are stable and **never
   reused**: a new option gets an id above every option the field has or had when saved (the server matches options by id, so a reused
   id would silently become another answer); a new field's key likewise never equals a key of a saved field, even one removed in the form.
 - **Save semantics** (`VarijantaEditorPage.sacuvaj`): `POST`/`PUT` render synchronously (up to 2 x 30 s), so the form is disabled with

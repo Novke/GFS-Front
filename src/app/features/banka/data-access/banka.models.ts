@@ -39,8 +39,9 @@ export interface PoljeOpcija {
 }
 
 /**
- * Jedno polje šeme odgovora grupe. `odstupanje` i `odstupanjeTip` važe za BROJ, `zanemariVelicinu` i `zanemariRazmake` za
- * TEKST, `opcije` za JEDAN_TACAN i VISE_TACNIH (za ostale tipove `null`). Server normalizuje podrazumevane vrednosti.
+ * Jedno polje šeme odgovora grupe. `odstupanje` i `odstupanjeTip` važe za BROJ, `zanemariVelicinu`, `zanemariRazmake` i
+ * `zanemariVodeceNule` za TEKST, `opcije` za JEDAN_TACAN i VISE_TACNIH (za ostale tipove `null`). Server normalizuje
+ * podrazumevane vrednosti.
  */
 export interface Polje {
   kljuc: string;
@@ -52,6 +53,11 @@ export interface Polje {
   zanemariVelicinu: boolean | null;
   zanemariRazmake: boolean | null;
   opcije: PoljeOpcija[] | null;
+  /**
+   * TEKST: `01111111` je isto što i `1111111` (`true`); `null`/izostavljeno = isključeno (server tako čuva i `false`). Samo gde
+   * nula ispred ne menja rezultat, nikad za komplement ili zapis fiksne širine.
+   */
+  zanemariVodeceNule?: boolean | null;
 }
 
 /** Tačan odgovor varijante za jedno polje: postavljeno je tačno ono svojstvo koje tip polja traži, ostala su `null`. */
