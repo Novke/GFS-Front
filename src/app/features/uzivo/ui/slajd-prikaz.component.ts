@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, input, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, booleanAttribute, computed, input, viewChild } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
 import { Faza, NastavnickiZadatak, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
@@ -53,7 +53,8 @@ export interface KodTraka { host: string; kod: string; }
         </div>
       } @else if (slajd().tip === 'ZADATAK') {
         <app-zadatak-prikaz [slajd]="slajd()" [zadatak]="zadatak()" [faza]="faza()" [brojOdgovora]="brojOdgovora()"
-                            [odgovoriliOd]="odgovoriliOd()" [prikaziRezultat]="prikaziRezultat()" [tajmer]="tajmer()" />
+                            [odgovoriliOd]="odgovoriliOd()" [prikaziRezultat]="prikaziRezultat()" [tajmer]="tajmer()"
+                            [primer]="primerZadatka()" />
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
           <app-tekst-formule class="uz-md uz-pitanje-tekst" [tekst]="p.tekst" [markdown]="true" />
@@ -103,6 +104,8 @@ export class SlajdPrikazComponent {
   readonly kodTraka = input<KodTraka | null>(null);
   /** Tema prezentacije (snimak bez teme, npr. stari server, daje NACRT). */
   readonly tema = input<Tema>('NACRT');
+  /** ZADATAK u editoru (pregled, sličice): slika primera jedne varijante umesto opisa (`ZadatakPrikazComponent.primer`). */
+  readonly primerZadatka = input(false, { transform: booleanAttribute });
   /** Animacija prelaza za PLATNO (vidi `app-platno-prikaz`); null crta krajnje stanje koraka. */
   readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 

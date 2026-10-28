@@ -874,6 +874,10 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   `core/api/banka-izbor.api.ts` (`CvorIzbora` over `GET banka/stablo`; `features/uzivo` never imports `features/banka/data-access`,
   `gfs/granice-featurea`), with timer and "broj različitih" (empty = all active). Warnings come from the server
   (`ZadatakSlajdaInfo.upozorenja`), the editor only shows them.
+  The side preview and the slide list thumbnails show **one example variant** (`ZadatakSlajdaInfo.primerSvgId`, the SVG of the first
+  candidate in draw order at the slide's level) instead of the plain description: `app-slajd-prikaz [primerZadatka]` ->
+  `app-zadatak-prikaz [primer]`, only without run state. Only the editor sets it; the console's "Sledeće" panel never does (its
+  screen is often mirrored to the projector), and the projector and phones never get the id (backend `ZadatakStanjeTest`).
 - **Console / remote:** `pages/zadatak-panel.component` (count for the next opening, `BROJ_VARIJANTI` in CEKA, drawn variants with
   assigned/answered/correct), `Shift+R` = `RESENJE` (`tastatura.ts`; plain `r`/`R` stays `PONOVI`, so Caps Lock never shows the
   solution), the remote has the same toggle. A scored run (`PokreniCmd.boduje`) works with student login (the backend's
