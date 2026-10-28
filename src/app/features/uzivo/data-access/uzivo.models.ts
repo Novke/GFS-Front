@@ -83,13 +83,19 @@ export interface IzvodjenjeInfo {
 }
 export interface KomandaCmd { tip: TipKomande; vrednost?: number | null; }
 export interface RezultatOpcija { id: number; tekst: string | null; broj: number; tacna: boolean | null; }
-export interface BrojStavka { vrednost: number; broj: number; }
-export interface RezultatBrojevi { medijana: number | null; uOdstupanju: number | null; najcesce: BrojStavka[]; }
+/** Uneta vrednost (tačno ista vrednost = jedna stavka); `tacan` `null` kod procene ili dok tačnost nije vidljiva. */
+export interface BrojStavka { vrednost: number; broj: number; tacan: boolean | null; }
+/** Sve različite unete vrednosti, najčešće prve (bez medijane: prikaz su čipovi). */
+export interface RezultatBrojevi { vrednosti: BrojStavka[]; }
 export interface RezultatTekst { kljuc: string; tekst: string; broj: number; sakriven: boolean; tacan: boolean | null; }
 export interface RezultatSkala { raspodela: number[]; prosek: number | null; }
+/**
+ * `tacnih`: koliko od `ukupno` je tačno; `null` kad pitanje nema tačan odgovor (anketa, skala, procena, otvoren kratak
+ * tekst) ili tačnost još nije vidljiva (javni rezultat pre `TACAN`). Nastavnički rezultat ga ima uvek kad tačan postoji.
+ */
 export interface Rezultat {
   tip: TipPitanja; ukupno: number; opcije: RezultatOpcija[] | null; brojevi: RezultatBrojevi | null;
-  tekstovi: RezultatTekst[] | null; skala: RezultatSkala | null;
+  tekstovi: RezultatTekst[] | null; skala: RezultatSkala | null; tacnih: number | null;
 }
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }

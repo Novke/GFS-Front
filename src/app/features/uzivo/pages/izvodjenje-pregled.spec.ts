@@ -19,7 +19,7 @@ function runda(rundaId: number, redniBroj: number, slajdId: number | null, izmen
   return {
     rundaId, slajdId, rbSlajda: slajdId, redniBroj, pitanje: snimak(50 + (slajdId ?? 0), slajdId),
     rezultat: {
-      tip: 'JEDAN_TACAN', ukupno: 4, brojevi: null, skala: null, tekstovi: null,
+      tip: 'JEDAN_TACAN', ukupno: 4, brojevi: null, skala: null, tekstovi: null, tacnih: 3,
       opcije: [{ id: 1, tekst: '3', broj: 1, tacna: false }, { id: 2, tekst: '4', broj: 3, tacna: true }],
     },
     brojOdgovora: 4, procenatTacnih: 75, ...izmene,

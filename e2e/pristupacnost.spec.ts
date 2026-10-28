@@ -352,7 +352,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       }));
       await page.goto('izvodjenja/7/pregled');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
-      await expect(page.locator('.uz-zr-cip')).toHaveCount(2);
+      await expect(page.locator('.uz-co-cip')).toHaveCount(2);
       await expect(page.locator('.uz-zr-oznaka')).toHaveCount(0);
       await expect(page.locator('[data-uneto="a"]')).toHaveCount(2);
       await expect(page.getByRole('columnheader', { name: 'Uneto' })).toBeVisible();
@@ -695,8 +695,8 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     // rešenje isključeno: samo krupni uneti brojevi (tačan i netačni čipovi)
     broker.posalji('/topic/izvodjenja/7/nastavnik', mock.izvodjenje.primeni('RESENJE').telo);
     await expect(page.locator('app-publika-scena img')).toHaveCount(0);
-    await expect(page.locator('app-publika-scena .uz-zr-cip--tacno')).toHaveCount(2);
-    await expect(page.locator('app-publika-scena .uz-zr-cip--netacno')).toHaveCount(1);
+    await expect(page.locator('app-publika-scena .uz-co-cip--tacno')).toHaveCount(2);
+    await expect(page.locator('app-publika-scena .uz-co-cip--netacno')).toHaveCount(1);
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, Zadatak samo sa odgovorima').toEqual([]);
   });
 });

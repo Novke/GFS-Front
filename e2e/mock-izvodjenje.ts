@@ -50,6 +50,8 @@ interface Runda { id: number; redniBroj: number; rokMs: number | null; preostalo
 interface Rezultat {
   tip: string; ukupno: number; opcije: { id: number; tekst: string | null; broj: number; tacna: boolean | null }[] | null;
   brojevi: null; tekstovi: null; skala: null;
+  /** Broj tačnih (nastavnički uvek kad pitanje ima tačan; javni tek posle `TACAN` na zatvorenom pitanju). */
+  tacnih: number | null;
 }
 
 export interface FiksturaIzvodjenja {
@@ -235,10 +237,12 @@ export class MockIzvodjenje {
     const pitanje = trenutni?.tip === 'PITANJE' ? trenutni.pitanje : null;
     const rezultat: Rezultat | null = pitanje && this.runda
       ? { tip: pitanje.tip, ukupno: 0, opcije: pitanje.opcije.map(o => ({ id: o.id, tekst: o.tekst, broj: 0, tacna: o.tacna })),
-          brojevi: null, tekstovi: null, skala: null }
+          brojevi: null, tekstovi: null, skala: null, tacnih: imaTacan(pitanje) ? 0 : null }
       : null;
+    const tacanVidljiv = this.tacanPrikazan && this.faza === 'ZATVORENO';
     const javni = rezultat && this.rezultatiPrikazani
-      ? { ...rezultat, opcije: rezultat.opcije!.map(o => ({ ...o, tacna: this.tacanPrikazan ? o.tacna : null })) }
+      ? { ...rezultat, opcije: rezultat.opcije!.map(o => ({ ...o, tacna: tacanVidljiv ? o.tacna : null })),
+          tacnih: tacanVidljiv ? rezultat.tacnih : null }
       : null;
     return {
       izvodjenje: { ...this.f.izvodjenje }, verzija: this.verzija, serverVremeMs: Date.now(), prikaz: this.prikaz,

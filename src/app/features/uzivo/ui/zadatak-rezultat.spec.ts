@@ -126,12 +126,12 @@ describe('ZadatakRezultatComponent', () => {
   it('odgovoriPrikazani: dodeljeno · odgovorilo · tačno i čipovi vrednosti, tačan prvi i označen, broj u zagradi tek preko 1', async () => {
     const { el } = await prikazi(rezultat(1));
     expect(tekst(el.querySelector('.uz-zr-brojevi'))).toBe('dodeljeno 4 · odgovorilo 4 · tačno 3');
-    const cipovi = el.querySelectorAll('.uz-zr-cip');
+    const cipovi = el.querySelectorAll('.uz-co-cip');
     expect(cipovi.length).toBe(2);
     expect(tekst(cipovi[0])).toBe('✓tačno: 11 (3)');
-    expect(cipovi[0].classList).toContain('uz-zr-cip--tacno');
+    expect(cipovi[0].classList).toContain('uz-co-cip--tacno');
     expect(tekst(cipovi[1])).toBe('✗netačno: 13');
-    expect(cipovi[1].classList).toContain('uz-zr-cip--netacno');
+    expect(cipovi[1].classList).toContain('uz-co-cip--netacno');
     expect(el.querySelector('.uz-rez-traka')).toBeNull();
   });
 
@@ -170,7 +170,7 @@ describe('ZadatakRezultatComponent', () => {
     r.varijante[0].polja = [polje({ vrednosti: null })];
     const { el } = await prikazi(r);
     expect(el.querySelector('.uz-zr-brojevi')).toBeNull();
-    expect(el.querySelector('.uz-zr-cip')).toBeNull();
+    expect(el.querySelector('.uz-co-cip')).toBeNull();
     expect(tekst(el.querySelector('.uz-zr-tacno'))).toBe('✓ tačno: 11');
     expect(el.querySelector('img[alt="Rešenje, varijanta V1"]')).not.toBeNull();
   });
@@ -196,11 +196,11 @@ describe('ZadatakRezultatComponent', () => {
       tacno: { broj: null, prihvatljivi: null, tacna: 1, tacne: null },
     });
     const { el } = await prikazi(rezultat(1, { varijante: [varijanta(1, { polja: [opcije] })] }));
-    const cipovi = el.querySelectorAll('.uz-zr-cip');
+    const cipovi = el.querySelectorAll('.uz-co-cip');
     expect(cipovi.length).toBe(2);
     expect(cipovi[0].querySelector('app-tekst-formule span.uz-formula')?.textContent).toBe('$11$');
     expect(cipovi[1].querySelector('app-tekst-formule')?.textContent).toBe('Trinaest');
-    expect(cipovi[0].classList).toContain('uz-zr-cip--tacno');
+    expect(cipovi[0].classList).toContain('uz-co-cip--tacno');
     expect(tekst(el.querySelector('.uz-zr-tacno'))).toContain('tačno:');
   });
 
@@ -210,7 +210,7 @@ describe('ZadatakRezultatComponent', () => {
       opcije: [{ id: 1, tekst: 'A', broj: 0, tacna: null }, { id: 2, tekst: 'B', broj: 0, tacna: null }],
     });
     const { el } = await prikazi({ ukupno: 0, odgovoriPrikazani: false, varijante: [varijanta(1, { dodeljeno: 0, odgovorilo: 0, tacnih: null, resenjeSvgId: null, polja: [opcije] })] });
-    expect(el.querySelector('.uz-zr-cip')).toBeNull();
+    expect(el.querySelector('.uz-co-cip')).toBeNull();
   });
 
   it('rad na papiru (grupa bez polja): dodeljeno · rad na papiru, bez odgovorilo', async () => {
@@ -225,7 +225,7 @@ describe('ZadatakRezultatComponent', () => {
       expect(el.querySelector('.uz-zr-tacno')).toBeNull();
       expect(el.querySelector('.uz-zr-brojevi')).toBeNull();
       expect([...el.querySelectorAll('.uz-zr-naziv')].map(tekst)).toEqual(['V1', 'V2']);
-      expect([...el.querySelectorAll('.uz-zr-kartica')[0].querySelectorAll('.uz-zr-cip')].map(tekst)).toEqual(['✓tačno: 11 (3)', '✗netačno: 13']);
+      expect([...el.querySelectorAll('.uz-zr-kartica')[0].querySelectorAll('.uz-co-cip')].map(tekst)).toEqual(['✓tačno: 11 (3)', '✗netačno: 13']);
     });
 
     it('pre TACAN sve neutralno, najčešće prvo', async () => {
@@ -238,8 +238,8 @@ describe('ZadatakRezultatComponent', () => {
         ],
       });
       const { el } = await prikazi(rezultat(1, { varijante: [varijanta(1, { tacnih: null, polja: [p] })] }), 'odgovori');
-      expect([...el.querySelectorAll('.uz-zr-cip')].map(tekst)).toEqual(['199 (2)', '198', '51']);
-      expect(el.querySelector('.uz-zr-cip--tacno, .uz-zr-cip--netacno')).toBeNull();
+      expect([...el.querySelectorAll('.uz-co-cip')].map(tekst)).toEqual(['199 (2)', '198', '51']);
+      expect(el.querySelector('.uz-co-cip--tacno, .uz-co-cip--netacno')).toBeNull();
     });
 
     it('varijanta bez odgovora i rad na papiru se ne crtaju; ako nema nijedne, jedna poruka', async () => {
@@ -256,7 +256,7 @@ describe('ZadatakRezultatComponent', () => {
 
   it('tabla: rešenje (Shift+R) bez čipova, sa slikama i redom "tačno"', async () => {
     const { el } = await prikazi(rezultat(1), 'resenje');
-    expect(el.querySelector('.uz-zr-cip')).toBeNull();
+    expect(el.querySelector('.uz-co-cip')).toBeNull();
     expect(el.querySelectorAll('img').length).toBe(2);
     expect(tekst(el.querySelector('.uz-zr-tacno'))).toBe('✓ tačno: 11');
   });

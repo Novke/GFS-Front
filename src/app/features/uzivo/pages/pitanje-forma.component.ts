@@ -227,6 +227,9 @@ let sledeciId = 0;
             <mat-radio-button value="OBLAK">Oblak reči</mat-radio-button>
             <mat-radio-button value="LISTA">Lista</mat-radio-button>
           </mat-radio-group>
+          @if (f.controls.prihvatljiviOdgovori.value.length) {
+            <p class="uz-ed-napomena" data-napomena-cipovi>Sa prihvatljivim odgovorima rezultat su uneti odgovori sa brojem učesnika, a posle „Tačno“ označeni ✓ i ✗; oblak i lista važe za pitanje bez tačnog.</p>
+          }
         </div>
         <mat-form-field subscriptSizing="dynamic" class="uz-ed-puno">
           <mat-label>Prihvatljivi odgovori</mat-label>

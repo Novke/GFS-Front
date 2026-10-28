@@ -378,6 +378,23 @@ over STOMP; teacher commands are REST.
 - `data-access/`: `uzivo.models.ts` (mirrors the backend DTOs), `prezentacije.api.ts`, `izvodjenja.api.ts` (teacher;
   every request is `LOCAL_ERRORS`, because every uživo caller shows its own error), `stomp.ts`, `sat.ts` (server clock
   offset), `editor.store.ts`, `izvodjenje.store.ts`, rules (`slajd-pravila`, `izvodjenje-pravila`). Only uživo uses them.
+- **Question results** (`ui/rezultat-prikaz.component`, the same component on the projector (`javniRezultat`), in the console
+  (teacher `rezultat`, `kompaktno`) and in the run overview): options (A/B/C/D) are bars with count and percent; free entry is shown
+  as **chips of the entered answers** like the Zadatak slide (`ui/cipovi-odgovora.component`, shared with `zadatak-rezultat`): BROJ
+  always (no median since 2026-10-28; every distinct value with all decimals through `tacanBroj` plus the unit, because the server
+  groups exactly equal values and rounding would show two different answers as one) and KRATAK_TEKST when the question has accepted
+  answers (`prihvatljiviOdgovori`, whatever `tekstPrikaz` says). Open KRATAK_TEKST (no accepted answers) keeps the word cloud or the
+  list (`tekstPrikaz`, `vrstaRezultata`); BROJ without a correct value (estimate) shows neutral chips. Chips are neutral until
+  correctness is visible (`Rezultat.tacnih !== null`, server rule: public result only after `TACAN` on a closed question); then the
+  correct ones come first with ✓, the wrong ones with ✗, and a chip "niko" with the correct value from the question when answers exist
+  but nobody had it (`cipoviRezultata`). At most `MAKS_CIPOVA` = 30 chips plus "+N drugih (M)", correct ones are never cut
+  (`ograniciCipove`); on the projector the font follows `data-gustina` (`gustinaCipova`, `min(cqw, cqh)` in `uzivo-tokeni.css`).
+  Whenever `tacnih` is set and there are answers, a line "✓ Tačno x od y · N %" (`tacnihTekst`) sits above every result type (options
+  included); the overview turns it off (`[prikaziTacnih]="false"`, its round header already says "tačnih N %"). Inputs: `rezultat`
+  and `pitanje` (`OpisPitanja` = `tekstPrikaz`, `jedinica`, `prihvatljiviOdgovori`, `brojTacno`; `PitanjeDetails` and
+  `PitanjeSnimak` both fit). Chip styles live in the lazy chip component, not in the global CSS; a parent enlarges the correct chip
+  with `--uz-co-tacno-f` and centers with `--uz-co-poravnanje`. The question form notes under "Rezultati na projektoru" that cloud and
+  list apply only without accepted answers.
 - `ui/`: shared views (slide, options, results, ranking, timer, QR); `pages/`: list, editor, runs, overview, audience
   (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
   `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
@@ -865,7 +882,8 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
 - **Projector:** renders only `NastavnickiZadatak.javniRezultat` (`ui/zadatak-rezultat.component`, `ui/zadatak-prikaz.component`), whose
   numbers, correctness and solution follow three independent switches on the server; the console's `rezultat` is never on the
   projector. Two separate use cases (`PrikazZadatka`, chosen by `zadatak-prikaz.prikazRezultata`): results on (Space) and solution off
-  = `odgovori`: no images, per variant only its name and per field the entered values as big chips in one wrapping row, most frequent
+  = `odgovori`: no images, per variant only its name and per field the entered values as big chips (`app-cipovi-odgovora`, the same
+  component as free-entry question results) in one wrapping row, most frequent
   first (`198 · 199 (2) · 51`, the count in parentheses only above 1), neutral until `TACAN`; then the correct value comes first, larger,
   with ✓ (a synthetic chip "niko" when nobody had it, so it is never lost behind wrong ones) and the wrong ones with ✗; variants nobody
   answered and paper variants are left out (one "Još nema odgovora." when none remain). Solution on (Shift+R), or only `TACAN` = `resenje`:
@@ -894,7 +912,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   change (no level there).
 - **Bundle budget exception:** the student page's static part grew by ~1.9 kB for the task (student login redirect, task screens in
   the store, the `@defer` entry must work before the lazy chunk), so `e2e/lenji-formule.spec.ts` allows `RAST_ZADATKA = 1 300` B on
-  top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5).
+  top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5). On
+  2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
+  free-entry chips did not change the student page, results are drawn only by teacher views).
 
 ## Banka zadataka (`features/banka`)
 

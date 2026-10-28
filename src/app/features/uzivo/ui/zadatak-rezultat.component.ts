@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RezultatPolja, RezultatVarijante, ZadatakRezultat, medijUrl } from '../data-access/uzivo.models';
+import { Cip, CipoviOdgovoraComponent, poredjajCipove } from './cipovi-odgovora.component';
 import { tacanBroj } from './format';
 import { meriFormule } from './mera-formule';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
@@ -39,13 +40,7 @@ export function oznakaVidljiva(v: Pick<RezultatVarijante, 'polja'>): boolean {
   return v.polja.length > 1;
 }
 
-/**
- * Jedan unet odgovor (ili opcija) kao čip: `broj` koliko je učesnika to unelo (0 samo za tačan odgovor koji niko nije uneo),
- * `stanje` `tacno`/`netacno` tek kad je tačan odgovor poznat (`null` pre toga: tabla je neutralna dok razred ne otkrije).
- */
-export interface Cip {
-  kljuc: string; tekst: string; broj: number; stanje: 'tacno' | 'netacno' | null; formula: boolean;
-}
+export type { Cip } from './cipovi-odgovora.component';
 
 /**
  * Čipovi polja: unete vrednosti (BROJ i TEKST, grupisane na serveru) ili opcije sa bar jednim glasom, najčešće prve. Kad je
@@ -67,11 +62,7 @@ export function cipoviPolja(p: RezultatPolja): Cip[] {
     const t = tacnoTekst(p);
     if (t && p.vrednosti) cipovi.push({ kljuc: '\u0000tacno', tekst: t, broj: 0, stanje: 'tacno', formula: false });
   }
-  const tezina = (c: Cip) => (c.stanje === 'tacno' ? 0 : 1);
-  return cipovi
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => tezina(a.c) - tezina(b.c) || b.c.broj - a.c.broj || a.i - b.i)
-    .map(x => x.c);
+  return poredjajCipove(cipovi);
 }
 
 /**
@@ -110,7 +101,7 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
-  imports: [TekstFormuleComponent],
+  imports: [CipoviOdgovoraComponent, TekstFormuleComponent],
   host: { class: 'uz-zr', '[attr.data-prikaz]': 'prikaz()' },
   // u komponenti (lenji chunkovi), ne u globalnom `uzivo-tokeni.css`: početni paket je na granici budžeta `e2e/lenji-editor.spec.ts`.
   // Osnova je mreža prirodne visine (pregled izvođenja); na projektoru (host dobija klasu `uz-zad-rezultat`) mreža puni ostatak
@@ -140,17 +131,6 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
     .uz-zr-polje { min-height: 0; overflow: hidden; }
     .uz-zr-oznaka { color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
     .uz-zr-tacno { margin: 0.1em 0 0.25em; font-weight: 600; }
-    .uz-zr-cipovi { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3em 0.45em; margin: 0.15em 0 0; padding: 0; list-style: none; }
-    .uz-zr-cip {
-      display: inline-flex; align-items: baseline; gap: 0.25em; max-width: 100%; box-sizing: border-box; padding: 0.05em 0.45em;
-      border: 1px solid var(--line); border-radius: 0.35em; background: var(--surface-2); font-weight: 600;
-      font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
-    }
-    .uz-zr-cip-broj { color: var(--muted); font-weight: 500; }
-    .uz-zr-cip--tacno { border-color: var(--ok); background: var(--ok-soft); font-weight: 800; }
-    .uz-zr-cip--tacno .uz-zr-znak { color: var(--ok); }
-    .uz-zr-cip--netacno { border-color: var(--danger); background: var(--danger-soft); }
-    .uz-zr-cip--netacno .uz-zr-znak { color: var(--danger); }
     .uz-zr-prazno { color: var(--muted); }
 
     :host(.uz-zad-rezultat) .uz-zr-mreza { position: absolute; inset: 0; grid-auto-rows: minmax(0, 1fr); gap: 1.2cqw; }
@@ -175,7 +155,7 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-kartica:only-child { font-size: 4.5cqw; }
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-naziv,
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-oznaka { font-size: 0.5em; }
-    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-cip--tacno { font-size: 1.3em; }
+    :host(.uz-zad-rezultat[data-prikaz="odgovori"]) { --uz-co-tacno-f: 1.3em; }
     :host(.uz-zad-rezultat[data-prikaz="odgovori"]) .uz-zr-prazno-sve {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 3cqw;
     }
@@ -210,20 +190,7 @@ function poljeKartice(p: RezultatPolja, v: RezultatVarijante, prikazani: boolean
                 }
                 @if (cipovi) {
                   @if (cipovi.length) {
-                    <ul class="uz-zr-cipovi">
-                      @for (c of cipovi; track c.kljuc) {
-                        <li class="uz-zr-cip" [class.uz-zr-cip--tacno]="c.stanje === 'tacno'" [class.uz-zr-cip--netacno]="c.stanje === 'netacno'">
-                          @if (c.stanje === 'tacno') { <span class="uz-zr-znak" aria-hidden="true">✓</span><span class="uz-sr">tačno: </span> }
-                          @if (c.stanje === 'netacno') { <span class="uz-zr-znak" aria-hidden="true">✗</span><span class="uz-sr">netačno: </span> }
-                          <span class="uz-zr-cip-tekst">@if (c.formula) { <app-tekst-formule class="uz-zr-formula" [tekst]="c.tekst" /> } @else { {{ c.tekst }} }</span>
-                          @if (c.broj > 1) {
-                            <span class="uz-zr-cip-broj">({{ c.broj }})</span>
-                          } @else if (c.broj === 0) {
-                            <span class="uz-zr-cip-broj">niko</span>
-                          }
-                        </li>
-                      }
-                    </ul>
+                    <app-cipovi-odgovora [cipovi]="cipovi" />
                   } @else {
                     <p class="uz-zr-prazno">Još nema odgovora.</p>
                   }
