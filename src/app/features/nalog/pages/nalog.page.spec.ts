@@ -15,6 +15,7 @@ const JA = 'api/public/nalog/ja';
 const KOD = 'api/public/nalog/kod';
 const PRIJAVA = 'api/public/nalog/prijava';
 const POMOC = 'api/public/nalog/pomoc';
+const CAS = 'api/public/nalog/cas';
 
 const JA_ODGOVOR: StudentJa = {
   indeks: 'GD12',
@@ -101,6 +102,8 @@ describe('NalogPage', () => {
   });
 
   afterEach(() => {
+    // kartica "Na času si" (tiho, posle `GET ja`): testovi koji je ne gledaju odgovaraju "nisi na času"
+    http.match(CAS).forEach(r => r.flush({ predavanje: null, cekiranU: null, izvodjenje: null }));
     http.verify();
     fixture?.destroy();
   });
@@ -124,6 +127,27 @@ describe('NalogPage', () => {
       expect(tekst).toContain('Ovaj uređaj');
       expect(dugme('Odjavi se')).toBeDefined();
       expect(dugme('Odjavi sve uređaje')).toBeDefined();
+    });
+
+    it('prijavljen i čekiran na času koji traje: kartica "Na času si" sa "Nastavi" na nalog/cas', async () => {
+      await otvoriStranu(null, true);
+      expect(el().querySelector('[data-na-casu-kartica]')).toBeNull();
+      http.expectOne(CAS).flush({
+        predavanje: { id: 17, predmet: 'Uvod u primenu računara', datum: '2026-10-28', rb: 3, tema: null, zavrseno: false },
+        cekiranU: '2026-10-28T10:00:00',
+      });
+      await stabilno();
+      const kartica = el().querySelector('[data-na-casu-kartica]');
+      expect(kartica?.textContent).toContain('Na času si');
+      expect(kartica?.textContent).toContain('Uvod u primenu računara · sreda 28.10.');
+      expect(kartica?.querySelector('a')?.getAttribute('href')).toBe('/nalog/cas');
+    });
+
+    it('završen čas i greška: bez kartice', async () => {
+      await otvoriStranu(null, true);
+      http.expectOne(CAS).flush({ predavanje: { id: 17, predmet: 'X', datum: '2026-10-28', rb: 3, tema: null, zavrseno: true } });
+      await stabilno();
+      expect(el().querySelector('[data-na-casu-kartica]')).toBeNull();
     });
 
     it('prijavljen, ali GET ja 401 (sesija istekla u međuvremenu): ekran indeksa', async () => {

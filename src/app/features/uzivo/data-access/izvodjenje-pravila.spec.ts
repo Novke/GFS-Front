@@ -177,6 +177,18 @@ describe('odgovorili (x/y u konzoli)', () => {
     expect(odgovorili(s)).toEqual({ broj: 15, od: 18, svi: false });
   });
 
+  it('brojOcekivanih sa servera (čekirani koji nisu ušli): 15 učesnika, 15 odgovora, 18 očekivanih je 15 od 18', () => {
+    const ucesnici = Array.from({ length: 15 }, (_, i) => u(i + 1, true, true));
+    const s = naPitanju('OTVORENO', { ucesnici, brojOdgovora: 15, brojPovezanih: 15, brojOcekivanih: 18, brojCekiranih: 18 });
+    expect(odgovorili(s)).toEqual({ broj: 15, od: 18, svi: false });
+  });
+
+  it('bez brojOcekivanih (stari backend) imenilac su učesnici', () => {
+    const s = naPitanju('OTVORENO', { ucesnici: [u(1, true, true), u(2, false, false)], brojOdgovora: 1, brojPovezanih: 1 });
+    expect(s.brojOcekivanih).toBeUndefined();
+    expect(odgovorili(s)).toEqual({ broj: 1, od: 2, svi: false });
+  });
+
   it('odgovorio pa izgubio vezu: ostaje u imeniocu, nema 3/2', () => {
     const s = naPitanju('OTVORENO', {
       ucesnici: [u(1, true, true), u(2, true, true), u(3, false, true), u(4, false, false)],

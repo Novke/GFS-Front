@@ -4,9 +4,12 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, filter, map, of, startWith, switchMap, timer } from 'rxjs';
+import { catchError, exhaustMap, filter, map, of, startWith, switchMap, timer } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
+import { CekiranjeApi, CekiranjeInfo, linkCekiranja } from '../../../core/api/cekiranje.api';
+import { formatDatum } from '../../../shared/util/datum.pipe';
+import { QrKodComponent } from '../../uzivo/ui/qr-kod.component';
 import { JE_ID } from '../../../core/route-matchers';
 import { StudentiApi } from '../../../core/api/studenti.api';
 import { sviStudentiGrupe } from '../data-access/predavanje.store';
@@ -15,6 +18,8 @@ import { PredavanjeDetails } from '../../../core/api/predavanja.models';
 
 /** Projektor osvežava broj prisutnih na 10 s (samo dok je tab vidljiv). */
 export const OSVEZAVANJE_MS = 10_000;
+/** Token čekiranja se menja na 10 s (važi 20-30 s); projektor ga čita na 3 s, pa nov QR kasni najviše 3 s. */
+export const CEKIRANJE_MS = 3_000;
 
 /** `grupa`: id-jevi studenata grupe predavanja (`null` = predavanje bez grupe ili grupa nije učitana). */
 type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | null } | { tip: 'greska'; poruka: string } | { tip: 'ucitava' };
@@ -24,10 +29,14 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
  * "Predavanje N · Predmet · Grupa" i veliki broj prisutnih, bez ličnih podataka. Broj je isti kao u zaglavlju detalja:
  * prisutni iz grupe ("od 14"), a stariji (studenti van grupe) kao "+N stariji". "Pun ekran" (Fullscreen API);
  * Esc van punog ekrana vraća na predavanje.
+ *
+ * Dok je predavanje živo, desno je QR za čekiranje (`nalog/cas/<token>`): token sa servera (tajna ga ne napušta),
+ * nov na 10 s, čita se na 3 s dok je tab vidljiv; ispod QR-a je ista adresa kao tekst i "Čekirano: N" (bez imena).
+ * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR.
  */
 @Component({
   selector: 'app-predavanje-projektor',
-  imports: [MatButton, MatIcon, RouterLink],
+  imports: [MatButton, MatIcon, RouterLink, QrKodComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'esc()',
@@ -43,17 +52,30 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
     @switch (stanje().tip) {
       @case ('ok') {
         @if (predavanje(); as p) {
-          <section class="sadrzaj" aria-live="polite">
-            <p class="kontekst">{{ kontekst() }}</p>
-            <h1 class="tema">{{ p.tema?.trim() || 'Predavanje ' + p.rb }}</h1>
-            <div class="broj" data-prisutnih>
-              <span class="vrednost">{{ brojevi().izGrupe }}</span>
-              <span class="labela">prisutno@if (brojevi().od !== null) { od {{ brojevi().od }}}</span>
-              @if (brojevi().stariji > 0) {
-                <span class="stariji" data-stariji>+{{ starijiTekst() }}</span>
+          <div class="ekran" [class.sa-qr]="!!qr()">
+            <section class="sadrzaj" aria-live="polite">
+              <p class="kontekst">{{ kontekst() }}</p>
+              <h1 class="tema">{{ p.tema?.trim() || 'Predavanje ' + p.rb }}</h1>
+              <div class="broj" data-prisutnih>
+                <span class="vrednost">{{ brojevi().izGrupe }}</span>
+                <span class="labela">prisutno@if (brojevi().od !== null) { od {{ brojevi().od }}}</span>
+                @if (brojevi().stariji > 0) {
+                  <span class="stariji" data-stariji>+{{ starijiTekst() }}</span>
+                }
+              </div>
+              @if (drugiDatum(); as d) {
+                <p class="drugi-datum" role="alert" data-drugi-datum>Ovo predavanje je od {{ d }} Da li si hteo novo predavanje?</p>
               }
-            </div>
-          </section>
+            </section>
+            @if (qr(); as q) {
+              <section class="cekiranje" aria-label="Čekiranje">
+                <p class="uputstvo">Skeniraj telefonom da potvrdiš prisustvo</p>
+                <app-qr-kod [tekst]="q.link" [velicina]="720" />
+                <p class="adresa" data-adresa-cekiranja>{{ q.link }}</p>
+                <p class="cekirano" data-cekirano>Čekirano: {{ q.broj }}</p>
+              </section>
+            }
+          </div>
         }
       }
       @case ('greska') {
@@ -67,7 +89,16 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
   styles: `
     :host { display: flex; flex-direction: column; min-height: calc(100dvh - 48px); }
     .alati { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
-    .sadrzaj { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+    .ekran { flex: 1; display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center; }
+    .ekran.sa-qr { grid-template-columns: minmax(0, 1fr) minmax(280px, min(42vw, 72dvh)); }
+    @media (max-width: 899px) { .ekran.sa-qr { grid-template-columns: 1fr; } }
+    .sadrzaj { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+    .cekiranje { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+    .cekiranje app-qr-kod { width: 100%; }
+    .uputstvo { margin: 0; font-size: clamp(20px, 2.2vw, 30px); font-weight: 600; color: var(--ink); }
+    .adresa { margin: 0; font-family: var(--font-mono); font-size: clamp(13px, 1.1vw, 18px); color: var(--ink-2); overflow-wrap: anywhere; }
+    .cekirano { margin: 0; font-size: clamp(24px, 2.6vw, 36px); font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+    .drugi-datum { margin: 16px 0 0; padding: 8px 16px; border-radius: 8px; font-size: clamp(18px, 1.8vw, 26px); color: var(--warn); border: 2px solid currentColor; }
     .kontekst { margin: 0; font-size: clamp(22px, 3vw, 36px); color: var(--ink-2); }
     .tema { margin: 0; font-size: clamp(36px, 6vw, 80px); line-height: 1.1; overflow-wrap: anywhere; }
     .broj { display: flex; flex-direction: column; align-items: center; margin-top: 24px; }
@@ -79,6 +110,7 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
 })
 export class PredavanjeProjektor {
   private readonly api = inject(PredavanjaApi);
+  private readonly cekiranjeApi = inject(CekiranjeApi);
   private readonly studentiApi = inject(StudentiApi);
   private readonly router = inject(Router);
   protected readonly dokument = inject(DOCUMENT);
@@ -145,6 +177,39 @@ export class PredavanjeProjektor {
     const izGrupe = [...prisutni].filter(id => id !== undefined && grupa.has(id)).length;
     return { izGrupe, stariji: prisutni.size - izGrupe, od: grupa.size as number | null };
   });
+  /** Id živog predavanja (`null` = nije učitano ili je završeno): samo tada se čita token čekiranja. */
+  private readonly zivoId = computed(() => {
+    const p = this.predavanje();
+    return p && !p.zavrseno ? p.id : null;
+  });
+
+  /** Poslednji uspešan odgovor čekiranja; neuspeo upit ga ne briše (QR ostaje, student dobije "QR je istekao"). */
+  private readonly cekiranje = toSignal(
+    toObservable(this.zivoId).pipe(
+      switchMap(id =>
+        id === null
+          ? of(null)
+          : timer(0, CEKIRANJE_MS).pipe(
+              filter(() => !this.dokument.hidden),
+              exhaustMap(() => this.cekiranjeApi.info(id).pipe(catchError(() => of(undefined)))),
+              filter((i): i is CekiranjeInfo => i !== undefined),
+            ),
+      ),
+    ),
+    { initialValue: null as CekiranjeInfo | null },
+  );
+
+  protected readonly qr = computed(() => {
+    const c = this.cekiranje();
+    return c?.token ? { link: linkCekiranja(c.token), broj: c.cekirani?.length ?? 0 } : null;
+  });
+
+  /** `14. 10.` kad datum predavanja nije današnji (server poredi sa svojim satom), inače `null`. */
+  protected readonly drugiDatum = computed(() => {
+    const p = this.predavanje();
+    return p && this.cekiranje()?.datumNijeDanas ? formatDatum(p.datum, 'kratko') : null;
+  });
+
   protected readonly kontekst = computed(() => {
     const p = this.predavanje();
     return p ? [`Predavanje ${p.rb}`, p.predmet?.naziv, p.grupa?.naziv].filter(Boolean).join(' · ') : '';

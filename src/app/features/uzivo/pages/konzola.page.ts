@@ -127,6 +127,7 @@ export class IzborEkranaDialog {
             <span>kod <strong>{{ kod() }}</strong></span>
             <span>{{ polozaj() }}</span>
             <span>učesnici {{ s.brojPovezanih }}/{{ s.ucesnici.length }}</span>
+            @if ((s.brojCekiranih ?? null) !== null) { <span class="uz-kon-cekirano">čekirano {{ s.brojCekiranih }}</span> }
             @if (s.izvodjenje.boduje) { <span class="uz-cip uz-boduje">Boduje se</span> }
             <span class="uz-kon-veza" [class.uz-kon-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
           </p>
@@ -154,7 +155,7 @@ export class IzborEkranaDialog {
       <ng-template #trenutniTpl>
         <section class="uz-kon-kartica uz-kon-trenutni" aria-label="Na projektoru">
           <h2 class="uz-kon-naslov">Na projektoru · {{ polozaj() }}</h2>
-          <app-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" [umanjeno]="true" />
+          <app-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [qrLink]="store.qrLink()" [sat]="store.sat()" [umanjeno]="true" />
         </section>
       </ng-template>
 

@@ -54,7 +54,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
   template: `
     @if (store.stanje() && fontoviSpremni()) {
       @if (scena(); as sc) {
-        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [sat]="store.sat()" [animiraj]="true"
+        <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [qrLink]="store.qrLink()" [sat]="store.sat()" [animiraj]="true"
                             [epohaVeze]="epohaVeze()" />
       } @else {
         <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>

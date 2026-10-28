@@ -15,7 +15,8 @@ import { JavnoApi } from './javno.api';
 import type { NacrtOdgovora } from './odgovor-unos.component';
 import type { NacrtZadatka } from './zadatak-unos.component';
 
-export type FazaStudenta = 'kod' | 'ime' | 'uzivo' | 'kraj' | 'izbacen' | 'greska';
+/** `cekiranje`: bodovano izvođenje sa predavanja, a student nije čekiran na času (403 pri prijavi; poruka bez ponovnog pokušaja). */
+export type FazaStudenta = 'kod' | 'ime' | 'uzivo' | 'kraj' | 'izbacen' | 'cekiranje' | 'greska';
 export type Veza = 'povezivanje' | 'povezan' | 'prekinut';
 
 export interface StudentState {
@@ -75,6 +76,9 @@ const ZAKLJUCAVAJU = new Set(['Pitanje je zatvoreno.', 'Vreme je isteklo.']);
 const VEC_ODGOVORIO = 'Već si odgovorio.';
 const NIJE_PRIJAVLJEN = 'Nisi prijavljen na ovo izvođenje.';
 const ZAVRSENO = 'Izvođenje je završeno.';
+/** 403 pri prijavi (studentski portal, faza 1): izbačen student i bodovano izvođenje bez čekiranja ne idu na nalog. */
+const IZBACEN = 'Izbačen si iz ovog izvođenja.';
+const PRVO_CEKIRANJE = 'Prvo se čekiraj: skeniraj QR sa table.';
 /** Prijava studenta (ruta agenta prijave): bodovan run bez prijavljenog studenta ide tamo, pa se vraća na `uzivo/<kod>`. */
 const NALOG = 'nalog?nazad=uzivo/';
 
@@ -484,7 +488,8 @@ export const StudentStore = signalStore(
 
     /**
      * Prijava (`POST prijava`): imenom iz forme, ili prijavljen student bez forme (`ime` prazno, server ga uzima iz baze).
-     * 403 (bodovan run bez prijavljenog studenta) vodi na nalog; bez forme svaka druga greška je faza greške.
+     * 403 "Izbačen si..." je faza `izbacen`, 403 "Prvo se čekiraj..." faza `cekiranje`, ostali 403 (bodovan run bez
+     * prijavljenog studenta) vode na nalog; bez forme svaka druga greška je faza greške.
      */
     function posaljiPrijavu(kod: string, ime: string): void {
       patchState(store, { salje: true });
@@ -493,7 +498,13 @@ export const StudentStore = signalStore(
         next: udji,
         error: e => {
           patchState(store, { salje: false });
-          if (status(e) === 403) void router.navigateByUrl(nalogUrl(kod, store.info()));
+          const razlog = status(e) === 403 ? razlogGreske(e, '') : null;
+          if (razlog === IZBACEN) zavrsi('izbacen');
+          else if (razlog === PRVO_CEKIRANJE) {
+            zatvoriVezu();
+            patchState(store, { faza: 'cekiranje', ...BEZ_UCESNIKA });
+            postaviGresku(PRVO_CEKIRANJE);
+          } else if (razlog !== null) void router.navigateByUrl(nalogUrl(kod, store.info()));
           else if (je404(e)) fazaGreska(e, 'Izvođenje sa ovim kodom ne postoji ili je završeno.');
           else if (store.faza() === 'ime') postaviGresku(razlogGreske(e, 'Prijava nije uspela. Pokušaj ponovo.'));
           else fazaGreska(e, 'Prijava nije uspela. Pokušaj ponovo.');
