@@ -184,12 +184,14 @@ export interface IzvodjenjeRezultati {
 export interface GrupaPutanja { id: number; naziv: string; }
 export type TipPoljaZadatka = 'BROJ' | 'TEKST' | 'JEDAN_TACAN' | 'VISE_TACNIH';
 /**
- * Polje šeme odgovora grupe: `odstupanje`/`odstupanjeTip` za BROJ, `zanemariVelicinu`/`zanemariRazmake` za TEKST, `opcije` za
+ * Polje šeme odgovora grupe: `odstupanje`/`odstupanjeTip` za BROJ, `zanemariVelicinu`/`zanemariRazmake`/`zanemariVodeceNule` za TEKST, `opcije` za
  * JEDAN_TACAN i VISE_TACNIH (tekst opcije sme da ima `$formule$`). Šema bez polja = rad na papiru.
  */
 export interface PoljeZadatka {
   kljuc: string; oznaka: string; tip: TipPoljaZadatka; odstupanje: number | null; odstupanjeTip: OdstupanjeTip | null;
   jedinica: string | null; zanemariVelicinu: boolean | null; zanemariRazmake: boolean | null; opcije: { id: number; tekst: string }[] | null;
+  /** TEKST: vodeće nule se ne računaju (`true`); `null`/izostavljeno = računaju se (stari snimak runde). */
+  zanemariVodeceNule?: boolean | null;
 }
 /** Tačan odgovor jednog polja: postavljeno je samo svojstvo tipa polja (BROJ `broj`, TEKST `prihvatljivi`, JEDAN `tacna`, VISE `tacne`). */
 export interface OdgovorPolja { broj: number | null; prihvatljivi: string[] | null; tacna: number | null; tacne: number[] | null; }

@@ -166,6 +166,8 @@ export function normalizujPolja(polja: readonly Polje[]): Polje[] {
       zanemariVelicinu: p.zanemariVelicinu ?? true,
       zanemariRazmake: p.zanemariRazmake ?? true,
       opcije: imaOpcije(p.tip) ? (p.opcije ?? []).map(o => ({ id: o.id, tekst: o.tekst.trim() })) : null,
+      // samo uključeno, kao server (isključeno ne upisuje): šema od pre opcije ostaje bajt po bajt ista
+      ...(p.tip === 'TEKST' && p.zanemariVodeceNule === true ? { zanemariVodeceNule: true } : {}),
     };
   });
 }

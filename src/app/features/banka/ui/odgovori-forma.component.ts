@@ -161,8 +161,12 @@ export class OdgovoriFormaComponent {
   }
 
   protected opisTeksta(p: Polje): string {
-    const zanemari = [p.zanemariVelicinu !== false ? 'velika slova' : null, p.zanemariRazmake !== false ? 'razmake' : null].filter(Boolean);
-    return `Enter dodaje, do ${MAX_PRIHVATLJIVIH}${zanemari.length ? `; poređenje zanemaruje ${zanemari.join(' i ')}` : ''}`;
+    const zanemari = [
+      p.zanemariVelicinu !== false ? 'velika slova' : null, p.zanemariRazmake !== false ? 'razmake' : null,
+      p.zanemariVodeceNule === true ? 'vodeće nule' : null,
+    ].filter(Boolean);
+    const spisak = zanemari.length > 1 ? `${zanemari.slice(0, -1).join(', ')} i ${zanemari.at(-1)}` : zanemari.join('');
+    return `Enter dodaje, do ${MAX_PRIHVATLJIVIH}${zanemari.length ? `; poređenje zanemaruje ${spisak}` : ''}`;
   }
 
   protected promeniBroj(p: Polje, e: Event): void {

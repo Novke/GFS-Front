@@ -238,6 +238,16 @@ describe('normalizujPolja i istaPolja', () => {
     expect(normalizujPolja([broj('a', { jedinica: ' m ' })])[0].jedinica).toBe('m');
   });
 
+  it('vodeće nule: samo TEKST sa true ostaje true, false, null i izostavljeno se ne šalju (kao server); promena se vidi u istaPolja', () => {
+    const tekst: Polje = { ...broj('a'), tip: 'TEKST', odstupanje: null, odstupanjeTip: null };
+    expect(normalizujPolja([{ ...tekst, zanemariVodeceNule: true }])[0].zanemariVodeceNule).toBe(true);
+    expect(normalizujPolja([{ ...tekst, zanemariVodeceNule: false }])[0]).not.toHaveProperty('zanemariVodeceNule');
+    expect(normalizujPolja([{ ...tekst, zanemariVodeceNule: null }])[0]).not.toHaveProperty('zanemariVodeceNule');
+    expect(normalizujPolja([{ ...broj('a'), zanemariVodeceNule: true }])[0]).not.toHaveProperty('zanemariVodeceNule');
+    expect(istaPolja([{ ...tekst, zanemariVodeceNule: false }], [tekst])).toBe(true);
+    expect(istaPolja([{ ...tekst, zanemariVodeceNule: true }], [tekst])).toBe(false);
+  });
+
   it('istaPolja poredi posle normalizacije, nezavisno od redosleda svojstava; redosled polja i opcija se računa', () => {
     const sacuvano = normalizujPolja([broj('a'), izbor('VISE_TACNIH', 'b')]);
     // isto polje sa svojstvima drugim redom (JSON sa servera) i bez podrazumevanih vrednosti
