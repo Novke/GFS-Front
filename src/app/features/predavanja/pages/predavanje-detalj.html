@@ -61,6 +61,12 @@
     </section>
   }
 
+  @if (cekirani(); as c) {
+    @if (!store.zavrseno() || c.length > 0) {
+      <app-cekirani-panel [cekirani]="c" />
+    }
+  }
+
   <app-prezentacije-na-predavanju [predavanjeId]="p.id" [zavrseno]="store.zavrseno() === true" />
 
   @if (store.zavrseno()) {

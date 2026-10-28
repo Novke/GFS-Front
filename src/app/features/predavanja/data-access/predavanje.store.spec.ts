@@ -443,6 +443,78 @@ describe('PredavanjeStore', () => {
     store.klik(1);
     expect(zahteviUToku()).toHaveLength(0);
   });
+  describe('osvezi (čekiranja sa telefona dok je predavanje živo)', () => {
+    const osvezi = () => http.expectOne(r => r.method === 'GET' && r.url === 'api/predavanja/5');
+
+    it('osveziNeGaziIzmenuNaCekanju: klik koji čeka odgovor ostaje, ostali studenti dobijaju stanje sa servera', () => {
+      ucitaj();
+      store.klik(1); // -> prisutan, zahtev u toku
+      server.postavi(2, 'PRISUSTVO'); // Marko se čekirao telefonom
+      store.osvezi();
+      osvezi().flush(server.details()); // server još ne zna za klik: Ana je tamo odsutna
+      expect(store.stanjePoStudentu()[1]).toBe('prisutan');
+      expect(store.cekanje()[1]).toBe(true);
+      expect(store.stanjePoStudentu()[2]).toBe('prisutan');
+      odgovaraj();
+      expect(store.stanjePoStudentu()[1]).toBe('prisutan');
+      expect(server.tipovi.get(1)).toBe('PRISUSTVO');
+    });
+
+    it('osveziDodajeNovoCekiranje: stariji student koji se čekirao dobija pločicu i godinu', () => {
+      ucitaj();
+      server.postavi(IVANA.id, 'PRISUSTVO');
+      store.osvezi();
+      osvezi().flush(server.details());
+      expect(store.stanjePoStudentu()[IVANA.id]).toBe('prisutan');
+      expect(store.stariji().has(IVANA.id)).toBe(true);
+      expect(store.brojevi()).toMatchObject({ prisutnoUkupno: 1, prisutnoStarijih: 1, prisutnoIzGrupe: 0 });
+      const gd2024 = { id: 1, naziv: 'GD-2024', godinaUpisa: 2024, brojStudenata: 30 };
+      http.expectOne(r => r.url === 'api/studenti/pretraga' && r.params.get('q') === 'GD14')
+        .flush(strana([student(IVANA.id, IVANA.ime, IVANA.prezime, IVANA.indeks, gd2024)]));
+      expect(store.studenti().find(s => s.id === IVANA.id)).toMatchObject({ godina: 2024 });
+      expect(store.studenti().map(s => s.indeks)).toEqual(['GD2', 'GD7', 'GD10', 'GD14']);
+    });
+
+    it('osveziPosleZavrsetkaReda: posle odgovora važi server; zastareo odgovor ne pregazi potvrdu stiglu posle upita', () => {
+      ucitaj();
+      store.klik(1);
+      odgovaraj();
+      server.postavi(1, 'ZADATAK'); // izmena iz druge kartice
+      store.osvezi();
+      osvezi().flush(server.details());
+      expect(store.stanjePoStudentu()[1]).toBe('zadatak');
+
+      // upit poslat pre klika, odgovor stiže posle potvrde klika: za tog studenta se odbacuje
+      const star = server.details();
+      store.osvezi();
+      const upit = osvezi();
+      store.klik(3);
+      odgovaraj();
+      upit.flush(star);
+      expect(store.stanjePoStudentu()[3]).toBe('prisutan');
+    });
+
+    it('preuzima završetak iz druge kartice; završeno, neučitano i upit u toku ne šalju nov upit', () => {
+      store.osvezi(); // nije učitano
+      ucitaj();
+      store.osvezi();
+      store.osvezi(); // već jedan u toku
+      server.zavrseno = true;
+      osvezi().flush(server.details());
+      expect(store.zavrseno()).toBe(true);
+      store.osvezi();
+      http.expectNone(r => r.method === 'GET' && r.url === 'api/predavanja/5');
+    });
+
+    it('neuspelo osvežavanje ne menja ništa i ne javlja grešku', () => {
+      ucitaj();
+      store.osvezi();
+      osvezi().flush(null, { status: 500, statusText: 'Server Error' });
+      expect(store.stanjePoStudentu()).toEqual({ 1: 'odsutan', 2: 'odsutan', 3: 'odsutan' });
+      expect(poruke).toEqual([]);
+    });
+  });
+
   describe('jednak obrazac čuvanja (kao TestStore)', () => {
     /** Ponovo otvoren ekran (nov store) za predavanje 5. */
     function noviEkran(): PredavanjeStore {
