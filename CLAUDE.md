@@ -475,8 +475,8 @@ over STOMP; teacher commands are REST.
   `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
   (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
-  the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 790 000 B (`BUDZET_POCETNO`,
-raised by 5 kB for the teacher session, see "Prijava"); the editor page
+  the global stylesheet once) has no editor string from `e2e/nizovi-editora.ts` and stays <= 800 000 B (`BUDZET_POCETNO`,
+raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for release tracking, see "Releases and stale tabs"); the editor page
   file (contains `uz-ed-zaglavlje`) <= 215 000 B; the editor's own closure (its closure minus initial and page closure)
   <= 450 000 B and <= 140 000 B gzip since 4b (it carries ProseMirror, the text editor of F12; 4a alone was
   <= 160 000 B). Public routes load none of it (`e2e/javna-mreza.ts` also checks every JS body for those strings).
@@ -928,7 +928,7 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Routes** (`banka.routes.ts`, loaded with `loadChildren` under the shell route `banka`, side nav entry "Banka zadataka",
   breadcrumbs "Nastava > Banka zadataka"; lazy on purpose, outside FE-4's file list: a static route table pushed the initial
   closure over the budget of `e2e/lenji-editor.spec.ts` (then 785 000 B; 790 000 B since the teacher session, see "Prijava"; after
-  merging MCP and the Zadatak slide into prijava the initial closure is 789 083 B, under 1 kB of headroom), so nothing new goes into the initial chunk): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
+  merging MCP and the Zadatak slide into prijava the initial closure is 789 083 B; 800 000 B since release tracking, 796 491 B), so nothing new goes into the initial chunk): `banka?predmet&namena&grupa` (tree + variants), `banka/pregled?predmet&izvor&serija&grupa&status&od`
   (draft review, title and last breadcrumb "Pregled nacrta"; declared before `grupe/:id`), `banka/grupe/:id` (group detail),
   `banka/varijante/nova?grupa=` and `banka/varijante/:id` (the same `VarijantaEditorPage`, optional `?povratak`). Ids must be numeric
   (`putanjaSaId`, otherwise 404 without an API call); the last two routes and `grupe/:id` carry `unsavedChangesGuard`.
@@ -1128,6 +1128,42 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Tests:** `e2e/banka-nivo.spec.ts` (card, review, filter, new and existing variant), `e2e/uzivo-zadatak-konzola.spec.ts` and
   `uzivo-zadatak-editor.spec.ts` (console and slide form); the mocks keep `nivo` per variant (`mock-banka.ts`, `PATCH`, `nivo` filter,
   `brojAktivnihPoNivou`) and the console mock handles `NIVO` (`mock-izvodjenje.ts`).
+
+## Releases and stale tabs (`core/izdanje`)
+
+A tab opened before a deploy keeps running the old build. It breaks the moment it asks for a lazy chunk the new build no longer
+has (hashed names, 404: routes, `@defer`, every dialog and import opened with `import()`) or sends a request the new backend
+changed. Real case (2026-10-28): a tab from 21.10 created a presentation "Iz PowerPointa", then the import chunk was a 404, so an
+empty presentation stayed behind. The fix is one mechanism, not a guard per call site:
+
+- **Release id.** `scripts/oznaci-izdanje.mjs` (Dockerfile, right after `ng build`) hashes `index.html` (it lists the hashed initial
+  files, so the id changes exactly when the front changes; the same source built twice gives the same id) and writes it to
+  `<meta name="gfs-izdanje">` in `index.html` (what this tab loaded) and `assets/izdanje.json` (what the server serves now;
+  `assets/` is `no-store` in `docker/nginx.conf` and public in the staging regex, so phones read it too). `ng serve`, unit tests and
+  the e2e build have no meta, and then `Izdanje` does nothing at all (no request, no listener).
+- **`Izdanje`** (root, created by `provideAppInitializer`) reads `assets/izdanje.json` with `fetch` (`cache: 'no-store'`, outside the
+  HTTP interceptors). It asks every 10 min while the tab is visible, on `visibilitychange` back to visible and on `online` (at most
+  once a minute), and "hitno" (at most every 5 s) after a failed chunk: `NavigationError`, `GfsErrorHandler` (the app's `ErrorHandler`),
+  an unhandled rejection and a 404 of a hashed file in Resource Timing (`responseStatus`; not in Safari). `izdanjeInterceptor` asks
+  (normal rate) after a 4xx other than 401/403/409/429. A failed chunk is recognised by `jeGreskaUcitavanja` (Chromium, Firefox and
+  Safari messages, also wrapped in `cause`/`error`/`reason`).
+- **When a newer release is known:** the next navigation to **another path** (after the deactivate guards, `GuardsCheckEnd`)
+  loads that URL fully from the server, so the teacher gets the new version without doing anything; a query-only change (list
+  filters) never does. A route whose chunk fails loads its target URL fully, but only when the server really has a newer release (a
+  missing chunk of the same release is a real fault: no reload, no loop). Never automatically while `NesacuvaneIzmene` has unsaved
+  work, and at most once towards the same release within 5 min (`sessionStorage` `gfs.izdanje.osvezavanje`), so a cache or proxy
+  that keeps serving the old page cannot loop. `IzdanjeTraka` (in `AppComponent`) shows "Dostupna je nova verzija GFS-a."
+  with "Osveži" (plain reload; the browser asks when there is unsaved work) and "Kasnije" (hidden until an even newer release); not
+  on routes with `data: { projekcija: true }` (lecture projector, onboarding QR, uživo audience), which are seen on the wall.
+- **Everything of it lives in the initial bundle** (+6 974 B; the budget became 800 000 B): a stale tab cannot load any lazy chunk,
+  so nothing here may be lazy, and nothing here may import a feature. Do not "optimise" it into a `@defer` or a dynamic import.
+- **A flow that creates something before it needs a lazy chunk** must load the chunk first: "Nova prezentacija" -> "Iz PowerPointa"
+  awaits `UvozPptxOtvarac.pripremi()` before `POST /prezentacije` (a failed load shows `PORUKA_UVOZ_NIJE_UCITAN` in the dialog and
+  creates nothing; a dialog closed while it loads creates nothing either). Follow the same order in any new flow of that kind.
+- **Tests:** `core/izdanje/*.spec.ts` (fake fetch through `DOHVATI_IZDANJE`, page loads through `UCITAVANJE_STRANE`),
+  `e2e/izdanje.spec.ts` (a simulated deploy: the spec adds the meta to every document, serves `assets/izdanje.json` and answers 404 for
+  chunks the tab has not loaded yet until the next full load; banner, next navigation, route with a missing chunk, a real fault with
+  the same release, the PowerPoint flow, axe day and night) and `e2e/oznaci-izdanje.spec.ts` (the script and its Dockerfile step).
 
 ## Routes and paths
 

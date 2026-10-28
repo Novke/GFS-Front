@@ -88,7 +88,7 @@ const nastavnickeRute: Routes = [
     children: PREZENTACIJE_RUTE,
   },
   // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe, editor varijante i pregled nacrta. Rute dece su lenje
-  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 790 000 B, `e2e/lenji-editor.spec.ts`).
+  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'banka',
     title: 'Banka zadataka',
@@ -191,11 +191,12 @@ export const routes: Routes = [
   // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
   // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `prijava`; kasnije `render/slajd`) su bez njega.
 
-  // Projektor (bez ljuske, uvek svetao)
+  // Projektor (bez ljuske, uvek svetao). `projekcija`: ekran se gleda sa platna, bez trake novog izdanja (`IzdanjeTraka`).
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
+    data: { projekcija: true },
     children: [
       {
         path: '',
@@ -208,6 +209,7 @@ export const routes: Routes = [
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
+    data: { projekcija: true },
     children: [
       {
         path: '',
@@ -222,7 +224,7 @@ export const routes: Routes = [
     matcher: putanjaSaId('izvodjenja/:id/publika'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
-    data: { celaStrana: true },
+    data: { celaStrana: true, projekcija: true },
     children: [
       { path: '', title: 'Publika', loadComponent: () => import('./features/uzivo/pages/publika.page').then(x => x.PublikaPage) },
     ],
