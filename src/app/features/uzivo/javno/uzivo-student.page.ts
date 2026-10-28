@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, linkedSignal, viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { medijUrl } from '../data-access/uzivo.models';
@@ -15,6 +15,9 @@ import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore, naslovIshoda } from './student.store';
 import { ZadatakEkranComponent } from './zadatak-ekran.component';
 
+/** Posle kraja izvođenja (ili izbacivanja) telefon sa `?sa=cas` se ovoliko zadrži, pa se vrati na `/nalog/cas`. */
+export const POVRATAK_NA_CAS_MS = 3_000;
+
 /**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
  * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`).
@@ -24,6 +27,8 @@ import { ZadatakEkranComponent } from './zadatak-ekran.component';
  * Zadatak slajd: "Zadatak stiže…", pa `app-zadatak-ekran` (stanje runde i svoja varijanta u `app-zadatak-unos`) u
  * lenjom bloku (`@defer`): telefon vuče njegov chunk tek na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu, pa ovde
  * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`).
+ * Sa `?sa=cas` (student je došao sa `/nalog/cas`): posle kraja ili izbacivanja se za {@link POVRATAK_NA_CAS_MS} vraća na
+ * čas, gde čeka sledeću prezentaciju. Bodovano izvođenje bez čekiranja (faza `cekiranje`) pokazuje samo poruku servera.
  */
 @Component({
   selector: 'app-uzivo-student',
@@ -67,8 +72,20 @@ import { ZadatakEkranComponent } from './zadatak-ekran.component';
       }
       @case ('izbacen') {
         <div class="uz-st-sredina">
-          <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio. Možeš ponovo da uđeš sa drugim imenom.</p>
-          <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="s.ponovoUdji()">Uđi ponovo</button>
+          @if (s.info()?.prijavljenStudent) {
+            <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio iz ovog izvođenja.</p>
+          } @else {
+            <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio. Možeš ponovo da uđeš sa drugim imenom.</p>
+            <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="s.ponovoUdji()">Uđi ponovo</button>
+          }
+          @if (saCasa) { <p class="uz-st-tekst" role="status" data-na-cas>Vraćam te na čas…</p> }
+        </div>
+      }
+      @case ('cekiranje') {
+        <div class="uz-st-sredina">
+          <h1 class="uz-st-naslov">{{ s.info()?.naziv ?? 'Uživo' }}</h1>
+          <p class="uz-st-tekst" role="alert" data-cekiranje>{{ s.greska() }}</p>
+          <a class="uz-st-dugme" routerLink="/nalog">Moj nalog</a>
         </div>
       }
       @default {
@@ -185,6 +202,7 @@ import { ZadatakEkranComponent } from './zadatak-ekran.component';
                     <app-rang-lista class="uz-st-rang" [stavke]="j!.rangLista!" [istakni]="l?.mesto ?? null" />
                   }
                   <p class="uz-st-veliko">Hvala!</p>
+                  @if (saCasa && s.faza() === 'kraj') { <p class="uz-st-tekst" role="status" data-na-cas>Vraćam te na čas…</p> }
                 </div>
               }
             }
@@ -243,9 +261,19 @@ export class UzivoStudentPage {
   });
 
   private readonly zatvoriDetalje = viewChild<ElementRef<HTMLButtonElement>>('zatvoriDetalje');
+  private readonly ruta = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  /** `?sa=cas`: student je došao sa `/nalog/cas` (čekiranje), pa se tamo vraća posle kraja izvođenja. */
+  protected readonly saCasa = this.ruta.snapshot?.queryParamMap?.get('sa') === 'cas';
 
   constructor() {
-    inject(ActivatedRoute).paramMap.pipe(
+    effect(onCleanup => {
+      const f = this.store.faza();
+      if (!this.saCasa || (f !== 'kraj' && f !== 'izbacen')) return;
+      const t = setTimeout(() => void this.router.navigateByUrl('nalog/cas'), POVRATAK_NA_CAS_MS);
+      onCleanup(() => clearTimeout(t));
+    });
+    this.ruta.paramMap.pipe(
       map(p => p.get('kod') ?? ''), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(kod => this.store.otvori(kod));
     // Fokus na "Zatvori" kad se panel otvori (tastatura i čitač ekrana).

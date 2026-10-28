@@ -1,13 +1,13 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import {
   JavniZadatak, JavnoPitanje, JavnoStanje, LicniZadatak, LicnoStanje, TelefonPrikaz,
 } from '../data-access/uzivo.models';
 import { ServerskiSat } from '../data-access/sat';
 import { EkranStudenta, FazaStudenta, StudentStore, TacanOdgovor, Veza } from './student.store';
-import { UzivoStudentPage } from './uzivo-student.page';
+import { POVRATAK_NA_CAS_MS, UzivoStudentPage } from './uzivo-student.page';
 
 /*
  * Stranica studenta sa formulama (faza 5, F3). `StudentStore` je provider komponente, pa se zamenjuje na komponenti.
@@ -226,5 +226,80 @@ describe('UzivoStudentPage: Zadatak slajd', () => {
     el = await napravi('zadatakIshod', { ...lz, faza: 'ZATVORENO', polja: [] }, zatvoreno);
     expect(el.querySelector('.uz-st-zd-naslov')).toBeNull();
     expect(el.textContent).toContain('Reši na papiru.');
+  });
+});
+
+describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
+  let lazni: ReturnType<typeof lazniStore>;
+  let navigacija: ReturnType<typeof vi.spyOn>;
+
+  async function pripremi(query: Record<string, string>): Promise<void> {
+    lazni = lazniStore();
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: of(convertToParamMap({ kod: '123456' })), snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+      ],
+    });
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    await TestBed.compileComponents();
+    navigacija = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  async function prikazi(faza: FazaStudenta): Promise<ComponentFixture<UzivoStudentPage>> {
+    lazni.faza.set(faza);
+    lazni.ekran.set('kraj');
+    const f = TestBed.createComponent(UzivoStudentPage);
+    f.detectChanges();
+    await f.whenStable();
+    return f;
+  }
+
+  it('posleKrajaSaCasVracaNaCas: posle 3 s na nalog/cas', async () => {
+    await pripremi({ sa: 'cas' });
+    const f = await prikazi('kraj');
+    expect((f.nativeElement as HTMLElement).querySelector('[data-na-cas]')?.textContent).toContain('Vraćam te na čas');
+    await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS - 1);
+    expect(navigacija).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(navigacija).toHaveBeenCalledWith('nalog/cas');
+  });
+
+  it('posleKrajaBezSaCasOstaje', async () => {
+    await pripremi({});
+    const f = await prikazi('kraj');
+    await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS * 3);
+    expect(navigacija).not.toHaveBeenCalled();
+    expect((f.nativeElement as HTMLElement).querySelector('[data-na-cas]')).toBeNull();
+  });
+
+  it('izbacenSaCasVracaNaCas: prijavljen student bez "Uđi ponovo", pa nazad na čas', async () => {
+    await pripremi({ sa: 'cas' });
+    lazni.info.set({ naziv: 'Statika', prijavljenStudent: true } as never);
+    const f = await prikazi('izbacen');
+    const el = f.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Nastavnik te je uklonio iz ovog izvođenja.');
+    expect(el.textContent).not.toContain('Uđi ponovo');
+    await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS);
+    expect(navigacija).toHaveBeenCalledWith('nalog/cas');
+  });
+
+  it('bodovanoBezCekiranjaPrikazujePoruku: poruka servera, bez forme imena i bez "Pokušaj ponovo"', async () => {
+    await pripremi({});
+    lazni.greska.set('Prvo se čekiraj: skeniraj QR sa table.');
+    const f = await prikazi('cekiranje');
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-cekiranje]')?.textContent).toBe('Prvo se čekiraj: skeniraj QR sa table.');
+    expect(el.querySelector('#uz-st-ime')).toBeNull();
+    expect(el.textContent).not.toContain('Pokušaj ponovo');
+    await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS * 2);
+    expect(navigacija).not.toHaveBeenCalled();
   });
 });
