@@ -333,6 +333,19 @@ export class MockApi {
   moodlePar = true;
   /** Ime Moodle naloga iz ulaska (`GET public/lti/povezivanje`); `null` = Moodle ga nije podelio. Izmišljeno, nije stvaran nalog. */
   moodleIme: string | null = 'Pera Test';
+  /**
+   * Čekiranje (studentski portal, faza 1). Projektor dobija nov token na svaki `GET predavanja/:id/cekiranje` (kao server
+   * na 10 s, ovde odmah, da test vidi promenu bez čekanja), `cekirani` vraća taj isti upit. Student: `skeniraj` bez sesije
+   * daje ključ čekanja (`kljucevi`), sa sesijom upisuje `predavanjeId`; `izvodjenje` test postavlja kad "pokrene" prezentaciju.
+   */
+  readonly cekiranje = {
+    tokena: 0,
+    cekirani: [] as { studentId: number; ime: string; prezime: string; indeks: string; vreme: string; kasnio: boolean; istiTelefonKao: number | null }[],
+    predavanjeId: null as number | null,
+    cekiranU: null as string | null,
+    izvodjenje: null as { kod: string; naziv: string } | null,
+    kljucevi: new Set<string>(),
+  };
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -883,6 +896,16 @@ export class MockApi {
       const x = nadji(d.predavanja, p['id'], 'Predavanje');
       return jeOdgovor(x) ? x : ok(this.predavanjeDetails(x));
     });
+    // čekiranje (nastavnik: projektor, stranica predavanja, Uživo QR): token se menja na svaki upit, završeno nema token
+    get('predavanja/:id/cekiranje', (_z, p) => {
+      const x = nadji(d.predavanja, p['id'], 'Predavanje');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const c = this.cekiranje;
+      const token = x.zavrseno ? null : `${x.id}.${String(++c.tokena).padStart(22, 'T')}`;
+      return ok({ token, vaziDoMs: token ? Date.now() + 20_000 : null, serverVremeMs: Date.now(), datumNijeDanas: false, cekirani: c.cekirani });
+    });
     const aktivnost = (izmeni: (p: Predavanje, sId: number) => Odgovor | null): Rukovalac => (z, p) => {
       const x = nadji(d.predavanja, p['id'], 'Predavanje');
       if (jeOdgovor(x)) {
@@ -1395,6 +1418,51 @@ export class MockApi {
       return ok({ odjavljeno });
     });
     post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
+    // čekiranje studenta (`/nalog/cas`): token oblika `<id>.<22 znaka>` živog predavanja, inače 410 kao server
+    const casStanje = () => {
+      const c = this.cekiranje;
+      const x = c.predavanjeId === null ? undefined : d.predavanja.find(q => q.id === c.predavanjeId);
+      if (!x) {
+        return { predavanje: null, cekiranU: null, izvodjenje: null };
+      }
+      const predavanje = { id: x.id, predmet: this.predmet(x.predmetId)?.naziv ?? null, datum: x.datum, rb: x.rb, tema: x.tema, zavrseno: x.zavrseno };
+      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje };
+    };
+    const cekiraj = (x: Predavanje) => {
+      this.cekiranje.predavanjeId = x.id;
+      this.cekiranje.cekiranU = lokalnoVreme(new Date());
+    };
+    post('public/nalog/cas/skeniraj', z => {
+      const token = String((z.telo as { token?: unknown } | null)?.token ?? '');
+      const m = /^(\d+)\.[A-Za-z0-9_-]{22}$/.exec(token);
+      const x = m ? d.predavanja.find(q => q.id === Number(m[1])) : undefined;
+      if (!x) {
+        return greska(410, 'QR je istekao. Skeniraj ponovo sa table.');
+      }
+      if (x.zavrseno) {
+        return greska(410, 'Čekiranje za ovaj čas je završeno.');
+      }
+      if (!this.studentPrijavljen) {
+        const kljuc = `K${x.id}`.padEnd(32, 'k');
+        this.cekiranje.kljucevi.add(kljuc);
+        return ok({ kljuc });
+      }
+      cekiraj(x);
+      return ok({ stanje: casStanje() });
+    });
+    post('public/nalog/cas/potvrdi', z => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      const kljuc = String((z.telo as { kljuc?: unknown } | null)?.kljuc ?? '');
+      const x = this.cekiranje.kljucevi.delete(kljuc) ? d.predavanja.find(q => q.id === Number(kljuc.slice(1, kljuc.indexOf('k')))) : undefined;
+      if (!x) {
+        return greska(410, 'Čekiranje je isteklo. Skeniraj QR ponovo.');
+      }
+      cekiraj(x);
+      return ok(casStanje());
+    });
+    get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));

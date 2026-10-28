@@ -127,7 +127,7 @@ without it.
 
 ## Public routes
 
-`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog` and `nalog/moodle` are opened by students on a phone **without basic-auth**
+`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas` and `nalog/cas/:token` are opened by students on a phone **without basic-auth**
 and without a teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
 `api/public/uzivo/*`, `api/public/mediji/*` (for a Zadatak slide only the participant's own variant and, after `RESENJE`, its
 solution), `api/public/ws`; nalog: `api/public/nalog/*`, and `nalog/moodle` also `api/public/lti/povezi` and `api/public/lti/povezivanje`); any other `/api/*`
@@ -276,6 +276,47 @@ the front only routes and shows.
   for `podaci.nalogStudenta`, fixture `e2e/fixtures/nalozi.json`, which also holds notifications and teacher sessions). Before
   revoking the teacher session in a test wait for the top bar (`trakaSpremna` in `prijava.spec.ts`): the deferred bell's first
   `GET obavestenja/broj` would otherwise get the 401. Specs: `prijava.spec.ts`, `nalog-nastavnika.spec.ts`, `nalog.spec.ts`, `podesavanja-moodle.spec.ts`.
+
+## Čekiranje (student portal, phase 1)
+
+Spec `docs/superpowers/specs/2026-10-28-studentski-portal-design.md` in `Novke/GFS-deploy` (sections 4-8), plan next to it. A
+student confirms attendance by scanning a QR on the projector; the backend decides who counts (group, account, 20-30 s token,
+lecture not finished) and writes the PRISUSTVO activity; the front only shows the QR, routes the phone and polls.
+- **Token and link:** `GET api/predavanja/{id}/cekiranje` (teacher, `core/api/cekiranje.api.ts`, always `LOCAL_ERRORS`) returns
+  `{token, vaziDoMs, serverVremeMs, datumNijeDanas, cekirani[]}`; the token is `<predavanjeId>.<22 chars>`, changes every 10 s and
+  is `null` for a finished lecture. `linkCekiranja(token)` = `new URL('nalog/cas/' + token, document.baseURI)`. The secret never
+  reaches the front. `CekiranjeApi` is in `core` because the lecture projector, the lecture page and Uživo share it.
+- **Teacher screens:** the lecture projector (`predavanja/:id/projektor`, link "Čekiranje" on the lecture page) polls every 3 s
+  (`CEKIRANJE_MS`, only while the tab is visible, `exhaustMap`, an error keeps the last QR) and shows the QR (720 px), the
+  address, "Čekirano: N" (count only, never names on the projector) and, when `datumNijeDanas`, "Ovo predavanje je od … Da li si
+  hteo novo predavanje?". The lecture page polls every 5 s (`OSVEZAVANJE_DETALJA_MS`) while live: the "Čekirani" panel
+  (`ui/cekirani-panel`: time, "kasnio" after 15 min, "isti telefon kao X") and `PredavanjeStore.osvezi()`, which merges server
+  activities only into rows without pending saves (per-student confirmation counters snapshotted at request time), so a check-in
+  appears in the grid without overwriting a teacher's click. Uživo: while the run belongs to a lecture and the join screen or the
+  Q overlay is shown, `IzvodjenjeStore` polls the same endpoint every 3 s (`QR_CEKIRANJE_MS`) and `qrLink` becomes the check-in
+  link (the QR content only; the printed text stays the short join link). Console and remote show "čekirano N"; the answer count
+  is `N / max(brojOcekivanih ?? ucesnici, brojOdgovora)`.
+- **Student `/nalog/cas` and `/nalog/cas/:token`** (`features/nalog/pages/cas.page.ts`, public, `CasApi` = only
+  `api/public/nalog/cas`, `/skeniraj`, `/potvrdi`, all `LOCAL_ERRORS`): with a token the address is replaced by `/nalog/cas` at once
+  (`Location.replaceState`, the token stays in no history), then `POST skeniraj`. A signed-in student gets the lecture state; a
+  student without `gfs_student` gets a one-time key, which goes to `sessionStorage` `gfs-cas-kljuc`, and the page goes to
+  `nalog?nazad=nalog/cas` (`javnoNazad` accepts the `nalog` prefix); back on `/nalog/cas` the key goes to `POST potvrdi` and is
+  deleted (401 keeps it and returns to the login, network/5xx keep it for "Pokušaj ponovo", other errors delete it). Without a
+  token and key: `GET` state (401 = login). While on the lecture it polls every 10 s ± 2 s (`sledeciUpitMs`) and at once on
+  `visibilitychange`; a hidden page does not poll; 429 backs off 20, 40, at most 60 s without a message; a network error keeps
+  the view. A state with `izvodjenje` navigates to `uzivo/<kod>?sa=cas`; a finished lecture, removed attendance or "not checked
+  in" end polling with a message. Server texts are shown verbatim (410 "QR je istekao. Skeniraj ponovo sa table.", "Čekiranje za
+  ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). `/nalog` shows the card "Na času si" (`ui/na-casu-kartica`,
+  "Nastavi" -> `/nalog/cas`) when `GET cas` returns a lecture that is not finished.
+- **Uživo phone:** `?sa=cas` (`uzivo-student.page.ts`, `saCasa`) returns to `nalog/cas` 3 s after `kraj` or `izbacen`
+  (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…"). A scored run of a lecture requires a check-in: the join 403 with
+  `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
+  connection closes); 403 `IZBACEN` is `izbacen` (a signed-in student sees "Nastavnik te je uklonio iz ovog izvođenja." without
+  "Uđi ponovo"); any other 403 goes to `nalog` as before.
+- **Tests:** unit specs next to each file; e2e `e2e/cekiranje.spec.ts` (scan -> wait -> run -> end -> back on the lecture,
+  login with a key, server messages, the `/nalog` card, axe in day mode, projector QR changes and shows no names, a finished
+  lecture has no QR and no request). The mock (`MockApi.cekiranje`) returns a new token on every `GET predavanja/:id/cekiranje`
+  so the test sees the change without waiting 10 s.
 
 ## Uživo (`features/uzivo`)
 
