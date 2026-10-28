@@ -14,6 +14,15 @@ export function sledeciUpitMs(slucajno: number): number {
   return 10_000 + Math.round((r * 2 - 1) * 2_000);
 }
 
+/**
+ * 429 na skeniranju ili potvrdi (cela učionica iza jedne NAT adrese skenira odjednom): kratko, jer token živi 20-30 s, a
+ * nginx puni 10 zahteva u sekundi. Posle `n`-tog pokušaja 1, 2, 4, pa najviše 8 s, plus `r` (0-1) s pomeranja.
+ */
+export function odlaganjeKoraka429(n: number, r: number): number {
+  const pomeranje = Number.isFinite(r) ? Math.min(Math.max(r, 0), 0.999) * 1_000 : 0;
+  return Math.min(8_000, 1_000 * 2 ** Math.max(0, n - 1)) + Math.floor(pomeranje);
+}
+
 /** Posle `n`-tog uzastopnog 429: 20 s, 40 s, pa najviše 60 s (bez poruke studentu). */
 export function odlaganjePosle429(n: number): number {
   return Math.min(60_000, 20_000 * 2 ** Math.max(0, n - 1));

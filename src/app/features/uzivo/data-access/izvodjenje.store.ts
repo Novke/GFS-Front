@@ -138,7 +138,11 @@ export const IzvodjenjeStore = signalStore(
               ? of(null)
               : timer(0, QR_CEKIRANJE_MS).pipe(
                   filter(() => !dokument.hidden),
-                  exhaustMap(() => cekiranje.info(id).pipe(map(i => i.token ?? null), catchError(() => of(null)))),
+                  // predavanje od drugog dana: QR ostaje ulazak u izvođenje, da QR na tabli ne čekira studente na staro
+                  // predavanje bez upozorenja (projektor predavanja to pita, konzola ne; bezbednosni pregled)
+                  exhaustMap(() =>
+                    cekiranje.info(id).pipe(map(i => (i.datumNijeDanas ? null : (i.token ?? null))), catchError(() => of(null))),
+                  ),
                 ),
           ),
           tap(token => store._tokenCekiranja.set(token)),

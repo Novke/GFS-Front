@@ -110,6 +110,40 @@ describe('CasPage', () => {
     expect(navigacija).toHaveBeenCalledWith('nalog?nazad=nalog/cas');
   });
 
+  it('429 na skeniranju: kratko čeka i ponavlja isti token, bez poruke', async () => {
+    await otvori(TOKEN);
+    const g = greska(429, 'Previše zahteva.');
+    http.expectOne(SKENIRAJ).flush(g.body, g.opts);
+    await osvezi();
+    expect(tekst()).not.toContain('Previše');
+    await vi.advanceTimersByTimeAsync(2_000);
+    const r = http.expectOne(SKENIRAJ);
+    expect(r.request.body).toEqual({ token: TOKEN });
+    r.flush({ stanje: NA_CASU });
+    await osvezi();
+    expect(tekst()).toContain('Prisutan si');
+  });
+
+  it('429 na potvrdi: ključ ostaje i potvrda se ponavlja; posle 5 pokušaja poruka sa "Pokušaj ponovo"', async () => {
+    sessionStorage.setItem(KLJUC_CEKANJA, KLJUC);
+    await otvori();
+    const g = greska(429, 'Previše zahteva.');
+    for (let i = 0; i < 6; i++) {
+      http.expectOne(POTVRDI).flush(g.body, g.opts);
+      await osvezi();
+      expect(sessionStorage.getItem(KLJUC_CEKANJA)).toBe(KLJUC);
+      await vi.advanceTimersByTimeAsync(9_000);
+    }
+    http.expectNone(POTVRDI);
+    expect(tekst()).toContain('Previše zahteva.');
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button')!.click();
+    await osvezi();
+    http.expectOne(POTVRDI).flush(NA_CASU);
+    await osvezi();
+    expect(sessionStorage.getItem(KLJUC_CEKANJA)).toBeNull();
+    expect(tekst()).toContain('Prisutan si');
+  });
+
   it('istekaoKljucPrikazujePoruku', async () => {
     sessionStorage.setItem(KLJUC_CEKANJA, KLJUC);
     await otvori();

@@ -403,6 +403,16 @@ describe('IzvodjenjeStore', () => {
       expect(store.qrLink()).toBe(linkCekiranja(TOKEN_B));
     });
 
+    it('qrLinkJeJoinZaPredavanjeOdDrugogDana: QR ne čekira na staro predavanje', async () => {
+      init(saPredavanjem());
+      await posle(0);
+      http.expectOne('api/predavanja/17/cekiranje').flush({ ...info(TOKEN_A), datumNijeDanas: true });
+      expect(store.qrLink()).toBe(store.joinLink());
+      await posle(QR_CEKIRANJE_MS);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_B)); // datum ispravljen: opet čekira
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_B));
+    });
+
     it('qrLinkJeJoinBezPredavanja', async () => {
       init(stanje());
       await posle(QR_CEKIRANJE_MS * 2);

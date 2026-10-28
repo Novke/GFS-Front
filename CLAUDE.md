@@ -294,7 +294,8 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   activities only into rows without pending saves (per-student confirmation counters snapshotted at request time), so a check-in
   appears in the grid without overwriting a teacher's click. Uživo: while the run belongs to a lecture and the join screen or the
   Q overlay is shown, `IzvodjenjeStore` polls the same endpoint every 3 s (`QR_CEKIRANJE_MS`) and `qrLink` becomes the check-in
-  link (the QR content only; the printed text stays the short join link). Console and remote show "čekirano N"; the answer count
+  link (the QR content only; the printed text stays the short join link). A lecture from another day (`datumNijeDanas`) keeps the
+  join QR, so the board never checks students into an old lecture without the projector's warning. Console and remote show "čekirano N"; the answer count
   is `N / max(brojOcekivanih ?? ucesnici, brojOdgovora)`.
 - **Student `/nalog/cas` and `/nalog/cas/:token`** (`features/nalog/pages/cas.page.ts`, public, `CasApi` = only
   `api/public/nalog/cas`, `/skeniraj`, `/potvrdi`, all `LOCAL_ERRORS`): with a token the address is replaced by `/nalog/cas` at once
@@ -304,7 +305,9 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   deleted (401 keeps it and returns to the login, network/5xx keep it for "Pokušaj ponovo", other errors delete it). Without a
   token and key: `GET` state (401 = login). While on the lecture it polls every 10 s ± 2 s (`sledeciUpitMs`) and at once on
   `visibilitychange`; a hidden page does not poll; 429 backs off 20, 40, at most 60 s without a message; a network error keeps
-  the view. A state with `izvodjenje` navigates to `uzivo/<kod>?sa=cas`; a finished lecture, removed attendance or "not checked
+  the view. A 429 on `skeniraj` or `potvrdi` (a classroom behind one NAT scanning at once) repeats the same step after 1-9 s
+  (`odlaganjeKoraka429`, short because the token lives 20-30 s) up to 5 times, then shows the message with "Pokušaj ponovo";
+  the key stays. The backend accepts a key only from the phone that scanned (same `gfs_uredjaj` cookie). A state with `izvodjenje` navigates to `uzivo/<kod>?sa=cas`; a finished lecture, removed attendance or "not checked
   in" end polling with a message. Server texts are shown verbatim (410 "QR je istekao. Skeniraj ponovo sa table.", "Čekiranje za
   ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). `/nalog` shows the card "Na času si" (`ui/na-casu-kartica`,
   "Nastavi" -> `/nalog/cas`) when `GET cas` returns a lecture that is not finished.

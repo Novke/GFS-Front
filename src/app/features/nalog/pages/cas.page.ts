@@ -8,7 +8,7 @@ import { Subscription } from 'rxjs';
 
 import { CasApi } from '../data-access/cas.api';
 import { CasStanje } from '../data-access/cas.models';
-import { KLJUC_CEKANJA, odlaganjePosle429, opisCasa, putanjaUzivo, sledeciUpitMs } from '../data-access/cas.pravila';
+import { KLJUC_CEKANJA, odlaganjeKoraka429, odlaganjePosle429, opisCasa, putanjaUzivo, sledeciUpitMs } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 
@@ -40,6 +40,9 @@ function pisiKljuc(kljuc: string | null): void {
 
 const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : -1);
 
+/** Koliko puta se skeniranje ili potvrda sami ponove posle 429, pre poruke sa "Pokušaj ponovo". */
+const POKUSAJA_429 = 5;
+
 /**
  * Čekiranje i praćenje časa (`/nalog/cas/:token` iz QR-a i `/nalog/cas`; javna ruta u `PublicLayout`-u, spec studentskog
  * portala 4.2). Zove samo `api/public/nalog/cas*` (`CasApi`).
@@ -52,6 +55,8 @@ const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : -1);
  *   stanje ima izvođenje, ide u Uživo (`uzivo/<kod>?sa=cas`, odande se posle kraja vraća ovde). 429 odlaže upit (20, 40,
  *   najviše 60 s) bez poruke, prekid mreže zadržava prikaz. Završen čas, uklonjeno prisustvo i "nisi čekiran" prekidaju
  *   praćenje porukom.
+ * - 429 na skeniranju ili potvrdi (cela učionica odjednom): isti korak se sam ponovi posle 1-9 s (`odlaganjeKoraka429`), do
+ *   `POKUSAJA_429` puta, pa poruka sa "Pokušaj ponovo"; ključ ostaje.
  */
 @Component({
   selector: 'app-cas-page',
@@ -119,6 +124,7 @@ export class CasPage implements OnInit {
   private zahtev: Subscription | null = null;
   private tajmer: ReturnType<typeof setTimeout> | null = null;
   private broj429 = 0;
+  private broj429Koraka = 0;
   /** Bar jednom prikazano "na času": prazno stanje posle toga je "Nisi više na času.". */
   private bioNaCasu = false;
   /** Praćenje je završeno (navigacija ili konačna poruka): ni tajmer ni povratak na stranicu više ne pitaju. */
@@ -157,6 +163,7 @@ export class CasPage implements OnInit {
 
   protected pokusajPonovo(): void {
     this.gotovo = false;
+    this.broj429Koraka = 0;
     this.ponovo.set(false);
     this.faza.set('ucitavanje');
     this.poslednjiKorak();
@@ -176,7 +183,9 @@ export class CasPage implements OnInit {
       },
       error: (e: unknown) => {
         this.zahtev = null;
-        this.greskaKoraka(e);
+        if (!this.ponoviPosle429(e, () => this.skeniraj(token))) {
+          this.greskaKoraka(e);
+        }
       },
     });
   }
@@ -195,7 +204,10 @@ export class CasPage implements OnInit {
           this.idi(NA_PRIJAVU); // ključ ostaje za posle prijave
           return;
         }
-        if (status(e) === 0 || status(e) >= 500) {
+        if (this.ponoviPosle429(e, () => this.potvrdi(kljuc))) {
+          return; // ključ ostaje
+        }
+        if (status(e) === 0 || status(e) === 429 || status(e) >= 500) {
           this.greskaKoraka(e); // server ga možda nije ni video: ključ ostaje za "Pokušaj ponovo"
           return;
         }
@@ -255,11 +267,21 @@ export class CasPage implements OnInit {
     this.zakazi(sledeciUpitMs(Math.random()));
   }
 
-  /** Greška koraka: poruka servera doslovno (4xx); mreža i 5xx dobijaju "Pokušaj ponovo". */
+  /** 429 na skeniranju ili potvrdi: isti korak posle kratkog čekanja, najviše `POKUSAJA_429` puta. */
+  private ponoviPosle429(e: unknown, korak: () => void): boolean {
+    if (status(e) !== 429 || this.broj429Koraka >= POKUSAJA_429) {
+      return false;
+    }
+    this.broj429Koraka++;
+    this.zakazi(odlaganjeKoraka429(this.broj429Koraka, Math.random()), korak);
+    return true;
+  }
+
+  /** Greška koraka: poruka servera doslovno (4xx); mreža, 429 posle pokušaja i 5xx dobijaju "Pokušaj ponovo". */
   private greskaKoraka(e: unknown): void {
     const s = status(e);
     this.kraj(porukaGreske(e), true);
-    this.ponovo.set(s === 0 || s >= 500 || s === -1);
+    this.ponovo.set(s === 0 || s === 429 || s >= 500 || s === -1);
   }
 
   private kraj(poruka: string, greska: boolean): void {
@@ -277,10 +299,10 @@ export class CasPage implements OnInit {
     void this.router.navigateByUrl(url);
   }
 
-  private zakazi(ms: number): void {
+  private zakazi(ms: number, korak: () => void = () => this.upit()): void {
     this.zaustaviTajmer();
     if (!this.gotovo) {
-      this.tajmer = setTimeout(() => this.upit(), ms);
+      this.tajmer = setTimeout(korak, ms);
     }
   }
 

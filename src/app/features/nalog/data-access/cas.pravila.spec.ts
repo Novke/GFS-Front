@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { danIDatum, odlaganjePosle429, opisCasa, putanjaUzivo, sledeciUpitMs } from './cas.pravila';
+import { danIDatum, odlaganjeKoraka429, odlaganjePosle429, opisCasa, putanjaUzivo, sledeciUpitMs } from './cas.pravila';
 
 describe('cas.pravila', () => {
   it('sledeciUpitMsUGranicama: 10 s ± 2 s', () => {
@@ -14,6 +14,12 @@ describe('cas.pravila', () => {
     }
     expect(sledeciUpitMs(Number.NaN)).toBe(10_000);
     expect(sledeciUpitMs(7)).toBe(12_000);
+  });
+
+  it('odlaganjeKoraka429: kratko (token živi 20-30 s), 1, 2, 4, pa najviše 8 s plus do 1 s pomeranja', () => {
+    expect([1, 2, 3, 4, 5, 9].map(n => odlaganjeKoraka429(n, 0))).toEqual([1_000, 2_000, 4_000, 8_000, 8_000, 8_000]);
+    expect(odlaganjeKoraka429(1, 0.999999)).toBeLessThan(2_000);
+    expect(odlaganjeKoraka429(0, Number.NaN)).toBe(1_000);
   });
 
   it('odlaganjePosle429: 20 s, 40 s, pa najviše 60 s', () => {
