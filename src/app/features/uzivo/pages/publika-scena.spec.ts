@@ -134,7 +134,8 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
   });
 
   it('OTVORENO uz Space: "Odgovorilo x od y" (imenilac kao u konzoli) i tajmer runde, bez kartica', async () => {
-    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3, ucesnici: [], brojPovezanih: 7, rezultatiPrikazani: true } });
+    const ucesnici = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, ime: 'U' + (i + 1), poeni: 0, povezan: i < 4, odgovorio: i < 3 }));
+    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3, ucesnici, brojPovezanih: 4, rezultatiPrikazani: true } });
     s.runda = { id: 9, redniBroj: 1, rokMs: s.serverVremeMs + 60_000, preostaloMs: null, tajmerRadi: true };
     const fixture = TestBed.createComponent(PublikaScenaComponent);
     fixture.componentRef.setInput('stanje', s);
