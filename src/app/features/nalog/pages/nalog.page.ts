@@ -21,11 +21,14 @@ import { finalize, Subscription } from 'rxjs';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { godinaIzUpita, predlogGodine, prikazIndeksa } from '../../../shared/util/indeks';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { CasApi } from '../data-access/cas.api';
+import { CasPredavanje } from '../data-access/cas.models';
 import { NalogApi } from '../data-access/nalog.api';
 import { IndeksIGodina, PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
 import { javnoNazad, porukaGreske, putanjaCilja } from '../data-access/nalog.pravila';
 import { IndeksKorak } from '../ui/indeks-korak.component';
 import { KodKorak } from '../ui/kod-korak.component';
+import { NaCasuKartica } from '../ui/na-casu-kartica.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NalogPregled } from '../ui/nalog-pregled.component';
 
@@ -56,7 +59,7 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
  */
 @Component({
   selector: 'app-nalog-page',
-  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled],
+  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NaCasuKartica, NalogOkvir, NalogPregled],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir>
@@ -104,6 +107,9 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
         }
         @case ('prijavljen') {
           <app-form-error-banner [poruka]="greska()" />
+          @if (naCasu(); as p) {
+            <app-na-casu-kartica [predavanje]="p" />
+          }
           @if (ja(); as s) {
             <app-nalog-pregled
               [ja]="s"
@@ -140,6 +146,7 @@ export class NalogPage {
   readonly godina = input<string | null | undefined>(null);
 
   private readonly api = inject(NalogApi);
+  private readonly casApi = inject(CasApi);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -170,6 +177,8 @@ export class NalogPage {
   protected readonly pomoc = signal<string | null>(null);
   protected readonly pomocSalje = signal(false);
   protected readonly ja = signal<StudentJa | null>(null);
+  /** Čas na kome je student čekiran i koji traje (kartica "Na času si"); `null` = nema ga ili upit nije uspeo. */
+  protected readonly naCasu = signal<CasPredavanje | null>(null);
   /** Poruka posle odjave (na koraku indeksa). */
   protected readonly info = signal<string | null>(null);
   /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to ekran naloga). */
@@ -339,6 +348,7 @@ export class NalogPage {
       next: ja => {
         this.salje.set(false);
         this.ja.set(ja);
+        this.ucitajCas();
         this.indeks.set(ja.indeks);
         this.unetaGodina.set(typeof ja.godina === 'number' ? ja.godina : null);
         this.idiNa('prijavljen', fokus);
@@ -352,6 +362,17 @@ export class NalogPage {
           this.greskaPriUcitavanju(e, fokus);
         }
       },
+    });
+  }
+
+  /** Tiho: kartica "Na času si" je dodatak, greška je ne prikazuje. */
+  private ucitajCas(): void {
+    this.casApi.stanje().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: s => {
+        const p = s?.predavanje ?? null;
+        this.naCasu.set(p && !p.zavrseno ? p : null);
+      },
+      error: () => this.naCasu.set(null),
     });
   }
 
@@ -383,6 +404,7 @@ export class NalogPage {
   private odjavljen(poruka: string): void {
     this.salje.set(false);
     this.ja.set(null);
+    this.naCasu.set(null);
     this.pomoc.set(null);
     // zajednički računar: indeks i maska prethodnog studenta ne smeju da ostanu u polju
     this.indeks.set('');

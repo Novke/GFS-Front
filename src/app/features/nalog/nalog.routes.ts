@@ -13,6 +13,18 @@ export const NALOG_RUTE: Route[] = [
     loadComponent: () => import('./pages/nalog.page').then(x => x.NalogPage),
   },
   {
+    // QR za čekiranje sa table ili projektora (studentski portal, faza 1): token se odmah briše iz adrese
+    path: 'cas/:token',
+    title: 'Čas',
+    loadComponent: () => import('./pages/cas.page').then(x => x.CasPage),
+  },
+  {
+    // praćenje časa: posle prijave (ključ čekanja), sa kartice "Na času si" i posle kraja Uživo izvođenja (`?sa=cas`)
+    path: 'cas',
+    title: 'Čas',
+    loadComponent: () => import('./pages/cas.page').then(x => x.CasPage),
+  },
+  {
     // posle ulaska iz Moodle-a (backend preusmerava): uparivanje, `?uloga=nastavnik`, `?greska=<kod>` (spec prijave 8.3)
     path: 'moodle',
     title: 'Moodle',
