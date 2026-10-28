@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ErrorHandler, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef, MatDialogState } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatRadioModule } from '@angular/material/radio';
@@ -12,6 +12,7 @@ import { razlogGreske } from '../data-access/razlog-greske';
 import { PORUKE, greskePrezentacije } from '../data-access/slajd-pravila';
 import { PRIHVACENI_FAJLOVI, proveriImeFajla } from '../uvoz-pptx/ime-fajla';
 import { PredmetKratko, PrezentacijaDetails } from '../data-access/uzivo.models';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 
 export interface NovaPrezentacijaPodaci { predmeti: PredmetKratko[]; predmetId: number | null; }
 
@@ -24,7 +25,13 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
   }).afterClosed();
 }
 
-/** Nova prezentacija: predmet, naziv, opis -> `POST /prezentacije`; zatvara se sa napravljenom prezentacijom. */
+/** Poruka kad se deo za uvoz ne učita (najčešće kartica otvorena pre novog izdanja); prezentacija tada nije napravljena. */
+export const PORUKA_UVOZ_NIJE_UCITAN = 'Uvoz iz PowerPointa nije učitan, pa prezentacija nije napravljena. Osveži stranicu i pokušaj ponovo.';
+
+/**
+ * Nova prezentacija: predmet, naziv, opis -> `POST /prezentacije`; zatvara se sa napravljenom prezentacijom. Sa početkom
+ * "Iz PowerPointa" prvo učitava chunk uvoza, pa tek onda pravi prezentaciju (bez praznih prezentacija kad uvoz ne može da krene).
+ */
 @Component({
   selector: 'app-nova-prezentacija-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,6 +92,8 @@ export class NovaPrezentacijaDialog {
   protected readonly data = inject<NovaPrezentacijaPodaci>(MAT_DIALOG_DATA);
   private readonly ref = inject<MatDialogRef<NovaPrezentacijaDialog, NovaPrezentacijaIshod>>(MatDialogRef);
   private readonly api = inject(PrezentacijeApi);
+  private readonly uvoz = inject(UvozPptxOtvarac);
+  private readonly greske = inject(ErrorHandler);
 
   protected readonly porukaNaziv = PORUKE.naziv;
   protected readonly prihvaceniFajlovi = PRIHVACENI_FAJLOVI;
@@ -136,12 +145,22 @@ export class NovaPrezentacijaDialog {
     this.salje.set(true);
     this.greska.set(null);
     const fajl = this.pocetak() === 'pptx' ? this.fajl() : null;
-    this.api.kreiraj({ predmetId, naziv: naziv.trim(), opis: opis.trim() || null, tema: fajl ? 'BELA' : null }).subscribe({
+    const kreiraj = () => this.api.kreiraj({ predmetId, naziv: naziv.trim(), opis: opis.trim() || null, tema: fajl ? 'BELA' : null }).subscribe({
       next: p => this.ref.close({ prezentacija: p, fajl }),
       error: e => {
         this.salje.set(false);
         this.greska.set(razlogGreske(e, 'Prezentacija nije napravljena.'));
       },
+    });
+    if (!fajl) {
+      kreiraj();
+      return;
+    }
+    // Otkazan dijalog dok se chunk učitava ne sme kasnije da napravi prezentaciju.
+    this.uvoz.pripremi().then(() => this.ref.getState() === MatDialogState.OPEN && kreiraj(), e => {
+      this.greske.handleError(e); // GfsErrorHandler: provera izdanja, traka "Osveži" kad je kartica zastarela
+      this.salje.set(false);
+      this.greska.set(PORUKA_UVOZ_NIJE_UCITAN);
     });
   }
 }

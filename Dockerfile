@@ -8,6 +8,8 @@ RUN npm ci
 COPY . .
 ARG BASE_HREF=/
 RUN npx ng build --configuration production --base-href "$BASE_HREF"
+# Izdanje (meta u index.html + assets/izdanje.json): otvorena kartica tako vidi da server ima noviji front (core/izdanje).
+RUN node scripts/oznaci-izdanje.mjs dist/gfs-front/browser
 # Okruzenje (prod/staging) za traku u AppComponent; ng serve nema ovaj fajl -> bez trake.
 ARG APP_ENV=prod
 RUN printf '{"env":"%s"}\n' "$APP_ENV" > dist/gfs-front/browser/assets/env.json
