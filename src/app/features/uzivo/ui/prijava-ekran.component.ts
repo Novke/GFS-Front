@@ -21,7 +21,7 @@ export function imenaZaPrikaz(imena: readonly string[], broj: number, maks = MAK
   host: { class: 'uz-okvir' },
   template: `
     <section class="uz-platno uz-prijava" aria-label="Prijava učesnika">
-      <app-qr-kod class="uz-prijava-qr" [tekst]="link()" [velicina]="720" />
+      <app-qr-kod class="uz-prijava-qr" [tekst]="qr() || link()" [velicina]="720" />
       <div class="uz-prijava-info">
         <p class="uz-prijava-poziv">Skeniraj QR kod ili otvori</p>
         <p class="uz-prijava-link">{{ linkPrikaz() }}</p>
@@ -42,8 +42,10 @@ export function imenaZaPrikaz(imena: readonly string[], broj: number, maks = MAK
 })
 export class PrijavaEkranComponent {
   readonly kod = input.required<string>();
-  /** Pun link za prijavu (`<origin><base>uzivo/<kod>`), ide u QR. */
+  /** Pun link za prijavu (`<origin><base>uzivo/<kod>`): tekst ispod QR-a, i sadržaj QR-a kad `qr` nije zadat. */
   readonly link = input.required<string>();
+  /** Sadržaj QR-a kad nije `link` (izvođenje sa predavanja: link čekiranja, menja se na 10 s; tekst ostaje `link`). */
+  readonly qr = input<string>('');
   readonly imena = input<readonly string[]>([]);
   readonly broj = input<number>(0);
 

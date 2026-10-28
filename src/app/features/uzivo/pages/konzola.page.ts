@@ -155,7 +155,7 @@ export class IzborEkranaDialog {
       <ng-template #trenutniTpl>
         <section class="uz-kon-kartica uz-kon-trenutni" aria-label="Na projektoru">
           <h2 class="uz-kon-naslov">Na projektoru · {{ polozaj() }}</h2>
-          <app-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [sat]="store.sat()" [umanjeno]="true" />
+          <app-publika-scena [stanje]="s" [joinLink]="store.joinLink()" [qrLink]="store.qrLink()" [sat]="store.sat()" [umanjeno]="true" />
         </section>
       </ng-template>
 

@@ -721,3 +721,36 @@ describe('PublikaScenaComponent (prelaz slajda)', () => {
     expect(t.prikazi().map(p => p.slajd().id)).toEqual([40]);
   });
 });
+
+describe('PublikaScenaComponent (QR za čekiranje)', () => {
+  const CEKIRANJE = 'http://localhost/nalog/cas/17.AAAAAAAAAAAAAAAAAAAAAA';
+
+  async function saQr(s: NastavnickoStanje, qrLink: string) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', s);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('qrLink', qrLink);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  }
+  const qr = (el: HTMLElement) => el.querySelector('app-qr-kod canvas')?.getAttribute('aria-label');
+
+  it('ekran prijave: QR je link čekiranja, a tekst ostaje kratka adresa izvođenja i kod', async () => {
+    const el = await saQr(stanje(), CEKIRANJE);
+    expect(qr(el)).toBe('QR kod: ' + CEKIRANJE);
+    expect(tekst(el.querySelector('.uz-prijava-link'))).toBe('localhost/uzivo/123456');
+    expect(tekst(el)).not.toContain('nalog/cas');
+  });
+
+  it('taster Q: QR preko slajda je link čekiranja, natpis ostaje /uzivo i kod', async () => {
+    const el = await saQr(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), qrPrikazan: true }), CEKIRANJE);
+    expect(qr(el)).toBe('QR kod: ' + CEKIRANJE);
+    expect(tekst(el.querySelector('.uz-scena-qr-link'))).toContain('/uzivo');
+  });
+
+  it('bez qrLink-a QR je ulazak u izvođenje (kao pre čekiranja)', async () => {
+    const el = await saQr(stanje(), '');
+    expect(qr(el)).toBe('QR kod: http://localhost/uzivo/123456');
+  });
+});

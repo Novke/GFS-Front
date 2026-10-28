@@ -95,7 +95,7 @@ interface Omotac {
     @let s = stanje();
     @switch (s.prikaz) {
       @case ('PRIJAVA') {
-        <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
+        <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [qr]="qrSadrzaj()" [imena]="imena()" [broj]="s.ucesnici.length" />
       }
       @case ('SLAJD') {
         <div class="uz-scena-slajdovi">
@@ -140,7 +140,7 @@ interface Omotac {
     @if (s.qrPrikazan) {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-qr" aria-label="QR kod za prijavu">
-          <app-qr-kod class="uz-scena-qr-kod" [tekst]="joinLink()" [velicina]="900" />
+          <app-qr-kod class="uz-scena-qr-kod" [tekst]="qrSadrzaj()" [velicina]="900" />
           <div class="uz-scena-qr-info">
             <p class="uz-scena-qr-link">{{ host() }}/uzivo</p>
             <p class="uz-scena-qr-kod-tekst">{{ kod() }}</p>
@@ -159,6 +159,9 @@ interface Omotac {
 export class PublikaScenaComponent {
   readonly stanje = input.required<NastavnickoStanje>();
   readonly joinLink = input.required<string>();
+  /** Sadržaj QR-a (`IzvodjenjeStore.qrLink`: link čekiranja za izvođenje sa predavanja); prazno = `joinLink`. Tekst ostaje kod. */
+  readonly qrLink = input<string>('');
+  protected readonly qrSadrzaj = computed(() => this.qrLink() || this.joinLink());
   readonly sat = input<ServerskiSat | null>(null);
   /** Umanjen prikaz u konzoli: crn/beo ekran dobija natpis da se zna šta je na projektoru. */
   readonly umanjeno = input<boolean>(false);
