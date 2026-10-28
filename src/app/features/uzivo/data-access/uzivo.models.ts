@@ -119,6 +119,13 @@ export interface NastavnickoStanje {
   pocetakMs: number;
   /** Zadatak slajd (`null` van njega). */
   zadatak?: NastavnickiZadatak | null;
+  /**
+   * Imenilac "predalo x od y": neizbačeni učesnici plus studenti čekirani na predavanju izvođenja koji još nisu ušli.
+   * Nema ga kod starog backenda (tokom izdanja), pa važi broj učesnika.
+   */
+  brojOcekivanih?: number;
+  /** Broj studenata na času predavanja izvođenja; `null` kad izvođenje nema predavanje. */
+  brojCekiranih?: number | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

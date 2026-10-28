@@ -129,6 +129,15 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).toContain('Slajd 1/3 · korak 1/3');
   });
 
+  it('"čekirano N" u zaglavlju samo za izvođenje sa predavanja', async () => {
+    lazniStore.stanje.update(s => s && { ...s, brojCekiranih: 18, brojOcekivanih: 18 });
+    const f = await prikazi();
+    expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).toContain('čekirano 18');
+    lazniStore.stanje.update(s => s && { ...s, brojCekiranih: null });
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).not.toContain('čekirano');
+  });
+
   it('beleške su panel sa tekstom trenutnog slajda', async () => {
     const f = await prikazi();
     const panel = f.debugElement.query(By.directive(BeleskePanelComponent));

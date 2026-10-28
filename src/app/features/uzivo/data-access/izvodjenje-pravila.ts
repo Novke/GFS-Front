@@ -75,13 +75,14 @@ export function ispravanIndeks(vrednost: number | undefined, brojSlajdova: numbe
 }
 
 /**
- * "Odgovorili x/y" u konzoli: imenilac su svi neizbačeni učesnici izvođenja (server izbačene ne šalje), povezani ili ne.
+ * "Odgovorili x/y" u konzoli: imenilac su svi neizbačeni učesnici izvođenja (server izbačene ne šalje), povezani ili ne,
+ * a za izvođenje sa predavanja i čekirani studenti koji još nisu ušli (`brojOcekivanih` sa servera; stari backend ga nema).
  * Telefon u pozadini (kalkulator, zaključan ekran) gubi vezu, ali student i dalje radi, pa "svi odgovorili" ne pali dok
  * neko ko je ušao još nije predao; ko je stvarno otišao, Novica ga "Izbaci". `povezan` je samo oznaka u panelu učesnika.
  * `od` nikad nije manji od broja odgovora, pa nema 31/30.
  */
 export function odgovorili(s: NastavnickoStanje): { broj: number; od: number; svi: boolean } {
-  const od = Math.max(s.ucesnici.length, s.brojOdgovora);
+  const od = Math.max(s.brojOcekivanih ?? s.ucesnici.length, s.brojOdgovora);
   return { broj: s.brojOdgovora, od, svi: od > 0 && s.brojOdgovora >= od };
 }
 

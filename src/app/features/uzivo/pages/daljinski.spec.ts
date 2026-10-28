@@ -197,6 +197,17 @@ describe('DaljinskiPage', () => {
       await zavrsi(f);
     }));
 
+  it('"čekirano N" u traci samo za izvođenje sa predavanja', saLaznimSatom(async () => {
+    stanjeS.set(naInfo({ brojCekiranih: 7, brojOcekivanih: 9 }));
+    const f = await prikazi();
+    expect(el(f).querySelector('.uz-dalj-cekirano')?.textContent).toContain('čekirano 7');
+    await zavrsi(f);
+    stanjeS.set(naInfo({ brojCekiranih: null }));
+    const g = await prikazi();
+    expect(el(g).querySelector('.uz-dalj-cekirano')).toBeNull();
+    await zavrsi(g);
+  }));
+
   it('pitanje nema dugme Rešenje', saLaznimSatom(async () => {
     stanjeS.set(naPitanju('ZATVORENO'));
     const f = await prikazi();
