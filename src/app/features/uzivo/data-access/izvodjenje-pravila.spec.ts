@@ -171,36 +171,36 @@ describe('imaTacanOdgovor i ispravanIndeks', () => {
 describe('odgovorili (x/y u konzoli)', () => {
   const u = (id: number, povezan: boolean, odgovorio: boolean) => ({ id, ime: 'U' + id, poeni: 0, povezan, odgovorio });
 
+  it('broji i nepovezane učesnike: 18 učesnika, 15 povezanih, 15 odgovora je 15 od 18', () => {
+    const ucesnici = Array.from({ length: 18 }, (_, i) => u(i + 1, i < 15, false));
+    const s = naPitanju('OTVORENO', { ucesnici, brojOdgovora: 15, brojPovezanih: 15 });
+    expect(odgovorili(s)).toEqual({ broj: 15, od: 18, svi: false });
+  });
+
   it('odgovorio pa izgubio vezu: ostaje u imeniocu, nema 3/2', () => {
     const s = naPitanju('OTVORENO', {
       ucesnici: [u(1, true, true), u(2, true, true), u(3, false, true), u(4, false, false)],
       brojOdgovora: 3, brojPovezanih: 2,
     });
+    expect(odgovorili(s)).toEqual({ broj: 3, od: 4, svi: false });
+  });
+
+  it('"svi odgovorili" pali tek kad su odgovorili svi učesnici, povezani ili ne', () => {
+    const s = naPitanju('OTVORENO', {
+      ucesnici: [u(1, true, true), u(2, false, true), u(3, false, true)],
+      brojOdgovora: 3, brojPovezanih: 1,
+    });
     expect(odgovorili(s)).toEqual({ broj: 3, od: 3, svi: true });
   });
 
-  it('"svi odgovorili" ne pali dok povezani nisu odgovorili', () => {
-    // 2 povezana, oba bez odgovora; treći odgovorio pa otišao: 1/3, ne 1/2 pa 2/2 prerano
-    const s = naPitanju('OTVORENO', {
-      ucesnici: [u(1, true, false), u(2, true, false), u(3, false, true)],
-      brojOdgovora: 1, brojPovezanih: 2,
-    });
-    expect(odgovorili(s)).toEqual({ broj: 1, od: 3, svi: false });
-    const posle = naPitanju('OTVORENO', {
-      ucesnici: [u(1, true, true), u(2, true, false), u(3, false, true)],
-      brojOdgovora: 2, brojPovezanih: 2,
-    });
-    expect(odgovorili(posle)).toEqual({ broj: 2, od: 3, svi: false });
-  });
-
-  it('niko povezan i niko odgovorio: 0/0 bez isticanja', () => {
-    const s = naPitanju('OTVORENO', { ucesnici: [u(1, false, false)], brojOdgovora: 0, brojPovezanih: 0 });
+  it('bez učesnika: 0/0 bez isticanja', () => {
+    const s = naPitanju('OTVORENO', { ucesnici: [], brojOdgovora: 0, brojPovezanih: 0 });
     expect(odgovorili(s)).toEqual({ broj: 0, od: 0, svi: false });
   });
 
-  it('imenilac nikad manji od broja povezanih ni broja odgovora', () => {
-    const s = naPitanju('OTVORENO', { ucesnici: [], brojOdgovora: 4, brojPovezanih: 5 });
-    expect(odgovorili(s)).toEqual({ broj: 4, od: 5, svi: false });
+  it('imenilac nikad manji od broja odgovora (nikad 31/30)', () => {
+    const s = naPitanju('OTVORENO', { ucesnici: [u(1, true, true)], brojOdgovora: 4, brojPovezanih: 1 });
+    expect(odgovorili(s)).toEqual({ broj: 4, od: 4, svi: true });
   });
 });
 
