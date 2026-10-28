@@ -127,7 +127,7 @@ export class IzborEkranaDialog {
             <span>kod <strong>{{ kod() }}</strong></span>
             <span>{{ polozaj() }}</span>
             <span>učesnici {{ s.brojPovezanih }}/{{ s.ucesnici.length }}</span>
-            @if (s.brojCekiranih != null) { <span class="uz-kon-cekirano">čekirano {{ s.brojCekiranih }}</span> }
+            @if ((s.brojCekiranih ?? null) !== null) { <span class="uz-kon-cekirano">čekirano {{ s.brojCekiranih }}</span> }
             @if (s.izvodjenje.boduje) { <span class="uz-cip uz-boduje">Boduje se</span> }
             <span class="uz-kon-veza" [class.uz-kon-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
           </p>

@@ -21,8 +21,9 @@
             <mat-icon svgIcon="slideshow" aria-hidden="true" />Pokreni prezentaciju
           </button>
         }
-        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" target="_blank" rel="noopener" data-projektor>
-          <mat-icon svgIcon="co_present" aria-hidden="true" />Projektor<span class="sr-only"> (otvara se u novoj kartici)</span>
+        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" target="_blank" rel="noopener" data-projektor
+           title="Projektor sa QR-om za čekiranje i brojem prisutnih">
+          <mat-icon svgIcon="qr_code_2" aria-hidden="true" />Čekiranje<span class="sr-only"> (projektor, otvara se u novoj kartici)</span>
         </a>
         <button matButton="filled" type="button" data-zavrsi (click)="zavrsi()">
           <mat-icon svgIcon="check" aria-hidden="true" />Završi predavanje
