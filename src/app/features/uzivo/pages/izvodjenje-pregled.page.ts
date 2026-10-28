@@ -164,7 +164,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                     <img class="uz-pr-slika" [src]="url(slika)" alt="Slika uz pitanje">
                   }
                   @if (k.p.rezultat; as rezultat) {
-                    <app-rezultat-prikaz [rezultat]="rezultat" [tekstPrikaz]="pitanje.tekstPrikaz" [jedinica]="pitanje.jedinica" />
+                    <app-rezultat-prikaz [rezultat]="rezultat" [pitanje]="pitanje" [prikaziTacnih]="false" />
                   }
                 } @else if (k.p.zadatak; as z) {
                   <p class="uz-pr-tekst">{{ putanja(z) }}</p>

@@ -284,13 +284,45 @@ app-tekst-formule {
   overflow: hidden;
 }
 
-/* Rezultati na slajdu: visina je zadata, pa stubići opcija smanjuju font da stane 5-6 opcija (`--uz-n` = broj opcija). */
+/* Rezultati na slajdu: visina je zadata, pa stubići opcija smanjuju font da stane 5-6 opcija (`--uz-n` = broj opcija).
+   Red "Tačno x od y" je prvi i prirodne visine, ostatak (`flex: 1`) deli preostalu visinu. */
 .uz-slajd-rezultat {
   container-type: size;
+  display: flex;
+  flex-direction: column;
+}
+
+.uz-slajd-rezultat > :not(.uz-rez-tacnih) {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .uz-slajd-rezultat .uz-rez-opcije {
   font-size: min(1em, calc(100cqh / (var(--uz-n, 4) * 3.4)));
+}
+
+.uz-slajd-rezultat.uz-rez--sa-tacnih .uz-rez-opcije {
+  font-size: min(1em, calc(100cqh / (var(--uz-n, 4) * 3.4 + 2.4)));
+}
+
+/* Čipovi slobodnog unosa na projektoru: krupno po gustini (`gustinaCipova`), ograničeno i širinom i visinom polja,
+   centrirano; tačan je prvi u redu i veći, pa ga prelivanje ne odseca. */
+.uz-slajd-rezultat .uz-rez-cipovi {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  overflow: hidden;
+  --uz-co-poravnanje: center;
+  --uz-co-tacno-f: 1.3em;
+  font-size: min(6cqw, 16cqh);
+}
+
+.uz-slajd-rezultat .uz-rez-cipovi[data-gustina="srednje"] { font-size: min(4.2cqw, 10cqh); }
+.uz-slajd-rezultat .uz-rez-cipovi[data-gustina="mnogo"] { font-size: min(3.2cqw, 7.5cqh); }
+.uz-slajd-rezultat .uz-rez-cipovi[data-gustina="vrlo"] { font-size: min(2.4cqw, 5.5cqh); }
+
+.uz-slajd-rezultat .uz-rez-tacnih {
+  font-size: 1.15em;
 }
 
 .uz-slajd-podnozje {
@@ -758,76 +790,11 @@ p.uz-prazno {
   font-size: 0.75em;
 }
 
-/* Broj */
-.uz-rez-broj {
-  height: 100%;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1.2em 2.4em;
-}
-
-.uz-rez--kompaktno .uz-rez-broj {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.uz-rez-kljucni {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8em;
-}
-
-.uz-rez .uz-rez-podatak {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-}
-
-.uz-rez-oznaka {
-  color: var(--muted);
-  font-size: 0.85em;
-}
-
-.uz-rez-velika {
-  font-size: 2.4em;
+/* Tačnih (posle C, i uvek u konzoli): "Tačno 7 od 12 · 58 %" iznad rezultata */
+.uz-rez .uz-rez-tacnih {
+  margin: 0 0 0.4em;
   font-weight: 700;
-  line-height: 1.1;
   font-variant-numeric: tabular-nums;
-}
-
-.uz-rez--kompaktno .uz-rez-velika {
-  font-size: 1.6em;
-}
-
-.uz-rez-najcesce {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3em;
-}
-
-.uz-rez-najcesce-red {
-  display: grid;
-  grid-template-columns: minmax(4em, auto) minmax(0, 1fr) 2.2em;
-  align-items: center;
-  gap: 0.6em;
-}
-
-.uz-rez-najcesce-vrednost,
-.uz-rez-najcesce-broj {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.uz-rez-najcesce-vrednost {
-  font-weight: 600;
-}
-
-.uz-rez-najcesce-broj {
-  font-weight: 700;
 }
 
 /* Skala */

@@ -250,7 +250,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
       'src', 'api/public/mediji/' + RESENJA[0]);
     await expect(kartice(page).nth(1).getByRole('img', { name: 'Zadatak, varijanta 110010 u dekadni' })).toBeVisible();
     await expect(kartice(page).nth(1).getByRole('img', { name: 'Rešenje, varijanta 110010 u dekadni' })).toBeVisible();
-    await expect(scena(page).locator('.uz-zr-cip, .uz-zr-brojevi, .uz-rez-traka')).toHaveCount(0);
+    await expect(scena(page).locator('.uz-co-cip, .uz-zr-brojevi, .uz-rez-traka')).toHaveCount(0);
     await expect(scena(page)).not.toContainText('tačno:');
     await expect.poll(() => resenja.length).toBe(2);
 
@@ -258,7 +258,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await page.keyboard.press('c');
     await expect(kartice(page).first().locator('.uz-zr-tacno')).toHaveText('✓ tačno: 11');
     await expect(kartice(page).nth(1).locator('.uz-zr-tacno')).toHaveText('✓ tačno: 50');
-    await expect(scena(page).locator('.uz-zr-cip, .uz-zr-brojevi')).toHaveCount(0);
+    await expect(scena(page).locator('.uz-co-cip, .uz-zr-brojevi')).toHaveCount(0);
 
     // 3. Space uz uključeno rešenje: rešenje ima prednost (slike, brojevi i "tačno:"), čipova nema
     await page.keyboard.press(' ');
@@ -266,7 +266,7 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await expect(scena(page).locator('app-zadatak-rezultat')).toHaveAttribute('data-prikaz', 'resenje');
     await expect(kartice(page).first().locator('.uz-zr-brojevi')).toHaveText('dodeljeno 1 · odgovorilo 1 · tačno 1');
     await expect(kartice(page).nth(1).locator('.uz-zr-brojevi')).toHaveText('dodeljeno 1 · odgovorilo 1 · tačno 0');
-    await expect(scena(page).locator('.uz-zr-cip')).toHaveCount(0);
+    await expect(scena(page).locator('.uz-co-cip')).toHaveCount(0);
     await expect(scena(page).locator('.uz-zr-oznaka')).toHaveCount(0);
 
     // 4. Shift+R gasi rešenje: samo uneti brojevi, krupno, bez slika; tačan prvi i istaknut, netačni uz njega
@@ -275,17 +275,17 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await expect(scena(page).locator('img')).toHaveCount(0);
     await expect(scena(page).locator('.uz-zr-tacno, .uz-zr-brojevi')).toHaveCount(0);
     await expect(kartice(page).first().locator('.uz-zr-naziv')).toHaveText('1011 u dekadni');
-    const prvi = kartice(page).first().locator('.uz-zr-cip');
+    const prvi = kartice(page).first().locator('.uz-co-cip');
     await expect(prvi).toHaveCount(1);
-    await expect(prvi).toHaveClass(/uz-zr-cip--tacno/);
-    await expect(prvi.locator('.uz-zr-cip-tekst')).toHaveText('11');
-    const drugi = kartice(page).nth(1).locator('.uz-zr-cip');
+    await expect(prvi).toHaveClass(/uz-co-cip--tacno/);
+    await expect(prvi.locator('.uz-co-cip-tekst')).toHaveText('11');
+    const drugi = kartice(page).nth(1).locator('.uz-co-cip');
     await expect(drugi).toHaveCount(2);
-    await expect(drugi.first()).toHaveClass(/uz-zr-cip--tacno/);
+    await expect(drugi.first()).toHaveClass(/uz-co-cip--tacno/);
     await expect(drugi.first()).toContainText('50');
     await expect(drugi.first()).toContainText('niko');
-    await expect(drugi.nth(1)).toHaveClass(/uz-zr-cip--netacno/);
-    await expect(drugi.nth(1).locator('.uz-zr-cip-tekst')).toHaveText('49');
+    await expect(drugi.nth(1)).toHaveClass(/uz-co-cip--netacno/);
+    await expect(drugi.nth(1).locator('.uz-co-cip-tekst')).toHaveText('49');
     await expect(scena(page)).not.toContainText(/Ana|Bojan/);
   });
 
@@ -312,17 +312,17 @@ test.describe('publika: Zadatak slajd (projektor, 1280 x 800)', () => {
     await page.keyboard.press(' ');
     await expect(scena(page).locator('app-zadatak-rezultat')).toHaveAttribute('data-prikaz', 'odgovori');
     await expect(kartice(page)).toHaveCount(2);
-    await expect(kartice(page).first().locator('.uz-zr-cip')).toHaveText('11');
-    await expect(kartice(page).nth(1).locator('.uz-zr-cip')).toHaveText('49');
-    await expect(scena(page).locator('img, .uz-zr-tacno, .uz-zr-brojevi, .uz-zr-cip--tacno, .uz-zr-cip--netacno')).toHaveCount(0);
+    await expect(kartice(page).first().locator('.uz-co-cip')).toHaveText('11');
+    await expect(kartice(page).nth(1).locator('.uz-co-cip')).toHaveText('49');
+    await expect(scena(page).locator('img, .uz-zr-tacno, .uz-zr-brojevi, .uz-co-cip--tacno, .uz-co-cip--netacno')).toHaveCount(0);
     expect(resenja).toEqual([]);
 
     await page.keyboard.press('Shift+R');
     await expect(scena(page).locator('img[alt^="Rešenje"]')).toHaveCount(2);
-    await expect(scena(page).locator('.uz-zr-cip')).toHaveCount(0);
+    await expect(scena(page).locator('.uz-co-cip')).toHaveCount(0);
     await page.keyboard.press('Shift+R');
     await expect(scena(page).locator('img')).toHaveCount(0);
     await expect(kartice(page)).toHaveCount(2);
-    await expect(scena(page).locator('.uz-zr-cip')).toHaveCount(2);
+    await expect(scena(page).locator('.uz-co-cip')).toHaveCount(2);
   });
 });

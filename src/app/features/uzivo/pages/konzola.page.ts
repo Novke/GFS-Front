@@ -193,8 +193,7 @@ export class IzborEkranaDialog {
                 Odgovorili <strong>{{ o?.broj }}/{{ o?.od }}</strong>
               </p>
               @if (s.rezultat; as r) {
-                <app-rezultat-prikaz class="rezim-dan uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true"
-                                     [tekstPrikaz]="p.tekstPrikaz" [jedinica]="p.jedinica" />
+                <app-rezultat-prikaz class="rezim-dan uz-dan uz-kon-rezultat" [rezultat]="r" [kompaktno]="true" [pitanje]="p" />
                 @if (r.tip === 'KRATAK_TEKST') {
                   <h3 class="uz-kon-podnaslov">Tekstovi</h3>
                   <app-tekstovi-panel [tekstovi]="r.tekstovi ?? []" (sakrij)="store.sakrij(s.runda.id, $event.kljuc, $event.sakriven)" />

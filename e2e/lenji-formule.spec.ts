@@ -28,7 +28,13 @@ import {
  */
 const OSNOVA_STUDENTA = 108_218;
 const RAST_ZADATKA = 1_300;
-const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA;
+/**
+ * Rezerva odobrena 2026-10-28 (Novica, uz rezultate slobodnog unosa kao čipove): zatvorenje je bilo 117 512 od 117 518 B, pa
+ * bi i sitna ispravka telefona pala na granici. Sama ta izmena studentsku stranicu ne menja (rezultate crtaju projektor,
+ * konzola i pregled; izmereno i posle nje 117 512 B), pa je ovo samo prostor za sledeće izmene telefona, ne nov rast.
+ */
+const REZERVA_2026_10_28 = 4_000;
+const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28;
 /**
  * Ekran zadatka (`app-zadatak-ekran` sa redom stanja i `app-zadatak-unos`: slika svoje varijante, polja, ishod, rešenje;
  * stilovi u komponentama, ne u globalnom CSS-u početnog paketa): samo dinamički uvoz iz studentske stranice, telefon ga

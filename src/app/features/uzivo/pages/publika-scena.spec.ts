@@ -60,33 +60,38 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
     expect(tekst(rang)).toContain('Još nema poena.');
   });
 
-  it('Space na pitanju sa brojem pre C: nema "U odstupanju" (javniRezultat, ne nastavnički)', async () => {
+  it('Space na pitanju sa brojem pre C: čipovi unetih vrednosti bez oznaka (javniRezultat, ne nastavnički); posle C ✓/✗ i tačnih %', async () => {
     const slajd = pitanjeSlajd('BROJ', { opcije: [], brojTacno: 9.81, brojOdstupanje: 0.1, odstupanjeTip: 'APSOLUTNO', jedinica: 'm/s²' });
     const nastavnicki: Rezultat = {
-      tip: 'BROJ', ukupno: 2, opcije: null, tekstovi: null, skala: null,
-      brojevi: { medijana: 6.4, uOdstupanju: 1, najcesce: [{ vrednost: 9.8, broj: 1 }, { vrednost: 3, broj: 1 }] },
+      tip: 'BROJ', ukupno: 3, opcije: null, tekstovi: null, skala: null, tacnih: 2,
+      brojevi: { vrednosti: [{ vrednost: 9.8, broj: 2, tacan: true }, { vrednost: 3, broj: 1, tacan: false }] },
     };
-    const javni: Rezultat = { ...nastavnicki, brojevi: { ...nastavnicki.brojevi!, uOdstupanju: null } };
+    const javni: Rezultat = {
+      ...nastavnicki, tacnih: null, brojevi: { vrednosti: nastavnicki.brojevi!.vrednosti.map(v => ({ ...v, tacan: null })) },
+    };
     const el = await prikazi(naPitanju('ZATVORENO', {
-      rezultatiPrikazani: true, rezultat: nastavnicki, javniRezultat: javni, brojOdgovora: 2,
+      rezultatiPrikazani: true, rezultat: nastavnicki, javniRezultat: javni, brojOdgovora: 3,
     }, slajd));
-    expect(tekst(el)).toMatch(/6[.,]4/);   // medijana se vidi (rezultat je prikazan)
-    expect(tekst(el)).not.toContain('U odstupanju');
+    const cipovi = [...el.querySelectorAll('app-rezultat-prikaz .uz-co-cip')].map(tekst);
+    expect(cipovi).toEqual(['9,8 m/s² (2)', '3 m/s²']);
+    expect(el.querySelector('.uz-co-cip--tacno, .uz-co-cip--netacno, .uz-rez-tacnih')).toBeNull();
+    expect(tekst(el)).not.toContain('Medijana');
 
-    // posle C server šalje broj u javnom rezultatu
+    // posle C server šalje tačnost u javnom rezultatu
     const posleC = await prikazi(naPitanju('ZATVORENO', {
-      rezultatiPrikazani: true, tacanPrikazan: true, rezultat: nastavnicki, javniRezultat: nastavnicki, brojOdgovora: 2,
+      rezultatiPrikazani: true, tacanPrikazan: true, rezultat: nastavnicki, javniRezultat: nastavnicki, brojOdgovora: 3,
     }, slajd));
-    expect(tekst(posleC)).toContain('U odstupanju');
-    expect(tekst(posleC)).toContain('1/2');
+    expect(posleC.querySelector('.uz-co-cip--tacno')?.textContent).toContain('9,8');
+    expect(posleC.querySelector('.uz-co-cip--netacno')?.textContent).toContain('3');
+    expect(tekst(posleC.querySelector('.uz-rez-tacnih'))).toContain('Tačno 2 od 3 · 67 %');
   });
 
   it('Space pre C: opcije bez oznake tačne (javniRezultat)', async () => {
     const nastavnicki: Rezultat = {
-      tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, tekstovi: null, skala: null,
+      tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, tekstovi: null, skala: null, tacnih: 1,
       opcije: [{ id: 1, tekst: '3', broj: 0, tacna: false }, { id: 2, tekst: '4', broj: 1, tacna: true }],
     };
-    const javni: Rezultat = { ...nastavnicki, opcije: nastavnicki.opcije!.map(o => ({ ...o, tacna: null })) };
+    const javni: Rezultat = { ...nastavnicki, tacnih: null, opcije: nastavnicki.opcije!.map(o => ({ ...o, tacna: null })) };
     const el = await prikazi(naPitanju('ZATVORENO', { rezultatiPrikazani: true, rezultat: nastavnicki, javniRezultat: javni }));
     expect(el.querySelectorAll('.uz-rez-opcija').length).toBe(2);
     expect(el.querySelector('.uz-rez-opcija--tacna, .uz-tacno-znak')).toBeNull();
@@ -182,7 +187,7 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
     }));
     const el = await prikazi(naZadatku('ZATVORENO', { zadatak: { javniRezultat: r } }));
     expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-kartica').length).toBe(2);
-    expect(el.querySelectorAll('app-zadatak-rezultat .uz-zr-cip').length).toBe(2);
+    expect(el.querySelectorAll('app-zadatak-rezultat .uz-co-cip').length).toBe(2);
     expect(el.querySelector('app-zadatak-rezultat img')).toBeNull();
   });
 });
@@ -602,7 +607,7 @@ describe('PublikaScenaComponent (prelaz slajda)', () => {
 
   it('7b. odlazni PITANJE sa prikazanim rezultatom: prikazuje rezultat iz prethodnog snimka', async () => {
     const rez: Rezultat = {
-      tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, tekstovi: null, skala: null,
+      tip: 'JEDAN_TACAN', ukupno: 1, brojevi: null, tekstovi: null, skala: null, tacnih: null,
       opcije: [{ id: 1, tekst: '3', broj: 0, tacna: null }, { id: 2, tekst: '4', broj: 1, tacna: null }],
     };
     const t = await scena(naPitanju('ZATVORENO', { indeks: 0, rezultatiPrikazani: true, javniRezultat: rez, brojOdgovora: 1, verzija: 5 }));
