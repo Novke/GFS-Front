@@ -126,6 +126,14 @@ const nastavnickeRute: Routes = [
     children: PREDMETI_RUTE,
   },
 
+  // Raspored časova, termini i najave odsustva (spec najave odsustva, odeljak 7); deca su lenja
+  {
+    path: 'raspored',
+    title: 'Raspored časova',
+    data: stalne(m('Nastava'), m('Raspored časova')),
+    loadChildren: () => import('./features/raspored/raspored.routes').then(x => x.RASPORED_RUTE),
+  },
+
   // Podešavanja (prijava, Moodle LTI): registracije alata i vrednosti za Moodle formu; deca su lenja
   {
     path: 'podesavanja',

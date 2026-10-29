@@ -12,6 +12,7 @@ import { PocetnaStore } from '../data-access/pocetna.store';
 import { naslovDatuma, pozdravZaSat } from '../data-access/pocetna.vreme';
 import { CekaNaTebe } from '../ui/ceka-na-tebe';
 import { NaloziKartica } from '../ui/nalozi-kartica.component';
+import { RasporedKartica } from '../ui/raspored-kartica.component';
 import { Nedavno } from '../ui/nedavno';
 import { OvaNedelja } from '../ui/ova-nedelja';
 import { SledecePredavanje } from '../ui/sledece-predavanje';
@@ -19,13 +20,16 @@ import { StatusChip } from '../../../shared/ui/status-chip';
 
 /**
  * Kontrolna tabla (`/`): pozdrav po dobu dana, datum i školska godina; traka "U toku" po nezavršenom predavanju od danas,
- * "Sledeće predavanje" (P1), "Čeka na tebe" (P3) sa karticom "Nalozi" (otvorena obaveštenja o nalozima studenata, iz
+ * "Sledeće predavanje" (P1), "Čeka na tebe" (P3) sa karticom "Obaveštenja" (otvorena obaveštenja o nalozima studenata, iz
  * `ObavestenjaStore`), "Ova nedelja" (P4) i "Nedavno" (P5). Jedan zahtev `GET pregled/kontrolna-tabla` (obaveštenja su
  * poseban endpoint, spec prijave, sekcija 6); greška table je panel sa "Pokušaj ponovo".
  */
 @Component({
   selector: 'app-pocetna',
-  imports: [CekaNaTebe, ErrorPanel, MatButton, NaloziKartica, Nedavno, OvaNedelja, PageHeader, RouterLink, SkeletonRows, SledecePredavanje, StatusChip],
+  imports: [
+    CekaNaTebe, ErrorPanel, MatButton, NaloziKartica, Nedavno, OvaNedelja, PageHeader, RasporedKartica, RouterLink, SkeletonRows,
+    SledecePredavanje, StatusChip,
+  ],
   providers: [PocetnaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './pocetna.html',

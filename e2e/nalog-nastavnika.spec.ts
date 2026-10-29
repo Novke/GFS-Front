@@ -5,7 +5,7 @@ import { expect, test } from './fixture';
 
 /*
  * Gornja traka nastavnika (spec prijave, sekcije 6 i 10): zvono sa značkom nepročitanih obaveštenja i padajućom listom,
- * meni korisnika ("Prijavljeni uređaji", "Odjava") i kartica "Nalozi" na Početnoj. Podaci: `fixtures/nalozi.json`
+ * meni korisnika ("Prijavljeni uređaji", "Odjava") i kartica "Obaveštenja" na Početnoj. Podaci: `fixtures/nalozi.json`
  * (dva nepročitana, jedno pročitano i jedno rešeno obaveštenje; tri uređaja nastavnika).
  */
 
@@ -68,9 +68,9 @@ test.describe('gornja traka: obaveštenja', () => {
     await expect(zvono(page)).toBeFocused();
   });
 
-  test('Početna: kartica "Nalozi" sa otvorenim obaveštenjima; "Rešeno" ih skida, "Kartica" vodi na studenta', async ({ page, mock }) => {
+  test('Početna: kartica "Obaveštenja" sa otvorenim obaveštenjima; "Rešeno" ih skida, "Kartica" vodi na studenta', async ({ page, mock }) => {
     await page.goto('./');
-    const kartica = page.getByRole('region', { name: 'Nalozi' });
+    const kartica = page.getByRole('region', { name: 'Obaveštenja' });
     await expect(kartica).toBeVisible();
     await expect(kartica.locator('[data-nalog]')).toHaveCount(3);
     await expect(kartica).toContainText(BOJAN);
@@ -85,13 +85,13 @@ test.describe('gornja traka: obaveštenja', () => {
     await expect(znacka(page)).toHaveCount(0);
   });
 
-  test('bez otvorenih obaveštenja: nema značke ni kartice "Nalozi"', async ({ page, mock }) => {
+  test('bez otvorenih obaveštenja: nema značke ni kartice "Obaveštenja"', async ({ page, mock }) => {
     mock.podaci.obavestenja = [];
     await page.goto('./');
     await expect(page.getByRole('heading', { name: 'Čeka na tebe' })).toBeVisible();
     await expect(zvono(page)).toBeVisible();
     await expect(znacka(page)).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Nalozi' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Obaveštenja' })).toHaveCount(0);
     await otvoriObavestenjaPrazno(page);
   });
 });
