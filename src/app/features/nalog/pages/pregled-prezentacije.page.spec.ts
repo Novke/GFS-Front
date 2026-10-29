@@ -10,7 +10,8 @@ import { PregledPrezentacijePage, tacanTekst } from './pregled-prezentacije.page
 const URL = 'api/public/nalog/prezentacije/4';
 
 const slajd = (s: Partial<SlajdPregleda> & Pick<SlajdPregleda, 'id' | 'rb' | 'tip'>): SlajdPregleda => ({
-  naslov: null, sadrzaj: null, slika: null, pitanje: null, platno: null, zadatak: null, mojOdgovor: null, ...s,
+  naslov: null, sadrzaj: null, slika: null, pitanje: null, platno: null, zadatak: null, mojOdgovor: null, tacanPoznat: false,
+  ...s,
 });
 
 const PREGLED: PregledPrezentacije = {
@@ -24,6 +25,7 @@ const PREGLED: PregledPrezentacije = {
         brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null,
         prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null },
       mojOdgovor: { tekst: '3', tacno: false },
+      tacanPoznat: true,
     }),
     slajd({ id: 32, rb: 3, tip: 'ZADATAK', naslov: 'Konverzija', zadatak: { naziv: 'Binarni u dekadni', moji: [], tipovi: [{ tipId: 5, naziv: 'Binarni u dekadni' }] } }),
   ],
@@ -84,6 +86,16 @@ describe('PregledPrezentacijePage', () => {
     fixture.detectChanges();
     expect(dugme.getAttribute('aria-pressed')).toBe('true');
     expect(dugme.textContent).toContain('Sakrij');
+  });
+
+  it('PITANJE bez snimka runde (tacanPoznat: false): nema prekidača tačnog odgovora', async () => {
+    await otvori();
+    const bezSnimka = structuredClone(PREGLED);
+    bezSnimka.slajdovi[1] = { ...bezSnimka.slajdovi[1], tacanPoznat: false, mojOdgovor: null };
+    http.expectOne(URL).flush(bezSnimka);
+    await stabilno();
+    expect(el().querySelector('[data-slajd="31"]')).not.toBeNull();
+    expect(el().querySelector('[data-tacan]')).toBeNull();
   });
 
   it('ZADATAK: tip i "Vežbaj", bez projektorske kartice', async () => {

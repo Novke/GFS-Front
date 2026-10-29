@@ -53,11 +53,11 @@ const NIJE_OTVOREN = 'Ovaj tip nije otvoren za vežbanje.';
         @if (zadatak(); as z) {
           <p class="nivo-zadatka">Nivo <span aria-hidden="true">{{ zvezdice(z.nivo) }}</span><span class="citac">{{ z.nivo }} od 3</span></p>
           <app-vezbanje-unos [zadatak]="z" [provera]="provera()" [resenje]="resenje()" [salje]="salje()"
-                             (proveri)="proveri($event)" (prikaziResenje)="prikaziResenje()" (sledeci)="novi()" />
+                             (proveri)="proveri($event)" (prikaziResenje)="prikaziResenje()" (sledeci)="novi(true)" />
         } @else if (salje()) {
           <p class="stanje" role="status"><mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Biram zadatak...</p>
         } @else {
-          <button type="button" mat-flat-button class="dugme" (click)="novi()">Novi zadatak</button>
+          <button type="button" mat-flat-button class="dugme" (click)="novi(true)">Novi zadatak</button>
         }
       } @else if (nijeOtvoren()) {
         <h2>Vežbanje</h2>
@@ -171,13 +171,17 @@ export class VezbanjePage implements OnInit {
     this.novi();
   }
 
-  protected novi(): void {
+  /**
+   * Zadatak tipa. `svez` je dugme "Novi zadatak" / "Sledeći zadatak" (uvek novo izvlačenje); otvaranje strane i promena nivoa
+   * dobijaju od servera netaknut zadatak iz poslednjih 10 minuta, ako ga ima (osvežavanje ne troši izvlačenja).
+   */
+  protected novi(svez = false): void {
     const t = this.tip();
     if (!t || this.salje()) {
       return;
     }
     this.pocni();
-    this.zahtev = this.api.noviZadatak(t.tipId, this.izabranNivo()).subscribe({
+    this.zahtev = this.api.noviZadatak(t.tipId, this.izabranNivo(), svez).subscribe({
       next: z => {
         this.salje.set(false);
         this.provera.set(null);
@@ -201,7 +205,7 @@ export class VezbanjePage implements OnInit {
       next: p => {
         this.salje.set(false);
         this.provera.set(p);
-        if (this.proverenPokusaj !== z.pokusajId) {
+        if (this.proverenPokusaj !== z.pokusajId && this.resenje() === null) {   // posle rešenja se ne broji (kao na serveru)
           this.proverenPokusaj = z.pokusajId;
           this.sesija.update(s => ({ provereno: s.provereno + 1, tacno: s.tacno + (p.tacno ? 1 : 0) }));
         }
@@ -231,7 +235,10 @@ export class VezbanjePage implements OnInit {
     this.greska.set(null);
   }
 
-  /** 401: prijava; 404: tip više nije otvoren (zatvoren u međuvremenu); ostalo poruka servera (409 "nema zadataka"). */
+  /**
+   * 401: prijava; 404: tip više nije otvoren (zatvoren u međuvremenu); ostalo poruka servera (409 "nema zadataka" ili "upravo
+   * na času", 429 "previše novih zadataka").
+   */
   private neuspeh(e: unknown): void {
     this.salje.set(false);
     const s = status(e);

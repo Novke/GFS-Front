@@ -112,6 +112,51 @@ describe('VezbanjePage', () => {
     expect(el().querySelector('img[data-svg="resenje"]')).not.toBeNull();
   });
 
+  it('"Sledeći zadatak" traži novo izvlačenje (novi: true); otvaranje strane ne', async () => {
+    await otvori();
+    http.expectOne(STABLO).flush(TEME);
+    const prvi = http.expectOne(NOVI);
+    expect(prvi.request.body).toEqual({ tipId: 5, nivo: null });
+    prvi.flush(ZADATAK);
+    await stabilno();
+    el().querySelector<HTMLButtonElement>('[data-sledeci]')!.click();
+    const req = http.expectOne(NOVI);
+    expect(req.request.body).toEqual({ tipId: 5, nivo: null, novi: true });
+    req.flush({ ...ZADATAK, pokusajId: 42 });
+  });
+
+  it('zadatak na času (409 na proveri): poruka servera, zadatak ostaje', async () => {
+    await otvori();
+    http.expectOne(STABLO).flush(TEME);
+    http.expectOne(NOVI).flush(ZADATAK);
+    await stabilno();
+    el().querySelector<HTMLButtonElement>('[data-resenje]')!.click();
+    http.expectOne('api/public/nalog/vezbanje/41/resenje')
+      .flush({ reason: 'Ovaj zadatak je upravo na času; pokušaj posle.' }, { status: 409, statusText: 'Conflict' });
+    await stabilno();
+    expect(el().querySelector('[data-greska]')?.textContent).toContain('upravo na času');
+    expect(el().querySelector('img[data-svg="zadatak"]')).not.toBeNull();
+  });
+
+  it('provera posle rešenja ne ulazi u učinak sesije', async () => {
+    await otvori();
+    http.expectOne(STABLO).flush(TEME);
+    http.expectOne(NOVI).flush(ZADATAK);
+    await stabilno();
+    const pre = el().querySelector('[data-ucinak]')?.textContent;
+    el().querySelector<HTMLButtonElement>('[data-resenje]')!.click();
+    http.expectOne('api/public/nalog/vezbanje/41/resenje').flush({ resenjeSvgId: 'r-41', tacneVrednosti: {} });
+    await stabilno();
+    const input = el().querySelector<HTMLInputElement>('input[data-polje="a"]')!;
+    input.value = '42';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el().querySelector<HTMLButtonElement>('[data-proveri]')!.click();
+    http.expectOne('api/public/nalog/vezbanje/41/provera').flush({ tacno: true, ishod: { a: true } });
+    await stabilno();
+    expect(el().querySelector('[data-ucinak]')?.textContent).toBe(pre);
+  });
+
   it('409 (nema zadataka tog nivoa): poruka servera i "Novi zadatak"', async () => {
     await otvori('5', '2');
     http.expectOne(STABLO).flush(TEME);

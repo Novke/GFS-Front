@@ -94,7 +94,8 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     await ocekuj(page.locator('[data-na-casu]')).toContainText(`Prisutan si: ${CAS}`);
     ocekuj(mock.zahteviZa('public/nalog/cas/potvrdi', 'POST')).toHaveLength(1);
     ocekuj(await page.evaluate(() => sessionStorage.getItem('gfs-cas-kljuc'))).toBeNull();
-    ocekuj(javnaMreza.api).toEqual([
+    // kartica "Naredni časovi" na tabu Čas (najava odsustva) čita svoj API nezavisno od toka čekiranja, pa se ne broji u redosled
+    ocekuj(javnaMreza.api.filter(z => z !== 'GET /api/public/nalog/casovi')).toEqual([
       'POST /api/public/nalog/cas/skeniraj',
       'GET /api/public/nalog/stanje',
       'POST /api/public/nalog/kod',

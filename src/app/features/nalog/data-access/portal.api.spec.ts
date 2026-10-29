@@ -30,6 +30,11 @@ describe('PortalApi', () => {
     ['pregled', () => api.pregled(9), 'GET', 'api/public/nalog/prezentacije/9', null],
     ['noviZadatak', () => api.noviZadatak(5, 2), 'POST', 'api/public/nalog/vezbanje', { tipId: 5, nivo: 2 }],
     ['noviZadatak svi nivoi', () => api.noviZadatak(5, null), 'POST', 'api/public/nalog/vezbanje', { tipId: 5, nivo: null }],
+    ['noviZadatak "Novi zadatak"', () => api.noviZadatak(5, null, true), 'POST', 'api/public/nalog/vezbanje',
+      { tipId: 5, nivo: null, novi: true }],
+    ['podesavanja', () => api.podesavanja(), 'GET', 'api/public/nalog/podesavanja', null],
+    ['sacuvajPodesavanja', () => api.sacuvajPodesavanja({ mejlOtkazanCas: false }), 'PUT', 'api/public/nalog/podesavanja',
+      { mejlOtkazanCas: false }],
     ['provera', () => api.provera(77, { a: '12', b: [3] }), 'POST', 'api/public/nalog/vezbanje/77/provera', { polja: { a: '12', b: [3] } }],
     ['resenje', () => api.resenje(77), 'POST', 'api/public/nalog/vezbanje/77/resenje', null],
   ] as const)('%s -> %s %s, LOCAL_ERRORS', (_ime, poziv, metod, url, telo) => {

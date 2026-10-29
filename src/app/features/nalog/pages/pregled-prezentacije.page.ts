@@ -39,7 +39,8 @@ export function tacanTekst(p: PitanjeDetails): string | null {
  * slajdovi koje je grupa studenta videla u završenom izvođenju (server ne šalje ostale, ni beleške), redom, svaki u krajnjem
  * stanju. INFO, PLATNO i PITANJE crta projektorski renderer (`app-slajd-prikaz`, tema prezentacije), tek kad slajd uđe u
  * vidno polje (`@defer (on viewport)`). Uz PITANJE "Tvoj odgovor" (kad je student odgovarao prijavljen) i "Prikaži tačan
- * odgovor" (samo prikaz: odgovor je već u odgovoru servera, čas je završen). ZADATAK slajd nije projektorska kartica nego
+ * odgovor" (samo prikaz, i samo kad je pitanje iz snimka runde sa časa grupe: `tacanPoznat`; bez runde server ne šalje tačan
+ * odgovor). ZADATAK slajd nije projektorska kartica nego
  * naziv tipa, sopstveni zadaci sa časa i "Vežbaj ovaj tip". Lenja strana: renderer slajda nije u početnom paketu ni u ljusci.
  */
 @Component({
@@ -95,7 +96,7 @@ export function tacanTekst(p: PitanjeDetails): string | null {
                         @if (o.tacno === false) { <span class="lose"> · netačno</span> }
                       </p>
                     }
-                    @if (imaTacan(q)) {
+                    @if (s.tacanPoznat && imaTacan(q)) {
                       <button type="button" class="dugme-link" [attr.aria-pressed]="prikazanTacan().has(s.id)"
                               (click)="prekidac(s.id)" data-tacan>
                         {{ prikazanTacan().has(s.id) ? 'Sakrij tačan odgovor' : 'Prikaži tačan odgovor' }}

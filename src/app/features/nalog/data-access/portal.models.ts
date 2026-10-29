@@ -122,8 +122,9 @@ export interface OdgovorPregleda {
 }
 
 /**
- * Slajd u pregledu: samo slajd koji je grupa videla u završenom izvođenju, bez beleški. `pitanje` nosi tačan odgovor (čas je
- * završen); "Prikaži tačan odgovor" je samo prikaz.
+ * Slajd u pregledu: samo slajd koji je grupa videla u završenom izvođenju, bez beleški. `pitanje` je iz snimka runde sa časa
+ * grupe i tada nosi tačan odgovor (`tacanPoznat`); bez runde je trenutno pitanje bez tačnog odgovora (`tacanPoznat: false`,
+ * nijedna opcija tačna) i strana ne nudi "Prikaži tačan odgovor".
  */
 export interface SlajdPregleda {
   id: number;
@@ -136,6 +137,7 @@ export interface SlajdPregleda {
   platno: Platno | null;
   zadatak: ZadatakPregleda | null;
   mojOdgovor: OdgovorPregleda | null;
+  tacanPoznat: boolean;
 }
 
 export interface PregledPrezentacije {
@@ -165,4 +167,10 @@ export interface OcenaStudenta {
   objavljeno: boolean;
   objavljenoU: string | null;
   ocena: SnimakOcene | null;
+}
+
+/** Podešavanja naloga (tab "Ja"); isti oblik za čitanje i izmenu. */
+export interface PodesavanjaNaloga {
+  /** Javi mi mejlom kad je čas otkazan (i kad se otkazan čas ipak održava). */
+  mejlOtkazanCas: boolean;
 }

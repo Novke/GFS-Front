@@ -14,6 +14,7 @@ import { porukaGreske } from '../data-access/nalog.pravila';
 import { putanjaPrijave, status } from '../data-access/portal.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NalogPregled } from '../ui/nalog-pregled.component';
+import { PodesavanjaMejla } from '../ui/podesavanja-mejla.component';
 
 /** `1 uređaj`, `2 uređaja`, `5 uređaja`, `21 uređaj` (genitiv množine i paukal su isti). */
 const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređaj' : 'uređaja'}`;
@@ -22,12 +23,12 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
  * Tab **Ja** (`/nalog/ja`, spec studentskog dela 12.5): `GET api/public/nalog/ja` (ime, indeks, grupa i generacija, maska
  * mejla, uređaji, Moodle), "Odjavi se" i "Odjavi sve uređaje" (uz potvrdu). Posle odjave strana prijave (`/nalog`) sa
  * porukom kroz stanje istorije; polje indeksa je tamo prazno (zajednički računar). 401 vodi na prijavu sa povratkom ovde;
- * 401 na odjavi znači da sesije već nema (za odjavu uspeh). Podešavanje "javi mi mejlom kad je čas otkazan" dolazi sa
- * integracijom najave odsustva (spec 12.8).
+ * 401 na odjavi znači da sesije već nema (za odjavu uspeh). Ispod profila kartica "Obaveštenja" ("Javi mi mejlom kad je čas
+ * otkazan", `PodesavanjaMejla`, sama učitava i čuva).
  */
 @Component({
   selector: 'app-ja-page',
-  imports: [FormErrorBanner, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled],
+  imports: [FormErrorBanner, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled, PodesavanjaMejla],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Ja">
@@ -35,6 +36,7 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
       @if (ja(); as s) {
         <app-form-error-banner [poruka]="greska()" />
         <app-nalog-pregled [ja]="s" [salje]="salje()" (odjavi)="odjavi()" (odjaviSvuda)="odjaviSvuda()" />
+        <app-podesavanja-mejla />
       } @else if (greskaUcitavanja(); as g) {
         <p class="poruka opasnost" role="alert">{{ g }}</p>
         <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>

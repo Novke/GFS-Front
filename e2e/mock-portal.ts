@@ -91,7 +91,7 @@ function pregled(): PregledPrezentacije {
     id: PREZENTACIJA, naziv: 'Konverzije – vežbe', tema: 'NACRT', predmetId: PREDMET, slajdovi: [
       {
         id: 71, rb: 1, tip: 'INFO', naslov: 'Pozicioni brojni sistemi', sadrzaj: 'Vrednost cifre zavisi od **mesta**.', slika: null,
-        pitanje: null, platno: null, zadatak: null, mojOdgovor: null,
+        pitanje: null, platno: null, zadatak: null, mojOdgovor: null, tacanPoznat: false,
       },
       {
         id: 72, rb: 2, tip: 'PITANJE', naslov: null, sadrzaj: null, slika: null, platno: null, zadatak: null,
@@ -102,10 +102,12 @@ function pregled(): PregledPrezentacije {
           skalaMinOznaka: null, skalaMaxOznaka: null,
         },
         mojOdgovor: { tekst: '8', tacno: false },
+        tacanPoznat: true,
       },
       {
         id: 73, rb: 3, tip: 'ZADATAK', naslov: 'Binarni u dekadni', sadrzaj: null, slika: null, pitanje: null, platno: null,
         zadatak: { naziv: '2 → 10', moji: mojiZadaci(PREDMET), tipovi: [{ tipId: TIP, naziv: '2 → 10' }] }, mojOdgovor: null,
+        tacanPoznat: false,
       },
     ],
   };
@@ -127,7 +129,9 @@ export class MockPortal {
   /** Učinak studenta na tipu {@link TIP} (prva provera svakog izvučenog zadatka). */
   readonly ucinak = { provereno: 1, tacno: 1 };
   /** Izvučeni zadaci u ovom testu (id -> tip); pokušaj van ove mape je tuđ ili nepostojeći (404). */
-  readonly pokusaji = new Map<number, { tipId: number; provereno: boolean }>();
+  readonly pokusaji = new Map<number, { tipId: number; nivo: number | null; provereno: boolean; resenje: boolean; zadatak: ZadatakVezbanja }>();
+  /** Podešavanja naloga (tab Ja); PUT ih menja. */
+  readonly podesavanja = { mejlOtkazanCas: true };
   /** Stanje panela „Za vežbanje“ po čvoru banke (nastavnik); bez unosa: podrazumevano za predmet čvora. */
   readonly otvoreno = new Map<number, OtvorenoZaGrupu[]>();
   private sledeci = 500;
@@ -135,7 +139,7 @@ export class MockPortal {
   constructor(private readonly studentPrijavljen: () => boolean, private readonly cvorPredavanja: (id: number) => boolean) {}
 
   /** Studentske rute (`public/nalog/...`). */
-  studentskeRute(get: Get, post: Get): void {
+  studentskeRute(get: Get, post: Get, put: Get): void {
     const student = (h: (z: { telo: unknown; query: URLSearchParams }, p: Record<string, string>) => Odgovor) =>
       (z: { telo: unknown; query: URLSearchParams }, p: Record<string, string>): Odgovor =>
         this.studentPrijavljen() ? h(z, p) : greska(401, 'Potrebna je prijava.');
@@ -156,8 +160,18 @@ export class MockPortal {
     get('public/nalog/predmeti/:id/ocena', zaPredmet(ocena));
     get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled()) : NEMA())));
 
+    get('public/nalog/podesavanja', student(() => ok({ ...this.podesavanja })));
+    put('public/nalog/podesavanja', student(z => {
+      const v = (z.telo as { mejlOtkazanCas?: unknown } | null)?.mejlOtkazanCas;
+      if (typeof v !== 'boolean') {
+        return greska(400, 'Izaberi da li želiš mejl.');
+      }
+      this.podesavanja.mejlOtkazanCas = v;
+      return ok({ ...this.podesavanja });
+    }));
+
     post('public/nalog/vezbanje', student(z => {
-      const telo = z.telo as { tipId?: unknown; nivo?: unknown } | null;
+      const telo = z.telo as { tipId?: unknown; nivo?: unknown; novi?: unknown } | null;
       const tip = vezbanje(PREDMET, this.ucinak)[0].tipovi.find(t => t.tipId === telo?.tipId);
       if (!tip) {
         return NEMA();
@@ -166,12 +180,18 @@ export class MockPortal {
       if (nivo !== null && tip.poNivou[nivo - 1] === 0) {
         return greska(409, 'Za ovaj nivo nema zadataka.');
       }
+      // kao server: bez "Novi zadatak" vraća poslednji netaknut zadatak istog tipa i nivoa
+      const netaknut = telo?.novi === true ? undefined : [...this.pokusaji.values()].reverse()
+        .find(x => x.tipId === tip.tipId && x.nivo === nivo && !x.provereno && !x.resenje);
+      if (netaknut) {
+        return ok(netaknut.zadatak);
+      }
       const pokusajId = this.sledeci++;
-      this.pokusaji.set(pokusajId, { tipId: tip.tipId, provereno: false });
       const zadatak: ZadatakVezbanja = {
         pokusajId, tipId: tip.tipId, tip: tip.naziv, tema: 'Konverzije brojeva', nivo: nivo ?? 1, svgId: `portal-svg-${pokusajId}`,
         polja: tip.papir ? [] : [POLJE_BROJA],
       };
+      this.pokusaji.set(pokusajId, { tipId: tip.tipId, nivo, provereno: false, resenje: false, zadatak });
       return ok(zadatak);
     }));
     post('public/nalog/vezbanje/:id/provera', student((z, p) => {
@@ -181,7 +201,7 @@ export class MockPortal {
       }
       const uneto = String((z.telo as { polja?: Record<string, unknown> } | null)?.polja?.['a'] ?? '').replace(/\s/g, '');
       const tacno = uneto === TACNO;
-      if (!pokusaj.provereno) {
+      if (!pokusaj.provereno && !pokusaj.resenje) {
         pokusaj.provereno = true;
         this.ucinak.provereno++;
         if (tacno) {
@@ -192,6 +212,9 @@ export class MockPortal {
     }));
     post('public/nalog/vezbanje/:id/resenje', student((_z, p) => {
       const pokusaj = this.pokusaji.get(Number(p['id']));
+      if (pokusaj) {
+        pokusaj.resenje = true;
+      }
       return pokusaj
         ? ok({ resenjeSvgId: `portal-svg-${p['id']}-resenje`, tacneVrednosti: { a: { broj: Number(TACNO), prihvatljivi: null, tacna: null, tacne: null } } })
         : NEMA();

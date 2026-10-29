@@ -18,7 +18,8 @@ import { MockApi, tekucaSkolskaGodina } from './mock-api';
  * prezentacija (traka); tab Ja čita `ja` (studentski portal, faze 1-3). `GET casovi`: kartica "Naredni časovi" na tabu Čas
  * (najava odsustva; bez rasporeda u moku je prazna i ne vidi se).
  */
-const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi)$/;
+// `podesavanja`: kartica "Obaveštenja" na tabu Ja (mejl o otkazanom času) čita svoje stanje
+const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi|podesavanja)$/;
 const INDEKS = 'GD1';
 /** Godina koju forma predlaže bez `?godina=` (fikstura nema svoju, pa mock prihvata istu). */
 const GODINA = tekucaSkolskaGodina();
@@ -329,8 +330,10 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
       'GET /api/public/nalog/ja',
       'POST /api/public/lti/povezi',
     ]);
-    // tab Ja čita nalog; ljuska tabova pita za čas (traka "Prezentacija je počela"), redosled nije bitan
-    ocekuj(javnaMreza.api.slice(6).sort()).toEqual(['GET /api/public/nalog/cas', 'GET /api/public/nalog/ja']);
+    // tab Ja čita nalog i podešavanja obaveštenja; ljuska tabova pita za čas (traka "Prezentacija je počela"), redosled nije bitan
+    ocekuj(javnaMreza.api.slice(6).sort()).toEqual(
+      ['GET /api/public/nalog/cas', 'GET /api/public/nalog/ja', 'GET /api/public/nalog/podesavanja'],
+    );
     ocekuj(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 

@@ -251,7 +251,8 @@ the front only routes and shows.
   off a lecture, ~10 s on one, at once on `visibilitychange`, 429 backs off to 120 s) and shows the strip "Prezentacija je počela · Uđi"
   (`[data-traka]`, link `uzivo/<kod>?sa=cas`); only the Čas tab enters the run by itself. Any 401 of a tab page or the shell goes to
   `putanjaPrijave(router.url)` = `nalog?nazad=<this tab>`. `data-access/portal.api.ts` calls only `api/public/nalog/{predmeti,
-  predmeti/{id}/{prisustvo,vezbanje,moji-zadaci,prezentacije,ocena}, prezentacije/{id}, vezbanje, vezbanje/{id}/{provera,resenje}}`, all
+  predmeti/{id}/{prisustvo,vezbanje,moji-zadaci,prezentacije,ocena}, prezentacije/{id}, vezbanje, vezbanje/{id}/{provera,resenje},
+  podesavanja}`, all
   `LOCAL_ERRORS`; `portal.models.ts` mirrors `dto/portal`; `portal.pravila.ts` holds the pure rules (`putanjaPrijave`, `jeTabCas`,
   `ucinak`, `opisPredmeta`, `idIzRute`, `nivoIzUpita`, `zvezdice`, `status`). Students never see the word "banka": the practice part is
   "Zadaci za vežbanje".
@@ -265,15 +266,27 @@ the front only routes and shows.
   - **Vežbanje** (`pages/vezbanje.page`, `ui/vezbanje-unos.component`): `POST vezbanje {tipId, nivo}` draws a variant (no correct
     values in it), "Proveri" shows per-field Tačno/Netačno only (editing a field clears its result), "Prikaži rešenje" fetches the correct
     values and the solution image, "Sledeći zadatak", level buttons ★/★★/★★★ with counts (a level with 0 is disabled; `?nivo=`).
-    Field rules are shared with the phone in class through `features/uzivo/ui/polja-zadatka` (pure functions). No points.
+    Opening the page or changing the level sends `{tipId, nivo}`, so the server hands back the student's untouched attempt of that type
+    and level from the last 10 min (a reload is not a new draw); only "Sledeći zadatak" / "Novi zadatak" send `novi: true`
+    (`PortalApi.noviZadatak(tipId, nivo, true)`; 60 new draws per hour, then 429 with the server text). 409 "Ovaj zadatak je upravo na
+    času; pokušaj posle." on "Proveri"/"Prikaži rešenje" keeps the task and shows the text (a variant drawn in an active run is never
+    drawn for practice). A check after "Prikaži rešenje" still shows the per-field result, but counts neither on the server nor in the
+    session's "Tvoj učinak". Field rules are shared with the phone in class through `features/uzivo/ui/polja-zadatka` (pure functions).
+    No points.
   - **Pregled prezentacije** (`pages/pregled-prezentacije.page`): only slides the group saw in a finished run, rendered by the projector
     renderer `features/uzivo/ui/slajd-prikaz.component` inside `@defer (on viewport)` in their final state (all PLATNO steps), no notes.
     The renderer's input type is the narrow `SlajdZaPrikaz` (`features/uzivo/ui/slajd-za-prikaz.ts`, types only), so the page never
-    imports `uzivo/data-access`. PITANJE: "Tvoj odgovor" and a "Prikaži tačan odgovor" toggle; ZADATAK: own tasks and "Vežbaj".
+    imports `uzivo/data-access`. PITANJE: "Tvoj odgovor" and a "Prikaži tačan odgovor" toggle, only when `SlajdPregleda.tacanPoznat`
+    (the question comes from the group's own round snapshot; without one the server sends no correct values and the page shows no
+    toggle); ZADATAK: own tasks and "Vežbaj". The page is its own lazy chunk: `e2e/lenji-pregled.spec.ts` (build only, spec 6.2) checks
+    it is only `import()`ed, outside the initial closure, own closure <= measured 89 772 B + 10 % (gzip too), and without editor,
+    ProseMirror, formula editor or full `mathlive`.
     `ui/slika-zadatka.component` shows task SVGs (`api/public/mediji/<uuid>` as `<img>`) with "Uvećaj".
   - **Ja** (`pages/ja.page`, `ui/nalog-pregled.component`): name, index, group and generation, masked e-mail, Moodle status, devices,
     "Odjavi se" / "Odjavi sve uređaje" (logout returns to `nalog` with the message in history state). `nalog/moodle` "Otvori nalog"
-    links here.
+    links here. Below it the self-contained card "Obaveštenja" (`ui/podesavanja-mejla.component`, `[data-podesavanja]`): checkbox
+    "Javi mi mejlom kad je čas otkazan" (`GET|PUT api/public/nalog/podesavanja` = `{mejlOtkazanCas}`, default on; covers the
+    cancellation mail and "čas se ipak održava"), optimistic with rollback and the server text on error, "Sačuvano." on success.
   - **Allow-list** (`DOZVOLJENO_PO_FEATURE['features/nalog']` in `eslint-rules/javna-ruta-konfig.js`, each entry read with its own
     imports): `features/uzivo/ui/{polja-zadatka,tekst-formule.component,tekst-formule,format}`, the slide renderer
     `ui/slajd-prikaz.component` and `ui/slajd-za-prikaz`. Types of a ui component's inputs are re-exported from that ui file
@@ -374,9 +387,9 @@ computed on the server; the front never builds dates of termini itself.
 - **Shared util `shared/util/termin.ts`** (no imports, so it is on the `features/nalog` allow-list): `DANI`/`DANI_KRATKO`
   (index = ISO weekday), `lokalniDatum`, `danUNedelji`, `isoDatum`, `dodajDane`, `hhmm` (server `HH:mm:ss` -> `HH:mm`),
   `blokVremena` ("10:00–13:00"), `danIDatum` ("sreda 4. 11."), `relativniDan` ("danas"/"sutra"). Use it for every termin label.
-- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted in the `prijavljen` step of
-  `/nalog` after "Na času si"): **self-contained** (provides its own `CasoviStore`, loads in its constructor, no inputs or
-  outputs), so it can move unchanged into a future "Čas" tab. `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
+- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted on the tab Čas (`pages/cas.page`,
+  below the check-in state) since the student portal phases 2-3; a signed-in `/nalog` goes there): **self-contained** (provides its
+  own `CasoviStore`, loads in its constructor, no inputs or outputs). `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
   all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
   "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
   dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,

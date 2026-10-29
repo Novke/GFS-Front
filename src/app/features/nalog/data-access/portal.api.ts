@@ -6,7 +6,7 @@ import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
 import { VrednostPolja } from '../../uzivo/ui/polja-zadatka';
 import {
-  MojZadatak, OcenaStudenta, PredmetStudenta, PregledPrezentacije, PrezentacijaStudenta, PrisustvoStudenta,
+  MojZadatak, OcenaStudenta, PodesavanjaNaloga, PredmetStudenta, PregledPrezentacije, PrezentacijaStudenta, PrisustvoStudenta,
   ProveraVezbanja, ResenjeVezbanja, TemaVezbanja, ZadatakVezbanja,
 } from './portal.models';
 
@@ -49,9 +49,14 @@ export class PortalApi {
     return this.http.get<PregledPrezentacije>(`${this.koren}/prezentacije/${prezentacijaId}`, { context: this.lokalneGreske });
   }
 
-  /** Novi zadatak tipa (`nivo` `null` = svi nivoi); 409 kad nema zadataka (tog nivoa), 404 kad tip nije otvoren. */
-  noviZadatak(tipId: number, nivo: number | null): Observable<ZadatakVezbanja> {
-    return this.http.post<ZadatakVezbanja>(`${this.koren}/vezbanje`, { tipId, nivo }, { context: this.lokalneGreske });
+  /**
+   * Zadatak tipa (`nivo` `null` = svi nivoi). Bez `novi` server vraća netaknut zadatak istog tipa i nivoa iz poslednjih 10
+   * minuta (osvežavanje strane, promena nivoa); `novi: true` je dugme "Novi zadatak". 409 kad nema zadataka (tog nivoa) ili su
+   * upravo na času, 429 preko 60 novih na sat, 404 kad tip nije otvoren.
+   */
+  noviZadatak(tipId: number, nivo: number | null, novi = false): Observable<ZadatakVezbanja> {
+    const telo = novi ? { tipId, nivo, novi: true } : { tipId, nivo };
+    return this.http.post<ZadatakVezbanja>(`${this.koren}/vezbanje`, telo, { context: this.lokalneGreske });
   }
 
   provera(pokusajId: number, polja: Record<string, VrednostPolja>): Observable<ProveraVezbanja> {
@@ -60,6 +65,14 @@ export class PortalApi {
 
   resenje(pokusajId: number): Observable<ResenjeVezbanja> {
     return this.http.post<ResenjeVezbanja>(`${this.koren}/vezbanje/${pokusajId}/resenje`, null, { context: this.lokalneGreske });
+  }
+
+  podesavanja(): Observable<PodesavanjaNaloga> {
+    return this.http.get<PodesavanjaNaloga>(`${this.koren}/podesavanja`, { context: this.lokalneGreske });
+  }
+
+  sacuvajPodesavanja(p: PodesavanjaNaloga): Observable<PodesavanjaNaloga> {
+    return this.http.put<PodesavanjaNaloga>(`${this.koren}/podesavanja`, p, { context: this.lokalneGreske });
   }
 
   private predmet(id: number): string {

@@ -15,7 +15,7 @@ import { PREDMET, PREDMET_OCENA, PREZENTACIJA, TACNO, TIP } from './mock-portal'
  * banke i statistika vežbanja.
  */
 
-const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|ocena))?|prezentacije\/\d+|vezbanje(\/\d+\/(provera|resenje))?)$|^GET \/api\/public\/mediji\/[\w-]+$/;
+const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|ocena))?|prezentacije\/\d+|vezbanje(\/\d+\/(provera|resenje))?)$|^(GET|PUT) \/api\/public\/nalog\/podesavanja$|^GET \/api\/public\/mediji\/[\w-]+$/;
 
 async function posleAnimacija(page: Page): Promise<void> {
   await expect
@@ -88,7 +88,7 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
     ocekuj(javnaMreza.odgovori401).toEqual([]);
   });
 
-  test('vežbanje: zadatak bez tačnog odgovora, provera, rešenje i sledeći; nivo bez zadataka je onemogućen', async ({ page, mock }) => {
+  test('vežbanje: zadatak bez tačnog odgovora, provera, rešenje i sledeći; nivo bez zadataka je onemogućen', async ({ page, mock, javnaMreza }) => {
     mock.studentPrijavljen = true;
     await page.goto(`nalog/predmet/${PREDMET}`);
     await page.locator(`[data-tip="${TIP}"]`).click();
@@ -120,9 +120,18 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
     await ocekuj(page.locator('input[data-polje="a"]')).toHaveValue('');
     await page.locator('[data-sledeci]').click();
     await ocekuj.poll(() => mock.zahteviZa('public/nalog/vezbanje', 'POST').length).toBe(3);
+    ocekuj(mock.zahteviZa('public/nalog/vezbanje', 'POST').at(-1)?.telo).toEqual({ tipId: TIP, nivo: 2, novi: true });
+
+    // javna ruta: samo API naloga i slike zadataka, bez 401 i bez koda editora (teardown proverava isto, ovde ne sme biti prazno)
+    ocekuj(javnaMreza.api.filter(z => z.startsWith('POST /api/public/nalog/vezbanje')).length).toBeGreaterThanOrEqual(5);
+    ocekuj(javnaMreza.api.filter(z => !API_PORTALA.test(z))).toEqual([]);
+    ocekuj(javnaMreza.odgovori401).toEqual([]);
+    const skripte = await javnaMreza.skripte();
+    ocekuj(skripte.putanje.length).toBeGreaterThan(0);
+    ocekuj(skripte.saEditorom).toEqual([]);
   });
 
-  test('pregled održane prezentacije: slajdovi, moj odgovor i tačan na dodir, Zadatak sa "Vežbaj"; nepoznata je 404', async ({ page, mock }) => {
+  test('pregled održane prezentacije: slajdovi, moj odgovor i tačan na dodir, Zadatak sa "Vežbaj"; nepoznata je 404', async ({ page, mock, javnaMreza }) => {
     mock.studentPrijavljen = true;
     await page.goto(`nalog/prezentacija/${PREZENTACIJA}`);
     await ocekuj(page.getByRole('heading', { level: 2, name: 'Slajdovi sa časa' })).toBeVisible();
@@ -138,6 +147,30 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
 
     await page.goto('nalog/prezentacija/999');
     await ocekuj(page.locator('[data-nema]')).toHaveText('Prezentacija nije pronađena.');
+
+    // javna ruta: samo API naloga, bez 401; pregled crta samo renderer slajda, nikad editor platna ni MathLive
+    ocekuj(javnaMreza.api).toContain(`GET /api/public/nalog/prezentacije/${PREZENTACIJA}`);
+    ocekuj(javnaMreza.api.filter(z => !API_PORTALA.test(z))).toEqual([]);
+    ocekuj(javnaMreza.odgovori401).toEqual([]);
+    const skripte = await javnaMreza.skripte();
+    ocekuj(skripte.putanje.length).toBeGreaterThan(0);
+    ocekuj(skripte.saEditorom).toEqual([]);
+    ocekuj(javnaMreza.zahtevi.filter(z => z.includes('/assets/mathlive/'))).toEqual([]);
+  });
+
+  test('Ja: "Javi mi mejlom kad je čas otkazan" se čuva (PUT), bez ozbiljnih a11y kršenja', async ({ page, mock, javnaMreza }) => {
+    mock.studentPrijavljen = true;
+    await page.goto('nalog/ja');
+    const izbor = page.getByRole('checkbox', { name: 'Javi mi mejlom kad je čas otkazan' });
+    await ocekuj(izbor).toBeChecked();
+    await izbor.uncheck();
+    await ocekuj(page.locator('[data-sacuvano]')).toHaveText('Sačuvano.');
+    ocekuj(mock.zahteviZa('public/nalog/podesavanja', 'PUT').map(z => z.telo)).toEqual([{ mejlOtkazanCas: false }]);
+    await page.reload();
+    await ocekuj(page.getByRole('checkbox', { name: 'Javi mi mejlom kad je čas otkazan' })).not.toBeChecked();
+    await bezOzbiljnihKrsenja(page, '[data-podesavanja]');
+    ocekuj(javnaMreza.api.filter(z => !API_PORTALA.test(z))).toEqual([]);
+    ocekuj(javnaMreza.odgovori401).toEqual([]);
   });
 
   test('bez prijave: tab vodi na prijavu sa nazad, pa posle koda nazad na tab', async ({ page, mock }) => {

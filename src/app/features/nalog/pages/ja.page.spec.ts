@@ -10,6 +10,7 @@ import type { StudentJa } from '../data-access/nalog.models';
 import { JaPage } from './ja.page';
 
 const JA = 'api/public/nalog/ja';
+const PODESAVANJA = 'api/public/nalog/podesavanja';
 
 const JA_ODGOVOR: StudentJa = {
   indeks: 'GD12',
@@ -69,8 +70,44 @@ describe('JaPage', () => {
   });
 
   afterEach(() => {
+    // kartica "Obaveštenja" učitava svoje kad se profil prikaže; testovi koji je ne gledaju samo je pune
+    http.match(r => r.method === 'GET' && r.url === PODESAVANJA).filter(r => !r.cancelled)
+      .forEach(r => r.flush({ mejlOtkazanCas: true }));
     http.verify();
     fixture?.destroy();
+  });
+
+  it('Obaveštenja: učitano stanje, promena ide PUT-om i ostaje', async () => {
+    await otvoriStranu();
+    http.expectOne(PODESAVANJA).flush({ mejlOtkazanCas: true });
+    await stabilno();
+    const box = el().querySelector<HTMLInputElement>('[data-mejl-otkazan]')!;
+    expect(box.checked).toBe(true);
+    expect(el().querySelector('[data-podesavanja]')?.textContent).toContain('Javi mi mejlom kad je čas otkazan');
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const put = http.expectOne(r => r.method === 'PUT' && r.url === PODESAVANJA);
+    expect(put.request.body).toEqual({ mejlOtkazanCas: false });
+    put.flush({ mejlOtkazanCas: false });
+    await stabilno();
+    expect(box.checked).toBe(false);
+    expect(el().querySelector('[data-sacuvano]')).not.toBeNull();
+  });
+
+  it('Obaveštenja: greška čuvanja vraća prethodno stanje i prikazuje poruku', async () => {
+    await otvoriStranu();
+    http.expectOne(PODESAVANJA).flush({ mejlOtkazanCas: true });
+    await stabilno();
+    const box = el().querySelector<HTMLInputElement>('[data-mejl-otkazan]')!;
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    http.expectOne(r => r.method === 'PUT' && r.url === PODESAVANJA)
+      .flush({ reason: 'Izaberi da li želiš mejl.' }, { status: 400, statusText: 'Bad Request' });
+    await stabilno();
+    expect(box.checked).toBe(true);
+    expect(el().querySelector('[data-podesavanja] [role="alert"]')?.textContent).toContain('Izaberi da li želiš mejl.');
   });
 
   it('profil: ime, indeks, grupa i generacija, mejl, Moodle, uređaji', async () => {
