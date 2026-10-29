@@ -142,13 +142,12 @@ for (const rezim of ['dan', 'noc'] as const) {
       await proveri('preambula');
     });
 
-    // raspored časova (najava odsustva): Početna sa karticom rasporeda i predlogom iz rasporeda, lista perioda, termini sa
-    // rasklopljenim najavama (iznad praga) i otkazanim terminom, dijalog otkazivanja, forma sa porukom provere (poslednja:
-    // izmenjena forma ne pušta sa strane bez potvrde)
-    test('raspored (Početna, /raspored, /raspored/termini, otkazivanje, /raspored/3): bez serious/critical kršenja', async ({ page, mock }) => {
-      const { sutra, prekosutra } = mock.raspored.primer();
+    // raspored časova (najava odsustva), tri testa da svaki ostane daleko ispod 30 s i na opterećenoj mašini: (1) Početna sa
+    // karticom rasporeda i predlogom iz rasporeda i lista perioda, (2) termini sa rasklopljenim najavama (iznad praga) i
+    // otkazanim terminom plus dijalog otkazivanja, (3) forma sa porukom provere
+    test('raspored (Početna sa rasporedom, /raspored): bez serious/critical kršenja', async ({ page, mock }) => {
+      const { sutra } = mock.raspored.primer();
       [2, 3, 4].forEach(id => mock.raspored.najavaDrugog(id, 31, sutra, 'lični razlog'));
-      mock.raspored.otkazani.set(`32:${prekosutra}`, 'sednica veća');
       await page.goto('./');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       await expect(page.locator('[data-raspored-kartica] [data-termin]').first()).toBeVisible();
@@ -157,8 +156,14 @@ for (const rezim of ['dan', 'noc'] as const) {
       await page.goto('raspored');
       await expect(page.locator('[data-raspored]').first()).toBeVisible();
       expect(await ozbiljnaKrsenja(page), `axe: /raspored (${rezim})`).toEqual([]);
+    });
 
+    test('raspored (/raspored/termini sa najavama i otkazanim terminom, dijalog otkazivanja): bez serious/critical kršenja', async ({ page, mock }) => {
+      const { sutra, prekosutra } = mock.raspored.primer();
+      [2, 3, 4].forEach(id => mock.raspored.najavaDrugog(id, 31, sutra, 'lični razlog'));
+      mock.raspored.otkazani.set(`32:${prekosutra}`, 'sednica veća');
       await page.goto('raspored/termini');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       const red = page.locator(`[data-termin="31:${sutra}"]`);
       await red.getByText('Ko ne dolazi (3)').click();
       await expect(red.getByText('lični razlog').first()).toBeVisible();
@@ -168,8 +173,13 @@ for (const rezim of ['dan', 'noc'] as const) {
       await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog otkazivanja (${rezim})`).toEqual([]);
       await page.getByRole('button', { name: 'Odustani' }).click();
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+    });
 
+    test('raspored (/raspored/3, forma sa porukom provere): bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.raspored.primer();
       await page.goto('raspored/3');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       await expect(page.locator('[data-stavka]')).toHaveCount(3);
       await page.locator('[data-kraj]').first().fill('09:00');
       await page.locator('[data-kraj]').first().blur();
