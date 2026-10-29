@@ -24,8 +24,11 @@ export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' |
    * otvaranje (oba samo u CEKA).
    */
   | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO'
-  /** Rang tačnosti celog predavanja na projektoru (Shift+L); `RANG_LISTA` (L) je rang ovog izvođenja. */
-  | 'RANG_PREDAVANJA';
+  /**
+   * Rang tačnosti celog predavanja na projektoru (Shift+L; `RANG_LISTA` (L) je rang ovog izvođenja) i koliko redova
+   * projektor prikazuje (`RANG_BROJ`, `vrednost` 0 ili `null` = svi, 1-30).
+   */
+  | 'RANG_PREDAVANJA' | 'RANG_BROJ';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -141,13 +144,16 @@ export interface NastavnickoStanje {
   /** Broj studenata na času predavanja izvođenja; `null` kad izvođenje nema predavanje. */
   brojCekiranih?: number | null;
   /**
-   * Rang tačnosti na projektoru (top 10, `null` dok nije prikazan; u takmičenju rang izvođenja ostaje `javnaRangLista`
-   * po poenima). Trenutna runda ne ulazi pre TACAN. `rangPrikaz`: koji rang je prikazan (`null` = nijedan).
+   * Rang tačnosti na projektoru (prvih `rangBroj`, a bez njega svi do 30; kratka imena "Ana K."; `null` dok nije
+   * prikazan; u takmičenju rang izvođenja ostaje `javnaRangLista` po poenima). Trenutna runda ne ulazi pre TACAN.
+   * `rangPrikaz`: koji rang je prikazan (`null` = nijedan).
    */
   javniRangTacnosti?: JavnaRangTacnostiStavka[] | null;
   rangPrikaz?: RangPrikaz | null;
   /** Predavanje ima još izvođenja sa rundama, pa rang predavanja ima smisla (Shift+L). */
   imaRangPredavanja?: boolean;
+  /** Koliko redova ranga projektor prikazuje (`RANG_BROJ`); `null` = svi. */
+  rangBroj?: number | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

@@ -220,6 +220,30 @@ describe('PreferencesStore', () => {
       expect(store.velicinaBeleski()).toBe(28);
     });
   });
+
+  describe('rang na tabli', () => {
+    it('učitavanje: podrazumevano 0 (svi), samo 0, 10 i 5 se prihvataju', () => {
+      const ucitaj = (sirovo: unknown) => {
+        localStorage.setItem(PREFS_KLJUC, JSON.stringify(sirovo));
+        return ucitajPreference(localStorage).rangNaTabli;
+      };
+      expect(ucitaj({})).toBe(0);
+      expect(ucitaj({ rangNaTabli: 5 })).toBe(5);
+      expect(ucitaj({ rangNaTabli: 10 })).toBe(10);
+      expect(ucitaj({ rangNaTabli: 7 })).toBe(0);
+      expect(ucitaj({ rangNaTabli: '5' })).toBe(0);
+    });
+
+    it('postaviRangNaTabli pamti izbor, nepoznata vrednost se ignoriše', () => {
+      lazniMatchMedia(false);
+      const store = napraviStore();
+      store.postaviRangNaTabli(5);
+      TestBed.tick();
+      expect(JSON.parse(localStorage.getItem(PREFS_KLJUC) ?? '{}').rangNaTabli).toBe(5);
+      store.postaviRangNaTabli(3);
+      expect(store.rangNaTabli()).toBe(5);
+    });
+  });
   describe('poslednje boje (paleta editora platna)', () => {
     it("zapamtiBoju('#ed7d31') pamti velikim slovima", () => {
       lazniMatchMedia(false);

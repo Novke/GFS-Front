@@ -10,7 +10,8 @@ import { IzvodjenjeNaPredavanju } from './prezentacije-predavanja.api';
  * Red ranga tačnosti (backend `RangTacnostiStavka`). `mesto` je `null` samo za studenta grupe koji nije dugovao nijedno
  * pitanje (dno liste grupe); `procenat` = ceo procenat `tacnih/dugovanih`; `prosekMs` = prosečno vreme odgovorenih
  * (`null` bez odgovora); `zvezdice` = ★ tačnih (pitanje 1, zadatak nivo varijante). `poeni` samo u takmičenju,
- * `izvodjenja` u zbiru predavanja, `casova` u zbiru grupe i studenta.
+ * `izvodjenja` u zbiru predavanja, `casova` u zbiru grupe i studenta. `indeks` studenta (kanonski, `GD5`; `null` za
+ * gosta). Redosled: više ★, pa kraći prosek, pa ime; tačnost samo informiše.
  */
 export interface RangTacnostiStavka {
   mesto: number | null;
@@ -27,6 +28,8 @@ export interface RangTacnostiStavka {
   poeni: number | null;
   izvodjenja: number | null;
   casova: number | null;
+  /** Nema ga kod backenda pre dorade ranga. */
+  indeks?: string | null;
 }
 
 /** Rang predavanja: izvođenja sa bar jednom rundom (najnovije prvo) i zbir svih njih. */
@@ -103,4 +106,15 @@ function parametri(f: FilterUzivo): HttpParams {
 export function prikazVremena(ms: number | null | undefined): string {
   if (ms == null) return '—';
   return `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
+}
+
+/** Boja tačnosti u rangu: 1 crveno (< 40 %), 2 narandžasto (< 60 %), 3 žuto (< 80 %), 4 zeleno; `null` bez procenta. */
+export function nivoTacnosti(procenat: number | null | undefined): 1 | 2 | 3 | 4 | null {
+  if (procenat == null) return null;
+  return procenat < 40 ? 1 : procenat < 60 ? 2 : procenat < 80 ? 3 : 4;
+}
+
+/** Indeks za rang: samo smer i broj (`GD5`), bez godine (stari zapis `GD5/2025`). */
+export function kratakIndeks(indeks: string | null | undefined): string {
+  return indeks ? indeks.replace(/\/\d{4}$/, '') : '';
 }

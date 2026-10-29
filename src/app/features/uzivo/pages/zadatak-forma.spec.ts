@@ -6,7 +6,7 @@ import type { CvorIzbora } from '../../../core/api/banka-izbor.api';
 import { poljeBroj, zadatakInfo } from '../data-access/izvodjenje-podaci.testing';
 import type { ZadatakSlajdaInfo } from '../data-access/uzivo.models';
 import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
-import { ZadatakForma, ZadatakFormaComponent, zadatakForma, zadatakIzForme } from './zadatak-forma.component';
+import { nivoNijeIzabran, ZadatakForma, ZadatakFormaComponent, zadatakForma, zadatakIzForme } from './zadatak-forma.component';
 
 describe('zadatakIzForme / zadatakForma', () => {
   it('prazno polje je null (bez tajmera, sve aktivne), broj je broj (razmaci se ne broje)', () => {
@@ -81,14 +81,14 @@ describe('ZadatakFormaComponent', () => {
   describe('nivo', () => {
     const radio = (el: HTMLElement, n: string) => el.querySelector<HTMLButtonElement>(`[data-zadatak-nivo] [role=radio][data-nivo="${n}"]`)!;
 
-    it('Svi/1/2/3 uz broj kandidata po nivou; izabran je nivo slajda; "Svi" nosi zbir', async () => {
+    it('Nasumično/1/2/3 uz broj kandidata po nivou; izabran je nivo slajda; "Nasumično" je bez broja', async () => {
       const el = await napravi(zadatakInfo({ nivo: 3, brojAktivnihPoNivou: [1, 4, 2] }));
       expect(radio(el, '3').getAttribute('aria-checked')).toBe('true');
       expect(radio(el, 'svi').getAttribute('aria-checked')).toBe('false');
       expect(radio(el, '1').getAttribute('aria-label')).toBe('Nivo 1 od 3 (lakši), 1 varijanta');
       expect(radio(el, '2').getAttribute('aria-label')).toBe('Nivo 2 od 3 (srednji), 4 varijante');
-      expect(radio(el, 'svi').getAttribute('aria-label')).toBe('Svi nivoi, 7 varijanti');
-      expect(el.querySelector('[data-zadatak-nivo]')!.textContent!.replace(/\s+/g, '')).toBe('NivoSvi7142');
+      expect(radio(el, 'svi').getAttribute('aria-label')).toBe('Nasumičan nivo: za svaku rundu se izvlači jedan, isti za sve');
+      expect(el.querySelector('[data-zadatak-nivo]')!.textContent!.replace(/\s+/g, '')).toBe('NivoNasumično142');
     });
 
     it('napomena "Prazno = sve aktivne (N)" broji kandidate nivoa iz forme, ne sačuvanog', async () => {
@@ -100,7 +100,17 @@ describe('ZadatakFormaComponent', () => {
       expect(napomena()).toContain('(4)');
       radio(el, 'svi').click();
       await osvezi();
-      expect(napomena()).toContain('(7)');
+      expect(napomena()).toContain('(4)'); // jedan nasumičan nivo: najviše koliko ima najbrojniji
+    });
+
+    it('bez nivoa a grupa ima više nivoa: upozorenje po formi (ne po sačuvanom), nestaje izborom nivoa', async () => {
+      const serverovo = 'Nivo nije izabran, a grupa ima varijante nivoa ★, ★★: staro';
+      const el = await napravi(zadatakInfo({ nivo: null, brojAktivnihPoNivou: [1, 4, 0], upozorenja: [serverovo] }));
+      const upozorenja = () => [...el.querySelectorAll('.uz-ed-upozorenje')].map(p => p.textContent!.trim());
+      expect(upozorenja()).toEqual([nivoNijeIzabran(['★', '★★'])]);
+      radio(el, '2').click();
+      await osvezi();
+      expect(upozorenja()).toEqual([]);
     });
 
     it('lokalni opis bez brojeva po nivoima (nov slajd pre odgovora servera): bez brojeva uz nivoe, napomena nosi ukupan broj', async () => {

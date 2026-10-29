@@ -55,14 +55,18 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
       takmicenje: false, rangListaPrikazana: true, rangPrikaz: 'IZVODJENJE', javniRangTacnosti: [red],
     }));
     const rang = el.querySelector('[aria-label="Rang-lista"]');
-    expect(tekst(rang?.querySelector('.uz-rang-red') ?? null)).toBe('1.Ana67%4,1 s4 ★ zvezdica');
+    expect(tekst(rang?.querySelector('ol .uz-rang-red') ?? null)).toBe('1.Ana2 tačnih1 netačnih67%4,1 s4 zvezdica');
+    expect(rang?.querySelector('.uz-rt-pilula')?.getAttribute('data-nivo')).toBe('3');
+    expect(tekst(rang?.querySelector('.uz-scena-ugao') ?? null)).toMatch(/^Prezentacija: /);
     const el2 = await prikazi(naPitanju('ZATVORENO', {
       takmicenje: true, rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE', javniRangTacnosti: [red],
+      izvodjenje: { ...stanje().izvodjenje, predavanje: { id: 9, rb: 4, datum: '2026-10-29', tema: 'Sile' } },
       javnaRangLista: [{ mesto: 1, ucesnikId: null, ime: 'Bojan', poeni: 800 }],
     }));
     const rangPredavanja = el2.querySelector('[aria-label="Rang predavanja"]');
     expect(tekst(rangPredavanja)).toContain('Ana');
     expect(tekst(rangPredavanja)).not.toContain('Bojan');
+    expect(tekst(rangPredavanja?.querySelector('.uz-scena-ugao') ?? null)).toBe('Predavanje 4. Sile · sve prezentacije');
   });
 
   it('rang tačnosti ostaje i na kraju (preko "Hvala!")', async () => {

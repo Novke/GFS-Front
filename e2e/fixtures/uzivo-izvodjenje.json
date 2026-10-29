@@ -1,5 +1,5 @@
 {
-  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka, PLATNO sa CRTEZ-om (2 poteza, ISCRTAJ 3000 ms, 5b), Zadatak slajd nad listom 2 → 10 (2 aktivne varijante, obe sa rešenjem; na slajdu 1 različita, konzola menja broj). Prelazi (5e): 104 GURANJE zdesna 3000 ms; 105 FADE 3000 ms i grupa 0 (naslov FADE 2000 ms posle prethodnog), da stanje 'prelaz traje' sigurno postoji dok ga test čita. varijanteZadatka su aktivne varijante grupe slajda 106 (mok ih izvlači redom).",
+  "_napomena": "Nastavničko izvođenje za e2e daljinskog i konzole (izmišljeni podaci): INFO postepeno, PLATNO sa dva KLIK koraka, pitanje, INFO bez beležaka, PLATNO sa CRTEZ-om (2 poteza, ISCRTAJ 3000 ms, 5b), Zadatak slajd nad listom 2 → 10 (3 aktivne varijante sa rešenjem, 31 i 32 nivoa 1, 33 nivoa 3; slajd bez nivoa, pa runda dobija jedan nivo; na slajdu 1 različita, konzola menja broj). Prelazi (5e): 104 GURANJE zdesna 3000 ms; 105 FADE 3000 ms i grupa 0 (naslov FADE 2000 ms posle prethodnog), da stanje 'prelaz traje' sigurno postoji dok ga test čita. varijanteZadatka su aktivne varijante grupe slajda 106 (mok ih izvlači redom).",
   "izvodjenje": {
     "id": 7,
     "prezentacija": { "id": 3, "naziv": "Statika · uvodni čas", "predmetId": 1 },
@@ -123,11 +123,11 @@
       "zadatak": {
         "grupaId": 2, "vremeSekunde": null, "brojVarijanti": 1, "nivo": null, "grupaNaziv": "2 → 10",
         "putanja": [{ "id": 1, "naziv": "Konverzije brojeva" }, { "id": 2, "naziv": "2 → 10" }],
-        "list": true, "brojAktivnihVarijanti": 2, "brojAktivnihPoNivou": [1, 0, 1],
+        "list": true, "brojAktivnihVarijanti": 3, "brojAktivnihPoNivou": [2, 0, 1],
         "polja": [
           { "kljuc": "a", "oznaka": "Vrednost u dekadnom sistemu", "tip": "BROJ", "odstupanje": 0, "odstupanjeTip": "APSOLUTNO", "jedinica": null, "zanemariVelicinu": null, "zanemariRazmake": null, "opcije": null }
         ],
-        "iskljucena": false, "iskljucenePodgrupe": [], "upozorenja": []
+        "iskljucena": false, "iskljucenePodgrupe": [], "upozorenja": ["Nivo nije izabran, a grupa ima varijante nivoa ★, ★★★: pri svakom otvaranju izvlači se jedan nivo nasumično (svi u rundi dobiju isti), pa je zadatak nekad lakši, nekad teži. Izaberi nivo."]
       }
     }
   ],
@@ -138,7 +138,12 @@
       "odgovori": { "a": { "broj": 11, "prihvatljivi": null, "tacna": null, "tacne": null } }
     },
     {
-      "varijantaId": 32, "nivo": 3, "naziv": "110010 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000032",
+      "varijantaId": 33, "nivo": 3, "naziv": "111 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000033",
+      "resenjeSvgId": "c0000000-0000-4000-8000-000000000133",
+      "odgovori": { "a": { "broj": 7, "prihvatljivi": null, "tacna": null, "tacne": null } }
+    },
+    {
+      "varijantaId": 32, "nivo": 1, "naziv": "110010 u dekadni", "svgId": "c0000000-0000-4000-8000-000000000032",
       "resenjeSvgId": "c0000000-0000-4000-8000-000000000132",
       "odgovori": { "a": { "broj": 50, "prihvatljivi": null, "tacna": null, "tacne": null } }
     }

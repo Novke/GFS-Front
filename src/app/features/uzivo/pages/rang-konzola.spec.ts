@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { stanje } from '../data-access/izvodjenje-podaci.testing';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
+import { PreferencesStore } from '../../../core/state/preferences.store';
 import { RANG_OSVEZAVANJE_MS, RangKonzolaComponent } from './rang-konzola.component';
 
 const red = (mesto: number, ime: string): RangTacnostiStavka => ({
@@ -84,5 +85,40 @@ describe('RangKonzolaComponent', () => {
     expect(predavanje).toHaveBeenCalledWith(9);
     f.detectChanges();
     expect(el.querySelector('[data-rang="predavanje"]')?.textContent).toContain('Bojan');
+  });
+
+  describe('"Na tabli" (koliko redova ranga ide na projektor)', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('šalje RANG_BROJ kad se postavka razlikuje od servera, jednom po verziji; stari backend (bez rangBroj) ništa', async () => {
+      TestBed.inject(PreferencesStore).postaviRangNaTabli(5);
+      const f = napravi({ ...stanje(), rangBroj: null });
+      const poslato: number[] = [];
+      f.componentInstance.rangBroj.subscribe(b => poslato.push(b));
+      f.componentRef.setInput('stanje', { ...stanje(), rangBroj: null, verzija: 2 });
+      f.detectChanges();
+      f.componentRef.setInput('stanje', { ...stanje(), rangBroj: null, verzija: 2, brojOdgovora: 1 });
+      f.detectChanges();
+      expect(poslato).toEqual([5]);
+      f.componentRef.setInput('stanje', { ...stanje(), rangBroj: 5, verzija: 3 });
+      f.detectChanges();
+      expect(poslato).toEqual([5]);
+
+      await izaberiTab(f, 1);
+      const dugmad = [...(f.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.uz-kon-rang-tabla button')];
+      expect(dugmad.map(b => b.textContent!.trim())).toEqual(['Svi', 'Prvih 10', 'Prvih 5']);
+      expect(dugmad[2].getAttribute('aria-pressed')).toBe('true');
+      dugmad[0].click();
+      f.detectChanges();
+      expect(poslato).toEqual([5, 0]);
+      expect(TestBed.inject(PreferencesStore).rangNaTabli()).toBe(0);
+
+      const stari = napravi(stanje());
+      const staroPoslato: number[] = [];
+      stari.componentInstance.rangBroj.subscribe(b => staroPoslato.push(b));
+      TestBed.inject(PreferencesStore).postaviRangNaTabli(10);
+      stari.detectChanges();
+      expect(staroPoslato).toEqual([]);
+    });
   });
 });

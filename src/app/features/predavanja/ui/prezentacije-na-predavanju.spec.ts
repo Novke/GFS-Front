@@ -46,7 +46,7 @@ describe('PrezentacijeNaPredavanju', () => {
     const { f } = napravi([izv(1, 'ZAVRSENO')], true, { predavanjeId: 40, izvodjenja: [izv(1, 'ZAVRSENO')], rang: [red(1, 'Ana', 7, 1)] });
     const rang = el(f).querySelector('[data-rang-predavanja]')!;
     expect(rang.querySelector('h3')?.textContent).toBe('Rang tačnosti');
-    expect(rang.querySelector('thead')?.textContent).not.toContain('Izvođenja');
+    expect(rang.querySelector('thead')?.textContent).not.toContain('Prezentacije');
     expect(rang.querySelector('a')?.getAttribute('href')).toBe('/studenti/7');
   });
 
@@ -57,7 +57,7 @@ describe('PrezentacijeNaPredavanju', () => {
     expect(rang.querySelector('h3')?.textContent).toBe('Rang tačnosti predavanja');
     expect(rang.textContent).toContain('Sve prezentacije ovog predavanja zajedno (2).');
     expect(rang.textContent).toContain('Osvežava se dok prezentacija traje.');
-    expect(rang.querySelector('thead')?.textContent).toContain('Izvođenja');
+    expect(rang.querySelector('thead')?.textContent).toContain('Prezentacije');
     expect(rang.querySelector('a')).toBeNull();
     expect(rang.textContent).toContain('gost');
   });

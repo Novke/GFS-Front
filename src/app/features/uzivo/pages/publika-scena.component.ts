@@ -133,7 +133,8 @@ interface Omotac {
     @if (s.rangListaPrikazana && s.javniRangTacnosti) {
       <!-- rang tačnosti (L van takmičenja, Shift+L uvek): i na kraju, preko "Hvala!" -->
       <div class="uz-okvir uz-scena-sloj">
-        <section class="uz-platno uz-scena-rang" [attr.aria-label]="naslovRanga()">
+        <section class="uz-platno uz-scena-rang uz-scena-rang--tacnost" [attr.aria-label]="naslovRanga()">
+          <p class="uz-scena-ugao">{{ ugaoRanga() }}</p>
           <h1 class="uz-scena-naslov">{{ naslovRanga() }}</h1>
           <app-rang-tacnosti-projektor [stavke]="s.javniRangTacnosti" />
         </section>
@@ -172,6 +173,13 @@ export class PublikaScenaComponent {
   readonly qrLink = input<string>('');
   protected readonly qrSadrzaj = computed(() => this.qrLink() || this.joinLink());
   protected readonly naslovRanga = computed(() => this.stanje().rangPrikaz === 'PREDAVANJE' ? 'Rang predavanja' : 'Rang-lista');
+  /** Natpis u uglu ranga: koja prezentacija, ili koje predavanje (Shift+L). */
+  protected readonly ugaoRanga = computed(() => {
+    const s = this.stanje();
+    const p = s.izvodjenje.predavanje;
+    if (s.rangPrikaz === 'PREDAVANJE' && p) return `Predavanje ${p.rb}.${p.tema ? ' ' + p.tema : ''} · sve prezentacije`;
+    return `Prezentacija: ${s.izvodjenje.prezentacija.naziv}`;
+  });
   readonly sat = input<ServerskiSat | null>(null);
   /** Umanjen prikaz u konzoli: crn/beo ekran dobija natpis da se zna šta je na projektoru. */
   readonly umanjeno = input<boolean>(false);

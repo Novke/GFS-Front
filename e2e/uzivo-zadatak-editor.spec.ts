@@ -106,7 +106,7 @@ test.describe('uživo: Zadatak slajd u editoru (mokovan API)', () => {
     await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
     await expect(nivo('1')).toHaveAttribute('aria-label', 'Nivo 1 od 3 (lakši), 0 varijanti');
     await expect(nivo('2')).toHaveAttribute('aria-label', 'Nivo 2 od 3 (srednji), 1 varijanta');
-    await expect(nivo('svi')).toHaveAttribute('aria-label', 'Svi nivoi, 1 varijanta');
+    await expect(nivo('svi')).toHaveAttribute('aria-label', 'Nasumičan nivo: za svaku rundu se izvlači jedan, isti za sve');
 
     await nivo('3').click();
     await expect.poll(() => poslednjiZadatak(mock)).toEqual({ grupaId: 2, vremeSekunde: 120, brojVarijanti: null, nivo: 3 });
@@ -150,7 +150,12 @@ test.describe('uživo: Zadatak slajd u editoru (mokovan API)', () => {
     await page.getByRole('button', { name: 'Promeni grupu…' }).click();
     await izaberiCvor(dijalog(page), /^Konverzije brojeva/);
     await expect.poll(() => poslednjiZadatak(mock)?.grupaId).toBe(1);
-    await expect(upozorenja(page).locator('p')).toHaveText(['Isključene podgrupe se ne izvlače: Razlomljeni brojevi (demo).']);
+    await expect(upozorenja(page).locator('p')).toHaveText([
+      // slajd bez nivoa nad čvorom sa varijantama dva nivoa: upozorenje forme (dorada ranga, isti nivo u rundi)
+      'Nivo nije izabran, a grupa ima varijante nivoa ★, ★★: pri svakom otvaranju izvlači se jedan nivo nasumično (svi u rundi '
+        + 'dobiju isti), pa je zadatak nekad lakši, nekad teži. Izaberi nivo.',
+      'Isključene podgrupe se ne izvlače: Razlomljeni brojevi (demo).',
+    ]);
     await expect(forma(page)).toContainText('Aktivnih varijanti u podgrupama: 3');
     await expect(forma(page)).not.toContainText('Polja odgovora');
     await expect(forma(page).locator('[data-putanja]')).toHaveText('Konverzije brojeva');
