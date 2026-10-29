@@ -20,6 +20,34 @@ export interface SledecePredavanjeInfo {
   brojStudenata: number;
   /** Studenti iz starijih grupa sa aktivnošću ili polaganjem na predmetu u tekućoj školskoj godini (ponovci). */
   brojStarijih: number;
+  /** Termin rasporeda iz koga je predlog (sa brojem najava odsustva); `null`/bez polja za `POSLEDNJE`. */
+  termin?: TerminKratkoInfo | null;
+  /**
+   * `POSLEDNJE`: poslednje predavanje, `rb + 1` (nijedan raspored ne pokriva danas); `RASPORED_DANAS`: današnji termin;
+   * `RASPORED_SLEDECI`: danas nema časa po rasporedu, ovo je sledeći. Bez polja (stariji backend) = `POSLEDNJE`.
+   */
+  izvor?: 'POSLEDNJE' | 'RASPORED_DANAS' | 'RASPORED_SLEDECI';
+}
+
+/** Ogleda `dto/pregled/TerminKratkoInfo`: termin rasporeda na početnoj (broj najava bez imena). Vreme `HH:mm:ss`. */
+export interface TerminKratkoInfo {
+  stavkaId: number;
+  datum: string;
+  pocetak: string;
+  kraj: string;
+  predmet: PredmetInfo;
+  grupa: GrupaInfo | null;
+  otkazan: boolean;
+  napomena: string | null;
+  brojNajava: number;
+  /** Predavanje istog predmeta, grupe i datuma, ako postoji. */
+  predavanjeId: number | null;
+}
+
+/** Ogleda `dto/pregled/RasporedTablaInfo`: termini od danas do danas + 6 i da li neki raspored pokriva danas. */
+export interface RasporedTablaInfo {
+  pokrivaDanas: boolean;
+  naredni: readonly TerminKratkoInfo[];
 }
 
 /** Ogleda `dto/pregled/CekaStavkaInfo`: onboarding sesija sa prijavama na čekanju. */
@@ -71,6 +99,8 @@ export interface KontrolnaTablaInfo {
   uToku: readonly PredavanjeListItem[];
   ceka: KontrolnaTablaCeka;
   nedelja: readonly AgendaStavkaInfo[];
+  /** Raspored narednih 7 dana; bez polja kod starijeg backenda. */
+  raspored?: RasporedTablaInfo | null;
 }
 
 @Injectable({ providedIn: 'root' })

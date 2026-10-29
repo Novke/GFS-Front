@@ -16,6 +16,7 @@ const KOD = 'api/public/nalog/kod';
 const PRIJAVA = 'api/public/nalog/prijava';
 const POMOC = 'api/public/nalog/pomoc';
 const CAS = 'api/public/nalog/cas';
+const CASOVI = 'api/public/nalog/casovi';
 
 const JA_ODGOVOR: StudentJa = {
   indeks: 'GD12',
@@ -104,6 +105,8 @@ describe('NalogPage', () => {
   afterEach(() => {
     // kartica "Na času si" (tiho, posle `GET ja`): testovi koji je ne gledaju odgovaraju "nisi na času"
     http.match(CAS).forEach(r => r.flush({ predavanje: null, cekiranU: null, izvodjenje: null }));
+    // kartica "Naredni časovi" (sama učitava svoje): bez rasporeda
+    http.match(CASOVI).filter(r => !r.cancelled).forEach(r => r.flush({ termini: [] }));
     http.verify();
     fixture?.destroy();
   });

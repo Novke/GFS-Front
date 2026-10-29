@@ -31,6 +31,7 @@ import { KodKorak } from '../ui/kod-korak.component';
 import { NaCasuKartica } from '../ui/na-casu-kartica.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NalogPregled } from '../ui/nalog-pregled.component';
+import { NaredniCasovi } from '../ui/naredni-casovi.component';
 
 export type KorakNaloga = 'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen';
 
@@ -59,7 +60,9 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
  */
 @Component({
   selector: 'app-nalog-page',
-  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NaCasuKartica, NalogOkvir, NalogPregled],
+  imports: [
+    FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NaCasuKartica, NalogOkvir, NalogPregled, NaredniCasovi,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir>
@@ -110,6 +113,7 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
           @if (naCasu(); as p) {
             <app-na-casu-kartica [predavanje]="p" />
           }
+          <app-naredni-casovi />
           @if (ja(); as s) {
             <app-nalog-pregled
               [ja]="s"

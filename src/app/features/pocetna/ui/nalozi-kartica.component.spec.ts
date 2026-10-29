@@ -39,12 +39,12 @@ describe('NaloziKartica (Čeka na tebe: nalozi)', () => {
     return { f, el, red: (id: number) => el.querySelector(`[data-nalog="${id}"]`) as HTMLElement | null };
   }
 
-  it('naslov "Nalozi" i stavke sa tekstom obaveštenja i vremenom', () => {
+  it('naslov "Obaveštenja" i stavke sa tekstom obaveštenja i vremenom', () => {
     const { el, red } = napravi([
       obavestenje(1, { podaci: { imaMejl: false } }),
       obavestenje(2, { vrsta: 'PREVISE_KODOVA', procitano: '2026-10-19T11:00:00' }),
     ]);
-    expect(el.querySelector('h2')?.textContent?.trim()).toBe('Nalozi');
+    expect(el.querySelector('h2')?.textContent?.trim()).toBe('Obaveštenja');
     expect(red(1)?.textContent).toContain('Ne stiže kod: Student 1 · nema mejl');
     expect(red(1)?.textContent).toContain('19. 10. 2026. 10:05');
     expect(red(1)?.textContent).toContain('nepročitano');

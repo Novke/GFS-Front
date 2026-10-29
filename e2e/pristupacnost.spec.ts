@@ -142,6 +142,42 @@ for (const rezim of ['dan', 'noc'] as const) {
       await proveri('preambula');
     });
 
+    // raspored časova (najava odsustva): Početna sa karticom rasporeda i predlogom iz rasporeda, lista perioda, termini sa
+    // rasklopljenim najavama (iznad praga) i otkazanim terminom, dijalog otkazivanja, forma sa porukom provere (poslednja:
+    // izmenjena forma ne pušta sa strane bez potvrde)
+    test('raspored (Početna, /raspored, /raspored/termini, otkazivanje, /raspored/3): bez serious/critical kršenja', async ({ page, mock }) => {
+      const { sutra, prekosutra } = mock.raspored.primer();
+      [2, 3, 4].forEach(id => mock.raspored.najavaDrugog(id, 31, sutra, 'lični razlog'));
+      mock.raspored.otkazani.set(`32:${prekosutra}`, 'sednica veća');
+      await page.goto('./');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-raspored-kartica] [data-termin]').first()).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: Početna sa rasporedom (${rezim})`).toEqual([]);
+
+      await page.goto('raspored');
+      await expect(page.locator('[data-raspored]').first()).toBeVisible();
+      expect(await ozbiljnaKrsenja(page), `axe: /raspored (${rezim})`).toEqual([]);
+
+      await page.goto('raspored/termini');
+      const red = page.locator(`[data-termin="31:${sutra}"]`);
+      await red.getByText('Ko ne dolazi (3)').click();
+      await expect(red.getByText('lični razlog').first()).toBeVisible();
+      await expect(page.locator(`[data-termin="32:${prekosutra}"]`)).toContainText('sednica veća');
+      expect(await ozbiljnaKrsenja(page), `axe: /raspored/termini (${rezim})`).toEqual([]);
+      await red.getByRole('button', { name: /^Otkaži čas/ }).click();
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog otkazivanja (${rezim})`).toEqual([]);
+      await page.getByRole('button', { name: 'Odustani' }).click();
+
+      await page.goto('raspored/3');
+      await expect(page.locator('[data-stavka]')).toHaveCount(3);
+      await page.locator('[data-kraj]').first().fill('09:00');
+      await page.locator('[data-kraj]').first().blur();
+      await expect(page.getByText('Početak mora biti pre kraja.')).toBeVisible();
+      await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
+      expect(await ozbiljnaKrsenja(page), `axe: forma rasporeda sa greškom (${rezim})`).toEqual([]);
+    });
+
     // Podešavanja -> Moodle: dijalog registracije sa porukom provere
     test('/podesavanja/moodle (forma registracije sa porukama provere): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('podesavanja/moodle');
@@ -158,12 +194,12 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: forma registracije (${rezim})`).toEqual([]);
     });
 
-    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Nalozi" iza nje), meni nastavnika
+    // gornja traka (prijava): lista obaveštenja otvorena ispod zvona (Početna sa karticom "Obaveštenja" iza nje), meni nastavnika
     // i dijalog "Prijavljeni uređaji"
     test('/ (lista obaveštenja otvorena ispod zvona): bez serious/critical kršenja', async ({ page }) => {
       await page.goto('./');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
-      await expect(page.getByRole('region', { name: 'Nalozi' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Obaveštenja' })).toBeVisible();
       await page.locator('app-obavestenja-meni button').click();
       const kontejner = page.locator('mat-dialog-container');
       await expect(kontejner.locator('[data-obavestenje]').first()).toBeVisible();

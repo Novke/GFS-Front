@@ -24,6 +24,7 @@ export const NASTAVA: readonly NavStavka[] = [
   // pregled izvođenja (`izvodjenja/:id/pregled`) je deo prezentacija (mrvice: Prezentacije > Pregled izvođenja)
   { label: 'Prezentacije', url: '/prezentacije', ikona: 'slideshow', iPod: ['/izvodjenja/'] },
   { label: 'Banka zadataka', url: '/banka', ikona: 'quiz' },
+  { label: 'Raspored', url: '/raspored', ikona: 'event' },
   { label: 'Domaći', url: '/domaci', ikona: 'description', brojac: 'domaci' },
   { label: 'Testovi', url: '/testovi', ikona: 'assignment', brojac: 'testovi' },
   { label: 'Ocene', url: '/ocene', ikona: 'bar_chart' },

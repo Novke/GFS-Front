@@ -2,8 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { MatButton } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
-import { SledecePredavanjeInfo } from '../../../core/api/pregled.api';
+import { SledecePredavanjeInfo, TerminKratkoInfo } from '../../../core/api/pregled.api';
 import { formatDatum } from '../../../shared/util/datum.pipe';
+import { blokVremena, danIDatum } from '../../../shared/util/termin';
 import { mnozina } from '../data-access/pocetna.vreme';
 
 /**
@@ -12,6 +13,11 @@ import { mnozina } from '../data-access/pocetna.vreme';
  * "Drugi predmet ili grupa" vodi na formu. Bez ijednog predavanja: "Započni prvo predavanje". Poslednje predavanje bez
  * grupe ne može da se pokrene jednim klikom (nema grupe), pa je tada primarna akcija forma sa predizabranim predmetom.
  * Motiv pruga iz logoa je dekoracija (CSS, kao u maketi).
+ *
+ * Raspored (spec najave odsustva, odeljak 8): kad predlog dolazi iz današnjeg termina, uz "danas" stoji vreme bloka i broj
+ * najava odsustva; kad danas nema časa po rasporedu (`RASPORED_SLEDECI`), naslov kaže to, a pilula "Sledeći: ..." pokazuje
+ * termin, dok "Ipak započni danas" i dalje pokreće predavanje za taj predmet i grupu danas. Današnji otkazani termini su
+ * redovi "Otkazano danas: ...".
  */
 @Component({
   selector: 'app-sledece-predavanje',
@@ -19,13 +25,20 @@ import { mnozina } from '../data-access/pocetna.vreme';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero ljuska-tamna" aria-labelledby="sledece-naslov">
-      <span class="eyebrow">Sledeće predavanje</span>
+      <span class="eyebrow" data-eyebrow>{{ sledeci() ? 'Danas nema časa po rasporedu' : 'Sledeće predavanje' }}</span>
       @if (sledece(); as s) {
         <h2 id="sledece-naslov">
           {{ s.predmet.naziv }}<br />Predavanje {{ s.rb }} · {{ s.grupa?.naziv ?? '—' }}
         </h2>
         <div class="meta">
-          <span class="pill">danas, {{ danas() }}</span>
+          @if (sledeci() && s.termin; as t) {
+            <span class="pill" data-termin>Sledeći: {{ opisTermina(t) }}</span>
+          } @else {
+            <span class="pill" data-danas>danas, {{ danas() }}@if (s.termin) {, {{ blok(s.termin) }}}</span>
+          }
+          @if (s.termin && s.termin.brojNajava > 0) {
+            <span class="pill" data-najave>najavljeno odsustvo: {{ s.termin.brojNajava }}</span>
+          }
           @if (s.grupa) {
             <span class="pill" data-studenata>{{ studenata() }}</span>
             @if (s.brojStarijih > 0) {
@@ -35,10 +48,15 @@ import { mnozina } from '../data-access/pocetna.vreme';
             <span class="pill">grupa nije poznata</span>
           }
         </div>
+        @for (o of otkazanoDanas(); track o.stavkaId) {
+          <p class="otkazano" data-otkazano-danas>
+            Otkazano danas: {{ o.predmet.naziv }} · {{ o.grupa?.naziv ?? '—' }}, {{ blok(o) }}@if (o.napomena) { ({{ o.napomena }})}
+          </p>
+        }
         <div class="red">
           @if (s.grupa) {
             <button matButton="filled" type="button" class="glavno" data-zapocni [disabled]="salje()" (click)="zapocni.emit()">
-              Započni predavanje
+              {{ sledeci() ? 'Ipak započni danas' : 'Započni predavanje' }}
             </button>
           }
           <a matButton="outlined" class="sporedno" data-drugo [routerLink]="['/predavanja/novo']"
@@ -64,6 +82,7 @@ import { mnozina } from '../data-access/pocetna.vreme';
     .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
     h2 { font-size: 26px; line-height: 1.15; color: inherit; }
     .objasnjenje { margin: 0; max-width: 52ch; opacity: .85; }
+    .otkazano { margin: 0; font-size: 13.5px; font-weight: 600; opacity: .9; }
     .meta { display: flex; flex-wrap: wrap; gap: 8px; }
     .pill { padding: 4px 10px; border-radius: var(--chip-radius, 999px); background: rgba(255, 255, 255, .16);
       font-size: 12.5px; font-weight: 600; }
@@ -86,6 +105,19 @@ export class SledecePredavanje {
   /** Pokretanje je u toku (dugme je onemogućeno protiv dvostrukog klika). */
   readonly salje = input(false);
   readonly zapocni = output<void>();
+  /** Današnji otkazani termini rasporeda (red "Otkazano danas"). */
+  readonly otkazanoDanas = input<readonly TerminKratkoInfo[]>([]);
+
+  /** Danas nema časa po rasporedu: predlog je sledeći termin. */
+  protected readonly sledeci = computed(() => this.sledece()?.izvor === 'RASPORED_SLEDECI' && !!this.sledece()?.termin);
+
+  protected blok(t: Pick<TerminKratkoInfo, 'pocetak' | 'kraj'>): string {
+    return blokVremena(t.pocetak, t.kraj);
+  }
+
+  protected opisTermina(t: TerminKratkoInfo): string {
+    return `${danIDatum(t.datum)}, ${this.blok(t)}`;
+  }
 
   protected readonly danas = computed(() => formatDatum(this.sada(), 'kratko'));
   protected readonly studenata = computed(() => mnozina(this.sledece()?.brojStudenata ?? 0, 'student', 'studenta', 'studenata'));
