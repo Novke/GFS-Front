@@ -1005,6 +1005,29 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views).
 
+### Rang tačnosti (leaderboard)
+
+Spec `docs/superpowers/specs/2026-10-28-rang-tacnosti-design.md` (deploy repo); backend rules in `GFSSystem/CLAUDE.md`, "Rang tačnosti". Order:
+accuracy (an unanswered question is wrong), then average answer time, then ★ (question 1, task the variant's level). Teacher only, nothing public.
+- **API:** `core/api/rang.api.ts` (`RangApi`: `izvodjenje`, `predavanje`, `student`, `grupa`; `prikazVremena` = "3,2 s"), in `core/api` because
+  uživo, predavanja, studenti and grupe use it. Table: `shared/ui/rang-tacnosti-tabela.ts` (`RangTacnostiTabela`: place, name with optional
+  student link and "gost" chip, accuracy "67% 2/3", average, ★, optional columns `poeni`/`izvodjenja`/`casova`; a row without a place is dimmed).
+- **Console:** the card "Učesnici i rang" (`pages/rang-konzola.component.ts`) has tabs "Ovo pitanje" (`UcesniciPanelComponent`: who answered the
+  current round, fastest first (`redosledOdgovora`), with time, ✓/✗ and the short answer; the rest below in join order), "Prezentacija" (`GET
+  izvodjenja/{id}/rang`) and "Predavanje" (only when the run has a lecture). A rank tab loads only while it is open, on a change of round, phase,
+  answer count, `TACAN` or participant count, at most once per 2 s (`RANG_OSVEZAVANJE_MS`, `throttleTime` leading + trailing).
+  The tabs are plain ARIA tabs (`role="tab"`, arrows/Home/End) in the card's title row, **not `MatTabGroup`**: the card must not make the console
+  taller than 768 px at 1366 x 768, or a page scrollbar narrows the mini projector and `e2e/uzivo-formule-tekst.spec.ts` (visible scrollbars) fails.
+- **Projector:** `L` = `RANG_LISTA` (run rank, always allowed), `Shift+L` = `RANG_PREDAVANJA` (allowed when `imaRangPredavanja`); console buttons
+  "Rang-lista" and "Rang predavanja". `PublikaScenaComponent` draws `javniRangTacnosti` with `ui/rang-tacnosti-projektor.component.ts` (title
+  "Rang predavanja" for the lecture rank; it stays at KRAJ over "Hvala!"); in takmičenje `L` keeps the points list (`javnaRangLista`) and the podium.
+- **Pages:** run overview (`izvodjenje-pregled`) has "Rang tačnosti" on top; the lecture page (`predavanja/ui/prezentacije-na-predavanju.ts`,
+  store `PrezentacijePredavanjaStore.rang`) shows one report for one run with questions, the lecture aggregate (column "Izvođenja") for more, and
+  polls every 10 s (`RANG_PREDAVANJA_OSVEZAVANJE_MS`, plain `setInterval`) while a run is in progress and the tab is visible; student links only on
+  a finished lecture. Student profile tab `/studenti/:id/uzivo` (`StudentUzivoTab`: totals and one row per class with "2 od 4") and group tab
+  `/grupe/:id/uzivo` (`GrupaUzivoTab`, roster rank with "Časova"); both filter by subject and school year locally (not in the URL).
+- e2e: `e2e/mock-api.ts` answers the four endpoints with empty ranks (an unknown route fails a test).
+
 ## Banka zadataka (`features/banka`)
 
 Bank of tasks (zadaci) per subject, written in LaTeX and rendered to SVG by the backend; teacher only, **nothing in it is public**

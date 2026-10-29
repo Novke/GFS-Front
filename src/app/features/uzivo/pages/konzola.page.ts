@@ -26,9 +26,9 @@ import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.comp
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
+import { RangKonzolaComponent } from './rang-konzola.component';
 import { SledecePanelComponent } from './sledece-panel.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
-import { UcesniciPanelComponent } from './ucesnici-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -109,7 +109,7 @@ export class IzborEkranaDialog {
   imports: [
     NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTabsModule, KonzolaKontroleComponent,
     PublikaScenaComponent, RezultatPrikazComponent, SledecePanelComponent, TajmerComponent, TekstoviPanelComponent,
-    UcesniciPanelComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent,
+    RangKonzolaComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent,
   ],
   host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)', '(document:keyup)': 'tast.pusten($event)' },
   // čip bodovanog runa (u komponenti, ne u globalnom CSS-u: početni paket je na granici budžeta)
@@ -215,10 +215,8 @@ export class IzborEkranaDialog {
       </ng-template>
 
       <ng-template #ucesniciTpl>
-        <section class="uz-kon-kartica" aria-label="Učesnici">
-          <h2 class="uz-kon-naslov">Učesnici</h2>
-          <app-ucesnici-panel [ucesnici]="s.ucesnici" [takmicenje]="s.takmicenje" [zadatak]="s.zadatak ?? null"
-                              (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
+        <section class="uz-kon-kartica" aria-label="Učesnici i rang">
+          <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
         </section>
       </ng-template>
 
@@ -235,7 +233,7 @@ export class IzborEkranaDialog {
           </mat-tab>
           <mat-tab label="Rezultati"><ng-container [ngTemplateOutlet]="rezultatiTpl" /></mat-tab>
           <mat-tab label="Beleške"><ng-container [ngTemplateOutlet]="beleskeTpl" /></mat-tab>
-          <mat-tab label="Učesnici"><ng-container [ngTemplateOutlet]="ucesniciTpl" /></mat-tab>
+          <mat-tab label="Učesnici i rang"><ng-container [ngTemplateOutlet]="ucesniciTpl" /></mat-tab>
         </mat-tab-group>
         <nav class="uz-kon-traka" aria-label="Brze komande">
           <button type="button" [disabled]="!ima('PRETHODNI')" (click)="pustiFokus($event); komanda({ tip: 'PRETHODNI' })">◀ Nazad</button>

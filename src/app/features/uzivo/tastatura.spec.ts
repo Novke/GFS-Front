@@ -79,6 +79,12 @@ describe('Shift+R = RESENJE (rešenje zadatka), R bez Shift-a = PONOVI', () => {
     expect(tasterUAkciju(sa('?', true), 10)).toEqual({ lokalno: 'POMOC' });
   });
 
+  it('Shift+L -> RANG_PREDAVANJA, L bez Shift-a (i pod Caps Lock-om) -> RANG_LISTA', () => {
+    expect(tasterUAkciju(sa('L', true), 10)).toEqual({ komanda: 'RANG_PREDAVANJA' });
+    expect(tasterUAkciju(sa('л', true, 'KeyL'), 10)).toEqual({ komanda: 'RANG_PREDAVANJA' });
+    expect(tasterUAkciju(sa('L', false), 10)).toEqual({ komanda: 'RANG_LISTA' });
+  });
+
   it('Ctrl+Shift+R se ne hvata (osvežavanje stranice)', () => {
     expect(tasterUAkciju({ ...sa('R', true), ctrlKey: true }, 10)).toBeNull();
   });

@@ -1145,6 +1145,14 @@ export class MockApi {
         .filter(i => (predavanjeId === null || i.predavanje?.id === Number(predavanjeId)) && (status === null || i.status === status))
         .sort((a, b) => b.pocetak.localeCompare(a.pocetak) || b.id - a.id));
     });
+    // rang tačnosti (bez odgovora u mokovanim podacima: prazni rangovi); predavanje vraća svoja izvođenja sa pitanjima, kao server
+    get('izvodjenja/:id/rang', () => ok([]));
+    get('predavanja/:id/rang', (_z, p) => ok({
+      predavanjeId: Number(p['id']), rang: [],
+      izvodjenja: this.izvodjenjaPredavanja.filter(i => i.predavanje?.id === Number(p['id']) && i.brojPitanja > 0),
+    }));
+    get('studenti/:id/uzivo', () => ok({ ukupno: null, casovi: [] }));
+    get('grupe/:id/uzivo', (_z, p) => ok({ grupaId: Number(p['id']), brojCasova: 0, rang: [] }));
     // pokretanje iz ekrana predavanja: kao server, jedno izvođenje u toku po prezentaciji (409), predavanje mora biti iz predmeta prezentacije
     post('prezentacije/:id/izvodjenja', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');

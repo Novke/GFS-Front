@@ -12,6 +12,7 @@ import { PokretPrelaza, PrelazDirective } from '../ui/prelaz.directive';
 import { PrijavaEkranComponent } from '../ui/prijava-ekran.component';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RangListaComponent } from '../ui/rang-lista.component';
+import { RangTacnostiProjektorComponent } from '../ui/rang-tacnosti-projektor.component';
 import { KodTraka, SlajdPrikazComponent, TajmerUlaz } from '../ui/slajd-prikaz.component';
 import { vazecaTema } from '../ui/teme';
 
@@ -82,7 +83,7 @@ interface Omotac {
 @Component({
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
+  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
   // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3).
@@ -129,7 +130,15 @@ interface Omotac {
         </div>
       }
     }
-    @if (s.rangListaPrikazana && s.prikaz !== 'KRAJ') {
+    @if (s.rangListaPrikazana && s.javniRangTacnosti) {
+      <!-- rang tačnosti (L van takmičenja, Shift+L uvek): i na kraju, preko "Hvala!" -->
+      <div class="uz-okvir uz-scena-sloj">
+        <section class="uz-platno uz-scena-rang" [attr.aria-label]="naslovRanga()">
+          <h1 class="uz-scena-naslov">{{ naslovRanga() }}</h1>
+          <app-rang-tacnosti-projektor [stavke]="s.javniRangTacnosti" />
+        </section>
+      </div>
+    } @else if (s.rangListaPrikazana && s.prikaz !== 'KRAJ') {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-rang" aria-label="Rang-lista">
           <h1 class="uz-scena-naslov">Rang-lista</h1>
@@ -162,6 +171,7 @@ export class PublikaScenaComponent {
   /** Sadržaj QR-a (`IzvodjenjeStore.qrLink`: link čekiranja za izvođenje sa predavanja); prazno = `joinLink`. Tekst ostaje kod. */
   readonly qrLink = input<string>('');
   protected readonly qrSadrzaj = computed(() => this.qrLink() || this.joinLink());
+  protected readonly naslovRanga = computed(() => this.stanje().rangPrikaz === 'PREDAVANJE' ? 'Rang predavanja' : 'Rang-lista');
   readonly sat = input<ServerskiSat | null>(null);
   /** Umanjen prikaz u konzoli: crn/beo ekran dobija natpis da se zna šta je na projektoru. */
   readonly umanjeno = input<boolean>(false);
