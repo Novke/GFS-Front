@@ -122,7 +122,7 @@ describe('RasporedFormaPage', () => {
     const req = http.expectOne('api/rasporedi');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      naziv: 'Zimski 2030/31', vaziOd: '2030-10-01', vaziDo: '2031-01-31', pragNajava: 5,
+      naziv: 'Zimski 2030/31', vaziOd: '2030-10-01', vaziDo: '2031-01-31', pragNajava: 5, podsetnik: true, podsetnikVreme: '18:00',
       stavke: [{ id: null, predmetId: 1, grupaId: 4, dan: 3, pocetak: '10:00', kraj: '13:00' }],
     });
     req.flush(DETALJ);
@@ -150,7 +150,7 @@ describe('RasporedFormaPage', () => {
     await otvoriStranu();
     const dugme = el().querySelector<HTMLButtonElement>('[data-vazi-od-kalendar] button')!;
     expect(dugme.getAttribute('aria-label')).toBe('Otvori kalendar: važi od');
-    expect(el().querySelector('mat-timepicker-toggle button')!.getAttribute('aria-label')).toBe('Izaberi početak termina 1');
+    expect(stavke()[0].querySelector('mat-timepicker-toggle button')!.getAttribute('aria-label')).toBe('Izaberi početak termina 1');
     dugme.click();
     await stabilno();
     expect(document.querySelector('mat-calendar')).not.toBeNull();

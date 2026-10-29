@@ -32,9 +32,19 @@ describe('raspored.pravila', () => {
 
   it('zahtev iz forme', () => {
     expect(cmdIzForme({ ...formaIzRasporeda(RASPORED), naziv: '  Leto ' })).toEqual({
-      naziv: 'Leto', vaziOd: '2026-10-01', vaziDo: '2027-01-31', pragNajava: 5,
+      naziv: 'Leto', vaziOd: '2026-10-01', vaziDo: '2027-01-31', pragNajava: 5, podsetnik: true, podsetnikVreme: '18:00',
       stavke: [{ id: 11, predmetId: 1, grupaId: 2, dan: 3, pocetak: '10:00', kraj: '13:00' }],
     });
+  });
+
+  it('podsetnik dan pre časa: sačuvano vreme, isključen, stariji backend bez polja', () => {
+    expect(formaIzRasporeda({ ...RASPORED, podsetnikVreme: '19:30:00' })).toMatchObject({ podsetnik: true, podsetnikVreme: '19:30' });
+    expect(formaIzRasporeda({ ...RASPORED, podsetnikVreme: null })).toMatchObject({ podsetnik: false, podsetnikVreme: '18:00' });
+    expect(formaIzRasporeda(RASPORED)).toMatchObject({ podsetnik: true, podsetnikVreme: '18:00' });
+    const f = formaIzRasporeda(RASPORED);
+    expect(cmdIzForme({ ...f, podsetnik: false, podsetnikVreme: '20:00' })).toMatchObject({ podsetnik: false, podsetnikVreme: null });
+    expect(cmdIzForme({ ...f, podsetnikVreme: '20:15' })).toMatchObject({ podsetnik: true, podsetnikVreme: '20:15' });
+    expect(kopijaRasporeda({ ...RASPORED, podsetnikVreme: '17:00:00' })).toMatchObject({ podsetnik: true, podsetnikVreme: '17:00' });
   });
 
   it('izgubljena otkazivanja: uklonjen termin, drugi predmet ili grupa, drugi dan, datum van novog perioda', () => {
