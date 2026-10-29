@@ -206,7 +206,8 @@ describe('CasPage', () => {
     await otvori();
     http.expectOne(CAS).flush({});
     await osvezi();
-    expect(tekst()).toContain('Trenutno nisi čekiran ni na jednom času. Skeniraj QR sa table.');
+    expect(tekst()).toContain('Nisi na času');
+    expect(tekst()).toContain('Skeniraj QR sa table.');
   });
 
   it('bez sesije (401 na stanju) ide na prijavu', async () => {

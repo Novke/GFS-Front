@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, DOCUMENT, inject, input, OnInit, signal } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { CasApi } from '../data-access/cas.api';
@@ -12,7 +12,7 @@ import { KLJUC_CEKANJA, odlaganjeKoraka429, odlaganjePosle429, opisCasa, putanja
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 
-type Faza = 'ucitavanje' | 'naCasu' | 'poruka';
+type Faza = 'ucitavanje' | 'naCasu' | 'nijeNaCasu' | 'poruka';
 
 /** Posle prijave kodom `/nalog` vraća ovde (`javnoNazad` pušta `nalog/...`). */
 const NA_PRIJAVU = 'nalog?nazad=nalog/cas';
@@ -44,8 +44,10 @@ const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : -1);
 const POKUSAJA_429 = 5;
 
 /**
- * Čekiranje i praćenje časa (`/nalog/cas/:token` iz QR-a i `/nalog/cas`; javna ruta u `PublicLayout`-u, spec studentskog
- * portala 4.2). Zove samo `api/public/nalog/cas*` (`CasApi`).
+ * Tab **Čas** naloga (spec studentskog dela 4.2 i 12.1): čekiranje i praćenje časa (`/nalog/cas/:token` iz QR-a i
+ * `/nalog/cas`, obe u ljusci tabova `NalogTabovi`; javna ruta u `PublicLayout`-u). Zove samo `api/public/nalog/cas*` (`CasApi`).
+ * Nečekiran student vidi "Nisi na času · Skeniraj QR sa table." (bez poruke greške; kartica "Naredni časovi" iz najave
+ * odsustva dolazi ispod u integracionom koraku, spec 12.8).
  *
  * - Sa tokenom: adresa se odmah menja u `/nalog/cas` (token ne ostaje u istoriji), pa `POST skeniraj`. Prijavljen student
  *   dobija stanje časa; neprijavljen ključ čekanja, koji ide u `sessionStorage`, a stranica na `/nalog?nazad=nalog/cas`.
@@ -60,7 +62,7 @@ const POKUSAJA_429 = 5;
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir, RouterLink],
+  imports: [MatButton, MatProgressSpinner, NalogOkvir],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
@@ -79,13 +81,17 @@ const POKUSAJA_429 = 5;
           </p>
           <p class="napomena">Ostavi ovu stranicu otvorenu: kad nastavnik pokrene prezentaciju, otvoriće se sama.</p>
         }
+        @case ('nijeNaCasu') {
+          <h2>Nisi na času</h2>
+          <p class="poruka info" role="status" data-poruka data-nije-na-casu>Skeniraj QR sa table.</p>
+          <p class="napomena">Kad nastavnik pokaže QR za čekiranje, skeniraj ga kamerom telefona.</p>
+        }
         @case ('poruka') {
           <h2>Čekiranje</h2>
           <p class="poruka" [class.opasnost]="greska()" [class.info]="!greska()" role="alert" data-poruka>{{ poruka() }}</p>
           @if (ponovo()) {
             <button type="button" mat-flat-button class="dugme" (click)="pokusajPonovo()">Pokušaj ponovo</button>
           }
-          <a matButton="outlined" class="dugme" routerLink="/nalog">Moj nalog</a>
         }
       }
     </app-nalog-okvir>
@@ -254,7 +260,12 @@ export class CasPage implements OnInit {
       return;
     }
     if (!p) {
-      this.kraj(this.bioNaCasu ? 'Nisi više na času.' : 'Trenutno nisi čekiran ni na jednom času. Skeniraj QR sa table.', false);
+      if (this.bioNaCasu) {
+        this.kraj('Nisi više na času.', false);
+      } else {
+        this.kraj('', false);
+        this.faza.set('nijeNaCasu');
+      }
       return;
     }
     if (p.zavrseno) {

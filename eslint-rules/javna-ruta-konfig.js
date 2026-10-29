@@ -47,6 +47,9 @@ const DOZVOLJENO_PO_FEATURE = {
     // ui/formula-markup -> mathlive/ssr, ui/formula-komande, ui/formula-sanitizer (bez uvoza).
     'features/uzivo/ui/tekst-formule.component', // formule $...$: uvozi @angular/core, ui/tekst-formule, ui/markdown i ui/formula-ucitavanje; mathlive/ssr samo dinamički (ui/formula-markup), stil i fontovi iz assets/mathlive/
     'features/uzivo/ui/tekst-formule', // čiste funkcije (tekstZaCitac), samo `import type` iz marked
+    // Pravila polja Zadatka (studentski portal faze 2-3, 2026-10-29: izdvojeno iz javno/zadatak-unos i javno/odgovor-unos da
+    // ih deli vežbanje na nalogu): čiste funkcije, uvozi samo ui/format (gore) i `import type` iz uzivo.models.
+    'features/uzivo/ui/polja-zadatka',
   ],
   // Nalog studenta (spec prijave 10, 2026-10-20): stranice `nalog` i `nalog/moodle` zovu samo api/public/nalog/*,
   // api/public/lti/povezi i api/public/lti/povezivanje (ime Moodle naloga). Oba modula su proverena sa svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API
@@ -54,6 +57,22 @@ const DOZVOLJENO_PO_FEATURE = {
   'features/nalog': [
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core
+    // Studentski portal, faze 2 i 3 (2026-10-29; spec 12.9 tačke 8 i 11). Pregledano sa svim uvozima: nijedan ne zove HTTP
+    // (slike samo `api/public/mediji/*` kroz `medijUrl`), ne uvozi nastavnički API, store, `pages/` ni `core/state`.
+    // - vežbanje (strana `vezbanje`, `ui/vezbanje-unos`): ista polja kao na času. `ui/polja-zadatka` je gore (uzivo/javno);
+    //   `ui/tekst-formule.component` i `ui/tekst-formule` su isti moduli kao za telefon na času (formule $...$, lenji
+    //   `mathlive/ssr` samo kroz `ui/formula-ucitavanje`); `ui/format` su čiste funkcije bez uvoza.
+    'features/uzivo/ui/polja-zadatka',
+    'features/uzivo/ui/tekst-formule.component',
+    'features/uzivo/ui/tekst-formule',
+    'features/uzivo/ui/format',
+    // - pregled prezentacije (samo lenja strana `prezentacija/:id`, nikad ljuska ni rute): projektorski renderer slajda.
+    //   `ui/slajd-prikaz.component` uvozi samo `ui/*` (platno, pločice i rezultat pitanja, tajmer, formule, markdown, teme,
+    //   zadatak-prikaz) i `data-access/{sat,uzivo.models,platno.models,platno-koraci}` (čisti tipovi i funkcije); `mathlive/ssr`
+    //   samo lenjo (`ui/formula-ucitavanje`), editor, `fflate`, `pdfjs-dist` i ProseMirror nikad. `ui/slajd-za-prikaz` su samo
+    //   tipovi (ulaz renderera bez beleški).
+    'features/uzivo/ui/slajd-prikaz.component',
+    'features/uzivo/ui/slajd-za-prikaz',
   ],
 };
 
