@@ -7,32 +7,38 @@ import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
 /*
  * Raspored časova i termini (deca rute `raspored` u ljusci, lenje kroz `loadChildren`; spec najave odsustva, odeljak 7).
  * Ljuska ima `nastavnikGuard`, pa je sve ovde iza sesije nastavnika; ništa javno. Id u putanji mora biti broj.
- * `novi?kopija=<id>` je „Kopiraj u novi“; `termini?od=<datum>` je veza iz obaveštenja „Mnogo najava odsustva“.
+ * `/raspored` (stavka „Raspored“ u bočnom meniju) vodi na naredne termine, svakodnevni pogled; periodi rasporeda su na
+ * `/raspored/periodi`. `novi?kopija=<id>` je „Kopiraj u novi“; `termini?od=<datum>` je veza iz obaveštenja „Mnogo najava
+ * odsustva“ i iz nastavničkog mejla, pa ta putanja ostaje.
  */
+const TERMINI = m('Naredni termini', '/raspored/termini');
+const PERIODI = m('Raspored časova', '/raspored/periodi');
+
 export const RASPORED_RUTE: Route[] = [
-  {
-    path: '',
-    pathMatch: 'full',
-    title: 'Raspored časova',
-    loadComponent: () => import('./pages/rasporedi.page').then(x => x.RasporediPage),
-  },
+  { path: '', pathMatch: 'full', redirectTo: 'termini' },
   {
     path: 'termini',
     title: 'Naredni termini',
-    data: { mrvice: () => [m('Raspored časova', '/raspored'), m('Naredni termini')] },
+    data: { mrvice: () => [m('Nastava'), m('Naredni termini')] },
     loadComponent: () => import('./pages/termini.page').then(x => x.TerminiPage),
+  },
+  {
+    path: 'periodi',
+    title: 'Raspored časova',
+    data: { mrvice: () => [TERMINI, m('Raspored časova')] },
+    loadComponent: () => import('./pages/rasporedi.page').then(x => x.RasporediPage),
   },
   {
     path: 'novi',
     title: 'Nov raspored',
-    data: { mrvice: () => [m('Raspored časova', '/raspored'), m('Nov raspored')] },
+    data: { mrvice: () => [TERMINI, PERIODI, m('Nov raspored')] },
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () => import('./pages/raspored-forma.page').then(x => x.RasporedFormaPage),
   },
   {
     matcher: putanjaSaId(':id'),
     title: 'Raspored',
-    data: { mrvice: () => [m('Raspored časova', '/raspored'), m('Izmena')] },
+    data: { mrvice: () => [TERMINI, PERIODI, m('Izmena')] },
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () => import('./pages/raspored-forma.page').then(x => x.RasporedFormaPage),
   },

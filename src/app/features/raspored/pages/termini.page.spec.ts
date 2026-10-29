@@ -82,30 +82,65 @@ describe('TerminiPage', () => {
     vi.useRealTimers();
   });
 
-  it('termini po danu: danas prvi, vreme, predmet i grupa, predavanje tog dana', async () => {
+  it('termini po danu: blok datuma (danas, sutra, dan u nedelji), vreme, predmet i grupa, predavanje tog dana', async () => {
     await otvoriStranu([
       termin({ predavanjeId: 40 }),
-      termin({ stavkaId: 8, datum: '2030-11-08', pocetak: '08:15:00', kraj: '09:45:00' }),
+      termin({ stavkaId: 8, datum: '2030-11-07' }),
+      termin({ stavkaId: 9, datum: '2030-11-08', pocetak: '08:15:00', kraj: '09:45:00' }),
     ]);
     const dani = [...el().querySelectorAll<HTMLElement>('[data-dan]')];
-    expect(dani.map(d => d.querySelector('h2')!.textContent)).toEqual(['Danas, sreda 6. 11.', 'Petak 8. 11.']);
-    expect(red('7:2030-11-06').textContent).toContain('10:00–13:00');
-    expect(red('7:2030-11-06').textContent).toContain('Geodezija 1 · GD-2030');
+    expect(dani.map(d => d.querySelector('h2 .sr-only')!.textContent)).toEqual([
+      'Danas, sreda 6. 11.', 'Sutra, četvrtak 7. 11.', 'Petak 8. 11.',
+    ]);
+    const blok = (d: HTMLElement) => [...d.querySelectorAll('h2 [aria-hidden="true"]')].map(x => x.textContent);
+    expect(blok(dani[0])).toEqual(['danas', '6', 'nov']);
+    expect(blok(dani[2])).toEqual(['petak', '8', 'nov']);
+    expect(dani[0].classList).toContain('danas');
+    expect(dani[2].classList).not.toContain('danas');
+    expect(red('7:2030-11-06').querySelector('[data-vreme]')!.textContent!.trim()).toBe('10:00–13:00');
+    expect(red('7:2030-11-06').querySelector('h3')!.textContent).toBe('Geodezija 1');
+    expect(red('7:2030-11-06').querySelector('[data-grupa]')!.textContent).toBe('GD-2030');
     expect(red('7:2030-11-06').querySelector('a[href="/predavanja/40"]')).not.toBeNull();
     expect(el().querySelector('[data-opseg]')!.textContent).toContain('6. 11.');
+    expect(el().querySelector('[data-periodi]')!.getAttribute('href')).toBe('/raspored/periodi');
   });
 
-  it('najave: broj (istaknut iznad praga), ko ne dolazi sa razlogom i vezom na karticu', async () => {
+  it('najave: krupan broj (istaknut iznad praga), klik rasklapa ko ne dolazi sa razlogom i vezom na karticu', async () => {
     const najave = [najava(1, 'bolnica'), najava(2), ...[3, 4, 5, 6].map(i => najava(i))];
-    await otvoriStranu([termin({ brojNajava: 6, najave }), termin({ stavkaId: 8, brojNajava: 2, najave: [najava(1), najava(2)] })]);
+    await otvoriStranu([
+      termin({ brojNajava: 6, najave }),
+      termin({ stavkaId: 8, brojNajava: 2, najave: [najava(1), najava(2)] }),
+      termin({ stavkaId: 9 }),
+    ]);
     const prvi = red('7:2030-11-06');
-    expect(prvi.querySelector('[data-broj-najava]')!.textContent).toContain('Ne dolazi: 6');
-    expect(prvi.querySelector('[data-broj-najava] span')!.className).toContain('warn');
-    expect(red('8:2030-11-06').querySelector('[data-broj-najava] span')!.className).not.toContain('warn');
-    expect(prvi.querySelector('summary')!.textContent).toBe('Ko ne dolazi (6)');
-    const prva = prvi.querySelector('details li')!;
+    const broj = prvi.querySelector<HTMLButtonElement>('button[data-broj-najava]')!;
+    expect(broj.querySelector('[data-broj]')!.textContent).toBe('6');
+    expect(broj.textContent).toContain('ne dolazi');
+    expect(broj.classList).toContain('iznad');
+    expect(broj.textContent).toContain('iznad praga 5');
+    expect(red('8:2030-11-06').querySelector('[data-broj-najava]')!.classList).not.toContain('iznad');
+    // nula: samo broj, bez dugmeta i liste
+    const nula = red('9:2030-11-06').querySelector('[data-broj-najava]')!;
+    expect(nula.tagName).toBe('P');
+    expect(nula.querySelector('[data-broj]')!.textContent).toBe('0');
+
+    const lista = prvi.querySelector<HTMLElement>('#ko-7\\:2030-11-06')!;
+    expect(broj.getAttribute('aria-controls')).toBe('ko-7:2030-11-06');
+    expect(broj.getAttribute('aria-expanded')).toBe('false');
+    expect(lista.hidden).toBe(true);
+    broj.click();
+    await stabilno();
+    expect(broj.getAttribute('aria-expanded')).toBe('true');
+    expect(lista.hidden).toBe(false);
+    expect(lista.querySelectorAll('li')).toHaveLength(6);
+    const prva = lista.querySelector('li')!;
     expect(prva.textContent).toContain('bolnica');
     expect(prva.querySelector('a')!.getAttribute('href')).toBe('/studenti/1');
+    // drugi termin ostaje sklopljen
+    expect(red('8:2030-11-06').querySelector<HTMLElement>('ul.ko')!.hidden).toBe(true);
+    broj.click();
+    await stabilno();
+    expect(lista.hidden).toBe(true);
   });
 
   it('počeo termin nema akcija; otkazan pokazuje napomenu, „Vrati čas“ i „Izmeni napomenu“', async () => {
@@ -207,7 +242,7 @@ describe('TerminiPage', () => {
 
   it('od iz putanje (veza iz obaveštenja); „Kasnije“ i „Od danas“ menjaju samo query', async () => {
     await otvoriStranu([termin({ datum: '2030-11-13' })], '2030-11-13');
-    expect(el().querySelector('h2')!.textContent).toBe('Sreda 13. 11.');
+    expect(el().querySelector('h2 .sr-only')!.textContent).toBe('Sreda 13. 11.');
     el().querySelector<HTMLButtonElement>('[data-kasnije]')!.click();
     expect(router.navigate).toHaveBeenLastCalledWith([], { queryParams: { od: '2030-12-11' }, queryParamsHandling: 'merge' });
     el().querySelector<HTMLButtonElement>('[data-danas]')!.click();

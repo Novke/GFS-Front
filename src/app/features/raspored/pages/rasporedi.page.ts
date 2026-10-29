@@ -22,7 +22,7 @@ import { vaziNaDan } from '../data-access/raspored.pravila';
 type Status = 'ucitavanje' | 'greska' | 'ok';
 
 /**
- * Raspored časova (`/raspored`; spec najave odsustva, odeljak 7): periodi, najnoviji prvi, sa brojem termina, pragom i
+ * Raspored časova (`/raspored/periodi`; spec najave odsustva, odeljak 7): periodi, najnoviji prvi, sa brojem termina, pragom i
  * oznakom „Važi danas“; „Izmeni“, „Kopiraj u novi“ (`/raspored/novi?kopija=<id>`) i „Obriši“ (potvrda). Periodi se ne
  * brišu sami: stari ostaju dok ih nastavnik ne obriše.
  */

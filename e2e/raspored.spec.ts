@@ -27,12 +27,16 @@ async function izaberi(page: Page, polje: ReturnType<Page['locator']>, opcija: s
 }
 
 test.describe('raspored časova (nastavnik)', () => {
-  test('bočna navigacija -> lista perioda; „Kopiraj u novi“ nosi termine i prag, period se bira iznova', async ({ page, mock }) => {
+  test('bočna navigacija -> naredni termini -> „Uredi raspored“; „Kopiraj u novi“ nosi termine i prag, period se bira iznova', async ({ page, mock }) => {
     const { period } = mock.raspored.primer();
     await page.goto('./');
     const nav = page.getByRole('navigation', { name: 'Glavna navigacija' });
     await nav.getByRole('link', { name: 'Raspored' }).click();
-    await expect(page).toHaveURL(/\/raspored$/);
+    await expect(page).toHaveURL(/\/raspored\/termini$/);
+    await expect(page).toHaveTitle('Naredni termini · GFS');
+    await expect(nav.getByRole('link', { name: 'Raspored' })).toHaveAttribute('aria-current', 'page');
+    await page.getByRole('link', { name: 'Uredi raspored' }).click();
+    await expect(page).toHaveURL(/\/raspored\/periodi$/);
     await expect(page).toHaveTitle('Raspored časova · GFS');
     await expect(periodi(page)).toHaveCount(1);
     await expect(periodi(page).first()).toContainText('Zimski semestar (primer)');
@@ -57,7 +61,7 @@ test.describe('raspored časova (nastavnik)', () => {
     await page.locator('[data-vazi-od]').fill('2031-02-20');
     await page.locator('[data-vazi-do]').fill('2031-06-10');
     await page.getByRole('button', { name: 'Sačuvaj' }).click();
-    await expect(page).toHaveURL(/\/raspored$/);
+    await expect(page).toHaveURL(/\/raspored\/periodi$/);
     await expect(periodi(page)).toHaveCount(2);
     const poslato = mock.zahteviZa('rasporedi', 'POST').at(-1)!.telo as { stavke: { id: number | null }[]; pragNajava: number };
     expect(poslato.pragNajava).toBe(2);
@@ -65,7 +69,7 @@ test.describe('raspored časova (nastavnik)', () => {
   });
 
   test('nov raspored: provera na klijentu, poruka servera u traci, pa sačuvan', async ({ page, mock }) => {
-    await page.goto('raspored');
+    await page.goto('raspored/periodi');
     await expect(page.getByText('Nema rasporeda')).toBeVisible();
     await page.locator('[data-novi]').click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nov raspored');
@@ -89,7 +93,7 @@ test.describe('raspored časova (nastavnik)', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'Termin 2 se ponavlja' })).toBeVisible();
     await izaberi(page, page.locator('[data-stavka]').nth(1).locator('[data-dan]'), 'petak');
     await page.getByRole('button', { name: 'Sačuvaj' }).click();
-    await expect(page).toHaveURL(/\/raspored$/);
+    await expect(page).toHaveURL(/\/raspored\/periodi$/);
     await expect(periodi(page).first()).toContainText('2 termina');
     expect((mock.zahteviZa('rasporedi', 'POST').at(-1)!.telo as { stavke: unknown[] }).stavke).toEqual([
       { id: null, predmetId: 1, grupaId: 1, dan: 3, pocetak: '10:00', kraj: '13:00' },
@@ -141,7 +145,7 @@ test.describe('raspored časova (nastavnik)', () => {
     await izaberi(page, stavka.locator('[data-predmet]'), 'Programiranje u građevinarstvu');
     await izaberi(page, stavka.locator('[data-grupa]'), 'GD-2025');
     await page.getByRole('button', { name: 'Sačuvaj' }).click();
-    await expect(page).toHaveURL(/\/raspored$/);
+    await expect(page).toHaveURL(/\/raspored\/periodi$/);
     const telo = mock.zahteviZa('rasporedi', 'POST').at(-1)!.telo as { vaziOd: string; vaziDo: string; stavke: unknown[] };
     expect(telo.vaziOd).toBe(`${godina}-${dva(mesec)}-03`);
     expect(telo.vaziDo).toBe(`${doDatuma.getFullYear()}-${dva(doDatuma.getMonth() + 1)}-28`);
@@ -159,8 +163,12 @@ test.describe('raspored časova (nastavnik)', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Naredni termini');
     const red = termin(page, 31, sutra);
     await expect(red).toContainText('10:00–13:00');
-    await expect(red.locator('[data-broj-najava]')).toHaveText(/Ne dolazi: 3/);
-    await red.getByText('Ko ne dolazi (3)').click();
+    const broj = red.locator('button[data-broj-najava]');
+    await expect(broj.locator('[data-broj]')).toHaveText('3');
+    await expect(broj).toContainText('iznad praga 2');
+    await expect(broj).toHaveAttribute('aria-expanded', 'false');
+    await broj.click();
+    await expect(broj).toHaveAttribute('aria-expanded', 'true');
     await expect(red.getByRole('link', { name: 'Bojan Izmišljenović' })).toHaveAttribute('href', '/studenti/2');
     await expect(red).toContainText('takmičenje');
     await expect(red).toContainText('bolest');
@@ -211,7 +219,7 @@ test.describe('raspored časova (nastavnik)', () => {
     await expect(upozorenje).toContainText(`Programiranje u građevinarstvu · GD-2025 · ${danIDatum(sutra)}`);
     await page.getByRole('button', { name: 'Sačuvaj' }).click();
     await expect(page.getByText('Raspored je sačuvan. Ukinuto otkazanih časova: 1.')).toBeVisible();
-    await expect(page).toHaveURL(/\/raspored$/);
+    await expect(page).toHaveURL(/\/raspored\/periodi$/);
     expect(mock.raspored.otkazani.has(`31:${sutra}`)).toBe(false);
   });
 
