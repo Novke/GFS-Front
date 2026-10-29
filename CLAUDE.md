@@ -412,7 +412,9 @@ computed on the server; the front never builds dates of termini itself.
   Both dialogs carry the checkbox "Pošalji mejl studentima" (checked by default, `TerminCmd.posaljiMejl`; the note-only edit sends
   `false`). `tekstMejla` builds the snackbar: "Mejl je poslat: N" counts mails actually queued (`obavesteno`); `neposlato > 0`
   (queue full or no SMTP) turns it into an error snackbar telling the teacher whom to reach another way; an unchecked box says
-  "Mejl studentima nije slat."). Names and reasons exist only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold,
+  "Mejl studentima nije slat."). Both counts leave out students who turned off "Javi mi mejlom kad je čas otkazan" on their tab Ja
+  (the server filters them before the address dedupe), so N is the number of students who really get the mail. Names and reasons exist
+  only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold,
   lost cancellations) are pure functions in `data-access/raspored.pravila.ts`.
 - **Notifications:** `VrstaObavestenja` has `MNOGO_NAJAVA` (`podaci`: `stavkaId`, `datum`, `pocetak`, `kraj`, `predmet`,
   `grupa`, `broj`, `prag`; never names or reasons). `tekstObavestenja` -> "Mnogo najava odsustva: predmet · grupa · sreda 4. 11.
