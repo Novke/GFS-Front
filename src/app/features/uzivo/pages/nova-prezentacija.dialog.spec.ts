@@ -101,7 +101,7 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     napravi(f);
     await f.whenStable();
     expect(pripremi).toHaveBeenCalledTimes(1);
-    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Predavanje 3', opis: null, tema: 'BELA' });
+    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Predavanje 3', opis: null, tema: 'BELA', vezba: null });
     const ishod = zatvori.mock.calls[0][0];
     expect(ishod.prezentacija.id).toBe(9);
     expect(ishod.fajl.name).toBe('Predavanje 3.pptx');
@@ -112,7 +112,7 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     naziv(f).value = 'Prazna';
     naziv(f).dispatchEvent(new Event('input'));
     napravi(f);
-    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Prazna', opis: null, tema: null });
+    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Prazna', opis: null, tema: null, vezba: null });
     expect(zatvori.mock.calls[0][0].fajl).toBeNull();
     expect(pripremi).not.toHaveBeenCalled();
   });
@@ -155,5 +155,44 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     pusti();
     await f.whenStable();
     expect(kreiraj).not.toHaveBeenCalled();
+  });
+
+  describe('broj vežbe', () => {
+    const vezba = (f: { nativeElement: HTMLElement }) => el(f).querySelector<HTMLInputElement>('[data-vezba]')!;
+    const upisi = (polje: HTMLInputElement, v: string) => { polje.value = v; polje.dispatchEvent(new Event('input')); };
+
+    it('predlaže se iz naziva "Vežbe N" i šalje; ručno upisan broj se ne prepisuje', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Vežbe 3 i 4 – zadaci');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('3');
+      upisi(vezba(f), '4');
+      upisi(naziv(f), 'Vežbe 5');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('4');
+      napravi(f);
+      expect(kreiraj).toHaveBeenCalledWith(expect.objectContaining({ naziv: 'Vežbe 5', vezba: 4 }));
+    });
+
+    it('predlog prati naziv dok ga korisnik ne promeni; naziv bez broja briše predlog', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Vežbe 2');
+      upisi(naziv(f), 'Vežbe 7');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('7');
+      upisi(naziv(f), 'Uvodno predavanje');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('');
+    });
+
+    it('van 0-99 se ne šalje', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Uvod');
+      upisi(vezba(f), '-1');
+      napravi(f);
+      f.detectChanges();
+      expect(kreiraj).not.toHaveBeenCalled();
+      expect(el(f).textContent).toContain('Broj vežbe mora biti od 0 do 99.');
+    });
   });
 });

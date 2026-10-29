@@ -18,13 +18,18 @@ describe('PrezentacijePredavanjaApi', () => {
 
   afterEach(() => http.verify());
 
-  it('prezentacije predmeta: GET prezentacije?predmetId, greške prikazuje pozivalac', () => {
-    api.prezentacije(4).subscribe();
-    const req = http.expectOne(r => r.url === 'api/prezentacije');
+  it('izbor: GET prezentacije/izbor sa grupom, bez nje sa "posle"; greške prikazuje pozivalac', () => {
+    api.izbor(4, 9).subscribe();
+    const req = http.expectOne(r => r.url === 'api/prezentacije/izbor');
     expect(req.request.method).toBe('GET');
-    expect(req.request.urlWithParams).toBe('api/prezentacije?predmetId=4');
+    expect(req.request.urlWithParams).toBe('api/prezentacije/izbor?predmetId=4&grupaId=9');
     expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
-    req.flush([]);
+    req.flush({ stavke: [], predlog: [] });
+
+    api.izbor(4, null, 12).subscribe();
+    const bez = http.expectOne(r => r.url === 'api/prezentacije/izbor');
+    expect(bez.request.urlWithParams).toBe('api/prezentacije/izbor?predmetId=4&posle=12');
+    bez.flush({ stavke: [], predlog: [] });
   });
 
   it('izvođenja predavanja: GET izvodjenja?predavanjeId', () => {

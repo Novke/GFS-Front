@@ -35,6 +35,11 @@ export class PrezentacijeApi {
     return this.http.put<PrezentacijaDetails>(`${this.api}/prezentacije/${id}`, cmd, { context: this.context });
   }
 
+  /** Broj vežbe 0-99 ili `null` (bez broja); ne menja `izmenjeno`, odgovor je stavka liste. */
+  postaviVezbu(id: number, vezba: number | null): Observable<PrezentacijaInfo> {
+    return this.http.patch<PrezentacijaInfo>(`${this.api}/prezentacije/${id}/vezba`, { vezba }, { context: this.context });
+  }
+
   obrisi(id: number): Observable<void> {
     return this.http.delete<void>(`${this.api}/prezentacije/${id}`, { context: this.context });
   }

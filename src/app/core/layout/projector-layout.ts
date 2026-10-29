@@ -2,17 +2,19 @@ import { booleanAttribute, ChangeDetectionStrategy, Component, inject, input } f
 import { RouterOutlet } from '@angular/router';
 
 import { Okruzenje } from './okruzenje';
+import { RezimProjektora } from './rezim-projektora';
 
 /**
  * Projektorski layout (`/predavanja/:id/projektor`, `/grupe/:id/onboarding/:sid/qr`, `/izvodjenja/:id/publika|konzola|daljinski`):
  * bez ljuske, ceo ekran, uvek svetao (`.rezim-dan`), osim kad ruta traži `pratiRezim` (daljinski: telefon u zamračenoj
- * sali prati dan/noć aplikacije). Dugme "Pun ekran" i Esc su na samim stranicama.
+ * sali prati dan/noć aplikacije) ili stranica privremeno to ne zatraži ({@link RezimProjektora}: završni ekran konzole).
+ * Dugme "Pun ekran" i Esc su na samim stranicama.
  */
 @Component({
   selector: 'app-projector-layout',
   imports: [RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[class.rezim-dan]': '!pratiRezim()' },
+  host: { '[class.rezim-dan]': '!pratiRezim() && !rezim.pratiRezim()' },
   template: `
     @if (okruzenje.jeStaging()) {
       <div class="traka-okruzenja">STAGING — test podaci</div>
@@ -29,6 +31,7 @@ import { Okruzenje } from './okruzenje';
 })
 export class ProjectorLayout {
   protected readonly okruzenje = inject(Okruzenje);
+  protected readonly rezim = inject(RezimProjektora);
   /**
    * Iz `data: { celaStrana: true }` rute layouta (withComponentInputBinding): sadržaj bez okvira (širina, razmak), za
    * strane koje same crtaju ceo ekran (uživo). Bez tog podatka binding upisuje `undefined` (-> false).

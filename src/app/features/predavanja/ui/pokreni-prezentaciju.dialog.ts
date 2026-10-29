@@ -1,17 +1,17 @@
-import { DatePipe, DOCUMENT } from '@angular/common';
+import { DOCUMENT } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
-import { MatInput } from '@angular/material/input';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { forkJoin, Observable } from 'rxjs';
 
-import { IzvodjenjeNaPredavanju, PrezentacijaZaIzbor, PrezentacijePredavanjaApi } from '../../../core/api/prezentacije-predavanja.api';
+import { IzvodjenjeNaPredavanju, PrezentacijaZaIzbor, PrezentacijePredavanjaApi, StavkaIzbora } from '../../../core/api/prezentacije-predavanja.api';
+import { IzborPrezentacije, RedIzbora, StanjeStavke } from '../../../shared/ui/izbor-prezentacije';
 import { razlogZahteva } from '../data-access/prezentacije-predavanja.store';
 import { konzolaIzvodjenja } from './izvodjenje-putanje';
+
+export type { StanjeStavke } from '../../../shared/ui/izbor-prezentacije';
 
 /** Ishod dijaloga: pokrenuto izvođenje i da li se konzola otvorila u novoj kartici (`false` = pregledač je blokirao karticu). */
 export interface PokrenutaPrezentacija {
@@ -22,23 +22,14 @@ export interface PokrenutaPrezentacija {
 export interface PokreniPrezentacijuCfg {
   predavanjeId: number;
   predmetId: number;
+  /** Grupa predavanja: predlog "Sledeće za <grupa>" prati šta je ona puštala; bez grupe nema predloga. */
+  grupa?: { id: number; naziv: string } | null;
 }
-
-/** Od ovoliko prezentacija se prikazuje polje za filtriranje. */
-export const PRAG_FILTERA = 6;
 
 /** Apsolutni URL konzole izvođenja (`<base href>` + putanja), za novu karticu. */
 export function urlKonzole(dokument: Document, izvodjenjeId: number): string {
   return new URL(konzolaIzvodjenja(izvodjenjeId), dokument.baseURI).href;
 }
-
-/** Najskorije izmenjena prvo (ista sekunda: veći id, tj. novija); `izmenjeno` je ISO bez zone, pa se poredi kao tekst. */
-export function poRedosledu(lista: PrezentacijaZaIzbor[]): PrezentacijaZaIzbor[] {
-  return [...lista].sort((a, b) => (b.izmenjeno ?? '').localeCompare(a.izmenjeno ?? '') || b.id - a.id);
-}
-
-/** Stanje stavke prema izvođenjima u toku: "Nastavi" (u toku za OVO predavanje), zauzeta (u toku drugde) ili slobodna. */
-export type StanjeStavke = { vrsta: 'slobodna' } | { vrsta: 'nastavi'; izvodjenjeId: number } | { vrsta: 'zauzeta' };
 
 export function stanjeStavke(p: PrezentacijaZaIzbor, uTokuOvde: readonly IzvodjenjeNaPredavanju[]): StanjeStavke {
   if (p.aktivnoIzvodjenjeId === null || p.aktivnoIzvodjenjeId === undefined) return { vrsta: 'slobodna' };
@@ -47,7 +38,9 @@ export function stanjeStavke(p: PrezentacijaZaIzbor, uTokuOvde: readonly Izvodje
 }
 
 /**
- * Izbor prezentacije predmeta za predavanje u toku. "Pokreni" odmah pokreće izvođenje vezano za predavanje (sa čuvanjem) i
+ * Izbor prezentacije predmeta za predavanje u toku: na vrhu predlog "Sledeće za <grupa>" (`GET prezentacije/izbor`, po onome
+ * što je grupa puštala), ispod sve prezentacije po vežbama sa filterom vrste i pretragom ({@link IzborPrezentacije}).
+ * "Pokreni" odmah pokreće izvođenje vezano za predavanje (sa čuvanjem) i
  * otvara konzolu u NOVOJ kartici, da beleženje na ovoj stranici ne prestane. Kartica se otvara sinhrono iz klika (prazna
  * `about:blank`), a adresa joj se postavlja kad server odgovori: `window.open` posle asinhronog poziva blokiraju pregledači
  * (Safari odmah). Ako je i prazna kartica blokirana, izvođenje je ipak pokrenuto i dijalog se zatvara; stranica predavanja
@@ -57,7 +50,7 @@ export function stanjeStavke(p: PrezentacijaZaIzbor, uTokuOvde: readonly Izvodje
 @Component({
   selector: 'app-pokreni-prezentaciju-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, FormsModule, MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, MatFormField, MatInput, MatLabel, MatProgressBar],
+  imports: [IzborPrezentacije, MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, MatProgressBar],
   template: `
     <h2 mat-dialog-title>Pokreni prezentaciju</h2>
     <mat-dialog-content>
@@ -67,48 +60,12 @@ export function stanjeStavke(p: PrezentacijaZaIzbor, uTokuOvde: readonly Izvodje
       @if (greska(); as g) {
         <p class="greska" role="alert" data-greska>{{ g }}</p>
       }
-      @if (!ucitava() && sve().length === 0 && !greskaUcitavanja()) {
+      @if (!ucitava() && redovi().length === 0 && !greskaUcitavanja()) {
         <p class="prazno" data-prazno>Ovaj predmet još nema prezentacija. Napravi je u odeljku Prezentacije.</p>
       }
-      @if (sve().length > prag) {
-        <mat-form-field appearance="outline" class="filter">
-          <mat-label>Traži prezentaciju</mat-label>
-          <input matInput type="search" [ngModel]="filter()" (ngModelChange)="filter.set($event)" data-filter />
-        </mat-form-field>
-      }
-      @if (prikazane().length) {
-        <ul class="lista" aria-label="Prezentacije predmeta">
-          @for (s of prikazane(); track s.p.id) {
-            <li class="stavka" [attr.data-prezentacija]="s.p.id">
-              <div class="tekst">
-                <span class="naziv">{{ s.p.naziv }}</span>
-                <span class="meta">
-                  {{ s.p.brojSlajdova }} {{ s.p.brojSlajdova === 1 ? 'slajd' : 'slajdova' }}
-                  @if (s.p.brojPitanja) { · pitanja: {{ s.p.brojPitanja }} }
-                  · izmenjeno {{ s.p.izmenjeno | date: 'd.M.yyyy.' }}
-                </span>
-                @if (s.stanje.vrsta === 'zauzeta') {
-                  <span class="meta uzbuna" data-zauzeta>Već je u toku, ali ne na ovom predavanju. Završi je u konzoli pa je pokreni ovde.</span>
-                }
-              </div>
-              @switch (s.stanje.vrsta) {
-                @case ('nastavi') {
-                  <a matButton="filled" [href]="url(s.stanje.izvodjenjeId)" target="_blank" rel="noopener" data-nastavi
-                     [attr.aria-label]="'Nastavi: ' + s.p.naziv + ' (otvara se u novoj kartici)'">Nastavi</a>
-                }
-                @case ('zauzeta') {
-                  <button matButton="outlined" type="button" disabled data-pokreni [attr.aria-label]="'Pokreni: ' + s.p.naziv">Pokreni</button>
-                }
-                @default {
-                  <button matButton="filled" type="button" [disabled]="salje()" data-pokreni
-                          [attr.aria-label]="'Pokreni: ' + s.p.naziv" (click)="pokreni(s.p)">Pokreni</button>
-                }
-              }
-            </li>
-          }
-        </ul>
-      } @else if (sve().length > 0) {
-        <p class="prazno" data-bez-rezultata>Nijedna prezentacija ne odgovara pretrazi.</p>
+      @if (redovi().length) {
+        <app-izbor-prezentacije [redovi]="redovi()" [predlog]="predlog()" [naslovPredloga]="naslovPredloga()"
+                                [zauzeto]="salje()" [urlNastavi]="urlFn" (pokreni)="pokreni($event)" />
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
@@ -116,13 +73,6 @@ export function stanjeStavke(p: PrezentacijaZaIzbor, uTokuOvde: readonly Izvodje
     </mat-dialog-actions>
   `,
   styles: `
-    .filter { width: 100%; }
-    .lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-    .stavka { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-    .tekst { display: grid; gap: 2px; min-width: 0; flex: 1; }
-    .naziv { font-weight: 600; overflow-wrap: anywhere; }
-    .meta { font-size: 12.5px; color: var(--muted); }
-    .uzbuna { color: var(--ink); }
     .greska { color: var(--danger-ink); margin: 0 0 8px; }
     .prazno { color: var(--muted); }
   `,
@@ -133,29 +83,28 @@ export class PokreniPrezentacijuDialog {
   private readonly api = inject(PrezentacijePredavanjaApi);
   private readonly dokument = inject(DOCUMENT);
 
-  protected readonly prag = PRAG_FILTERA;
   protected readonly ucitava = signal(true);
   protected readonly salje = signal(false);
   protected readonly greska = signal<string | null>(null);
   protected readonly greskaUcitavanja = signal(false);
-  protected readonly filter = signal('');
-  protected readonly sve = signal<PrezentacijaZaIzbor[]>([]);
+  private readonly stavke = signal<StavkaIzbora[]>([]);
+  protected readonly predlog = signal<number[]>([]);
   private readonly uTokuOvde = signal<IzvodjenjeNaPredavanju[]>([]);
+  protected readonly naslovPredloga = computed(() => `Sledeće za ${this.cfg.grupa?.naziv ?? 'grupu'}`);
+  protected readonly urlFn = (id: number) => this.url(id);
 
-  protected readonly prikazane = computed(() => {
-    const upit = this.filter().trim().toLocaleLowerCase('sr-Latn');
-    return poRedosledu(this.sve())
-      .filter(p => !upit || p.naziv.toLocaleLowerCase('sr-Latn').includes(upit))
-      .map(p => ({ p, stanje: stanjeStavke(p, this.uTokuOvde()) }));
-  });
+  protected readonly redovi = computed<RedIzbora[]>(() => this.stavke().map(s => ({
+    p: s.prezentacija, pusteno: s.pustenoGrupi, stanje: stanjeStavke(s.prezentacija, this.uTokuOvde()),
+  })));
 
   constructor() {
     forkJoin({
-      prezentacije: this.api.prezentacije(this.cfg.predmetId),
+      izbor: this.api.izbor(this.cfg.predmetId, this.cfg.grupa?.id ?? null),
       izvodjenja: this.api.izvodjenja(this.cfg.predavanjeId),
     }).pipe(takeUntilDestroyed()).subscribe({
-      next: ({ prezentacije, izvodjenja }) => {
-        this.sve.set(prezentacije);
+      next: ({ izbor, izvodjenja }) => {
+        this.stavke.set(izbor.stavke);
+        this.predlog.set(this.cfg.grupa ? izbor.predlog : []);
         this.uTokuOvde.set(izvodjenja.filter(i => i.status === 'AKTIVNO'));
         this.ucitava.set(false);
       },

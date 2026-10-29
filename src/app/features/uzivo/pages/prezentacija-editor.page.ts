@@ -34,6 +34,7 @@ import { PlatnoEditorComponent } from '../editor-platna/platno-editor.component'
 import { UvozPdfOtvarac } from './uvoz-pdf-otvarac';
 import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 import type { NazivIkone } from '../../../core/layout/icons';
+import { PORUKA_VEZBE, nazivVezbe, vezbaIzPolja } from '../../../core/api/redosled-prezentacija';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
@@ -108,6 +109,13 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             <mat-panel-description>{{ opisPodesavanja() }}</mat-panel-description>
           </mat-expansion-panel-header>
           <div class="uz-ed-podesavanja-telo">
+            <div class="uz-ed-vezba">
+              <label for="uz-ed-vezba-polje">Broj vežbe</label>
+              <input id="uz-ed-vezba-polje" class="uz-ed-vezba-polje" inputmode="numeric" maxlength="2" autocomplete="off"
+                     aria-describedby="uz-ed-vezba-napomena" [value]="p.vezba ?? ''" data-vezba
+                     (change)="sacuvajVezbu($any($event.target))" (keydown.enter)="$any($event.target).blur()">
+              <span class="uz-ed-napomena" id="uz-ed-vezba-napomena">Redosled u listi i predlog „sledeće“ za grupu; 0 = uvod, prazno = bez broja.</span>
+            </div>
             <mat-slide-toggle [checked]="p.takmicenje" (change)="podesi({ takmicenje: $event.checked })">
               Takmičenje: poeni za brzinu i rang-lista
             </mat-slide-toggle>
@@ -313,7 +321,8 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     if (!p) return '';
     const telefon = p.telefonPrikaz === 'PITANJE' ? 'telefon: celo pitanje'
       : `telefon: samo dugmad${p.detaljiDozvoljeni ? ', Detalji dozvoljeni' : ''}`;
-    return `${p.takmicenje ? 'Takmičenje' : 'Bez takmičenja'} · ${telefon}`;
+    const vezba = p.vezba === null ? 'bez broja vežbe' : nazivVezbe(p.vezba);
+    return `${vezba} · ${p.takmicenje ? 'Takmičenje' : 'Bez takmičenja'} · ${telefon}`;
   });
 
   private readonly aktivnoZa = computed(() => {
@@ -540,6 +549,18 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
       return;
     }
     this.podesi({ naziv: polje.value.trim() });
+  }
+
+  protected sacuvajVezbu(polje: HTMLInputElement): void {
+    const p = this.store.prezentacija();
+    if (!p) return;
+    const v = vezbaIzPolja(polje.value);
+    if (v === undefined) {
+      polje.value = p.vezba === null ? '' : String(p.vezba);
+      this.obavestenja.greska(PORUKA_VEZBE);
+      return;
+    }
+    this.store.postaviVezbu(v);
   }
 
   protected sacuvajOpis(polje: HTMLInputElement): void {

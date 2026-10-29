@@ -29,6 +29,44 @@
   width: 260px;
 }
 
+.uz-ed-lista-filteri {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.uz-ed-filter-uzi {
+  width: 200px;
+}
+
+@media (max-width: 599px) {
+  .uz-ed-lista-filteri .uz-ed-filter,
+  .uz-ed-lista-filteri .uz-ed-filter-uzi {
+    width: 100%;
+  }
+}
+
+.uz-ed-tabela .uz-ed-grupa-red th {
+  padding-top: 18px;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--bg);
+}
+
+.uz-ed-tabela .uz-ed-nowrap {
+  white-space: nowrap;
+}
+
+.uz-ed-tiho {
+  color: var(--muted);
+}
+
+.uz-ed-prazno-filter {
+  color: var(--muted);
+}
+
 .uz-ed-tabela {
   width: 100%;
   border-collapse: collapse;
@@ -237,6 +275,34 @@ p.uz-ed-upozorenje {
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
+}
+
+.uz-ed-vezba {
+  display: grid;
+  grid-template-columns: auto 4.5em;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.uz-ed-vezba .uz-ed-napomena {
+  grid-column: 1 / -1;
+}
+
+.uz-ed-vezba-polje {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.uz-ed-vezba-polje:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
 }
 
 .uz-ed-grupa {
