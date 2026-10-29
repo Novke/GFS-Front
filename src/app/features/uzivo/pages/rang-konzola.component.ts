@@ -1,7 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { MatTabsModule } from '@angular/material/tabs';
 import { asyncScheduler, catchError, distinctUntilChanged, EMPTY, filter, map, switchMap, throttleTime } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
@@ -16,7 +15,8 @@ export const RANG_OSVEZAVANJE_MS = 2000;
 export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
 
 /**
- * Kartica "Učesnici i rang" u konzoli (rang tačnosti, spec 5): tabovi "Ovo pitanje" (učesnici po brzini odgovora na
+ * Kartica "Učesnici i rang" u konzoli (rang tačnosti, spec 5): ARIA tabovi (bez `MatTabGroup`: njegovi posmatrači veličine
+ * remete merenje formula na umanjenom projektoru, e2e `uzivo-formule-tekst`) "Ovo pitanje" (učesnici po brzini odgovora na
  * trenutnu rundu, sa ishodom i kratkim odgovorom), "Prezentacija" (rang ovog izvođenja) i "Predavanje" (zbir svih
  * izvođenja predavanja; samo kad izvođenje ima predavanje). Rang se učitava samo dok je njegov tab otvoren, kad se
  * promeni runda, faza, broj odgovora ili tačan odgovor, najviše jednom u {@link RANG_OSVEZAVANJE_MS}. Vidi ga samo
@@ -25,39 +25,57 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
 @Component({
   selector: 'app-rang-konzola',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatTabsModule, RangTacnostiTabela, UcesniciPanelComponent],
+  imports: [RangTacnostiTabela, UcesniciPanelComponent],
   styles: `
     :host { display: block; }
     .uz-kon-rang-greska { margin: 8px 0 0; color: var(--danger); font-size: 13px; }
     .uz-kon-rang-napomena { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
-    .uz-kon-rang-telo { padding-top: 8px; }
+    .uz-kon-rang-zaglavlje { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 12px;
+      margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .uz-kon-rang-zaglavlje .uz-kon-naslov { margin: 0 0 8px; }
+    .uz-kon-rang-tabovi { display: flex; gap: 2px; }
+    .uz-kon-rang-tab { min-height: 32px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; background: none;
+      color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .uz-kon-rang-tab:hover { color: var(--ink); }
+    .uz-kon-rang-tab[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--primary); }
+    .uz-kon-rang-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
   `,
   template: `
-    <mat-tab-group [selectedIndex]="indeks()" (selectedIndexChange)="izaberi($event)" animationDuration="0ms"
-                   mat-stretch-tabs="false" aria-label="Učesnici i rang">
-      <mat-tab label="Ovo pitanje">
-        <div class="uz-kon-rang-telo">
+    <!-- naslov i tabovi u istom redu: kartica ne sme da bude viša od stare "Učesnici" (konzola 1366 x 768 bez skrola) -->
+    <div class="uz-kon-rang-zaglavlje">
+      <h2 class="uz-kon-naslov">
+        Učesnici i rang
+        @if (stanje().rangListaPrikazana) {
+          <span class="uz-cip">{{ stanje().rangPrikaz === 'PREDAVANJE' ? 'rang predavanja' : 'rang' }} na projektoru</span>
+        }
+      </h2>
+      <div class="uz-kon-rang-tabovi" role="tablist" aria-label="Učesnici i rang">
+        @for (t of tabovi(); track t.id) {
+          <button type="button" role="tab" class="uz-kon-rang-tab" [id]="'uz-kon-rang-tab-' + t.id"
+                  [attr.aria-selected]="tab() === t.id" [attr.aria-controls]="'uz-kon-rang-panel-' + t.id"
+                  [tabIndex]="tab() === t.id ? 0 : -1" (click)="tab.set(t.id)" (keydown)="strelice($event)">{{ t.naslov }}</button>
+        }
+      </div>
+    </div>
+    <div class="uz-kon-rang-telo" role="tabpanel" [id]="'uz-kon-rang-panel-' + tab()" [attr.aria-labelledby]="'uz-kon-rang-tab-' + tab()"
+         [attr.data-rang]="tab() === 'pitanje' ? null : tab()">
+      @switch (tab()) {
+        @case ('pitanje') {
           <app-ucesnici-panel [ucesnici]="stanje().ucesnici" [takmicenje]="stanje().takmicenje" [zadatak]="stanje().zadatak ?? null"
                               (preimenuj)="preimenuj.emit($event)" (izbaci)="izbaci.emit($event)" />
-        </div>
-      </mat-tab>
-      <mat-tab label="Prezentacija">
-        <div class="uz-kon-rang-telo" data-rang="prezentacija">
+        }
+        @case ('prezentacija') {
           <app-rang-tacnosti-tabela [stavke]="rangIzvodjenja() ?? []" [kolone]="koloneIzvodjenja()" [zbijeno]="true"
                                     [prazno]="rangIzvodjenja() ? 'Još nema zatvorenih pitanja sa tačnim odgovorom.' : 'Učitavanje…'" />
           <p class="uz-kon-rang-napomena">Tačnost: neodgovoreno pitanje je netačno. Pa prosečno vreme odgovora, pa ★.</p>
-        </div>
-      </mat-tab>
-      @if (predavanjeId()) {
-        <mat-tab label="Predavanje">
-          <div class="uz-kon-rang-telo" data-rang="predavanje">
-            <app-rang-tacnosti-tabela [stavke]="rangPredavanja() ?? []" [kolone]="['izvodjenja']" [zbijeno]="true"
-                                      [prazno]="rangPredavanja() ? 'Još nema zatvorenih pitanja sa tačnim odgovorom.' : 'Učitavanje…'" />
-            <p class="uz-kon-rang-napomena">Sva izvođenja ovog predavanja zajedno.</p>
-          </div>
-        </mat-tab>
+        }
+        @case ('predavanje') {
+          <app-rang-tacnosti-tabela [stavke]="rangPredavanja() ?? []" [kolone]="['izvodjenja']" [zbijeno]="true"
+                                    [prazno]="rangPredavanja() ? 'Još nema zatvorenih pitanja sa tačnim odgovorom.' : 'Učitavanje…'" />
+          <p class="uz-kon-rang-napomena">Sva izvođenja ovog predavanja zajedno.</p>
+        }
       }
-    </mat-tab-group>
+    </div>
     @if (greska(); as g) { <p class="uz-kon-rang-greska" role="alert">{{ g }}</p> }
   `,
 })
@@ -74,7 +92,11 @@ export class RangKonzolaComponent {
 
   protected readonly predavanjeId = computed(() => this.stanje().izvodjenje.predavanje?.id ?? null);
   protected readonly koloneIzvodjenja = computed<RangKolona[]>(() => this.stanje().takmicenje ? ['poeni'] : []);
-  protected readonly indeks = computed(() => ['pitanje', 'prezentacija', 'predavanje'].indexOf(this.tab()));
+  protected readonly tabovi = computed<{ id: RangTab; naslov: string }[]>(() => [
+    { id: 'pitanje', naslov: 'Ovo pitanje' },
+    { id: 'prezentacija', naslov: 'Prezentacija' },
+    ...(this.predavanjeId() ? [{ id: 'predavanje' as const, naslov: 'Predavanje' }] : []),
+  ]);
 
   /** Ključ osvežavanja: otvoren tab i ono što menja rang (runda, faza, odgovori, tačan odgovor, učesnici). */
   private readonly kljuc = computed(() => {
@@ -108,7 +130,15 @@ export class RangKonzolaComponent {
     });
   }
 
-  protected izaberi(i: number): void {
-    this.tab.set((['pitanje', 'prezentacija', 'predavanje'] as const)[i] ?? 'pitanje');
+  /** Strelice levo/desno, Home i End menjaju tab (ARIA tabovi; prečice konzole ih na `role="tab"` ne hvataju). */
+  protected strelice(e: KeyboardEvent): void {
+    const t = this.tabovi();
+    const i = t.findIndex(x => x.id === this.tab());
+    const novi = e.key === 'ArrowRight' ? (i + 1) % t.length : e.key === 'ArrowLeft' ? (i - 1 + t.length) % t.length
+      : e.key === 'Home' ? 0 : e.key === 'End' ? t.length - 1 : null;
+    if (novi === null) return;
+    e.preventDefault();
+    this.tab.set(t[novi].id);
+    (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]')[novi]?.focus();
   }
 }

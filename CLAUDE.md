@@ -975,6 +975,8 @@ accuracy (an unanswered question is wrong), then average answer time, then ★ (
   current round, fastest first (`redosledOdgovora`), with time, ✓/✗ and the short answer; the rest below in join order), "Prezentacija" (`GET
   izvodjenja/{id}/rang`) and "Predavanje" (only when the run has a lecture). A rank tab loads only while it is open, on a change of round, phase,
   answer count, `TACAN` or participant count, at most once per 2 s (`RANG_OSVEZAVANJE_MS`, `throttleTime` leading + trailing).
+  The tabs are plain ARIA tabs (`role="tab"`, arrows/Home/End) in the card's title row, **not `MatTabGroup`**: the card must not make the console
+  taller than 768 px at 1366 x 768, or a page scrollbar narrows the mini projector and `e2e/uzivo-formule-tekst.spec.ts` (visible scrollbars) fails.
 - **Projector:** `L` = `RANG_LISTA` (run rank, always allowed), `Shift+L` = `RANG_PREDAVANJA` (allowed when `imaRangPredavanja`); console buttons
   "Rang-lista" and "Rang predavanja". `PublikaScenaComponent` draws `javniRangTacnosti` with `ui/rang-tacnosti-projektor.component.ts` (title
   "Rang predavanja" for the lecture rank; it stays at KRAJ over "Hvala!"); in takmičenje `L` keeps the points list (`javnaRangLista`) and the podium.

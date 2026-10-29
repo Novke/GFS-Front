@@ -216,10 +216,6 @@ export class IzborEkranaDialog {
 
       <ng-template #ucesniciTpl>
         <section class="uz-kon-kartica" aria-label="Učesnici i rang">
-          <h2 class="uz-kon-naslov">
-            Učesnici i rang
-            @if (s.rangListaPrikazana) { <span class="uz-cip">{{ s.rangPrikaz === 'PREDAVANJE' ? 'rang predavanja' : 'rang' }} na projektoru</span> }
-          </h2>
           <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
         </section>
       </ng-template>
