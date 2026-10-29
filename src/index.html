@@ -9,6 +9,10 @@
   <meta name="theme-color" content="#111c30" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#080e19" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- Aplikacija na telefonu (spec „Aplikacija i obaveštenja“ 4.1): manifest dodaju tek prijavljeni delovi (core/pwa/manifest.ts),
+       pa ga upis, uživo i prijava nemaju. Ikonica i ime za iPhone važe svuda. -->
+  <link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="GFS">
   <script>
     // Režim dan/noć pre prvog renderovanja (bez treptanja). Isti ključ i pravila kao PreferencesStore.
     (function () {
@@ -24,6 +28,12 @@
       html.setAttribute('data-mode', rezim);
       html.style.colorScheme = rezim === 'noc' ? 'dark' : 'light';
     })();
+    // Ponuda za instalaciju (Chrome i ostali Chromium browseri) može da stigne pre nego što se Angular podigne: čuva se ovde,
+    // a core/pwa/instalacija.ts je preuzima. preventDefault gasi browserovu traku; ponudu prikazuje kartica na nalogu.
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__gfsPonudaInstalacije = e;
+    });
   </script>
 </head>
 <body>
