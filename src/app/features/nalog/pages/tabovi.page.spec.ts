@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NalogTabovi, tabIzUrla } from './tabovi.page';
 
 const CAS = 'api/public/nalog/cas';
+/** Zvono u zaglavlju (`ZvonoNaloga`, svoj spec) pita samo za sebe; ovde se prazno odgovara na kraju testa. */
+const ZVONO = 'api/public/nalog/obavestenja';
 
 @Component({ template: '<h2>strana</h2>' })
 class Strana {}
@@ -57,6 +59,7 @@ describe('NalogTabovi', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    http.match(ZVONO).forEach(r => r.flush({ novo: false, stavke: [] }));
     http.verify();
   });
 
@@ -81,6 +84,9 @@ describe('NalogTabovi', () => {
     expect(traka()).toBeNull();
     expect([...el().querySelectorAll('nav.tabovi a')].map(a => a.getAttribute('data-tab'))).toEqual(['pocetna', 'cas', 'predmeti', 'ja']);
     expect(tacka()).toBeNull();
+    // zvono je u ljusci na svakom tabu
+    expect(el().querySelector('app-zvono-naloga')).not.toBeNull();
+    http.expectOne(ZVONO).flush({ novo: false, stavke: [] });
   });
 
   it('Početna: aktivan tab, traka i tačka na tabu Čas dok traje izvođenje', async () => {

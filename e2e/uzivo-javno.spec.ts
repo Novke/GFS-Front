@@ -61,6 +61,9 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
       `GET /api/public/uzivo/${KOD}/ja`,
       `POST /api/public/uzivo/${KOD}/prijava`,
     ]);
+    // aplikacija na telefonu (spec „Aplikacija i obaveštenja“ 8): javna ruta nema manifest ni service worker
+    await expect(page.locator('link[rel=manifest]')).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.serviceWorker.getRegistrations().then(r => r.length))).toBe(0);
     // javna ruta ne vuče fontove platna (spec 13): ni jedan zahtev za carlito, caladea, arimo, tinos, cousine, atkinson
     expect(zahtevi.filter(p => /carlito|caladea|arimo|tinos|cousine|atkinson/i.test(p)), 'fontovi platna na javnoj ruti').toEqual([]);
     expect(javnaMreza.ws).toEqual(['/api/public/ws']);

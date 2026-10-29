@@ -173,4 +173,14 @@ export interface OcenaStudenta {
 export interface PodesavanjaNaloga {
   /** Javi mi mejlom kad je čas otkazan (i kad se otkazan čas ipak održava). */
   mejlOtkazanCas: boolean;
+  /**
+   * Push i zvono (spec „Aplikacija i obaveštenja“ 6.5 i 6.8; `GET` ih uvek vraća, server bez njih = stariji backend, pa su
+   * opciona). „Čas otkazan / ipak se održava“ je u zvonu uvek; podsetnik u zvono ne ide.
+   */
+  pushPodsetnik?: boolean;
+  pushOtkazanCas?: boolean;
+  pushOcene?: boolean;
+  pushPosleCasa?: boolean;
+  zvonoOcene?: boolean;
+  zvonoPosleCasa?: boolean;
 }

@@ -49,7 +49,7 @@ export interface IzborOtkazivanja {
         }
       </mat-form-field>
       @if (!t.otkazan) {
-        <mat-checkbox [formControl]="posaljiMejl" data-posalji-mejl>Pošalji mejl studentima („Nema časa“, jedan po studentu)</mat-checkbox>
+        <mat-checkbox [formControl]="posaljiMejl" data-posalji-mejl>Obavesti studente mejlom i na telefon („Nema časa“)</mat-checkbox>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">

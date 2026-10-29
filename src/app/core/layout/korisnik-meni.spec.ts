@@ -71,7 +71,9 @@ describe('KorisnikMeni', () => {
     expect(okidac.getAttribute('aria-label')).toBe('Nalog: nastavnik');
     expect(stavka('[data-uredjaji]').textContent?.trim()).toBe('Prijavljeni uređaji');
     expect(stavka('[data-odjava]').textContent?.trim()).toBe('Odjava');
-    expect(overlay.querySelectorAll('[role=menuitem]').length).toBe(2);
+    expect(stavka('[data-instaliraj-telefon]').textContent?.trim()).toBe('Instaliraj na telefon');
+    expect(stavka('[data-instaliraj-telefon]').getAttribute('href')).toBe('/podesavanja/obavestenja');
+    expect(overlay.querySelectorAll('[role=menuitem]').length).toBe(3);
   });
 
   it('"Odjava" zove odjavi i vodi na /prijava (bez nazad)', async () => {

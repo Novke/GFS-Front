@@ -15,7 +15,7 @@ import { PREDMET, PREDMET_OCENA, PREZENTACIJA, TACNO, TIP } from './mock-portal'
  * banke i statistika vežbanja.
  */
 
-const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|ocena))?|prezentacije\/\d+|vezbanje(\/\d+\/(provera|resenje))?)$|^(GET|PUT) \/api\/public\/nalog\/podesavanja$|^GET \/api\/public\/mediji\/[\w-]+$/;
+const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|ocena))?|prezentacije\/\d+|vezbanje(\/\d+\/(provera|resenje))?)$|^(GET|PUT) \/api\/public\/nalog\/podesavanja$|^GET \/api\/public\/mediji\/[\w-]+$|^(GET \/api\/public\/nalog\/(obavestenja|push)|POST \/api\/public\/nalog\/obavestenja\/otvoreno)$/;
 
 async function posleAnimacija(page: Page): Promise<void> {
   await expect
@@ -39,7 +39,8 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
   test.use({
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
     dozvoljeniApi: API_PORTALA,
-    dozvoljeni401: /^\/api\/public\/nalog\/(ja|cas|predmeti|prijava)$/,
+    // `obavestenja`: zvono ljuske tabova pre preusmerenja na prijavu (sakriveno, bez poruke)
+    dozvoljeni401: /^\/api\/public\/nalog\/(ja|cas|predmeti|prijava|obavestenja)$/,
   });
 
   test('tabovi: Predmeti -> predmet -> Istorija i Ocena; traka "Prezentacija je počela" na tabu van Časa', async ({ page, mock, javnaMreza }) => {
@@ -165,12 +166,79 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
     await ocekuj(izbor).toBeChecked();
     await izbor.uncheck();
     await ocekuj(page.locator('[data-sacuvano]')).toHaveText('Sačuvano.');
-    ocekuj(mock.zahteviZa('public/nalog/podesavanja', 'PUT').map(z => z.telo)).toEqual([{ mejlOtkazanCas: false }]);
+    // PUT nosi ceo objekat (mejl, push i zvono), kao što ga je GET vratio, sa jednom izmenom
+    ocekuj(mock.zahteviZa('public/nalog/podesavanja', 'PUT').map(z => z.telo)).toEqual([{
+      mejlOtkazanCas: false, pushPodsetnik: true, pushOtkazanCas: true, pushOcene: true, pushPosleCasa: true, zvonoOcene: true,
+      zvonoPosleCasa: true,
+    }]);
     await page.reload();
     await ocekuj(page.getByRole('checkbox', { name: 'Javi mi mejlom kad je čas otkazan' })).not.toBeChecked();
     await bezOzbiljnihKrsenja(page, '[data-podesavanja]');
     ocekuj(javnaMreza.api.filter(z => !API_PORTALA.test(z))).toEqual([]);
     ocekuj(javnaMreza.odgovori401).toEqual([]);
+  });
+
+  test('zvono: tačka do otvaranja, spisak od najnovijeg, stavka vodi gde i push; bez ozbiljnih a11y kršenja', async ({ page, mock, javnaMreza }) => {
+    mock.studentPrijavljen = true;
+    await page.goto('nalog/predmeti');
+    const zvono = page.getByRole('button', { name: 'Obaveštenja, ima novih' });
+    await ocekuj(zvono).toBeVisible();
+    await ocekuj(page.locator('[data-tacka]')).toBeVisible();
+    await zvono.click();
+    const spisak = page.locator('[data-zvono-spisak]');
+    await ocekuj(spisak.locator('[data-vrsta]')).toHaveCount(3);
+    await ocekuj(spisak.locator('[data-vrsta]').first()).toContainText('Čas je otkazan');
+    await ocekuj(page.locator('[data-tacka]')).toHaveCount(0);
+    ocekuj(mock.zahteviZa('public/nalog/obavestenja/otvoreno', 'POST')).toHaveLength(1);
+    await bezOzbiljnihKrsenja(page, '[data-zvono-spisak]');
+    await spisak.locator('[data-vrsta="OCENE"]').click();
+    await ocekuj(page).toHaveURL(/\/nalog\/predmet\/1$/);
+    await ocekuj(spisak).toHaveCount(0);
+    // posle osvežavanja: viđeno ostaje viđeno (server), tačke nema
+    await page.reload();
+    await ocekuj(page.getByRole('button', { name: 'Obaveštenja', exact: true })).toBeVisible();
+    await ocekuj(page.locator('[data-tacka]')).toHaveCount(0);
+    ocekuj(mock.zahteviZa('public/nalog/obavestenja/otvoreno', 'POST')).toHaveLength(1);
+    ocekuj(javnaMreza.api.filter(z => !API_PORTALA.test(z))).toEqual([]);
+    ocekuj(javnaMreza.odgovori401).toEqual([]);
+  });
+
+  test('aplikacija: studentski manifest (ikonica otvara nalog) i service worker sa opsegom korena', async ({ page, mock }) => {
+    mock.studentPrijavljen = true;
+    await page.goto('nalog/predmeti');
+    await ocekuj(page.getByRole('button', { name: /^Obaveštenja/ })).toBeVisible();
+    const manifest = await page.locator('link[rel=manifest]').getAttribute('href');
+    ocekuj(manifest).toBe('assets/pwa/manifest-student.webmanifest');
+    const m = await page.evaluate(async (h: string) => {
+      const url = new URL(h, document.baseURI);
+      const odgovor = await fetch(url);
+      const json = await odgovor.json() as { start_url: string; scope: string; display: string };
+      return { tip: odgovor.headers.get('content-type'), start: new URL(json.start_url, url).pathname,
+        opseg: new URL(json.scope, url).pathname, prikaz: json.display };
+    }, manifest!);
+    ocekuj(m).toEqual({ tip: 'application/manifest+json', start: '/nalog', opseg: '/', prikaz: 'standalone' });
+    const opseg = await page.evaluate(() => navigator.serviceWorker.ready.then(r => new URL(r.scope).pathname));
+    ocekuj(opseg).toBe('/');
+  });
+
+  test('Ja: prekidači telefona i zvona po vrsti; otkazan čas je u zvonu uvek, podsetnik nikad', async ({ page, mock }) => {
+    mock.studentPrijavljen = true;
+    await page.goto('nalog/ja');
+    // headless Chromium unapred odbija dozvolu za obaveštenja (blokirano); stanje servera se svejedno pročita
+    await ocekuj(page.locator('[data-push]')).toHaveAttribute('data-stanje', /^(iskljuceno|blokirano|nepodrzano)$/);
+    await ocekuj(page.getByRole('checkbox', { name: 'Zvono: Podsetnik dan pre časa' })).toHaveCount(0);
+    await ocekuj(page.getByText('Zvono: uvek')).toBeVisible();
+    await page.getByRole('checkbox', { name: 'Zvono: Ocene objavljene' }).uncheck();
+    await ocekuj(page.locator('[data-sacuvano]')).toHaveText('Sačuvano.');
+    await page.getByRole('checkbox', { name: 'Telefon: Podsetnik dan pre časa' }).uncheck();
+    await ocekuj(page.getByRole('checkbox', { name: 'Telefon: Podsetnik dan pre časa' })).not.toBeChecked();
+    await ocekuj.poll(() => mock.zahteviZa('public/nalog/podesavanja', 'PUT').length).toBe(2);
+    ocekuj(mock.zahteviZa('public/nalog/podesavanja', 'PUT').map(z => z.telo)).toEqual([
+      ocekuj.objectContaining({ zvonoOcene: false, pushPodsetnik: true, mejlOtkazanCas: true }),
+      ocekuj.objectContaining({ zvonoOcene: false, pushPodsetnik: false, mejlOtkazanCas: true }),
+    ]);
+    await page.reload();
+    await ocekuj(page.getByRole('checkbox', { name: 'Zvono: Ocene objavljene' })).not.toBeChecked();
   });
 
   test('bez prijave: tab vodi na prijavu sa nazad, pa posle koda nazad na tab', async ({ page, mock }) => {

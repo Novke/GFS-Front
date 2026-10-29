@@ -37,6 +37,7 @@
             "scripts": [],
             "allowedCommonJsDependencies": [
               "qrcode",
+              "jsqr",
               "@stomp/stompjs"
             ],
             "browser": "src/main.ts"

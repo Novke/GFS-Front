@@ -31,7 +31,11 @@ const TIPOVI: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
   '.wasm': 'application/wasm', // kao nginx mime.types (pdf.js, faza 5d): inače pdf.js upozori i prevodi wasm sporije
+  '.webmanifest': 'application/manifest+json', // kao docker/nginx.conf (manifesti aplikacije pod assets/pwa/)
 };
+
+/** Service worker aplikacije (docker/nginx.conf): opseg mu je koren, pa ga zaglavlje dozvoljava. */
+const SERVICE_WORKER = '/assets/pwa/sw.js';
 
 if (!existsSync(INDEX)) {
   console.error(`Nema ${INDEX}: prvo pokreni "npx ng build" (e2e testira produkcioni build).`);
@@ -65,6 +69,7 @@ createServer((req, res) => {
     'Content-Type': TIPOVI[extname(pronadjen)] ?? 'application/octet-stream',
     'Cache-Control': 'no-store',
     'Content-Security-Policy': CSP,
+    ...(putanja === SERVICE_WORKER && postojeci ? { 'Service-Worker-Allowed': '/' } : {}),
   });
   createReadStream(pronadjen).pipe(res);
 }).listen(PORT, '127.0.0.1', () => console.log(`e2e: dist na http://127.0.0.1:${PORT}`));

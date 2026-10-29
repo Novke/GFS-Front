@@ -4,10 +4,12 @@ import { MatButton } from '@angular/material/button';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 
+import { postaviManifest } from '../../../core/pwa/manifest';
 import { CasApi } from '../data-access/cas.api';
 import { CasIzvodjenje, CasUToku } from '../data-access/cas.models';
 import { opisUToku } from '../data-access/cas.pravila';
 import { jeTabCas, putanjaPrijave, sledeciUpitTrakeMs, status } from '../data-access/portal.pravila';
+import { ZvonoNaloga } from '../ui/zvono-naloga.component';
 
 export type TabNaloga = 'pocetna' | 'cas' | 'predmeti' | 'ja';
 
@@ -28,6 +30,9 @@ export function tabIzUrla(url: string): TabNaloga {
  * `pocetna`, `cas`, `cas/:token`, `predmeti`, `predmet/:id[/vezbanje/:tipId]`, `prezentacija/:id` i `ja`. Strana prijave
  * (`/nalog`) i `/nalog/moodle` su van nje.
  *
+ * **Zvono** (`ZvonoNaloga`, spec „Aplikacija i obaveštenja“ 6.8) stoji u desnom uglu zaglavlja kartice na svakom tabu. Ljuska
+ * postavlja studentski manifest aplikacije (ikonica otvara nalog; `core/pwa/manifest`).
+ *
  * Traka na svim tabovima osim Čas (izvor `GET api/public/nalog/cas`, isti kao tab Čas):
  * - **"Prezentacija je počela · Uđi"** dok traje izvođenje predavanja na kome je student čekiran. Traka je samo dugme:
  *   student usred vežbanja ili pregleda ne gubi rad (sam ulazi samo tab Čas).
@@ -39,7 +44,7 @@ export function tabIzUrla(url: string): TabNaloga {
  */
 @Component({
   selector: 'app-nalog-tabovi',
-  imports: [MatButton, RouterLink, RouterOutlet],
+  imports: [MatButton, RouterLink, RouterOutlet, ZvonoNaloga],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (traka(); as iz) {
@@ -53,7 +58,10 @@ export function tabIzUrla(url: string): TabNaloga {
         <a mat-flat-button class="traka-dugme" routerLink="/nalog/cas">Čekiraj se</a>
       </div>
     }
-    <div class="sadrzaj"><router-outlet /></div>
+    <div class="sadrzaj">
+      <div class="zvono-mesto"><app-zvono-naloga /></div>
+      <router-outlet />
+    </div>
     <nav class="tabovi" aria-label="Nalog">
       <a routerLink="/nalog/pocetna" [class.aktivan]="tab() === 'pocetna'"
          [attr.aria-current]="tab() === 'pocetna' ? 'page' : null" data-tab="pocetna">
@@ -83,6 +91,9 @@ export function tabIzUrla(url: string): TabNaloga {
     }
     .traka.u-toku { border-color: var(--warn); background: var(--warn-soft); }
     .traka-tekst { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    /* zvono stoji u desnom uglu zaglavlja kartice naloga (NalogOkvir: max 480 px, razmak odozgo clamp(0, 4vh, 48px)) */
+    .sadrzaj { position: relative; --nalog-zaglavlje-desno: 68px; }
+    .zvono-mesto { position: absolute; z-index: 4; top: calc(clamp(0px, 4vh, 48px) + 24px); right: max(10px, calc((100% - 480px) / 2 + 10px)); }
     .traka-dugme { flex: none; min-height: 44px; }
     .tabovi {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; display: grid; grid-template-columns: repeat(4, 1fr);
@@ -133,6 +144,7 @@ export class NalogTabovi {
 
   constructor() {
     const destroyRef = inject(DestroyRef);
+    postaviManifest(this.dokument, 'student');
     this.router.events.pipe(filter(e => e instanceof NavigationEnd), takeUntilDestroyed(destroyRef)).subscribe(e => {
       const pre = this.tab();
       this.url.set(e.urlAfterRedirects);

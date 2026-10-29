@@ -12,7 +12,7 @@ import { expect as ocekuj, test } from './javna-mreza';
  * 401 kao na stejdžingu i obara test). Mok: `e2e/mock-raspored.ts` (`primer()`: stavke 31 i 32 grupe studenta, 33 tuđa).
  */
 
-const API = /^(GET|POST) \/api\/public\/nalog\/(stanje|ja|cas|casovi|casovi\/najavi|casovi\/povuci)$/;
+const API = /^(GET|POST) \/api\/public\/nalog\/(stanje|ja|cas|casovi|casovi\/najavi|casovi\/povuci|obavestenja)$/;
 
 const kartica = (page: Page) => page.locator('[data-naredni-casovi]');
 const termin = (page: Page, stavka: number, datum: string) => page.locator(`[data-termin="${stavka}:${datum}"]`);

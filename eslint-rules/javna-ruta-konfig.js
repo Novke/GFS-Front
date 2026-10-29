@@ -59,6 +59,13 @@ const DOZVOLJENO_PO_FEATURE = {
   // api/public/lti/povezi i api/public/lti/povezivanje (ime Moodle naloga). Oba modula su proverena sa svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API
   // ni ljusku.
   'features/nalog': [
+    // Aplikacija na telefonu i push (spec „Aplikacija i obaveštenja“ 4 i 5): bez HTTP-a i bez store-a
+    'core/pwa/instalacija.pravila', // čiste funkcije, bez uvoza
+    'core/pwa/instalacija', // beforeinstallprompt i display-mode; uvozi samo @angular/core i instalacija.pravila
+    'core/pwa/uputstvo-instalacije.component', // uvozi samo @angular/core, instalacija i instalacija.pravila
+    'core/pwa/service-worker', // registracija assets/pwa/sw.js, bez uvoza
+    'core/pwa/manifest', // <link rel="manifest">, bez uvoza
+    'core/pwa/push-uredjaj', // klasa sa signalima; HTTP ide kroz PushApi koji daje feature (api/public/nalog/push); uvozi rxjs, instalacija.pravila, service-worker
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core
     'shared/util/termin', // naredni časovi (dan, datum, vreme termina): bez ijednog uvoza

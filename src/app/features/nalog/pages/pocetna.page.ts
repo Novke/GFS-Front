@@ -9,6 +9,7 @@ import { NalogApi } from '../data-access/nalog.api';
 import { StudentJa } from '../data-access/nalog.models';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { putanjaPrijave, status } from '../data-access/portal.pravila';
+import { InstalacijaKartica } from '../ui/instalacija-kartica.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NaredniCasovi } from '../ui/naredni-casovi.component';
 
@@ -16,13 +17,14 @@ import { NaredniCasovi } from '../ui/naredni-casovi.component';
  * Tab **Početna** (`/nalog/pocetna`, prvi tab posle prijave): pozdrav po imenu sa grupom i generacijom
  * (`GET api/public/nalog/ja`), dugme **WhatsApp grupa** sopstvene grupe kad je nastavnik postavio link (stoji i posle
  * pridruživanja, kao prečica; samo kanonski `https://chat.whatsapp.com/<kod>`, `waLinkZaPrikaz`), kartica "Naredni časovi"
- * (`ui/naredni-casovi`, sama čita `api/public/nalog/casovi`) i mesto `[data-instalacija-mesto]` za karticu instalacije
- * aplikacije (zaseban posao). Traku "Predavanje je u toku" i "Prezentacija je počela" crta ljuska (`NalogTabovi`). 401
+ * (`ui/naredni-casovi`, sama čita `api/public/nalog/casovi`) i u mestu `[data-instalacija-mesto]` ponuda za instalaciju
+ * aplikacije (`InstalacijaKartica`, spec „Aplikacija i obaveštenja“ 4.3: samo na telefonu bez instalirane aplikacije, dok je
+ * student ne sakrije). Traku "Predavanje je u toku" i "Prezentacija je počela" crta ljuska (`NalogTabovi`). 401
  * vodi na prijavu sa povratkom ovde.
  */
 @Component({
   selector: 'app-pocetna-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir, NaredniCasovi],
+  imports: [InstalacijaKartica, MatButton, MatProgressSpinner, NalogOkvir, NaredniCasovi],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Studentski portal">
@@ -55,7 +57,7 @@ import { NaredniCasovi } from '../ui/naredni-casovi.component';
         </p>
       }
       <div class="naredni"><app-naredni-casovi /></div>
-      <div class="instalacija" data-instalacija-mesto></div>
+      <div class="instalacija" data-instalacija-mesto><app-instalacija-kartica mesto="pocetna" /></div>
     </app-nalog-okvir>
   `,
   styles: `

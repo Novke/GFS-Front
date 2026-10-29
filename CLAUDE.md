@@ -264,8 +264,8 @@ the front only routes and shows.
   - **Početna** (`pages/pocetna.page`, the default tab after login): "Zdravo, <ime>!", a welcome line, "Grupa X · generacija Y"
     (`GET api/public/nalog/ja`), the button **"WhatsApp grupa"** (`[data-wa-grupa]`, `target="_blank"`, `rel="noopener noreferrer"`)
     when `StudentJa.waLink` passes `waLinkZaPrikaz` (it stays after joining, as a shortcut), the self-contained card "Naredni časovi"
-    (moved here from the tab Čas) and an empty `[data-instalacija-mesto]` for the app install card of the push work (hidden while
-    empty). 401 goes to the login with a return here; other errors show the text and "Pokušaj ponovo".
+    (moved here from the tab Čas) and `[data-instalacija-mesto]` with the app install card (`InstalacijaKartica mesto="pocetna"`, see
+    "Aplikacija i obaveštenja"). 401 goes to the login with a return here; other errors show the text and "Pokušaj ponovo".
   - **Predmeti** (`pages/predmeti.page`): subjects from the student's groups (own group plus lectures attended with another group),
     "Prisutan na x od y · n tipova za vežbanje", chip "Ocena objavljena".
   - **Predmet** (`pages/predmet.page`, `?k=materijali|istorija|ocena`, `replaceUrl`): Materijali = presentations shown in finished runs
@@ -294,13 +294,13 @@ the front only routes and shows.
     `ui/slika-zadatka.component` shows task SVGs (`api/public/mediji/<uuid>` as `<img>`) with "Uvećaj".
   - **Ja** (`pages/ja.page`, `ui/nalog-pregled.component`): name, index, group and generation, masked e-mail, Moodle status, devices,
     "Odjavi se" / "Odjavi sve uređaje" (logout returns to `nalog` with the message in history state). `nalog/moodle` "Otvori nalog"
-    links here. Below it the self-contained card "Obaveštenja" (`ui/podesavanja-mejla.component`, `[data-podesavanja]`): checkbox
-    "Javi mi mejlom kad je čas otkazan" (`GET|PUT api/public/nalog/podesavanja` = `{mejlOtkazanCas}`, default on; covers the
-    cancellation mail and "čas se ipak održava"), optimistic with rollback and the server text on error, "Sačuvano." on success.
+    links here. Below it the self-contained card "Obaveštenja" (`ui/podesavanja-obavestenja.component`, `[data-podesavanja]`; push
+    device state, switches per kind and the mail checkbox, see "Aplikacija i obaveštenja") and the install card.
   - **Allow-list** (`DOZVOLJENO_PO_FEATURE['features/nalog']` in `eslint-rules/javna-ruta-konfig.js`, each entry read with its own
     imports): `features/uzivo/ui/{polja-zadatka,tekst-formule.component,tekst-formule,format}`, the slide renderer
     `ui/slajd-prikaz.component`, `ui/slajd-za-prikaz` and `features/uzivo/izlaz-iz-izvodjenja` (no imports; also on the
-    `features/uzivo/javno` list). Types of a ui component's inputs are re-exported from that ui file
+    `features/uzivo/javno` list), and the PWA modules `core/pwa/{instalacija.pravila,instalacija,uputstvo-instalacije.component,
+    service-worker,manifest,push-uredjaj}` (none of them imports `core/api`, `core/state` or a store). Types of a ui component's inputs are re-exported from that ui file
     (`slajd-za-prikaz.ts`, `polja-zadatka.ts`), because `gfs/granice-featurea` also forbids `import type` from another feature's
     `data-access`.
 - **Moodle, student side** (`features/nalog/pages/moodle.page.ts`, public child `nalog/moodle`, spec prijave 8.3): the backend
@@ -467,6 +467,58 @@ computed on the server; the front never builds dates of termini itself.
   it mirrors the server's overlap check, lost cancellations, `posaljiMejl` and the next-4 announce window).
   `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`
   (Početna); the check-in flow on the tab Čas never asks for it.
+
+## Aplikacija i obaveštenja (PWA, push, student bell, QR scanner; studentski deo faza 4)
+
+Branch `feature/aplikacija-push` in all three repos. Spec: deploy repo `docs/superpowers/specs/2026-10-29-aplikacija-i-obavestenja-design.md`,
+plan next to it; backend in `GFSSystem/CLAUDE.md` ("Aplikacija i obaveštenja"). No Angular service worker package, no caching: the app stays
+online-only, the SW exists only for install and push.
+- **Static files (`src/assets/pwa/`):** icons, `manifest-student.webmanifest` (start `../../nalog`) and `manifest-nastavnik.webmanifest` (start
+  `../../`), both `id: "/"`, scope `../../` (relative, so any base href works), and `sw.js` (plain JS, **no `fetch` handler**:
+  `skipWaiting` + `clients.claim`, `push` shows `{naslov, tekst, putanja, oznaka}` with the icon and badge, `notificationclick` focuses or
+  opens `putanja` resolved against the scope and only inside it, else `nalog`; every push also posts `{tip: 'gfs-obavestenje'}` to the open
+  windows). The container `docker/nginx.conf` serves `sw.js` from its own `location = /assets/pwa/sw.js` with `Service-Worker-Allowed: /`,
+  `no-store` and the same CSP line (so `e2e/csp.spec.ts` counts three CSP lines), the manifests through `location /` with the http-level
+  `types { application/manifest+json webmanifest; }` (no extra regex location: `e2e/javne-putanje.spec.ts` allows only the long-cache regex);
+  the e2e static server mirrors both. `e2e/javni-upis.spec.ts` and `e2e/uzivo-javno.spec.ts` check that public routes have neither a manifest nor a SW. Host nginx does not change (`assets/` is public).
+- **`core/pwa/`** (no `core/api`, no store; all on the `features/nalog` allow-list): `instalacija.pravila` (pure detection from
+  `userAgent`/`maxTouchPoints`/standalone: `instalirano | ponuda | ios-safari | ios-drugi | android | racunar`, table spec),
+  `instalacija` (`PonudaInstalacije`: the `beforeinstallprompt` event is caught already in `index.html`, `window.__gfsPonudaInstalacije`,
+  because it fires before Angular starts), `uputstvo-instalacije.component` (button or the iPhone three-step visual guide, manual "Nije tvoj
+  telefon?"), `manifest` (`postaviManifest(document, 'student'|'nastavnik')`, sets `link#gfs-manifest`), `service-worker` (register once with
+  scope = base href, `naPushPoruku`), `push-uredjaj` (`PushUredjaj` over a `PushApi`: state `ucitavanje | nepodrzano | samo-iz-aplikacije |
+  blokirano | iskljuceno | ukljuceno | greska`; on load it re-syncs browser and server subscription silently and drops one made with an old
+  VAPID key; `ukljuci()` asks for permission **before any await** (Safari gesture rule); iPhone outside the home-screen app is
+  `samo-iz-aplikacije`).
+- **Initial bundle:** nothing PWA is in the initial closure (budget 800 000 B, `e2e/lenji-editor.spec.ts`). The student manifest is set by the
+  lazy tabs shell (`NalogTabovi`), the teacher manifest and the SW registration by the deferred teacher bell (`ObavestenjaMeni`), so `upis`,
+  `uzivo`, `nalog` (login) and `/prijava` have neither. The student SW is registered after the first successful bell load (signed in).
+- **Student bell (`features/nalog/ui/zvono-naloga.component`, own `ZvonoStore`, never `NotificationStore`):** in the corner of the account
+  card header on every tab (absolute in `NalogTabovi`, the header reserves `--nalog-zaglavlje-desno`), hidden until the first `GET
+  api/public/nalog/obavestenja` succeeds (a 401 before the redirect to login stays silent). Red dot while `novo`; opening posts `obavestenja/otvoreno`
+  (per student, all devices); items newest first, a click goes to `adresaStavke(putanja)` (only `nalog...` paths, else `/nalog`). Refresh on
+  open, on `visibilitychange`, every 2 min and on the SW message.
+- **Settings card (`ui/podesavanja-obavestenja.component`, tab Ja):** "Na ovom uređaju" (`PushUredjaj` over `ObavestenjaApi`: enable, test push,
+  disable) and "Šta mi javljaš" (per kind a "Telefon" and a "Zvono" checkbox, accessible names `Telefon: <kind>` / `Zvono: <kind>`; the
+  cancellation is "Zvono: uvek", the reminder has no bell), then "Javi mi mejlom kad je čas otkazan". `PUT api/public/nalog/podesavanja` sends
+  the whole object; an older backend without the push fields shows only the mail checkbox.
+- **Install card (`ui/instalacija-kartica.component`, `mesto` = `pocetna` | `ja`):** only inside the signed-in account. On the tab Početna
+  (`[data-instalacija-mesto]`, below "Naredni časovi") only on a phone without the installed app and until "Ne sada" (`localStorage` `gfs.instalacija.skrivena`); the tab Ja always shows the item
+  "Aplikacija na telefonu" (computer included, no "Ne sada").
+- **QR scanner (`ui/skener-qr.component`, tab Čas `[data-skener-mesto]`):** text before the permission ("Slobodno dozvoli."), then
+  `getUserMedia` with `BarcodeDetector` or the lazy `jsqr` chunk (`data-access/citac-qr.ts`, in `allowedCommonJsDependencies`); denied or
+  no camera: "Slikaj tablu" (`<input type=file accept=image/* capture=environment>`, decoded the same way), then spoken instructions per OS.
+  `tokenIzQr` accepts only `nalog/cas/<token>` on the same origin and base (`Ovo nije QR za čekiranje.`).
+- **Teacher:** user menu "Instaliraj na telefon" -> `/podesavanja/obavestenja` (`features/podesavanja/pages/obavestenja-telefona.page.ts`:
+  install guide, this device via `NastavnikPushApi` = `api/push`, kinds via `GET|PUT api/push/podesavanja`). A push opens
+  `?obavestenja=otvori`: `ObavestenjaMeni` removes the parameter (`replaceUrl`) and opens the list. Timetable form: checkbox "Podsetnik
+  studentima dan pre časa" + time 06:00-21:30 (`opcijeVremena(6, 21.75, 15)`, default 18:00; `RasporedCmd.podsetnik`/`podsetnikVreme`).
+  Termini page: after a cancel/restore the snackbar offers "WhatsApp" and the row keeps "Pošalji u WhatsApp" until the page is left
+  (`WhatsAppDialog`: editable text from `tekstZaWhatsApp`, then `https://wa.me/?text=`; the app sends nothing itself).
+- **Tests:** unit specs next to each file (UA table, QR parsing, camera fallbacks, bell, push state machine, settings); e2e
+  `nalog-portal.spec.ts` (bell dot/list/opened/navigation with axe, switches and full-object `PUT`, student manifest and SW scope `/`), mock
+  routes in `e2e/mock-portal.ts` (`zvono`, `pushPretplacen`, `podesavanja`). Specs that list account requests allow `GET obavestenja` (and
+  `push` on the tab Ja); headless Chromium reports notifications as `blokirano`.
 
 ## Uživo (`features/uzivo`)
 

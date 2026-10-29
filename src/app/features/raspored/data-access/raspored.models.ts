@@ -10,6 +10,8 @@ export interface RasporedInfo {
   vaziOd: string;
   vaziDo: string;
   pragNajava: number;
+  /** Podsetnik studentima dan pre časa (`HH:mm:ss`), `null` kad je isključen; stariji backend ga ne šalje. */
+  podsetnikVreme?: string | null;
   brojStavki: number;
 }
 
@@ -30,6 +32,8 @@ export interface RasporedDetails {
   vaziOd: string;
   vaziDo: string;
   pragNajava: number;
+  /** Podsetnik studentima dan pre časa (`HH:mm:ss`), `null` kad je isključen; stariji backend ga ne šalje. */
+  podsetnikVreme?: string | null;
   stavke: StavkaInfo[];
   /** Koliko otkazanih termina od danas je izmena ukinula (samo odgovor na `PUT`; inače 0). */
   izgubljenaOtkazivanja?: number;
@@ -50,6 +54,10 @@ export interface RasporedCmd {
   vaziOd: string;
   vaziDo: string;
   pragNajava: number;
+  /** Podsetnik dan pre časa (spec „Aplikacija i obaveštenja“ 6.1); `null` = pri upisu uključen, pri izmeni ne menja. */
+  podsetnik?: boolean | null;
+  /** `HH:mm`; `null` = pri upisu 18:00, pri izmeni ne menja. */
+  podsetnikVreme?: string | null;
   stavke: StavkaCmd[];
 }
 
@@ -87,7 +95,7 @@ export interface TerminCmd {
   stavkaId: number;
   datum: string;
   napomena?: string | null;
-  /** „Pošalji mejl studentima“ (server: izostavljeno = da). */
+  /** „Obavesti studente (mejl i telefon)“ (server: izostavljeno = da). */
   posaljiMejl?: boolean;
 }
 
@@ -97,6 +105,8 @@ export interface PromenaTerminaOdgovor {
   obavesteno: number;
   /** Studenti sa mejlom koji poruku nisu dobili (pun red ili slanje nije podešeno); stariji server ga ne šalje. */
   neposlato?: number;
+  /** Koliko push poruka je stavljeno u red (uređaji studenata); stariji server ga ne šalje. */
+  pushPoslato?: number;
 }
 
 export const MAX_NAZIV = 100;

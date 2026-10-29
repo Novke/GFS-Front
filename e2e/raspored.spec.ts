@@ -181,7 +181,7 @@ test.describe('raspored časova (nastavnik)', () => {
     await red.getByRole('button', { name: /^Otkaži čas/ }).click();
     const dijalog = page.getByRole('dialog', { name: 'Otkazati čas?' });
     await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
-    await expect(dijalog.getByRole('checkbox', { name: /^Pošalji mejl studentima/ })).toBeChecked();
+    await expect(dijalog.getByRole('checkbox', { name: /^Obavesti studente mejlom i na telefon/ })).toBeChecked();
     await dijalog.getByLabel('Napomena za studente (nije obavezno)').fill('sednica veća');
     await dijalog.getByRole('button', { name: 'Otkaži čas' }).click();
     await expect(page.getByText('Čas je otkazan. Mejl je poslat: 6 studenata.')).toBeVisible();
@@ -195,11 +195,11 @@ test.describe('raspored časova (nastavnik)', () => {
     await red.getByRole('button', { name: /^Vrati čas/ }).click();
     const potvrda = page.getByRole('alertdialog', { name: 'Vratiti čas?' });
     // bez mejla: nastavnik isključi kvačicu (npr. već je javio na času)
-    const mejl = potvrda.getByRole('checkbox', { name: /^Pošalji mejl studentima/ });
+    const mejl = potvrda.getByRole('checkbox', { name: /^Obavesti studente mejlom i na telefon/ });
     await expect(mejl).toBeChecked();
     await mejl.uncheck();
     await potvrda.getByRole('button', { name: 'Vrati čas' }).click();
-    await expect(page.getByText('Čas se ipak održava. Mejl studentima nije slat.')).toBeVisible();
+    await expect(page.getByText('Čas se ipak održava. Mejl i obaveštenje na telefon nisu slati.')).toBeVisible();
     await expect(red.getByRole('button', { name: /^Otkaži čas/ })).toBeVisible();
     expect(mock.zahteviZa('rasporedi/termini/vrati', 'POST').map(z => z.telo)).toEqual([{ stavkaId: 31, datum: sutra, posaljiMejl: false }]);
 
