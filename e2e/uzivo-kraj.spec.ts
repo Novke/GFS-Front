@@ -75,7 +75,12 @@ test.describe('konzola posle kraja izvođenja', () => {
     await nastavnickiBroker(konzola, mock);
     await konzola.reload();
     await expect(kraj(konzola).locator('[data-nazad-predavanje]')).toBeVisible();
-    await Promise.all([konzola.waitForEvent('close'), kraj(konzola).locator('[data-nazad-predavanje]').click()]);
+    const zatvorena = konzola.waitForEvent('close');
+    // kartica se zatvara usred klika, pa Playwright javlja zatvoren cilj: to je očekivani ishod, svaka druga greška nije
+    await kraj(konzola).locator('[data-nazad-predavanje]').click().catch((e: unknown) => {
+      if (!konzola.isClosed()) throw e;
+    });
+    await zatvorena;
     expect(page.isClosed()).toBe(false);
   });
 });
