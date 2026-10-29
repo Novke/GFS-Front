@@ -52,6 +52,9 @@ test.describe('javni upis (telefon studenta, bez basic-auth-a)', () => {
     expect(NIZOVI_EDITORA).toEqual(expect.arrayContaining([NIZ_PROSEMIRROR, NIZ_MATHLIVE]));
     expect(javnaMreza.zahtevi.filter(p => p.includes('/assets/mathlive/'))).toEqual([]);
     expect(javnaMreza.zahtevi.length, 'zahtevi su zabeleženi').toBeGreaterThan(1);
+    // aplikacija na telefonu (spec „Aplikacija i obaveštenja“ 8): javna ruta nema manifest ni service worker
+    await expect(page.locator('link[rel=manifest]')).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.serviceWorker.getRegistrations().then(r => r.length))).toBe(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
