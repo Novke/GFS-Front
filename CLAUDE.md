@@ -264,8 +264,8 @@ the front only routes and shows.
   - **Početna** (`pages/pocetna.page`, the default tab after login): "Zdravo, <ime>!", a welcome line, "Grupa X · generacija Y"
     (`GET api/public/nalog/ja`), the button **"WhatsApp grupa"** (`[data-wa-grupa]`, `target="_blank"`, `rel="noopener noreferrer"`)
     when `StudentJa.waLink` passes `waLinkZaPrikaz` (it stays after joining, as a shortcut), the self-contained card "Naredni časovi"
-    (moved here from the tab Čas) and an empty `[data-instalacija-mesto]` for the app install card of the push work (hidden while
-    empty). 401 goes to the login with a return here; other errors show the text and "Pokušaj ponovo".
+    (moved here from the tab Čas) and `[data-instalacija-mesto]` with the app install card (`InstalacijaKartica mesto="pocetna"`, see
+    "Aplikacija i obaveštenja"). 401 goes to the login with a return here; other errors show the text and "Pokušaj ponovo".
   - **Predmeti** (`pages/predmeti.page`): subjects from the student's groups (own group plus lectures attended with another group),
     "Prisutan na x od y · n tipova za vežbanje", chip "Ocena objavljena".
   - **Predmet** (`pages/predmet.page`, `?k=materijali|istorija|ocena`, `replaceUrl`): Materijali = presentations shown in finished runs
@@ -502,8 +502,8 @@ online-only, the SW exists only for install and push.
   disable) and "Šta mi javljaš" (per kind a "Telefon" and a "Zvono" checkbox, accessible names `Telefon: <kind>` / `Zvono: <kind>`; the
   cancellation is "Zvono: uvek", the reminder has no bell), then "Javi mi mejlom kad je čas otkazan". `PUT api/public/nalog/podesavanja` sends
   the whole object; an older backend without the push fields shows only the mail checkbox.
-- **Install card (`ui/instalacija-kartica.component`, `mesto` = `cas` | `ja`):** only inside the signed-in account. On the tab Čas only on a
-  phone without the installed app and until "Ne sada" (`localStorage` `gfs.instalacija.skrivena`); the tab Ja always shows the item
+- **Install card (`ui/instalacija-kartica.component`, `mesto` = `pocetna` | `ja`):** only inside the signed-in account. On the tab Početna
+  (`[data-instalacija-mesto]`, below "Naredni časovi") only on a phone without the installed app and until "Ne sada" (`localStorage` `gfs.instalacija.skrivena`); the tab Ja always shows the item
   "Aplikacija na telefonu" (computer included, no "Ne sada").
 - **QR scanner (`ui/skener-qr.component`, tab Čas `[data-skener-mesto]`):** text before the permission ("Slobodno dozvoli."), then
   `getUserMedia` with `BarcodeDetector` or the lazy `jsqr` chunk (`data-access/citac-qr.ts`, in `allowedCommonJsDependencies`); denied or

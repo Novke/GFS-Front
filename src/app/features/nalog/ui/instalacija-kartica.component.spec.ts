@@ -19,7 +19,7 @@ describe('InstalacijaKartica', () => {
 
   afterEach(() => localStorage.removeItem(KLJUC_SKRIVENA_PONUDA));
 
-  function napravi(mesto: 'cas' | 'ja') {
+  function napravi(mesto: 'pocetna' | 'ja') {
     const f = TestBed.createComponent(InstalacijaKartica);
     f.componentRef.setInput('mesto', mesto);
     f.detectChanges();
@@ -28,7 +28,7 @@ describe('InstalacijaKartica', () => {
 
   it('Android sa ponudom: dugme „Instaliraj“ bez uputstva; „Ne sada“ sakriva i pamti na uređaju', async () => {
     prikaz.set({ uredjaj: 'android', nacin: 'ponuda' });
-    const { f, el } = napravi('cas');
+    const { f, el } = napravi('pocetna');
     expect(el.querySelector('h3')?.textContent).toBe('Instaliraj GFS na telefon');
     expect(el.querySelector('[data-instaliraj]')).not.toBeNull();
     expect(el.querySelector('[data-uputstvo]')).toBeNull();
@@ -42,7 +42,7 @@ describe('InstalacijaKartica', () => {
 
   it('iPhone: uputstvo u 3 koraka (Safari), ručni izbor Androida; „Već sam dodao“ sakriva', async () => {
     prikaz.set({ uredjaj: 'iphone', nacin: 'ios-safari' });
-    const { f, el } = napravi('cas');
+    const { f, el } = napravi('pocetna');
     expect(el.querySelector('h3')?.textContent).toBe('Dodaj GFS na početni ekran');
     expect(el.querySelectorAll('[data-uputstvo="ios-safari"] li')).toHaveLength(3);
     expect(el.textContent).toContain('Add to Home Screen');
@@ -56,12 +56,12 @@ describe('InstalacijaKartica', () => {
     expect(el.querySelector('[data-instalacija]')).toBeNull();
   });
 
-  it('računar i instalirana aplikacija: nema kartice na tabu Čas; na Ja je tekst za računar ili potvrda', () => {
+  it('računar i instalirana aplikacija: nema kartice na Početnoj; na Ja je tekst za računar ili potvrda', () => {
     prikaz.set({ uredjaj: 'racunar', nacin: 'racunar' });
-    expect(napravi('cas').el.querySelector('[data-instalacija]')).toBeNull();
+    expect(napravi('pocetna').el.querySelector('[data-instalacija]')).toBeNull();
     expect(napravi('ja').el.textContent).toContain('Možeš da je instaliraš i na računar.');
     prikaz.set({ uredjaj: 'android', nacin: 'instalirano' });
-    expect(napravi('cas').el.querySelector('[data-instalacija]')).toBeNull();
+    expect(napravi('pocetna').el.querySelector('[data-instalacija]')).toBeNull();
     expect(napravi('ja').el.querySelector('[data-instalirano]')).not.toBeNull();
   });
 });

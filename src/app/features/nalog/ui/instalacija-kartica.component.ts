@@ -23,8 +23,8 @@ function sakrij(): void {
 /**
  * „Instaliraj GFS na telefon“ (spec „Aplikacija i obaveštenja“ 4.3, skica telefona A i B), samo za prijavljenog studenta.
  *
- * - `mesto="cas"`: kartica na vrhu taba Čas, samo na telefonu bez instalirane aplikacije i dok je student ne sakrije sa
- *   „Ne sada“ ili „Već sam dodao“ (pamti se u `localStorage` ovog uređaja).
+ * - `mesto="pocetna"`: kartica na tabu Početna (`[data-instalacija-mesto]`), samo na telefonu bez instalirane aplikacije
+ *   i dok je student ne sakrije sa „Ne sada“ ili „Već sam dodao“ (pamti se u `localStorage` ovog uređaja).
  * - `mesto="ja"`: stalna stavka „Aplikacija na telefonu“ na tabu Ja (i za računar), bez „Ne sada“.
  */
 @Component({
@@ -33,9 +33,9 @@ function sakrij(): void {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (vidljiva()) {
-      <section class="kartica" [class.istaknuta]="mesto() === 'cas'" aria-labelledby="naslov-instalacije"
+      <section class="kartica" [class.istaknuta]="mesto() === 'pocetna'" aria-labelledby="naslov-instalacije"
                [attr.data-instalacija]="mesto()">
-        @if (mesto() === 'cas') {
+        @if (mesto() === 'pocetna') {
           <h3 id="naslov-instalacije">{{ iphone() ? 'Dodaj GFS na početni ekran' : 'Instaliraj GFS na telefon' }}</h3>
           <p class="uvod">
             @if (iphone()) {
@@ -51,7 +51,7 @@ function sakrij(): void {
           }
         }
         <app-uputstvo-instalacije [nacin]="prikaz().nacin" (dodao)="dodao()" (ishod)="ishod($event)">
-          @if (mesto() === 'cas') {
+          @if (mesto() === 'pocetna') {
             <button dodatna-akcija type="button" class="dugme" (click)="neSada()" data-ne-sada>Ne sada</button>
           }
         </app-uputstvo-instalacije>
@@ -63,9 +63,8 @@ function sakrij(): void {
   `,
   styles: `
     :host { display: block; }
-    .kartica { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    .kartica { margin: 16px 0 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm);
       background: var(--surface); }
-    .kartica[data-instalacija='ja'] { margin: 16px 0 0; }
     .kartica.istaknuta { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-soft-ink); }
     h3 { margin: 0 0 4px; font-size: 16px; }
     .uvod { margin: 0; }
@@ -78,7 +77,7 @@ function sakrij(): void {
 export class InstalacijaKartica {
   private readonly ponuda = inject(PonudaInstalacije);
 
-  readonly mesto = input<'cas' | 'ja'>('cas');
+  readonly mesto = input<'pocetna' | 'ja'>('pocetna');
 
   protected readonly prikaz = this.ponuda.prikaz;
   protected readonly iphone = computed(() => this.prikaz().uredjaj === 'iphone');
@@ -94,7 +93,7 @@ export class InstalacijaKartica {
   }
 
   protected dodao(): void {
-    if (this.mesto() === 'cas') {
+    if (this.mesto() === 'pocetna') {
       this.neSada();
     } else {
       this.poruka.set('Otvori GFS sa početnog ekrana i tamo se prijavi.');
