@@ -231,6 +231,13 @@ export class MockIzvodjenje {
     this.verzija++;
   }
 
+  /** Izvođenje je pokrenuto sa predavanja (grupa i predavanje u svakom snimku, REST i STOMP). */
+  naPredavanju(grupa: unknown, predavanje: unknown): void {
+    this.f.izvodjenje.grupa = grupa;
+    this.f.izvodjenje.predavanje = predavanje;
+    this.verzija++;
+  }
+
   stanje(): NastavnickoSnimak {
     const sl = this.f.slajdovi;
     const trenutni = this.trenutni();

@@ -1,4 +1,5 @@
 import type { Platno, Potez, Tema } from './platno.models';
+import type { VrstaPrezentacije } from '../../../core/api/redosled-prezentacija';
 
 export type { Tema } from './platno.models';
 export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO' | 'ZADATAK';
@@ -57,9 +58,15 @@ export interface PrezentacijaInfo {
   id: number; naziv: string; opis: string | null; predmet: PredmetKratko; brojSlajdova: number; brojPitanja: number;
   izmenjeno: string; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
   brojIzvodjenja: number; aktivnoIzvodjenjeId: number | null;
+  /** Redni broj vežbe 0-99 (`null` = bez broja); menja se samo kroz `PATCH prezentacije/{id}/vezba`. */
+  vezba: number | null;
+  /** Iz slajdova: ZADACI = bar jedan ZADATAK, PITANJA = bar jedno pitanje, inače GRADIVO. */
+  vrsta: VrstaPrezentacije; brojZadataka: number; kreirano: string;
+  /** Početak najnovijeg izvođenja (bilo koje grupe) ili `null`. */
+  poslednjePustanje: string | null;
 }
 export interface PrezentacijaDetails extends PrezentacijaInfo { slajdovi: SlajdDetails[]; }
-export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; }
+export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; vezba?: number | null; }
 export interface UpdatePrezentacijaCmd { naziv: string; opis: string | null; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean; }
 export interface OpcijaCmd { tekst: string; tacna: boolean; }
 export interface PitanjeCmd {

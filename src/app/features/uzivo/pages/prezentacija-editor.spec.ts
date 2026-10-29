@@ -48,6 +48,7 @@ const prezentacija: PrezentacijaDetails = {
   id: 1, naziv: 'Statika', opis: null, predmet: { id: 7, naziv: 'Mehanika' }, brojSlajdova: 1, brojPitanja: 0,
   izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: true,
   brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [slajd(11, 1, 'Uvod')],
+  vezba: null, vrsta: 'GRADIVO', brojZadataka: 0, kreirano: '2026-10-01T10:00:00', poslednjePustanje: null,
 };
 
 // Polja prelaza u formi slajda su `@defer (on immediate)` (F16). Prvi dinamički uvoz chunk-a traje van lažnog sata, pa bi

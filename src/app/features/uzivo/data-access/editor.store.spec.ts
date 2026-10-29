@@ -24,6 +24,7 @@ function prezentacija(slajdovi: SlajdDetails[]): PrezentacijaDetails {
     id: 1, naziv: 'Statika', opis: null, predmet: { id: 7, naziv: 'Mehanika' }, brojSlajdova: slajdovi.length,
     brojPitanja: 0, izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD',
     detaljiDozvoljeni: true, brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi,
+    vezba: null, vrsta: 'GRADIVO', brojZadataka: 0, kreirano: '2026-10-01T10:00:00', poslednjePustanje: null,
   };
 }
 

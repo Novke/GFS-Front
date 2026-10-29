@@ -7,7 +7,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/d
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTabsModule } from '@angular/material/tabs';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { distinctUntilChanged, filter, firstValueFrom, map } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { pratiPovratak } from '../data-access/povratak';
@@ -22,6 +22,7 @@ import { QrKodComponent } from '../ui/qr-kod.component';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
+import { KrajIzvodjenjaComponent } from './kraj-izvodjenja.component';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
@@ -33,6 +34,7 @@ import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { RezimProjektora } from '../../../core/layout/rezim-projektora';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
@@ -100,7 +102,8 @@ export class IzborEkranaDialog {
  * levo trenutni (tačno ono što je na projektoru) i sledeći slajd, u sredini kontrole i tajmer, desno rezultati uživo
  * (privatno, uvek; na Zadatak slajdu panel zadatka: broj različitih pre otvaranja, izvučene varijante posle), tekstovi
  * sa "sakrij", beleške i učesnici. Ispod 600 px: tabovi i lepljiva donja traka. Iste prečice kao publika; `R` traži
- * potvrdu, `Shift+R` je rešenje zadatka, `P` otvara publiku. Posle završetka: pregled (uz čuvanje) ili editor.
+ * potvrdu, `Shift+R` je rešenje zadatka, `P` otvara publiku. Posle završetka: završni ekran
+ * ({@link KrajIzvodjenjaComponent}: predlog sledeće prezentacije, povratak na predavanje).
  */
 @Component({
   selector: 'app-konzola',
@@ -109,7 +112,7 @@ export class IzborEkranaDialog {
   imports: [
     NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTabsModule, KonzolaKontroleComponent,
     PublikaScenaComponent, RezultatPrikazComponent, SledecePanelComponent, TajmerComponent, TekstoviPanelComponent,
-    RangKonzolaComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent,
+    RangKonzolaComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent, KrajIzvodjenjaComponent,
   ],
   host: { class: 'uz-kon', lang: 'sr-Latn', '[class.uz-kon--usko]': 'usko()', '(document:keydown)': 'tastatura($event)', '(document:keyup)': 'tast.pusten($event)' },
   // čip bodovanog runa (u komponenti, ne u globalnom CSS-u: početni paket je na granici budžeta)
@@ -120,6 +123,9 @@ export class IzborEkranaDialog {
   `,
   template: `
     @if (store.stanje(); as s) {
+      @if (s.izvodjenje.status === 'ZAVRSENO') {
+        <app-kraj-izvodjenja [izvodjenje]="s.izvodjenje" />
+      } @else {
       <header class="uz-kon-zaglavlje">
         <div class="uz-kon-naslovi">
           <h1 class="uz-kon-naziv">{{ s.izvodjenje.prezentacija.naziv }}</h1>
@@ -262,6 +268,7 @@ export class IzborEkranaDialog {
           </div>
         </div>
       }
+      }
     } @else if (store.greska(); as g) {
       <div class="uz-kon-poruka" role="alert">
         <p>{{ g }}</p>
@@ -279,7 +286,6 @@ export class KonzolaPage {
   protected readonly store = inject(IzvodjenjeStore);
   private readonly dialog = inject(MatDialog);
   private readonly obavestenja = inject(NotificationStore);
-  private readonly router = inject(Router);
   protected readonly rute = UzivoPutanje;
   protected readonly tast = new TastaturaIzvodjenja();
   protected readonly pustiFokus = pustiFokusPosleKlika;
@@ -307,7 +313,8 @@ export class KonzolaPage {
     return s ? odgovorili(s) : null;
   });
 
-  private otisao = false;
+  /** Završni ekran: tastatura konzole tada ne šalje komande (server bi ih odbio sa 410). */
+  protected readonly zavrseno = computed(() => this.store.stanje()?.izvodjenje.status === 'ZAVRSENO');
 
   constructor() {
     window.name = PROZOR_KONZOLE;
@@ -327,19 +334,11 @@ export class KonzolaPage {
       if (s) untracked(() => preducitajFormule(s.trenutniSlajd, s.sledeciSlajd));
     });
 
-    // Završeno (ovom konzolom, drugim prozorom ili automatski posle 12 h): pregled ako se čuva, inače editor.
-    effect(() => {
-      const s = this.store.stanje();
-      if (!s || s.izvodjenje.status !== 'ZAVRSENO' || this.otisao) return;
-      this.otisao = true;
-      untracked(() => {
-        this.obavestenja.info('Izvođenje je završeno.');
-        const cilj = s.izvodjenje.cuvanje
-          ? UzivoPutanje.izvodjenjePregled(s.izvodjenje.id)
-          : UzivoPutanje.prezentacija(s.izvodjenje.prezentacija.id);
-        void this.router.navigate(['/' + cilj]);
-      });
-    });
+    // Završeno (ovom konzolom, drugim prozorom ili automatski posle 12 h): završni ekran u istoj kartici (predlog sledeće,
+    // sve prezentacije, povratak), u režimu aplikacije (dan/noć), a ne više skok na pregled.
+    const rezim = inject(RezimProjektora);
+    effect(() => rezim.pratiRezim.set(this.zavrseno()));
+    destroyRef.onDestroy(() => rezim.pratiRezim.set(false));
   }
 
   protected ima(tip: TipKomande): boolean {
@@ -355,6 +354,7 @@ export class KonzolaPage {
   }
 
   protected tastatura(e: KeyboardEvent): void {
+    if (this.zavrseno()) return;
     const a = this.tast.akcija(e, this.store.stanje()?.brojSlajdova ?? 0, this.dialog.openDialogs.length > 0);
     if (a) this.izvrsi(a);
   }

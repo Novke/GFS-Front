@@ -764,6 +764,37 @@ export const EditorStore = signalStore(
       },
 
       /**
+       * Broj vežbe (`PATCH prezentacije/{id}/vezba`, posebno od `PUT`-a podešavanja); optimistično, neuspeh vraća stari broj.
+       * Proveru 0-99 radi stranica pre poziva, server je ponavlja.
+       */
+      postaviVezbu(vezba: number | null): void {
+        const p = store.prezentacija();
+        if (!p || p.vezba === vezba) return;
+        const staro = p.vezba;
+        const primeni = (v: number | null) => {
+          const sada = store.prezentacija();
+          if (sada) patchState(store, { prezentacija: { ...sada, vezba: v } });
+        };
+        primeni(vezba);
+        const gen = generacija;
+        let ishod: string | null | undefined;
+        pocni();
+        pratiZahtev(api.postaviVezbu(p.id, vezba))
+          .pipe(finalize(() => gen === generacija && zavrsi(ishod)))
+          .subscribe({
+            next: d => {
+              ishod = null;
+              if (gen === generacija) primeni(d.vezba);
+            },
+            error: e => {
+              ishod = razlogGreske(e, PORUKA_CUVANJE);
+              if (vanEkrana(gen)) javiPriIzlasku('Broj vežbe nije sačuvan', e);
+              if (gen === generacija) primeni(staro);
+            },
+          });
+      },
+
+      /**
        * Rezultat uvoza iz PowerPointa (cela prezentacija posle `POST slajdovi/uvoz`): slajdovi po `rb`, izabran prvi slajd
        * čiji id ranije nije postojao. Id-jevi postojećih slajdova se ne menjaju, pa lokalno stanje čuvanja (izmene, nacrti
        * zamenjeni pravim id-jem) i dalje važi; slajd sa izmenom koja još nije na serveru zadržava lokalni sadržaj. Uvoz

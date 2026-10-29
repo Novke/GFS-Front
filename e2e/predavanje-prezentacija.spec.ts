@@ -31,9 +31,15 @@ test.describe('prezentacije na predavanju', () => {
     await posleOtvaranjaDijaloga(page, dijalog);
     const stavke = dijalog.locator('li[data-prezentacija]');
     await expect(stavke).toHaveCount(2);
-    // najskorije izmenjena prva: 6 (18.10.) pre 5 (1.10.)
+    // po vežbama: 6 (Vežbe 1) pre 5 (bez broja vežbe), sa naslovom grupe
     expect(await stavke.evaluateAll(l => l.map(x => x.getAttribute('data-prezentacija')))).toEqual(['6', '5']);
-    await expect(dijalog.locator('[data-filter]')).toHaveCount(0);
+    await expect(dijalog.locator('h4')).toHaveText(['Vežbe 1', 'Bez broja vežbe']);
+    // predlog za grupu predavanja: grupa još ništa nije puštala, pa je prva numerisana prezentacija sledeća
+    await expect(dijalog.locator('[data-predlog] h3')).toContainText('Sledeće za');
+    await expect(dijalog.locator('[data-predlog-stavka]')).toHaveCount(1);
+    await expect(dijalog.locator('[data-predlog-stavka="6"]')).toBeVisible();
+    expect(mock.zahteviZa('prezentacije/izbor', 'GET')[0].query.get('grupaId')).toBe('1');
+    await expect(dijalog.locator('[data-pretraga]')).toHaveCount(0);
 
     const [kartica] = await Promise.all([
       page.waitForEvent('popup'),
@@ -75,7 +81,7 @@ test.describe('prezentacije na predavanju', () => {
     const dijalog = page.getByRole('dialog', { name: 'Pokreni prezentaciju' });
     await posleOtvaranjaDijaloga(page, dijalog);
     await expect(dijalog.locator('li[data-prezentacija="6"] [data-pokreni]')).toBeDisabled();
-    await expect(dijalog.locator('li[data-prezentacija="6"] [data-zauzeta]')).toContainText('ne na ovom predavanju');
+    await expect(dijalog.locator('li[data-prezentacija="6"] [data-zauzeta]')).toContainText('u toku na drugom mestu');
 
     mock.na('POST', 'prezentacije/:id/izvodjenja', () => ({ status: 409, telo: { reason: 'Prezentacija je već u toku.', time: '' } }));
     await prazneKonzole(page);

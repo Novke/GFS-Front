@@ -1,14 +1,16 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { distinctUntilChanged, filter, map } from 'rxjs';
+import { pratiNovoIzvodjenje } from '../data-access/novo-izvodjenje';
 import { pratiPovratak } from '../data-access/povratak';
 import { ispravanIndeks } from '../data-access/izvodjenje-pravila';
 import { IzvodjenjeStore, Veza } from '../data-access/izvodjenje.store';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
+import { UzivoPutanje } from '../uzivo-putanje';
 import {
   fontoviZaPrikaz, preducitajFontove, preducitajFormule, preducitajSlike, sacekajFontove, slikeSlajda,
 } from '../ui/preducitavanje';
@@ -114,10 +116,19 @@ export class PublikaPage {
         preducitajFormule(s.trenutniSlajd, s.sledeciSlajd);
       });
     });
+    let izvodjenjeId = 0;
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
-    ).subscribe(id => this.store.init(id));
+    ).subscribe(id => {
+      izvodjenjeId = id;
+      this.store.init(id);
+    });
     const destroyRef = inject(DestroyRef);
+    // Konzola je posle kraja pokrenula novo izvođenje: ovaj prozor prelazi na njega (isti dokument, pa ostaje ceo ekran).
+    const router = inject(Router);
+    destroyRef.onDestroy(pratiNovoIzvodjenje(p => {
+      if (p.staro === izvodjenjeId) void router.navigate(['/' + UzivoPutanje.izvodjenjePublika(p.novo)], { replaceUrl: true });
+    }));
     // Projektor koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
     destroyRef.onDestroy(pratiPovratak(document, window, ms => this.store.posleVracanja(ms)));
     destroyRef.onDestroy(() => {
