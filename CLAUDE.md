@@ -477,8 +477,10 @@ online-only, the SW exists only for install and push.
   `../../`), both `id: "/"`, scope `../../` (relative, so any base href works), and `sw.js` (plain JS, **no `fetch` handler**:
   `skipWaiting` + `clients.claim`, `push` shows `{naslov, tekst, putanja, oznaka}` with the icon and badge, `notificationclick` focuses or
   opens `putanja` resolved against the scope and only inside it, else `nalog`; every push also posts `{tip: 'gfs-obavestenje'}` to the open
-  windows). The container `docker/nginx.conf` serves `sw.js` with `Service-Worker-Allowed: /` and `no-store`, the manifests as
-  `application/manifest+json`; the e2e static server mirrors both. Host nginx does not change (`assets/` is public).
+  windows). The container `docker/nginx.conf` serves `sw.js` from its own `location = /assets/pwa/sw.js` with `Service-Worker-Allowed: /`,
+  `no-store` and the same CSP line (so `e2e/csp.spec.ts` counts three CSP lines), the manifests through `location /` with the http-level
+  `types { application/manifest+json webmanifest; }` (no extra regex location: `e2e/javne-putanje.spec.ts` allows only the long-cache regex);
+  the e2e static server mirrors both. `e2e/javni-upis.spec.ts` and `e2e/uzivo-javno.spec.ts` check that public routes have neither a manifest nor a SW. Host nginx does not change (`assets/` is public).
 - **`core/pwa/`** (no `core/api`, no store; all on the `features/nalog` allow-list): `instalacija.pravila` (pure detection from
   `userAgent`/`maxTouchPoints`/standalone: `instalirano | ponuda | ios-safari | ios-drugi | android | racunar`, table spec),
   `instalacija` (`PonudaInstalacije`: the `beforeinstallprompt` event is caught already in `index.html`, `window.__gfsPonudaInstalacije`,
