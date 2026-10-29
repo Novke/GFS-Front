@@ -110,8 +110,8 @@ describe('RasporedFormaPage', () => {
   it('nov: popunjen i sačuvan šalje POST sa terminom (vreme HH:mm) i vodi na listu', async () => {
     await otvoriStranu();
     upisi('[data-naziv]', '  Zimski 2030/31 ');
-    upisi('[data-vazi-od]', '2030-10-01');
-    upisi('[data-vazi-do]', '2031-01-31');
+    upisi('[data-vazi-od]', '1. 10. 2030.');
+    upisi('[data-vazi-do]', '31.1.2031');
     await izaberi('[data-dan]', 'sreda');
     upisi('[data-pocetak]', '10:00');
     upisi('[data-kraj]', '13:00');
@@ -144,6 +144,65 @@ describe('RasporedFormaPage', () => {
     upisi('[data-vazi-od]', '2029-01-01');
     await stabilno();
     expect(el().querySelector('[data-greska-perioda]')!.textContent).toBe('Raspored može da traje najviše 400 dana.');
+  });
+
+  it('kalendar: dugme „Otvori kalendar“ i klik na polje ga otvaraju; izabran dan je datum u polju', async () => {
+    await otvoriStranu();
+    const dugme = el().querySelector<HTMLButtonElement>('[data-vazi-od-kalendar] button')!;
+    expect(dugme.getAttribute('aria-label')).toBe('Otvori kalendar: važi od');
+    expect(el().querySelector('mat-timepicker-toggle button')!.getAttribute('aria-label')).toBe('Izaberi početak termina 1');
+    dugme.click();
+    await stabilno();
+    expect(document.querySelector('mat-calendar')).not.toBeNull();
+    [...document.querySelectorAll<HTMLElement>('.mat-calendar-body-cell')].find(c => c.textContent!.trim() === '15')!.click();
+    await stabilno();
+    const danas = new Date();
+    expect(ulaz('[data-vazi-od]').value).toBe(`15. ${danas.getMonth() + 1}. ${danas.getFullYear()}.`);
+
+    // zatvaranje posle izbora čeka kraj animacije, koje u jsdom-u nema; proverava ga e2e
+    const dugmeDo = el().querySelector<HTMLButtonElement>('[data-vazi-do-kalendar] button')!;
+    expect(dugmeDo.getAttribute('aria-expanded')).toBe('false');
+    ulaz('[data-vazi-do]').click();
+    await stabilno();
+    expect(dugmeDo.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('vreme: klik na polje otvara listu 07:00-21:45 na 15 min; izabrano vreme ide u zahtev kao HH:mm', async () => {
+    await otvoriStranu();
+    upisi('[data-naziv]', 'Zimski 2030/31');
+    upisi('[data-vazi-od]', '2030-10-01');
+    upisi('[data-vazi-do]', '2031-01-31');
+    await izaberi('[data-dan]', 'sreda');
+    ulaz('[data-pocetak]').click();
+    await stabilno();
+    const opcije = [...document.querySelectorAll<HTMLElement>('.mat-timepicker-panel mat-option')];
+    expect(opcije).toHaveLength(60);
+    expect(opcije[0].textContent!.trim()).toBe('07:00');
+    expect(opcije.at(-1)!.textContent!.trim()).toBe('21:45');
+    opcije.find(o => o.textContent!.trim() === '10:15')!.click();
+    await stabilno();
+    expect(ulaz('[data-pocetak]').value).toBe('10:15');
+    upisi('[data-kraj]', '13.40');
+    await izaberi('[data-predmet]', 'Geodezija 1');
+    await izaberi('[data-grupa]', 'GD-2030');
+    el().querySelector<HTMLButtonElement>('[data-sacuvaj]')!.click();
+    const req = http.expectOne('api/rasporedi');
+    expect(req.request.body.stavke).toEqual([{ id: null, predmetId: 1, grupaId: 4, dan: 3, pocetak: '10:15', kraj: '13:40' }]);
+    req.flush(DETALJ);
+    await stabilno();
+  });
+
+  it('neispravno ukucan datum ili vreme: poruka kaže šta ne valja (ne „obavezno“) i forma se ne šalje', async () => {
+    await otvoriStranu();
+    upisi('[data-vazi-od]', '31. 2. 2030.');
+    upisi('[data-pocetak]', '25:00');
+    await stabilno();
+    expect(el().textContent).toContain('Datum nije ispravan (npr. 29. 10. 2026.).');
+    expect(el().textContent).toContain('Vreme nije ispravno (npr. 08:30).');
+    expect(ulaz('[data-vazi-od]').value).toBe('31. 2. 2030.');
+    el().querySelector<HTMLButtonElement>('[data-sacuvaj]')!.click();
+    await stabilno();
+    http.expectNone('api/rasporedi');
   });
 
   it('„Dodaj termin“ nasleđuje predmet, grupu i vreme poslednjeg; „Ukloni“ ga briše', async () => {

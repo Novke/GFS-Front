@@ -1,12 +1,20 @@
 import { ValidationErrors } from '@angular/forms';
 
 /**
- * Poruka na srpskom za prvu grešku validacije polja (prioritet: required, pa ostalo po redosledu ispod).
+ * Poruka na srpskom za prvu grešku validacije polja (prioritet: neispravno ukucan datum ili vreme, required, pa ostalo po
+ * redosledu ispod; kalendar i izbor vremena ostavljaju polje bez vrednosti kad tekst ne mogu da pročitaju, pa bi required
+ * rekao „obavezno“ za polje u kome nešto piše).
  * `labela` je ime polja sa velikim početnim slovom ("Prezime"). `null` kad nema greške.
  */
 export function porukaValidacije(errors: ValidationErrors | null, labela: string): string | null {
   if (!errors) {
     return null;
+  }
+  if (errors['matDatepickerParse']) {
+    return 'Datum nije ispravan (npr. 29. 10. 2026.).';
+  }
+  if (errors['matTimepickerParse']) {
+    return 'Vreme nije ispravno (npr. 08:30).';
   }
   if (errors['required']) {
     return `${labela} je obavezno.`;

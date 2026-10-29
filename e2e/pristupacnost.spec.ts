@@ -195,6 +195,16 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('[data-izgubljena-otkazivanja]')).toBeVisible();
       await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
       expect(await ozbiljnaKrsenja(page), `axe: forma rasporeda sa greškom (${rezim})`).toEqual([]);
+      // kalendar i lista vremena (iskačući prozori u overlay-u)
+      await page.locator('[data-vazi-od-kalendar] button').click();
+      await expect(page.locator('mat-calendar')).toBeVisible();
+      await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
+      expect(await ozbiljnaKrsenja(page, '.mat-datepicker-content'), `axe: kalendar (${rezim})`).toEqual([]);
+      await page.keyboard.press('Escape');
+      await page.locator('[data-pocetak]').first().click();
+      await expect(page.getByRole('listbox')).toBeVisible();
+      await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
+      expect(await ozbiljnaKrsenja(page, '.mat-timepicker-panel'), `axe: lista vremena (${rezim})`).toEqual([]);
     });
 
     // Podešavanja -> Moodle: dijalog registracije sa porukom provere
