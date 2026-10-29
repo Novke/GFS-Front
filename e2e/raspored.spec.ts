@@ -22,7 +22,7 @@ async function izaberi(page: Page, polje: ReturnType<Page['locator']>, opcija: s
 
 test.describe('raspored časova (nastavnik)', () => {
   test('bočna navigacija -> lista perioda; „Kopiraj u novi“ nosi termine i prag, period se bira iznova', async ({ page, mock }) => {
-    mock.raspored.primer();
+    const { period } = mock.raspored.primer();
     await page.goto('./');
     const nav = page.getByRole('navigation', { name: 'Glavna navigacija' });
     await nav.getByRole('link', { name: 'Raspored' }).click();
@@ -42,6 +42,12 @@ test.describe('raspored časova (nastavnik)', () => {
     await expect(page.locator('[data-prag]')).toHaveValue('2');
 
     await page.locator('[data-naziv]').fill('Letnji semestar');
+    // isti termini u periodu koji se preklapa sa originalom: server odbija, poruka ide u traku
+    await page.locator('[data-vazi-od]').fill(period.vaziOd);
+    await page.locator('[data-vazi-do]').fill(period.vaziDo);
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Termin 1 već postoji u rasporedu „Zimski semestar (primer)“' })).toBeVisible();
+    await expect(periodi(page)).toHaveCount(0);
     await page.locator('[data-vazi-od]').fill('2031-02-20');
     await page.locator('[data-vazi-do]').fill('2031-06-10');
     await page.getByRole('button', { name: 'Sačuvaj' }).click();
@@ -106,25 +112,50 @@ test.describe('raspored časova (nastavnik)', () => {
     await red.getByRole('button', { name: /^Otkaži čas/ }).click();
     const dijalog = page.getByRole('dialog', { name: 'Otkazati čas?' });
     await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+    await expect(dijalog.getByRole('checkbox', { name: /^Pošalji mejl studentima/ })).toBeChecked();
     await dijalog.getByLabel('Napomena za studente (nije obavezno)').fill('sednica veća');
     await dijalog.getByRole('button', { name: 'Otkaži čas' }).click();
     await expect(page.getByText('Čas je otkazan. Mejl je poslat: 6 studenata.')).toBeVisible();
     await expect(red).toContainText('Otkazano');
     await expect(red).toContainText('Napomena: sednica veća');
-    expect(mock.zahteviZa('rasporedi/termini/otkazi', 'POST').map(z => z.telo)).toEqual([{ stavkaId: 31, datum: sutra, napomena: 'sednica veća' }]);
+    expect(mock.zahteviZa('rasporedi/termini/otkazi', 'POST').map(z => z.telo)).toEqual([
+      { stavkaId: 31, datum: sutra, napomena: 'sednica veća', posaljiMejl: true },
+    ]);
     expect(mock.podaci.obavestenja.find(o => o.vrsta === 'MNOGO_NAJAVA')!.reseno).not.toBeNull();
 
     await red.getByRole('button', { name: /^Vrati čas/ }).click();
     const potvrda = page.getByRole('alertdialog', { name: 'Vratiti čas?' });
+    // bez mejla: nastavnik isključi kvačicu (npr. već je javio na času)
+    const mejl = potvrda.getByRole('checkbox', { name: /^Pošalji mejl studentima/ });
+    await expect(mejl).toBeChecked();
+    await mejl.uncheck();
     await potvrda.getByRole('button', { name: 'Vrati čas' }).click();
-    await expect(page.getByText('Čas se ipak održava. Mejl je poslat: 6 studenata.')).toBeVisible();
+    await expect(page.getByText('Čas se ipak održava. Mejl studentima nije slat.')).toBeVisible();
     await expect(red.getByRole('button', { name: /^Otkaži čas/ })).toBeVisible();
+    expect(mock.zahteviZa('rasporedi/termini/vrati', 'POST').map(z => z.telo)).toEqual([{ stavkaId: 31, datum: sutra, posaljiMejl: false }]);
 
     // „Kasnije“ pomera prozor za 4 nedelje, „Od danas“ vraća
     await page.getByRole('button', { name: 'Kasnije' }).click();
     await expect(page).toHaveURL(new RegExp(`od=${pomeriDan(pomeriDan(sutra, -1), 28)}$`));
     await page.getByRole('button', { name: 'Od danas' }).click();
     await expect(page).toHaveURL(/\/raspored\/termini$/);
+  });
+
+  test('izmena perioda koja ukida otkazan čas: upozorenje pre čuvanja, broj ukinutih posle', async ({ page, mock }) => {
+    const { sutra } = mock.raspored.primer();
+    mock.raspored.otkazani.set(`31:${sutra}`, 'sednica veća');
+    await page.goto('raspored/3');
+    await expect(page.locator('[data-stavka]')).toHaveCount(3);
+    await expect(page.locator('[data-izgubljena-otkazivanja]')).toHaveCount(0);
+    // period se skraćuje na danas: sutrašnji otkazan čas više nije u periodu
+    await page.locator('[data-vazi-do]').fill(pomeriDan(sutra, -1));
+    const upozorenje = page.locator('[data-izgubljena-otkazivanja]');
+    await expect(upozorenje).toContainText('Čuvanje ukida jedan otkazan čas');
+    await expect(upozorenje).toContainText(`Programiranje u građevinarstvu · GD-2025 · ${danIDatum(sutra)}`);
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(page.getByText('Raspored je sačuvan. Ukinuto otkazanih časova: 1.')).toBeVisible();
+    await expect(page).toHaveURL(/\/raspored$/);
+    expect(mock.raspored.otkazani.has(`31:${sutra}`)).toBe(false);
   });
 
   test('zvono: „Mnogo najava odsustva“ bez imena vodi na termine od dana termina', async ({ page, mock }) => {

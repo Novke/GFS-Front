@@ -10,6 +10,7 @@ import { KLJUC_CEKANJA } from '../data-access/cas.pravila';
 import { CasPage } from './cas.page';
 
 const CAS = 'api/public/nalog/cas';
+const CASOVI = 'api/public/nalog/casovi';
 const SKENIRAJ = `${CAS}/skeniraj`;
 const POTVRDI = `${CAS}/potvrdi`;
 const TOKEN = '17.AAAAAAAAAAAAAAAAAAAAAA';
@@ -43,6 +44,8 @@ describe('CasPage', () => {
   });
 
   afterEach(() => {
+    // kartica "Naredni časovi" (sama učitava svoje, ispod živog dela): testovi koji je ne gledaju odgovaraju "bez rasporeda"
+    http.match(CASOVI).filter(r => !r.cancelled).forEach(r => r.flush({ termini: [] }));
     fixture?.destroy();
     http.verify();
     vi.useRealTimers();
@@ -206,7 +209,24 @@ describe('CasPage', () => {
     await otvori();
     http.expectOne(CAS).flush({});
     await osvezi();
-    expect(tekst()).toContain('Trenutno nisi čekiran ni na jednom času. Skeniraj QR sa table.');
+    expect(tekst()).toContain('Nisi na času');
+    expect(tekst()).toContain('Skeniraj QR sa table.');
+    // ispod: kartica "Naredni časovi" iz najave odsustva (spec 12.8)
+    http.expectOne(CASOVI).flush({ termini: [{
+      stavkaId: 7, datum: '2026-11-04', pocetak: '10:00:00', kraj: '13:00:00', predmet: 'Geodezija 1', grupa: 'GD-2026',
+      svojaGrupa: true, otkazan: false, napomena: null, najavljeno: false, razlog: null,
+    }] });
+    await osvezi();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-naredni-casovi]')).not.toBeNull();
+    expect(tekst()).toContain('Geodezija 1');
+  });
+
+  it('dok se stanje učitava nema kartice "Naredni časovi" (ni zahteva za raspored)', async () => {
+    await otvori();
+    http.expectNone(CASOVI);
+    http.expectOne(CAS).flush({});
+    await osvezi();
+    http.expectOne(CASOVI).flush({ termini: [] });
   });
 
   it('bez sesije (401 na stanju) ide na prijavu', async () => {

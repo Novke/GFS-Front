@@ -7,6 +7,7 @@ import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
 /*
  * Rute banke zadataka (deca rute `banka` u ljusci; roditelj daje naslov "Banka zadataka" i mrvice "Nastava > Banka
  * zadataka"). Filteri stranice su query parametri (`?predmet&namena&grupa`; pregled nacrta `?predmet&izvor&serija&grupa&status&od`).
+ * Statistika vežbanja (`/banka/vezbanje?predmet&grupa&od&do`) je zbirna, bez imena studenata.
  * Id u putanji mora biti broj (`putanjaSaId`), inače 404 bez poziva API-ja. Sve je iza basic-auth-a (ništa pod `/public`).
  * Detalj grupe i editor varijante pitaju pre napuštanja sa nesačuvanim izmenama (`unsavedChangesGuard`).
  */
@@ -22,6 +23,12 @@ export const BANKA_RUTE: Route[] = [
     title: 'Pregled nacrta',
     data: { mrvice: () => [m('Banka zadataka', '/banka'), m('Pregled nacrta')] },
     loadComponent: () => import('./pages/pregled.page').then(x => x.PregledPage),
+  },
+  {
+    path: 'vezbanje',
+    title: 'Statistika vežbanja',
+    data: { mrvice: () => [m('Banka zadataka', '/banka'), m('Statistika vežbanja')] },
+    loadComponent: () => import('./pages/statistika-vezbanja.page').then(x => x.StatistikaVezbanjaPage),
   },
   {
     matcher: putanjaSaId('grupe/:id'),

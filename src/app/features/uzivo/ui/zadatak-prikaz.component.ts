@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Faza, NastavnickiZadatak, SlajdDetails, medijUrl } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, medijUrl } from '../data-access/uzivo.models';
 import type { TajmerUlaz } from './slajd-prikaz.component';
+import type { SlajdZaPrikaz } from './slajd-za-prikaz';
 import { TajmerComponent } from './tajmer.component';
 import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.component';
 
@@ -85,7 +86,7 @@ import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.comp
   `,
 })
 export class ZadatakPrikazComponent {
-  readonly slajd = input.required<SlajdDetails>();
+  readonly slajd = input.required<SlajdZaPrikaz>();
   /** Nastavnički snimak Zadatak slajda; `null` bez stanja izvođenja. */
   readonly zadatak = input<NastavnickiZadatak | null>(null);
   readonly faza = input<Faza | null>(null);

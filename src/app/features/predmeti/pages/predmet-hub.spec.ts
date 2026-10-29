@@ -204,6 +204,11 @@ describe('rute i hub predmeta', () => {
     expect(redovi).toEqual(['3', '4']);
     expect(el().textContent).toContain('nije položio');
     expect(el().querySelector<HTMLAnchorElement>('[data-podesi]')!.getAttribute('href')).toBe('/predmeti/5/podesavanja');
+    // traka objave predloga (ista kao na /ocene): stanje objave za predmet i grupu taba
+    http.expectOne(r => r.url === 'api/ocenjivanje/predmet/5/objava' && r.params.get('grupa') === '1')
+      .flush({ predmetId: 5, grupaId: 1, objavljeno: null, studenata: 0 });
+    await stabilno();
+    expect(el().querySelector('app-objava-ocena [data-objavi]')).not.toBeNull();
   });
 
   /** Otvara Podešavanja i odgovara na koeficijente i sve tipove (`?svi=true`): aktivan 7 i isključen 9. */

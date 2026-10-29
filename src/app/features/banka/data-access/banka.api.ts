@@ -8,8 +8,8 @@ import type { OpcijeZahteva } from '../../../core/api/opcije-zahteva';
 import { Strana } from '../../../shared/models/strana';
 import {
   BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, IskljucenaTemaCmd, IskljucenaTemaInfo, MedijInfo, Namena, NivoCmd,
-  PonistavanjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, SerijaInfo,
-  StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
+  OtvorenoZaGrupu, PonistavanjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, SerijaInfo,
+  StatistikaFilter, StatistikaTipa, StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from './banka.models';
 
 /** Strana liste `GET banka/pretraga` (Spring `page` je 0-based, `size` najviše 100). */
@@ -224,5 +224,39 @@ export class BankaApi {
   /** `DELETE iskljucene-teme/{id}`: tema je ponovo uključena (Klod je opet može nuditi). */
   ukljuciTemu(id: number, o: OpcijeZahteva = {}): Observable<void> {
     return this.http.delete<void>(`${API_URL}/iskljucene-teme/${id}`, { context: this.kontekst(o) });
+  }
+
+  // ---------------------------------------------------------------------------------------------- zadaci za vežbanje
+
+  /** `GET banka/grupe/{id}/otvoreno`: stanje čvora (PREDAVANJE) po grupi studenata; 404 za TEST čvor. */
+  otvoreno(grupaId: number, o: OpcijeZahteva = {}): Observable<OtvorenoZaGrupu[]> {
+    return this.http.get<OtvorenoZaGrupu[]>(`${API_URL}/banka/grupe/${grupaId}/otvoreno`, { context: this.kontekst(o) });
+  }
+
+  /** `PUT banka/grupe/{id}/otvoreno/{grupaStudenataId}`: ručno otvaranje (RUCNO), vraća novo stanje svih grupa. */
+  otvori(grupaId: number, grupaStudenataId: number, o: OpcijeZahteva = {}): Observable<OtvorenoZaGrupu[]> {
+    return this.http.put<OtvorenoZaGrupu[]>(`${API_URL}/banka/grupe/${grupaId}/otvoreno/${grupaStudenataId}`, null,
+      { context: this.kontekst(o) });
+  }
+
+  /** `DELETE banka/grupe/{id}/otvoreno/{grupaStudenataId}`: zatvara čvor i celo podstablo (otvoren predak ostaje). */
+  zatvori(grupaId: number, grupaStudenataId: number, o: OpcijeZahteva = {}): Observable<OtvorenoZaGrupu[]> {
+    return this.http.delete<OtvorenoZaGrupu[]>(`${API_URL}/banka/grupe/${grupaId}/otvoreno/${grupaStudenataId}`,
+      { context: this.kontekst(o) });
+  }
+
+  /** `GET predmeti/{id}/vezbanje/statistika?grupa&od&do`: zbirno po tipu (bez imena studenata). */
+  statistikaVezbanja(predmetId: number, f: StatistikaFilter = {}, o: OpcijeZahteva = {}): Observable<StatistikaTipa[]> {
+    let params = new HttpParams();
+    if (f.grupa != null) {
+      params = params.set('grupa', f.grupa);
+    }
+    if (f.od) {
+      params = params.set('od', f.od);
+    }
+    if (f.do) {
+      params = params.set('do', f.do);
+    }
+    return this.http.get<StatistikaTipa[]>(`${API_URL}/predmeti/${predmetId}/vezbanje/statistika`, { params, context: this.kontekst(o) });
   }
 }

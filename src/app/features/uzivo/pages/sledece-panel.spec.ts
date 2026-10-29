@@ -8,6 +8,7 @@ import type { CrtezSloj, Potez } from '../data-access/platno.models';
 import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { NastavnickoStanje, SlajdDetails } from '../data-access/uzivo.models';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
+import type { SlajdZaPrikaz } from '../ui/slajd-za-prikaz';
 import { SledecePanelComponent } from './sledece-panel.component';
 
 async function prikazi(s: NastavnickoStanje) {
@@ -84,7 +85,7 @@ describe('SledecePanelComponent', () => {
 /** Panel čita keš poteza prozora (konzola: publika-scena ga puni za trenutni i sledeći), a sam ništa ne traži. */
 describe('SledecePanelComponent (potezi crteža iz keša)', () => {
   const potezi: Potez[] = [{ boja: '#C00000', debljina: 3, tacke: [10, 5, 20, 10] }];
-  const crtezSlajda = (sl: SlajdDetails) => sl.platno!.slojevi.find((x) => x.tip === 'CRTEZ') as CrtezSloj;
+  const crtezSlajda = (sl: SlajdZaPrikaz) => sl.platno!.slojevi.find((x) => x.tip === 'CRTEZ') as CrtezSloj;
   let http: HttpTestingController;
 
   beforeEach(() => {

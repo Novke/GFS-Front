@@ -127,7 +127,8 @@ without it.
 
 ## Public routes
 
-`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas` and `nalog/cas/:token` are opened by students on a phone **without basic-auth**
+`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas`, `nalog/cas/:token` and the account tabs (`nalog/predmeti`,
+`nalog/predmet/:id`, `nalog/predmet/:id/vezbanje/:tipId`, `nalog/prezentacija/:id`, `nalog/ja`) are opened by students on a phone **without basic-auth**
 and without a teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
 `api/public/uzivo/*`, `api/public/mediji/*` (for a Zadatak slide only the participant's own variant and, after `RESENJE`, its
 solution), `api/public/ws`; nalog: `api/public/nalog/*`, and `nalog/moodle` also `api/public/lti/povezi` and `api/public/lti/povezivanje`); any other `/api/*`
@@ -239,6 +240,58 @@ the front only routes and shows.
   (`nalog`, `nalog?...`) shows the account screen instead of navigating (the reused component would stay on the code step). Server texts are
   shown verbatim ("Ako nalog postoji, kod je poslat.", 401 "Kod nije ispravan ili je istekao.", 429, 503, "Javili smo
   nastavniku."); "Odjavi sve uređaje" confirms with `ConfirmDialog`. Focus moves to the step heading (`h2`) after each step change.
+  **Since phases 2-3 (below):** after a successful code without `nazad` (or with a `nazad` to `nalog` itself) and for an already
+  signed-in student opening `/nalog` without `nazad`, the page goes to the tab Čas (`NALOG_POCETNA = 'nalog/cas'`, `replaceUrl`); the
+  `prijavljen` step with "Nastavi" exists only for a safe `nazad` elsewhere. Devices and logout live on the tab Ja.
+- **Account tabs Čas · Predmeti · Ja (student portal phases 2 and 3; spec `2026-10-28-studentski-portal-design.md` section 12 in
+  `Novke/GFS-deploy`):** `nalog.routes.ts` keeps `''` (login, `NalogPage`) and `moodle` outside, and puts `cas`, `cas/:token`,
+  `predmeti`, `predmet/:id`, `predmet/:id/vezbanje/:tipId` (`?nivo=`), `prezentacija/:id` and `ja` under the lazy shell
+  `pages/tabovi.page.ts` (`NalogTabovi`: bottom nav `aria-label="Nalog"` with `data-tab`, `aria-current="page"`). Every page is lazy;
+  nothing of it is in the initial bundle. Outside the Čas tab the shell polls `GET api/public/nalog/cas` (`sledeciUpitTrakeMs`, 30-60 s
+  off a lecture, ~10 s on one, at once on `visibilitychange`, 429 backs off to 120 s) and shows the strip "Prezentacija je počela · Uđi"
+  (`[data-traka]`, link `uzivo/<kod>?sa=cas`); only the Čas tab enters the run by itself. Any 401 of a tab page or the shell goes to
+  `putanjaPrijave(router.url)` = `nalog?nazad=<this tab>`. `data-access/portal.api.ts` calls only `api/public/nalog/{predmeti,
+  predmeti/{id}/{prisustvo,vezbanje,moji-zadaci,prezentacije,ocena}, prezentacije/{id}, vezbanje, vezbanje/{id}/{provera,resenje},
+  podesavanja}`, all
+  `LOCAL_ERRORS`; `portal.models.ts` mirrors `dto/portal`; `portal.pravila.ts` holds the pure rules (`putanjaPrijave`, `jeTabCas`,
+  `ucinak`, `opisPredmeta`, `idIzRute`, `nivoIzUpita`, `zvezdice`, `status`). Students never see the word "banka": the practice part is
+  "Zadaci za vežbanje".
+  - **Predmeti** (`pages/predmeti.page`): subjects from the student's groups (own group plus lectures attended with another group),
+    "Prisutan na x od y · n tipova za vežbanje", chip "Ocena objavljena".
+  - **Predmet** (`pages/predmet.page`, `?k=materijali|istorija|ocena`, `replaceUrl`): Materijali = presentations shown in finished runs
+    (`[data-prezentacija]` -> review) and the open practice types per topic (`[data-tip]`); Istorija = attendance list and "Moji zadaci sa
+    časa" (`ui/moj-zadatak.component`: own variant, what was entered, "Prikaži rešenje" toggles the correct values and the solution
+    image, "Vežbaj ovaj tip"); Ocena = "Ocena još nije objavljena." until the teacher publishes, then the published snapshot. Each card
+    loads once, lazily.
+  - **Vežbanje** (`pages/vezbanje.page`, `ui/vezbanje-unos.component`): `POST vezbanje {tipId, nivo}` draws a variant (no correct
+    values in it), "Proveri" shows per-field Tačno/Netačno only (editing a field clears its result), "Prikaži rešenje" fetches the correct
+    values and the solution image, "Sledeći zadatak", level buttons ★/★★/★★★ with counts (a level with 0 is disabled; `?nivo=`).
+    Opening the page or changing the level sends `{tipId, nivo}`, so the server hands back the student's untouched attempt of that type
+    and level from the last 10 min (a reload is not a new draw); only "Sledeći zadatak" / "Novi zadatak" send `novi: true`
+    (`PortalApi.noviZadatak(tipId, nivo, true)`; 60 new draws per hour, then 429 with the server text). 409 "Ovaj zadatak je upravo na
+    času; pokušaj posle." on "Proveri"/"Prikaži rešenje" keeps the task and shows the text (a variant drawn in an active run is never
+    drawn for practice). A check after "Prikaži rešenje" still shows the per-field result, but counts neither on the server nor in the
+    session's "Tvoj učinak". Field rules are shared with the phone in class through `features/uzivo/ui/polja-zadatka` (pure functions).
+    No points.
+  - **Pregled prezentacije** (`pages/pregled-prezentacije.page`): only slides the group saw in a finished run, rendered by the projector
+    renderer `features/uzivo/ui/slajd-prikaz.component` inside `@defer (on viewport)` in their final state (all PLATNO steps), no notes.
+    The renderer's input type is the narrow `SlajdZaPrikaz` (`features/uzivo/ui/slajd-za-prikaz.ts`, types only), so the page never
+    imports `uzivo/data-access`. PITANJE: "Tvoj odgovor" and a "Prikaži tačan odgovor" toggle, only when `SlajdPregleda.tacanPoznat`
+    (the question comes from the group's own round snapshot; without one the server sends no correct values and the page shows no
+    toggle); ZADATAK: own tasks and "Vežbaj". The page is its own lazy chunk: `e2e/lenji-pregled.spec.ts` (build only, spec 6.2) checks
+    it is only `import()`ed, outside the initial closure, own closure <= measured 89 772 B + 10 % (gzip too), and without editor,
+    ProseMirror, formula editor or full `mathlive`.
+    `ui/slika-zadatka.component` shows task SVGs (`api/public/mediji/<uuid>` as `<img>`) with "Uvećaj".
+  - **Ja** (`pages/ja.page`, `ui/nalog-pregled.component`): name, index, group and generation, masked e-mail, Moodle status, devices,
+    "Odjavi se" / "Odjavi sve uređaje" (logout returns to `nalog` with the message in history state). `nalog/moodle` "Otvori nalog"
+    links here. Below it the self-contained card "Obaveštenja" (`ui/podesavanja-mejla.component`, `[data-podesavanja]`): checkbox
+    "Javi mi mejlom kad je čas otkazan" (`GET|PUT api/public/nalog/podesavanja` = `{mejlOtkazanCas}`, default on; covers the
+    cancellation mail and "čas se ipak održava"), optimistic with rollback and the server text on error, "Sačuvano." on success.
+  - **Allow-list** (`DOZVOLJENO_PO_FEATURE['features/nalog']` in `eslint-rules/javna-ruta-konfig.js`, each entry read with its own
+    imports): `features/uzivo/ui/{polja-zadatka,tekst-formule.component,tekst-formule,format}`, the slide renderer
+    `ui/slajd-prikaz.component` and `ui/slajd-za-prikaz`. Types of a ui component's inputs are re-exported from that ui file
+    (`slajd-za-prikaz.ts`, `polja-zadatka.ts`), because `gfs/granice-featurea` also forbids `import type` from another feature's
+    `data-access`.
 - **Moodle, student side** (`features/nalog/pages/moodle.page.ts`, public child `nalog/moodle`, spec prijave 8.3): the backend
   redirects here after a Moodle launch. `?greska=<kod>` shows a fixed text per code (`nepoznata-registracija`,
   `istekla-sesija`, `bez-kolacica`, `neispravan-token`, `nepodrzana-poruka`; unknown code = generic text, the code itself is
@@ -312,15 +365,16 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   (`odlaganjeKoraka429`, short because the token lives 20-30 s) up to 5 times, then shows the message with "Pokušaj ponovo";
   the key stays. The backend accepts a key only from the phone that scanned (same `gfs_uredjaj` cookie). A state with `izvodjenje` navigates to `uzivo/<kod>?sa=cas`; a finished lecture, removed attendance or "not checked
   in" end polling with a message. Server texts are shown verbatim (410 "QR je istekao. Skeniraj ponovo sa table.", "Čekiranje za
-  ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). `/nalog` shows the card "Na času si" (`ui/na-casu-kartica`,
-  "Nastavi" -> `/nalog/cas`) when `GET cas` returns a lecture that is not finished.
+  ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). Since phases 2-3 `/nalog/cas` is the tab Čas inside the
+  account shell (the card "Na času si" on `/nalog` is gone: `/nalog` goes straight to the tab); not checked in = "Nisi na času ·
+  Skeniraj QR sa table." (`[data-nije-na-casu]`).
 - **Uživo phone:** `?sa=cas` (`uzivo-student.page.ts`, `saCasa`) returns to `nalog/cas` 3 s after `kraj` or `izbacen`
   (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…"). A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
   connection closes); 403 `IZBACEN` is `izbacen` (a signed-in student sees "Nastavnik te je uklonio iz ovog izvođenja." without
   "Uđi ponovo"); any other 403 goes to `nalog` as before.
 - **Tests:** unit specs next to each file; e2e `e2e/cekiranje.spec.ts` (scan -> wait -> run -> end -> back on the lecture,
-  login with a key, server messages, the `/nalog` card, axe in day mode, projector QR changes and shows no names, a finished
+  login with a key, server messages, `/nalog` straight to the tab Čas, axe in day mode, projector QR changes and shows no names, a finished
   lecture has no QR and no request). The mock (`MockApi.cekiranje`) returns a new token on every `GET predavanja/:id/cekiranje`
   so the test sees the change without waiting 10 s.
 
@@ -333,9 +387,9 @@ computed on the server; the front never builds dates of termini itself.
 - **Shared util `shared/util/termin.ts`** (no imports, so it is on the `features/nalog` allow-list): `DANI`/`DANI_KRATKO`
   (index = ISO weekday), `lokalniDatum`, `danUNedelji`, `isoDatum`, `dodajDane`, `hhmm` (server `HH:mm:ss` -> `HH:mm`),
   `blokVremena` ("10:00–13:00"), `danIDatum` ("sreda 4. 11."), `relativniDan` ("danas"/"sutra"). Use it for every termin label.
-- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted in the `prijavljen` step of
-  `/nalog` after "Na času si"): **self-contained** (provides its own `CasoviStore`, loads in its constructor, no inputs or
-  outputs), so it can move unchanged into a future "Čas" tab. `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
+- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted on the tab Čas (`pages/cas.page`,
+  below the check-in state) since the student portal phases 2-3; a signed-in `/nalog` goes there): **self-contained** (provides its
+  own `CasoviStore`, loads in its constructor, no inputs or outputs). `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
   all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
   "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
   dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,
@@ -345,12 +399,23 @@ computed on the server; the front never builds dates of termini itself.
   of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
   `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`; a new
   line copies subject, group and times of the last one; the copy keeps lines and threshold, drops ids and dates; the server
-  re-checks everything and its 400 text goes to the banner), `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
+  re-checks everything and its 400 text goes to the banner, including the overlap rule: the same subject, group, weekday and
+  start in another period with overlapping dates is a 400, so "Kopiraj u novi" with overlapping dates fails there). Editing a
+  period warns before saving which cancelled termini the save drops (`izgubljenaOtkazivanja(original, form)` in
+  `raspored.pravila.ts` from `StavkaInfo.otkazani`, the future cancellations that are still termini: a line removed, with another
+  subject, group or weekday, or a date outside the new period; same rule as the server, live `role="status"` box
+  `[data-izgubljena-otkazivanja]`), and the save snackbar reports `RasporedDetails.izgubljenaOtkazivanja` ("Ukinuto otkazanih
+  časova: N."). `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
   grouped by day, chip "Ne dolazi: N" in warn tone above the threshold, `<details>` "Ko ne dolazi" with names, card links and
   reasons, link to the lecture of that day, "Otkaži čas" (`OtkazivanjeDialog`, optional note; for an already cancelled termin the
-  same dialog only edits the note) and "Vrati čas" (`ConfirmDialog`), both hidden once the termin started; the snackbar says how
-  many students got the mail). Names and reasons exist only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold) are
-  pure functions in `data-access/raspored.pravila.ts`.
+  same dialog only edits the note) and "Vrati čas" (`VracanjeDialog`, `role: 'alertdialog'`), both hidden once the termin started.
+  Both dialogs carry the checkbox "Pošalji mejl studentima" (checked by default, `TerminCmd.posaljiMejl`; the note-only edit sends
+  `false`). `tekstMejla` builds the snackbar: "Mejl je poslat: N" counts mails actually queued (`obavesteno`); `neposlato > 0`
+  (queue full or no SMTP) turns it into an error snackbar telling the teacher whom to reach another way; an unchecked box says
+  "Mejl studentima nije slat."). Both counts leave out students who turned off "Javi mi mejlom kad je čas otkazan" on their tab Ja
+  (the server filters them before the address dedupe), so N is the number of students who really get the mail. Names and reasons exist
+  only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold,
+  lost cancellations) are pure functions in `data-access/raspored.pravila.ts`.
 - **Notifications:** `VrstaObavestenja` has `MNOGO_NAJAVA` (`podaci`: `stavkaId`, `datum`, `pocetak`, `kraj`, `predmet`,
   `grupa`, `broj`, `prag`; never names or reasons). `tekstObavestenja` -> "Mnogo najava odsustva: predmet · grupa · sreda 4. 11.
   (6)"; `vezaObavestenja(o)` gives the link for both the bell list and the Home card (`/raspored/termini?od=<datum>` here, the
@@ -363,9 +428,11 @@ computed on the server; the front never builds dates of termini itself.
   lecture for that subject and group).
 - **Tests:** unit specs next to each file; e2e `e2e/najava-odsustva.spec.ts` (phone, public network, axe: own group only,
   announce, reason, withdraw, threshold notification, no counts in the student response, cancelled termin, 409 while open),
-  `e2e/raspored.spec.ts` (nav, copy, new form with server error, termini with names/reasons, cancel/restore, bell link, Home),
+  `e2e/raspored.spec.ts` (nav, copy with the overlap 400, new form with server error, termini with names/reasons, cancel with
+  mail and restore without, lost-cancellation warning on edit, bell link, Home),
   and a raspored block in `e2e/pristupacnost.spec.ts` (day and night). Mock: `e2e/mock-raspored.ts` (empty by default, so old
-  specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after).
+  specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after;
+  it mirrors the server's overlap check, lost cancellations, `posaljiMejl` and the next-4 announce window).
   `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`.
 
 ## Uživo (`features/uzivo`)
@@ -1071,6 +1138,15 @@ and Claude's series, and reviews the drafts one by one (below).
   (draft review, title and last breadcrumb "Pregled nacrta"; declared before `grupe/:id`), `banka/grupe/:id` (group detail),
   `banka/varijante/nova?grupa=` and `banka/varijante/:id` (the same `VarijantaEditorPage`, optional `?povratak`). Ids must be numeric
   (`putanjaSaId`, otherwise 404 without an API call); the last two routes and `grupe/:id` carry `unsavedChangesGuard`.
+- **Zadaci za vežbanje (student portal phases 2-3, teacher side):** a PREDAVANJE node's detail page has the panel "Za vežbanje"
+  (`ui/za-vezbanje.component`, `BankaApi.otvoreno/otvori/zatvori` = `GET|PUT|DELETE banka/grupe/{id}/otvoreno[/{grupaStudenataId}]`,
+  all `tiho`): per student group the state `OTVORENO` (after class `CAS` or by hand `RUCNO`, with date), `PREKO_TEME` (an ancestor
+  is open: no button, close it on that topic), `DELIMICNO` ("x od y tipa"), `ZATVORENO`; "Otvori" opens the node with its subtree,
+  "Zatvori" removes the node's and subtree's records for that group whatever their source (nothing reopens it except a new class
+  that draws it), both with `ConfirmDialog`. The lazy page `banka/vezbanje?predmet&grupa&od&do` (`pages/statistika-vezbanja.page`,
+  `BankaApi.statistikaVezbanja` = `GET predmeti/{id}/vezbanje/statistika`) shows per type how many students practised, drawn,
+  checked, correct on the first check (with %) and solutions opened without a correct check; aggregates only, never names. Links:
+  the panel and the `/banka` header ("Statistika vežbanja", PREDAVANJE only).
 - **`data-access/`**: `banka.models.ts` mirrors the backend `dto/banka/*` (same keys; commands are full-replacement `PUT`s, so nullable
   fields are always sent; the MCP fields `izvor` on groups, search rows and topics (variants have had it since phase 1), `serija`,
   `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`, `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
@@ -1268,6 +1344,14 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Tests:** `e2e/banka-nivo.spec.ts` (card, review, filter, new and existing variant), `e2e/uzivo-zadatak-konzola.spec.ts` and
   `uzivo-zadatak-editor.spec.ts` (console and slide form); the mocks keep `nivo` per variant (`mock-banka.ts`, `PATCH`, `nivo` filter,
   `brojAktivnihPoNivou`) and the console mock handles `NIVO` (`mock-izvodjenje.ts`).
+
+## Grade publication (student portal phases 2-3, teacher side)
+
+`features/ocene/ui/objava-ocena.ts` (`app-objava-ocena`, rendered by `OcenePregled` when the group has students, so on `/ocene`
+and on the subject hub's Ocene tab): `OceneApi.objava/objavi/povuci` = `GET ocenjivanje/predmet/{p}/objava?grupa=`, `PUT|DELETE
+ocenjivanje/predmet/{p}/objava/{grupa}` (all `tiho`). Until "Objavi predloge" students see nothing of the grade (not even test or
+homework points); publishing stores a snapshot per student, "Objavi ponovo" replaces it, "Povuci" removes it; each with a confirmation.
+Attendance and tasks from class are visible to students regardless.
 
 ## Releases and stale tabs (`core/izdanje`)
 

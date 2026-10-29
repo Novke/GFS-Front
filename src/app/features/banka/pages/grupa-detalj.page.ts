@@ -36,6 +36,7 @@ import { BrojaciSeme, istaPolja, normalizujPolja, posledicePromene, proveriPolja
 import { potvrdiUkljucivanje, pretakIskljucenja } from '../ui/iskljucene-teme.component';
 import { PoljaEditorComponent } from '../ui/polja-editor.component';
 import { imeVarijante, VarijantaKarticaComponent } from '../ui/varijanta-kartica.component';
+import { ZaVezbanjeComponent } from '../ui/za-vezbanje.component';
 
 type RadnjaStatusa = 'odobri' | 'arhiviraj' | 'vratiUNacrt';
 
@@ -78,7 +79,7 @@ interface GreskaUcitavanja {
   imports: [
     EmptyState, ErrorPanel, FormErrorBanner, MatButton, MatError, MatFormField, MatHint, MatIcon, MatInput, MatLabel, MatOption,
     MatProgressSpinner, MatSelect, MatTooltip, PageHeader, PoljaEditorComponent, ReactiveFormsModule, RouterLink, SkeletonRows,
-    VarijantaKarticaComponent,
+    VarijantaKarticaComponent, ZaVezbanjeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:beforeunload)': 'preIzlaska($event)' },
@@ -225,6 +226,9 @@ interface GreskaUcitavanja {
             <app-skeleton-rows [redovi]="3" />
           }
         </section>
+      }
+      @if (g.namena === 'PREDAVANJE') {
+        <app-za-vezbanje [grupaId]="g.id" [predmetId]="g.predmetId" />
       }
     } @else {
       <app-page-header naslov="Grupa zadataka" />

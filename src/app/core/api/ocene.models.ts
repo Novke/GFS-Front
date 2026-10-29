@@ -190,3 +190,14 @@ export function poeniZaTip(r: RezultatiStudentaInfo, tipId: number): number | nu
   const p = (r?.rezultati ?? []).find(x => x?.tipTesta?.id === tipId);
   return typeof p?.ostvarenoPoena === 'number' && Number.isFinite(p.ostvarenoPoena) ? p.ostvarenoPoena : null;
 }
+
+/**
+ * Ogleda `ObjavaOcenaInfo` (`GET|PUT ocenjivanje/predmet/{id}/objava`): kada je predlog ocena objavljen studentima grupe
+ * (`null` = nije) i za koliko studenata je snimak napravljen.
+ */
+export interface ObjavaOcenaInfo {
+  predmetId: number;
+  grupaId: number;
+  objavljeno: string | null;
+  studenata: number;
+}

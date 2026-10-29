@@ -6,8 +6,8 @@ import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { StudentJa } from '../data-access/nalog.models';
 
 /**
- * Prijavljen student (spec prijave 5.1 tačka 5): indeks, ime, maska mejla, Moodle, uređaji, "Odjavi se" i "Odjavi sve
- * uređaje" (potvrdu otvara roditelj). Prezentaciona komponenta, bez HTTP-a.
+ * Tab Ja (spec prijave 5.1 tačka 5, spec studentskog dela 12.5): ime, indeks, grupa i generacija, maska mejla, Moodle,
+ * uređaji, "Odjavi se" i "Odjavi sve uređaje" (potvrdu otvara roditelj). Prezentaciona komponenta, bez HTTP-a.
  */
 @Component({
   selector: 'app-nalog-pregled',
@@ -18,6 +18,9 @@ import { StudentJa } from '../data-access/nalog.models';
     <dl class="podaci">
       <dt>Ime</dt><dd>{{ s.ime }} {{ s.prezime }}</dd>
       <dt>Indeks</dt><dd class="mono">{{ s.indeks }}@if (s.godina) {/{{ s.godina }}}</dd>
+      @if (s.grupa) {
+        <dt>Grupa</dt><dd>{{ s.grupa }}@if (s.generacija) { · generacija {{ s.generacija }}}</dd>
+      }
       <dt>Mejl</dt><dd>{{ s.maskaMejla ?? '—' }}</dd>
       <dt>Moodle</dt><dd>{{ s.moodlePovezan ? 'povezan' : 'nije povezan' }}</dd>
     </dl>

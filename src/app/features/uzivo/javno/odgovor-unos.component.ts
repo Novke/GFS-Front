@@ -2,23 +2,15 @@ import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, outp
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import { OpcijaOblikComponent, oblikOpcije } from '../ui/opcija-oblik';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
+import { normalizujBroj, porukaZaBroj } from '../ui/polja-zadatka';
 import { tekstZaCitac } from '../ui/tekst-formule';
 
-/** Isto pravilo kao `Normalizacija.broj` na serveru: razmaci su razdvajači hiljada, decimalni znak tačka ili zarez. */
-const BROJ = /^[+-]?\d+([.,]\d+)?$/;
+// Broj (pravilo `Normalizacija.broj` sa servera) deli i Zadatak i vežbanje na nalogu: `ui/polja-zadatka`.
+export { PORUKA_BROJ, normalizujBroj, porukaZaBroj } from '../ui/polja-zadatka';
+
 const MAX_TEKST = 200;
 
-export const PORUKA_BROJ = 'Unesi broj.';
 export const PORUKA_TEKST = 'Odgovor mora imati od 1 do 200 znakova.';
-
-export function normalizujBroj(unos: string): string {
-  return unos.replace(/[\s\u00A0\u202F]/g, '');
-}
-
-/** Poruka kad unos nije broj (ista kao serverska), inače null. */
-export function porukaZaBroj(unos: string): string | null {
-  return BROJ.test(normalizujBroj(unos)) ? null : PORUKA_BROJ;
-}
 
 export function porukaZaTekst(unos: string): string | null {
   const t = unos.trim();

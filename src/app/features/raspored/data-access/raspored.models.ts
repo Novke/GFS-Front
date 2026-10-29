@@ -20,6 +20,8 @@ export interface StavkaInfo {
   dan: number;
   pocetak: string;
   kraj: string;
+  /** Otkazani termini stavke od danas (ISO datumi, rastuće); forma upozorava kad bi ih izmena ukinula. */
+  otkazani?: string[];
 }
 
 export interface RasporedDetails {
@@ -29,6 +31,8 @@ export interface RasporedDetails {
   vaziDo: string;
   pragNajava: number;
   stavke: StavkaInfo[];
+  /** Koliko otkazanih termina od danas je izmena ukinula (samo odgovor na `PUT`; inače 0). */
+  izgubljenaOtkazivanja?: number;
 }
 
 /** Stavka u zahtevu; `id` postojeće zadržava njene najave i otkazivanja dok se ne promene predmet ili grupa. */
@@ -83,12 +87,16 @@ export interface TerminCmd {
   stavkaId: number;
   datum: string;
   napomena?: string | null;
+  /** „Pošalji mejl studentima“ (server: izostavljeno = da). */
+  posaljiMejl?: boolean;
 }
 
 export interface PromenaTerminaOdgovor {
   termin: TerminInfo;
-  /** Koliko studenata je dobilo mejl (0 kad mejl nije podešen ili je otkazivanje samo izmenilo napomenu). */
+  /** Koliko mejlova je stavljeno u red za slanje (0 bez promene, kad je slanje isključeno ili niko nema mejl). */
   obavesteno: number;
+  /** Studenti sa mejlom koji poruku nisu dobili (pun red ili slanje nije podešeno); stariji server ga ne šalje. */
+  neposlato?: number;
 }
 
 export const MAX_NAZIV = 100;

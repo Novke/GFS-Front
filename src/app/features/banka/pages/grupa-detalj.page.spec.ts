@@ -67,6 +67,7 @@ describe('GrupaDetaljPage', () => {
     obrisiVarijantu: vi.fn(),
     ukljuciTemu: vi.fn(),
     iskljuceneTeme: vi.fn(),
+    otvoreno: vi.fn(),
   };
   const el = () => harness.routeNativeElement as HTMLElement;
 
@@ -106,6 +107,9 @@ describe('GrupaDetaljPage', () => {
     api.grupa.mockImplementation((id: number) => of(id === 1 ? UNUTRASNJI : list()));
     api.varijante.mockImplementation(() => of([varijanta(11, 'NACRT'), varijanta(12, 'AKTIVNA'), varijanta(13, 'NACRT')]));
     api.iskljuceneTeme.mockImplementation(() => of([tema()]));
+    api.otvoreno.mockImplementation(() => of([{
+      grupaId: 3, naziv: 'G1', godinaUpisa: 2025, stanje: 'ZATVORENO', izvor: null, prviPut: null, tema: null, otvorenihListova: 0, listova: 1,
+    }]));
     api.izmeniGrupu.mockImplementation((id: number, cmd: { naziv: string; opis: string | null; tezina: number | null; uputstvo: string | null; polja: Polje[] | null }) =>
       of({ ...(id === 1 ? UNUTRASNJI : list()), naziv: cmd.naziv, opis: cmd.opis, tezina: cmd.tezina, uputstvo: cmd.uputstvo, ...(cmd.polja ? { polja: cmd.polja } : {}) }));
     TestBed.configureTestingModule({
@@ -505,5 +509,19 @@ describe('GrupaDetaljPage', () => {
     [...overlay.querySelectorAll<HTMLElement>('button')].find(b => b.textContent!.includes('Napusti'))!.click();
     expect(await navigacija).toBe(true);
     expect(router.url).toBe('/drugo');
+  });
+
+  it('čvor banke za predavanja ima panel „Za vežbanje“ (stanje po grupi studenata)', async () => {
+    const e = await otvori('/banka/grupe/2');
+    expect(api.otvoreno).toHaveBeenCalledWith(2, { tiho: true });
+    expect(e.querySelector('[data-za-vezbanje] [data-grupa="3"]')?.textContent).toContain('Zatvoreno');
+  });
+
+  it('čvor banke za testove nema panel „Za vežbanje“', async () => {
+    api.grupa.mockImplementation(() => of(list({ id: 8, namena: 'TEST' })));
+    const e = await otvori('/banka/grupe/8');
+    expect(e.querySelector('h1')!.textContent).toBe('2 → 10');
+    expect(e.querySelector('[data-za-vezbanje]')).toBeNull();
+    expect(api.otvoreno).not.toHaveBeenCalled();
   });
 });

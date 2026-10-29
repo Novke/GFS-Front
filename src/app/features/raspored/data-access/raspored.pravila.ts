@@ -1,4 +1,4 @@
-import { dodajDane, hhmm, isoDatum, lokalniDatum } from '../../../shared/util/termin';
+import { danUNedelji, dodajDane, hhmm, isoDatum, lokalniDatum } from '../../../shared/util/termin';
 import { RasporedDetails, RasporedInfo, StavkaCmd, TerminInfo } from './raspored.models';
 
 /** Vrednosti jedne stavke u formi (vreme `HH:mm`). */
@@ -104,4 +104,37 @@ export function imeStudenta(n: { ime: string | null; prezime: string | null; ind
   const ime = [n.ime, n.prezime].filter(x => !!x && x.trim() !== '').join(' ') || 'Student';
   const indeks = n.indeks ? (n.godina ? `${n.indeks}/${n.godina}` : n.indeks) : null;
   return indeks ? `${ime} (${indeks})` : ime;
+}
+
+/** Otkazan čas koji bi izmena rasporeda ukinula. */
+export interface IzgubljenoOtkazivanje {
+  stavkaId: number;
+  datum: string;
+  predmet: string;
+  grupa: string;
+}
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Otkazani termini od danas (`StavkaInfo.otkazani` sačuvanog rasporeda) koje bi trenutna forma ukinula, isto pravilo kao
+ * server: stavka uklonjena ili sa drugim predmetom ili grupom (server je pravi iznova), drugi dan ili datum van novog
+ * perioda. Neispravni datumi perioda se ne računaju (dok se kucaju, važi sačuvani period). Po datumu.
+ */
+export function izgubljenaOtkazivanja(original: RasporedDetails, v: VrednostiForme): IzgubljenoOtkazivanje[] {
+  const od = ISO.test(v.vaziOd) ? v.vaziOd : original.vaziOd;
+  const doDatuma = ISO.test(v.vaziDo) ? v.vaziDo : original.vaziDo;
+  const poId = new Map(v.stavke.filter(s => s.id !== null).map(s => [s.id as number, s]));
+  const izgubljena: IzgubljenoOtkazivanje[] = [];
+  for (const s of original.stavke) {
+    const n = poId.get(s.id);
+    for (const datum of s.otkazani ?? []) {
+      const ostaje = !!n && n.predmet === s.predmet.id && n.grupa === s.grupa.id && n.dan === danUNedelji(datum)
+        && datum >= od && datum <= doDatuma;
+      if (!ostaje) {
+        izgubljena.push({ stavkaId: s.id, datum, predmet: s.predmet.naziv, grupa: s.grupa.naziv });
+      }
+    }
+  }
+  return izgubljena.sort((a, b) => a.datum.localeCompare(b.datum) || a.stavkaId - b.stavkaId);
 }
