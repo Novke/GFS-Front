@@ -54,6 +54,7 @@ const DOZVOLJENO_PO_FEATURE = {
   'features/nalog': [
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core
+    'shared/util/termin', // naredni časovi (dan, datum, vreme termina): bez ijednog uvoza
   ],
 };
 

@@ -22,7 +22,11 @@
 
   <div class="tabla">
     <div class="kolona">
-      <app-sledece-predavanje [sledece]="store.sledece()" [sada]="store.sada()" [salje]="salje()" (zapocni)="zapocni()" />
+      <app-sledece-predavanje [sledece]="store.sledece()" [sada]="store.sada()" [salje]="salje()"
+                              [otkazanoDanas]="store.otkazanoDanas()" (zapocni)="zapocni()" />
+      @if (store.raspored().pokrivaDanas || store.raspored().naredni.length > 0) {
+        <app-raspored-kartica [raspored]="store.raspored()" [sada]="store.sada()" />
+      }
       <app-ova-nedelja [nedelja]="store.nedelja()" />
     </div>
     <div class="kolona">
