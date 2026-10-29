@@ -27,4 +27,10 @@ describe('porukaValidacije', () => {
   it('prvi ključ po prioritetu: required pre ostalih', () => {
     expect(porukaValidacije({ pattern: {}, required: true }, 'Indeks')).toBe('Indeks je obavezno.');
   });
+
+  it('neispravno ukucan datum ili vreme ima prednost nad required (polje tada nema vrednost, ali nije prazno)', () => {
+    expect(porukaValidacije({ matDatepickerParse: { text: '31. 2. 2030.' }, required: true }, 'Datum'))
+      .toBe('Datum nije ispravan (npr. 29. 10. 2026.).');
+    expect(porukaValidacije({ matTimepickerParse: { text: '25:00' } }, 'Vreme')).toBe('Vreme nije ispravno (npr. 08:30).');
+  });
 });

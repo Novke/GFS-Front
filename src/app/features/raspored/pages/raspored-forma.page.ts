@@ -5,51 +5,58 @@ import {
   AbstractControl, FormArray, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators,
 } from '@angular/forms';
 import { MatButton, MatIconButton } from '@angular/material/button';
-import { MatError, MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
+import { MatDatepicker, MatDatepickerInput, MatDatepickerToggle } from '@angular/material/datepicker';
+import { MatError, MatFormField, MatHint, MatLabel, MatSuffix } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatOption, MatSelect } from '@angular/material/select';
+import { MatTimepicker, MatTimepickerInput, MatTimepickerToggle } from '@angular/material/timepicker';
 import { Router, RouterLink } from '@angular/router';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ReferenceStore } from '../../../core/state/reference.store';
+import { hhmmIzVremena, isoIzDatuma, opcijeVremena, provideSrpskiDatum, vremeIzHhmm } from '../../../shared/forms/datum-vreme';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
-import { DANI, danIDatum } from '../../../shared/util/termin';
+import { DANI, danIDatum, lokalniDatum } from '../../../shared/util/termin';
 import { RasporedApi } from '../data-access/raspored.api';
 import { MAX_DANA, MAX_NAZIV, MAX_STAVKI, PODRAZUMEVANI_PRAG, RasporedDetails } from '../data-access/raspored.models';
 import {
   cmdIzForme, danaUPeriodu, formaIzRasporeda, izgubljenaOtkazivanja, kopijaRasporeda, StavkaForme, VrednostiForme,
 } from '../data-access/raspored.pravila';
 
-const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
-const VREME = /^\d{2}:\d{2}$/;
-
+/*
+ * Datumi i vremena su `Date` iz kalendara i izbora vremena (`shared/forms/datum-vreme`); u `YYYY-MM-DD` i `HH:mm`
+ * (`VrednostiForme`, zahtev) se pretvaraju tek u `vrednosti()`. Nativna `type="date|time"` polja u `mat-form-field` nemaju
+ * iskačući prozor (Material sakriva ikonicu pickera).
+ */
 type StavkaGrupa = FormGroup<{
   id: FormControl<number | null>;
   predmet: FormControl<number | null>;
   grupa: FormControl<number | null>;
   dan: FormControl<number | null>;
-  pocetak: FormControl<string>;
-  kraj: FormControl<string>;
+  pocetak: FormControl<Date | null>;
+  kraj: FormControl<Date | null>;
 }>;
 
 /** Početak pre kraja (oba `HH:mm`, pa se porede kao tekst). */
 const pocetakPreKraja: ValidatorFn = (g: AbstractControl): ValidationErrors | null => {
-  const { pocetak, kraj } = g.value as { pocetak: string; kraj: string };
-  return VREME.test(pocetak ?? '') && VREME.test(kraj ?? '') && pocetak >= kraj ? { vreme: true } : null;
+  const pocetak = hhmmIzVremena(g.get('pocetak')?.value);
+  const kraj = hhmmIzVremena(g.get('kraj')?.value);
+  return pocetak && kraj && pocetak >= kraj ? { vreme: true } : null;
 };
 
 /** Period: od pre do, najviše 400 dana. */
 const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | null => {
-  const { vaziOd, vaziDo } = g.value as { vaziOd: string; vaziDo: string };
-  if (!ISO_DATUM.test(vaziOd ?? '') || !ISO_DATUM.test(vaziDo ?? '')) {
+  const vaziOd = isoIzDatuma(g.get('vaziOd')?.value);
+  const vaziDo = isoIzDatuma(g.get('vaziDo')?.value);
+  if (!vaziOd || !vaziDo) {
     return null;
   }
   if (vaziOd > vaziDo) {
@@ -67,9 +74,11 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
 @Component({
   selector: 'app-raspored-forma-page',
   imports: [
-    ErrorPanel, FormErrorBanner, MatButton, MatError, MatFormField, MatHint, MatIcon, MatIconButton, MatInput, MatLabel,
-    MatOption, MatProgressSpinner, MatSelect, PageHeader, ReactiveFormsModule, RouterLink, SkeletonRows,
+    ErrorPanel, FormErrorBanner, MatButton, MatDatepicker, MatDatepickerInput, MatDatepickerToggle, MatError, MatFormField,
+    MatHint, MatIcon, MatIconButton, MatInput, MatLabel, MatOption, MatProgressSpinner, MatSelect, MatSuffix, MatTimepicker,
+    MatTimepickerInput, MatTimepickerToggle, PageHeader, ReactiveFormsModule, RouterLink, SkeletonRows,
   ],
+  providers: [provideSrpskiDatum()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-page-header [naslov]="naslov()" podnaslov="Čas se ponavlja svake nedelje u periodu važenja. Periodi mogu da se preklapaju." />
@@ -99,14 +108,20 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
           <div class="red">
             <mat-form-field appearance="outline">
               <mat-label>Važi od</mat-label>
-              <input matInput type="date" formControlName="vaziOd" data-vazi-od />
+              <input matInput [matDatepicker]="kalendarOd" formControlName="vaziOd" placeholder="d. m. gggg."
+                     autocomplete="off" (click)="kalendarOd.open()" data-vazi-od />
+              <mat-datepicker-toggle matIconSuffix [for]="kalendarOd" aria-label="Otvori kalendar: važi od" data-vazi-od-kalendar />
+              <mat-datepicker #kalendarOd />
               @if (poruka(forma.controls.vaziOd, 'Datum'); as m) {
                 <mat-error>{{ m }}</mat-error>
               }
             </mat-form-field>
             <mat-form-field appearance="outline">
               <mat-label>Važi do</mat-label>
-              <input matInput type="date" formControlName="vaziDo" data-vazi-do />
+              <input matInput [matDatepicker]="kalendarDo" formControlName="vaziDo" placeholder="d. m. gggg."
+                     autocomplete="off" (click)="kalendarDo.open()" data-vazi-do />
+              <mat-datepicker-toggle matIconSuffix [for]="kalendarDo" aria-label="Otvori kalendar: važi do" data-vazi-do-kalendar />
+              <mat-datepicker #kalendarDo [startAt]="forma.controls.vaziOd.value" />
               @if (poruka(forma.controls.vaziDo, 'Datum'); as m) {
                 <mat-error>{{ m }}</mat-error>
               }
@@ -163,14 +178,20 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="vreme">
                   <mat-label>Početak</mat-label>
-                  <input matInput type="time" formControlName="pocetak" data-pocetak />
+                  <input matInput [matTimepicker]="vremePocetka" formControlName="pocetak" placeholder="hh:mm"
+                         autocomplete="off" data-pocetak />
+                  <mat-timepicker-toggle matIconSuffix [for]="vremePocetka" [aria-label]="'Izaberi početak termina ' + (i + 1)" />
+                  <mat-timepicker #vremePocetka [options]="vremena" />
                   @if (poruka(s.controls.pocetak, 'Vreme'); as m) {
                     <mat-error>{{ m }}</mat-error>
                   }
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="vreme">
                   <mat-label>Kraj</mat-label>
-                  <input matInput type="time" formControlName="kraj" data-kraj />
+                  <input matInput [matTimepicker]="vremeKraja" formControlName="kraj" placeholder="hh:mm"
+                         autocomplete="off" data-kraj />
+                  <mat-timepicker-toggle matIconSuffix [for]="vremeKraja" [aria-label]="'Izaberi kraj termina ' + (i + 1)" />
+                  <mat-timepicker #vremeKraja [options]="vremena" />
                   @if (poruka(s.controls.kraj, 'Vreme'); as m) {
                     <mat-error>{{ m }}</mat-error>
                   }
@@ -268,8 +289,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   protected readonly forma = new FormGroup(
     {
       naziv: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(MAX_NAZIV)] }),
-      vaziOd: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.pattern(ISO_DATUM)] }),
-      vaziDo: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.pattern(ISO_DATUM)] }),
+      vaziOd: new FormControl<Date | null>(null, Validators.required),
+      vaziDo: new FormControl<Date | null>(null, Validators.required),
       pragNajava: new FormControl<number | null>(PODRAZUMEVANI_PRAG, [Validators.required, Validators.min(1), Validators.max(100)]),
       stavke: new FormArray<StavkaGrupa>([]),
     },
@@ -279,6 +300,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   protected readonly dani = DANI.slice(1).map((naziv, i) => ({ vrednost: i + 1, naziv }));
   protected readonly maxNaziv = MAX_NAZIV;
   protected readonly maxStavki = MAX_STAVKI;
+  /** Ponuđena vremena (časovi su preko dana); drugo vreme može da se ukuca. */
+  protected readonly vremena = opcijeVremena(7, 22, 15);
 
   protected readonly ucitavanje = signal(false);
   protected readonly greskaUcitavanja = signal<string | null>(null);
@@ -295,7 +318,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   protected readonly izgubljena = computed(() => {
     const r = this.original();
     this.vrednost();
-    return r ? izgubljenaOtkazivanja(r, this.forma.getRawValue() as VrednostiForme) : [];
+    return r ? izgubljenaOtkazivanja(r, this.vrednosti()) : [];
   });
   protected readonly danIDatum = danIDatum;
 
@@ -342,7 +365,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     const posl = this.stavke.at(this.stavke.length - 1)?.getRawValue();
     this.stavke.push(this.novaStavka({
       id: null, predmet: posl?.predmet ?? null, grupa: posl?.grupa ?? null, dan: null,
-      pocetak: posl?.pocetak ?? '', kraj: posl?.kraj ?? '',
+      pocetak: hhmmIzVremena(posl?.pocetak), kraj: hhmmIzVremena(posl?.kraj),
     }));
     this.forma.markAsDirty();
   }
@@ -378,7 +401,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     }
     this.greska.set(null);
     this.salje.set(true);
-    const cmd = cmdIzForme(this.forma.getRawValue() as VrednostiForme);
+    const cmd = cmdIzForme(this.vrednosti());
     const id = this.izId(this.id());
     const zahtev = id !== null ? this.api.izmeni(id, cmd, { tiho: true }) : this.api.kreiraj(cmd, { tiho: true });
     zahtev.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -400,12 +423,26 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     return v && JE_ID.test(v) ? Number(v) : null;
   }
 
+  /** Forma kao tekst (`YYYY-MM-DD`, `HH:mm`); neispravno ukucan datum ili vreme je prazan tekst. */
+  private vrednosti(): VrednostiForme {
+    const v = this.forma.getRawValue();
+    return {
+      naziv: v.naziv,
+      vaziOd: isoIzDatuma(v.vaziOd),
+      vaziDo: isoIzDatuma(v.vaziDo),
+      pragNajava: v.pragNajava,
+      stavke: v.stavke.map(s => ({ ...s, pocetak: hhmmIzVremena(s.pocetak), kraj: hhmmIzVremena(s.kraj) })),
+    };
+  }
+
   private postavi(v: VrednostiForme): void {
     this.stavke.clear();
     for (const s of v.stavke) {
       this.stavke.push(this.novaStavka(s));
     }
-    this.forma.patchValue({ naziv: v.naziv, vaziOd: v.vaziOd, vaziDo: v.vaziDo, pragNajava: v.pragNajava });
+    this.forma.patchValue({
+      naziv: v.naziv, vaziOd: lokalniDatum(v.vaziOd), vaziDo: lokalniDatum(v.vaziDo), pragNajava: v.pragNajava,
+    });
     this.forma.markAsPristine();
     this.forma.markAsUntouched();
   }
@@ -417,8 +454,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
         predmet: new FormControl<number | null>(s.predmet, Validators.required),
         grupa: new FormControl<number | null>(s.grupa, Validators.required),
         dan: new FormControl<number | null>(s.dan, Validators.required),
-        pocetak: new FormControl(s.pocetak, { nonNullable: true, validators: [Validators.required, Validators.pattern(VREME)] }),
-        kraj: new FormControl(s.kraj, { nonNullable: true, validators: [Validators.required, Validators.pattern(VREME)] }),
+        pocetak: new FormControl<Date | null>(vremeIzHhmm(s.pocetak), Validators.required),
+        kraj: new FormControl<Date | null>(vremeIzHhmm(s.kraj), Validators.required),
       },
       { validators: pocetakPreKraja },
     );
