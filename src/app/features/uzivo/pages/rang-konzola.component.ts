@@ -6,8 +6,8 @@ import { asyncScheduler, catchError, distinctUntilChanged, EMPTY, filter, map, s
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
-import { PreferencesStore, RANG_NA_TABLI } from '../../../core/state/preferences.store';
 import { RangKolona, RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
+import { RANG_NA_TABLI, RangNaTabli } from '../data-access/rang-na-tabli';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
 
@@ -23,7 +23,7 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
  * izvođenja predavanja; samo kad izvođenje ima predavanje). Rang se učitava samo dok je njegov tab otvoren, kad se
  * promeni runda, faza, broj odgovora ili tačan odgovor, najviše jednom u {@link RANG_OSVEZAVANJE_MS}. Vidi ga samo
  * nastavnik; na projektor ga šalju L i Shift+L. "Na tabli" (svi, prvih 10, prvih 5) je nastavnikova postavka u pregledaču
- * (`PreferencesStore.rangNaTabli`, važi za sva izvođenja): kartica je šalje serveru komandom `RANG_BROJ` kad se konzola
+ * (`RangNaTabli`, važi za sva izvođenja): kartica je šalje serveru komandom `RANG_BROJ` kad se konzola
  * otvori i kad se izbor promeni.
  */
 @Component({
@@ -96,7 +96,7 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
         <fieldset class="uz-kon-rang-tabla">
           <legend>Na tabli:</legend>
           @for (b of naTabliIzbori; track b) {
-            <button type="button" [attr.aria-pressed]="naTabli() === b" (click)="prefs.postaviRangNaTabli(b)">{{ b ? 'Prvih ' + b : 'Svi' }}</button>
+            <button type="button" [attr.aria-pressed]="naTabli() === b" (click)="naTabliPostavka.postavi(b)">{{ b ? 'Prvih ' + b : 'Svi' }}</button>
           }
         </fieldset>
       </div>
@@ -112,9 +112,9 @@ export class RangKonzolaComponent {
   readonly rangBroj = output<number>();
 
   private readonly api = inject(RangApi);
-  protected readonly prefs = inject(PreferencesStore);
+  protected readonly naTabliPostavka = inject(RangNaTabli);
   protected readonly naTabliIzbori = RANG_NA_TABLI;
-  protected readonly naTabli = this.prefs.rangNaTabli;
+  protected readonly naTabli = this.naTabliPostavka.broj;
   /** `verzija` stanja na koju je poslat `RANG_BROJ` (jednom po verziji, pa nema petlje ni kad server zaostane). */
   private poslatoNaVerziji: number | null = null;
   protected readonly tab = signal<RangTab>('pitanje');

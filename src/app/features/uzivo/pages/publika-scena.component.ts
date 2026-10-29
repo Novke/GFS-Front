@@ -86,11 +86,18 @@ interface Omotac {
   imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
-  // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3).
+  // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
+  // isto i rang tačnosti: budžet početnog zatvorenja u e2e/lenji-editor.spec.ts).
   styles: `
     .uz-scena-slajdovi { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
     .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
     .uz-scena-ulazni { position: relative; z-index: 1; }
+    /* rang tačnosti (L / Shift+L): cela širina, od vrha; slova postavlja komponenta, natpis u gornjem desnom uglu */
+    .uz-scena-rang--tacnost { justify-content: flex-start; gap: 1.2cqw; }
+    .uz-scena-rang--tacnost .uz-scena-naslov { font-size: 3.4cqw; }
+    .uz-scena-rang .uz-rang.uz-rt { width: 100%; }
+    .uz-scena-ugao { position: absolute; top: 1.4cqw; right: 2cqw; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; color: var(--muted); font-size: 1.6cqw; font-weight: 600; }
   `,
   template: `
     @let s = stanje();

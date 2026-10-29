@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { stanje } from '../data-access/izvodjenje-podaci.testing';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
-import { PreferencesStore } from '../../../core/state/preferences.store';
+import { RangNaTabli } from '../data-access/rang-na-tabli';
 import { RANG_OSVEZAVANJE_MS, RangKonzolaComponent } from './rang-konzola.component';
 
 const red = (mesto: number, ime: string): RangTacnostiStavka => ({
@@ -91,7 +91,7 @@ describe('RangKonzolaComponent', () => {
     beforeEach(() => localStorage.clear());
 
     it('šalje RANG_BROJ kad se postavka razlikuje od servera, jednom po verziji; stari backend (bez rangBroj) ništa', async () => {
-      TestBed.inject(PreferencesStore).postaviRangNaTabli(5);
+      TestBed.inject(RangNaTabli).postavi(5);
       const f = napravi({ ...stanje(), rangBroj: null });
       const poslato: number[] = [];
       f.componentInstance.rangBroj.subscribe(b => poslato.push(b));
@@ -111,12 +111,12 @@ describe('RangKonzolaComponent', () => {
       dugmad[0].click();
       f.detectChanges();
       expect(poslato).toEqual([5, 0]);
-      expect(TestBed.inject(PreferencesStore).rangNaTabli()).toBe(0);
+      expect(TestBed.inject(RangNaTabli).broj()).toBe(0);
 
       const stari = napravi(stanje());
       const staroPoslato: number[] = [];
       stari.componentInstance.rangBroj.subscribe(b => staroPoslato.push(b));
-      TestBed.inject(PreferencesStore).postaviRangNaTabli(10);
+      TestBed.inject(RangNaTabli).postavi(10);
       stari.detectChanges();
       expect(staroPoslato).toEqual([]);
     });

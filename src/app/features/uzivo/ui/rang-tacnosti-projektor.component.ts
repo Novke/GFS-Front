@@ -34,10 +34,11 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
     .uz-rt-tacnih { color: var(--ok); font-weight: 700; }
     .uz-rt-netacnih { color: var(--danger); }
     .uz-rt-pilula { display: inline-block; min-width: 3.4em; padding: 0 .4em; border-radius: 1em; font-weight: 700; }
-    .uz-rt-pilula[data-nivo='1'] { background: var(--tacnost-1); color: var(--tacnost-1-ink); }
-    .uz-rt-pilula[data-nivo='2'] { background: var(--tacnost-2); color: var(--tacnost-2-ink); }
-    .uz-rt-pilula[data-nivo='3'] { background: var(--tacnost-3); color: var(--tacnost-3-ink); }
-    .uz-rt-pilula[data-nivo='4'] { background: var(--tacnost-4); color: var(--tacnost-4-ink); }
+    .uz-rt-pilula { --b: var(--muted); background: color-mix(in srgb, var(--b) 18%, var(--surface)); color: var(--b); }
+    .uz-rt-pilula[data-nivo='1'] { --b: var(--tacnost-1); }
+    .uz-rt-pilula[data-nivo='2'] { --b: var(--tacnost-2); }
+    .uz-rt-pilula[data-nivo='3'] { --b: var(--tacnost-3); }
+    .uz-rt-pilula[data-nivo='4'] { --b: var(--tacnost-4); }
     .uz-rt-vreme { color: var(--ink-2); }
     .uz-rt-zvezde { font-weight: 700; }
     .uz-rt-zvezde-znak { color: var(--star); }

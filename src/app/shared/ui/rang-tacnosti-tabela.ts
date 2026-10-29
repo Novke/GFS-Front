@@ -125,10 +125,11 @@ export type RangSort = 'zvezdice' | 'tacnost' | 'vreme';
     .zvezdice { font-weight: 700; }
     .zvezda { margin-right: 3px; color: var(--star); }
     .pilula { display: inline-block; min-width: 3.4em; padding: 1px 8px; border-radius: 999px; font-weight: 700; text-align: center; }
-    .pilula[data-nivo='1'] { background: var(--tacnost-1); color: var(--tacnost-1-ink); }
-    .pilula[data-nivo='2'] { background: var(--tacnost-2); color: var(--tacnost-2-ink); }
-    .pilula[data-nivo='3'] { background: var(--tacnost-3); color: var(--tacnost-3-ink); }
-    .pilula[data-nivo='4'] { background: var(--tacnost-4); color: var(--tacnost-4-ink); }
+    .pilula { --b: var(--muted); background: color-mix(in srgb, var(--b) 18%, var(--surface)); color: var(--b); }
+    .pilula[data-nivo='1'] { --b: var(--tacnost-1); }
+    .pilula[data-nivo='2'] { --b: var(--tacnost-2); }
+    .pilula[data-nivo='3'] { --b: var(--tacnost-3); }
+    .pilula[data-nivo='4'] { --b: var(--tacnost-4); }
     .razlomak { display: inline-block; min-width: 2.6em; margin-left: 6px; color: var(--muted); font-size: 12px; text-align: left; }
     .sort { display: inline-flex; align-items: center; gap: 2px; min-height: 28px; padding: 0 6px; border: 0; border-radius: 6px;
       background: none; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; }

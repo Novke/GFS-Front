@@ -57,34 +57,6 @@
   text-align: left;
 }
 
-/* Rang tačnosti: cela širina, od vrha; veličinu slova postavlja komponenta (sve mora da stane na slajd). */
-.uz-scena-rang--tacnost {
-  justify-content: flex-start;
-  gap: 1.2cqw;
-}
-
-.uz-scena-rang .uz-rang.uz-rt {
-  width: 100%;
-}
-
-.uz-platno .uz-scena-rang--tacnost .uz-scena-naslov {
-  font-size: 3.4cqw;
-}
-
-/* Šta je na tabli (prezentacija ili predavanje): gornji desni ugao. */
-.uz-platno .uz-scena-ugao {
-  position: absolute;
-  top: 1.4cqw;
-  right: 2cqw;
-  max-width: 45%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 1.6cqw;
-  font-weight: 600;
-}
-
 .uz-scena-qr {
   flex-direction: row;
   align-items: center;

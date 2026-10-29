@@ -1108,13 +1108,14 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
   uživo, predavanja, studenti and grupe use it; `nivoTacnosti` (1 red < 40 %, 2 orange < 60 %, 3 yellow < 80 %, 4 green) and `kratakIndeks` (`GD5`,
   drops an old `/YYYY`). Table: `shared/ui/rang-tacnosti-tabela.ts` (`RangTacnostiTabela`: `# | Indeks | Ime | ★ | ✓ | ⏱` plus optional columns
   `poeni`/`izvodjenja` ("Prezentacije")/`casova`; the Indeks column only when some row has one; accuracy is a pill coloured by the tokens
-  `--tacnost-1..4` (+ `-ink`, day and night in `_tokens.scss`) with "2/3"; the ★, ✓ and ⏱ headers are sort buttons (`aria-sort`; ★ = server order,
+  `--tacnost-1..4` (text colour, day and night in `_tokens.scss`; the background is `color-mix` 18 % with `--surface`) with "2/3"; the ★, ✓ and ⏱ headers are sort buttons (`aria-sort`; ★ = server order,
   ✓ desc, ⏱ asc first, a second click flips; equal values keep server order, rows without a place stay last, the place never changes).
 - **Console:** the card "Učesnici i rang" (`pages/rang-konzola.component.ts`) has tabs "Ovo pitanje" (`UcesniciPanelComponent`: who answered the
   current round, fastest first (`redosledOdgovora`), with time, ✓/✗ and the short answer; the rest below in join order), "Prezentacija" (`GET
   izvodjenja/{id}/rang`) and "Predavanje" (only when the run has a lecture). A rank tab loads only while it is open, on a change of round, phase,
   answer count, `TACAN` or participant count, at most once per 2 s (`RANG_OSVEZAVANJE_MS`, `throttleTime` leading + trailing). Under a rank tab
-  "Na tabli: Svi / Prvih 10 / Prvih 5" is the teacher's browser preference (`PreferencesStore.rangNaTabli`, `RANG_NA_TABLI`, same for every run):
+  "Na tabli: Svi / Prvih 10 / Prvih 5" is the teacher's browser preference (`features/uzivo/data-access/rang-na-tabli.ts`, own localStorage key `gfs.rang-na-tabli.v1`, kept out of
+  `PreferencesStore` so it stays out of the initial bundle, budget in `e2e/lenji-editor.spec.ts`; same for every run):
   the card emits `rangBroj` and the console sends `RANG_BROJ` whenever the server's `rangBroj` differs (console open, change, backend restart),
   once per state `verzija`; an old backend without `rangBroj` gets nothing.
   The tabs are plain ARIA tabs (`role="tab"`, arrows/Home/End) in the card's title row, **not `MatTabGroup`**: the card must not make the console
