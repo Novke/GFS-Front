@@ -10,6 +10,13 @@ import { IZASAO_IZ_IZVODJENJA, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
 import { EkranStudenta, FazaStudenta, StudentStore, TacanOdgovor, Veza } from './student.store';
 import { POVRATAK_NA_CAS_MS, tacnostUcesnika, UzivoStudentPage } from './uzivo-student.page';
 
+// Uništena stranica izvođenja koje traje pamti izlazak u sessionStorage (`zapamtiIzlazak`), a jsdom ga deli sa ostalim spec
+// fajlovima istog radnika. TestBed bi stranice uništio tek u svom afterEach (posle ovog), pa ih ovde uništavamo pre brisanja.
+afterEach(() => {
+  TestBed.resetTestingModule();
+  sessionStorage.clear();
+});
+
 /*
  * Stranica studenta sa formulama (faza 5, F3). `StudentStore` je provider komponente, pa se zamenjuje na komponenti.
  * Učitavači formula ostaju oni iz `src/test-setup.ts` (nikad se ne razreše): javni spec ne sme da uvozi

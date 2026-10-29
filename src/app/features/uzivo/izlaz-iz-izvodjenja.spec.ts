@@ -1,6 +1,7 @@
 import { izasaoIz, IZASAO_IZ_IZVODJENJA, zaboraviIzlazak, zapamtiIzlazak } from './izlaz-iz-izvodjenja';
 
 describe('izlaz iz izvođenja', () => {
+  beforeEach(() => sessionStorage.clear());
   afterEach(() => sessionStorage.clear());
 
   it('pamti samo poslednji kod i važi samo za njega', () => {
