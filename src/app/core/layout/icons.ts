@@ -40,6 +40,8 @@ export const IKONE = [
   'picture_as_pdf',
   // Gornja traka: obaveštenja i meni nastavnika (prijava).
   'notifications', 'account_circle', 'logout', 'devices',
+  // Aplikacija i obaveštenja (faza 4): „Pošalji u WhatsApp“ posle otkazivanja termina.
+  'send',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

@@ -87,7 +87,7 @@ export interface TerminCmd {
   stavkaId: number;
   datum: string;
   napomena?: string | null;
-  /** „Pošalji mejl studentima“ (server: izostavljeno = da). */
+  /** „Obavesti studente (mejl i telefon)“ (server: izostavljeno = da). */
   posaljiMejl?: boolean;
 }
 
@@ -97,6 +97,8 @@ export interface PromenaTerminaOdgovor {
   obavesteno: number;
   /** Studenti sa mejlom koji poruku nisu dobili (pun red ili slanje nije podešeno); stariji server ga ne šalje. */
   neposlato?: number;
+  /** Koliko push poruka je stavljeno u red (uređaji studenata); stariji server ga ne šalje. */
+  pushPoslato?: number;
 }
 
 export const MAX_NAZIV = 100;

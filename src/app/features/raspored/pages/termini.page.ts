@@ -20,8 +20,10 @@ import {
 import { RasporedApi } from '../data-access/raspored.api';
 import { DANA_TERMINA, PromenaTerminaOdgovor, TerminInfo } from '../data-access/raspored.models';
 import { imeStudenta, iznadPraga, odIliDanas, poDatumu, pomeriOd } from '../data-access/raspored.pravila';
+import { tekstZaWhatsApp, VrstaPromene } from '../data-access/whatsapp';
 import { OtkazivanjeDialog } from '../ui/otkazivanje.dialog';
 import { VracanjeDialog } from '../ui/vracanje.dialog';
+import { WhatsAppDialog } from '../ui/whatsapp.dialog';
 
 type Status = 'ucitavanje' | 'greska' | 'ok';
 
@@ -32,7 +34,9 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
  * perioda za 4 nedelje od `od` (podrazumevano danas), po danu. Kartica dana ima blok datuma levo (dan, krupan broj, mesec);
  * red termina vreme u svom uglu, predmet i grupu, krupan broj studenata koji ne dolaze (istaknut iznad praga; klik
  * rasklapa ko ne dolazi i zašto), predavanje tog dana, i desno „Otkaži čas“ / „Vrati čas“ dok termin nije počeo.
- * Obaveštenje „Mnogo najava odsustva“ i nastavnički mejl vode ovde sa `od` = datum termina.
+ * Obaveštenje „Mnogo najava odsustva“ i nastavnički mejl vode ovde sa `od` = datum termina. Posle otkazivanja ili vraćanja
+ * termina poruka o uspehu nudi „WhatsApp“, a red termina dugme „Pošalji u WhatsApp“ dok se ne napusti stranica (spec
+ * aplikacije i obaveštenja, odeljak 7).
  */
 @Component({
   selector: 'app-termini-page',
@@ -100,6 +104,12 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
                     </p>
                     @if (t.otkazan && t.napomena) {
                       <p class="napomena">Napomena: {{ t.napomena }}</p>
+                    }
+                    @if (zaWhatsApp().get(kljuc(t)); as v) {
+                      <button matButton type="button" class="wa" (click)="whatsapp(t, v)"
+                              [attr.aria-label]="'Pošalji u WhatsApp: ' + opis(t)" data-wa>
+                        <mat-icon svgIcon="send" aria-hidden="true" />Pošalji u WhatsApp
+                      </button>
                     }
                   </div>
                   @if (t.najave.length > 0) {
@@ -190,6 +200,7 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
     .veza { font-size: 14px; }
     .napomena { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
     .otkazan .vreme, .otkazan .predmet { text-decoration: line-through; color: var(--muted); }
+    .wa { margin-top: 6px; }
 
     /* Broj studenata koji ne dolaze: krupan broj sa ikonicom; iznad praga istaknut. */
     .odsutni { grid-area: odsutni; justify-self: end; margin: 0; min-width: 104px; padding: 6px 12px;
@@ -251,6 +262,8 @@ export class TerminiPage {
   protected readonly opseg = computed(() => `${formatDatum(this.pocetak(), 'kratko')} – ${formatDatum(pomeriOd(this.pocetak(), this.dana - 1))}`);
   protected readonly iznadPraga = iznadPraga;
   protected readonly kljuc = kljuc;
+  /** Termini otkazani ili vraćeni na ovoj stranici: nude „Pošalji u WhatsApp“ dok se stranica ne napusti. */
+  protected readonly zaWhatsApp = signal<ReadonlyMap<string, VrstaPromene>>(new Map());
   /** Termini čija je lista „ko ne dolazi“ rasklopljena. */
   private readonly otvoreni = signal<ReadonlySet<string>>(new Set());
   private ucitavanje?: Subscription;
@@ -346,7 +359,8 @@ export class TerminiPage {
         if (izbor !== undefined) {
           this.posalji(t, this.api.otkazi({
             stavkaId: t.stavkaId, datum: t.datum, napomena: izbor.napomena || null, posaljiMejl: izbor.posaljiMejl,
-          }), t.otkazan ? () => 'Napomena je sačuvana.' : o => `Čas je otkazan. ${tekstMejla(o, izbor.posaljiMejl)}`);
+          }), t.otkazan ? () => 'Napomena je sačuvana.' : o => `Čas je otkazan. ${tekstMejla(o, izbor.posaljiMejl)}`,
+          t.otkazan ? undefined : 'OTKAZAN');
         }
       });
   }
@@ -361,7 +375,7 @@ export class TerminiPage {
       .subscribe(izbor => {
         if (izbor !== undefined) {
           this.posalji(t, this.api.vrati({ stavkaId: t.stavkaId, datum: t.datum, posaljiMejl: izbor.posaljiMejl }),
-            o => `Čas se ipak održava. ${tekstMejla(o, izbor.posaljiMejl)}`);
+            o => `Čas se ipak održava. ${tekstMejla(o, izbor.posaljiMejl)}`, 'ODRZAVA');
         }
       });
   }
@@ -370,17 +384,26 @@ export class TerminiPage {
    * Zahtev nije tih: poruka servera (409 „Termin je već počeo.“) ide u snackbar, a lista se učitava iznova. Kad neki mejl
    * nije stavljen u red (`neposlato`), poruka je greška, da se ne previdi.
    */
-  private posalji(t: TerminInfo, zahtev: Observable<PromenaTerminaOdgovor>, poruka: (o: PromenaTerminaOdgovor) => string): void {
+  /** Otvara predlog poruke za WhatsApp grupu za termin otkazan ili vraćen na ovoj stranici. */
+  protected whatsapp(t: TerminInfo, vrsta: VrstaPromene): void {
+    WhatsAppDialog.otvori(this.dialog, tekstZaWhatsApp(t, vrsta, this.danas));
+  }
+
+  private posalji(t: TerminInfo, zahtev: Observable<PromenaTerminaOdgovor>, poruka: (o: PromenaTerminaOdgovor) => string,
+                  wa?: VrstaPromene): void {
     const k = kljuc(t);
     this.salje.set(k);
     zahtev.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: o => {
         this.salje.set(null);
         this.termini.update(l => l.map(x => (kljuc(x) === k ? o.termin : x)));
+        if (wa) {
+          this.zaWhatsApp.update(m => new Map(m).set(k, wa));
+        }
         if ((o.neposlato ?? 0) > 0) {
           this.poruke.greska(poruka(o));
         } else {
-          this.poruke.uspeh(poruka(o));
+          this.poruke.uspeh(poruka(o), wa ? { label: 'WhatsApp', run: () => this.whatsapp(o.termin, wa) } : undefined);
         }
       },
       error: () => {
@@ -391,11 +414,20 @@ export class TerminiPage {
   }
 }
 
-/** Deo poruke o mejlu posle otkazivanja ili vraćanja (`posaljiMejl` = izbor nastavnika u dijalogu). */
+/**
+ * Deo poruke o obaveštavanju posle otkazivanja ili vraćanja (`posaljiMejl` = izbor nastavnika u dijalogu, važi za mejl i
+ * telefon): mejl, pa broj push poruka (`pushPoslato`, stariji server ga ne šalje).
+ */
 export function tekstMejla(o: PromenaTerminaOdgovor, posaljiMejl: boolean): string {
   if (!posaljiMejl) {
-    return 'Mejl studentima nije slat.';
+    return 'Mejl i obaveštenje na telefon nisu slati.';
   }
+  const push = o.pushPoslato ?? 0;
+  const naTelefon = push > 0 ? ` Obaveštenje na telefon: ${push}.` : '';
+  return `${tekstSamoMejla(o)}${naTelefon}`;
+}
+
+function tekstSamoMejla(o: PromenaTerminaOdgovor): string {
   const neposlato = o.neposlato ?? 0;
   const poslat = o.obavesteno > 0 ? `Mejl je poslat: ${brojStudenataTekst(o.obavesteno)}.` : '';
   if (neposlato > 0) {
