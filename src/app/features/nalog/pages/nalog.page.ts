@@ -37,19 +37,19 @@ const NASLOV: Record<KorakNaloga, string> = {
   prijavljen: 'Prijavljen si',
 };
 
-/** Tab Čas: podrazumevana strana prijavljenog studenta (spec studentskog dela 12.1). */
-export const NALOG_POCETNA = 'nalog/cas';
+/** Tab Početna: podrazumevana strana prijavljenog studenta (pozdrav, WhatsApp grupa, naredni časovi). */
+export const NALOG_POCETNA = 'nalog/pocetna';
 
 /**
  * Prijava studenta (`/nalog`, u `PublicLayout`-u: student na telefonu, bez sesije nastavnika; spec prijave 5.1):
  * indeks -> kod na mejl -> prijavljen na ovom telefonu (kolačić `gfs_student`, 365 dana). Zove **samo** `api/public/nalog/*`
  * (`NalogApi`); ESLint `gfs/javna-ruta-uvozi` drži uvoze, e2e `nalog.spec.ts` mrežu.
  *
- * Na prvom učitavanju `GET stanje` bira korak. Prijavljen student bez `nazad` odmah ide na tab Čas (`nalog/cas`, spec
- * studentskog dela 12.1; nalog, uređaji i odjava su na tabu Ja). Posle uspešne prijave ide na `nazad` (query,
+ * Na prvom učitavanju `GET stanje` bira korak. Prijavljen student bez `nazad` odmah ide na tab Početna (`nalog/pocetna`;
+ * nalog, uređaji i odjava su na tabu Ja). Posle uspešne prijave ide na `nazad` (query,
  * `withComponentInputBinding`) ako ga `javnoNazad` pusti (samo relativna putanja javne rute: `uzivo`, `upis`, `nalog`, npr.
- * `uzivo/ABC123`), inače na tab Čas; spoljni ili apsolutni URL i nastavnička ruta se nikad ne otvaraju, a `nazad` na ovu istu
- * stranicu (`nalog`) je tab Čas. Već prijavljen student sa `nazad` dobija "Nastavi" (`GET ja` za ime; bez automatskog skoka,
+ * `uzivo/ABC123`), inače na tab Početna; spoljni ili apsolutni URL i nastavnička ruta se nikad ne otvaraju, a `nazad` na ovu
+ * istu stranicu (`nalog`) je tab Početna. Već prijavljen student sa `nazad` dobija "Nastavi" (`GET ja` za ime; bez automatskog skoka,
  * pa nema petlje ako ga ciljna strana vrati ovde). Greške servera (401, 429, 503) su doslovno u baneru koraka; mreža i
  * ostale 5xx opšte poruke. Poruku posle odjave (tab Ja) donosi stanje istorije (`info`).
  */
@@ -110,7 +110,7 @@ export const NALOG_POCETNA = 'nalog/cas';
           @if (nastaviNa()) {
             <button type="button" mat-flat-button class="dugme" [disabled]="salje()" (click)="nastavi()">Nastavi</button>
           }
-          <a matButton="outlined" class="dugme drugo" routerLink="/nalog/cas">Moj nalog</a>
+          <a matButton="outlined" class="dugme drugo" routerLink="/nalog/pocetna">Moj nalog</a>
         }
       }
     </app-nalog-okvir>
@@ -169,7 +169,7 @@ export class NalogPage {
   protected readonly ja = signal<StudentJa | null>(null);
   /** Poruka posle odjave (na koraku indeksa): tab Ja je šalje kroz stanje istorije (`{ info }`). */
   protected readonly info = signal<string | null>(porukaIzIstorije(inject(Location).getState()));
-  /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to tab Čas). */
+  /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to tab Početna). */
   protected readonly nastaviNa = computed(() => {
     const cilj = javnoNazad(this.nazad());
     return cilj !== null && putanjaCilja(cilj) !== 'nalog' ? cilj : null;
@@ -182,7 +182,7 @@ export class NalogPage {
     this.ucitaj(false);
   }
 
-  /** `GET stanje` bira početni korak; prijavljen sa `nazad` još `GET ja` (ime uz "Nastavi"), bez njega tab Čas. */
+  /** `GET stanje` bira početni korak; prijavljen sa `nazad` još `GET ja` (ime uz "Nastavi"), bez njega tab Početna. */
   protected ucitaj(fokus = true): void {
     this.zahtev?.unsubscribe();
     this.korak.set('ucitavanje');
@@ -235,7 +235,7 @@ export class NalogPage {
   }
 
   /**
-   * Prijava kodom, pa `nazad` ili tab Čas. `salje` ostaje `true` dok navigacija ne završi, da dupli dodir ne pošalje drugu
+   * Prijava kodom, pa `nazad` ili tab Početna. `salje` ostaje `true` dok navigacija ne završi, da dupli dodir ne pošalje drugu
    * prijavu već iskorišćenim kodom (401 bi prijavljenom studentu pokazao "Kod nije ispravan").
    */
   protected prijavi(kod: string): void {

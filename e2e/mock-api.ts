@@ -121,6 +121,8 @@ interface NalogStudenta {
   grupa?: string | null; generacija?: number | null;
   /** Godina upisa; bez nje u fiksturi važi početna godina tekuće školske godine (ono što forma predlaže). */
   godina?: number;
+  /** Link WhatsApp grupe sopstvene grupe (Početna); fikstura ga nema, test ga postavlja. */
+  waLink?: string | null;
 }
 
 /** Početna godina tekuće školske godine (1. 10. Y do 30. 9. Y+1 = Y), kao predlog forme na `/nalog`. */
@@ -350,6 +352,8 @@ export class MockApi {
    * Čekiranje (studentski portal, faza 1). Projektor dobija nov token na svaki `GET predavanja/:id/cekiranje` (kao server
    * na 10 s, ovde odmah, da test vidi promenu bez čekanja), `cekirani` vraća taj isti upit. Student: `skeniraj` bez sesije
    * daje ključ čekanja (`kljucevi`), sa sesijom upisuje `predavanjeId`; `izvodjenje` test postavlja kad "pokrene" prezentaciju.
+   * `uToku`: današnje predavanje studentove grupe u toku (test ga postavlja); server ga šalje samo kad student nije na živom
+   * času, pa ga mok tada i vraća.
    */
   readonly cekiranje = {
     tokena: 0,
@@ -357,6 +361,7 @@ export class MockApi {
     predavanjeId: null as number | null,
     cekiranU: null as string | null,
     izvodjenje: null as { kod: string; naziv: string } | null,
+    uToku: null as { predmet: string | null; tema: string | null } | null,
     kljucevi: new Set<string>(),
   };
   /**
@@ -1564,10 +1569,10 @@ export class MockApi {
       const c = this.cekiranje;
       const x = c.predavanjeId === null ? undefined : d.predavanja.find(q => q.id === c.predavanjeId);
       if (!x) {
-        return { predavanje: null, cekiranU: null, izvodjenje: null };
+        return { predavanje: null, cekiranU: null, izvodjenje: null, uToku: c.uToku };
       }
       const predavanje = { id: x.id, predmet: this.predmet(x.predmetId)?.naziv ?? null, datum: x.datum, rb: x.rb, tema: x.tema, zavrseno: x.zavrseno };
-      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje };
+      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje, uToku: x.zavrseno ? c.uToku : null };
     };
     const cekiraj = (x: Predavanje) => {
       this.cekiranje.predavanjeId = x.id;
