@@ -345,12 +345,21 @@ computed on the server; the front never builds dates of termini itself.
   of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
   `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`; a new
   line copies subject, group and times of the last one; the copy keeps lines and threshold, drops ids and dates; the server
-  re-checks everything and its 400 text goes to the banner), `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
+  re-checks everything and its 400 text goes to the banner, including the overlap rule: the same subject, group, weekday and
+  start in another period with overlapping dates is a 400, so "Kopiraj u novi" with overlapping dates fails there). Editing a
+  period warns before saving which cancelled termini the save drops (`izgubljenaOtkazivanja(original, form)` in
+  `raspored.pravila.ts` from `StavkaInfo.otkazani`, the future cancellations that are still termini: a line removed, with another
+  subject, group or weekday, or a date outside the new period; same rule as the server, live `role="status"` box
+  `[data-izgubljena-otkazivanja]`), and the save snackbar reports `RasporedDetails.izgubljenaOtkazivanja` ("Ukinuto otkazanih
+  časova: N."). `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
   grouped by day, chip "Ne dolazi: N" in warn tone above the threshold, `<details>` "Ko ne dolazi" with names, card links and
   reasons, link to the lecture of that day, "Otkaži čas" (`OtkazivanjeDialog`, optional note; for an already cancelled termin the
-  same dialog only edits the note) and "Vrati čas" (`ConfirmDialog`), both hidden once the termin started; the snackbar says how
-  many students got the mail). Names and reasons exist only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold) are
-  pure functions in `data-access/raspored.pravila.ts`.
+  same dialog only edits the note) and "Vrati čas" (`VracanjeDialog`, `role: 'alertdialog'`), both hidden once the termin started.
+  Both dialogs carry the checkbox "Pošalji mejl studentima" (checked by default, `TerminCmd.posaljiMejl`; the note-only edit sends
+  `false`). `tekstMejla` builds the snackbar: "Mejl je poslat: N" counts mails actually queued (`obavesteno`); `neposlato > 0`
+  (queue full or no SMTP) turns it into an error snackbar telling the teacher whom to reach another way; an unchecked box says
+  "Mejl studentima nije slat."). Names and reasons exist only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold,
+  lost cancellations) are pure functions in `data-access/raspored.pravila.ts`.
 - **Notifications:** `VrstaObavestenja` has `MNOGO_NAJAVA` (`podaci`: `stavkaId`, `datum`, `pocetak`, `kraj`, `predmet`,
   `grupa`, `broj`, `prag`; never names or reasons). `tekstObavestenja` -> "Mnogo najava odsustva: predmet · grupa · sreda 4. 11.
   (6)"; `vezaObavestenja(o)` gives the link for both the bell list and the Home card (`/raspored/termini?od=<datum>` here, the
@@ -363,9 +372,11 @@ computed on the server; the front never builds dates of termini itself.
   lecture for that subject and group).
 - **Tests:** unit specs next to each file; e2e `e2e/najava-odsustva.spec.ts` (phone, public network, axe: own group only,
   announce, reason, withdraw, threshold notification, no counts in the student response, cancelled termin, 409 while open),
-  `e2e/raspored.spec.ts` (nav, copy, new form with server error, termini with names/reasons, cancel/restore, bell link, Home),
+  `e2e/raspored.spec.ts` (nav, copy with the overlap 400, new form with server error, termini with names/reasons, cancel with
+  mail and restore without, lost-cancellation warning on edit, bell link, Home),
   and a raspored block in `e2e/pristupacnost.spec.ts` (day and night). Mock: `e2e/mock-raspored.ts` (empty by default, so old
-  specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after).
+  specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after;
+  it mirrors the server's overlap check, lost cancellations, `posaljiMejl` and the next-4 announce window).
   `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`.
 
 ## Uživo (`features/uzivo`)
