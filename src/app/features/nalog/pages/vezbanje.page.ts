@@ -84,6 +84,7 @@ const NIJE_OTVOREN = 'Ovaj tip nije otvoren za vežbanje.';
     .nivo:disabled { opacity: 0.5; cursor: default; }
     .nivo:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
     .broj { color: var(--muted); font-weight: 400; }
+    .nivo[aria-pressed='true'] .broj { color: inherit; }
     .nivo-zadatka { margin: 0 0 6px; color: var(--ink-2); }
     .citac { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .stanje { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 24px 0; color: var(--muted); }

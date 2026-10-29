@@ -187,7 +187,7 @@ const PORUKA_SESIJA_ISTEKLA = 'Prijava na ovom uređaju je istekla. Prijavi se p
             <button type="button" mat-flat-button class="dugme" (click)="nastavi()">Nastavi</button>
           }
           <div class="akcije">
-            <a matButton="outlined" routerLink="/nalog">Otvori nalog</a>
+            <a matButton="outlined" routerLink="/nalog/ja">Otvori nalog</a>
           </div>
         }
         @case ('neuspeh') {

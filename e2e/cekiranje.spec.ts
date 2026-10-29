@@ -111,15 +111,12 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/nalog/cas', 'GET')).toHaveLength(0);
   });
 
-  test('/nalog: kartica "Na času si" vodi na čas', async ({ page, mock }) => {
+  test('/nalog: prijavljen i čekiran ide pravo na tab Čas (na času)', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     mock.cekiranje.predavanjeId = 1;
     await page.goto('nalog');
-    const kartica = page.locator('[data-na-casu-kartica]');
-    await ocekuj(kartica).toContainText(CAS);
-    await kartica.getByRole('link', { name: 'Nastavi' }).click();
     await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
-    await ocekuj(page.locator('[data-na-casu]')).toBeVisible();
+    await ocekuj(page.locator('[data-na-casu]')).toContainText(CAS);
   });
 
   test('axe (dan), 360 px: na času i poruka', async ({ page, mock }) => {
