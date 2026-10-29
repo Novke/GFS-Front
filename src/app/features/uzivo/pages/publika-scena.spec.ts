@@ -49,6 +49,30 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
     expect(tekst(rang)).not.toContain('800');
   });
 
+  it('rang tačnosti (L van takmičenja): procenat, vreme i ★ iz javniRangTacnosti; Shift+L ima naslov "Rang predavanja"', async () => {
+    const red = { mesto: 1, ime: 'Ana', gost: false, tacnih: 2, dugovanih: 3, odgovorenih: 3, procenat: 67, prosekMs: 4120, zvezdice: 4, poeni: null };
+    const el = await prikazi(naPitanju('ZATVORENO', {
+      takmicenje: false, rangListaPrikazana: true, rangPrikaz: 'IZVODJENJE', javniRangTacnosti: [red],
+    }));
+    const rang = el.querySelector('[aria-label="Rang-lista"]');
+    expect(tekst(rang?.querySelector('.uz-rang-red') ?? null)).toBe('1.Ana67%4,1 s4 ★ zvezdica');
+    const el2 = await prikazi(naPitanju('ZATVORENO', {
+      takmicenje: true, rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE', javniRangTacnosti: [red],
+      javnaRangLista: [{ mesto: 1, ucesnikId: null, ime: 'Bojan', poeni: 800 }],
+    }));
+    const rangPredavanja = el2.querySelector('[aria-label="Rang predavanja"]');
+    expect(tekst(rangPredavanja)).toContain('Ana');
+    expect(tekst(rangPredavanja)).not.toContain('Bojan');
+  });
+
+  it('rang tačnosti ostaje i na kraju (preko "Hvala!")', async () => {
+    const el = await prikazi(stanje({
+      prikaz: 'KRAJ', takmicenje: false, rangListaPrikazana: true, rangPrikaz: 'IZVODJENJE',
+      javniRangTacnosti: [{ mesto: 1, ime: 'Ana', gost: false, tacnih: 1, dugovanih: 1, odgovorenih: 1, procenat: 100, prosekMs: 900, zvezdice: 1, poeni: null }],
+    }));
+    expect(tekst(el.querySelector('[aria-label="Rang-lista"]'))).toContain('Ana');
+  });
+
   it('L bez javne rang-liste (stari snimak, null): prazna lista, nikad nastavnička', async () => {
     const el = await prikazi(naPitanju('ZATVORENO', {
       takmicenje: true, rangListaPrikazana: true,

@@ -38,6 +38,11 @@ export const STUDENTI_RUTE: Route[] = [
         loadComponent: () => import('./pages/student-hronologija-tab').then(x => x.StudentHronologijaTab),
       },
       {
+        path: 'uzivo',
+        title: 'Uživo rezultati studenta',
+        loadComponent: () => import('./pages/student-uzivo-tab').then(x => x.StudentUzivoTab),
+      },
+      {
         path: 'beleske',
         title: 'Beleške o studentu',
         loadComponent: () => import('./pages/student-beleske-tab').then(x => x.StudentBeleskeTab),
