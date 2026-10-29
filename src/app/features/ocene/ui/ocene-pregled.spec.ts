@@ -115,6 +115,12 @@ describe('OcenePregled', () => {
     await korak();
     http.expectOne('api/ocenjivanje/predmet/5/rezultati').flush([rez(1, 'Zec', 55, 6), rez(2, 'Anić', 20, null), rez(3, 'Bek', 10, null)]);
     await korak();
+    // traka objave studentima ide uz predlog (ima studenata)
+    const objava = http.expectOne(r => r.url === 'api/ocenjivanje/predmet/5/objava');
+    expect(objava.request.params.get('grupa')).toBe('2');
+    objava.flush({ predmetId: 5, grupaId: 2, objavljeno: null, studenata: 0 });
+    await korak();
+    expect(el().querySelector('[data-objava]')?.textContent).toContain('Studenti još ne vide predloge ocena ni bodove.');
     expect(el().querySelector('[data-opis-koeficijenata]')?.textContent).toContain('3 studenta');
     const [blok] = await f.getDeferBlocks();
     await blok.render(DeferBlockState.Complete);
@@ -136,5 +142,6 @@ describe('OcenePregled', () => {
     http.expectOne('api/ocenjivanje/predmet/5/rezultati').flush([]);
     await korak();
     expect(el().textContent).toContain('Grupa nema studenata');
+    expect(el().querySelector('app-objava-ocena')).toBeNull();
   });
 });
