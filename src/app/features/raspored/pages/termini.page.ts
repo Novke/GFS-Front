@@ -14,7 +14,9 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { formatDatum } from '../../../shared/util/datum.pipe';
 import { brojStudenataTekst } from '../../../shared/util/mnozina';
-import { blokVremena, danIDatum, isoDatum } from '../../../shared/util/termin';
+import {
+  blokVremena, DANI, danIDatum, danUNedelji, isoDatum, lokalniDatum, MESECI_KRATKO, relativniDan,
+} from '../../../shared/util/termin';
 import { RasporedApi } from '../data-access/raspored.api';
 import { DANA_TERMINA, PromenaTerminaOdgovor, TerminInfo } from '../data-access/raspored.models';
 import { imeStudenta, iznadPraga, odIliDanas, poDatumu, pomeriOd } from '../data-access/raspored.pravila';
@@ -26,10 +28,11 @@ type Status = 'ucitavanje' | 'greska' | 'ok';
 const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.datum}`;
 
 /**
- * Naredni termini (`/raspored/termini?od=<datum>`; spec najave odsustva, odeljak 7): termini svih perioda za 4 nedelje od
- * `od` (podrazumevano danas), po danu, sa brojem najava (istaknut iznad praga), ko ne dolazi i zašto (rasklapa se),
- * predavanjem tog dana, i „Otkaži čas“ / „Vrati čas“ dok termin nije počeo. Obaveštenje „Mnogo najava odsustva“ vodi
- * ovde sa `od` = datum termina.
+ * Naredni termini (`/raspored/termini?od=<datum>`, i `/raspored` vodi ovde; spec najave odsustva, odeljak 7): termini svih
+ * perioda za 4 nedelje od `od` (podrazumevano danas), po danu. Kartica dana ima blok datuma levo (dan, krupan broj, mesec);
+ * red termina vreme u svom uglu, predmet i grupu, krupan broj studenata koji ne dolaze (istaknut iznad praga; klik
+ * rasklapa ko ne dolazi i zašto), predavanje tog dana, i desno „Otkaži čas“ / „Vrati čas“ dok termin nije počeo.
+ * Obaveštenje „Mnogo najava odsustva“ i nastavnički mejl vode ovde sa `od` = datum termina.
  */
 @Component({
   selector: 'app-termini-page',
@@ -37,7 +40,9 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-page-header naslov="Naredni termini" podnaslov="Časovi iz rasporeda, sa najavama odsustva studenata.">
-      <a akcije matButton="outlined" routerLink="/raspored"><mat-icon svgIcon="event" aria-hidden="true" />Raspored časova</a>
+      <a akcije matButton="outlined" routerLink="/raspored/periodi" data-periodi>
+        <mat-icon svgIcon="edit" aria-hidden="true" />Uredi raspored
+      </a>
     </app-page-header>
 
     <nav class="prozor" aria-label="Period termina">
@@ -64,46 +69,60 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
         @if (dani().length === 0) {
           <app-empty-state naslov="Nema termina u ovom periodu" ikona="event"
             tekst="Termini dolaze iz rasporeda časova; proveri da li neki raspored važi u ovim danima.">
-            <a matButton="outlined" routerLink="/raspored">Raspored časova</a>
+            <a matButton="outlined" routerLink="/raspored/periodi">Uredi raspored</a>
           </app-empty-state>
         }
         @for (d of dani(); track d.datum) {
-          <section class="dan" [attr.aria-labelledby]="'dan-' + d.datum" [attr.data-dan]="d.datum">
-            <h2 [id]="'dan-' + d.datum">{{ naslovDana(d.datum) }}</h2>
+          <section class="dan" [class.danas]="d.datum === danas" [attr.aria-labelledby]="'dan-' + d.datum"
+                   [attr.data-dan]="d.datum">
+            <h2 class="kad" [id]="'dan-' + d.datum">
+              <span class="sr-only">{{ naslovDana(d.datum) }}</span>
+              <span class="kad-dan" aria-hidden="true">{{ danUBloku(d.datum) }}</span>
+              <span class="kad-broj" aria-hidden="true">{{ brojDana(d.datum) }}</span>
+              <span class="kad-mesec" aria-hidden="true">{{ mesec(d.datum) }}</span>
+            </h2>
             <ul class="termini">
               @for (t of d.termini; track kljuc(t)) {
-                <li [attr.data-termin]="kljuc(t)" [class.otkazan]="t.otkazan">
-                  <div class="glava">
-                    <span class="vreme">{{ blok(t) }}</span>
-                    <span class="naziv"><strong>{{ t.predmet.naziv }}</strong> · {{ t.grupa.naziv }}</span>
-                    @if (t.otkazan) {
-                      <app-status-chip tekst="Otkazano" ton="danger" />
-                    }
-                    @if (t.brojNajava > 0) {
-                      <app-status-chip [tekst]="'Ne dolazi: ' + t.brojNajava" [ton]="iznadPraga(t) ? 'warn' : 'neutral'"
-                                       data-broj-najava />
-                    }
-                    @if (t.predavanjeId) {
-                      <a class="veza" [routerLink]="['/predavanja', t.predavanjeId]">Predavanje</a>
+                <li class="termin" [attr.data-termin]="kljuc(t)" [class.otkazan]="t.otkazan">
+                  <p class="vreme" data-vreme>
+                    <span class="sr-only">{{ t.otkazan ? 'Otkazano: ' : '' }}</span>{{ blok(t) }}
+                  </p>
+                  <div class="sta">
+                    <h3 class="predmet">{{ t.predmet.naziv }}</h3>
+                    <p class="grupa">
+                      <span data-grupa>{{ t.grupa.naziv }}</span>
+                      @if (t.otkazan) {
+                        <app-status-chip tekst="Otkazano" ton="danger" />
+                      }
+                      @if (t.predavanjeId) {
+                        <a class="veza" [routerLink]="['/predavanja', t.predavanjeId]">Predavanje</a>
+                      }
+                    </p>
+                    @if (t.otkazan && t.napomena) {
+                      <p class="napomena">Napomena: {{ t.napomena }}</p>
                     }
                   </div>
-                  @if (t.otkazan && t.napomena) {
-                    <p class="napomena">Napomena: {{ t.napomena }}</p>
-                  }
                   @if (t.najave.length > 0) {
-                    <details class="najave">
-                      <summary>Ko ne dolazi ({{ t.najave.length }})</summary>
-                      <ul>
-                        @for (n of t.najave; track n.studentId) {
-                          <li>
-                            <a [routerLink]="['/studenti', n.studentId]">{{ ime(n) }}</a>
-                            @if (n.razlog) {
-                              <span class="razlog">: {{ n.razlog }}</span>
-                            }
-                          </li>
-                        }
-                      </ul>
-                    </details>
+                    <button type="button" class="odsutni" [class.iznad]="iznadPraga(t)" (click)="rasklopi(t)"
+                            [attr.aria-expanded]="otvoren(t)" [attr.aria-controls]="'ko-' + kljuc(t)" data-broj-najava>
+                      <span class="odsutni-broj">
+                        <mat-icon svgIcon="person_remove" aria-hidden="true" /><span data-broj>{{ t.brojNajava }}</span>
+                      </span>
+                      <span class="odsutni-tekst">
+                        ne dolazi<mat-icon class="strelica" svgIcon="expand_more" aria-hidden="true" />
+                      </span>
+                      @if (iznadPraga(t)) {
+                        <span class="odsutni-prag">iznad praga {{ t.prag }}</span>
+                      }
+                      <span class="sr-only">, {{ otvoren(t) ? 'sakrij' : 'prikaži' }} imena</span>
+                    </button>
+                  } @else {
+                    <p class="odsutni nula" data-broj-najava>
+                      <span class="odsutni-broj">
+                        <mat-icon svgIcon="person_remove" aria-hidden="true" /><span data-broj>{{ t.brojNajava }}</span>
+                      </span>
+                      <span class="odsutni-tekst">ne dolazi</span>
+                    </p>
                   }
                   @if (!t.poceo) {
                     <div class="akcije">
@@ -114,9 +133,23 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
                                 [attr.aria-label]="'Izmeni napomenu: ' + opis(t)">Izmeni napomenu</button>
                       } @else {
                         <button matButton="outlined" type="button" class="destruktivno" [disabled]="salje() !== null"
-                                (click)="otkazi(t)" [attr.aria-label]="'Otkaži čas: ' + opis(t)" data-otkazi>Otkaži čas</button>
+                                (click)="otkazi(t)" [attr.aria-label]="'Otkaži čas: ' + opis(t)" data-otkazi>
+                          <mat-icon svgIcon="cancel" aria-hidden="true" />Otkaži čas
+                        </button>
                       }
                     </div>
+                  }
+                  @if (t.najave.length > 0) {
+                    <ul class="ko" [id]="'ko-' + kljuc(t)" [hidden]="!otvoren(t)" [attr.aria-label]="'Ko ne dolazi: ' + opis(t)">
+                      @for (n of t.najave; track n.studentId) {
+                        <li>
+                          <a [routerLink]="['/studenti', n.studentId]">{{ ime(n) }}</a>
+                          @if (n.razlog) {
+                            <span class="razlog">{{ n.razlog }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
                   }
                 </li>
               }
@@ -130,24 +163,70 @@ const kljuc = (t: Pick<TerminInfo, 'stavkaId' | 'datum'>) => `${t.stavkaId}:${t.
     :host { display: flex; flex-direction: column; gap: 16px; }
     .prozor { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .opseg { font-weight: 600; padding: 0 6px; }
-    .dan { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
-      box-shadow: var(--shadow); min-width: 0; }
-    h2 { margin: 0 0 8px; font-size: 16px; }
-    .termini { margin: 0; padding: 0; list-style: none; }
-    .termini > li { padding: 10px 0; border-top: 1px solid var(--line); }
-    .termini > li:first-child { border-top: 0; padding-top: 0; }
-    .glava { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-    .vreme { font-family: var(--font-mono); font-weight: 600; }
-    .naziv { overflow-wrap: anywhere; }
-    .otkazan .naziv, .otkazan .vreme { text-decoration: line-through; color: var(--muted); }
+
+    /* Kartica dana: blok datuma levo, termini desno. */
+    .dan { display: grid; grid-template-columns: 96px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--radius);
+      background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+    .kad { margin: 0; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: var(--surface-2); color: var(--ink-2); border-right: 1px solid var(--line); font-weight: 400; }
+    .kad-dan { font-size: 13px; font-weight: 600; line-height: 1.2; }
+    .kad-broj { font-size: 34px; font-weight: 700; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums;
+      letter-spacing: -.02em; }
+    .kad-mesec { font-size: 13px; line-height: 1.2; }
+    .danas .kad { background: var(--primary-soft); color: var(--primary-soft-ink); }
+    .danas .kad-broj { color: var(--primary-soft-ink); }
+
+    .termini { margin: 0; padding: 0; list-style: none; min-width: 0; }
+    .termin { display: grid; align-items: start; gap: 4px 20px; padding: 14px 18px;
+      grid-template-columns: 104px minmax(0, 1fr) auto auto;
+      grid-template-areas: "vreme sta odsutni akcije" ". ko ko ko"; }
+    .termin + .termin { border-top: 1px solid var(--line); }
+    .vreme { grid-area: vreme; margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--ink);
+      font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sta { grid-area: sta; min-width: 0; }
+    .predmet { margin: 0; font-size: 17px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
+    .grupa { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 14px;
+      color: var(--ink-2); }
     .veza { font-size: 14px; }
-    .napomena { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; }
-    .najave { margin: 6px 0 0; font-size: 14px; }
-    .najave summary { cursor: pointer; color: var(--primary); }
-    .najave ul { margin: 6px 0 0; padding-left: 1.2em; }
-    .razlog { color: var(--ink-2); overflow-wrap: anywhere; }
-    .akcije { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .napomena { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+    .otkazan .vreme, .otkazan .predmet { text-decoration: line-through; color: var(--muted); }
+
+    /* Broj studenata koji ne dolaze: krupan broj sa ikonicom; iznad praga istaknut. */
+    .odsutni { grid-area: odsutni; justify-self: end; margin: 0; min-width: 104px; padding: 6px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 0; border: 1px solid var(--line);
+      border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; text-align: center; }
+    button.odsutni { cursor: pointer; }
+    button.odsutni:hover { background: var(--surface-2); }
+    .odsutni-broj { display: inline-flex; align-items: center; gap: 6px; font-size: 28px; font-weight: 700; line-height: 1.1;
+      font-variant-numeric: tabular-nums; }
+    .odsutni-broj mat-icon { width: 22px; height: 22px; font-size: 22px; color: var(--ink-2); }
+    .odsutni-tekst { display: inline-flex; align-items: center; font-size: 13px; color: var(--ink-2); }
+    .strelica { width: 18px; height: 18px; font-size: 18px; transition: transform .15s; }
+    [aria-expanded="true"] .strelica { transform: rotate(180deg); }
+    .odsutni-prag { font-size: 12px; font-weight: 600; }
+    .odsutni.iznad { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+    .odsutni.iznad .odsutni-broj mat-icon, .odsutni.iznad .odsutni-tekst { color: var(--warn); }
+    .odsutni.nula { border-color: transparent; background: transparent; color: var(--muted); }
+    .odsutni.nula .odsutni-broj mat-icon, .odsutni.nula .odsutni-tekst { color: var(--muted); }
+
+    .akcije { grid-area: akcije; justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .destruktivno { --mat-button-outlined-label-text-color: var(--danger); }
+
+    .ko { grid-area: ko; margin: 8px 0 0; padding: 10px 14px; list-style: none; border-radius: var(--radius-sm);
+      background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+    .ko[hidden] { display: none; }
+    .razlog { color: var(--ink-2); overflow-wrap: anywhere; }
+    .razlog::before { content: ' · '; }
+    @media (prefers-reduced-motion: reduce) { .strelica { transition: none; } }
+
+    /* Telefon: uži blok datuma, vreme iznad predmeta, broj i akcije u redu ispod. */
+    @media (max-width: 599.98px) {
+      .dan { grid-template-columns: 64px minmax(0, 1fr); }
+      .kad-broj { font-size: 26px; }
+      .termin { padding: 12px; gap: 6px 12px; grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "vreme vreme" "sta sta" "odsutni akcije" "ko ko"; }
+      .odsutni { justify-self: start; }
+    }
   `,
 })
 export class TerminiPage {
@@ -172,6 +251,8 @@ export class TerminiPage {
   protected readonly opseg = computed(() => `${formatDatum(this.pocetak(), 'kratko')} – ${formatDatum(pomeriOd(this.pocetak(), this.dana - 1))}`);
   protected readonly iznadPraga = iznadPraga;
   protected readonly kljuc = kljuc;
+  /** Termini čija je lista „ko ne dolazi“ rasklopljena. */
+  private readonly otvoreni = signal<ReadonlySet<string>>(new Set());
   private ucitavanje?: Subscription;
   private dijalogOtvoren = false;
 
@@ -206,9 +287,40 @@ export class TerminiPage {
     void this.router.navigate([], { queryParams: { od: od === this.danas ? null : od }, queryParamsHandling: 'merge' });
   }
 
+  /** Pun naziv dana za čitač ekrana: `Danas, sreda 6. 11.`, `Sutra, ...`, `Petak 8. 11.`. */
   protected naslovDana(datum: string): string {
     const d = danIDatum(datum);
-    return datum === this.danas ? `Danas, ${d}` : d.charAt(0).toUpperCase() + d.slice(1);
+    const r = relativniDan(datum, this.danas);
+    return r ? `${r.charAt(0).toUpperCase()}${r.slice(1)}, ${d}` : d.charAt(0).toUpperCase() + d.slice(1);
+  }
+
+  /** Gornji red bloka datuma: `danas`, `sutra` ili dan u nedelji. */
+  protected danUBloku(datum: string): string {
+    return relativniDan(datum, this.danas) || DANI[danUNedelji(datum)];
+  }
+
+  protected brojDana(datum: string): string {
+    return String(lokalniDatum(datum)?.getDate() ?? '');
+  }
+
+  protected mesec(datum: string): string {
+    const d = lokalniDatum(datum);
+    return d ? MESECI_KRATKO[d.getMonth()] : '';
+  }
+
+  protected otvoren(t: TerminInfo): boolean {
+    return this.otvoreni().has(kljuc(t));
+  }
+
+  protected rasklopi(t: TerminInfo): void {
+    const k = kljuc(t);
+    this.otvoreni.update(s => {
+      const novi = new Set(s);
+      if (!novi.delete(k)) {
+        novi.add(k);
+      }
+      return novi;
+    });
   }
 
   protected blok(t: TerminInfo): string {

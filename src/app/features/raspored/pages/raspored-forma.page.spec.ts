@@ -128,7 +128,7 @@ describe('RasporedFormaPage', () => {
     req.flush(DETALJ);
     await stabilno();
     expect(poruke.uspeh).toHaveBeenCalledWith('Raspored je sačuvan.');
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/raspored');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/raspored/periodi');
     expect(fixture.componentInstance.imaNesacuvanihIzmena()).toBe(false);
   });
 
@@ -234,7 +234,7 @@ describe('RasporedFormaPage', () => {
     ]);
     req.flush(DETALJ);
     await stabilno();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/raspored');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/raspored/periodi');
   });
 
   it('izmena koja ukida otkazane časove: upozorenje pre čuvanja i broj ukinutih posle', async () => {

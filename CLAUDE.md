@@ -395,8 +395,9 @@ computed on the server; the front never builds dates of termini itself.
   dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,
   started, cancelled meanwhile) show the server text next to that termin and reload the list silently. The response never
   carries counts or other students' names, and the card shows none.
-- **Teacher `features/raspored`** (lazy `RASPORED_RUTE` under `raspored`, side nav "Raspored", icon `event`): `/raspored` list
-  of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
+- **Teacher `features/raspored`** (lazy `RASPORED_RUTE` under `raspored`, side nav "Raspored", icon `event`): `/raspored`
+  redirects to the termini page (the everyday view; its header button "Uredi raspored" leads to the periods), `/raspored/periodi`
+  list of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
   `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`;
   dates through `MatDatepicker` (opens on a click in the field too, "Važi do" starts at the month of "Važi od") and times through
   `MatTimepicker` (list 07:00-21:45 every 15 min, any other time can be typed), see "Date and time fields" under Design; a new
@@ -407,9 +408,13 @@ computed on the server; the front never builds dates of termini itself.
   `raspored.pravila.ts` from `StavkaInfo.otkazani`, the future cancellations that are still termini: a line removed, with another
   subject, group or weekday, or a date outside the new period; same rule as the server, live `role="status"` box
   `[data-izgubljena-otkazivanja]`), and the save snackbar reports `RasporedDetails.izgubljenaOtkazivanja` ("Ukinuto otkazanih
-  časova: N."). `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
-  grouped by day, chip "Ne dolazi: N" in warn tone above the threshold, `<details>` "Ko ne dolazi" with names, card links and
-  reasons, link to the lecture of that day, "Otkaži čas" (`OtkazivanjeDialog`, optional note; for an already cancelled termin the
+  časova: N."). `/raspored/termini?od=<datum>` (`TerminiPage`; the URL stays, the bell
+  link and the teacher mail point to it: 28 days from `od`, one card per day with a date block on the left (`danas`/`sutra`/weekday,
+  big day number, short month from `MESECI_KRATKO`; the `h2` text for screen readers is the full "Danas, sreda 6. 11.", the visual
+  parts are `aria-hidden`; today's block is `--primary-soft`), one row per termin: time in its corner, subject (`h3`) and group,
+  a big count with the `person_remove` icon and "ne dolazi" (muted `0` as plain text; with announcements a button with
+  `aria-expanded`/`aria-controls` that unfolds the names with card links and reasons, warn background and "iznad praga N" above the
+  threshold), link to the lecture of that day, and on the right "Otkaži čas" (`OtkazivanjeDialog`, optional note; for an already cancelled termin the
   same dialog only edits the note) and "Vrati čas" (`VracanjeDialog`, `role: 'alertdialog'`), both hidden once the termin started.
   Both dialogs carry the checkbox "Pošalji mejl studentima" (checked by default, `TerminCmd.posaljiMejl`; the note-only edit sends
   `false`). `tekstMejla` builds the snackbar: "Mejl je poslat: N" counts mails actually queued (`obavesteno`); `neposlato > 0`

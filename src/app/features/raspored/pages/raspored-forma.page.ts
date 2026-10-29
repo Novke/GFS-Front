@@ -234,7 +234,7 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
         </section>
 
         <div class="dugmad">
-          <a matButton routerLink="/raspored">Odustani</a>
+          <a matButton routerLink="/raspored/periodi">Odustani</a>
           <button matButton="filled" type="submit" [disabled]="salje()" data-sacuvaj>
             @if (salje()) {
               <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
@@ -410,7 +410,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
         this.napustanje = true;
         const n = r.izgubljenaOtkazivanja ?? 0;
         this.poruke.uspeh(n > 0 ? `Raspored je sačuvan. Ukinuto otkazanih časova: ${n}.` : 'Raspored je sačuvan.');
-        void this.router.navigateByUrl('/raspored');
+        void this.router.navigateByUrl('/raspored/periodi');
       },
       error: (e: unknown) => {
         this.salje.set(false);
