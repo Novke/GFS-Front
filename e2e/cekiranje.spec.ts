@@ -14,7 +14,8 @@ import { MockApi } from './mock-api';
  */
 
 const API = new RegExp(
-  '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|cas/skeniraj|cas/potvrdi)$'
+  // `casovi`: kartica "Naredni časovi" na `/nalog` (najava odsustva; bez rasporeda u moku prazna)
+  '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi)$'
   + '|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$',
 );
 /** Token oblika servera (`<predavanjeId>.<22 znaka>`) za živo predavanje 1 iz fiksture. */

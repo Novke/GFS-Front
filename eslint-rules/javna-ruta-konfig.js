@@ -57,6 +57,7 @@ const DOZVOLJENO_PO_FEATURE = {
   'features/nalog': [
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core
+    'shared/util/termin', // naredni časovi (dan, datum, vreme termina): bez ijednog uvoza
     // Studentski portal, faze 2 i 3 (2026-10-29; spec 12.9 tačke 8 i 11). Pregledano sa svim uvozima: nijedan ne zove HTTP
     // (slike samo `api/public/mediji/*` kroz `medijUrl`), ne uvozi nastavnički API, store, `pages/` ni `core/state`.
     // - vežbanje (strana `vezbanje`, `ui/vezbanje-unos`): ista polja kao na času. `ui/polja-zadatka` je gore (uzivo/javno);

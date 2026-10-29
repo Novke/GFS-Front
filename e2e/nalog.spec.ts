@@ -15,9 +15,10 @@ import { MockApi, tekucaSkolskaGodina } from './mock-api';
 
 /**
  * `GET cas`: posle prijave student je na tabu Čas (`/nalog/cas`), a ljuska tabova na drugim tabovima pita da li je počela
- * prezentacija (traka); tab Ja čita `ja` (studentski portal, faze 1-3).
+ * prezentacija (traka); tab Ja čita `ja` (studentski portal, faze 1-3). `GET casovi`: kartica "Naredni časovi" na tabu Čas
+ * (najava odsustva; bez rasporeda u moku je prazna i ne vidi se).
  */
-const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas)$/;
+const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi)$/;
 const INDEKS = 'GD1';
 /** Godina koju forma predlaže bez `?godina=` (fikstura nema svoju, pa mock prihvata istu). */
 const GODINA = tekucaSkolskaGodina();
@@ -125,7 +126,9 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     await ocekuj(page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: 'Čas' })).toHaveAttribute('aria-current', 'page');
     ocekuj(mock.zahteviZa('public/nalog/kod')).toHaveLength(0); // mejl se ne šalje
     ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA, kod: MockApi.KOD_NALOGA });
-    ocekuj(javnaMreza.api).toEqual(['GET /api/public/nalog/stanje', 'POST /api/public/nalog/prijava', 'GET /api/public/nalog/cas']);
+    // tab Čas pita za čas i (kartica "Naredni časovi") za raspored; redosled ta dva nije bitan
+    ocekuj(javnaMreza.api.slice(0, 2)).toEqual(['GET /api/public/nalog/stanje', 'POST /api/public/nalog/prijava']);
+    ocekuj(javnaMreza.api.slice(2).sort()).toEqual(['GET /api/public/nalog/cas', 'GET /api/public/nalog/casovi']);
   });
 
   test('nalepljen kod sa razmacima ulazi kao 6 cifara', async ({ page }) => {

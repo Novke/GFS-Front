@@ -215,11 +215,14 @@ the front only routes and shows.
   (`korisnik-meni`: "Prijavljeni uređaji" (lazy `sesije.dialog`), "Odjava" (`ConfirmDialog` only with unsaved work; 401 counts
   as success; other errors keep the teacher on the page)); the notifications list is a lazy dialog anchored under the bell
   (`obavestenja-panel`, several actions per item, so not a menu). All of it is outside the initial bundle. The side nav shows
-  the username (`SideNav.korisnik` from `SesijaStore.korisnik`). Home shows the "Nalozi" card next to "Čeka na tebe".
+  the username (`SideNav.korisnik` from `SesijaStore.korisnik`). Home shows the "Obaveštenja" card next to "Čeka na tebe"
+  (renamed from "Nalozi" when `MNOGO_NAJAVA` arrived: not every notification is about a student account; its link comes from
+  `vezaObavestenja`, as in the bell list).
 - **Student account `nalog`** (`features/nalog/`, a `JAVNI_FEATURE`): route `nalog` in `PublicLayout` with children
   `NALOG_RUTE` (lazy page; the public 404 under `/nalog` is added in `app.routes.ts` because `NotFound` lives in
   `core/layout`). Allow-list: `JAVNO_DOZVOLJENO` plus `DOZVOLJENO_PO_FEATURE['features/nalog']` = `shared/ui/confirm-dialog`
-  (Angular Material dialog/button and rxjs only) and `shared/util/datum.pipe` (`@angular/core` only); never `core/state`,
+  (Angular Material dialog/button and rxjs only), `shared/util/datum.pipe` (`@angular/core` only) and `shared/util/termin`
+  (no imports; a rule test keeps it import-free); never `core/state`,
   `core/auth`, teacher API clients or `features/studenti`. `data-access/`: `nalog.api.ts` (only `api/public/nalog/*`, all
   `LOCAL_ERRORS`; bodies carry `{indeks, godina}`), `nalog.models.ts` (DTOs as on the server), `nalog.pravila.ts` (code digits,
   `porukaGreske`; `javnoNazad` now lives in `shared/util/nazad.ts`). `ui/`: presentational steps with inputs/outputs and no HTTP, reused by `nalog/moodle` (F5):
@@ -361,6 +364,50 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   login with a key, server messages, `/nalog` straight to the tab Čas, axe in day mode, projector QR changes and shows no names, a finished
   lecture has no QR and no request). The mock (`MockApi.cekiranje`) returns a new token on every `GET predavanja/:id/cekiranje`
   so the test sees the change without waiting 10 s.
+
+## Raspored i najava odsustva (timetable, absence announcements)
+
+Spec `docs/superpowers/specs/2026-10-29-najava-odsustva-design.md` in `Novke/GFS-deploy` (decisions in section 11), plan next
+to it; backend in `GFSSystem/CLAUDE.md`. A timetable period (`naziv`, `vaziOd`/`vaziDo`, threshold `pragNajava`, lines =
+subject, group, ISO weekday, start, end) generates weekly termini; only cancellations and announcements are stored. Termini are
+computed on the server; the front never builds dates of termini itself.
+- **Shared util `shared/util/termin.ts`** (no imports, so it is on the `features/nalog` allow-list): `DANI`/`DANI_KRATKO`
+  (index = ISO weekday), `lokalniDatum`, `danUNedelji`, `isoDatum`, `dodajDane`, `hhmm` (server `HH:mm:ss` -> `HH:mm`),
+  `blokVremena` ("10:00–13:00"), `danIDatum` ("sreda 4. 11."), `relativniDan` ("danas"/"sutra"). Use it for every termin label.
+- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted in the `prijavljen` step of
+  `/nalog` after "Na času si"): **self-contained** (provides its own `CasoviStore`, loads in its constructor, no inputs or
+  outputs), so it can move unchanged into a future "Čas" tab. `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
+  all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
+  "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
+  dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,
+  started, cancelled meanwhile) show the server text next to that termin and reload the list silently. The response never
+  carries counts or other students' names, and the card shows none.
+- **Teacher `features/raspored`** (lazy `RASPORED_RUTE` under `raspored`, side nav "Raspored", icon `event`): `/raspored` list
+  of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
+  `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`; a new
+  line copies subject, group and times of the last one; the copy keeps lines and threshold, drops ids and dates; the server
+  re-checks everything and its 400 text goes to the banner), `/raspored/termini?od=<datum>` (`TerminiPage`: 28 days from `od`,
+  grouped by day, chip "Ne dolazi: N" in warn tone above the threshold, `<details>` "Ko ne dolazi" with names, card links and
+  reasons, link to the lecture of that day, "Otkaži čas" (`OtkazivanjeDialog`, optional note; for an already cancelled termin the
+  same dialog only edits the note) and "Vrati čas" (`ConfirmDialog`), both hidden once the termin started; the snackbar says how
+  many students got the mail). Names and reasons exist only in `api/rasporedi/termini`. Rules (copy, cmd, window, threshold) are
+  pure functions in `data-access/raspored.pravila.ts`.
+- **Notifications:** `VrstaObavestenja` has `MNOGO_NAJAVA` (`podaci`: `stavkaId`, `datum`, `pocetak`, `kraj`, `predmet`,
+  `grupa`, `broj`, `prag`; never names or reasons). `tekstObavestenja` -> "Mnogo najava odsustva: predmet · grupa · sreda 4. 11.
+  (6)"; `vezaObavestenja(o)` gives the link for both the bell list and the Home card (`/raspored/termini?od=<datum>` here, the
+  student card for the account kinds, `null` without a student).
+- **Home:** `KontrolnaTablaInfo.raspored` (optional, older backend: no field) feeds the card "Raspored, narednih 7 dana"
+  (`features/pocetna/ui/raspored-kartica`, shown when a period covers today or there are termini; counts only, link "ne dolazi: N"
+  to the termini page) and "Otkazano danas" rows in the hero. `SledecePredavanjeInfo.termin` and `izvor` (both optional):
+  `RASPORED_DANAS` adds the time block and "najavljeno odsustvo: N" to "danas"; `RASPORED_SLEDECI` turns the eyebrow into
+  "Danas nema časa po rasporedu", shows "Sledeći: <dan>, <vreme>" and the button "Ipak započni danas" (it still starts today's
+  lecture for that subject and group).
+- **Tests:** unit specs next to each file; e2e `e2e/najava-odsustva.spec.ts` (phone, public network, axe: own group only,
+  announce, reason, withdraw, threshold notification, no counts in the student response, cancelled termin, 409 while open),
+  `e2e/raspored.spec.ts` (nav, copy, new form with server error, termini with names/reasons, cancel/restore, bell link, Home),
+  and a raspored block in `e2e/pristupacnost.spec.ts` (day and night). Mock: `e2e/mock-raspored.ts` (empty by default, so old
+  specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after).
+  `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`.
 
 ## Uživo (`features/uzivo`)
 

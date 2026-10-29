@@ -7,7 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ObavestenjeInfo } from '../../../core/api/obavestenja.api';
-import { KontrolnaTablaInfo } from '../../../core/api/pregled.api';
+import { KontrolnaTablaInfo, TerminKratkoInfo } from '../../../core/api/pregled.api';
 import { ObavestenjaStore } from '../../../core/state/obavestenja.store';
 import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
 import { PREFS_KLJUC } from '../../../core/state/preferences.store';
@@ -63,13 +63,14 @@ describe('Pocetna', () => {
     obavestenja = { broj: signal({ neprocitana: 0, otvorena: 0 }), otvorena: signal([]), ucitaj: vi.fn(), procitano: vi.fn(), reseno: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
-        // obaveštenja (kartica "Nalozi") imaju svoj store i spec; ovde samo veza sa stranicom
+        // obaveštenja (kartica "Obaveštenja") imaju svoj store i spec; ovde samo veza sa stranicom
         { provide: ObavestenjaStore, useValue: obavestenja },
         provideRouter([
           { path: '', component: Pocetna },
           { path: 'predavanja/:id', component: Stub },
           { path: 'predavanja', component: Stub },
           { path: 'studenti/:id', component: Stub },
+          { path: 'raspored/termini', component: Stub },
         ]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -258,7 +259,88 @@ describe('Pocetna', () => {
     expect(el().querySelector('[data-ceka="testovi"]')).not.toBeNull();
   });
 
-  describe('kartica "Nalozi" (obaveštenja za naloge studenata)', () => {
+  describe('raspored (spec najave odsustva, odeljak 8)', () => {
+    const termin = (izmene: Partial<TerminKratkoInfo> = {}): TerminKratkoInfo => ({
+      stavkaId: 3, datum: '2025-10-14', pocetak: '10:00:00', kraj: '13:00:00', predmet: PREDMET, grupa: GRUPA,
+      otkazan: false, napomena: null, brojNajava: 0, predavanjeId: null, ...izmene,
+    });
+
+    it('stari backend (bez polja raspored): nema kartice rasporeda, hero kao pre', async () => {
+      await otvori({ ...PRAZNA, sledece: { predmet: PREDMET, grupa: GRUPA, rb: 13, brojStudenata: 38, brojStarijih: 0 } });
+      expect(el().querySelector('[data-raspored-kartica]')).toBeNull();
+      expect(el().querySelector('[data-eyebrow]')!.textContent).toBe('Sledeće predavanje');
+      expect(el().querySelector('[data-zapocni]')!.textContent).toContain('Započni predavanje');
+    });
+
+    it('današnji termin: vreme bloka uz "danas" i broj najava; kartica sa vezom na termine', async () => {
+      const t = termin({ brojNajava: 3 });
+      await otvori({
+        ...PRAZNA,
+        sledece: { predmet: PREDMET, grupa: GRUPA, rb: 13, brojStudenata: 38, brojStarijih: 0, termin: t, izvor: 'RASPORED_DANAS' },
+        raspored: { pokrivaDanas: true, naredni: [t, termin({ stavkaId: 4, datum: '2025-10-16', predavanjeId: 40 })] },
+      });
+      const hero = el().querySelector('app-sledece-predavanje')!;
+      expect(hero.querySelector('[data-danas]')!.textContent).toBe('danas, 14. 10., 10:00–13:00');
+      expect(hero.querySelector('[data-najave]')!.textContent).toBe('najavljeno odsustvo: 3');
+      const kartica = el().querySelector('[data-raspored-kartica]')!;
+      expect(kartica.querySelector('h2')!.textContent).toBe('Raspored, narednih 7 dana');
+      const redovi = [...kartica.querySelectorAll('li')];
+      expect(redovi.length).toBe(2);
+      expect(redovi[0].textContent).toContain('danas, utorak 14. 10.');
+      expect(redovi[0].querySelector<HTMLAnchorElement>('[data-najave]')!.getAttribute('href')).toBe('/raspored/termini?od=2025-10-14');
+      expect(redovi[1].textContent).toContain('četvrtak 16. 10.');
+      expect(redovi[1].querySelector('[data-najave]')).toBeNull();
+      expect(redovi[1].querySelector<HTMLAnchorElement>('a[href="/predavanja/40"]')).not.toBeNull();
+      expect(kartica.querySelector<HTMLAnchorElement>('.zaglavlje a')!.getAttribute('href')).toBe('/raspored/termini');
+    });
+
+    it('danas nema časa: naslov to kaže, pilula "Sledeći", "Ipak započni danas" pokreće predavanje za taj predmet i grupu', async () => {
+      const t = termin({ datum: '2025-10-16' });
+      await otvori({
+        ...PRAZNA,
+        sledece: { predmet: PREDMET, grupa: GRUPA, rb: 13, brojStudenata: 38, brojStarijih: 0, termin: t, izvor: 'RASPORED_SLEDECI' },
+        raspored: { pokrivaDanas: true, naredni: [t] },
+      });
+      const hero = el().querySelector('app-sledece-predavanje')!;
+      expect(hero.querySelector('[data-eyebrow]')!.textContent).toBe('Danas nema časa po rasporedu');
+      expect(hero.querySelector('[data-termin]')!.textContent).toBe('Sledeći: četvrtak 16. 10., 10:00–13:00');
+      expect(hero.querySelector('[data-danas]')).toBeNull();
+      const dugme = hero.querySelector<HTMLButtonElement>('[data-zapocni]')!;
+      expect(dugme.textContent).toContain('Ipak započni danas');
+      dugme.click();
+      const req = http.expectOne('api/predavanja/start');
+      expect(req.request.body).toEqual({ predmetId: 1, grupaId: 4 });
+      req.flush({ id: 78 });
+      await harness.fixture.whenStable();
+      expect(router.url).toBe('/predavanja/78');
+    });
+
+    it('otkazan današnji termin: red "Otkazano danas" sa napomenom, precrtan u kartici', async () => {
+      const otkazan = termin({ otkazan: true, napomena: 'sednica veća' });
+      await otvori({
+        ...PRAZNA,
+        sledece: { predmet: PREDMET, grupa: GRUPA, rb: 13, brojStudenata: 38, brojStarijih: 0, izvor: 'POSLEDNJE' },
+        raspored: { pokrivaDanas: true, naredni: [otkazan] },
+      });
+      expect(el().querySelector('[data-otkazano-danas]')!.textContent!.trim())
+        .toBe('Otkazano danas: Uvod u primenu računara · GD-2025, 10:00–13:00 (sednica veća)');
+      const red = el().querySelector('[data-raspored-kartica] li')!;
+      expect(red.classList).toContain('otkazan');
+      expect(red.textContent).toContain('otkazano');
+    });
+
+    it('raspored pokriva danas, ali narednih 7 dana nema termina: kartica kaže to', async () => {
+      await otvori({ ...PRAZNA, raspored: { pokrivaDanas: true, naredni: [] } });
+      expect(el().querySelector('[data-raspored-kartica]')!.textContent).toContain('Narednih 7 dana nema časova po rasporedu.');
+    });
+
+    it('nijedan raspored ne pokriva danas i nema termina: nema kartice', async () => {
+      await otvori({ ...PRAZNA, raspored: { pokrivaDanas: false, naredni: [] } });
+      expect(el().querySelector('[data-raspored-kartica]')).toBeNull();
+    });
+  });
+
+  describe('kartica "Obaveštenja" (obaveštenja za naloge studenata)', () => {
     const NALOG: ObavestenjeInfo = {
       id: 9, vrsta: 'NE_STIZE_KOD', studentId: 4, studentIme: 'Ana Primerović', indeks: 'GD1', podaci: { imaMejl: false },
       kreirano: '2025-10-13T18:00:00', procitano: null, reseno: null,
@@ -270,12 +352,12 @@ describe('Pocetna', () => {
       expect(el().querySelector('app-nalozi-kartica')).toBeNull();
     });
 
-    it('sa otvorenim obaveštenjima: kartica "Nalozi" uz "Čeka na tebe"; "Rešeno" i veza idu kroz store', async () => {
+    it('sa otvorenim obaveštenjima: kartica "Obaveštenja" uz "Čeka na tebe"; "Rešeno" i veza idu kroz store', async () => {
       obavestenja.otvorena.set([NALOG]);
       obavestenja.broj.set({ neprocitana: 1, otvorena: 1 });
       await otvori(PRAZNA);
       const kartica = el().querySelector('app-nalozi-kartica')!;
-      expect(kartica.querySelector('h2')!.textContent?.trim()).toBe('Nalozi');
+      expect(kartica.querySelector('h2')!.textContent?.trim()).toBe('Obaveštenja');
       expect(kartica.textContent).toContain('Ne stiže kod: Ana Primerović · nema mejl');
       expect(kartica.previousElementSibling?.tagName.toLowerCase()).toBe('app-ceka-na-tebe');
       kartica.querySelector<HTMLButtonElement>('button[data-reseno]')!.click();

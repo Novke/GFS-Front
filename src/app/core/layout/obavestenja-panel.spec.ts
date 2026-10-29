@@ -55,7 +55,7 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
     };
     TestBed.configureTestingModule({
       providers: [
-        provideRouter([{ path: 'studenti/:id', component: Prazna }]),
+        provideRouter([{ path: 'studenti/:id', component: Prazna }, { path: 'raspored/termini', component: Prazna }]),
         { provide: ObavestenjaStore, useValue: stanje },
         { provide: KodZaDiktiranjeApi, useValue: { izdaj } },
       ],
@@ -106,6 +106,23 @@ describe('ObavestenjaPanel (lista obaveštenja)', () => {
     stavka(1).querySelector('a')!.click();
     await vi.waitFor(() => expect(router.url).toBe('/studenti/4'));
     expect(stanje.procitano).toHaveBeenCalledExactlyOnceWith(1);
+    expect(zatvori).toHaveBeenCalled();
+  });
+
+  it('"Mnogo najava odsustva": tekst bez imena, veza na termine od dana termina, bez "Kod za diktiranje"', async () => {
+    stanje.otvorena.set([obavestenje(9, {
+      vrsta: 'MNOGO_NAJAVA', studentId: null, studentIme: null, indeks: null,
+      podaci: { stavkaId: 7, datum: '2030-11-06', pocetak: '10:00', kraj: '13:00', predmet: 'Geodezija 1', grupa: 'GD-2030', broj: 6, prag: 5 },
+    })]);
+    const ref = await otvori();
+    expect(stavka(9).textContent).toContain('Mnogo najava odsustva: Geodezija 1 · GD-2030 · sreda 6. 11. (6)');
+    expect(stavka(9).querySelector('[data-kod-za-diktiranje]')).toBeNull();
+    const veza = stavka(9).querySelector('a')!;
+    expect(veza.getAttribute('href')).toBe('/raspored/termini?od=2030-11-06');
+    const zatvori = vi.spyOn(ref, 'close');
+    veza.click();
+    await vi.waitFor(() => expect(router.url).toBe('/raspored/termini?od=2030-11-06'));
+    expect(stanje.procitano).toHaveBeenCalledExactlyOnceWith(9);
     expect(zatvori).toHaveBeenCalled();
   });
 

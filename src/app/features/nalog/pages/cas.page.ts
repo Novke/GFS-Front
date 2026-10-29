@@ -11,6 +11,7 @@ import { CasStanje } from '../data-access/cas.models';
 import { KLJUC_CEKANJA, odlaganjeKoraka429, odlaganjePosle429, opisCasa, putanjaUzivo, sledeciUpitMs } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
+import { NaredniCasovi } from '../ui/naredni-casovi.component';
 
 type Faza = 'ucitavanje' | 'naCasu' | 'nijeNaCasu' | 'poruka';
 
@@ -46,8 +47,9 @@ const POKUSAJA_429 = 5;
 /**
  * Tab **Čas** naloga (spec studentskog dela 4.2 i 12.1): čekiranje i praćenje časa (`/nalog/cas/:token` iz QR-a i
  * `/nalog/cas`, obe u ljusci tabova `NalogTabovi`; javna ruta u `PublicLayout`-u). Zove samo `api/public/nalog/cas*` (`CasApi`).
- * Nečekiran student vidi "Nisi na času · Skeniraj QR sa table." (bez poruke greške; kartica "Naredni časovi" iz najave
- * odsustva dolazi ispod u integracionom koraku, spec 12.8).
+ * Nečekiran student vidi "Nisi na času · Skeniraj QR sa table." (bez poruke greške). Ispod živog dela (na času, nije na času,
+ * poruka) stoji kartica "Naredni časovi" iz najave odsustva (`ui/naredni-casovi`, sama čita `api/public/nalog/casovi`;
+ * spec 12.8); dok se stanje učitava (i pre preusmerenja na prijavu) je nema.
  *
  * - Sa tokenom: adresa se odmah menja u `/nalog/cas` (token ne ostaje u istoriji), pa `POST skeniraj`. Prijavljen student
  *   dobija stanje časa; neprijavljen ključ čekanja, koji ide u `sessionStorage`, a stranica na `/nalog?nazad=nalog/cas`.
@@ -62,7 +64,7 @@ const POKUSAJA_429 = 5;
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir],
+  imports: [MatButton, MatProgressSpinner, NalogOkvir, NaredniCasovi],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
@@ -94,6 +96,9 @@ const POKUSAJA_429 = 5;
           }
         }
       }
+      @if (faza() !== 'ucitavanje') {
+        <div class="naredni"><app-naredni-casovi /></div>
+      }
     </app-nalog-okvir>
   `,
   styles: `
@@ -105,6 +110,7 @@ const POKUSAJA_429 = 5;
     .poruka.opasnost { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
     .poruka.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
     .poruka.info { background: var(--surface-2, transparent); border-color: var(--line); color: var(--ink); }
+    .naredni { margin-top: 20px; }
   `,
 })
 export class CasPage implements OnInit {

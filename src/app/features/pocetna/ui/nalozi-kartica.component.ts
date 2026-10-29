@@ -1,15 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { ObavestenjeInfo, tekstObavestenja } from '../../../core/api/obavestenja.api';
+import { ObavestenjeInfo, tekstObavestenja, vezaObavestenja } from '../../../core/api/obavestenja.api';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 
 /** Najviše redova na Početnoj; ostalo je "+N još" (cela lista je u zvonu gornje trake). */
 const MAX_REDOVA = 5;
 
 /**
- * "Nalozi" uz "Čeka na tebe" (spec prijave, sekcija 6): otvorena obaveštenja o nalozima studenata ("Ne stiže kod",
- * "Previše zahteva za kod"). Veza vodi na karticu studenta (i označava obaveštenje pročitanim); "Rešeno" ga skida sa liste.
+ * "Obaveštenja" uz "Čeka na tebe" (spec prijave, sekcija 6; do najave odsustva "Nalozi"): otvorena obaveštenja ("Ne stiže
+ * kod", "Previše zahteva za kod", "Mnogo najava odsustva"). Veza vodi na karticu studenta ili na termin rasporeda (i
+ * označava obaveštenje pročitanim); "Rešeno" ga skida sa liste.
  * Obaveštenje bez studenta (indeks koji ne postoji) nema vezu, samo "Rešeno". Prikazuje se samo kad ima otvorenih.
  */
 @Component({
@@ -18,7 +19,7 @@ const MAX_REDOVA = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="kartica" aria-labelledby="nalozi-naslov">
-      <div class="zaglavlje"><h2 id="nalozi-naslov">Nalozi</h2></div>
+      <div class="zaglavlje"><h2 id="nalozi-naslov">Obaveštenja</h2></div>
       <ul class="sanduce">
         @for (o of redovi(); track o.id) {
           <li [attr.data-nalog]="o.id">
@@ -28,8 +29,8 @@ const MAX_REDOVA = 5;
               <div class="s">{{ o.kreirano | datum: 'sa-vremenom' }}@if (!o.procitano) { · nepročitano}</div>
             </div>
             <div class="akcije">
-              @if (o.studentId !== null) {
-                <a class="ide" [routerLink]="['/studenti', o.studentId]" (click)="otvoreno(o)">Kartica<span class="sr-only"> — {{ tekst(o) }}</span></a>
+              @if (veza(o); as v) {
+                <a class="ide" [routerLink]="v.putanja" [queryParams]="v.query" (click)="otvoreno(o)">{{ v.oznaka }}<span class="sr-only"> — {{ tekst(o) }}</span></a>
               }
               <button type="button" class="ide" data-reseno (click)="reseno.emit(o.id)">Rešeno<span class="sr-only"> — {{ tekst(o) }}</span></button>
             </div>
@@ -73,6 +74,7 @@ export class NaloziKartica {
   protected readonly redovi = computed(() => this.stavke().slice(0, MAX_REDOVA));
   protected readonly jos = computed(() => Math.max(0, Math.max(this.ukupno(), this.stavke().length) - this.redovi().length));
   protected readonly tekst = tekstObavestenja;
+  protected readonly veza = vezaObavestenja;
 
   protected otvoreno(o: ObavestenjeInfo): void {
     if (!o.procitano) {

@@ -25,7 +25,7 @@ const SADA = () => new Date().toISOString();
 
 /**
  * Obaveštenja za nastavnika (spec prijave, sekcija 6): broj za značku u gornjoj traci i prvih 10 otvorenih za padajuću
- * listu i karticu "Nalozi" na Početnoj (root).
+ * listu i karticu "Obaveštenja" na Početnoj (root).
  *
  * - **Broj** se osvežava istim ritmom kao `DashboardCountsStore` (`periodicnoOsvezavanje`: posle navigacije najviše jednom u
  *   15 s, na 60 s dok je tab vidljiv), ali tek kad ga `pokreni` uključi, i samo dok živi ono što ga je uključilo (zvono u
