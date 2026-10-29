@@ -6,6 +6,7 @@ import { expect, test } from './fixture';
 import { napraviPdf } from './fixtures/pdf-fabrika';
 import { lazniBroker } from './lazni-stomp';
 import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM, pitanjeSaFormulom } from './mock-izvodjenje';
+import { pomeriDan } from './mock-raspored';
 import { uzorakPptx } from './pptx-uzorak';
 import { budanEkranStub, nastavnickiBroker } from './uzivo-nastavnik';
 
@@ -174,16 +175,24 @@ for (const rezim of ['dan', 'noc'] as const) {
       expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog otkazivanja (${rezim})`).toEqual([]);
       await page.getByRole('button', { name: 'Odustani' }).click();
       await expect(page.locator('mat-dialog-container')).toHaveCount(0);
+      await page.locator(`[data-termin="32:${prekosutra}"]`).getByRole('button', { name: /^Vrati čas/ }).click();
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog vraćanja (${rezim})`).toEqual([]);
+      await page.getByRole('button', { name: 'Odustani' }).click();
+      await expect(page.locator('mat-dialog-container')).toHaveCount(0);
     });
 
-    test('raspored (/raspored/3, forma sa porukom provere): bez serious/critical kršenja', async ({ page, mock }) => {
-      mock.raspored.primer();
+    test('raspored (/raspored/3, forma sa porukom provere i upozorenjem o otkazanom času): bez serious/critical kršenja', async ({ page, mock }) => {
+      const { sutra } = mock.raspored.primer();
+      mock.raspored.otkazani.set(`31:${sutra}`, null);
       await page.goto('raspored/3');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       await expect(page.locator('[data-stavka]')).toHaveCount(3);
       await page.locator('[data-kraj]').first().fill('09:00');
       await page.locator('[data-kraj]').first().blur();
       await expect(page.getByText('Početak mora biti pre kraja.')).toBeVisible();
+      await page.locator('[data-vazi-do]').fill(pomeriDan(sutra, -1));
+      await expect(page.locator('[data-izgubljena-otkazivanja]')).toBeVisible();
       await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
       expect(await ozbiljnaKrsenja(page), `axe: forma rasporeda sa greškom (${rezim})`).toEqual([]);
     });

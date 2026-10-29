@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl, FormArray, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators,
 } from '@angular/forms';
@@ -21,10 +21,12 @@ import { porukaValidacije } from '../../../shared/forms/poruke-validacije';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
-import { DANI } from '../../../shared/util/termin';
+import { DANI, danIDatum } from '../../../shared/util/termin';
 import { RasporedApi } from '../data-access/raspored.api';
 import { MAX_DANA, MAX_NAZIV, MAX_STAVKI, PODRAZUMEVANI_PRAG, RasporedDetails } from '../data-access/raspored.models';
-import { cmdIzForme, danaUPeriodu, formaIzRasporeda, kopijaRasporeda, StavkaForme, VrednostiForme } from '../data-access/raspored.pravila';
+import {
+  cmdIzForme, danaUPeriodu, formaIzRasporeda, izgubljenaOtkazivanja, kopijaRasporeda, StavkaForme, VrednostiForme,
+} from '../data-access/raspored.pravila';
 
 const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const VREME = /^\d{2}:\d{2}$/;
@@ -128,6 +130,20 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
           @if (izmena()) {
             <p class="napomena">Promena predmeta ili grupe postojećeg termina briše najave odsustva za taj termin.</p>
           }
+          <div role="status" class="izgubljena-okvir">
+            @if (izgubljena().length > 0) {
+              <div class="izgubljena" data-izgubljena-otkazivanja>
+                <p><strong>Čuvanje ukida {{ izgubljena().length === 1 ? 'jedan otkazan čas' : 'otkazane časove (' + izgubljena().length + ')' }}:</strong></p>
+                <ul>
+                  @for (o of izgubljena(); track o.stavkaId + ':' + o.datum) {
+                    <li>{{ o.predmet }} · {{ o.grupa }} · {{ danIDatum(o.datum) }}</li>
+                  }
+                </ul>
+                <p>Termin uklonjen, sa drugim predmetom, grupom ili danom, ili van novog perioda gubi otkazivanje. Ako taj čas i
+                  dalje ne treba da se održi, otkaži ga ponovo na „Naredni termini“.</p>
+              </div>
+            }
+          </div>
           @if (stavke.length === 0) {
             <p class="prazno">Još nema termina. Dodaj čas za svaki dan u nedelji kada se održava.</p>
           }
@@ -219,6 +235,11 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
     .prag { width: 100%; max-width: 520px; }
     .napomena, .prazno { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
     .greska-polja { margin: -8px 0 12px; color: var(--danger); font-size: 13px; }
+    .izgubljena { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius);
+      background: var(--warn-soft); color: var(--ink); font-size: 14px; }
+    .izgubljena p { margin: 0 0 6px; }
+    .izgubljena p:last-child { margin: 6px 0 0; color: var(--ink-2); }
+    .izgubljena ul { margin: 0; padding-left: 20px; }
     .stavke { margin: 0 0 12px; padding: 0; list-style: none; }
     .stavke li { display: grid; grid-template-columns: 150px 120px 120px minmax(160px, 1fr) minmax(140px, 1fr) auto;
       gap: 0 10px; align-items: start; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -267,6 +288,16 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   private napustanje = false;
   /** Izmena postojećeg (ne nov ni kopija). */
   protected readonly izmena = computed(() => this.izId(this.id()) !== null);
+  /** Sačuvan raspored koji se menja (za upozorenje o otkazanim časovima); null za nov i kopiju. */
+  private readonly original = signal<RasporedDetails | null>(null);
+  private readonly vrednost = toSignal(this.forma.valueChanges, { initialValue: null });
+  /** Otkazani časovi od danas koje bi čuvanje ukinulo (isto pravilo kao server). */
+  protected readonly izgubljena = computed(() => {
+    const r = this.original();
+    this.vrednost();
+    return r ? izgubljenaOtkazivanja(r, this.forma.getRawValue() as VrednostiForme) : [];
+  });
+  protected readonly danIDatum = danIDatum;
 
   ngOnInit(): void {
     this.reference.ucitaj();
@@ -291,6 +322,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     this.greskaUcitavanja.set(null);
     this.api.detalj(izvor, { tiho: true }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (r: RasporedDetails) => {
+        this.original.set(id !== null ? r : null);
         this.postavi(id !== null ? formaIzRasporeda(r) : kopijaRasporeda(r));
         this.ucitavanje.set(false);
       },
@@ -350,10 +382,11 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     const id = this.izId(this.id());
     const zahtev = id !== null ? this.api.izmeni(id, cmd, { tiho: true }) : this.api.kreiraj(cmd, { tiho: true });
     zahtev.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+      next: (r: RasporedDetails) => {
         this.salje.set(false);
         this.napustanje = true;
-        this.poruke.uspeh('Raspored je sačuvan.');
+        const n = r.izgubljenaOtkazivanja ?? 0;
+        this.poruke.uspeh(n > 0 ? `Raspored je sačuvan. Ukinuto otkazanih časova: ${n}.` : 'Raspored je sačuvan.');
         void this.router.navigateByUrl('/raspored');
       },
       error: (e: unknown) => {

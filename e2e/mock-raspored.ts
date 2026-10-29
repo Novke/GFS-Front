@@ -124,6 +124,10 @@ export class MockRaspored {
     if (g) {
       return g;
     }
+    const preklapanje = this.preklapanje(null, cmd);
+    if (preklapanje) {
+      return preklapanje;
+    }
     const p: Period = { id: this.sledeciId++, naziv: cmd.naziv.trim(), vaziOd: cmd.vaziOd, vaziDo: cmd.vaziDo, pragNajava: cmd.pragNajava ?? 5, stavke: [] };
     p.stavke = cmd.stavke.map(s => this.novaStavka(s));
     this.periodi.push(p);
@@ -140,12 +144,18 @@ export class MockRaspored {
       return g;
     }
     const stare = new Map(p.stavke.map(s => [s.id, s]));
-    const nove: Stavka[] = [];
     for (const [i, s] of cmd.stavke.entries()) {
-      const stara = s.id === null ? undefined : stare.get(s.id);
-      if (s.id !== null && !stara) {
+      if (s.id !== null && !stare.has(s.id)) {
         return greska(400, `Termin ${i + 1} ne pripada ovom rasporedu.`);
       }
+    }
+    const preklapanje = this.preklapanje(id, cmd);
+    if (preklapanje) {
+      return preklapanje;
+    }
+    const nove: Stavka[] = [];
+    for (const s of cmd.stavke) {
+      const stara = s.id === null ? undefined : stare.get(s.id);
       if (stara && stara.predmetId === s.predmetId && stara.grupaId === s.grupaId) {
         Object.assign(stara, { dan: s.dan, pocetak: sekunde(s.pocetak), kraj: sekunde(s.kraj) });
         nove.push(stara);
@@ -154,9 +164,21 @@ export class MockRaspored {
       }
     }
     const ostaju = new Set(nove.map(s => s.id));
+    const danas = isoDan(this.sada());
+    const buduca = [...this.otkazani.keys()].filter(k => stare.has(Number(k.split(':')[0])) && k.split(':')[1] >= danas);
     this.ocistiStavke(p.stavke.filter(s => !ostaju.has(s.id)).map(s => s.id));
     Object.assign(p, { naziv: cmd.naziv.trim(), vaziOd: cmd.vaziOd, vaziDo: cmd.vaziDo, pragNajava: cmd.pragNajava ?? 5, stavke: nove });
-    return { telo: this.details(p) };
+    // kao server: budući otkazan termin uklonjene stavke ili koji više nije termin (dan, period) se briše i broji
+    let izgubljena = 0;
+    for (const k of buduca) {
+      const [stavkaId, datum] = k.split(':');
+      const s = ostaju.has(Number(stavkaId)) ? this.stavka(Number(stavkaId)) : undefined;
+      if (!s || !this.jeTermin(s, datum)) {
+        this.otkazani.delete(k);
+        izgubljena++;
+      }
+    }
+    return { telo: this.details(p, izgubljena) };
   }
 
   obrisi(id: number): Ishod {
@@ -193,10 +215,10 @@ export class MockRaspored {
     let obavesteno = 0;
     if (!this.otkazani.has(k)) {
       this.o.resiPoKljucu(`MNOGO_NAJAVA:${k}`);
-      obavesteno = this.primaoci(s).length;
+      obavesteno = cmd.posaljiMejl === false ? 0 : this.primaoci(s).length;
     }
     this.otkazani.set(k, napomena);
-    const odgovor: PromenaTerminaOdgovor = { termin: this.terminInfo(s, cmd.datum), obavesteno };
+    const odgovor: PromenaTerminaOdgovor = { termin: this.terminInfo(s, cmd.datum), obavesteno, neposlato: 0 };
     return { telo: odgovor };
   }
 
@@ -206,27 +228,18 @@ export class MockRaspored {
       return s;
     }
     const k = kljuc(s.id, cmd.datum);
-    const obavesteno = this.otkazani.delete(k) ? this.primaoci(s).length : 0;
-    const odgovor: PromenaTerminaOdgovor = { termin: this.terminInfo(s, cmd.datum), obavesteno };
+    const obavesteno = this.otkazani.delete(k) && cmd.posaljiMejl !== false ? this.primaoci(s).length : 0;
+    const odgovor: PromenaTerminaOdgovor = { termin: this.terminInfo(s, cmd.datum), obavesteno, neposlato: 0 };
     return { telo: odgovor };
   }
 
   // ------------------------------------------------------------------------------------------ student
 
   naredni(): NaredniCasovi {
-    const danas = isoDan(this.sada());
     const termini: StudentskiTermin[] = [];
     for (const p of this.periodi) {
       for (const s of p.stavke.filter(x => x.grupaId === this.grupaStudenta)) {
-        let d = danas;
-        let nadjeno = 0;
-        while (nadjeno < 4 && d <= p.vaziDo) {
-          if (d >= p.vaziOd && danUNedelji(d) === s.dan && !this.poceo(d, s.pocetak)) {
-            termini.push(this.studentskiTermin(s, d));
-            nadjeno++;
-          }
-          d = pomeriDan(d, 1);
-        }
+        this.narednih(s).forEach(d => termini.push(this.studentskiTermin(s, d)));
       }
     }
     termini.sort((a, b) => a.datum.localeCompare(b.datum) || a.pocetak.localeCompare(b.pocetak) || a.stavkaId - b.stavkaId);
@@ -339,6 +352,9 @@ export class MockRaspored {
     if (this.poceo(cmd.datum, s.pocetak)) {
       return greska(409, 'Čas je već počeo.');
     }
+    if (!this.narednih(s).includes(cmd.datum)) {
+      return greska(404, 'Taj čas nije u tvom rasporedu.');
+    }
     return this.otkazani.has(kljuc(s.id, cmd.datum)) ? greska(409, 'Ovaj čas je otkazan.') : s;
   }
 
@@ -362,6 +378,40 @@ export class MockRaspored {
 
   private primaoci(s: Stavka): StudentRasporeda[] {
     return this.o.studenti().filter(x => x.grupaId === s.grupaId);
+  }
+
+  /** Naredna 4 termina stavke koja nisu počela (kao `Termini.naredni(..., NAREDNIH)`): student vidi i najavljuje samo njih. */
+  private narednih(s: Stavka): string[] {
+    const p = this.periodStavke(s.id);
+    const izlaz: string[] = [];
+    for (let d = isoDan(this.sada()); izlaz.length < 4 && d <= p.vaziDo; d = pomeriDan(d, 1)) {
+      if (d >= p.vaziOd && danUNedelji(d) === s.dan && !this.poceo(d, s.pocetak)) {
+        izlaz.push(d);
+      }
+    }
+    return izlaz;
+  }
+
+  /** Isti predmet, grupa, dan i početak u drugom periodu čiji se datumi preklapaju bar u jednom takvom danu: 400. */
+  private preklapanje(id: number | null, cmd: RasporedCmd): Ishod | null {
+    const datum = (iso: string) => iso.split('-').map(Number).reverse().map(String).join('. ') + '.';
+    for (const [i, n] of cmd.stavke.entries()) {
+      for (const p of this.periodi.filter(x => x.id !== id && x.vaziOd <= cmd.vaziDo && x.vaziDo >= cmd.vaziOd)) {
+        const od = cmd.vaziOd > p.vaziOd ? cmd.vaziOd : p.vaziOd;
+        const doDatuma = cmd.vaziDo < p.vaziDo ? cmd.vaziDo : p.vaziDo;
+        const isti = p.stavke.some(d => d.predmetId === n.predmetId && d.grupaId === n.grupaId && d.dan === n.dan
+          && d.pocetak === sekunde(n.pocetak));
+        let imaDan = false;
+        for (let d = od; d <= doDatuma && !imaDan; d = pomeriDan(d, 1)) {
+          imaDan = danUNedelji(d) === n.dan;
+        }
+        if (isti && imaDan) {
+          return greska(400, `Termin ${i + 1} već postoji u rasporedu „${p.naziv}“ (${datum(p.vaziOd)} – ${datum(p.vaziDo)}): isti `
+            + 'predmet, grupa, dan i početak u periodima koji se preklapaju. Promeni datume važenja ili ukloni termin.');
+        }
+      }
+    }
+    return null;
   }
 
   private ocistiStavke(ids: number[]): void {
@@ -412,12 +462,22 @@ export class MockRaspored {
     return { id: this.sledeciId++, predmetId: s.predmetId, grupaId: s.grupaId, dan: s.dan, pocetak: sekunde(s.pocetak), kraj: sekunde(s.kraj) };
   }
 
-  private details(p: Period): RasporedDetails {
+  private details(p: Period, izgubljenaOtkazivanja = 0): RasporedDetails {
+    const danas = isoDan(this.sada());
+    const otkazani = (s: Stavka) => [...this.otkazani.keys()]
+      .map(k => k.split(':'))
+      .filter(([id, d]) => Number(id) === s.id && d >= danas && this.jeTermin(s, d))
+      .map(([, d]) => d)
+      .sort();
     return {
       id: p.id, naziv: p.naziv, vaziOd: p.vaziOd, vaziDo: p.vaziDo, pragNajava: p.pragNajava,
       stavke: [...p.stavke]
         .sort((a, b) => a.dan - b.dan || a.pocetak.localeCompare(b.pocetak) || a.id - b.id)
-        .map(s => ({ id: s.id, predmet: this.o.predmet(s.predmetId)!, grupa: this.grupaInfo(s.grupaId), dan: s.dan, pocetak: s.pocetak, kraj: s.kraj })),
+        .map(s => ({
+          id: s.id, predmet: this.o.predmet(s.predmetId)!, grupa: this.grupaInfo(s.grupaId), dan: s.dan, pocetak: s.pocetak, kraj: s.kraj,
+          otkazani: otkazani(s),
+        })),
+      izgubljenaOtkazivanja,
     };
   }
 

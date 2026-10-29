@@ -1,4 +1,7 @@
-import { cmdIzForme, danaUPeriodu, formaIzRasporeda, imeStudenta, iznadPraga, kopijaRasporeda, odIliDanas, poDatumu, pomeriOd, vaziNaDan } from './raspored.pravila';
+import {
+  cmdIzForme, danaUPeriodu, formaIzRasporeda, imeStudenta, iznadPraga, izgubljenaOtkazivanja, kopijaRasporeda, odIliDanas, poDatumu,
+  pomeriOd, vaziNaDan,
+} from './raspored.pravila';
 import { RasporedDetails, TerminInfo } from './raspored.models';
 
 const RASPORED: RasporedDetails = {
@@ -32,6 +35,27 @@ describe('raspored.pravila', () => {
       naziv: 'Leto', vaziOd: '2026-10-01', vaziDo: '2027-01-31', pragNajava: 5,
       stavke: [{ id: 11, predmetId: 1, grupaId: 2, dan: 3, pocetak: '10:00', kraj: '13:00' }],
     });
+  });
+
+  it('izgubljena otkazivanja: uklonjen termin, drugi predmet ili grupa, drugi dan, datum van novog perioda', () => {
+    const sa = { ...RASPORED, stavke: [{ ...RASPORED.stavke[0], otkazani: ['2027-01-27', '2026-11-04', '2026-11-11'] }] };
+    const f = formaIzRasporeda(sa);
+    expect(izgubljenaOtkazivanja(sa, f)).toEqual([]);
+    expect(izgubljenaOtkazivanja(sa, { ...f, naziv: 'Drugo', pragNajava: 9 })).toEqual([]);
+    const sve = ['2026-11-04', '2026-11-11', '2027-01-27'];
+    const datumi = (v: typeof f) => izgubljenaOtkazivanja(sa, v).map(i => i.datum);
+    expect(datumi({ ...f, stavke: [] })).toEqual(sve);
+    expect(izgubljenaOtkazivanja(sa, { ...f, stavke: [] })[0])
+      .toEqual({ stavkaId: 11, datum: '2026-11-04', predmet: 'Geodezija 1', grupa: 'GD-2026' });
+    expect(datumi({ ...f, stavke: [{ ...f.stavke[0], dan: 4 }] })).toEqual(sve);
+    expect(datumi({ ...f, stavke: [{ ...f.stavke[0], grupa: 9 }] })).toEqual(sve);
+    expect(datumi({ ...f, stavke: [{ ...f.stavke[0], predmet: 9 }] })).toEqual(sve);
+    expect(datumi({ ...f, stavke: [{ ...f.stavke[0], pocetak: '11:00', kraj: '14:00' }] })).toEqual([]);
+    expect(datumi({ ...f, vaziDo: '2026-12-31' })).toEqual(['2027-01-27']);
+    expect(datumi({ ...f, vaziOd: '2026-11-05' })).toEqual(['2026-11-04']);
+    // nedovršen datum dok se kuca: važi sačuvani period
+    expect(datumi({ ...f, vaziDo: '2026-1' })).toEqual([]);
+    expect(izgubljenaOtkazivanja(RASPORED, { ...formaIzRasporeda(RASPORED), stavke: [] })).toEqual([]);
   });
 
   it('dani perioda, važi na dan, prag', () => {
