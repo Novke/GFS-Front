@@ -15,6 +15,12 @@ import { pomeriDan } from './mock-raspored';
 const periodi = (page: Page) => page.locator('[data-raspored]');
 const termin = (page: Page, stavka: number, datum: string) => page.locator(`[data-termin="${stavka}:${datum}"]`);
 
+/** Kalendar je otvoren i animacija je gotova (dok traje, Material ignoriše Escape). */
+async function kalendarOtvoren(page: Page): Promise<void> {
+  await expect(page.locator('mat-calendar .mat-calendar-body-active')).toBeFocused();
+  await expect(page.locator('.mat-datepicker-content')).not.toHaveClass(/mat-datepicker-content-animating/);
+}
+
 async function izaberi(page: Page, polje: ReturnType<Page['locator']>, opcija: string): Promise<void> {
   await polje.click();
   await page.getByRole('option', { name: opcija, exact: true }).click();
@@ -89,6 +95,57 @@ test.describe('raspored časova (nastavnik)', () => {
       { id: null, predmetId: 1, grupaId: 1, dan: 3, pocetak: '10:00', kraj: '13:00' },
       { id: null, predmetId: 1, grupaId: 1, dan: 5, pocetak: '10:00', kraj: '13:00' },
     ]);
+  });
+
+  test('kalendar i lista vremena: klik na polje otvara izbor, srpski zapis se kuca, zahtev nosi YYYY-MM-DD i HH:mm', async ({ page, mock }) => {
+    await page.goto('raspored/novi');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nov raspored');
+    await page.locator('[data-naziv]').fill('Letnji 2031');
+    // klik na polje (ne samo na ikonicu) otvara kalendar; mesec napred, pa dan 3
+    await page.locator('[data-vazi-od]').click();
+    const kalendar = page.locator('mat-calendar');
+    await expect(kalendar).toBeVisible();
+    await page.getByRole('button', { name: 'Sledeći mesec' }).click();
+    await kalendar.locator('.mat-calendar-body-cell').filter({ hasText: /^\s*3\s*$/ }).click();
+    await expect(kalendar).toHaveCount(0);
+    await expect(page.locator('[data-vazi-od]')).toHaveValue(/^3\. \d{1,2}\. \d{4}\.$/);
+    const [, mesec, godina] = (await page.locator('[data-vazi-od]').inputValue()).match(/\d+/g)!.map(Number);
+    const dva = (n: number) => String(n).padStart(2, '0');
+    const doDatuma = new Date(godina, mesec - 1 + 3, 28);
+    // ikonica pored polja otvara isti kalendar (na mesecu „Važi od“); Escape ga zatvara
+    await page.getByRole('button', { name: 'Otvori kalendar: važi do' }).click();
+    await kalendarOtvoren(page);
+    await expect(kalendar.locator('.mat-calendar-body-active')).toHaveText('3');
+    await page.keyboard.press('Escape');
+    await expect(kalendar).toHaveCount(0);
+    // posle Escape-a iz kalendara otvorenog klikom na polje fokus je u polju, gde se kuca srpski zapis
+    await page.locator('[data-vazi-do]').click();
+    await kalendarOtvoren(page);
+    await page.keyboard.press('Escape');
+    await expect(kalendar).toHaveCount(0);
+    await expect(page.locator('[data-vazi-do]')).toBeFocused();
+    await page.keyboard.type(`28.${doDatuma.getMonth() + 1}.${doDatuma.getFullYear()}`);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-vazi-do]')).toHaveValue(`28. ${doDatuma.getMonth() + 1}. ${doDatuma.getFullYear()}.`);
+
+    const stavka = page.locator('[data-stavka]').first();
+    await izaberi(page, stavka.locator('[data-dan]'), 'utorak');
+    // prazno polje: labela leži preko polja, klik na nju je klik na polje i otvara listu vremena
+    await stavka.getByText('Početak').click();
+    await page.getByRole('option', { name: '10:15', exact: true }).click();
+    await expect(stavka.locator('[data-pocetak]')).toHaveValue('10:15');
+    await stavka.locator('[data-kraj]').focus();
+    await page.keyboard.type('13.40');
+    await page.keyboard.press('Tab');
+    await expect(stavka.locator('[data-kraj]')).toHaveValue('13:40');
+    await izaberi(page, stavka.locator('[data-predmet]'), 'Programiranje u građevinarstvu');
+    await izaberi(page, stavka.locator('[data-grupa]'), 'GD-2025');
+    await page.getByRole('button', { name: 'Sačuvaj' }).click();
+    await expect(page).toHaveURL(/\/raspored$/);
+    const telo = mock.zahteviZa('rasporedi', 'POST').at(-1)!.telo as { vaziOd: string; vaziDo: string; stavke: unknown[] };
+    expect(telo.vaziOd).toBe(`${godina}-${dva(mesec)}-03`);
+    expect(telo.vaziDo).toBe(`${doDatuma.getFullYear()}-${dva(doDatuma.getMonth() + 1)}-28`);
+    expect(telo.stavke).toEqual([{ id: null, predmetId: 1, grupaId: 1, dan: 2, pocetak: '10:15', kraj: '13:40' }]);
   });
 
   test('naredni termini: ko ne dolazi i zašto; otkazivanje sa napomenom rešava obaveštenje; vraćanje uz potvrdu', async ({ page, mock }) => {

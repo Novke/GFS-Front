@@ -397,7 +397,9 @@ computed on the server; the front never builds dates of termini itself.
   carries counts or other students' names, and the card shows none.
 - **Teacher `features/raspored`** (lazy `RASPORED_RUTE` under `raspored`, side nav "Raspored", icon `event`): `/raspored` list
   of periods (newest first, "Važi danas", Izmeni, "Kopiraj u novi" = `/raspored/novi?kopija=<id>`, Obriši with `ConfirmDialog`),
-  `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`; a new
+  `/raspored/novi` and `/raspored/:id` (`RasporedFormaPage`, typed form with a `FormArray` of lines, `unsavedChangesGuard`;
+  dates through `MatDatepicker` (opens on a click in the field too, "Važi do" starts at the month of "Važi od") and times through
+  `MatTimepicker` (list 07:00-21:45 every 15 min, any other time can be typed), see "Date and time fields" under Design; a new
   line copies subject, group and times of the last one; the copy keeps lines and threshold, drops ids and dates; the server
   re-checks everything and its 400 text goes to the banner, including the overlap rule: the same subject, group, weekday and
   start in another period with overlapping dates is a 400, so "Kopiraj u novi" with overlapping dates fails there). Editing a
@@ -1451,3 +1453,13 @@ Theme "Nacrt": `src/styles/_tokens.scss` is the only source of colours (`--bg`, 
 day/night via `data-mode` on `<html>`, `.rezim-dan` forces day tokens (projector screens). The focus ring is always
 `--focus`; dark shell bars use `.ljuska-tamna`, which switches `--focus` to `--side-focus`. No hex colours in
 components. Check layouts at 390 px (no horizontal scroll from 360 px) and 1280 px, day and night.
+
+**Date and time fields:** a native `type="date"` or `type="time"` inside `mat-form-field` has no popup, because Material hides
+the browser's picker icon (`.mdc-text-field__input::-webkit-calendar-picker-indicator { display: none }`), and in a narrow field
+a click lands in the year segment, so typed digits leave the value empty (the bug in the Raspored form, 2026-10-29). New date
+and time fields use `MatDatepicker` / `MatTimepicker` with `shared/forms/datum-vreme`: `provideSrpskiDatum()` in the
+component's `providers` (adapter that reads `29. 10. 2026.`, `29.10.2026` and ISO, rejects everything else instead of guessing
+US order, Monday first, `08:05`, Serbian calendar labels; local on purpose, the initial bundle sits at the 800 kB budget), the
+control holds a `Date`, and `isoIzDatuma` / `hhmmIzVremena` / `vremeIzHhmm` convert at the form boundary. `porukaValidacije`
+reports `matDatepickerParse` / `matTimepickerParse` before `required`. The older native fields (domaći, test, predavanje,
+student dialogs, `/upis`, the date-range chip) still have the hidden icon; move them when they are touched.
