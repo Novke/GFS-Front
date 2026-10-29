@@ -18,7 +18,11 @@ const termin = (page: Page, stavka: number, datum: string) => page.locator(`[dat
 /** Kalendar je otvoren i animacija je gotova (dok traje, Material ignoriše Escape). */
 async function kalendarOtvoren(page: Page): Promise<void> {
   await expect(page.locator('mat-calendar .mat-calendar-body-active')).toBeFocused();
-  await expect(page.locator('.mat-datepicker-content')).not.toHaveClass(/mat-datepicker-content-animating/);
+  // Material ignoriše Escape (`close()`) dok traje animacija otvaranja, a klasu `-animating` dodaje tek na `animationstart`:
+  // na sporom runneru provera same klase prođe pre početka animacije i Escape se izgubi. Zato se čeka kraj animacije.
+  const sadrzaj = page.locator('.mat-datepicker-content');
+  await expect.poll(() => sadrzaj.evaluate(el => el.getAnimations().length)).toBe(0);
+  await expect(sadrzaj).not.toHaveClass(/mat-datepicker-content-animating/);
 }
 
 async function izaberi(page: Page, polje: ReturnType<Page['locator']>, opcija: string): Promise<void> {
