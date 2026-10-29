@@ -454,7 +454,7 @@ over STOMP; teacher commands are REST.
   (`features/predavanja` must not import `features/uzivo/data-access`); it does not import `features/uzivo/uzivo-putanje.ts` either (a shared chunk would grow the student closure past its e2e budget): `ui/izvodjenje-putanje.ts` holds the two paths, pinned equal to `UzivoPutanje` by `izvodjenje-putanje.spec.ts`. The route
   `prezentacije/:id?predavanje=ID` (editor, "Pokreni" without dialog) still exists and is unchanged.
 
-- **Order of presentations (branch `feature/redosled-prezentacija`, backend V19).** Every presentation has an optional `vezba` (0-99, `null` =
+- **Order of presentations (branch `feature/redosled-prezentacija`, backend V21).** Every presentation has an optional `vezba` (0-99, `null` =
   "Bez broja vežbe"; a multi-vežba deck takes the first number; the "Nova prezentacija" dialog proposes it from the name, `vezbaIzNaziva`,
   until the field is touched; the editor's Podešavanja saves it with `PATCH prezentacije/{id}/vezba`, `EditorStore.postaviVezbu`, optimistic
   with revert) and a server-derived `vrsta` (`GRADIVO` only slides, `PITANJA` questions without Zadatak, `ZADACI` at least one Zadatak slide;

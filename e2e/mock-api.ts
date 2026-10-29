@@ -761,7 +761,7 @@ export class MockApi {
     return { ...x, ...this.redosledPrezentacije(x), slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
   }
 
-  /** Kao server (V19): `vezba` se čuva, vrsta i broj zadataka se računaju iz slajdova, puštanje iz izvođenja. */
+  /** Kao server (V21): `vezba` se čuva, vrsta i broj zadataka se računaju iz slajdova, puštanje iz izvođenja. */
   private redosledPrezentacije(x: UzivoPrezentacija) {
     const pitanja = x.slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length;
     const zadaci = x.slajdovi.filter(s => s.tip === 'ZADATAK').length;

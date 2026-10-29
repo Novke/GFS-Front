@@ -68,7 +68,7 @@ export function grupisiPoVezbi<T extends { vezba: number | null }>(lista: readon
   return grupe;
 }
 
-/** Predlog broja iz naziva "Vežbe N ..." (prvi broj), kao server (`Vezba.izNaziva`) i popuna u V19. */
+/** Predlog broja iz naziva "Vežbe N ..." (prvi broj), kao server (`Vezba.izNaziva`) i popuna u V21. */
 export function vezbaIzNaziva(naziv: string | null | undefined): number | null {
   const m = /^\s*ve[zž]be\s+(\d{1,2})(?!\d)/iu.exec(naziv ?? '');
   return m ? Number(m[1]) : null;
