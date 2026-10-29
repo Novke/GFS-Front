@@ -1,5 +1,5 @@
 import { parseDatum } from '../../../shared/util/datum.pipe';
-import { CasPredavanje } from './cas.models';
+import { CasPredavanje, CasUToku } from './cas.models';
 
 /*
  * Čista pravila čekiranja (`/nalog/cas`): ključ čekanja, ritam upita i tekst časa. Bez Angular servisa.
@@ -28,6 +28,11 @@ export function odlaganjePosle429(n: number): number {
   return Math.min(60_000, 20_000 * 2 ** Math.max(0, n - 1));
 }
 
+/** Van časa (nije čekiran): predavanje grupe u toku 30 s (da traka nestane kad se čas završi), inače 60 s. */
+export function sledeciUpitVanCasaMs(uToku: boolean): number {
+  return uToku ? 30_000 : 60_000;
+}
+
 /** Uživo izvođenje sa časa; `sa=cas` vraća telefon na `/nalog/cas` posle kraja izvođenja. */
 export function putanjaUzivo(kod: string): string {
   return `uzivo/${encodeURIComponent(kod)}?sa=cas`;
@@ -44,4 +49,9 @@ export function danIDatum(datum: string | null | undefined): string {
 /** `Uvod u primenu računara · sreda 28.10. · Petlje` (prazni delovi se izostavljaju). */
 export function opisCasa(p: CasPredavanje): string {
   return [p.predmet?.trim(), danIDatum(p.datum), p.tema?.trim()].filter(Boolean).join(' · ');
+}
+
+/** `Uvod u primenu računara · Petlje` za predavanje u toku (prazni delovi se izostavljaju; ništa = prazan string). */
+export function opisUToku(u: CasUToku): string {
+  return [u.predmet?.trim(), u.tema?.trim()].filter(Boolean).join(' · ');
 }

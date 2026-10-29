@@ -49,6 +49,8 @@ export interface StudentJa {
   grupa?: string | null;
   /** Generacija: godina upisa grupe (stari backend je ne šalje). */
   generacija?: number | null;
+  /** Link WhatsApp grupe sopstvene grupe (Početna); prikazuje se samo kanonski (`waLinkZaPrikaz`). */
+  waLink?: string | null;
 }
 
 /** `POST api/public/nalog/pomoc`: uvek "Javili smo nastavniku." (stvarno obaveštenje najviše 1/h po indeksu). */

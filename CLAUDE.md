@@ -127,7 +127,7 @@ without it.
 
 ## Public routes
 
-`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas`, `nalog/cas/:token` and the account tabs (`nalog/predmeti`,
+`upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas`, `nalog/cas/:token` and the account tabs (`nalog/pocetna`, `nalog/predmeti`,
 `nalog/predmet/:id`, `nalog/predmet/:id/vezbanje/:tipId`, `nalog/prezentacija/:id`, `nalog/ja`) are opened by students on a phone **without basic-auth**
 and without a teacher session, so they may only request `assets/*` and `api/public/*` (`upis`: `api/public/upis/*`; uživo:
 `api/public/uzivo/*`, `api/public/mediji/*` (for a Zadatak slide only the participant's own variant and, after `RESENJE`, its
@@ -138,7 +138,8 @@ call returns 401 and pops the browser's password dialog. All live in `PublicLayo
 `dozvoljenoZa(feature)` in `eslint-rules/javna-ruta-konfig.js` = the shared list (`JAVNO_DOZVOLJENO`) plus a per-feature
 addition (`DOZVOLJENO_PO_FEATURE`). The rule checks direct imports only, so every addition must be read together with its
 own imports (the comment next to each entry says why it is safe). `JAVNO_DOZVOLJENO` today also holds `shared/util/nazad`,
-`shared/util/indeks` and `shared/forms/indeks-polja` (three-part index, see below). Never add teacher-shell code (stores, `core/state`,
+`shared/util/indeks` and `shared/forms/indeks-polja` (three-part index, see below) and `shared/util/wa-link` (no imports; the
+canonical WhatsApp link check of `upis` and the tab Početna). Never add teacher-shell code (stores, `core/state`,
 shell, teacher API clients) to it. npm packages are free for public features except `ZABRANJENI_PAKETI_JAVNO` in the same
 file (heavy slide-builder editor/import libraries, today `fflate`, the seven `prosemirror-*` packages, `mathlive` (with
 `mathlive/ssr`) and `pdfjs-dist`; subpaths such as `fflate/esm` count too): the rule reports them as `zabranjenPaket`. The
@@ -170,7 +171,7 @@ full international number of a listed country selects the country itself (`razdv
 sačuvan kao +381 64 1234567"; the server applies the same rule (`Telefon.uE164`).
 
 After a successful submit `upis` shows "Pridruži se WhatsApp grupi" when the `POST` response carries `waLink`; it renders
-only a canonical `https://chat.whatsapp.com/<code>` (`waLinkZaPrikaz` in `upis.pravila`, the server enforces the same), so
+only a canonical `https://chat.whatsapp.com/<code>` (`waLinkZaPrikaz` in `shared/util/wa-link`, re-exported by `upis.pravila`; the server enforces the same), so
 the `href` is never an arbitrary URL. The teacher side lives on the group's Studenti tab: "Kontakti za telefon" is a plain
 `<a download>` to `api/grupe/{id}/kontakti.vcf` (vCard; the phone offers the import into Contacts), "Pošalji WA link" is a
 `mailto:` built by `mailtoWaLinka` (`core/api/grupe.models.ts`: shown students' addresses in BCC, RFC 6068 encoding) that
@@ -218,9 +219,9 @@ the front only routes and shows.
   the username (`SideNav.korisnik` from `SesijaStore.korisnik`). Home shows the "Obaveštenja" card next to "Čeka na tebe"
   (renamed from "Nalozi" when `MNOGO_NAJAVA` arrived: not every notification is about a student account; its link comes from
   `vezaObavestenja`, as in the bell list).
-- **Student account `nalog`** (`features/nalog/`, a `JAVNI_FEATURE`): route `nalog` in `PublicLayout` with children
-  `NALOG_RUTE` (lazy page; the public 404 under `/nalog` is added in `app.routes.ts` because `NotFound` lives in
-  `core/layout`). Allow-list: `JAVNO_DOZVOLJENO` plus `DOZVOLJENO_PO_FEATURE['features/nalog']` = `shared/ui/confirm-dialog`
+- **Student account `nalog`** (`features/nalog/`, a `JAVNI_FEATURE`): route `nalog` in `PublicLayout` whose children
+  `NALOG_RUTE` come through `loadChildren` (the route table itself is lazy, like `banka`, so the initial bundle carries only the
+  entry; the public 404 under `/nalog` is appended in `app.routes.ts` because `NotFound` lives in `core/layout`). Allow-list: `JAVNO_DOZVOLJENO` plus `DOZVOLJENO_PO_FEATURE['features/nalog']` = `shared/ui/confirm-dialog`
   (Angular Material dialog/button and rxjs only), `shared/util/datum.pipe` (`@angular/core` only) and `shared/util/termin`
   (no imports; a rule test keeps it import-free); never `core/state`,
   `core/auth`, teacher API clients or `features/studenti`. `data-access/`: `nalog.api.ts` (only `api/public/nalog/*`, all
@@ -241,21 +242,30 @@ the front only routes and shows.
   shown verbatim ("Ako nalog postoji, kod je poslat.", 401 "Kod nije ispravan ili je istekao.", 429, 503, "Javili smo
   nastavniku."); "Odjavi sve uređaje" confirms with `ConfirmDialog`. Focus moves to the step heading (`h2`) after each step change.
   **Since phases 2-3 (below):** after a successful code without `nazad` (or with a `nazad` to `nalog` itself) and for an already
-  signed-in student opening `/nalog` without `nazad`, the page goes to the tab Čas (`NALOG_POCETNA = 'nalog/cas'`, `replaceUrl`); the
+  signed-in student opening `/nalog` without `nazad`, the page goes to the tab Početna (`NALOG_POCETNA = 'nalog/pocetna'`, `replaceUrl`); the
   `prijavljen` step with "Nastavi" exists only for a safe `nazad` elsewhere. Devices and logout live on the tab Ja.
-- **Account tabs Čas · Predmeti · Ja (student portal phases 2 and 3; spec `2026-10-28-studentski-portal-design.md` section 12 in
-  `Novke/GFS-deploy`):** `nalog.routes.ts` keeps `''` (login, `NalogPage`) and `moodle` outside, and puts `cas`, `cas/:token`,
-  `predmeti`, `predmet/:id`, `predmet/:id/vezbanje/:tipId` (`?nivo=`), `prezentacija/:id` and `ja` under the lazy shell
-  `pages/tabovi.page.ts` (`NalogTabovi`: bottom nav `aria-label="Nalog"` with `data-tab`, `aria-current="page"`). Every page is lazy;
-  nothing of it is in the initial bundle. Outside the Čas tab the shell polls `GET api/public/nalog/cas` (`sledeciUpitTrakeMs`, 30-60 s
-  off a lecture, ~10 s on one, at once on `visibilitychange`, 429 backs off to 120 s) and shows the strip "Prezentacija je počela · Uđi"
-  (`[data-traka]`, link `uzivo/<kod>?sa=cas`); only the Čas tab enters the run by itself. Any 401 of a tab page or the shell goes to
+- **Account tabs Početna · Čas · Predmeti · Ja (student portal phases 2 and 3; spec `2026-10-28-studentski-portal-design.md` section 12 in
+  `Novke/GFS-deploy`; Početna since `feature/portal-pocetna`):** `nalog.routes.ts` keeps `''` (login, `NalogPage`) and `moodle` outside, and
+  puts `pocetna`, `cas`, `cas/:token`, `predmeti`, `predmet/:id`, `predmet/:id/vezbanje/:tipId` (`?nivo=`), `prezentacija/:id` and `ja`
+  under the lazy shell `pages/tabovi.page.ts` (`NalogTabovi`: bottom nav `aria-label="Nalog"`, four columns, `data-tab`,
+  `aria-current="page"`). Every page is lazy; nothing of it is in the initial bundle. Outside the Čas tab the shell polls
+  `GET api/public/nalog/cas` (`sledeciUpitTrakeMs`: ~10 s on a lecture, 30 s while the group's lecture runs without the student
+  (`uToku`), else 60 s; at once on `visibilitychange`, a hidden page does not poll, 429 backs off to 120 s) and shows one strip:
+  "Prezentacija je počela · Uđi" (`[data-traka]`, link `uzivo/<kod>?sa=cas`) while a run of the lecture the student is checked in on
+  runs, else "Predavanje je u toku · <predmet · tema> · Čekiraj se" (`[data-traka-u-toku]`, link to the tab Čas, warn colours) when
+  `CasStanje.uToku` says today's lecture of his group runs and he is not checked in; either one also puts a red dot on the Čas tab
+  (`[data-tacka]` plus a visually hidden "(čas je u toku)"). Only the Čas tab enters the run by itself. Any 401 of a tab page or the shell goes to
   `putanjaPrijave(router.url)` = `nalog?nazad=<this tab>`. `data-access/portal.api.ts` calls only `api/public/nalog/{predmeti,
   predmeti/{id}/{prisustvo,vezbanje,moji-zadaci,prezentacije,ocena}, prezentacije/{id}, vezbanje, vezbanje/{id}/{provera,resenje},
   podesavanja}`, all
   `LOCAL_ERRORS`; `portal.models.ts` mirrors `dto/portal`; `portal.pravila.ts` holds the pure rules (`putanjaPrijave`, `jeTabCas`,
   `ucinak`, `opisPredmeta`, `idIzRute`, `nivoIzUpita`, `zvezdice`, `status`). Students never see the word "banka": the practice part is
   "Zadaci za vežbanje".
+  - **Početna** (`pages/pocetna.page`, the default tab after login): "Zdravo, <ime>!", a welcome line, "Grupa X · generacija Y"
+    (`GET api/public/nalog/ja`), the button **"WhatsApp grupa"** (`[data-wa-grupa]`, `target="_blank"`, `rel="noopener noreferrer"`)
+    when `StudentJa.waLink` passes `waLinkZaPrikaz` (it stays after joining, as a shortcut), the self-contained card "Naredni časovi"
+    (moved here from the tab Čas) and an empty `[data-instalacija-mesto]` for the app install card of the push work (hidden while
+    empty). 401 goes to the login with a return here; other errors show the text and "Pokušaj ponovo".
   - **Predmeti** (`pages/predmeti.page`): subjects from the student's groups (own group plus lectures attended with another group),
     "Prisutan na x od y · n tipova za vežbanje", chip "Ocena objavljena".
   - **Predmet** (`pages/predmet.page`, `?k=materijali|istorija|ocena`, `replaceUrl`): Materijali = presentations shown in finished runs
@@ -289,7 +299,8 @@ the front only routes and shows.
     cancellation mail and "čas se ipak održava"), optimistic with rollback and the server text on error, "Sačuvano." on success.
   - **Allow-list** (`DOZVOLJENO_PO_FEATURE['features/nalog']` in `eslint-rules/javna-ruta-konfig.js`, each entry read with its own
     imports): `features/uzivo/ui/{polja-zadatka,tekst-formule.component,tekst-formule,format}`, the slide renderer
-    `ui/slajd-prikaz.component` and `ui/slajd-za-prikaz`. Types of a ui component's inputs are re-exported from that ui file
+    `ui/slajd-prikaz.component`, `ui/slajd-za-prikaz` and `features/uzivo/izlaz-iz-izvodjenja` (no imports; also on the
+    `features/uzivo/javno` list). Types of a ui component's inputs are re-exported from that ui file
     (`slajd-za-prikaz.ts`, `polja-zadatka.ts`), because `gfs/granice-featurea` also forbids `import type` from another feature's
     `data-access`.
 - **Moodle, student side** (`features/nalog/pages/moodle.page.ts`, public child `nalog/moodle`, spec prijave 8.3): the backend
@@ -361,21 +372,35 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   deleted (401 keeps it and returns to the login, network/5xx keep it for "Pokušaj ponovo", other errors delete it). Without a
   token and key: `GET` state (401 = login). While on the lecture it polls every 10 s ± 2 s (`sledeciUpitMs`) and at once on
   `visibilitychange`; a hidden page does not poll; 429 backs off 20, 40, at most 60 s without a message; a network error keeps
-  the view. A 429 on `skeniraj` or `potvrdi` (a classroom behind one NAT scanning at once) repeats the same step after 1-9 s
+  the view (and reschedules the next poll). A 429 on `skeniraj` or `potvrdi` (a classroom behind one NAT scanning at once) repeats the same step after 1-9 s
   (`odlaganjeKoraka429`, short because the token lives 20-30 s) up to 5 times, then shows the message with "Pokušaj ponovo";
-  the key stays. The backend accepts a key only from the phone that scanned (same `gfs_uredjaj` cookie). A state with `izvodjenje` navigates to `uzivo/<kod>?sa=cas`; a finished lecture, removed attendance or "not checked
-  in" end polling with a message. Server texts are shown verbatim (410 "QR je istekao. Skeniraj ponovo sa table.", "Čekiranje za
-  ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). Since phases 2-3 `/nalog/cas` is the tab Čas inside the
-  account shell (the card "Na času si" on `/nalog` is gone: `/nalog` goes straight to the tab); not checked in = "Nisi na času ·
-  Skeniraj QR sa table." (`[data-nije-na-casu]`).
+  the key stays. The backend accepts a key only from the phone that scanned (same `gfs_uredjaj` cookie). A state with `izvodjenje`
+  navigates to `uzivo/<kod>?sa=cas` with `replaceUrl` (Čas does not stay in history under the run, so Back never lands on a page
+  that enters again), **unless the student left that run himself**: `features/uzivo/izlaz-iz-izvodjenja` (no imports) keeps the code
+  in `sessionStorage` `gfs-uzivo-izasao` when `uzivo/<kod>` is destroyed while the run still goes on (Izađi, Back, another link), and
+  opening `uzivo/<kod>` clears it; then Čas shows "Prezentacija je u toku · <naziv>" (`[data-izasao]`) and the link "Uđi u
+  prezentaciju" (`[data-udji]`), and keeps polling. Another run (another code) still enters by itself. A finished lecture or removed
+  attendance shows a note ("Čas je završen." / "Nisi više na času.") above the not-checked-in view and **keeps polling** (60 s, 30 s
+  while `uToku`; only while visible), so a new lecture of the day is noticed. Server texts are shown verbatim (410 "QR je istekao.
+  Skeniraj ponovo sa table.", "Čekiranje za ovaj čas je završeno.", "Čekiranje je isteklo. Skeniraj QR ponovo."). `/nalog/cas` is
+  the tab Čas inside the account shell, **live only** (no "Naredni časovi" any more): not checked in and the group's lecture runs
+  (`CasStanje.uToku = {predmet, tema}`, `opisUToku`) = h2 "Predavanje je u toku" and "Skeniraj QR sa table da te nastavnik vidi na
+  času." (`[data-u-toku]`); otherwise "Nisi na času · Skeniraj QR sa table." (`[data-nije-na-casu]`). Both end with an empty
+  `[data-skener-mesto]` (hidden while empty) where the in-browser QR scanner of the push work goes.
 - **Uživo phone:** `?sa=cas` (`uzivo-student.page.ts`, `saCasa`) returns to `nalog/cas` 3 s after `kraj` or `izbacen`
-  (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…"). A scored run of a lecture requires a check-in: the join 403 with
+  (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…", `replaceUrl`). The header has **"Izađi"** (`[data-izadji]`): with `?sa=cas` to
+  `nalog/cas` (`replaceUrl`), a signed-in student (`prijavljenStudent`) to `nalog/pocetna`, a guest to the code entry `uzivo`; leaving
+  a running run records the exit marker above. Under the name the header shows the participant's own accuracy (`[data-tacnost]`,
+  `tacnostUcesnika`: "Tačno x od y", plus "N poena · " in takmičenje) and the "Gledaj u tablu" screen repeats it ("Do sada: …",
+  `[data-skor]`); both come only from the server (`LicnoStanje.tacnih`/`dugovanih`, the leaderboard rule: owed questions with a
+  correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
   connection closes); 403 `IZBACEN` is `izbacen` (a signed-in student sees "Nastavnik te je uklonio iz ovog izvođenja." without
   "Uđi ponovo"); any other 403 goes to `nalog` as before.
 - **Tests:** unit specs next to each file; e2e `e2e/cekiranje.spec.ts` (scan -> wait -> run -> end -> back on the lecture,
-  login with a key, server messages, `/nalog` straight to the tab Čas, axe in day mode, projector QR changes and shows no names, a finished
-  lecture has no QR and no request). The mock (`MockApi.cekiranje`) returns a new token on every `GET predavanja/:id/cekiranje`
+  login with a key, server messages, `/nalog` to Početna and the lecture on the tab Čas, no loop on Back, Izađi and "Uđi u
+  prezentaciju", the "Predavanje je u toku" strip and Čas view, axe in day mode, projector QR changes and shows no names, a finished
+  lecture has no QR and no request). The mock's `cekiranje.uToku` is set by the test. The mock (`MockApi.cekiranje`) returns a new token on every `GET predavanja/:id/cekiranje`
   so the test sees the change without waiting 10 s.
 
 ## Raspored i najava odsustva (timetable, absence announcements)
@@ -387,8 +412,8 @@ computed on the server; the front never builds dates of termini itself.
 - **Shared util `shared/util/termin.ts`** (no imports, so it is on the `features/nalog` allow-list): `DANI`/`DANI_KRATKO`
   (index = ISO weekday), `lokalniDatum`, `danUNedelji`, `isoDatum`, `dodajDane`, `hhmm` (server `HH:mm:ss` -> `HH:mm`),
   `blokVremena` ("10:00–13:00"), `danIDatum` ("sreda 4. 11."), `relativniDan` ("danas"/"sutra"). Use it for every termin label.
-- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted on the tab Čas (`pages/cas.page`,
-  below the check-in state) since the student portal phases 2-3; a signed-in `/nalog` goes there): **self-contained** (provides its
+- **Student card "Naredni časovi"** (`features/nalog/ui/naredni-casovi.component.ts`, mounted on the tab Početna
+  (`pages/pocetna.page`; before `feature/portal-pocetna` on the tab Čas); a signed-in `/nalog` goes there): **self-contained** (provides its
   own `CasoviStore`, loads in its constructor, no inputs or outputs). `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
   all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
   "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
@@ -440,7 +465,8 @@ computed on the server; the front never builds dates of termini itself.
   and a raspored block in `e2e/pristupacnost.spec.ts` (day and night). Mock: `e2e/mock-raspored.ts` (empty by default, so old
   specs are unchanged; `mock.raspored.primer()` fills one period around today with prag 2 and lines tomorrow and the day after;
   it mirrors the server's overlap check, lost cancellations, `posaljiMejl` and the next-4 announce window).
-  `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`.
+  `nalog.spec.ts` and `cekiranje.spec.ts` allow `GET /api/public/nalog/casovi`, because the card asks on every signed-in `/nalog`
+  (Početna); the check-in flow on the tab Čas never asks for it.
 
 ## Uživo (`features/uzivo`)
 
@@ -1104,7 +1130,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   the store, the `@defer` entry must work before the lazy chunk), so `e2e/lenji-formule.spec.ts` allows `RAST_ZADATKA = 1 300` B on
   top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5). On
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
-  free-entry chips did not change the student page, results are drawn only by teacher views).
+  free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
+  (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
+  a new decision.
 
 ### Rang tačnosti (leaderboard)
 

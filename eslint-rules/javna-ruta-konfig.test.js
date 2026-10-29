@@ -169,6 +169,25 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       assert.doesNotMatch(izvor, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
     });
 
+    for (const modul of ['src/app/shared/util/wa-link.ts', 'src/app/features/uzivo/izlaz-iz-izvodjenja.ts']) {
+      it(`${modul} (Početna, izlaz iz izvođenja) nema nijedan uvoz`, () => {
+        const izvor = require('node:fs').readFileSync(path.join(KORENI, modul), 'utf8');
+        assert.doesNotMatch(izvor, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
+      });
+    }
+
+    for (const [feature, dozvoljen] of [
+      ['features/upis', 'shared/util/wa-link'],
+      ['features/nalog', 'shared/util/wa-link'],
+      ['features/nalog', 'features/uzivo/izlaz-iz-izvodjenja'],
+      ['features/uzivo/javno', 'features/uzivo/izlaz-iz-izvodjenja'],
+    ]) {
+      it(`${feature} sme ${dozvoljen}`, async () => {
+        const kod = `import * as X from '${dubina(feature)}${dozvoljen}';\nexport const y = X;\n`;
+        assert.deepEqual(await poruke(feature, kod), []);
+      });
+    }
+
     it('shared/util/nazad je u zajedničkom spisku (čista funkcija, bez uvoza)', () => {
       assert.ok(JAVNO_DOZVOLJENO.includes('shared/util/nazad'));
     });

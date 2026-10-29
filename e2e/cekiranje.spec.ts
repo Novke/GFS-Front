@@ -9,12 +9,13 @@ import { MockApi } from './mock-api';
 /*
  * Čekiranje (studentski portal, faza 1): student skenira QR sa projektora (`/nalog/cas/<token>`), prijavljen je odmah na
  * času, neprijavljen ide kroz prijavu kodom i vraća se na `/nalog/cas`. Stranica časa prati stanje i vodi u Uživo izvođenje
- * (`?sa=cas`), a posle kraja izvođenja nazad na čas. Javna mreža: samo `api/public/nalog/*` i `api/public/uzivo/*`.
- * Projektor predavanja (nastavnik) crta QR čiji token se menja.
+ * (`?sa=cas`), a posle kraja izvođenja nazad na čas. Ulazak i povratak menjaju unos istorije, a izvođenje koje je student
+ * napustio (Izađi, Nazad) tab Čas ne otvara sam, nego nudi "Uđi u prezentaciju" (nema petlje na Nazad). Javna mreža: samo
+ * `api/public/nalog/*` i `api/public/uzivo/*`. Projektor predavanja (nastavnik) crta QR čiji token se menja.
  */
 
 const API = new RegExp(
-  // `casovi`: kartica "Naredni časovi" na `/nalog` (najava odsustva; bez rasporeda u moku prazna)
+  // `casovi`: kartica "Naredni časovi" na Početnoj (najava odsustva; bez rasporeda u moku prazna)
   '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi)$'
   + '|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$',
 );
@@ -37,26 +38,33 @@ async function bezOzbiljnihKrsenja(page: Page): Promise<void> {
   ocekuj(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
 
+/** Lažni STOMP broker izvođenja 7 (kod 123456): početno stanje za poslednjeg učesnika, faza PRIJAVA. */
+function brokerIzvodjenja(page: Page, mock: MockApi, ws: string[]) {
+  return lazniBroker(page, 'api/public/ws', o => {
+    if (o !== '/app/izvodjenja/7/pocetno') return undefined;
+    const u = mock.podaci.ucesnici.at(-1)!;
+    return {
+      javno: {
+        izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas', kod: '123456',
+        prikaz: 'PRIJAVA', slajdTip: null, ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
+        brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null, zadatak: null,
+      },
+      licno: {
+        verzija: 1, ucesnikId: u.ucesnikId, ime: u.ime, poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null,
+        zadatak: null,
+      },
+    };
+  }, url => ws.push(new URL(url).pathname));
+}
+
+const tab = (page: Page, ime: string) => page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: ime });
+
 test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, dozvoljeniApi: API });
 
   test('cas: skeniranje -> čeka -> izvođenje -> kraj -> nazad na čas', async ({ page, mock, javnaMreza }) => {
     mock.studentPrijavljen = true;
-    const broker = await lazniBroker(page, 'api/public/ws', o => {
-      if (o !== '/app/izvodjenja/7/pocetno') return undefined;
-      const u = mock.podaci.ucesnici.at(-1)!;
-      return {
-        javno: {
-          izvodjenjeId: 7, verzija: 1, serverVremeMs: Date.now(), status: 'AKTIVNO', naziv: 'Statika · uvodni čas', kod: '123456',
-          prikaz: 'PRIJAVA', slajdTip: null, ekran: 'NORMALAN', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false,
-          brojUcesnika: 1, pitanje: null, rezultat: null, rangLista: null, zadatak: null,
-        },
-        licno: {
-          verzija: 1, ucesnikId: u.ucesnikId, ime: u.ime, poeni: 0, mesto: null, brojUcesnika: 1, izbacen: false, odgovor: null,
-          zadatak: null,
-        },
-      };
-    }, url => javnaMreza.ws.push(new URL(url).pathname));
+    const broker = await brokerIzvodjenja(page, mock, javnaMreza.ws);
 
     await page.goto(`nalog/cas/${TOKEN}`);
     await ocekuj(page.locator('[data-na-casu]')).toContainText(`Prisutan si: ${CAS}`);
@@ -94,8 +102,9 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     await ocekuj(page.locator('[data-na-casu]')).toContainText(`Prisutan si: ${CAS}`);
     ocekuj(mock.zahteviZa('public/nalog/cas/potvrdi', 'POST')).toHaveLength(1);
     ocekuj(await page.evaluate(() => sessionStorage.getItem('gfs-cas-kljuc'))).toBeNull();
-    // kartica "Naredni časovi" na tabu Čas (najava odsustva) čita svoj API nezavisno od toka čekiranja, pa se ne broji u redosled
-    ocekuj(javnaMreza.api.filter(z => z !== 'GET /api/public/nalog/casovi')).toEqual([
+    // tab Čas je samo uživo: "Naredni časovi" su na Početnoj, pa ih ovaj tok nikad ne čita
+    ocekuj(mock.zahteviZa('public/nalog/casovi', 'GET')).toHaveLength(0);
+    ocekuj(javnaMreza.api).toEqual([
       'POST /api/public/nalog/cas/skeniraj',
       'GET /api/public/nalog/stanje',
       'POST /api/public/nalog/kod',
@@ -113,18 +122,81 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/nalog/cas', 'GET')).toHaveLength(0);
   });
 
-  test('/nalog: prijavljen i čekiran ide pravo na tab Čas (na času)', async ({ page, mock }) => {
+  test('/nalog: prijavljen i čekiran ide na Početnu, tab Čas pokazuje čas', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     mock.cekiranje.predavanjeId = 1;
     await page.goto('nalog');
-    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page).toHaveURL(/\/nalog\/pocetna$/);
+    await tab(page, 'Čas').click();
     await ocekuj(page.locator('[data-na-casu]')).toContainText(CAS);
   });
 
-  test('axe (dan), 360 px: na času i poruka', async ({ page, mock }) => {
+  test('bez petlje na Nazad: Čas ulazi u izvođenje umesto sebe, Izađi vraća na Čas, "Uđi u prezentaciju" opet ulazi', async ({ page, mock, javnaMreza }) => {
+    mock.studentPrijavljen = true;
+    mock.cekiranje.predavanjeId = 1;
+    mock.cekiranje.izvodjenje = { kod: '123456', naziv: 'Statika · uvodni čas' };
+    await brokerIzvodjenja(page, mock, javnaMreza.ws);
+    await page.goto('nalog/pocetna');
+    await ocekuj(page.locator('[data-traka]')).toContainText('Prezentacija je počela');
+
+    // tab Čas sam ulazi u izvođenje, ali menja svoj unos istorije: Nazad ide na Početnu, ne na Čas (koji bi opet ušao)
+    await tab(page, 'Čas').click();
+    await ocekuj(page).toHaveURL(/\/uzivo\/123456\?sa=cas$/);
+    await ocekuj(page.getByText('Čekamo početak')).toBeVisible();
+    await page.goBack();
+    await ocekuj(page).toHaveURL(/\/nalog\/pocetna$/);
+
+    // izvođenje koje je student napustio: Čas ga nudi, ne otvara sam
+    await tab(page, 'Čas').click();
+    await ocekuj(page.locator('[data-izasao]')).toContainText('Prezentacija je u toku · Statika · uvodni čas');
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/cas$/);
+    await page.getByRole('link', { name: 'Uđi u prezentaciju' }).click();
+    await ocekuj(page).toHaveURL(/\/uzivo\/123456\?sa=cas$/);
+    await ocekuj(page.getByText('Čekamo početak')).toBeVisible();
+
+    // Izađi: na Čas (isti unos istorije), gde ostaje i posle sledećeg upita
+    await page.getByRole('button', { name: 'Izađi' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page.getByRole('link', { name: 'Uđi u prezentaciju' })).toBeVisible();
+    const upita = mock.zahteviZa('public/nalog/cas', 'GET').length;
+    await vratiStranicu(page);
+    await ocekuj.poll(() => mock.zahteviZa('public/nalog/cas', 'GET').length).toBeGreaterThan(upita);
+    await ocekuj(page.getByRole('link', { name: 'Uđi u prezentaciju' })).toBeVisible();
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/cas$/);
+    ocekuj(javnaMreza.api.filter(z => !API.test(z))).toEqual([]);
+  });
+
+  test('predavanje grupe u toku, student nije čekiran: traka na Početnoj, poziv na skeniranje na Čas', async ({ page, mock }) => {
+    mock.studentPrijavljen = true;
+    mock.cekiranje.uToku = { predmet: 'Programiranje u građevinarstvu', tema: 'Petlje i nizovi' };
+    await page.goto('nalog/pocetna');
+    const traka = page.locator('[data-traka-u-toku]');
+    await ocekuj(traka).toContainText('Predavanje je u toku · Programiranje u građevinarstvu · Petlje i nizovi');
+    await ocekuj(tab(page, 'Čas')).toContainText('(čas je u toku)');
+    await traka.getByRole('link', { name: 'Čekiraj se' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Predavanje je u toku' })).toBeVisible();
+    await ocekuj(page.locator('[data-u-toku]')).toContainText('Skeniraj QR sa table');
+    await ocekuj(page.locator('[data-skener-mesto]')).toBeAttached();
+    await ocekuj(page.locator('[data-traka-u-toku]')).toHaveCount(0); // na tabu Čas traka ne stoji
+
+    // predavanje se završilo: Čas posle sledećeg upita kaže "Nisi na času"
+    mock.cekiranje.uToku = null;
+    await vratiStranicu(page);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
+  });
+
+  test('axe (dan), 360 px: na času, predavanje u toku i poruka', async ({ page, mock }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await page.setViewportSize({ width: 360, height: 740 });
     mock.studentPrijavljen = true;
+    mock.cekiranje.uToku = { predmet: 'Programiranje u građevinarstvu', tema: 'Petlje i nizovi' };
+    await page.goto('nalog/pocetna');
+    await ocekuj(page.locator('[data-traka-u-toku]')).toBeVisible();
+    await bezOzbiljnihKrsenja(page);
+    await page.goto('nalog/cas');
+    await ocekuj(page.locator('[data-u-toku]')).toBeVisible();
+    await bezOzbiljnihKrsenja(page);
     mock.cekiranje.predavanjeId = 1;
     await page.goto('nalog/cas');
     await ocekuj(page.locator('[data-na-casu]')).toBeVisible();
