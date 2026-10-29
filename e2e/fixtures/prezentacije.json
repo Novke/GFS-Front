@@ -479,7 +479,7 @@
   },
   {
    "id": 6,
-   "naziv": "Vežbe 1 – zadaci (demo)",
+   "naziv": "Vežbe 1 – zadaci (demo)", "vezba": 1,
    "opis": null,
    "predmet": {
     "id": 1,

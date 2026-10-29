@@ -4,8 +4,13 @@ import { Observable } from 'rxjs';
 
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
+import { VrstaPrezentacije } from './redosled-prezentacija';
 
-/** Prezentacija predmeta kao stavka izbora (`GET prezentacije?predmetId`); `aktivnoIzvodjenjeId` = izvođenje u toku, ako ga ima. */
+/**
+ * Prezentacija predmeta kao stavka izbora (`GET prezentacije?predmetId`, `GET prezentacije/izbor`); `aktivnoIzvodjenjeId` =
+ * izvođenje u toku, ako ga ima. `vezba` je redni broj vežbe (`null` = bez broja), `vrsta` se računa iz slajdova,
+ * `brojZadataka` broji ZADATAK slajdove, `poslednjePustanje` je početak najnovijeg izvođenja bilo koje grupe.
+ */
 export interface PrezentacijaZaIzbor {
   id: number;
   naziv: string;
@@ -13,6 +18,23 @@ export interface PrezentacijaZaIzbor {
   brojPitanja: number;
   izmenjeno: string;
   aktivnoIzvodjenjeId: number | null;
+  vezba: number | null;
+  vrsta: VrstaPrezentacije;
+  brojZadataka: number;
+  kreirano: string;
+  poslednjePustanje: string | null;
+}
+
+/** Stavka izbora: prezentacija i kad ju je grupa iz upita poslednji put puštala (`null` = nije, ili upit bez grupe). */
+export interface StavkaIzbora {
+  prezentacija: PrezentacijaZaIzbor;
+  pustenoGrupi: string | null;
+}
+
+/** `GET prezentacije/izbor`: sve prezentacije predmeta po vežbama i id-jevi predloženih sledećih (najviše 3, redom). */
+export interface IzborPrezentacija {
+  stavke: StavkaIzbora[];
+  predlog: number[];
 }
 
 /** Izvođenje (jedno prikazivanje prezentacije) vezano za predavanje (`GET izvodjenja?predavanjeId`), najnovije prvo. */
@@ -38,9 +60,15 @@ export class PrezentacijePredavanjaApi {
   private readonly http = inject(HttpClient);
   private readonly context = new HttpContext().set(LOCAL_ERRORS, true);
 
-  prezentacije(predmetId: number): Observable<PrezentacijaZaIzbor[]> {
-    const params = new HttpParams().set('predmetId', predmetId);
-    return this.http.get<PrezentacijaZaIzbor[]>(`${API_URL}/prezentacije`, { params, context: this.context });
+  /**
+   * Izbor za pokretanje: sa `grupaId` predlog prati šta je ta grupa puštala, bez nje (izvođenje van predavanja) nudi sledeće
+   * po redu posle `posle`.
+   */
+  izbor(predmetId: number, grupaId: number | null, posle: number | null = null): Observable<IzborPrezentacija> {
+    let params = new HttpParams().set('predmetId', predmetId);
+    if (grupaId !== null) params = params.set('grupaId', grupaId);
+    if (posle !== null) params = params.set('posle', posle);
+    return this.http.get<IzborPrezentacija>(`${API_URL}/prezentacije/izbor`, { params, context: this.context });
   }
 
   izvodjenja(predavanjeId: number): Observable<IzvodjenjeNaPredavanju[]> {

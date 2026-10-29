@@ -194,7 +194,9 @@ export class PredavanjeDetalj {
     if (!p?.predmet) {
       return;
     }
-    PokreniPrezentacijuDialog.otvori(this.dialog, { predavanjeId: p.id, predmetId: p.predmet.id }).subscribe(ishod => {
+    PokreniPrezentacijuDialog.otvori(this.dialog, {
+      predavanjeId: p.id, predmetId: p.predmet.id, grupa: p.grupa ? { id: p.grupa.id, naziv: p.grupa.naziv } : null,
+    }).subscribe(ishod => {
       this.prezentacije.ucitaj(p.id);
       if (ishod && !ishod.otvorena) {
         this.obavestenja.info('Prezentacija je pokrenuta, ali je pregledač blokirao novu karticu. Otvori konzolu dugmetom „Nastavi“ ispod.', {

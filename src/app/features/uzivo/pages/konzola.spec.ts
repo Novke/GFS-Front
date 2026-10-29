@@ -14,6 +14,7 @@ import { resetujPreducitavanje } from '../ui/preducitavanje';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { ServerskiSat } from '../data-access/sat';
 import { BeleskePanelComponent } from './beleske-panel.component';
+import { RezimProjektora } from '../../../core/layout/rezim-projektora';
 import { KonzolaPage } from './konzola.page';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 
@@ -123,6 +124,22 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     Reflect.deleteProperty(document, 'visibilityState');
     window.name = '';
     lazniStore.stanje.set(null);
+  });
+
+  it('posle kraja: završni ekran umesto konzole, prati dan/noć dok je prikazan', async () => {
+    const f = await prikazi();
+    const rezim = TestBed.inject(RezimProjektora);
+    expect(rezim.pratiRezim()).toBe(false);
+    const s = lazniStore.stanje()!;
+    lazniStore.stanje.set({ ...s, izvodjenje: { ...s.izvodjenje, status: 'ZAVRSENO', kraj: '2026-10-29T10:41:00' } });
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('app-kraj-izvodjenja')).not.toBeNull();
+    expect(el.querySelector('app-beleske-panel')).toBeNull();
+    expect(rezim.pratiRezim()).toBe(true);
+    f.destroy();
+    expect(rezim.pratiRezim()).toBe(false);
   });
 
   it('zaglavlje ima vreme izvođenja i položaj sa korakom', async () => {
