@@ -12,6 +12,7 @@ import type { RasporedCmd, TerminCmd } from '../src/app/features/raspored/data-a
 import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
+import { MockPortal } from './mock-portal';
 import { MockRaspored } from './mock-raspored';
 
 /*
@@ -115,6 +116,8 @@ interface SesijaNastavnika { id: number; opis: string; kreirano: string; posledn
 interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
 interface NalogStudenta {
   indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
+  /** Grupa i generacija (tab Ja). */
+  grupa?: string | null; generacija?: number | null;
   /** Godina upisa; bez nje u fiksturi važi početna godina tekuće školske godine (ono što forma predlaže). */
   godina?: number;
 }
@@ -304,6 +307,12 @@ export class MockApi {
   readonly mediji: Medij[] = [];
   /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
   readonly banka = new MockBanka(this.podaci, id => this.predmet(id) !== null, this.mediji);
+  /**
+   * Nalog studenta, faze 2 i 3 (predmeti, vežbanje, pregled prezentacije, ocena) i nastavnički panel „Za vežbanje“ i statistika
+   * (`mock-portal.ts`): studentske rute traže `studentPrijavljen`, panel samo čvorove banke za predavanja.
+   */
+  readonly portal = new MockPortal(() => this.studentPrijavljen,
+    id => this.podaci.bankaGrupe.some(g => g.id === id && g.namena === 'PREDAVANJE'));
   /**
    * Sesija nastavnika (kao kolačić `gfs_nastavnik`). Podrazumevano je nastavnik prijavljen, pa specovi pre prijave rade kao
    * ranije. Bez nje mok odgovara kao server: svaki nastavnički API (sve osim `public/*`, `auth/prijava` i `auth/ja`) daje 401
@@ -1366,6 +1375,7 @@ export class MockApi {
       return b.redosled(Number(z.query.get('predmetId')), z.query.get('namena'), roditelj === null ? null : Number(roditelj), z.telo);
     });
     get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
+    this.portal.nastavnickeRute(get, put, del);
     put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
     del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
     post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
@@ -1530,6 +1540,7 @@ export class MockApi {
       return ok(casStanje());
     });
     get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
+    this.portal.studentskeRute(get, post, put);
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));

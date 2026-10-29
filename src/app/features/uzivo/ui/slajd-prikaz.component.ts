@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, booleanAttribute, computed, input, viewChild } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
-import { Faza, NastavnickiZadatak, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, Rezultat, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
 import { meriFormule } from './mera-formule';
 import { renderMarkdown } from './markdown';
@@ -9,6 +9,7 @@ import { PlatnoPrikazComponent } from './platno-prikaz.component';
 import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
+import type { SlajdZaPrikaz } from './slajd-za-prikaz';
 import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 import { ZadatakPrikazComponent } from './zadatak-prikaz.component';
 
@@ -87,7 +88,8 @@ export interface KodTraka { host: string; kod: string; }
   `,
 })
 export class SlajdPrikazComponent {
-  readonly slajd = input.required<SlajdDetails>();
+  /** Uži tip od `SlajdDetails` (bez beleški i prelaza): i studentski pregled prezentacije ga puni (`slajd-za-prikaz`). */
+  readonly slajd = input.required<SlajdZaPrikaz>();
   /** Broj otkrivenih stavki liste (INFO sa postepenim otkrivanjem). */
   readonly korak = input<number>(0);
   readonly postepeno = input<boolean>(false);

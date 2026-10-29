@@ -12,6 +12,7 @@ import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-st
 import { brojStudenataTekst } from '../../../shared/util/mnozina';
 import { OceneApi } from '../../../core/api/ocene.api';
 import { KoeficijentiInfo, raspodelaOcena, RezultatiStudentaInfo } from '../../../core/api/ocene.models';
+import { ObjavaOcena } from './objava-ocena';
 import { OceneTabela } from './ocene-tabela';
 
 /** Rezultat učitavanja: podaci ili poruka greške (greška se hvata u toku, pa `value()` nikad ne baca). */
@@ -22,12 +23,12 @@ interface Stanje {
 
 /**
  * Predlog ocena za predmet i grupu (H2): kratak opis koeficijenata sa linkom "Podesi koeficijente"
- * (`/predmeti/:id/podesavanja`), histogram raspodele (nije položio, 6-10; `@defer`) i tabela predloga. Isti sadržaj
+ * (`/predmeti/:id/podesavanja`), traka objave studentima (`app-objava-ocena`, spec studentskog dela 12.4), histogram raspodele (nije položio, 6-10; `@defer`) i tabela predloga. Isti sadržaj
  * prikazuju `/ocene?predmet&grupa` i tab Ocene u hubu predmeta. Sve poene i ocene računa server.
  */
 @Component({
   selector: 'app-ocene-pregled',
-  imports: [EmptyState, ErrorPanel, Histogram, MatButton, MatIcon, OceneTabela, RouterLink, SkeletonRows],
+  imports: [EmptyState, ErrorPanel, Histogram, MatButton, MatIcon, ObjavaOcena, OceneTabela, RouterLink, SkeletonRows],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let st = stanje();
@@ -41,6 +42,9 @@ interface Stanje {
           <mat-icon svgIcon="settings" aria-hidden="true" />Podesi koeficijente
         </a>
       </div>
+      @if (p.rezultati.length > 0) {
+        <app-objava-ocena [predmetId]="predmetId()" [grupaId]="grupaId()" />
+      }
       @if (p.rezultati.length === 0) {
         <app-empty-state naslov="Grupa nema studenata" ikona="groups" tekst="Predlog ocena se računa za studente grupe." />
       } @else {

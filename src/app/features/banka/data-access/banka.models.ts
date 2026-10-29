@@ -434,3 +434,45 @@ export function prviList(stablo: readonly GrupaCvor[]): GrupaCvor | null {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------------------------- zadaci za vežbanje
+
+/**
+ * Stanje čvora banke za vežbanje u jednoj grupi studenata (`GET banka/grupe/{id}/otvoreno`, samo nastavnik). `OTVORENO`:
+ * zapis na samom čvoru (`izvor` CAS = kraj izvođenja, RUCNO = Novica, `prviPut`); `PREKO_TEME`: otvoren predak `tema` (zatvara se
+ * na toj temi); `DELIMICNO`: otvoren deo listova ispod čvora; `ZATVORENO`. `otvorenihListova` od `listova`: tipovi ispod čvora koje
+ * grupa sme da vežba.
+ */
+export type StanjeOtvorenosti = 'OTVORENO' | 'PREKO_TEME' | 'DELIMICNO' | 'ZATVORENO';
+export type IzvorOtvaranja = 'CAS' | 'RUCNO';
+
+export interface OtvorenoZaGrupu {
+  grupaId: number;
+  naziv: string;
+  godinaUpisa: number | null;
+  stanje: StanjeOtvorenosti;
+  izvor: IzvorOtvaranja | null;
+  prviPut: string | null;
+  tema: string | null;
+  otvorenihListova: number;
+  listova: number;
+}
+
+/** Statistika vežbanja jednog tipa (`GET predmeti/{id}/vezbanje/statistika`, samo zbirno, nikad po studentu). */
+export interface StatistikaTipa {
+  tipId: number;
+  naziv: string;
+  putanja: string[];
+  studenata: number;
+  pokusaja: number;
+  provereno: number;
+  prvaTacno: number;
+  resenjeBezTacne: number;
+}
+
+/** Filteri statistike: grupa studenata i opseg dana (ISO `YYYY-MM-DD`, uključivo). */
+export interface StatistikaFilter {
+  grupa?: number | null;
+  od?: string | null;
+  do?: string | null;
+}

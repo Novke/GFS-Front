@@ -211,7 +211,7 @@ describe('MoodlePage', () => {
       await stabilno();
       expect(naslov()).toBe('Moodle nalog je povezan');
       expect(el().textContent).toContain('Sledeći put iz Moodle-a ulaziš jednim klikom, bez koda.');
-      expect(link('Otvori nalog')?.getAttribute('href')).toBe('/nalog');
+      expect(link('Otvori nalog')?.getAttribute('href')).toBe('/nalog/ja');
       expect(dugme('Nastavi')).toBeUndefined();
       expect(navigacija).not.toHaveBeenCalled();
     });

@@ -29,7 +29,9 @@
   ],
   "_napomenaStudenta": "Nalog studenta (javna ruta /nalog, spec prijave 5.1): izmišljen student, maska mejla iz domena example.test.",
   "nalogStudenta": {
-    "indeks": "GD1", "ime": "Ana", "prezime": "Primerović", "maskaMejla": "a***@example.test", "moodlePovezan": false,
+    "indeks": "GD1", "ime": "Ana", "prezime": "Primerović", "maskaMejla": "a***@example.test",
+    "grupa": "GD-2025",
+    "generacija": 2025, "moodlePovezan": false,
     "uredjaji": [
       { "id": 11, "opis": "Android · Chrome", "nacin": "KOD", "prviUlaz": "2026-10-01T10:00:00", "poslednjiUlaz": "2026-10-19T08:30:00", "trenutni": false },
       { "id": 12, "opis": "Windows · Firefox", "nacin": "LTI", "prviUlaz": "2026-09-20T12:00:00", "poslednjiUlaz": "2026-10-02T09:15:00", "trenutni": false }

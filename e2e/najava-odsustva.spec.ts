@@ -5,7 +5,8 @@ import { danIDatum } from '../src/app/shared/util/termin';
 import { expect as ocekuj, test } from './javna-mreza';
 
 /*
- * Najava odsustva sa naloga studenta (spec najave odsustva, odeljak 4): kartica „Naredni časovi“ na `/nalog`, „Neću doći“,
+ * Najava odsustva sa naloga studenta (spec najave odsustva, odeljak 4): kartica „Naredni časovi“ na tabu Čas (`/nalog` vodi
+ * prijavljenog studenta na `/nalog/cas`, studentski portal faze 2-3), „Neću doći“,
  * razlog, „Ipak dolazim“, otkazan čas („Nema časa“ sa napomenom), 409 kad nastavnik otkaže dok je stranica otvorena.
  * Student nikad ne vidi broj najava ni tuđa imena. Javna mreža: samo `api/public/nalog/*` (`javna-mreza`: sve ostalo je
  * 401 kao na stejdžingu i obara test). Mok: `e2e/mock-raspored.ts` (`primer()`: stavke 31 i 32 grupe studenta, 33 tuđa).
@@ -36,7 +37,7 @@ test.describe('najava odsustva (telefon, bez sesije nastavnika)', () => {
     mock.raspored.najavaDrugog(3, 31, sutra);
 
     await page.goto('nalog');
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/); // prijavljen student: /nalog vodi na tab Čas (studentski portal)
     await ocekuj(kartica(page).getByRole('heading', { name: 'Naredni časovi' })).toBeVisible();
     await ocekuj(kartica(page).locator('[data-termin]')).toHaveCount(8);
     await ocekuj(kartica(page).locator('[data-termin^="33:"]')).toHaveCount(0); // tuđa grupa
@@ -96,7 +97,7 @@ test.describe('najava odsustva (telefon, bez sesije nastavnika)', () => {
   test('bez rasporeda: nema kartice (i nema greške)', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     await page.goto('nalog');
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Prijavljen si' })).toBeVisible();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/); // prijavljen student: /nalog vodi na tab Čas (studentski portal)
     await ocekuj.poll(() => mock.zahteviZa('public/nalog/casovi', 'GET').length).toBe(1);
     await ocekuj(kartica(page)).toHaveCount(0);
   });
