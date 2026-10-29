@@ -128,6 +128,7 @@ export class StudentProfil {
   protected readonly tabovi = [
     { putanja: 'pregled', naslov: 'Pregled' },
     { putanja: 'hronologija', naslov: 'Hronologija' },
+    { putanja: 'uzivo', naslov: 'Uživo' },
     { putanja: 'beleske', naslov: 'Beleške' },
   ] as const;
 

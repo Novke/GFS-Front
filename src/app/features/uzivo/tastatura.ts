@@ -38,7 +38,7 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 'End': return { komanda: 'IDI_NA', vrednost: Math.max(brojSlajdova - 1, -1) };
     case ' ': return { komanda: 'REZULTATI' };
     case 'c': case 'C': return { komanda: 'TACAN' };
-    case 'l': case 'L': return { komanda: 'RANG_LISTA' };
+    case 'l': case 'L': return { komanda: e.shiftKey ? 'RANG_PREDAVANJA' : 'RANG_LISTA' };
     case 'o': case 'O': return { komanda: 'OTVORI_ZATVORI' };
     case 'r': case 'R': return { komanda: e.shiftKey ? 'RESENJE' : 'PONOVI' };
     case 't': case 'T': return { komanda: 'TAJMER' };

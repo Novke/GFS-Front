@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { RangTacnostiStavka } from '../../../core/api/rang.api';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, PregledZadatka, RezultatPitanja } from '../data-access/uzivo.models';
@@ -113,7 +114,7 @@ describe('oznakeRundi', () => {
 describe('IzvodjenjePregledPage', () => {
   let http: HttpTestingController;
 
-  function otvori(rezultati: IzvodjenjeRezultati): HTMLElement {
+  function otvori(rezultati: IzvodjenjeRezultati, rang: RangTacnostiStavka[] = []): HTMLElement {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
@@ -123,6 +124,7 @@ describe('IzvodjenjePregledPage', () => {
     http = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(IzvodjenjePregledPage);
     http.expectOne('api/izvodjenja/5/rezultati').flush(rezultati);
+    http.expectOne('api/izvodjenja/5/rang').flush(rang);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -141,7 +143,7 @@ describe('IzvodjenjePregledPage', () => {
     expect(meta).toContain('GD-2025 · 3. predavanje (7.10.2026.) · Greda');
     expect(meta).toContain('Učesnika: 4');
 
-    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])'));
     expect(karte.length).toBe(4);
     const naslovi = karte.map(k => k.querySelector('h2')?.textContent);
     expect(naslovi).toEqual(['Pitanje 1', 'Pitanje 2', 'Pitanje 3', 'Rang-lista']);
@@ -172,7 +174,7 @@ describe('IzvodjenjePregledPage', () => {
 
   it('zadatak runda i pitanje runda: obe kartice, putanja, rezultat po varijanti i tabela učesnika', () => {
     const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [zadatakRunda(1, 20, 20), runda(2, 1, 10)], rangLista: [] });
-    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])'));
     expect(karte.length).toBe(2);
     expect(karte[0].querySelector('h2')?.textContent).toBe('Zadatak 1');
     expect(karte[1].querySelector('h2')?.textContent).toBe('Pitanje 2');
@@ -195,7 +197,7 @@ describe('IzvodjenjePregledPage', () => {
     nova.zadatak = { ...nova.zadatak!, nivo: 3, nivoi: { '12': 3 } };
     stara.zadatak = { ...stara.zadatak!, nivo: null, nivoi: {} };
     const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [nova, stara], rangLista: [] });
-    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])'));
     expect(karte[0].querySelector('[data-nivo-runde] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 3 od 3 (teži)');
     expect(karte[0].querySelector('tbody tr [data-nivo-varijante] [data-nivo-prikaz]')!.getAttribute('aria-label')).toBe('Nivo 3 od 3 (teži)');
     expect(karte[1].querySelector('[data-nivo-runde]')).toBeNull();
@@ -248,7 +250,7 @@ describe('IzvodjenjePregledPage', () => {
       izvodjenje: INFO, takmicenje: false, pitanja: [runda(1, 1, 10)],
       rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }],
     });
-    expect(el.querySelectorAll('.uz-pr-karta').length).toBe(1);
+    expect(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])').length).toBe(1);
     expect(el.textContent).not.toContain('Rang-lista');
     expect(el.textContent).not.toContain('Za poene važi');
   });
@@ -258,7 +260,7 @@ describe('IzvodjenjePregledPage', () => {
       izvodjenje: INFO, takmicenje: true, pitanja: [runda(1, 1, 10)],
       rangLista: [{ mesto: 1, ucesnikId: 1, ime: 'Ana', poeni: 0 }, { mesto: 2, ucesnikId: 2, ime: 'Bojan', poeni: 0 }],
     });
-    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])'));
     expect(karte.length).toBe(2);
     expect(karte[1].querySelector('h2')?.textContent).toBe('Rang-lista');
     expect(karte[1].textContent).toContain('Ana');
@@ -267,7 +269,7 @@ describe('IzvodjenjePregledPage', () => {
 
   it('takmičenje bez učesnika: prazno stanje rang-liste', () => {
     const el = otvori({ izvodjenje: INFO, takmicenje: true, pitanja: [runda(1, 1, 10)], rangLista: [] });
-    const karte = Array.from(el.querySelectorAll('.uz-pr-karta'));
+    const karte = Array.from(el.querySelectorAll('.uz-pr-karta:not([data-rang-tacnosti])'));
     expect(karte[1].textContent).toContain('Još nema poena.');
   });
 
@@ -275,6 +277,19 @@ describe('IzvodjenjePregledPage', () => {
     const el = otvori({ izvodjenje: { ...INFO, cuvanje: false, brojPitanja: 0, brojUcesnika: 0 }, takmicenje: false, pitanja: [], rangLista: [] });
     expect(el.textContent).toContain('Rezultati ovog izvođenja nisu čuvani.');
     expect(el.querySelector('.uz-pr-karta')).toBeNull();
+  });
+
+  it('rang tačnosti na vrhu: mesto, procenat i x/y, prosek, ★, link na studenta, gost', () => {
+    const el = otvori({ izvodjenje: INFO, takmicenje: false, pitanja: [], rangLista: [] }, [
+      { mesto: 1, ucesnikId: 1, studentId: 7, ime: 'Ana', gost: false, tacnih: 3, dugovanih: 3, odgovorenih: 3, procenat: 100,
+        prosekMs: 3240, zvezdice: 5, poeni: null, izvodjenja: null, casova: null },
+      { mesto: 2, ucesnikId: 2, studentId: null, ime: 'Mile', gost: true, tacnih: 1, dugovanih: 3, odgovorenih: 2, procenat: 33,
+        prosekMs: null, zvezdice: 1, poeni: null, izvodjenja: null, casova: null },
+    ]);
+    const redovi = [...el.querySelectorAll('[data-rang-tacnosti] tbody tr')]
+      .map(r => [...r.querySelectorAll('td')].map(td => td.textContent!.replace(/\s+/g, ' ').trim()).join(' | '));
+    expect(redovi).toEqual(['1 | Ana | 100%3/3 | 3,2 s | 5', '2 | Mile gost | 33%1/3 | — | 1']);
+    expect(el.querySelector('[data-rang-tacnosti] a')?.getAttribute('href')).toBe('/studenti/7');
   });
 
   it('sačuvano izvođenje bez pitanja', () => {
@@ -292,6 +307,7 @@ describe('IzvodjenjePregledPage', () => {
     http = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(IzvodjenjePregledPage);
     http.expectOne('api/izvodjenja/5/rezultati').flush({ reason: 'Izvođenje nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne('api/izvodjenja/5/rang').flush({ reason: 'Izvođenje nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role=alert]')?.textContent).toContain('Izvođenje nije pronađeno.');
   });

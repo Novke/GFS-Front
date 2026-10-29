@@ -3,6 +3,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { IzvodjenjeNaPredavanju, PrezentacijePredavanjaApi } from '../../../core/api/prezentacije-predavanja.api';
+import { RangApi, RangPredavanja } from '../../../core/api/rang.api';
 
 /** Poruka za korisnika iz greške zahteva (`reason` servera ili opšta). */
 export function razlogZahteva(e: unknown): string {
@@ -10,14 +11,20 @@ export function razlogZahteva(e: unknown): string {
 }
 
 /**
- * Izvođenja prezentacija vezana za jedno predavanje ("Prezentacije na ovom predavanju"). Pripada stranici predavanja
- * (provajder u `PredavanjeDetalj`), pa živi dok je stranica otvorena. Odgovor starog zahteva (drugo predavanje ili sporiji
- * raniji poziv) se odbacuje po brojaču, da prikazana lista nikad ne pripada tuđem predavanju.
+ * Izvođenja prezentacija vezana za jedno predavanje ("Prezentacije na ovom predavanju") i rang tačnosti predavanja (zbir
+ * svih izvođenja; čita se posle liste, samo kad lista nije prazna). Pripada stranici predavanja (provajder u
+ * `PredavanjeDetalj`), pa živi dok je stranica otvorena. Odgovor starog zahteva (drugo predavanje ili sporiji raniji poziv)
+ * se odbacuje po brojaču, da prikazana lista nikad ne pripada tuđem predavanju.
  */
 @Injectable()
 export class PrezentacijePredavanjaStore {
   private readonly api = inject(PrezentacijePredavanjaApi);
+  private readonly rangApi = inject(RangApi);
   private brojac = 0;
+
+  /** Rang predavanja (`null` dok nije učitan ili kad predavanje nema izvođenja). */
+  readonly rang = signal<RangPredavanja | null>(null);
+  readonly rangGreska = signal<string | null>(null);
 
   readonly izvodjenja = signal<IzvodjenjeNaPredavanju[]>([]);
   readonly ucitano = signal(false);
@@ -34,6 +41,11 @@ export class PrezentacijePredavanjaStore {
         this.izvodjenja.set(lista);
         this.greska.set(null);
         this.ucitano.set(true);
+        if (lista.length > 0) {
+          this.ucitajRang(predavanjeId, moj);
+        } else {
+          this.rang.set(null);
+        }
       },
       error: e => {
         if (moj !== this.brojac) return;
@@ -43,10 +55,26 @@ export class PrezentacijePredavanjaStore {
     });
   }
 
+  private ucitajRang(predavanjeId: number, moj: number): void {
+    this.rangApi.predavanje(predavanjeId).subscribe({
+      next: r => {
+        if (moj !== this.brojac) return;
+        this.rang.set(r);
+        this.rangGreska.set(null);
+      },
+      error: e => {
+        if (moj !== this.brojac) return;
+        this.rangGreska.set(razlogZahteva(e));
+      },
+    });
+  }
+
   /** Predavanje je promenjeno: stara lista ne važi. */
   resetuj(): void {
     this.brojac++;
     this.izvodjenja.set([]);
+    this.rang.set(null);
+    this.rangGreska.set(null);
     this.ucitano.set(false);
     this.greska.set(null);
   }

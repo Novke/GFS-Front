@@ -23,7 +23,9 @@ export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' |
    * Zadatak slajd: prekidač rešenja (uključenje posle zatvaranja), broj različitih varijanti i nivo varijanti za sledeće
    * otvaranje (oba samo u CEKA).
    */
-  | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO';
+  | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO'
+  /** Rang tačnosti celog predavanja na projektoru (Shift+L); `RANG_LISTA` (L) je rang ovog izvođenja. */
+  | 'RANG_PREDAVANJA';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -99,9 +101,21 @@ export interface Rezultat {
 }
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }
-/** `varijantaId` i `tacno` važe za trenutnu Zadatak rundu (dodeljena varijanta i ishod), inače `null`. */
+/**
+ * `varijantaId` važi za trenutnu Zadatak rundu (dodeljena varijanta). `tacno`, `vremeMs` i `odgovor` (kratak prikaz:
+ * slova opcija, broj, tekst do 40 znakova, polja zadatka) važe za odgovor u trenutnoj rundi, inače `null`;
+ * `odgovorSakriven` = nastavnik je sakrio tekstualni odgovor. Stari backend (tokom izdanja) nema poslednja tri polja.
+ */
 export interface UcesnikStanje {
   id: number; ime: string; poeni: number; povezan: boolean; odgovorio: boolean; varijantaId?: number | null; tacno?: boolean | null;
+  vremeMs?: number | null; odgovor?: string | null; odgovorSakriven?: boolean;
+}
+/** Koji rang tačnosti je na projektoru: ovog izvođenja (L) ili celog predavanja (Shift+L). */
+export type RangPrikaz = 'IZVODJENJE' | 'PREDAVANJE';
+/** Red ranga tačnosti na projektoru (bez id-jeva; isti oblik kao `RangTacnostiStavka` iz `core/api/rang.api`). */
+export interface JavnaRangTacnostiStavka {
+  mesto: number | null; ime: string; gost: boolean; tacnih: number; dugovanih: number; odgovorenih: number;
+  procenat: number | null; prosekMs: number | null; zvezdice: number; poeni: number | null;
 }
 /**
  * Snimak za nastavnika. `rezultat` i `rangLista` su nastavnički (tačnost i poeni trenutne runde uživo, samo konzola);
@@ -126,6 +140,14 @@ export interface NastavnickoStanje {
   brojOcekivanih?: number;
   /** Broj studenata na času predavanja izvođenja; `null` kad izvođenje nema predavanje. */
   brojCekiranih?: number | null;
+  /**
+   * Rang tačnosti na projektoru (top 10, `null` dok nije prikazan; u takmičenju rang izvođenja ostaje `javnaRangLista`
+   * po poenima). Trenutna runda ne ulazi pre TACAN. `rangPrikaz`: koji rang je prikazan (`null` = nijedan).
+   */
+  javniRangTacnosti?: JavnaRangTacnostiStavka[] | null;
+  rangPrikaz?: RangPrikaz | null;
+  /** Predavanje ima još izvođenja sa rundama, pa rang predavanja ima smisla (Shift+L). */
+  imaRangPredavanja?: boolean;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

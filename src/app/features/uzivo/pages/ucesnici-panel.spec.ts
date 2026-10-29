@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { naZadatku } from '../data-access/izvodjenje-podaci.testing';
 import { NastavnickiZadatak, UcesnikStanje } from '../data-access/uzivo.models';
-import { UcesniciPanelComponent } from './ucesnici-panel.component';
+import { UcesniciPanelComponent, redosledOdgovora } from './ucesnici-panel.component';
 
 describe('UcesniciPanelComponent', () => {
   const ucesnici: UcesnikStanje[] = [
@@ -55,5 +55,33 @@ describe('UcesniciPanelComponent', () => {
     }
     const f2 = prikazi(naZadatku('CEKA').zadatak!, [{ id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: false }]);
     expect(redovi(f2)[0]).not.toContain('nije odgovorio');
+  });
+
+  it('ovo pitanje: odgovorili po brzini (redni broj, vreme, ✓/✗, kratak odgovor), ostali ispod redom prijave', () => {
+    const lista: UcesnikStanje[] = [
+      { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: false },
+      { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: true, tacno: false, vremeMs: 5200, odgovor: 'B' },
+      { id: 3, ime: 'Ceca', poeni: 0, povezan: true, odgovorio: true, tacno: true, vremeMs: 2100, odgovor: 'A, C' },
+      { id: 4, ime: 'Dara', poeni: 0, povezan: false, odgovorio: true, tacno: null, vremeMs: 3000, odgovor: 'zelena', odgovorSakriven: true },
+    ];
+    expect(redosledOdgovora(lista).map(r => [r.u.ime, r.rb])).toEqual([['Ceca', 1], ['Dara', 2], ['Bojan', 3], ['Ana', null]]);
+    const f = prikazi(null, lista);
+    const [ceca, dara, bojan, ana] = redovi(f);
+    expect(ceca).toContain('1.');
+    expect(ceca).toContain('A, C');
+    expect(ceca).toContain('2,1 s');
+    expect(dara).toContain('(sakriveno) zelena');
+    expect(bojan).toContain('5,2 s');
+    expect(ana).not.toMatch(/\d,\d s/);
+    const ikone = Array.from((f.nativeElement as HTMLElement).querySelectorAll('li')).map(li => li.querySelector('mat-icon[aria-label]')?.getAttribute('aria-label') ?? null);
+    expect(ikone.slice(0, 3)).toEqual(['tačno', 'odgovorio', 'netačno']);
+  });
+
+  it('stari backend bez vremena: odgovorili ostaju redom prijave', () => {
+    const lista: UcesnikStanje[] = [
+      { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: true },
+      { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: true },
+    ];
+    expect(redosledOdgovora(lista).map(r => r.u.ime)).toEqual(['Ana', 'Bojan']);
   });
 });

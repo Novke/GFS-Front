@@ -68,10 +68,11 @@ describe('dozvoljeneKomande', () => {
     expect(d.has('REZULTATI')).toBe(true);
   });
 
-  it('rang-lista samo uz takmičenje (ili da se sakrije)', () => {
-    expect(dozvoljeneKomande(stanje()).has('RANG_LISTA')).toBe(false);
-    expect(dozvoljeneKomande(stanje({ takmicenje: true })).has('RANG_LISTA')).toBe(true);
-    expect(dozvoljeneKomande(stanje({ rangListaPrikazana: true })).has('RANG_LISTA')).toBe(true);
+  it('rang izvođenja uvek; rang predavanja kad predavanje ima još izvođenja (ili da se sakrije)', () => {
+    expect(dozvoljeneKomande(stanje()).has('RANG_LISTA')).toBe(true);
+    expect(dozvoljeneKomande(stanje()).has('RANG_PREDAVANJA')).toBe(false);
+    expect(dozvoljeneKomande(stanje({ imaRangPredavanja: true })).has('RANG_PREDAVANJA')).toBe(true);
+    expect(dozvoljeneKomande(stanje({ rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE' })).has('RANG_PREDAVANJA')).toBe(true);
   });
 });
 
