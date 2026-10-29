@@ -34,11 +34,12 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
     .uz-rt-tacnih { color: var(--ok); font-weight: 700; }
     .uz-rt-netacnih { color: var(--danger); }
     .uz-rt-pilula { display: inline-block; min-width: 3.4em; padding: 0 .4em; border-radius: 1em; font-weight: 700; }
-    .uz-rt-pilula { --b: var(--muted); background: color-mix(in srgb, var(--b) 18%, var(--surface)); color: var(--b); }
-    .uz-rt-pilula[data-nivo='1'] { --b: var(--tacnost-1); }
-    .uz-rt-pilula[data-nivo='2'] { --b: var(--tacnost-2); }
-    .uz-rt-pilula[data-nivo='3'] { --b: var(--tacnost-3); }
-    .uz-rt-pilula[data-nivo='4'] { --b: var(--tacnost-4); }
+    /* tačnost iz postojećih tokena (bez novih globalnih: budžet početnog paketa): crveno, narandžasto, žuto, zeleno */
+    .uz-rt-pilula { --b: var(--muted); background: color-mix(in srgb, var(--b) 14%, var(--surface)); color: var(--b); }
+    .uz-rt-pilula[data-nivo='1'] { --b: var(--danger); }
+    .uz-rt-pilula[data-nivo='2'] { --b: color-mix(in srgb, var(--danger) 50%, var(--warn)); }
+    .uz-rt-pilula[data-nivo='3'] { --b: var(--warn); }
+    .uz-rt-pilula[data-nivo='4'] { --b: var(--ok); }
     .uz-rt-vreme { color: var(--ink-2); }
     .uz-rt-zvezde { font-weight: 700; }
     .uz-rt-zvezde-znak { color: var(--star); }

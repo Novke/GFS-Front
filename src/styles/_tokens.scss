@@ -44,12 +44,6 @@
   --snack-ink: #ffffff;
   --snack-link: var(--accent);
   --star: #e89a1c;
-  // Tačnost u rangu (crveno < 40 %, narandžasto < 60 %, žuto < 80 %, zeleno): boja teksta pilule; pozadinu komponenta
-  // meša iz nje (`color-mix`, 18 % sa --surface). Samo četiri tokena: globalni stilovi ulaze u budžet početnog paketa.
-  --tacnost-1: #8f1a10;
-  --tacnost-2: #853800;
-  --tacnost-3: #5e4800;
-  --tacnost-4: #135437;
   --shadow: 0 1px 2px rgba(18, 26, 42, .06);
   // Milimetarski papir (≤ 4.5 % opacity); samo slike, veličina ćelije je --pattern-size.
   --pattern:
@@ -93,10 +87,6 @@
   --snack-ink: #0c1320;
   --snack-link: #1b4386;
   --star: #f2b544;
-  --tacnost-1: #ffb8b0;
-  --tacnost-2: #ffc792;
-  --tacnost-3: #f1dc7c;
-  --tacnost-4: #86ddb0;
   --shadow: none;
   --pattern:
     linear-gradient(rgba(140, 170, 230, .035) 1px, transparent 1px),

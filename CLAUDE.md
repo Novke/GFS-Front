@@ -1109,8 +1109,9 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
 - **API:** `core/api/rang.api.ts` (`RangApi`: `izvodjenje`, `predavanje`, `student`, `grupa`; `prikazVremena` = "3,2 s"), in `core/api` because
   uživo, predavanja, studenti and grupe use it; `nivoTacnosti` (1 red < 40 %, 2 orange < 60 %, 3 yellow < 80 %, 4 green) and `kratakIndeks` (`GD5`,
   drops an old `/YYYY`). Table: `shared/ui/rang-tacnosti-tabela.ts` (`RangTacnostiTabela`: `# | Indeks | Ime | ★ | ✓ | ⏱` plus optional columns
-  `poeni`/`izvodjenja` ("Prezentacije")/`casova`; the Indeks column only when some row has one; accuracy is a pill coloured by the tokens
-  `--tacnost-1..4` (text colour, day and night in `_tokens.scss`; the background is `color-mix` 18 % with `--surface`) with "2/3"; the ★, ✓ and ⏱ headers are sort buttons (`aria-sort`; ★ = server order,
+  `poeni`/`izvodjenja` ("Prezentacije")/`casova`; the Indeks column only when some row has one; accuracy is a pill coloured from existing tokens
+  (`--danger`, `--danger`/`--warn` mix, `--warn`, `--ok`; background `color-mix` 14 % with `--surface`; no new global token: the initial-bundle
+  budget in `e2e/lenji-editor.spec.ts` has almost no headroom and every token is emitted four times) with "2/3"; the ★, ✓ and ⏱ headers are sort buttons (`aria-sort`; ★ = server order,
   ✓ desc, ⏱ asc first, a second click flips; equal values keep server order, rows without a place stay last, the place never changes).
 - **Console:** the card "Učesnici i rang" (`pages/rang-konzola.component.ts`) has tabs "Ovo pitanje" (`UcesniciPanelComponent`: who answered the
   current round, fastest first (`redosledOdgovora`), with time, ✓/✗ and the short answer; the rest below in join order), "Prezentacija" (`GET
