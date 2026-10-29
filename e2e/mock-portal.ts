@@ -1,4 +1,5 @@
 import type { OtvorenoZaGrupu, StatistikaTipa } from '../src/app/features/banka/data-access/banka.models';
+import type { StavkaZvona, Zvono } from '../src/app/features/nalog/data-access/obavestenja.models';
 import type {
   MojZadatak, OcenaStudenta, PoljeZadatka, PredmetStudenta, PregledPrezentacije, PrezentacijaStudenta, PrisustvoStudenta,
   TemaVezbanja, ZadatakVezbanja,
@@ -125,13 +126,33 @@ function ocena(predmet: number): OcenaStudenta {
   };
 }
 
+/** Javni VAPID ključ (65 bajtova, nekompresovana P-256 tačka, base64url): izmišljen, browser ga ovde ne koristi. */
+const JAVNI_KLJUC = 'BB' + 'A'.repeat(85);
+
+/** Stavke zvona, od najnovije: obavezna (otkazan čas) i dve koje student može da isključi. */
+const ZVONO: StavkaZvona[] = [
+  { id: 3, vrsta: 'OTKAZAN_CAS', naslov: 'Čas je otkazan', tekst: 'Osnove računarstva, pet 30.10. u 10:15.', putanja: 'nalog',
+    kreirano: '2026-10-29T17:05:00' },
+  { id: 2, vrsta: 'OCENE', naslov: 'Ocene su objavljene', tekst: 'Osnove računarstva: pogledaj predlog ocene.',
+    putanja: `nalog/predmet/${PREDMET}`, kreirano: '2026-10-28T12:00:00' },
+  { id: 1, vrsta: 'POSLE_CASA', naslov: 'Posle časa', tekst: 'Prezentacija i tvoji zadaci su u predmetu.',
+    putanja: `nalog/predmet/${PREDMET}`, kreirano: '2026-10-27T13:40:00' },
+];
+
 export class MockPortal {
   /** Učinak studenta na tipu {@link TIP} (prva provera svakog izvučenog zadatka). */
   readonly ucinak = { provereno: 1, tacno: 1 };
   /** Izvučeni zadaci u ovom testu (id -> tip); pokušaj van ove mape je tuđ ili nepostojeći (404). */
   readonly pokusaji = new Map<number, { tipId: number; nivo: number | null; provereno: boolean; resenje: boolean; zadatak: ZadatakVezbanja }>();
-  /** Podešavanja naloga (tab Ja); PUT ih menja. */
-  readonly podesavanja = { mejlOtkazanCas: true };
+  /** Podešavanja naloga (tab Ja); PUT ih menja (ceo objekat, kao server). */
+  readonly podesavanja: Record<string, boolean> = {
+    mejlOtkazanCas: true, pushPodsetnik: true, pushOtkazanCas: true, pushOcene: true, pushPosleCasa: true, zvonoOcene: true,
+    zvonoPosleCasa: true,
+  };
+  /** Zvono studenta (spec „Aplikacija i obaveštenja“ 6.8): stavke od najnovije; `otvoreno` gasi tačku. */
+  readonly zvono: Zvono = { novo: true, stavke: ZVONO };
+  /** Push na ovom uređaju: server zna pretplatu samo posle `PUT push`. */
+  pushPretplacen = false;
   /** Stanje panela „Za vežbanje“ po čvoru banke (nastavnik); bez unosa: podrazumevano za predmet čvora. */
   readonly otvoreno = new Map<number, OtvorenoZaGrupu[]>();
   private sledeci = 500;
@@ -139,7 +160,7 @@ export class MockPortal {
   constructor(private readonly studentPrijavljen: () => boolean, private readonly cvorPredavanja: (id: number) => boolean) {}
 
   /** Studentske rute (`public/nalog/...`). */
-  studentskeRute(get: Get, post: Get, put: Get): void {
+  studentskeRute(get: Get, post: Get, put: Get, del: Get): void {
     const student = (h: (z: { telo: unknown; query: URLSearchParams }, p: Record<string, string>) => Odgovor) =>
       (z: { telo: unknown; query: URLSearchParams }, p: Record<string, string>): Odgovor =>
         this.studentPrijavljen() ? h(z, p) : greska(401, 'Potrebna je prijava.');
@@ -162,13 +183,34 @@ export class MockPortal {
 
     get('public/nalog/podesavanja', student(() => ok({ ...this.podesavanja })));
     put('public/nalog/podesavanja', student(z => {
-      const v = (z.telo as { mejlOtkazanCas?: unknown } | null)?.mejlOtkazanCas;
-      if (typeof v !== 'boolean') {
+      const telo = (z.telo ?? {}) as Record<string, unknown>;
+      if (typeof telo['mejlOtkazanCas'] !== 'boolean') {
         return greska(400, 'Izaberi da li želiš mejl.');
       }
-      this.podesavanja.mejlOtkazanCas = v;
+      for (const k of Object.keys(this.podesavanja)) {
+        if (typeof telo[k] === 'boolean') {
+          this.podesavanja[k] = telo[k];
+        }
+      }
       return ok({ ...this.podesavanja });
     }));
+
+    // zvono i push (spec „Aplikacija i obaveštenja“ 6.5 i 6.8)
+    get('public/nalog/obavestenja', student(() => ok({ novo: this.zvono.novo, stavke: this.zvono.stavke })));
+    post('public/nalog/obavestenja/otvoreno', student(() => {
+      this.zvono.novo = false;
+      return { status: 204 };
+    }));
+    get('public/nalog/push', student(() => ok({ javniKljuc: JAVNI_KLJUC, pretplacen: this.pushPretplacen })));
+    put('public/nalog/push', student(() => {
+      this.pushPretplacen = true;
+      return { status: 204 };
+    }));
+    del('public/nalog/push', student(() => {
+      this.pushPretplacen = false;
+      return { status: 204 };
+    }));
+    post('public/nalog/push/proba', student(() => (this.pushPretplacen ? { status: 204 } : greska(409, 'Push nije uključen na ovom uređaju.'))));
 
     post('public/nalog/vezbanje', student(z => {
       const telo = z.telo as { tipId?: unknown; nivo?: unknown; novi?: unknown } | null;

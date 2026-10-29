@@ -14,6 +14,7 @@ import {
 } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
+import { SkenerQr } from '../ui/skener-qr.component';
 
 type Faza = 'ucitavanje' | 'naCasu' | 'nijeNaCasu' | 'poruka';
 
@@ -50,8 +51,9 @@ const POKUSAJA_429 = 5;
  * Tab **Čas** naloga (spec studentskog dela 4.2 i 12.1): samo čas uživo, čekiranje i praćenje (`/nalog/cas/:token` iz QR-a i
  * `/nalog/cas`, obe u ljusci tabova `NalogTabovi`; javna ruta u `PublicLayout`-u). Zove samo `api/public/nalog/cas*` (`CasApi`).
  * "Naredni časovi" su na tabu Početna. Nečekiran student vidi "Nisi na času · Skeniraj QR sa table.", a dok je današnje
- * predavanje njegove grupe u toku (`CasStanje.uToku`) "Predavanje je u toku" sa predmetom i temom. Mesto
- * `[data-skener-mesto]` je za skener QR-a kamerom (zaseban posao).
+ * predavanje njegove grupe u toku (`CasStanje.uToku`) "Predavanje je u toku" sa predmetom i temom. U mestu
+ * `[data-skener-mesto]` je skener QR-a unutar aplikacije (`SkenerQr`, spec „Aplikacija i obaveštenja“ 4.5; i ispod poruke
+ * greške). Ponuda za instalaciju je na Početnoj i na tabu Ja.
  *
  * - Sa tokenom: adresa se odmah menja u `/nalog/cas` (token ne ostaje u istoriji), pa `POST skeniraj`. Prijavljen student
  *   dobija stanje časa; neprijavljen ključ čekanja, koji ide u `sessionStorage`, a stranica na `/nalog?nazad=nalog/cas`.
@@ -69,7 +71,7 @@ const POKUSAJA_429 = 5;
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir, RouterLink],
+  imports: [MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
@@ -110,9 +112,9 @@ const POKUSAJA_429 = 5;
           } @else {
             <h2>Nisi na času</h2>
             <p class="poruka info" role="status" data-nije-na-casu>Skeniraj QR sa table.</p>
-            <p class="napomena">Kad nastavnik pokaže QR za čekiranje, skeniraj ga kamerom telefona.</p>
+            <p class="napomena">Kad nastavnik pokaže QR za čekiranje, skeniraj ga ovde ili kamerom telefona.</p>
           }
-          <div class="skener" data-skener-mesto></div>
+          <div class="skener" data-skener-mesto><app-skener-qr /></div>
         }
         @case ('poruka') {
           <h2>Čekiranje</h2>
@@ -120,6 +122,7 @@ const POKUSAJA_429 = 5;
           @if (ponovo()) {
             <button type="button" mat-flat-button class="dugme" (click)="pokusajPonovo()">Pokušaj ponovo</button>
           }
+          <div class="skener" data-skener-mesto><app-skener-qr /></div>
         }
       }
     </app-nalog-okvir>
@@ -134,7 +137,6 @@ const POKUSAJA_429 = 5;
     .poruka.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
     .poruka.info { background: var(--surface-2, transparent); border-color: var(--line); color: var(--ink); }
     .poruka.upozorenje { background: var(--warn-soft); border-color: var(--warn); color: var(--ink); }
-    .skener:empty { display: none; }
     .skener { margin-top: 16px; }
   `,
 })

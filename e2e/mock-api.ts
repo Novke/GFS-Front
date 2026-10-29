@@ -1609,7 +1609,7 @@ export class MockApi {
       return ok(casStanje());
     });
     get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
-    this.portal.studentskeRute(get, post, put);
+    this.portal.studentskeRute(get, post, put, del);
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));
