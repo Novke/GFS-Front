@@ -7,6 +7,7 @@ import type {
   BankaPretragaStavka, GrupaCmd, IskljucenaTemaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd,
 } from '../src/app/features/banka/data-access/banka.models';
 import type { LtiRegistracijaCmd, LtiRegistracijaInfo, LtiVrednostiZaMoodle } from '../src/app/features/podesavanja/data-access/lti.models';
+import { poVezbama, type VrstaPrezentacije } from '../src/app/core/api/redosled-prezentacija';
 import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
@@ -713,7 +714,20 @@ export class MockApi {
   }
 
   private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
-    return { ...x, slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
+    return { ...x, ...this.redosledPrezentacije(x), slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
+  }
+
+  /** Kao server (V19): `vezba` se čuva, vrsta i broj zadataka se računaju iz slajdova, puštanje iz izvođenja. */
+  private redosledPrezentacije(x: UzivoPrezentacija) {
+    const pitanja = x.slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length;
+    const zadaci = x.slajdovi.filter(s => s.tip === 'ZADATAK').length;
+    const vrsta: VrstaPrezentacije = zadaci > 0 ? 'ZADACI' : pitanja > 0 ? 'PITANJA' : 'GRADIVO';
+    const pocetci = this.izvodjenjaPredavanja.filter(i => i.prezentacija.id === x.id).map(i => i.pocetak).sort();
+    return {
+      vezba: (x['vezba'] as number | null | undefined) ?? null, vrsta, brojZadataka: zadaci,
+      kreirano: (x['kreirano'] as string | undefined) ?? (x['izmenjeno'] as string | undefined) ?? '2026-10-01T10:00:00',
+      poslednjePustanje: (x['poslednjePustanje'] as string | null | undefined) ?? pocetci.at(-1) ?? null,
+    };
   }
 
   private kontrolnaTabla() {
@@ -1164,7 +1178,7 @@ export class MockApi {
       const id = this.sledeciId++;
       const novo: IzvodjenjeNaPredavanju = {
         id, kod: String(100000 + id), prezentacija: { id: x.id, naziv: x.naziv, predmetId: x.predmet.id }, status: 'AKTIVNO', cuvanje: cmd.cuvanje,
-        grupa: null, predavanje: pr ? { id: pr.id, rb: pr.rb, datum: pr.datum, tema: pr.tema } : null,
+        grupa: pr ? this.grupa(pr.grupaId) : null, predavanje: pr ? { id: pr.id, rb: pr.rb, datum: pr.datum, tema: pr.tema } : null,
         pocetak: lokalnoVreme(new Date()), kraj: null, brojUcesnika: 0, brojPitanja: 0, boduje: false,
       };
       this.izvodjenjaPredavanja.push(novo);
@@ -1174,14 +1188,61 @@ export class MockApi {
     const info = (x: UzivoPrezentacija) => {
       const { slajdovi, ...ostalo } = x;
       // kao server: slajdovi sa rundama (PITANJE i ZADATAK)
-      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length };
+      return {
+        ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length,
+        ...this.redosledPrezentacije(x),
+      };
     };
+    // GET prezentacije/izbor: redosled kao server (RedosledPrezentacija.REDOSLED), predlog za grupu (zaGrupu) ili posle date (posle)
+    get('prezentacije/izbor', z => {
+      const predmetId = Number(z.query.get('predmetId'));
+      const grupaId = z.query.get('grupaId') === null ? null : Number(z.query.get('grupaId'));
+      const posle = z.query.get('posle') === null ? null : Number(z.query.get('posle'));
+      if (!predmetId) {
+        return greska(400, 'Predmet je obavezan.');
+      }
+      const pusteno = (id: number) => this.izvodjenjaPredavanja
+        .filter(i => i.prezentacija.id === id && grupaId !== null && (i.grupa as { id?: number } | null)?.id === grupaId)
+        .map(i => i.pocetak).sort().at(-1) ?? null;
+      const uToku = (id: number) => d.prezentacije.find(x => x.id === id)?.['aktivnoIzvodjenjeId'] != null;
+      const stavke = poVezbama(d.prezentacije.filter(x => x.predmet.id === predmetId).map(info))
+        .map(p => ({ prezentacija: p, pustenoGrupi: pusteno(p.id) }));
+      let predlog: number[];
+      if (grupaId !== null) {
+        const najdalja = Math.max(-1, ...stavke.filter(s => s.pustenoGrupi && s.prezentacija.vezba !== null).map(s => s.prezentacija.vezba!));
+        const kandidati = stavke.filter(s => !s.pustenoGrupi && s.prezentacija.vezba !== null && !uToku(s.prezentacija.id));
+        predlog = [
+          ...kandidati.filter(s => s.prezentacija.vrsta === 'ZADACI' && s.prezentacija.vezba! < najdalja),
+          ...kandidati.filter(s => s.prezentacija.vezba! >= najdalja),
+        ].map(s => s.prezentacija.id).slice(0, 3);
+      } else {
+        const i = stavke.findIndex(s => s.prezentacija.id === posle);
+        predlog = i < 0 || stavke[i].prezentacija.vezba === null ? [] : stavke.slice(i + 1)
+          .filter(s => s.prezentacija.vezba !== null && !uToku(s.prezentacija.id)).map(s => s.prezentacija.id).slice(0, 3);
+      }
+      return ok({ stavke, predlog });
+    });
+    patch('prezentacije/:id/vezba', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const v = (z.telo as { vezba?: unknown }).vezba;
+      if (v !== null && (typeof v !== 'number' || !Number.isInteger(v))) {
+        return greska(400, 'Neispravan format podataka.');
+      }
+      if (v !== null && (v < 0 || v > 99)) {
+        return greska(400, 'Broj vežbe mora biti od 0 do 99.');
+      }
+      x['vezba'] = v;
+      return ok(info(x));
+    });
     get('prezentacije', z => {
       const predmetId = z.query.get('predmetId');
       return ok(d.prezentacije.filter(x => predmetId === null || x.predmet.id === Number(predmetId)).map(info));
     });
     post('prezentacije', z => {
-      const cmd = z.telo as { predmetId: number; naziv: string; opis?: string | null; tema?: string | null };
+      const cmd = z.telo as { predmetId: number; naziv: string; opis?: string | null; tema?: string | null; vezba?: number | null };
       const predmet = this.predmet(cmd.predmetId);
       if (!predmet) {
         return greska(404, 'Predmet ne postoji.');
@@ -1190,6 +1251,7 @@ export class MockApi {
         id: this.sledeciId++, naziv: cmd.naziv, opis: cmd.opis ?? null, predmet: { id: predmet.id, naziv: predmet.naziv },
         brojSlajdova: 0, brojPitanja: 0, izmenjeno: lokalnoVreme(new Date()), tema: cmd.tema ?? 'NACRT', takmicenje: false,
         telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false, brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [],
+        vezba: cmd.vezba ?? null, kreirano: lokalnoVreme(new Date()),
       };
       d.prezentacije.push(x);
       return { status: 201, telo: x };
@@ -1257,7 +1319,9 @@ export class MockApi {
       if (jeOdgovor(x)) {
         return x;
       }
-      Object.assign(x, z.telo);
+      const telo = { ...(z.telo as Record<string, unknown>) };
+      delete telo['vezba']; // kao server: PUT ne menja broj vežbe
+      Object.assign(x, telo);
       return ok(this.prezentacijaOdgovor(x));
     });
     put('slajdovi/:id', (z, p) => {

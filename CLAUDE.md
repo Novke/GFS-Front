@@ -328,8 +328,9 @@ in `Novke/GFS-deploy`). The server is the only source of truth: every change arr
 over STOMP; teacher commands are REST.
 
 - **Presentations on a lecture (`features/predavanja`, not `features/uzivo`).** The live lecture page (`/predavanja/:id` until finished) has
-  "Pokreni prezentaciju": `ui/pokreni-prezentaciju.dialog.ts` lists the subject's presentations (`GET prezentacije?predmetId`, newest edited first,
-  filter field above 6) and starts a run bound to the lecture (`POST prezentacije/{id}/izvodjenja`, `cuvanje: true`, `predavanjeId`, also for a
+  "Pokreni prezentaciju": `ui/pokreni-prezentaciju.dialog.ts` shows `GET prezentacije/izbor?predmetId&grupaId` through the shared
+  `shared/ui/izbor-prezentacije` ("Sledeće za <grupa>" on top, then every presentation grouped by vežba, a vrsta filter, search above 6;
+  see "Order of presentations" below) and starts a run bound to the lecture (`POST prezentacije/{id}/izvodjenja`, `cuvanje: true`, `predavanjeId`, also for a
   presentation without questions) and opens its console in a **new tab**, so recording continues. The tab is opened **synchronously from the click** as
   `about:blank` and gets its address when the server answers (popup blockers refuse `window.open` after an async call); on a server error it is closed,
   and when even the blank tab is blocked the run still starts and the page tells the teacher to use "Nastavi". A presentation with a run in progress for this
@@ -338,6 +339,26 @@ over STOMP; teacher commands are REST.
   "Nastavi" (console) or "Pregled", reloads when the browser tab becomes visible again. The API client and DTOs are in `core/api/prezentacije-predavanja.api.ts`
   (`features/predavanja` must not import `features/uzivo/data-access`); it does not import `features/uzivo/uzivo-putanje.ts` either (a shared chunk would grow the student closure past its e2e budget): `ui/izvodjenje-putanje.ts` holds the two paths, pinned equal to `UzivoPutanje` by `izvodjenje-putanje.spec.ts`. The route
   `prezentacije/:id?predavanje=ID` (editor, "Pokreni" without dialog) still exists and is unchanged.
+
+- **Order of presentations (branch `feature/redosled-prezentacija`, backend V19).** Every presentation has an optional `vezba` (0-99, `null` =
+  "Bez broja vežbe"; a multi-vežba deck takes the first number; the "Nova prezentacija" dialog proposes it from the name, `vezbaIzNaziva`,
+  until the field is touched; the editor's Podešavanja saves it with `PATCH prezentacije/{id}/vezba`, `EditorStore.postaviVezbu`, optimistic
+  with revert) and a server-derived `vrsta` (`GRADIVO` only slides, `PITANJA` questions without Zadatak, `ZADACI` at least one Zadatak slide;
+  `brojZadataka`, `kreirano`, `poslednjePustanje` next to it). Pure helpers in `core/api/redosled-prezentacija.ts` (labels, `poVezbama`,
+  `grupisiPoVezbi`, `PORUKA_VEZBE` = the server text). The list page (`prezentacije`) groups by vežba (`?sort=` naziv | kreirano | izmenjeno |
+  pustanje, default by vežba), filters `?predmet`, `?vrsta`, `?q` (URL is the source of truth, `upitIzUrla`, `sortirajListu`). The suggestion
+  (`IzborPrezentacija.predlog`, at most 3 ids) comes only from the server (`GET prezentacije/izbor`: with `grupaId` owed zadaci of earlier
+  vežbe first, then everything from the furthest vežba the group has run; without a group `posle=<id>` = the next ones after that deck);
+  the front never recomputes it. **Console end screen:** a finished run shows `pages/kraj-izvodjenja.component` instead of jumping to the
+  overview: summary, the suggestion, "Vidi sve prezentacije" (`SvePrezentacijeDialog`, the same `IzborPrezentacije` in a dialog, the page
+  does not change), "Nazad na predavanje" (`window.close()`, the console was opened in a new tab from the lecture; if the browser refuses,
+  it navigates to `/predavanja/:id`) or "Nazad na prezentacije". "Pokreni" starts the next run **in the same tab** (`komandaNastavka`: same
+  lecture, or same group and `cuvanje`; never `boduje`, a scored run is started from the lecture) and announces it on the `BroadcastChannel`
+  `gfs-uzivo-izvodjenje` (`data-access/novo-izvodjenje.ts`), so an open `publika` window of the old run navigates to the new one itself.
+  The end screen follows the app's day/night mode: the console sets `core/layout/rezim-projektora` `RezimProjektora` while it shows it and
+  `ProjectorLayout` then drops `.rezim-dan` (like `pratiRezim` of the remote); the live console stays day. E2E `e2e/uzivo-kraj.spec.ts`
+  (suggestion, dialog, same-tab start with the audience window following, closing the tab, axe day and night; the run mock gets its
+  lecture through `MockIzvodjenje.naPredavanju`), list and dialog in `prezentacije-lista` / `predavanje-prezentacija.spec.ts`.
 
 - **Formulas in question and option text (phase 5a).** Syntax `$...$` by pandoc's `tex_math_dollars` (`ui/tekst-formule.ts`):
   after the opening `$` a character that is neither a space nor `$`; no newline and no unescaped `$` inside; the last character
