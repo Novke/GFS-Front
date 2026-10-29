@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { IzvodjenjeNaPredavanju, PrezentacijePredavanjaApi } from '../../../core/api/prezentacije-predavanja.api';
+import { RangApi, RangPredavanja, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predavanja.store';
 import { PrezentacijeNaPredavanju } from './prezentacije-na-predavanju';
 
@@ -13,13 +14,20 @@ const izv = (id: number, status: 'AKTIVNO' | 'ZAVRSENO', naziv = 'Konverzije'): 
   brojUcesnika: 12, brojPitanja: 3, cuvanje: true,
 });
 
-function napravi(lista: IzvodjenjeNaPredavanju[], zavrseno: boolean): { f: ComponentFixture<PrezentacijeNaPredavanju>; izvodjenja: ReturnType<typeof vi.fn> } {
+const red = (mesto: number, ime: string, studentId: number | null, izvodjenja: number | null): RangTacnostiStavka => ({
+  mesto, ucesnikId: null, studentId, ime, gost: studentId === null, tacnih: 2, dugovanih: 3, odgovorenih: 3, procenat: 67,
+  prosekMs: 4100, zvezdice: 3, poeni: null, izvodjenja, casova: null,
+});
+
+function napravi(lista: IzvodjenjeNaPredavanju[], zavrseno: boolean, rang?: RangPredavanja): { f: ComponentFixture<PrezentacijeNaPredavanju>; izvodjenja: ReturnType<typeof vi.fn> } {
   const izvodjenja = vi.fn(() => of(lista));
+  const predavanje = vi.fn(() => of(rang ?? { predavanjeId: 40, izvodjenja: [], rang: [] }));
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
       PrezentacijePredavanjaStore,
       { provide: PrezentacijePredavanjaApi, useValue: { izvodjenja } },
+      { provide: RangApi, useValue: { predavanje } },
       { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
     ],
   });
@@ -34,6 +42,31 @@ function napravi(lista: IzvodjenjeNaPredavanju[], zavrseno: boolean): { f: Compo
 const el = (f: ComponentFixture<unknown>) => f.nativeElement as HTMLElement;
 
 describe('PrezentacijeNaPredavanju', () => {
+  it('rang: jedno izvođenje sa pitanjima = jedan izveštaj, bez kolone izvođenja', () => {
+    const { f } = napravi([izv(1, 'ZAVRSENO')], true, { predavanjeId: 40, izvodjenja: [izv(1, 'ZAVRSENO')], rang: [red(1, 'Ana', 7, 1)] });
+    const rang = el(f).querySelector('[data-rang-predavanja]')!;
+    expect(rang.querySelector('h3')?.textContent).toBe('Rang tačnosti');
+    expect(rang.querySelector('thead')?.textContent).not.toContain('Izvođenja');
+    expect(rang.querySelector('a')?.getAttribute('href')).toBe('/studenti/7');
+  });
+
+  it('rang: više izvođenja = zbir predavanja sa kolonom izvođenja; u beleženju bez linkova', () => {
+    const dva = [izv(2, 'AKTIVNO', 'Druga'), izv(1, 'ZAVRSENO')];
+    const { f } = napravi(dva, false, { predavanjeId: 40, izvodjenja: dva, rang: [red(1, 'Ana', 7, 2), red(2, 'Mile', null, 1)] });
+    const rang = el(f).querySelector('[data-rang-predavanja]')!;
+    expect(rang.querySelector('h3')?.textContent).toBe('Rang tačnosti predavanja');
+    expect(rang.textContent).toContain('Sve prezentacije ovog predavanja zajedno (2).');
+    expect(rang.textContent).toContain('Osvežava se dok prezentacija traje.');
+    expect(rang.querySelector('thead')?.textContent).toContain('Izvođenja');
+    expect(rang.querySelector('a')).toBeNull();
+    expect(rang.textContent).toContain('gost');
+  });
+
+  it('rang: predavanje bez izvođenja sa pitanjima nema odeljak ranga', () => {
+    const { f } = napravi([izv(1, 'ZAVRSENO')], true, { predavanjeId: 40, izvodjenja: [], rang: [] });
+    expect(el(f).querySelector('[data-rang-predavanja]')).toBeNull();
+  });
+
   it('predavanje u toku: u toku ima "Nastavi" u novoj kartici, završeno "Pregled"', () => {
     const { f } = napravi([izv(2, 'AKTIVNO', 'Druga'), izv(1, 'ZAVRSENO')], false);
     const nastavi = el(f).querySelector<HTMLAnchorElement>('[data-izvodjenje="2"] [data-nastavi]')!;

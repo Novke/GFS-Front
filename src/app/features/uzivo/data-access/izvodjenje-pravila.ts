@@ -58,7 +58,9 @@ export function dozvoljeneKomande(s: NastavnickoStanje | null): ReadonlySet<TipK
   }
   // broj različitih važi za sledeće otvaranje (i PONOVI), pa samo pre otvaranja
   if (zadatak && faza === 'CEKA') d.add('BROJ_VARIJANTI');
-  if (s.takmicenje || s.rangListaPrikazana) d.add('RANG_LISTA');
+  // rang tačnosti izvođenja uvek (u takmičenju je to rang po poenima); rang predavanja kad predavanje ima još izvođenja
+  d.add('RANG_LISTA');
+  if (s.imaRangPredavanja || s.rangPrikaz === 'PREDAVANJE') d.add('RANG_PREDAVANJA');
   if (runde && faza === 'OTVORENO' && s.runda) {
     d.add('TAJMER');
     if (s.runda.rokMs !== null || s.runda.preostaloMs !== null) {

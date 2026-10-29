@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { NastavnickiZadatak, UcesnikStanje } from '../data-access/uzivo.models';
 import { grupisiCifre } from '../ui/format';
+import { prikazVremena } from '../../../core/api/rang.api';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /** Ime učesnika: 1-40 znakova posle `trim` (kao server, spec 2.8). */
@@ -54,9 +55,29 @@ export class PreimenujDialog {
 interface VarijantaUcesnika { naziv: string; papir: boolean; }
 
 /**
+ * Učesnik u spisku "Ovo pitanje": `rb` je redni broj odgovora u trenutnoj rundi (1 = najbrži), `null` za one koji nisu
+ * odgovorili.
+ */
+interface UcesnikRed { u: UcesnikStanje; rb: number | null; }
+
+/**
+ * Redosled za "Ovo pitanje" (rang tačnosti, spec 5): ko je odgovorio na trenutnu rundu, po vremenu odgovora (najbrži
+ * prvi; stari backend bez `vremeMs` ostavlja redosled prijave), pa ostali redom prijave.
+ */
+export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed[] {
+  const odgovorili = ucesnici.filter(u => u.odgovorio)
+    .map((u, i) => ({ u, i }))
+    .sort((a, b) => (a.u.vremeMs ?? Number.MAX_SAFE_INTEGER) - (b.u.vremeMs ?? Number.MAX_SAFE_INTEGER) || a.i - b.i)
+    .map(({ u }, i) => ({ u, rb: i + 1 }));
+  return [...odgovorili, ...ucesnici.filter(u => !u.odgovorio).map(u => ({ u, rb: null }))];
+}
+
+/**
  * Spisak učesnika (spec 2.8, 6.4): ime, povezan (tačka i tekst), odgovorio na trenutnu rundu, poeni uz takmičenje;
- * preimenuj u dijalogu, izbaci uz potvrdu. Učesnici su u redosledu prijave. U Zadatak rundi uz ime još dodeljena
- * varijanta i ishod (tačno, netačno, nije odgovorio; na papiru bez ishoda), samo u konzoli (banka spec 4.2.5).
+ * preimenuj u dijalogu, izbaci uz potvrdu. Oni koji su odgovorili na trenutnu rundu su gore, po brzini, sa vremenom,
+ * ishodom (✓/✗ kad pitanje ima tačan odgovor) i kratkim odgovorom; ostali ispod, redom prijave (rang tačnosti, spec 5).
+ * U Zadatak rundi uz ime još dodeljena varijanta i ishod (tačno, netačno, nije odgovorio; na papiru bez ishoda), samo u
+ * konzoli (banka spec 4.2.5).
  */
 @Component({
   selector: 'app-ucesnici-panel',
@@ -72,15 +93,30 @@ interface VarijantaUcesnika { naziv: string; papir: boolean; }
     .uz-kon-ishod { flex: none; color: var(--muted); font-size: 13px; }
     .uz-kon-ishod--tacno { color: var(--ok); font-weight: 600; }
     .uz-kon-ishod--netacno { color: var(--danger); font-weight: 600; }
+    .uz-kon-rb { flex: none; min-width: 1.6em; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
+    .uz-kon-odgovor { display: block; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .uz-kon-odgovor--sakriven { color: var(--muted); font-style: italic; }
+    .uz-kon-vreme { flex: none; color: var(--muted); font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .uz-kon-ikona-tacno { flex: none; color: var(--ok); }
+    .uz-kon-ikona-netacno { flex: none; color: var(--danger); }
   `,
   template: `
     <p class="uz-kon-zbir">Povezano {{ povezanih() }} od {{ ucesnici().length }}</p>
     @if (ucesnici().length) {
       <ul class="uz-kon-ucesnici-lista">
-        @for (u of ucesnici(); track u.id) {
+        @for (r of redosled(); track r.u.id) {
+          @let u = r.u;
           <li class="uz-kon-ucesnik" [class.uz-kon-ucesnik--odsutan]="!u.povezan">
+            <span class="uz-kon-rb">{{ r.rb ? r.rb + '.' : '' }}</span>
             <span class="uz-kon-tacka" [class.uz-kon-tacka--da]="u.povezan" aria-hidden="true"></span>
-            <span class="uz-kon-ucesnik-ime">{{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}</span></span>
+            <span class="uz-kon-ucesnik-ime">
+              {{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}</span>
+              @if (u.odgovorio && u.odgovor) {
+                <span class="uz-kon-odgovor" [class.uz-kon-odgovor--sakriven]="u.odgovorSakriven" [title]="u.odgovor">
+                  {{ u.odgovorSakriven ? '(sakriveno) ' : '' }}{{ u.odgovor }}
+                </span>
+              }
+            </span>
             @if (varijantaOd(u); as v) {
               <span class="uz-kon-varijanta" [title]="'Varijanta ' + v.naziv">{{ v.naziv }}</span>
               @if (v.papir) {
@@ -90,7 +126,18 @@ interface VarijantaUcesnika { naziv: string; papir: boolean; }
                 <span class="uz-kon-ishod" [class.uz-kon-ishod--tacno]="u.tacno === true" [class.uz-kon-ishod--netacno]="u.tacno === false">{{ ishod }}</span>
               }
             }
-            @if (u.odgovorio) { <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" /> }
+            @if (u.odgovorio && u.vremeMs !== null && u.vremeMs !== undefined) { <span class="uz-kon-vreme">{{ vreme(u.vremeMs) }}</span> }
+            @if (u.odgovorio) {
+              @if (varijantaOd(u)) {
+                <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
+              } @else if (u.tacno === true) {
+                <mat-icon class="uz-kon-ikona-tacno" aria-label="tačno" svgIcon="check_circle" />
+              } @else if (u.tacno === false) {
+                <mat-icon class="uz-kon-ikona-netacno" aria-label="netačno" svgIcon="cancel" />
+              } @else {
+                <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
+              }
+            }
             @if (takmicenje()) { <span class="uz-kon-poeni">{{ poeni(u.poeni) }}</span> }
             <button mat-icon-button type="button" [attr.aria-label]="'Preimenuj ' + u.ime" (click)="preimenujDialog(u)">
               <mat-icon svgIcon="edit" />
@@ -116,6 +163,8 @@ export class UcesniciPanelComponent {
 
   private readonly dialog = inject(MatDialog);
   protected readonly poeni = grupisiCifre;
+  protected readonly vreme = prikazVremena;
+  protected readonly redosled = computed(() => redosledOdgovora(this.ucesnici()));
   protected readonly povezanih = computed(() => this.ucesnici().filter(u => u.povezan).length);
   protected readonly varijante = computed(() => {
     const z = this.zadatak();

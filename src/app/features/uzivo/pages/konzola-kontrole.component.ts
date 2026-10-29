@@ -77,7 +77,8 @@ export class KonzolaKontroleComponent {
           { tip: 'TACAN', oznaka: 'Tačan odgovor', taster: 'C', ikona: 'check_circle', ukljuceno: s.tacanPrikazan },
           // rešenje Zadatak runde (prekidač); na pitanju je uvek onemogućeno
           { tip: 'RESENJE', oznaka: 'Rešenje', taster: 'Shift+R', ikona: 'task_alt', ukljuceno: s.zadatak?.resenjePrikazano ?? false },
-          { tip: 'RANG_LISTA', oznaka: 'Rang-lista', taster: 'L', ikona: 'leaderboard', ukljuceno: s.rangListaPrikazana },
+          { tip: 'RANG_LISTA', oznaka: 'Rang-lista', taster: 'L', ikona: 'leaderboard', ukljuceno: s.rangListaPrikazana && s.rangPrikaz !== 'PREDAVANJE' },
+          { tip: 'RANG_PREDAVANJA', oznaka: 'Rang predavanja', taster: 'Shift+L', ikona: 'leaderboard', ukljuceno: s.rangListaPrikazana && s.rangPrikaz === 'PREDAVANJE' },
           { tip: 'PONOVI', oznaka: zadatak ? 'Ponovi zadatak' : 'Ponovi pitanje', taster: 'R', ikona: 'replay', ukljuceno: null },
         ],
       },

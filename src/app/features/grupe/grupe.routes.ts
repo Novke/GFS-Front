@@ -9,6 +9,7 @@ export const TABOVI_GRUPE = [
   { putanja: 'studenti', naslov: 'Studenti', title: 'Studenti grupe' },
   { putanja: 'prisustvo', naslov: 'Prisustvo', title: 'Prisustvo grupe' },
   { putanja: 'nastava', naslov: 'Nastava', title: 'Nastava grupe' },
+  { putanja: 'uzivo', naslov: 'Uživo', title: 'Uživo rezultati grupe' },
   { putanja: 'onboarding', naslov: 'Onboarding', title: 'Onboarding grupe' },
 ] as const;
 
@@ -17,6 +18,7 @@ const komponentaTaba: Record<(typeof TABOVI_GRUPE)[number]['putanja'], Route['lo
   studenti: () => import('./pages/grupa-studenti-tab').then(x => x.GrupaStudentiTab),
   prisustvo: () => import('./pages/grupa-prisustvo-tab').then(x => x.GrupaPrisustvoTab),
   nastava: () => import('./pages/grupa-nastava-tab').then(x => x.GrupaNastavaTab),
+  uzivo: () => import('./pages/grupa-uzivo-tab').then(x => x.GrupaUzivoTab),
   onboarding: () => import('./pages/grupa-onboarding-tab').then(x => x.GrupaOnboardingTab),
 };
 
