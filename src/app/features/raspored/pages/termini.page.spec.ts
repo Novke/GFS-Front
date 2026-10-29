@@ -8,10 +8,10 @@ import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationStore } from '../../../core/state/notification.store';
-import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import type { TerminInfo } from '../data-access/raspored.models';
 import { OtkazivanjeDialog } from '../ui/otkazivanje.dialog';
-import { TerminiPage } from './termini.page';
+import { VracanjeDialog } from '../ui/vracanje.dialog';
+import { tekstMejla, TerminiPage } from './termini.page';
 
 const TERMINI = 'api/rasporedi/termini';
 const PREDMET = { id: 1, naziv: 'Geodezija 1' };
@@ -73,6 +73,7 @@ describe('TerminiPage', () => {
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
     poruke = TestBed.inject(NotificationStore);
     vi.spyOn(poruke, 'uspeh');
+    vi.spyOn(poruke, 'greska');
   });
 
   afterEach(() => {
@@ -122,13 +123,13 @@ describe('TerminiPage', () => {
   });
 
   it('Otkaži čas: dijalog napomene, POST otkazi, red se menja, poruka sa brojem mejlova', async () => {
-    odgovor.set(OtkazivanjeDialog, 'sednica veća');
+    odgovor.set(OtkazivanjeDialog, { napomena: 'sednica veća', posaljiMejl: true });
     await otvoriStranu([termin()]);
     red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-otkazi]')!.click();
     expect(otvori.mock.calls[0][0]).toBe(OtkazivanjeDialog);
     const req = http.expectOne('api/rasporedi/termini/otkazi');
-    expect(req.request.body).toEqual({ stavkaId: 7, datum: '2030-11-06', napomena: 'sednica veća' });
-    req.flush({ termin: termin({ otkazan: true, napomena: 'sednica veća' }), obavesteno: 12 });
+    expect(req.request.body).toEqual({ stavkaId: 7, datum: '2030-11-06', napomena: 'sednica veća', posaljiMejl: true });
+    req.flush({ termin: termin({ otkazan: true, napomena: 'sednica veća' }), obavesteno: 12, neposlato: 0 });
     await stabilno();
     expect(red('7:2030-11-06').textContent).toContain('Napomena: sednica veća');
     expect(poruke.uspeh).toHaveBeenCalledWith('Čas je otkazan. Mejl je poslat: 12 studenata.');
@@ -139,22 +140,23 @@ describe('TerminiPage', () => {
     red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-otkazi]')!.click();
     await stabilno();
     http.expectNone('api/rasporedi/termini/otkazi');
-    odgovor.set(OtkazivanjeDialog, '');
+    odgovor.set(OtkazivanjeDialog, { napomena: '', posaljiMejl: true });
     red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-otkazi]')!.click();
     const req = http.expectOne('api/rasporedi/termini/otkazi');
     expect(req.request.body.napomena).toBeNull();
-    req.flush({ termin: termin({ otkazan: true }), obavesteno: 0 });
+    req.flush({ termin: termin({ otkazan: true }), obavesteno: 0, neposlato: 0 });
     await stabilno();
     expect(poruke.uspeh).toHaveBeenCalledWith('Čas je otkazan. Mejl nije poslat nikome.');
   });
 
   it('Vrati čas: potvrda, POST vrati, poruka; greška (409) učitava listu iznova', async () => {
-    odgovor.set(ConfirmDialog, true);
+    odgovor.set(VracanjeDialog, { posaljiMejl: true });
     await otvoriStranu([termin({ otkazan: true }), termin({ stavkaId: 8, otkazan: true })]);
     red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-vrati]')!.click();
+    expect(otvori.mock.calls[0][0]).toBe(VracanjeDialog);
     const req = http.expectOne('api/rasporedi/termini/vrati');
-    expect(req.request.body).toEqual({ stavkaId: 7, datum: '2030-11-06' });
-    req.flush({ termin: termin(), obavesteno: 1 });
+    expect(req.request.body).toEqual({ stavkaId: 7, datum: '2030-11-06', posaljiMejl: true });
+    req.flush({ termin: termin(), obavesteno: 1, neposlato: 0 });
     await stabilno();
     expect(poruke.uspeh).toHaveBeenCalledWith('Čas se ipak održava. Mejl je poslat: 1 student.');
     expect(red('7:2030-11-06').querySelector('[data-otkazi]')).not.toBeNull();
@@ -164,6 +166,43 @@ describe('TerminiPage', () => {
     http.expectOne(r => r.url === TERMINI).flush([termin({ stavkaId: 8, otkazan: true, poceo: true })]);
     await stabilno();
     expect(red('8:2030-11-06').querySelector('button')).toBeNull();
+  });
+
+  it('bez mejla: posaljiMejl false ide serveru i poruka to kaže', async () => {
+    odgovor.set(OtkazivanjeDialog, { napomena: '', posaljiMejl: false });
+    odgovor.set(VracanjeDialog, { posaljiMejl: false });
+    await otvoriStranu([termin(), termin({ stavkaId: 8, otkazan: true })]);
+    red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-otkazi]')!.click();
+    const otkaz = http.expectOne('api/rasporedi/termini/otkazi');
+    expect(otkaz.request.body.posaljiMejl).toBe(false);
+    otkaz.flush({ termin: termin({ otkazan: true }), obavesteno: 0, neposlato: 0 });
+    await stabilno();
+    expect(poruke.uspeh).toHaveBeenCalledWith('Čas je otkazan. Mejl studentima nije slat.');
+    red('8:2030-11-06').querySelector<HTMLButtonElement>('[data-vrati]')!.click();
+    const vrati = http.expectOne('api/rasporedi/termini/vrati');
+    expect(vrati.request.body).toEqual({ stavkaId: 8, datum: '2030-11-06', posaljiMejl: false });
+    vrati.flush({ termin: termin({ stavkaId: 8 }), obavesteno: 0, neposlato: 0 });
+    await stabilno();
+    expect(poruke.uspeh).toHaveBeenCalledWith('Čas se ipak održava. Mejl studentima nije slat.');
+  });
+
+  it('deo mejlova nije stavljen u red: poruka je greška i kaže kome nije poslat', async () => {
+    odgovor.set(OtkazivanjeDialog, { napomena: '', posaljiMejl: true });
+    await otvoriStranu([termin()]);
+    red('7:2030-11-06').querySelector<HTMLButtonElement>('[data-otkazi]')!.click();
+    http.expectOne('api/rasporedi/termini/otkazi').flush({ termin: termin({ otkazan: true }), obavesteno: 10, neposlato: 2 });
+    await stabilno();
+    expect(poruke.uspeh).not.toHaveBeenCalled();
+    expect(poruke.greska).toHaveBeenCalledWith('Čas je otkazan. Mejl je poslat: 10 studenata. Mejl nije poslat: 2 studenta '
+      + '(red za slanje je pun ili slanje nije podešeno); javi im drugim putem.');
+  });
+
+  it('tekstMejla: stari server bez neposlato, nijedan u redu, samo neposlati', () => {
+    expect(tekstMejla({ termin: termin(), obavesteno: 3 }, true)).toBe('Mejl je poslat: 3 studenta.');
+    expect(tekstMejla({ termin: termin(), obavesteno: 0, neposlato: 0 }, true)).toBe('Mejl nije poslat nikome.');
+    expect(tekstMejla({ termin: termin(), obavesteno: 0, neposlato: 1 }, true))
+      .toBe('Mejl nije poslat: 1 student (red za slanje je pun ili slanje nije podešeno); javi im drugim putem.');
+    expect(tekstMejla({ termin: termin(), obavesteno: 5, neposlato: 0 }, false)).toBe('Mejl studentima nije slat.');
   });
 
   it('od iz putanje (veza iz obaveštenja); „Kasnije“ i „Od danas“ menjaju samo query', async () => {

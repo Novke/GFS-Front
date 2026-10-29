@@ -9,7 +9,6 @@ import { finalize, Observable, Subscription } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { NotificationStore } from '../../../core/state/notification.store';
-import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
@@ -20,6 +19,7 @@ import { RasporedApi } from '../data-access/raspored.api';
 import { DANA_TERMINA, PromenaTerminaOdgovor, TerminInfo } from '../data-access/raspored.models';
 import { imeStudenta, iznadPraga, odIliDanas, poDatumu, pomeriOd } from '../data-access/raspored.pravila';
 import { OtkazivanjeDialog } from '../ui/otkazivanje.dialog';
+import { VracanjeDialog } from '../ui/vracanje.dialog';
 
 type Status = 'ucitavanje' | 'greska' | 'ok';
 
@@ -230,11 +230,11 @@ export class TerminiPage {
     this.dijalogOtvoren = true;
     OtkazivanjeDialog.otvori(this.dialog, t)
       .pipe(finalize(() => (this.dijalogOtvoren = false)), takeUntilDestroyed(this.destroyRef))
-      .subscribe(napomena => {
-        if (napomena !== undefined) {
-          this.posalji(t, this.api.otkazi({ stavkaId: t.stavkaId, datum: t.datum, napomena: napomena || null }), t.otkazan
-            ? () => 'Napomena je sačuvana.'
-            : o => `Čas je otkazan. ${o.obavesteno > 0 ? 'Mejl je poslat: ' + brojStudenataTekst(o.obavesteno) + '.' : 'Mejl nije poslat nikome.'}`);
+      .subscribe(izbor => {
+        if (izbor !== undefined) {
+          this.posalji(t, this.api.otkazi({
+            stavkaId: t.stavkaId, datum: t.datum, napomena: izbor.napomena || null, posaljiMejl: izbor.posaljiMejl,
+          }), t.otkazan ? () => 'Napomena je sačuvana.' : o => `Čas je otkazan. ${tekstMejla(o, izbor.posaljiMejl)}`);
         }
       });
   }
@@ -244,19 +244,20 @@ export class TerminiPage {
       return;
     }
     this.dijalogOtvoren = true;
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Vratiti čas?',
-      tekst: `${this.opis(t)}. Studenti iz rasporeda dobijaju mejl „Čas se ipak održava“.`,
-      potvrdi: 'Vrati čas',
-    }).pipe(finalize(() => (this.dijalogOtvoren = false)), takeUntilDestroyed(this.destroyRef)).subscribe(da => {
-      if (da) {
-        this.posalji(t, this.api.vrati({ stavkaId: t.stavkaId, datum: t.datum }),
-          o => `Čas se ipak održava. ${o.obavesteno > 0 ? 'Mejl je poslat: ' + brojStudenataTekst(o.obavesteno) + '.' : 'Mejl nije poslat nikome.'}`);
-      }
-    });
+    VracanjeDialog.otvori(this.dialog, t)
+      .pipe(finalize(() => (this.dijalogOtvoren = false)), takeUntilDestroyed(this.destroyRef))
+      .subscribe(izbor => {
+        if (izbor !== undefined) {
+          this.posalji(t, this.api.vrati({ stavkaId: t.stavkaId, datum: t.datum, posaljiMejl: izbor.posaljiMejl }),
+            o => `Čas se ipak održava. ${tekstMejla(o, izbor.posaljiMejl)}`);
+        }
+      });
   }
 
-  /** Zahtev nije tih: poruka servera (409 „Termin je već počeo.“) ide u snackbar, a lista se učitava iznova. */
+  /**
+   * Zahtev nije tih: poruka servera (409 „Termin je već počeo.“) ide u snackbar, a lista se učitava iznova. Kad neki mejl
+   * nije stavljen u red (`neposlato`), poruka je greška, da se ne previdi.
+   */
   private posalji(t: TerminInfo, zahtev: Observable<PromenaTerminaOdgovor>, poruka: (o: PromenaTerminaOdgovor) => string): void {
     const k = kljuc(t);
     this.salje.set(k);
@@ -264,7 +265,11 @@ export class TerminiPage {
       next: o => {
         this.salje.set(null);
         this.termini.update(l => l.map(x => (kljuc(x) === k ? o.termin : x)));
-        this.poruke.uspeh(poruka(o));
+        if ((o.neposlato ?? 0) > 0) {
+          this.poruke.greska(poruka(o));
+        } else {
+          this.poruke.uspeh(poruka(o));
+        }
       },
       error: () => {
         this.salje.set(null);
@@ -272,4 +277,17 @@ export class TerminiPage {
       },
     });
   }
+}
+
+/** Deo poruke o mejlu posle otkazivanja ili vraćanja (`posaljiMejl` = izbor nastavnika u dijalogu). */
+export function tekstMejla(o: PromenaTerminaOdgovor, posaljiMejl: boolean): string {
+  if (!posaljiMejl) {
+    return 'Mejl studentima nije slat.';
+  }
+  const neposlato = o.neposlato ?? 0;
+  const poslat = o.obavesteno > 0 ? `Mejl je poslat: ${brojStudenataTekst(o.obavesteno)}.` : '';
+  if (neposlato > 0) {
+    return `${poslat} Mejl nije poslat: ${brojStudenataTekst(neposlato)} (red za slanje je pun ili slanje nije podešeno); javi im drugim putem.`.trim();
+  }
+  return poslat || 'Mejl nije poslat nikome.';
 }

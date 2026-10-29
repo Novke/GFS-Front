@@ -178,8 +178,38 @@ describe('RasporedFormaPage', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/raspored');
   });
 
+  it('izmena koja ukida otkazane časove: upozorenje pre čuvanja i broj ukinutih posle', async () => {
+    const detalj: RasporedDetails = {
+      ...DETALJ,
+      stavke: [{ ...DETALJ.stavke[0], otkazani: ['2030-11-13', '2030-11-06'] }, { ...DETALJ.stavke[1], otkazani: ['2030-11-08'] }],
+    };
+    await otvoriStranu({ id: '3' }, detalj);
+    expect(el().querySelector('[data-izgubljena-otkazivanja]')).toBeNull();
+    upisi('[data-kraj]', '13:30');
+    await stabilno();
+    expect(el().querySelector('[data-izgubljena-otkazivanja]')).toBeNull();
+    await izaberi('[data-dan]', 'četvrtak');
+    const upozorenje = el().querySelector('[data-izgubljena-otkazivanja]')!;
+    expect(upozorenje.textContent).toContain('Čuvanje ukida otkazane časove (2)');
+    expect([...upozorenje.querySelectorAll('li')].map(li => li.textContent!.trim()))
+      .toEqual(['Geodezija 1 · GD-2030 · sreda 6. 11.', 'Geodezija 1 · GD-2030 · sreda 13. 11.']);
+    await izaberi('[data-dan]', 'sreda');
+    upisi('[data-vazi-do]', '2030-11-07');
+    await stabilno();
+    expect(el().querySelector('[data-izgubljena-otkazivanja]')!.textContent).toContain('Čuvanje ukida otkazane časove (2)');
+    upisi('[data-vazi-do]', '2030-11-12');
+    await stabilno();
+    const jedan = el().querySelector('[data-izgubljena-otkazivanja]')!;
+    expect(jedan.textContent).toContain('Čuvanje ukida jedan otkazan čas');
+    expect(jedan.textContent).toContain('sreda 13. 11.');
+    el().querySelector<HTMLButtonElement>('[data-sacuvaj]')!.click();
+    http.expectOne('api/rasporedi/3').flush({ ...DETALJ, izgubljenaOtkazivanja: 1 });
+    await stabilno();
+    expect(poruke.uspeh).toHaveBeenCalledWith('Raspored je sačuvan. Ukinuto otkazanih časova: 1.');
+  });
+
   it('kopija: termini i prag bez id-jeva, naziv „(kopija)“, prazan period; šalje se kao nov (POST)', async () => {
-    await otvoriStranu({ kopija: '3' }, DETALJ);
+    await otvoriStranu({ kopija: '3' }, { ...DETALJ, stavke: [{ ...DETALJ.stavke[0], otkazani: ['2030-11-06'] }, DETALJ.stavke[1]] });
     expect(el().querySelector('h1')!.textContent).toBe('Nov raspored (kopija)');
     expect(ulaz('[data-naziv]').value).toBe('Zimski 2030/31 (kopija)');
     expect(ulaz('[data-vazi-od]').value).toBe('');
@@ -192,8 +222,10 @@ describe('RasporedFormaPage', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body.pragNajava).toBe(7);
     expect(req.request.body.stavke.map((s: { id: number | null }) => s.id)).toEqual([null, null]);
+    expect(el().querySelector('[data-izgubljena-otkazivanja]')).toBeNull();
     req.flush(DETALJ);
     await stabilno();
+    expect(poruke.uspeh).toHaveBeenCalledWith('Raspored je sačuvan.');
   });
 
   it('poruka servera (400) ide u traku iznad forme; forma ostaje', async () => {
