@@ -40,7 +40,7 @@ import { GrupaStore } from '../data-access/grupa.store';
         <app-skeleton-rows [redovi]="5" />
       }
     </section>
-    <p class="napomena">Tačnost: neodgovoreno pitanje je netačno; pa prosečno vreme odgovora, pa ★ (pitanje 1, zadatak nivo varijante).</p>
+    <p class="napomena">Redosled: više ★ (pitanje 1, zadatak nivo varijante), pa kraće prosečno vreme. Tačnost: neodgovoreno pitanje je netačno.</p>
   `,
   styles: `
     :host { display: flex; flex-direction: column; gap: 12px; }

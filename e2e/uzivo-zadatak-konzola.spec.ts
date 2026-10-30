@@ -83,7 +83,7 @@ test.describe('konzola: Zadatak slajd (1280 x 800)', () => {
       const p = panel(page);
       const nivo = (n: string) => p.locator(`[data-zp-nivo] [role=radio][data-nivo="${n}"]`);
       await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
-      await expect(nivo('1')).toHaveAttribute('aria-label', 'Nivo 1 od 3 (lakši), 1 varijanta');
+      await expect(nivo('1')).toHaveAttribute('aria-label', 'Nivo 1 od 3 (lakši), 2 varijante');
       await expect(nivo('2')).toHaveAttribute('aria-label', 'Nivo 2 od 3 (srednji), 0 varijanti');
       await expect(p.getByRole('button', { name: /^Kao na slajdu/ })).toHaveCount(0);
 
@@ -91,13 +91,13 @@ test.describe('konzola: Zadatak slajd (1280 x 800)', () => {
       await expect(nivo('3')).toHaveAttribute('aria-checked', 'true');
       await expect(p).toContainText('Različitih: 1 od 1');
       expect(komande(mock)).toEqual([{ tip: 'NIVO', vrednost: 3 }]);
-      await expect(p.getByRole('button', { name: 'Kao na slajdu (svi)' })).toBeVisible();
+      await expect(p.getByRole('button', { name: 'Kao na slajdu (nasumično)' })).toBeVisible();
 
       // "Svi" je 0, "Kao na slajdu" je null
       await nivo('svi').click();
       await expect(nivo('svi')).toHaveAttribute('aria-checked', 'true');
       await nivo('1').click();
-      await p.getByRole('button', { name: 'Kao na slajdu (svi)' }).click();
+      await p.getByRole('button', { name: 'Kao na slajdu (nasumično)' }).click();
       await expect(p.getByRole('button', { name: /^Kao na slajdu/ })).toHaveCount(0);
       expect(komande(mock).map(k => k.vrednost)).toEqual([3, 0, 1, null]);
 
@@ -112,7 +112,7 @@ test.describe('konzola: Zadatak slajd (1280 x 800)', () => {
       await page.keyboard.press('o');
       const kartice = p.getByRole('list', { name: 'Izvučene varijante' }).getByRole('listitem');
       await expect(kartice).toHaveCount(1);
-      await expect(kartice.first()).toContainText('110010 u dekadni');
+      await expect(kartice.first()).toContainText('111 u dekadni');
       await expect(kartice.first().locator('[data-nivo-prikaz]')).toHaveAttribute('aria-label', 'Nivo 3 od 3 (teži)');
       await expect(p.locator('[data-zp-nivo]')).toHaveCount(0);
     });

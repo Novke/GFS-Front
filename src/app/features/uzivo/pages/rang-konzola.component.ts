@@ -1,11 +1,13 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { asyncScheduler, catchError, distinctUntilChanged, EMPTY, filter, map, switchMap, throttleTime } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { RangKolona, RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
+import { RANG_NA_TABLI, RangNaTabli } from '../data-access/rang-na-tabli';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { UcesniciPanelComponent } from './ucesnici-panel.component';
 
@@ -20,16 +22,28 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
  * trenutnu rundu, sa ishodom i kratkim odgovorom), "Prezentacija" (rang ovog izvođenja) i "Predavanje" (zbir svih
  * izvođenja predavanja; samo kad izvođenje ima predavanje). Rang se učitava samo dok je njegov tab otvoren, kad se
  * promeni runda, faza, broj odgovora ili tačan odgovor, najviše jednom u {@link RANG_OSVEZAVANJE_MS}. Vidi ga samo
- * nastavnik; na projektor ga šalju L i Shift+L.
+ * nastavnik; na projektor ga šalju L i Shift+L. "Na tabli" (svi, prvih 10, prvih 5) je nastavnikova postavka u pregledaču
+ * (`RangNaTabli`, važi za sva izvođenja): kartica je šalje serveru komandom `RANG_BROJ` kad se konzola
+ * otvori i kad se izbor promeni.
  */
 @Component({
   selector: 'app-rang-konzola',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RangTacnostiTabela, UcesniciPanelComponent],
+  imports: [NgTemplateOutlet, RangTacnostiTabela, UcesniciPanelComponent],
   styles: `
     :host { display: block; }
     .uz-kon-rang-greska { margin: 8px 0 0; color: var(--danger); font-size: 13px; }
-    .uz-kon-rang-napomena { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .uz-kon-rang-dno { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
+      margin-top: 6px; }
+    .uz-kon-rang-napomena { margin: 0; color: var(--muted); font-size: 12px; }
+    .uz-kon-rang-tabla { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 0; border: 0;
+      color: var(--muted); font-size: 12px; }
+    .uz-kon-rang-tabla legend { float: left; margin-right: 4px; padding: 0; }
+    .uz-kon-rang-tabla button { min-height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--surface); color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+    .uz-kon-rang-tabla button[aria-pressed='true'] { border-color: var(--primary); background: var(--primary-soft);
+      color: var(--primary-soft-ink); font-weight: 600; }
+    .uz-kon-rang-tabla button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
     .uz-kon-rang-zaglavlje { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 12px;
       margin-bottom: 6px; border-bottom: 1px solid var(--line); }
     .uz-kon-rang-zaglavlje .uz-kon-naslov { margin: 0 0 8px; }
@@ -67,15 +81,26 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
         @case ('prezentacija') {
           <app-rang-tacnosti-tabela [stavke]="rangIzvodjenja() ?? []" [kolone]="koloneIzvodjenja()" [zbijeno]="true"
                                     [prazno]="rangIzvodjenja() ? 'Još nema zatvorenih pitanja sa tačnim odgovorom.' : 'Učitavanje…'" />
-          <p class="uz-kon-rang-napomena">Tačnost: neodgovoreno pitanje je netačno. Pa prosečno vreme odgovora, pa ★.</p>
+          <ng-container *ngTemplateOutlet="dno; context: { napomena: 'Redosled: ★, pa prosečno vreme. Neodgovoreno je netačno.' }" />
         }
         @case ('predavanje') {
           <app-rang-tacnosti-tabela [stavke]="rangPredavanja() ?? []" [kolone]="['izvodjenja']" [zbijeno]="true"
                                     [prazno]="rangPredavanja() ? 'Još nema zatvorenih pitanja sa tačnim odgovorom.' : 'Učitavanje…'" />
-          <p class="uz-kon-rang-napomena">Sva izvođenja ovog predavanja zajedno.</p>
+          <ng-container *ngTemplateOutlet="dno; context: { napomena: 'Sve prezentacije ovog predavanja zajedno.' }" />
         }
       }
     </div>
+    <ng-template #dno let-napomena="napomena">
+      <div class="uz-kon-rang-dno">
+        <p class="uz-kon-rang-napomena">{{ napomena }}</p>
+        <fieldset class="uz-kon-rang-tabla">
+          <legend>Na tabli:</legend>
+          @for (b of naTabliIzbori; track b) {
+            <button type="button" [attr.aria-pressed]="naTabli() === b" (click)="naTabliPostavka.postavi(b)">{{ b ? 'Prvih ' + b : 'Svi' }}</button>
+          }
+        </fieldset>
+      </div>
+    </ng-template>
     @if (greska(); as g) { <p class="uz-kon-rang-greska" role="alert">{{ g }}</p> }
   `,
 })
@@ -83,8 +108,15 @@ export class RangKonzolaComponent {
   readonly stanje = input.required<NastavnickoStanje>();
   readonly preimenuj = output<{ id: number; ime: string }>();
   readonly izbaci = output<number>();
+  /** Koliko redova ranga ide na projektor (`RANG_BROJ`: 0 = svi). */
+  readonly rangBroj = output<number>();
 
   private readonly api = inject(RangApi);
+  protected readonly naTabliPostavka = inject(RangNaTabli);
+  protected readonly naTabliIzbori = RANG_NA_TABLI;
+  protected readonly naTabli = this.naTabliPostavka.broj;
+  /** `verzija` stanja na koju je poslat `RANG_BROJ` (jednom po verziji, pa nema petlje ni kad server zaostane). */
+  private poslatoNaVerziji: number | null = null;
   protected readonly tab = signal<RangTab>('pitanje');
   protected readonly rangIzvodjenja = signal<RangTacnostiStavka[] | null>(null);
   protected readonly rangPredavanja = signal<RangTacnostiStavka[] | null>(null);
@@ -110,6 +142,17 @@ export class RangKonzolaComponent {
   });
 
   constructor() {
+    // postavka "Na tabli" ide serveru kad se razlikuje od njegove (otvaranje konzole, promena izbora, restart servera);
+    // stari backend nema `rangBroj` (undefined) i komandu ne zna, pa mu se ništa ne šalje
+    effect(() => {
+      const s = this.stanje();
+      const zeljeno = this.naTabli();
+      if (s.rangBroj === undefined || s.izvodjenje.status !== 'AKTIVNO') return;
+      if ((s.rangBroj ?? 0) === zeljeno || this.poslatoNaVerziji === s.verzija) return;
+      this.poslatoNaVerziji = s.verzija;
+      this.rangBroj.emit(zeljeno);
+    });
+
     toObservable(this.kljuc).pipe(
       filter(k => k !== null),
       distinctUntilChanged((a, b) => a.otisak === b.otisak),

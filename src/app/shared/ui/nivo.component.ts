@@ -41,8 +41,9 @@ const ZVEZDA = 'M12 2.8l2.75 5.8 6.35.8-4.65 4.4 1.2 6.3L12 17l-5.65 3.1 1.2-6.3
         [attr.aria-label]="natpis() ? null : natpisTekst()">
         @if (saSvima()) {
           <button type="button" role="radio" class="nivo-svi" data-nivo="svi" [attr.aria-checked]="nivo() === null"
-            [attr.aria-label]="brojevi() ? 'Svi nivoi, ' + opisBroja(zbir()) : null"
-            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)" (keydown)="tastatura($event)">Svi@if (brojevi()) {<span class="nivo-broj" aria-hidden="true">{{ zbir() }}</span>}</button>
+            [attr.aria-label]="nasumicno() ? NASUMICNO_OPIS : brojevi() ? 'Svi nivoi, ' + opisBroja(zbir()) : null"
+            [attr.title]="nasumicno() ? NASUMICNO_OPIS : null"
+            [attr.tabindex]="fokusiran() === null ? 0 : -1" [disabled]="onemoguceno()" (click)="biraj(null)" (keydown)="tastatura($event)">{{ nasumicno() ? 'Nasumično' : 'Svi' }}@if (brojevi() && !nasumicno()) {<span class="nivo-broj" aria-hidden="true">{{ zbir() }}</span>}</button>
         }
         @for (n of nivoi; track n) {
           <button type="button" role="radio" class="nivo-dugme" [attr.data-nivo]="n" [attr.aria-checked]="nivo() === n"
@@ -96,6 +97,12 @@ export class NivoComponent {
   readonly izbor = input(false, { transform: booleanAttribute });
   /** Uz izbor: prva opcija "Svi" (emituje `null`). */
   readonly saSvima = input(false, { transform: booleanAttribute });
+  /**
+   * Uz `saSvima`: opcija `null` se zove "Nasumično", bez zbira (slajd Zadatak i konzola: bez nivoa server za svaku rundu
+   * bira jedan nivo, svi u rundi dobiju isti).
+   */
+  readonly nasumicno = input(false, { transform: booleanAttribute });
+  protected readonly NASUMICNO_OPIS = 'Nasumičan nivo: za svaku rundu se izvlači jedan, isti za sve';
   /** Vidljiv natpis "Nivo" ispred zvezdica. */
   readonly natpis = input(true, { transform: booleanAttribute });
   /** Tekst natpisa (i naziv radio grupe): "Nivo", a gde na ekranu ima više grupa, razlikovan ("Prikaži nivo"). */

@@ -288,7 +288,7 @@ describe('IzvodjenjePregledPage', () => {
     ]);
     const redovi = [...el.querySelectorAll('[data-rang-tacnosti] tbody tr')]
       .map(r => [...r.querySelectorAll('td')].map(td => td.textContent!.replace(/\s+/g, ' ').trim()).join(' | '));
-    expect(redovi).toEqual(['1 | Ana | 100%3/3 | 3,2 s | 5', '2 | Mile gost | 33%1/3 | — | 1']);
+    expect(redovi).toEqual(['1 | Ana | ★5 | 100%3/3 | 3,2 s', '2 | Mile gost | ★1 | 33%1/3 | —']);
     expect(el.querySelector('[data-rang-tacnosti] a')?.getAttribute('href')).toBe('/studenti/7');
   });
 

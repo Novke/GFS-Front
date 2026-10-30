@@ -1188,26 +1188,43 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
 
 ### Rang tačnosti (leaderboard)
 
-Spec `docs/superpowers/specs/2026-10-28-rang-tacnosti-design.md` (deploy repo); backend rules in `GFSSystem/CLAUDE.md`, "Rang tačnosti". Order:
-accuracy (an unanswered question is wrong), then average answer time, then ★ (question 1, task the variant's level). Teacher only, nothing public.
+Spec `docs/superpowers/specs/2026-10-28-rang-tacnosti-design.md` (deploy repo); backend rules in `GFSSystem/CLAUDE.md`, "Rang tačnosti". Order
+(revision 2026-10-29): more ★ (question 1, task the variant's level), then shorter average answer time, then name; accuracy (an unanswered question
+is wrong) is shown, never ranked. Teacher only, nothing public.
 - **API:** `core/api/rang.api.ts` (`RangApi`: `izvodjenje`, `predavanje`, `student`, `grupa`; `prikazVremena` = "3,2 s"), in `core/api` because
-  uživo, predavanja, studenti and grupe use it. Table: `shared/ui/rang-tacnosti-tabela.ts` (`RangTacnostiTabela`: place, name with optional
-  student link and "gost" chip, accuracy "67% 2/3", average, ★, optional columns `poeni`/`izvodjenja`/`casova`; a row without a place is dimmed).
+  uživo, predavanja, studenti and grupe use it; `nivoTacnosti` (1 red < 40 %, 2 orange < 60 %, 3 yellow < 80 %, 4 green) and `kratakIndeks` (`GD5`,
+  drops an old `/YYYY`). Table: `shared/ui/rang-tacnosti-tabela.ts` (`RangTacnostiTabela`: `# | Indeks | Ime | ★ | ✓ | ⏱` plus optional columns
+  `poeni`/`izvodjenja` ("Prezentacije")/`casova`; the Indeks column only when some row has one; accuracy is a pill coloured from existing tokens
+  (`--danger`, `--danger`/`--warn` mix, `--warn`, `--ok`; background `color-mix` 14 % with `--surface`; no new global token: the initial-bundle
+  budget in `e2e/lenji-editor.spec.ts` has almost no headroom and every token is emitted four times) with "2/3"; the ★, ✓ and ⏱ headers are sort buttons (`aria-sort`; ★ = server order,
+  ✓ desc, ⏱ asc first, a second click flips; equal values keep server order, rows without a place stay last, the place never changes).
 - **Console:** the card "Učesnici i rang" (`pages/rang-konzola.component.ts`) has tabs "Ovo pitanje" (`UcesniciPanelComponent`: who answered the
   current round, fastest first (`redosledOdgovora`), with time, ✓/✗ and the short answer; the rest below in join order), "Prezentacija" (`GET
   izvodjenja/{id}/rang`) and "Predavanje" (only when the run has a lecture). A rank tab loads only while it is open, on a change of round, phase,
-  answer count, `TACAN` or participant count, at most once per 2 s (`RANG_OSVEZAVANJE_MS`, `throttleTime` leading + trailing).
+  answer count, `TACAN` or participant count, at most once per 2 s (`RANG_OSVEZAVANJE_MS`, `throttleTime` leading + trailing). Under a rank tab
+  "Na tabli: Svi / Prvih 10 / Prvih 5" is the teacher's browser preference (`features/uzivo/data-access/rang-na-tabli.ts`, own localStorage key `gfs.rang-na-tabli.v1`, kept out of
+  `PreferencesStore` so it stays out of the initial bundle, budget in `e2e/lenji-editor.spec.ts`; same for every run):
+  the card emits `rangBroj` and the console sends `RANG_BROJ` whenever the server's `rangBroj` differs (console open, change, backend restart),
+  once per state `verzija`; an old backend without `rangBroj` gets nothing.
   The tabs are plain ARIA tabs (`role="tab"`, arrows/Home/End) in the card's title row, **not `MatTabGroup`**: the card must not make the console
   taller than 768 px at 1366 x 768, or a page scrollbar narrows the mini projector and `e2e/uzivo-formule-tekst.spec.ts` (visible scrollbars) fails.
 - **Projector:** `L` = `RANG_LISTA` (run rank, always allowed), `Shift+L` = `RANG_PREDAVANJA` (allowed when `imaRangPredavanja`); console buttons
   "Rang-lista" and "Rang predavanja". `PublikaScenaComponent` draws `javniRangTacnosti` with `ui/rang-tacnosti-projektor.component.ts` (title
-  "Rang predavanja" for the lecture rank; it stays at KRAJ over "Hvala!"); in takmičenje `L` keeps the points list (`javnaRangLista`) and the podium.
+  "Rang predavanja" for the lecture rank, the corner label `.uz-scena-ugao` "Prezentacija: <naziv>" or "Predavanje N. <tema> · sve prezentacije";
+  it stays at KRAJ over "Hvala!"); in takmičenje `L` keeps the points list (`javnaRangLista`) and the podium. Projector rows: place, short name from
+  the server ("Ana K."), ✓ correct, ✗ wrong, accuracy pill, ⏱, ★, always in server order. Everything fits the 16:9 slide: the font (cqw, inline on
+  the host) shrinks with the row count (`velicinaSlova`), and the rows split into two columns when that gives a larger font (from 9 rows).
 - **Pages:** run overview (`izvodjenje-pregled`) has "Rang tačnosti" on top; the lecture page (`predavanja/ui/prezentacije-na-predavanju.ts`,
-  store `PrezentacijePredavanjaStore.rang`) shows one report for one run with questions, the lecture aggregate (column "Izvođenja") for more, and
+  store `PrezentacijePredavanjaStore.rang`) shows one report for one run with questions, the lecture aggregate (column "Prezentacije") for more, and
   polls every 10 s (`RANG_PREDAVANJA_OSVEZAVANJE_MS`, plain `setInterval`) while a run is in progress and the tab is visible; student links only on
   a finished lecture. Student profile tab `/studenti/:id/uzivo` (`StudentUzivoTab`: totals and one row per class with "2 od 4") and group tab
   `/grupe/:id/uzivo` (`GrupaUzivoTab`, roster rank with "Časova"); both filter by subject and school year locally (not in the URL).
 - e2e: `e2e/mock-api.ts` answers the four endpoints with empty ranks (an unknown route fails a test).
+- **Zadatak level (same revision):** every student of a round gets the same level; without a level on the slide or in the console the server
+  draws one per opening. The level picker's `null` option is "Nasumično" (`app-nivo ... saSvima nasumicno`, no total count) on the Zadatak form and
+  the console panel; the counts with no level are the largest per-level count (as the server's `brojZaOtvaranje`). The form shows the server text
+  `ZadaciSlajdova.NIVO_NIJE_IZABRAN` itself (`nivoNijeIzabran`), from the form's current level rather than the saved slide, and hides the server's
+  copy. The e2e mock (`e2e/mock-izvodjenje.ts`) draws the first variant's level when none is chosen.
 
 ## Banka zadataka (`features/banka`)
 

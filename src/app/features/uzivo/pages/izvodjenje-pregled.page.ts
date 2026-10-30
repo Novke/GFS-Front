@@ -150,7 +150,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                 <p class="uz-ed-greska" role="alert">{{ g }}</p>
               } @else if (rang(); as rangLista) {
                 <app-rang-tacnosti-tabela [stavke]="rangLista" [kolone]="takmicenje() ? ['poeni'] : []" [linkoviStudenata]="true" />
-                <p class="uz-ed-napomena">Prvo tačnost (neodgovoreno pitanje je netačno), pa prosečno vreme odgovora, pa ★ (pitanje 1, zadatak nivo varijante).</p>
+                <p class="uz-ed-napomena">Redosled: više ★ (pitanje 1, zadatak nivo varijante), pa kraće prosečno vreme. Tačnost (neodgovoreno je netačno) je podatak; klik na ★, ✓ ili ⏱ sortira.</p>
               } @else {
                 <mat-progress-bar mode="indeterminate" aria-label="Učitavanje ranga" />
               }

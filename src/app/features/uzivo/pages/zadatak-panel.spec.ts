@@ -169,7 +169,7 @@ describe('ZadatakPanelComponent (konzola, Zadatak slajd)', () => {
       // zbir kad je izabrano "Svi", a slajd traži nivo
       const k = naZadatku('CEKA', { zadatak: { izmenaNivoa: 0, nivoZaOtvaranje: null } });
       const m = prikazi({ ...k, zadatak: { ...k.zadatak!, slajd: { ...k.zadatak!.slajd, nivo: 1, brojAktivnihVarijanti: 1, brojAktivnihPoNivou: [1, 0, 1] } } });
-      expect(tekst(m)).toContain('od 2');
+      expect(tekst(m)).toContain('od 1'); // bez nivoa jedan nasumičan nivo: najviše koliko ima najbrojniji
     });
 
     it('posle otvaranja nema izbora nivoa, a svaka izvučena varijanta pokazuje svoj nivo', () => {

@@ -222,7 +222,8 @@ export class IzborEkranaDialog {
 
       <ng-template #ucesniciTpl>
         <section class="uz-kon-kartica" aria-label="Učesnici i rang">
-          <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)" />
+          <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)"
+                            (rangBroj)="store.komanda('RANG_BROJ', $event)" />
         </section>
       </ng-template>
 

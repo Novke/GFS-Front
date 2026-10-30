@@ -69,7 +69,7 @@ export function linkCasa(r: Pick<UzivoStudentaRed, 'predavanjeId' | 'izvodjenjeI
             </table>
           </div>
         </section>
-        <p class="napomena">Tačnost: neodgovoreno pitanje je netačno. ★: pitanje 1, zadatak nivo varijante.</p>
+        <p class="napomena">Mesto: više ★ (pitanje 1, zadatak nivo varijante), pa kraće prosečno vreme. Tačnost: neodgovoreno pitanje je netačno.</p>
       } @else {
         <app-empty-state naslov="Student nije odgovarao na pitanja uživo" ikona="leaderboard"
           tekst="Kad student učestvuje u prezentaciji sa pitanjima koja imaju tačan odgovor, rezultati se vide ovde." />

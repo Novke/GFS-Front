@@ -49,6 +49,15 @@ const TIP_POLJA: Record<TipPoljaZadatka, string> = {
   BROJ: 'broj', TEKST: 'tekst', JEDAN_TACAN: 'jedan tačan', VISE_TACNIH: 'više tačnih',
 };
 
+/** Početak serverskog upozorenja `ZadaciSlajdova.NIVO_NIJE_IZABRAN` (forma ga računa sama, po izboru u formi). */
+const NIVO_NIJE_IZABRAN_POCETAK = 'Nivo nije izabran';
+
+/** Isti tekst kao `ZadaciSlajdova.NIVO_NIJE_IZABRAN` na serveru; `nivoi` npr. `['★', '★★']`. */
+export function nivoNijeIzabran(nivoi: readonly string[]): string {
+  return `${NIVO_NIJE_IZABRAN_POCETAK}, a grupa ima varijante nivoa ${nivoi.join(', ')}: pri svakom otvaranju izvlači se jedan `
+    + 'nivo nasumično (svi u rundi dobiju isti), pa je zadatak nekad lakši, nekad teži. Izaberi nivo.';
+}
+
 /** Šta forma prikazuje o grupi: opis sa servera ili, dok on ne stigne, čvor upravo izabran u dijalogu. */
 interface OpisGrupe {
   grupaId: number | null;
@@ -100,12 +109,12 @@ interface OpisGrupe {
       </mat-form-field>
     </div>
     <div class="uz-ed-red" data-zadatak-nivo>
-      <app-nivo izbor saSvima [nivo]="nivo()" [brojevi]="o?.poNivou" (promena)="postaviNivo($event)" />
+      <app-nivo izbor saSvima nasumicno [nivo]="nivo()" [brojevi]="o?.poNivou" (promena)="postaviNivo($event)" />
     </div>
-    <p class="uz-ed-napomena">Kad je nivo izabran, svi studenti dobijaju varijante tog nivoa; broj uz nivo su aktivne varijante.</p>
+    <p class="uz-ed-napomena">Svi u rundi uvek dobijaju varijante istog nivoa; broj uz nivo su aktivne varijante.</p>
     <!-- region postoji uvek, da čitač ekrana najavi promenu (kao upozorenja formula u formi pitanja) -->
     <div role="status">
-      @for (u of o?.upozorenja ?? []; track u) {
+      @for (u of upozorenja(); track u) {
         <p class="uz-ed-upozorenje">{{ u }}</p>
       }
     </div>
@@ -155,13 +164,25 @@ export class ZadatakFormaComponent {
       ? { grupaId: c.id, putanja: [{ id: c.id, naziv: c.naziv }], list: c.list, brojAktivnih: c.brojAktivnih, poNivou: null, polja: null, upozorenja: [] }
       : null;
   });
+  /**
+   * Upozorenja servera, a upozorenje o neizabranom nivou po formi (ne po sačuvanom slajdu), da nestane čim se nivo
+   * izabere: grupa ima aktivne varijante više nivoa, a nivo nije izabran (server tada pri svakom otvaranju bira jedan).
+   */
+  protected readonly upozorenja = computed(() => {
+    const o = this.opis();
+    const ostala = (o?.upozorenja ?? []).filter(u => !u.startsWith(NIVO_NIJE_IZABRAN_POCETAK));
+    const nivoi = (o?.poNivou ?? []).map((b, i) => (b > 0 ? '★'.repeat(i + 1) : null)).filter(n => n !== null);
+    return this.nivo() === null && nivoi.length > 1 ? [nivoNijeIzabran(nivoi), ...ostala] : ostala;
+  });
+
   /** Kandidati za nivo iz forme (ne sačuvani): iz brojeva po nivoima kad ih server dao, inače ukupan broj čvora. */
   protected readonly brojZaNivo = computed(() => {
     const o = this.opis();
     if (!o) return 0;
     const n = this.nivo();
     if (!o.poNivou) return o.brojAktivnih;
-    return n === null ? o.poNivou.reduce((a, b) => a + b, 0) : o.poNivou[n - 1] ?? 0;
+    // bez nivoa runda dobija jedan nasumičan nivo: najviše onoliko koliko ima najbrojniji (kao server)
+    return n === null ? Math.max(0, ...o.poNivou) : o.poNivou[n - 1] ?? 0;
   });
   protected readonly putanja = computed(() => (this.opis()?.putanja ?? []).map(p => p.naziv).join(' › '));
 

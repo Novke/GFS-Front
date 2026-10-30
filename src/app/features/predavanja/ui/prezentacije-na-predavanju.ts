@@ -66,7 +66,7 @@ export const RANG_PREDAVANJA_OSVEZAVANJE_MS = 10_000;
                 <h3 id="naslov-rang-predavanja">{{ r.izvodjenja.length > 1 ? 'Rang tačnosti predavanja' : 'Rang tačnosti' }}</h3>
                 <p class="meta">
                   @if (r.izvodjenja.length > 1) { Sve prezentacije ovog predavanja zajedno ({{ r.izvodjenja.length }}). }
-                  Prvo tačnost (neodgovoreno pitanje je netačno), pa prosečno vreme, pa ★.
+                  Redosled: više ★, pa kraće prosečno vreme; tačnost (neodgovoreno je netačno) je podatak.
                   @if (store.uToku().length > 0) { Osvežava se dok prezentacija traje. }
                 </p>
                 <app-rang-tacnosti-tabela [stavke]="r.rang" [kolone]="r.izvodjenja.length > 1 ? ['izvodjenja'] : []"

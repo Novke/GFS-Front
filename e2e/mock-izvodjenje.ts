@@ -352,16 +352,24 @@ export class MockIzvodjenje {
     return this.izmenaNivoa === null ? (z.nivo ?? null) : this.izmenaNivoa === 0 ? null : this.izmenaNivoa;
   }
 
-  /** Aktivne varijante važećeg nivoa (redom iz fikstura); nivo varijante bez polja je 2. */
+  /**
+   * Aktivne varijante važećeg nivoa (redom iz fikstura); nivo varijante bez polja je 2. Bez nivoa svi u rundi i dalje
+   * rade isti nivo (kao server): server ga izvlači nasumično, mok uzima nivo prve varijante.
+   */
   private kandidati(z: ZadatakInfo): VarijantaZadatka[] {
-    const nivo = this.nivoZaOtvaranje(z);
-    return (this.f.varijanteZadatka ?? []).filter(v => nivo === null || (v.nivo ?? 2) === nivo);
+    const sve = this.f.varijanteZadatka ?? [];
+    const nivo = this.nivoZaOtvaranje(z) ?? (sve[0]?.nivo ?? 2);
+    return sve.filter(v => (v.nivo ?? 2) === nivo);
   }
 
   /** Koliko se izvlači pri otvaranju: izbor iz konzole, inače broj sa slajda (`null` = sve), najviše koliko ima aktivnih. */
   private brojZaOtvaranje(z: ZadatakInfo): number {
     // nivo slajda: broj sa servera (fikstura ga može menjati); drugi nivo iz konzole: kandidati tog nivoa
-    const m = this.nivoZaOtvaranje(z) === (z.nivo ?? null) ? z.brojAktivnihVarijanti : this.kandidati(z).length;
+    // (bez nivoa: najviše koliko ima najbrojniji nivo, kao server)
+    const nivo = this.nivoZaOtvaranje(z);
+    const po = z.brojAktivnihPoNivou ?? [];
+    const m = nivo === null && po.filter(b => b > 0).length > 1 ? Math.max(...po)
+      : nivo === (z.nivo ?? null) ? z.brojAktivnihVarijanti : this.kandidati(z).length;
     const n = this.izmenaBrojaVarijanti === null ? (z.brojVarijanti ?? m) : this.izmenaBrojaVarijanti === 0 ? m : this.izmenaBrojaVarijanti;
     return Math.min(n, m);
   }
