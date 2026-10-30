@@ -40,7 +40,8 @@ test.describe('konzola posle kraja izvođenja', () => {
     await expect(kraj(page).locator('[data-nazad-predavanje]')).toBeVisible();
 
     await kraj(page).locator('[data-predlog-stavka="6"] [data-pokreni]').click();
-    await expect(page).toHaveURL(/\/izvodjenja\/(\d+)\/konzola$/);
+    // čeka se adresa NOVOG izvođenja: obična `(\d+)` odgovara i staroj adresi (7) pa čekanje prođe pre navigacije
+    await expect(page).toHaveURL(/\/izvodjenja\/(?!7\/)\d+\/konzola$/);
     const novo = Number(/izvodjenja\/(\d+)\/konzola/.exec(page.url())![1]);
     expect(novo).not.toBe(7);
     expect(mock.zahteviZa('prezentacije/6/izvodjenja', 'POST')[0].telo).toEqual({ cuvanje: true, grupaId: null, predavanjeId: 1, boduje: false });
