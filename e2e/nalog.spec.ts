@@ -14,12 +14,13 @@ import { MockApi, tekucaSkolskaGodina } from './mock-api';
  */
 
 /**
- * `GET cas`: posle prijave student je na tabu Čas (`/nalog/cas`), a ljuska tabova na drugim tabovima pita da li je počela
- * prezentacija (traka); tab Ja čita `ja` (studentski portal, faze 1-3). `GET casovi`: kartica "Naredni časovi" na tabu Čas
- * (najava odsustva; bez rasporeda u moku je prazna i ne vidi se).
+ * `GET cas`: posle prijave student je na tabu Početna (`/nalog/pocetna`), a ljuska tabova na tabovima osim Čas pita da li je
+ * počela prezentacija ili je predavanje u toku (traka); Početna i tab Ja čitaju `ja` (studentski portal, faze 1-3). `GET casovi`:
+ * kartica "Naredni časovi" na Početnoj (najava odsustva; bez rasporeda u moku je prazna i ne vidi se).
  */
-// `podesavanja`: kartica "Obaveštenja" na tabu Ja (mejl o otkazanom času) čita svoje stanje
-const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi|podesavanja)$/;
+// `podesavanja`: kartica "Obaveštenja" na tabu Ja (mejl, push i zvono) čita svoje stanje, `push` stanje uređaja;
+// `obavestenja`: zvono u zaglavlju svakog taba (`otvoreno` kad ga student otvori)
+const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi|podesavanja|obavestenja|obavestenja\/otvoreno|push)$/;
 const INDEKS = 'GD1';
 /** Godina koju forma predlaže bez `?godina=` (fikstura nema svoju, pa mock prihvata istu). */
 const GODINA = tekucaSkolskaGodina();
@@ -121,15 +122,18 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     await ocekuj(page.getByRole('button', { name: 'Ne stiže mi kod' })).toHaveCount(0);
     await page.getByLabel('Kod od nastavnika').fill(MockApi.KOD_NALOGA);
     await page.getByRole('button', { name: 'Prijavi se' }).click();
-    // posle prijave bez `nazad`: tab Čas (nečekiran), prijava ne ostaje u istoriji
-    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
-    await ocekuj(page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: 'Čas' })).toHaveAttribute('aria-current', 'page');
+    // posle prijave bez `nazad`: tab Početna, prijava ne ostaje u istoriji
+    await ocekuj(page).toHaveURL(/\/nalog\/pocetna$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
+    await ocekuj(page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: 'Početna' })).toHaveAttribute('aria-current', 'page');
     ocekuj(mock.zahteviZa('public/nalog/kod')).toHaveLength(0); // mejl se ne šalje
     ocekuj(mock.zahteviZa('public/nalog/prijava', 'POST').at(-1)?.telo).toEqual({ indeks: INDEKS, godina: GODINA, kod: MockApi.KOD_NALOGA });
-    // tab Čas pita za čas i (kartica "Naredni časovi") za raspored; redosled ta dva nije bitan
+    // Početna čita nalog i (kartica "Naredni časovi") raspored, ljuska tabova pita za čas (traka), zvono ljuske za
+    // obaveštenja; redosled nije bitan
     ocekuj(javnaMreza.api.slice(0, 2)).toEqual(['GET /api/public/nalog/stanje', 'POST /api/public/nalog/prijava']);
-    ocekuj(javnaMreza.api.slice(2).sort()).toEqual(['GET /api/public/nalog/cas', 'GET /api/public/nalog/casovi']);
+    ocekuj(javnaMreza.api.slice(2).sort()).toEqual(
+      ['GET /api/public/nalog/cas', 'GET /api/public/nalog/casovi', 'GET /api/public/nalog/ja', 'GET /api/public/nalog/obavestenja'],
+    );
   });
 
   test('nalepljen kod sa razmacima ulazi kao 6 cifara', async ({ page }) => {
@@ -144,48 +148,49 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
     }, ` ${MockApi.KOD_NALOGA.slice(0, 3)} ${MockApi.KOD_NALOGA.slice(3)} `);
     await ocekuj(kod).toHaveValue(MockApi.KOD_NALOGA);
     await page.getByRole('button', { name: 'Prijavi se' }).click();
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
   });
 
-  test('nazad sa spoljnim URL-om se ignoriše (Review Focus 4): posle prijave tab Čas', async ({ page }) => {
+  test('nazad sa spoljnim URL-om se ignoriše (Review Focus 4): posle prijave tab Početna', async ({ page }) => {
     await page.goto('nalog?nazad=%2F%2Fevil.example.test');
     await posaljiKod(page);
     await unesiKod(page, MockApi.KOD_NALOGA);
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
-    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/cas$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/pocetna$/);
     await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
   });
 
-  test('nazad na nastavničku rutu se ignoriše: posle prijave tab Čas, bez nastavničkih zahteva', async ({ page, javnaMreza }) => {
+  test('nazad na nastavničku rutu se ignoriše: posle prijave tab Početna, bez nastavničkih zahteva', async ({ page, javnaMreza }) => {
     await page.goto('nalog?nazad=predavanja%2F3');
     await posaljiKod(page);
     await unesiKod(page, MockApi.KOD_NALOGA);
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
-    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/cas$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/pocetna$/);
     await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
     ocekuj(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/') && !z.startsWith('POST /api/public/'))).toEqual([]);
   });
 
-  test('nazad=nalog (ista stranica): posle prijave tab Čas, ne ostaje na kodu', async ({ page }) => {
+  test('nazad=nalog (ista stranica): posle prijave tab Početna, ne ostaje na kodu', async ({ page }) => {
     await page.goto('nalog?nazad=nalog');
     await posaljiKod(page);
     await unesiKod(page, MockApi.KOD_NALOGA);
-    await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
-    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/cas$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
+    ocekuj(new URL(page.url()).pathname).toMatch(/\/nalog\/pocetna$/);
     await ocekuj(page.getByRole('button', { name: 'Nastavi' })).toHaveCount(0);
   });
 
-  test('prijavljen: /nalog vodi na tab Čas; tab Ja: ime, grupa, uređaji; "Odjavi sve uređaje" uz potvrdu, pa "Odjavi se" posle nove prijave', async ({ page, mock }) => {
+  test('prijavljen: /nalog vodi na tab Početna; tab Ja: ime, grupa, uređaji; "Odjavi sve uređaje" uz potvrdu, pa "Odjavi se" posle nove prijave', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     await page.goto('nalog');
-    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page).toHaveURL(/\/nalog\/pocetna$/);
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Zdravo, Ana!' })).toBeVisible();
     await page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: 'Ja' }).click();
     await ocekuj(page.getByRole('heading', { level: 2, name: 'Moj nalog' })).toBeVisible();
     await ocekuj(page.getByText('Ana Primerović')).toBeVisible();
     await ocekuj(page.getByText('GD-2025 · generacija 2025')).toBeVisible();
     await ocekuj(page.getByText('Android · Chrome')).toBeVisible();
     await ocekuj(page.getByText('Windows · Firefox')).toBeVisible();
-    ocekuj(mock.zahteviZa('public/nalog/ja', 'GET')).toHaveLength(1);
+    ocekuj(mock.zahteviZa('public/nalog/ja', 'GET')).toHaveLength(2); // Početna, pa tab Ja
 
     await page.getByRole('button', { name: 'Odjavi sve uređaje' }).click();
     const dijalog = page.getByRole('alertdialog', { name: 'Odjaviti sve uređaje?' });
@@ -200,7 +205,7 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
 
     await posaljiKod(page);
     await unesiKod(page, MockApi.KOD_NALOGA);
-    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page).toHaveURL(/\/nalog\/pocetna$/);
     await page.getByRole('navigation', { name: 'Nalog' }).getByRole('link', { name: 'Ja' }).click();
     await ocekuj(page.getByText('Ovaj uređaj')).toBeVisible();
     await page.getByRole('button', { name: 'Odjavi se' }).click();
@@ -216,7 +221,7 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
   });
 
   for (const rezim of ['dan', 'noc'] as const) {
-    test(`axe (${rezim}), 360 px: ekran koda sa greškom, tab Čas i tab Ja, bez serious/critical`, async ({ page, mock }) => {
+    test(`axe (${rezim}), 360 px: ekran koda sa greškom, Početna, tab Čas i tab Ja, bez serious/critical`, async ({ page, mock }) => {
       test.info().annotations.push({ type: 'rezim', description: rezim });
       await page.emulateMedia({ colorScheme: rezim === 'noc' ? 'dark' : 'light' });
       await page.setViewportSize({ width: 360, height: 740 });
@@ -227,7 +232,11 @@ test.describe('nalog studenta (telefon, bez sesije nastavnika)', () => {
       await bezOzbiljnihKrsenja(page);
 
       mock.studentPrijavljen = true;
+      mock.podaci.nalogStudenta.waLink = 'https://chat.whatsapp.com/E2eGrupaPrimer0123';
       await page.goto('nalog');
+      await ocekuj(page.getByRole('link', { name: /WhatsApp grupa/ })).toBeVisible();
+      await bezOzbiljnihKrsenja(page);
+      await page.goto('nalog/cas');
       await ocekuj(page.getByRole('heading', { level: 2, name: 'Nisi na času' })).toBeVisible();
       await bezOzbiljnihKrsenja(page);
       await page.goto('nalog/ja');
@@ -332,7 +341,8 @@ test.describe('nalog/moodle (telefon, bez sesije nastavnika)', () => {
     ]);
     // tab Ja čita nalog i podešavanja obaveštenja; ljuska tabova pita za čas (traka "Prezentacija je počela"), redosled nije bitan
     ocekuj(javnaMreza.api.slice(6).sort()).toEqual(
-      ['GET /api/public/nalog/cas', 'GET /api/public/nalog/ja', 'GET /api/public/nalog/podesavanja'],
+      ['GET /api/public/nalog/cas', 'GET /api/public/nalog/ja', 'GET /api/public/nalog/obavestenja',
+        'GET /api/public/nalog/podesavanja', 'GET /api/public/nalog/push'],
     );
     ocekuj(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });

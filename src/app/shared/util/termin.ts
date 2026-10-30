@@ -9,6 +9,9 @@ export const DANI: readonly string[] = ['', 'ponedeljak', 'utorak', 'sreda', 'č
 /** Isto, kratko (`pon`, `uto`, ...), za uske tabele. */
 export const DANI_KRATKO: readonly string[] = ['', 'pon', 'uto', 'sre', 'čet', 'pet', 'sub', 'ned'];
 
+/** Kratki nazivi meseci (`jan` ... `dec`), indeks 0 = januar; za blok datuma na kartici termina. */
+export const MESECI_KRATKO: readonly string[] = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
+
 const ISO_DAN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** `2026-11-04` -> lokalni datum (ponoć), ili `null` za nešto drugo i nepostojeći dan. */

@@ -36,7 +36,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 18px 20px;
+      /* ljuska tabova ostavlja mesto za zvono u desnom uglu (NalogTabovi) */
+      padding: 18px var(--nalog-zaglavlje-desno, 20px) 18px 20px;
       background: var(--hero-bg);
       color: var(--hero-ink);
     }

@@ -15,7 +15,7 @@ export interface IzborVracanja {
 
 /**
  * Vraćanje otkazanog termina („čas se ipak održava“, spec najave odsustva, odeljak 6): potvrda (alertdialog) sa izborom
- * „Pošalji mejl studentima“ (uključeno). Vraća izbor ili `undefined` (Odustani); zahtev šalje stranica.
+ * „Obavesti studente mejlom i na telefon“ (uključeno). Vraća izbor ili `undefined` (Odustani); zahtev šalje stranica.
  */
 @Component({
   selector: 'app-vracanje-dialog',
@@ -29,7 +29,7 @@ export interface IzborVracanja {
         {{ dan }}, {{ blok }}
       </p>
       <p class="opis">Čas se ipak održava: studenti na nalogu više ne vide „Nema časa“.</p>
-      <mat-checkbox [formControl]="posaljiMejl" data-posalji-mejl>Pošalji mejl studentima („Čas se ipak održava“, jedan po studentu)</mat-checkbox>
+      <mat-checkbox [formControl]="posaljiMejl" data-posalji-mejl>Obavesti studente mejlom i na telefon („Čas se ipak održava“)</mat-checkbox>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button matButton type="button" [mat-dialog-close]="undefined">Odustani</button>

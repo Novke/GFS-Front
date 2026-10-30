@@ -1,11 +1,12 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, linkedSignal, viewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, linkedSignal, viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
+import { zaboraviIzlazak, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
 import { UzivoPutanje } from '../uzivo-putanje';
-import { medijUrl } from '../data-access/uzivo.models';
+import { LicnoStanje, medijUrl } from '../data-access/uzivo.models';
 import { grupisiCifre } from '../ui/format';
 import { OpcijaOblikComponent } from '../ui/opcija-oblik';
 import { RangListaComponent } from '../ui/rang-lista.component';
@@ -19,6 +20,15 @@ import { ZadatakEkranComponent } from './zadatak-ekran.component';
 export const POVRATAK_NA_CAS_MS = 3_000;
 
 /**
+ * Sopstvena tačnost u zaglavlju: `Tačno 3 od 5`, `null` dok nema nijednog pitanja koje se računa (stari backend je ne šalje).
+ * Server je računa po pravilu ranga tačnosti, a trenutna runda ulazi tek posle "Tačno" (nikad ranije).
+ */
+export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | null {
+  const d = l?.dugovanih;
+  return typeof d === 'number' && d > 0 ? `Tačno ${Math.max(0, l?.tacnih ?? 0)} od ${d}` : null;
+}
+
+/**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
  * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`).
  * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first. Tekst pitanja i opcija (i tačne opcije)
@@ -28,7 +38,12 @@ export const POVRATAK_NA_CAS_MS = 3_000;
  * lenjom bloku (`@defer`): telefon vuče njegov chunk tek na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu, pa ovde
  * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`).
  * Sa `?sa=cas` (student je došao sa `/nalog/cas`): posle kraja ili izbacivanja se za {@link POVRATAK_NA_CAS_MS} vraća na
- * čas, gde čeka sledeću prezentaciju. Bodovano izvođenje bez čekiranja (faza `cekiranje`) pokazuje samo poruku servera.
+ * čas (`replaceUrl`, završeno izvođenje ne ostaje u istoriji), gde čeka sledeću prezentaciju. Bodovano izvođenje bez
+ * čekiranja (faza `cekiranje`) pokazuje samo poruku servera.
+ * **Izađi** (zaglavlje) vodi na tab Čas (došao sa časa), Početnu naloga (prijavljen student) ili unos koda (gost). Kad
+ * student napusti izvođenje koje traje (Izađi, Nazad, drugi link), kod se pamti (`izlaz-iz-izvodjenja`), pa ga tab Čas ne
+ * otvara sam ponovo (petlja Nazad -> Čas -> izvođenje); otvaranje `uzivo/<kod>` to briše. Zaglavlje nosi i sopstvenu
+ * tačnost ({@link tacnostUcesnika}), koja se menja tek posle "Tačno".
  */
 @Component({
   selector: 'app-uzivo-student',
@@ -100,14 +115,17 @@ export const POVRATAK_NA_CAS_MS = 3_000;
         <header class="uz-st-zaglavlje">
           <div class="uz-st-ko">
             <span class="uz-st-ime">{{ l?.ime ?? s.ucesnik()?.ime }}</span>
-            @if (j?.takmicenje && l) {
-              <span class="uz-st-poeni">{{ poeni(l.poeni) }} poena</span>
+            @if (ucinak(); as u) {
+              <span class="uz-st-poeni" data-tacnost>{{ u }}</span>
             }
           </div>
-          @if (detaljiMoguci()) {
-            <button type="button" class="uz-st-dugme uz-st-detalji-dugme" aria-haspopup="dialog"
-                    (click)="detaljiOtvoreni.set(true)">Detalji</button>
-          }
+          <div class="uz-st-vrh-dugmad">
+            @if (detaljiMoguci()) {
+              <button type="button" class="uz-st-dugme uz-st-detalji-dugme" aria-haspopup="dialog"
+                      (click)="detaljiOtvoreni.set(true)">Detalji</button>
+            }
+            <button type="button" class="uz-st-dugme uz-st-izadji" (click)="izadji()" data-izadji>Izađi</button>
+          </div>
         </header>
         @if (s.greska(); as g) {
           <p class="uz-st-greska" role="alert">{{ g }}</p>
@@ -139,7 +157,12 @@ export const POVRATAK_NA_CAS_MS = 3_000;
                   <p class="uz-st-tekst">Ti si: <strong>{{ l?.ime ?? s.ucesnik()?.ime }}</strong></p>
                 </div>
               }
-              @case ('tabla') { <p class="uz-st-veliko" role="status">Gledaj u tablu</p> }
+              @case ('tabla') {
+                <div class="uz-st-poruka" role="status">
+                  <p class="uz-st-veliko">Gledaj u tablu</p>
+                  @if (tacnost(); as t) { <p class="uz-st-tekst" data-skor>Do sada: <strong>{{ t }}</strong></p> }
+                </div>
+              }
               @case ('stize') { <p class="uz-st-veliko" role="status">{{ j?.slajdTip === 'ZADATAK' ? 'Zadatak' : 'Pitanje' }} stiže…</p> }
               @case ('unos') {
                 @if (p) {
@@ -265,18 +288,47 @@ export class UzivoStudentPage {
   private readonly router = inject(Router);
   /** `?sa=cas`: student je došao sa `/nalog/cas` (čekiranje), pa se tamo vraća posle kraja izvođenja. */
   protected readonly saCasa = this.ruta.snapshot?.queryParamMap?.get('sa') === 'cas';
+  protected readonly tacnost = computed(() => tacnostUcesnika(this.store.licno()));
+  /** Red ispod imena: poeni (samo takmičenje) i tačnost, npr. `120 poena · Tačno 3 od 5`. */
+  protected readonly ucinak = computed(() => {
+    const l = this.store.licno();
+    const poeni = this.store.javno()?.takmicenje && l ? `${grupisiCifre(l.poeni)} poena` : null;
+    return [poeni, this.tacnost()].filter(Boolean).join(' · ');
+  });
 
   constructor() {
     effect(onCleanup => {
       const f = this.store.faza();
       if (!this.saCasa || (f !== 'kraj' && f !== 'izbacen')) return;
-      const t = setTimeout(() => void this.router.navigateByUrl('nalog/cas'), POVRATAK_NA_CAS_MS);
+      const t = setTimeout(() => void this.router.navigateByUrl('nalog/cas', { replaceUrl: true }), POVRATAK_NA_CAS_MS);
       onCleanup(() => clearTimeout(t));
     });
     this.ruta.paramMap.pipe(
       map(p => p.get('kod') ?? ''), distinctUntilChanged(), takeUntilDestroyed(),
-    ).subscribe(kod => this.store.otvori(kod));
+    ).subscribe(kod => {
+      zaboraviIzlazak();
+      this.store.otvori(kod);
+    });
+    // Napušteno izvođenje koje još traje: tab Čas ga posle ne otvara sam (Nazad sa ove strane bi inače bio petlja).
+    inject(DestroyRef).onDestroy(() => {
+      const kod = this.store.kod();
+      const f = this.store.faza();
+      if (kod && f !== 'kraj' && f !== 'izbacen') {
+        zapamtiIzlazak(kod);
+      }
+    });
     // Fokus na "Zatvori" kad se panel otvori (tastatura i čitač ekrana).
     effect(() => this.zatvoriDetalje()?.nativeElement.focus());
+  }
+
+  /** Sa časa nazad na tab Čas (menja ovaj unos istorije), prijavljen student na Početnu, gost na unos koda. */
+  protected izadji(): void {
+    if (this.saCasa) {
+      void this.router.navigateByUrl('nalog/cas', { replaceUrl: true });
+    } else if (this.store.info()?.prijavljenStudent) {
+      void this.router.navigateByUrl('nalog/pocetna');
+    } else {
+      void this.router.navigateByUrl(UzivoPutanje.uzivo);
+    }
   }
 }

@@ -33,6 +33,7 @@
     "@stomp/rx-stomp": "^2.4.0",
     "@stomp/stompjs": "^7.3.0",
     "fflate": "0.8.3",
+    "jsqr": "1.4.0",
     "marked": "^18.1.0",
     "mathlive": "0.111.1",
     "pdfjs-dist": "6.4.299",

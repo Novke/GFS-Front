@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { API_URL } from '../../../core/api/api-url';
 import { javnoNazad, nazadIzUrla } from '../../../shared/util/nazad';
 import { decimalni } from '../../uzivo/ui/format';
-import { sledeciUpitMs } from './cas.pravila';
+import { sledeciUpitMs, sledeciUpitVanCasaMs } from './cas.pravila';
 import { OcenaStudenta, PredmetStudenta, TipAktivnosti, TipVezbanja } from './portal.models';
 
 /*
@@ -18,7 +18,7 @@ export const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status
 
 /**
  * Prijava sa povratkom na trenutnu stranu naloga (`/nalog/predmet/3?k=istorija` -> `nalog?nazad=nalog/predmet/3?k=istorija`).
- * Putanja koju `javnoNazad` ne pušta (kodirani znaci, nepoznat prefiks) daje samo `nalog`: posle prijave tab Čas.
+ * Putanja koju `javnoNazad` ne pušta (kodirani znaci, nepoznat prefiks) daje samo `nalog`: posle prijave tab Početna.
  */
 export function putanjaPrijave(url: string): string {
   const nazad = javnoNazad(nazadIzUrla(url));
@@ -33,10 +33,10 @@ export function jeTabCas(url: string): boolean {
 
 /**
  * Sledeći upit trake (spec 12.1): na času 10 s ± 2 s kao `/nalog/cas` (30 telefona iza jedne NAT adrese se ne poravna),
- * inače 60 s; `slucajno` iz `[0, 1)`.
+ * van časa 30 s dok je predavanje grupe u toku (`uToku`), inače 60 s; `slucajno` iz `[0, 1)`.
  */
-export function sledeciUpitTrakeMs(naCasu: boolean, slucajno: number): number {
-  return naCasu ? sledeciUpitMs(slucajno) : 60_000;
+export function sledeciUpitTrakeMs(naCasu: boolean, slucajno: number, uToku = false): number {
+  return naCasu ? sledeciUpitMs(slucajno) : sledeciUpitVanCasaMs(uToku);
 }
 
 /** Aktivnost na predavanju kako je student vidi (bez bodova): `null` = nije bio. */

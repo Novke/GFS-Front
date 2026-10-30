@@ -6,8 +6,16 @@ import {
   JavniZadatak, JavnoPitanje, JavnoStanje, LicniZadatak, LicnoStanje, TelefonPrikaz,
 } from '../data-access/uzivo.models';
 import { ServerskiSat } from '../data-access/sat';
+import { IZASAO_IZ_IZVODJENJA, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
 import { EkranStudenta, FazaStudenta, StudentStore, TacanOdgovor, Veza } from './student.store';
-import { POVRATAK_NA_CAS_MS, UzivoStudentPage } from './uzivo-student.page';
+import { POVRATAK_NA_CAS_MS, tacnostUcesnika, UzivoStudentPage } from './uzivo-student.page';
+
+// Uništena stranica izvođenja koje traje pamti izlazak u sessionStorage (`zapamtiIzlazak`), a jsdom ga deli sa ostalim spec
+// fajlovima istog radnika. TestBed bi stranice uništio tek u svom afterEach (posle ovog), pa ih ovde uništavamo pre brisanja.
+afterEach(() => {
+  TestBed.resetTestingModule();
+  sessionStorage.clear();
+});
 
 /*
  * Stranica studenta sa formulama (faza 5, F3). `StudentStore` je provider komponente, pa se zamenjuje na komponenti.
@@ -262,14 +270,14 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
     return f;
   }
 
-  it('posleKrajaSaCasVracaNaCas: posle 3 s na nalog/cas', async () => {
+  it('posleKrajaSaCasVracaNaCas: posle 3 s na nalog/cas (zamena u istoriji)', async () => {
     await pripremi({ sa: 'cas' });
     const f = await prikazi('kraj');
     expect((f.nativeElement as HTMLElement).querySelector('[data-na-cas]')?.textContent).toContain('Vraćam te na čas');
     await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS - 1);
     expect(navigacija).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(navigacija).toHaveBeenCalledWith('nalog/cas');
+    expect(navigacija).toHaveBeenCalledWith('nalog/cas', { replaceUrl: true });
   });
 
   it('posleKrajaBezSaCasOstaje', async () => {
@@ -288,7 +296,7 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
     expect(el.textContent).toContain('Nastavnik te je uklonio iz ovog izvođenja.');
     expect(el.textContent).not.toContain('Uđi ponovo');
     await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS);
-    expect(navigacija).toHaveBeenCalledWith('nalog/cas');
+    expect(navigacija).toHaveBeenCalledWith('nalog/cas', { replaceUrl: true });
   });
 
   it('bodovanoBezCekiranjaPrikazujePoruku: poruka servera, bez forme imena i bez "Pokušaj ponovo"', async () => {
@@ -301,5 +309,105 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
     expect(el.textContent).not.toContain('Pokušaj ponovo');
     await vi.advanceTimersByTimeAsync(POVRATAK_NA_CAS_MS * 2);
     expect(navigacija).not.toHaveBeenCalled();
+  });
+});
+
+function licno(izmene: Partial<LicnoStanje> = {}): LicnoStanje {
+  return { verzija: 1, ucesnikId: 5, ime: 'Ana', poeni: 1200, mesto: 2, brojUcesnika: 9, izbacen: false, odgovor: null, ...izmene };
+}
+
+describe('tacnostUcesnika', () => {
+  it.each([
+    [null, null],
+    [licno(), null],
+    [licno({ tacnih: 0, dugovanih: 0 }), null],
+    [licno({ tacnih: 0, dugovanih: 2 }), 'Tačno 0 od 2'],
+    [licno({ tacnih: 3, dugovanih: 5 }), 'Tačno 3 od 5'],
+  ] as const)('%j -> %s', (l, ocekivano) => {
+    expect(tacnostUcesnika(l)).toBe(ocekivano);
+  });
+});
+
+describe('UzivoStudentPage: Izađi, tačnost i pamćenje izlaska', () => {
+  let lazni: ReturnType<typeof lazniStore>;
+  let navigacija: ReturnType<typeof vi.spyOn>;
+
+  async function pripremi(query: Record<string, string>): Promise<ComponentFixture<UzivoStudentPage>> {
+    sessionStorage.clear();
+    lazni = lazniStore();
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: of(convertToParamMap({ kod: '123456' })), snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+      ],
+    });
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    await TestBed.compileComponents();
+    navigacija = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    lazni.ekran.set('tabla');
+    const f = TestBed.createComponent(UzivoStudentPage);
+    f.detectChanges();
+    return f;
+  }
+
+  afterEach(() => sessionStorage.clear());
+
+  it('otvaranje briše zapamćen izlazak; napuštanje izvođenja koje traje ga pamti', async () => {
+    zapamtiIzlazak('123456');
+    const f = await pripremi({ sa: 'cas' });
+    expect(sessionStorage.getItem(IZASAO_IZ_IZVODJENJA)).toBeNull();
+    f.destroy();
+    expect(sessionStorage.getItem(IZASAO_IZ_IZVODJENJA)).toBe('123456');
+  });
+
+  it.each(['kraj', 'izbacen'] as const)('posle faze %s napuštanje ne pamti izlazak (izvođenje se završilo)', async faza => {
+    const f = await pripremi({ sa: 'cas' });
+    lazni.faza.set(faza);
+    f.destroy();
+    expect(sessionStorage.getItem(IZASAO_IZ_IZVODJENJA)).toBeNull();
+  });
+
+  it('Izađi sa časa: tab Čas uz zamenu u istoriji', async () => {
+    const f = await pripremi({ sa: 'cas' });
+    (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-izadji]')!.click();
+    expect(navigacija).toHaveBeenCalledExactlyOnceWith('nalog/cas', { replaceUrl: true });
+  });
+
+  it('Izađi: prijavljen student bez ?sa=cas ide na Početnu, gost na unos koda', async () => {
+    let f = await pripremi({});
+    lazni.info.set({ naziv: 'Statika', prijavljenStudent: true } as never);
+    (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-izadji]')!.click();
+    expect(navigacija).toHaveBeenCalledExactlyOnceWith('nalog/pocetna');
+    f.destroy();
+    TestBed.resetTestingModule();
+    f = await pripremi({});
+    (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-izadji]')!.click();
+    expect(navigacija).toHaveBeenCalledExactlyOnceWith('uzivo');
+  });
+
+  it('tačnost u zaglavlju i na ekranu "Gledaj u tablu"; bez nijednog pitanja ništa', async () => {
+    const f = await pripremi({ sa: 'cas' });
+    const el = f.nativeElement as HTMLElement;
+    lazni.licno.set(licno());
+    f.detectChanges();
+    expect(el.querySelector('[data-tacnost]')).toBeNull();
+    expect(el.querySelector('[data-skor]')).toBeNull();
+    lazni.licno.set(licno({ tacnih: 3, dugovanih: 5 }));
+    f.detectChanges();
+    expect(el.querySelector('[data-tacnost]')?.textContent?.trim()).toBe('Tačno 3 od 5');
+    expect(el.querySelector('[data-skor]')?.textContent).toContain('Tačno 3 od 5');
+  });
+
+  it('takmičenje: poeni i tačnost u istom redu', async () => {
+    const f = await pripremi({ sa: 'cas' });
+    lazni.javno.set({ ...javno('PITANJE', pitanje()), takmicenje: true });
+    lazni.licno.set(licno({ tacnih: 1, dugovanih: 2 }));
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('[data-tacnost]')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe('1 200 poena · Tačno 1 od 2');
   });
 });

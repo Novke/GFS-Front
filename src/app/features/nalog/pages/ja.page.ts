@@ -14,7 +14,8 @@ import { porukaGreske } from '../data-access/nalog.pravila';
 import { putanjaPrijave, status } from '../data-access/portal.pravila';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NalogPregled } from '../ui/nalog-pregled.component';
-import { PodesavanjaMejla } from '../ui/podesavanja-mejla.component';
+import { InstalacijaKartica } from '../ui/instalacija-kartica.component';
+import { PodesavanjaObavestenja } from '../ui/podesavanja-obavestenja.component';
 
 /** `1 uređaj`, `2 uređaja`, `5 uređaja`, `21 uređaj` (genitiv množine i paukal su isti). */
 const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređaj' : 'uređaja'}`;
@@ -23,12 +24,13 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
  * Tab **Ja** (`/nalog/ja`, spec studentskog dela 12.5): `GET api/public/nalog/ja` (ime, indeks, grupa i generacija, maska
  * mejla, uređaji, Moodle), "Odjavi se" i "Odjavi sve uređaje" (uz potvrdu). Posle odjave strana prijave (`/nalog`) sa
  * porukom kroz stanje istorije; polje indeksa je tamo prazno (zajednički računar). 401 vodi na prijavu sa povratkom ovde;
- * 401 na odjavi znači da sesije već nema (za odjavu uspeh). Ispod profila kartica "Obaveštenja" ("Javi mi mejlom kad je čas
- * otkazan", `PodesavanjaMejla`, sama učitava i čuva).
+ * 401 na odjavi znači da sesije već nema (za odjavu uspeh). Ispod profila kartica "Obaveštenja" (push na ovom uređaju,
+ * prekidači po vrsti i mejl o otkazanom času, `PodesavanjaObavestenja`, sama učitava i čuva) i "Aplikacija na telefonu"
+ * (`InstalacijaKartica`, spec „Aplikacija i obaveštenja“ 4.3).
  */
 @Component({
   selector: 'app-ja-page',
-  imports: [FormErrorBanner, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled, PodesavanjaMejla],
+  imports: [FormErrorBanner, InstalacijaKartica, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled, PodesavanjaObavestenja],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Ja">
@@ -36,7 +38,8 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
       @if (ja(); as s) {
         <app-form-error-banner [poruka]="greska()" />
         <app-nalog-pregled [ja]="s" [salje]="salje()" (odjavi)="odjavi()" (odjaviSvuda)="odjaviSvuda()" />
-        <app-podesavanja-mejla />
+        <app-podesavanja-obavestenja />
+        <app-instalacija-kartica mesto="ja" />
       } @else if (greskaUcitavanja(); as g) {
         <p class="poruka opasnost" role="alert">{{ g }}</p>
         <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>

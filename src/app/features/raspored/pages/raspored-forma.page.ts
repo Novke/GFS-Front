@@ -5,6 +5,7 @@ import {
   AbstractControl, FormArray, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators,
 } from '@angular/forms';
 import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatCheckbox } from '@angular/material/checkbox';
 import { MatDatepicker, MatDatepickerInput, MatDatepickerToggle } from '@angular/material/datepicker';
 import { MatError, MatFormField, MatHint, MatLabel, MatSuffix } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
@@ -28,7 +29,8 @@ import { DANI, danIDatum, lokalniDatum } from '../../../shared/util/termin';
 import { RasporedApi } from '../data-access/raspored.api';
 import { MAX_DANA, MAX_NAZIV, MAX_STAVKI, PODRAZUMEVANI_PRAG, RasporedDetails } from '../data-access/raspored.models';
 import {
-  cmdIzForme, danaUPeriodu, formaIzRasporeda, izgubljenaOtkazivanja, kopijaRasporeda, StavkaForme, VrednostiForme,
+  cmdIzForme, danaUPeriodu, formaIzRasporeda, izgubljenaOtkazivanja, kopijaRasporeda, PODRAZUMEVANO_VREME_PODSETNIKA, StavkaForme,
+  VrednostiForme,
 } from '../data-access/raspored.pravila';
 
 /*
@@ -74,7 +76,7 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
 @Component({
   selector: 'app-raspored-forma-page',
   imports: [
-    ErrorPanel, FormErrorBanner, MatButton, MatDatepicker, MatDatepickerInput, MatDatepickerToggle, MatError, MatFormField,
+    ErrorPanel, FormErrorBanner, MatButton, MatCheckbox, MatDatepicker, MatDatepickerInput, MatDatepickerToggle, MatError, MatFormField,
     MatHint, MatIcon, MatIconButton, MatInput, MatLabel, MatOption, MatProgressSpinner, MatSelect, MatSuffix, MatTimepicker,
     MatTimepickerInput, MatTimepickerToggle, PageHeader, ReactiveFormsModule, RouterLink, SkeletonRows,
   ],
@@ -138,6 +140,21 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
               <mat-error>{{ m }}</mat-error>
             }
           </mat-form-field>
+          <div class="podsetnik">
+            <mat-checkbox formControlName="podsetnik" data-podsetnik>Podsetnik studentima dan pre časa</mat-checkbox>
+            <mat-form-field appearance="outline" class="vreme">
+              <mat-label>U koliko sati</mat-label>
+              <input matInput [matTimepicker]="vremePodsetnika" formControlName="podsetnikVreme" placeholder="hh:mm"
+                     data-podsetnik-vreme />
+              <mat-timepicker-toggle matIconSuffix [for]="vremePodsetnika" aria-label="Izaberi vreme podsetnika" />
+              <mat-timepicker #vremePodsetnika [options]="vremenaPodsetnika" />
+              @if (poruka(forma.controls.podsetnikVreme, 'Vreme'); as m) {
+                <mat-error>{{ m }}</mat-error>
+              }
+            </mat-form-field>
+            <p class="napomena">Stiže na telefon studentima koji su uključili obaveštenja i sutra imaju čas (ne ako je čas otkazan
+              ili su najavili da neće doći). Bez mejla.</p>
+          </div>
         </section>
 
         <section class="kartica" aria-labelledby="rf-termini">
@@ -234,7 +251,7 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
         </section>
 
         <div class="dugmad">
-          <a matButton routerLink="/raspored">Odustani</a>
+          <a matButton routerLink="/raspored/periodi">Odustani</a>
           <button matButton="filled" type="submit" [disabled]="salje()" data-sacuvaj>
             @if (salje()) {
               <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true" />
@@ -254,6 +271,9 @@ const ispravanPeriod: ValidatorFn = (g: AbstractControl): ValidationErrors | nul
     .red { display: flex; flex-wrap: wrap; gap: 0 12px; }
     .siroko { flex: 1 1 320px; }
     .prag { width: 100%; max-width: 520px; }
+    .podsetnik { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 8px; }
+    .podsetnik .vreme { width: 160px; }
+    .podsetnik .napomena { flex: 1 1 100%; margin: 0; }
     .napomena, .prazno { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
     .greska-polja { margin: -8px 0 12px; color: var(--danger); font-size: 13px; }
     .izgubljena { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius);
@@ -292,6 +312,9 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
       vaziOd: new FormControl<Date | null>(null, Validators.required),
       vaziDo: new FormControl<Date | null>(null, Validators.required),
       pragNajava: new FormControl<number | null>(PODRAZUMEVANI_PRAG, [Validators.required, Validators.min(1), Validators.max(100)]),
+      podsetnik: new FormControl(true, { nonNullable: true }),
+      // isključen podsetnik gasi polje (onemogućeno polje se ne proverava)
+      podsetnikVreme: new FormControl<Date | null>(vremeIzHhmm(PODRAZUMEVANO_VREME_PODSETNIKA), Validators.required),
       stavke: new FormArray<StavkaGrupa>([]),
     },
     { validators: ispravanPeriod },
@@ -302,6 +325,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   protected readonly maxStavki = MAX_STAVKI;
   /** Ponuđena vremena (časovi su preko dana); drugo vreme može da se ukuca. */
   protected readonly vremena = opcijeVremena(7, 22, 15);
+  /** Podsetnik od 06:00 do 21:30 (granice servera; posle 22:00 se ne šalje). */
+  protected readonly vremenaPodsetnika = opcijeVremena(6, 21.75, 15);
 
   protected readonly ucitavanje = signal(false);
   protected readonly greskaUcitavanja = signal<string | null>(null);
@@ -323,6 +348,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
   protected readonly danIDatum = danIDatum;
 
   ngOnInit(): void {
+    // isključen podsetnik gasi polje vremena
+    this.forma.controls.podsetnik.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(v => this.uskladiPodsetnik(v));
     this.reference.ucitaj();
     this.ucitaj();
   }
@@ -335,7 +362,10 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     this.naslov.set(id !== null ? 'Izmena rasporeda' : kopija !== null ? 'Nov raspored (kopija)' : 'Nov raspored');
     if (izvor === null) {
       if (this.stavke.length === 0) {
-        this.postavi({ naziv: '', vaziOd: '', vaziDo: '', pragNajava: PODRAZUMEVANI_PRAG, stavke: [] });
+        this.postavi({
+          naziv: '', vaziOd: '', vaziDo: '', pragNajava: PODRAZUMEVANI_PRAG, podsetnik: true,
+          podsetnikVreme: PODRAZUMEVANO_VREME_PODSETNIKA, stavke: [],
+        });
         this.dodaj();
         this.forma.markAsPristine();
       }
@@ -410,7 +440,7 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
         this.napustanje = true;
         const n = r.izgubljenaOtkazivanja ?? 0;
         this.poruke.uspeh(n > 0 ? `Raspored je sačuvan. Ukinuto otkazanih časova: ${n}.` : 'Raspored je sačuvan.');
-        void this.router.navigateByUrl('/raspored');
+        void this.router.navigateByUrl('/raspored/periodi');
       },
       error: (e: unknown) => {
         this.salje.set(false);
@@ -431,6 +461,8 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
       vaziOd: isoIzDatuma(v.vaziOd),
       vaziDo: isoIzDatuma(v.vaziDo),
       pragNajava: v.pragNajava,
+      podsetnik: v.podsetnik,
+      podsetnikVreme: hhmmIzVremena(v.podsetnikVreme),
       stavke: v.stavke.map(s => ({ ...s, pocetak: hhmmIzVremena(s.pocetak), kraj: hhmmIzVremena(s.kraj) })),
     };
   }
@@ -442,9 +474,20 @@ export class RasporedFormaPage implements OnInit, NemaNesacuvanih {
     }
     this.forma.patchValue({
       naziv: v.naziv, vaziOd: lokalniDatum(v.vaziOd), vaziDo: lokalniDatum(v.vaziDo), pragNajava: v.pragNajava,
+      podsetnik: v.podsetnik, podsetnikVreme: vremeIzHhmm(v.podsetnikVreme),
     });
+    this.uskladiPodsetnik(v.podsetnik);
     this.forma.markAsPristine();
     this.forma.markAsUntouched();
+  }
+
+  private uskladiPodsetnik(ukljucen: boolean): void {
+    const vreme = this.forma.controls.podsetnikVreme;
+    if (ukljucen) {
+      vreme.enable({ emitEvent: false });
+    } else {
+      vreme.disable({ emitEvent: false });
+    }
   }
 
   private novaStavka(s: StavkaForme): StavkaGrupa {

@@ -1,12 +1,12 @@
 import { Route } from '@angular/router';
 
 /**
- * Deca rute `nalog` (u `PublicLayout`-u, `app.routes.ts`; student na telefonu, bez sesije nastavnika). Sve strane su lenje,
- * pa početni bundle nosi samo ovaj niz. Javni 404 za pogrešan link pod `/nalog` dodaje `app.routes.ts` (`NotFound` je u
- * `core/layout`, van allow-liste javnog feature-a).
+ * Deca rute `nalog` (u `PublicLayout`-u, `app.routes.ts`; student na telefonu, bez sesije nastavnika). I sam niz je lenj
+ * (`loadChildren`), pa početni bundle nosi samo ulaz. Javni 404 za pogrešan link pod `/nalog` dodaje `app.routes.ts`
+ * (`NotFound` je u `core/layout`, van allow-liste javnog feature-a).
  *
- * Prijavljen student (spec studentskog dela 12.1) je u ljusci tabova Čas · Predmeti · Ja (`NalogTabovi`, lenja); strana
- * prijave (`''`) i `moodle` su van nje. Pregled prezentacije je zaseban lenji chunk (projektorski renderer slajda).
+ * Prijavljen student (spec studentskog dela 12.1) je u ljusci tabova Početna · Čas · Predmeti · Ja (`NalogTabovi`, lenja);
+ * strana prijave (`''`) i `moodle` su van nje. Pregled prezentacije je zaseban lenji chunk (projektorski renderer slajda).
  */
 export const NALOG_RUTE: Route[] = [
   {
@@ -26,13 +26,19 @@ export const NALOG_RUTE: Route[] = [
     loadComponent: () => import('./pages/tabovi.page').then(x => x.NalogTabovi),
     children: [
       {
+        // prvi tab posle prijave: pozdrav, WhatsApp grupa, naredni časovi
+        path: 'pocetna',
+        title: 'Početna',
+        loadComponent: () => import('./pages/pocetna.page').then(x => x.PocetnaPage),
+      },
+      {
         // QR za čekiranje sa table ili projektora (studentski portal, faza 1): token se odmah briše iz adrese
         path: 'cas/:token',
         title: 'Čas',
         loadComponent: () => import('./pages/cas.page').then(x => x.CasPage),
       },
       {
-        // tab Čas: posle prijave, posle ključa čekanja i posle kraja Uživo izvođenja (`?sa=cas`)
+        // tab Čas (samo čas uživo): posle ključa čekanja i posle kraja Uživo izvođenja (`?sa=cas`)
         path: 'cas',
         title: 'Čas',
         loadComponent: () => import('./pages/cas.page').then(x => x.CasPage),

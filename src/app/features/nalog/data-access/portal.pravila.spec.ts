@@ -15,7 +15,7 @@ describe('portal.pravila', () => {
     ['/nalog/predmet/3?k=istorija', 'nalog?nazad=nalog/predmet/3?k=istorija'],
     ['/nalog/predmeti', 'nalog?nazad=nalog/predmeti'],
     ['/nalog/prezentacija/7', 'nalog?nazad=nalog/prezentacija/7'],
-    // putanja koju javnoNazad ne pušta: samo prijava (posle nje tab Čas)
+    // putanja koju javnoNazad ne pušta: samo prijava (posle nje tab Početna)
     ['/predavanja/3', 'nalog'],
     ['/nalog/predmet/3?q=a,b', 'nalog'],
     ['/', 'nalog'],

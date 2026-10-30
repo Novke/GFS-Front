@@ -80,13 +80,14 @@ function imaCsp(odgovor: Response | null): void {
 }
 
 test.describe('CSP frontend kontejnera', () => {
-  test('docker/nginx.conf: isti CSP (always) u location / i u lokaciji heširanih fajlova, nigde više', () => {
+  test('docker/nginx.conf: isti CSP (always) u location /, u lokaciji heširanih fajlova i za service worker, nigde više', () => {
     const conf = readFileSync(join(__dirname, '..', 'docker', 'nginx.conf'), 'utf8');
     const red = `add_header Content-Security-Policy "${CSP}" always;`;
     // add_header se ne nasleđuje u lokaciju koja ima svoj (Cache-Control), pa ga obe lokacije sa sadržajem ponavljaju
     expect(lokacija(conf, 'location / {')).toContain(red);
     expect(lokacija(conf, `location ~ "${DUGI_KES_IZRAZ}" {`)).toContain(red);
-    expect(conf.split('Content-Security-Policy').length - 1, 'broj CSP zaglavlja u nginx.conf').toBe(2);
+    expect(lokacija(conf, 'location = /assets/pwa/sw.js {')).toContain(red);
+    expect(conf.split('Content-Security-Policy').length - 1, 'broj CSP zaglavlja u nginx.conf').toBe(3);
   });
 
   test('pregledač primenjuje CSP sa statičkog servera: slika i veza ka drugom poreklu su odbijene', async ({ page }) => {

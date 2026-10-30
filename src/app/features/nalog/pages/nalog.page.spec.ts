@@ -32,12 +32,12 @@ const G = tekucaSkolska();
 
 const greska = (status: number, statusText: string) => ({ status, statusText });
 
-/** Tab Čas sa zamenom `/nalog` u istoriji: kuda ide prijavljen student bez (bezbednog) `nazad` (spec studentskog dela 12.1). */
+/** Tab Početna sa zamenom `/nalog` u istoriji: kuda ide prijavljen student bez (bezbednog) `nazad` (spec studentskog dela 12.1). */
 const NA_CAS = [NALOG_POCETNA, { replaceUrl: true }] as const;
 
 /**
  * Prijava studenta (spec prijave 5.1): indeks -> kod na mejl -> prijavljen na ovom telefonu; posle prijave `nazad` (samo
- * bezbedna relativna putanja) ili tab Čas. Stranica zove samo `api/public/nalog/*`; nalog i odjava su na tabu Ja (`ja.page.spec`).
+ * bezbedna relativna putanja) ili tab Početna. Stranica zove samo `api/public/nalog/*`; nalog i odjava su na tabu Ja (`ja.page.spec`).
  */
 describe('NalogPage', () => {
   let fixture: ComponentFixture<NalogPage>;
@@ -105,13 +105,13 @@ describe('NalogPage', () => {
       http.expectNone(JA);
     });
 
-    it('prijavljen bez nazad: GET stanje, pa tab Čas umesto /nalog u istoriji (bez GET ja)', async () => {
+    it('prijavljen bez nazad: GET stanje, pa tab Početna umesto /nalog u istoriji (bez GET ja)', async () => {
       await otvoriStranu(null, true);
       expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
       http.expectNone(JA);
     });
 
-    it('prijavljen, ali navigacija na tab Čas ne uspe (lenji chunk bez mreže): poruka i "Pokušaj ponovo"', async () => {
+    it('prijavljen, ali navigacija na tab Početna ne uspe (lenji chunk bez mreže): poruka i "Pokušaj ponovo"', async () => {
       navigacija.mockResolvedValue(false);
       await otvoriStranu(null, true);
       await stabilno();
@@ -285,7 +285,7 @@ describe('NalogPage', () => {
       expect(dugme('Prijavi se')!.disabled).toBe(false);
     });
 
-    it('bez nazad: posle prijave tab Čas (zamena u istoriji), bez GET ja', async () => {
+    it('bez nazad: posle prijave tab Početna (zamena u istoriji), bez GET ja', async () => {
       await otvoriStranu();
       await doKoda();
       await prijaviKodom();
@@ -295,7 +295,7 @@ describe('NalogPage', () => {
       http.expectNone(JA);
     });
 
-    it('dupli dodir bez nazad: dok navigacija na tab Čas traje, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+    it('dupli dodir bez nazad: dok navigacija na tab Početna traje, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
       let zavrsi!: (ok: boolean) => void;
       navigacija.mockReturnValue(new Promise<boolean>(r => (zavrsi = r)));
       await otvoriStranu();
@@ -312,7 +312,7 @@ describe('NalogPage', () => {
     });
 
     it.each(['//evil.com', 'https://x', '/\\evil', 'javascript:alert(1)', '../x'])(
-      'nazad=%s se ignoriše (Review Focus 4): posle prijave tab Čas',
+      'nazad=%s se ignoriše (Review Focus 4): posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
@@ -325,7 +325,7 @@ describe('NalogPage', () => {
     );
 
     it.each(['predavanja/3', 'studenti/1/pregled', 'prijava?nazad=uzivo', 'nalozi'])(
-      'nazad=%s (nastavnička ruta) se ignoriše kao da ga nema: posle prijave tab Čas',
+      'nazad=%s (nastavnička ruta) se ignoriše kao da ga nema: posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
@@ -337,7 +337,7 @@ describe('NalogPage', () => {
       },
     );
 
-    it('već prijavljen sa nazad na nastavničku rutu: tab Čas, bez "Nastavi"', async () => {
+    it('već prijavljen sa nazad na nastavničku rutu: tab Početna, bez "Nastavi"', async () => {
       await otvoriStranu('predavanja/3', true);
       expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
       http.expectNone(JA);
@@ -353,7 +353,7 @@ describe('NalogPage', () => {
     });
 
     it.each(['nalog', 'nalog/', 'nalog?x=1'])(
-      'nazad=%s (ista stranica): posle prijave tab Čas',
+      'nazad=%s (ista stranica): posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
@@ -370,7 +370,7 @@ describe('NalogPage', () => {
       expect(navigacija).not.toHaveBeenCalled();
       expect(el().querySelector('h2')?.textContent).toBe('Prijavljen si');
       expect(el().querySelector('[data-prijavljen]')?.textContent).toContain('Ana Primerović');
-      expect(el().querySelector('a[href="/nalog/cas"]')?.textContent).toContain('Moj nalog');
+      expect(el().querySelector('a[href="/nalog/pocetna"]')?.textContent).toContain('Moj nalog');
       dugme('Nastavi')!.click();
       expect(navigacija).toHaveBeenCalledExactlyOnceWith('uzivo/ABC123');
     });

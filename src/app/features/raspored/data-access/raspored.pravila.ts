@@ -1,5 +1,8 @@
 import { danUNedelji, dodajDane, hhmm, isoDatum, lokalniDatum } from '../../../shared/util/termin';
-import { RasporedDetails, RasporedInfo, StavkaCmd, TerminInfo } from './raspored.models';
+import { RasporedCmd, RasporedDetails, RasporedInfo, TerminInfo } from './raspored.models';
+
+/** Podrazumevano vreme podsetnika dan pre časa (spec „Aplikacija i obaveštenja“ 6.1). */
+export const PODRAZUMEVANO_VREME_PODSETNIKA = '18:00';
 
 /** Vrednosti jedne stavke u formi (vreme `HH:mm`). */
 export interface StavkaForme {
@@ -16,6 +19,9 @@ export interface VrednostiForme {
   vaziOd: string;
   vaziDo: string;
   pragNajava: number | null;
+  /** Podsetnik studentima dan pre časa (push) i u koliko sati (`HH:mm`; prazno dok je isključen ili neispravno ukucano). */
+  podsetnik: boolean;
+  podsetnikVreme: string;
   stavke: StavkaForme[];
 }
 
@@ -26,6 +32,9 @@ export function formaIzRasporeda(r: RasporedDetails): VrednostiForme {
     vaziOd: r.vaziOd,
     vaziDo: r.vaziDo,
     pragNajava: r.pragNajava,
+    // stariji backend bez polja: podrazumevano uključen u 18:00
+    podsetnik: r.podsetnikVreme !== null,
+    podsetnikVreme: r.podsetnikVreme ? hhmm(r.podsetnikVreme) : PODRAZUMEVANO_VREME_PODSETNIKA,
     stavke: r.stavke.map(s => ({
       id: s.id, predmet: s.predmet.id, grupa: s.grupa.id, dan: s.dan, pocetak: hhmm(s.pocetak), kraj: hhmm(s.kraj),
     })),
@@ -42,12 +51,14 @@ export function kopijaRasporeda(r: RasporedDetails): VrednostiForme {
 }
 
 /** Zahtev iz forme (forma je već proverena: obavezna polja nisu null). */
-export function cmdIzForme(v: VrednostiForme): { naziv: string; vaziOd: string; vaziDo: string; pragNajava: number; stavke: StavkaCmd[] } {
+export function cmdIzForme(v: VrednostiForme): RasporedCmd {
   return {
     naziv: v.naziv.trim(),
     vaziOd: v.vaziOd,
     vaziDo: v.vaziDo,
     pragNajava: v.pragNajava ?? 5,
+    podsetnik: v.podsetnik,
+    podsetnikVreme: v.podsetnik ? v.podsetnikVreme || PODRAZUMEVANO_VREME_PODSETNIKA : null,
     stavke: v.stavke.map(s => ({
       id: s.id, predmetId: s.predmet!, grupaId: s.grupa!, dan: s.dan!, pocetak: s.pocetak, kraj: s.kraj,
     })),

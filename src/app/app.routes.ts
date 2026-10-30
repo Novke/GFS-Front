@@ -11,7 +11,6 @@ import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
-import { NALOG_RUTE } from './features/nalog/nalog.routes';
 import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
@@ -174,13 +173,14 @@ export const routes: Routes = [
 
   // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
   // api/public/lti/povezi i api/public/lti/povezivanje. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  // Tabela ruta je lenja (`loadChildren`, kao banka), da ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'nalog',
     component: PublicLayout,
-    children: [
-      ...NALOG_RUTE,
+    loadChildren: () => import('./features/nalog/nalog.routes').then(x => [
+      ...x.NALOG_RUTE,
       { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
-    ],
+    ]),
   },
 
   // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.

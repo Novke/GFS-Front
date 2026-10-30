@@ -176,9 +176,13 @@ export interface JavnoStanje {
   rangLista: RangStavka[] | null; zadatak?: JavniZadatak | null;
 }
 export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null; }
+/**
+ * `tacnih` od `dugovanih`: sopstvena tačnost po pravilu ranga tačnosti (pitanja sa tačnim odgovorom i zadaci sa poljima,
+ * propušteno je netačno); trenutna runda ulazi tek posle "Tačno". Stari backend ih ne šalje.
+ */
 export interface LicnoStanje {
   verzija: number; ucesnikId: number; ime: string; poeni: number; mesto: number | null; brojUcesnika: number;
-  izbacen: boolean; odgovor: LicniOdgovor | null; zadatak?: LicniZadatak | null;
+  izbacen: boolean; odgovor: LicniOdgovor | null; zadatak?: LicniZadatak | null; tacnih?: number; dugovanih?: number;
 }
 export interface PocetnoStanje { javno: JavnoStanje; licno: LicnoStanje; }
 export interface UcesnikInfo { ucesnikId: number; ime: string; izvodjenjeId: number; }
