@@ -147,6 +147,8 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       'features/studenti/studenti.routes',
       'features/prijava/pages/prijava.page',
       'features/upis/upis.pravila',
+      'features/raspored/data-access/raspored.api',
+      'features/pocetna/ui/raspored-kartica.component',
       'shared/ui/student-picker',
     ]) {
       it(`obara uvoz ${zabranjen}`, async () => {
@@ -156,9 +158,33 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       });
     }
 
-    for (const dozvoljen of ['shared/util/nazad', 'shared/ui/confirm-dialog', 'shared/util/datum.pipe', 'core/api/api-error']) {
+    for (const dozvoljen of ['shared/util/nazad', 'shared/ui/confirm-dialog', 'shared/util/datum.pipe', 'shared/util/termin', 'core/api/api-error']) {
       it(`sme ${dozvoljen}`, async () => {
         assert.deepEqual(await poruke('features/nalog', `import * as X from '${gore}${dozvoljen}';\nexport const y = X;\n`), []);
+      });
+    }
+
+    it('shared/util/termin (naredni časovi, najava odsustva) nema nijedan uvoz', () => {
+      const izvor = require('node:fs').readFileSync(path.join(KORENI, 'src/app/shared/util/termin.ts'), 'utf8');
+      assert.doesNotMatch(izvor, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
+    });
+
+    for (const modul of ['src/app/shared/util/wa-link.ts', 'src/app/features/uzivo/izlaz-iz-izvodjenja.ts']) {
+      it(`${modul} (Početna, izlaz iz izvođenja) nema nijedan uvoz`, () => {
+        const izvor = require('node:fs').readFileSync(path.join(KORENI, modul), 'utf8');
+        assert.doesNotMatch(izvor, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
+      });
+    }
+
+    for (const [feature, dozvoljen] of [
+      ['features/upis', 'shared/util/wa-link'],
+      ['features/nalog', 'shared/util/wa-link'],
+      ['features/nalog', 'features/uzivo/izlaz-iz-izvodjenja'],
+      ['features/uzivo/javno', 'features/uzivo/izlaz-iz-izvodjenja'],
+    ]) {
+      it(`${feature} sme ${dozvoljen}`, async () => {
+        const kod = `import * as X from '${dubina(feature)}${dozvoljen}';\nexport const y = X;\n`;
+        assert.deepEqual(await poruke(feature, kod), []);
       });
     }
 

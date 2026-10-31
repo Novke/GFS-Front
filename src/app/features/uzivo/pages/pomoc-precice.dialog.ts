@@ -6,7 +6,7 @@ export type KontekstPrecica = 'publika' | 'konzola';
 
 interface Red { tasteri: string[]; opis: string; }
 
-/** Tabela prečica iz spec-a 6.4 i `Shift+R` za rešenje zadatka (ista u publici i konzoli; razlikuju se samo R i P). */
+/** Tabela prečica iz spec-a 6.4, `Shift+R` za rešenje zadatka i `Shift+L` za rang predavanja (ista u publici i konzoli; razlikuju se samo R i P). */
 export function precice(kontekst: KontekstPrecica): Red[] {
   return [
     { tasteri: ['→', 'PageDown', 'Enter'], opis: 'Dalje: sledeća stavka, otvori ili zatvori pitanje, sledeći slajd' },
@@ -17,7 +17,8 @@ export function precice(kontekst: KontekstPrecica): Red[] {
     { tasteri: ['O'], opis: 'Otvori ili zatvori pitanje' },
     { tasteri: ['Space'], opis: 'Rezultati' },
     { tasteri: ['C'], opis: 'Tačan odgovor' },
-    { tasteri: ['L'], opis: 'Rang-lista (takmičenje)' },
+    { tasteri: ['L'], opis: 'Rang-lista prezentacije (★, pa brzina; u takmičenju poeni)' },
+    { tasteri: ['Shift', 'L'], opis: 'Rang-lista celog predavanja (sve prezentacije)' },
     { tasteri: ['R'], opis: kontekst === 'publika' ? 'Ponovi pitanje (pritisni R dvaput)' : 'Ponovi pitanje (uz potvrdu)' },
     { tasteri: ['Shift', 'R'], opis: 'Rešenje zadatka (posle zatvaranja)' },
     { tasteri: ['T'], opis: 'Tajmer: pokreni 30 s, pauziraj, nastavi' },

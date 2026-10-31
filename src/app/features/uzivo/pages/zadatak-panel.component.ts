@@ -86,7 +86,7 @@ const kljucBroja = (v: number | null) => (v === null ? '' : String(v));
         <p class="uz-zp-broj">Različitih: <strong>{{ z.brojZaOtvaranje }}</strong> od {{ kandidata() }}</p>
         <!-- nivo za sledeće otvaranje (i PONOVI); izbor pokazuje stanje servera (efektivni nivo), 409 ga ne pomera -->
         <div class="uz-zp-nivo" data-zp-nivo>
-          <app-nivo izbor saSvima [nivo]="z.nivoZaOtvaranje" [brojevi]="z.slajd.brojAktivnihPoNivou" (promena)="izaberiNivo($event)" />
+          <app-nivo izbor saSvima nasumicno [nivo]="z.nivoZaOtvaranje" [brojevi]="z.slajd.brojAktivnihPoNivou" (promena)="izaberiNivo($event)" />
           @if (z.izmenaNivoa !== null && z.izmenaNivoa !== undefined) {
             <button type="button" class="uz-zp-nivo-kao" data-nivo-kao-na-slajdu (click)="komanda.emit({ tip: 'NIVO', vrednost: null })">
               Kao na slajdu ({{ nivoSlajda() }})
@@ -146,17 +146,19 @@ export class ZadatakPanelComponent {
     const z = this.stanje().zadatak;
     if (!z) return 0;
     const nivo = z.nivoZaOtvaranje ?? null;
-    if (nivo === (z.slajd.nivo ?? null)) return z.slajd.brojAktivnihVarijanti;
     const po = z.slajd.brojAktivnihPoNivou ?? [];
-    return nivo === null ? po.reduce((a, b) => a + b, 0) : (po[nivo - 1] ?? 0);
+    // bez nivoa runda dobija jedan nasumičan nivo: najviše onoliko koliko ima najbrojniji (kao server)
+    if (nivo === null) return po.filter(b => b > 0).length > 1 ? Math.max(...po) : z.slajd.brojAktivnihVarijanti;
+    if (nivo === (z.slajd.nivo ?? null)) return z.slajd.brojAktivnihVarijanti;
+    return po[nivo - 1] ?? 0;
   });
 
   protected readonly nivoSlajda = computed(() => {
     const n = this.stanje().zadatak?.slajd.nivo;
-    return n === null || n === undefined ? 'svi' : '★'.repeat(n);
+    return n === null || n === undefined ? 'nasumično' : '★'.repeat(n);
   });
 
-  /** "Svi" je `0` u komandi (`null` je "kao na slajdu", vraća se posebnim dugmetom). */
+  /** "Nasumično" je `0` u komandi (`null` je "kao na slajdu", vraća se posebnim dugmetom). */
   protected izaberiNivo(n: number | null): void {
     this.komanda.emit({ tip: 'NIVO', vrednost: n ?? 0 });
   }

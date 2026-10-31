@@ -252,6 +252,31 @@ describe('BankaApi', () => {
     brisanje.flush(null, { status: 204, statusText: 'No Content' });
     expect(rez).toHaveBeenCalledOnce();
   });
+
+  it('zadaci za vežbanje: stanje, otvori i zatvori po grupi studenata', () => {
+    api.otvoreno(5).subscribe();
+    zahtev('GET', 'api/banka/grupe/5/otvoreno').flush([]);
+    api.otvori(5, 9, { tiho: true }).subscribe();
+    const put = zahtev('PUT', 'api/banka/grupe/5/otvoreno/9');
+    expect(put.request.body).toBeNull();
+    expect(put.request.context.get(LOCAL_ERRORS)).toBe(true);
+    put.flush([]);
+    api.zatvori(5, 9).subscribe();
+    zahtev('DELETE', 'api/banka/grupe/5/otvoreno/9').flush([]);
+  });
+
+  it('statistikaVezbanja šalje samo postavljene filtere', () => {
+    api.statistikaVezbanja(3).subscribe();
+    const bez = zahtev('GET', 'api/predmeti/3/vezbanje/statistika');
+    expect(bez.request.params.keys()).toEqual([]);
+    bez.flush([]);
+    api.statistikaVezbanja(3, { grupa: 4, od: '2026-10-01', do: null }).subscribe();
+    const sa = zahtev('GET', 'api/predmeti/3/vezbanje/statistika');
+    expect(sa.request.params.get('grupa')).toBe('4');
+    expect(sa.request.params.get('od')).toBe('2026-10-01');
+    expect(sa.request.params.has('do')).toBe(false);
+    sa.flush([]);
+  });
 });
 
 describe('svgUrl', () => {

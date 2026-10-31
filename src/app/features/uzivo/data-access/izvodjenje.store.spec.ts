@@ -4,9 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { IMessage } from '@stomp/stompjs';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { linkCekiranja } from '../../../core/api/cekiranje.api';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { naPitanju, stanje } from './izvodjenje-podaci.testing';
-import { GRUPA_PORUKA, IzvodjenjeStore, PONOVO_POVEZI_POSLE_MS } from './izvodjenje.store';
+import { GRUPA_PORUKA, IzvodjenjeStore, PONOVO_POVEZI_POSLE_MS, QR_CEKIRANJE_MS } from './izvodjenje.store';
 import { STOMP_FABRIKA } from './stomp';
 import { NastavnickoStanje } from './uzivo.models';
 
@@ -370,6 +371,90 @@ describe('IzvodjenjeStore', () => {
       expect(store.ukupnoMs()).toBe(30_000);
       store.prihvati({ ...bezRoka, verzija: 3, runda: { ...bezRoka.runda!, preostaloMs: 12_000 } });
       expect(store.ukupnoMs()).toBe(30_000);
+    });
+  });
+
+  describe('qrLink (čekiranje za izvođenje sa predavanja)', () => {
+    const TOKEN_A = '17.AAAAAAAAAAAAAAAAAAAAAA';
+    const TOKEN_B = '17.BBBBBBBBBBBBBBBBBBBBBB';
+    const saPredavanjem = (izmene: Partial<NastavnickoStanje> = {}): NastavnickoStanje => {
+      const s = stanje(izmene);
+      return { ...s, izvodjenje: { ...s.izvodjenje, predavanje: { id: 17, rb: 3, datum: '2026-10-28', tema: null } } };
+    };
+    const info = (token: string | null) => ({ token, vaziDoMs: null, serverVremeMs: 0, datumNijeDanas: false, cekirani: [] });
+    const upit = () => http.match('api/predavanja/17/cekiranje');
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    async function posle(ms: number): Promise<void> {
+      TestBed.tick();
+      await vi.advanceTimersByTimeAsync(ms);
+    }
+
+    it('qrLinkJeCekiranjeZaVezanoIzvodjenje: na ekranu prijave QR čekira, token se čita na 3 s', async () => {
+      init(saPredavanjem());
+      await posle(0);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_A));
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_A));
+      expect(store.joinLink()).toMatch(/uzivo\/123456$/);
+      await posle(QR_CEKIRANJE_MS);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_B));
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_B));
+    });
+
+    it('qrLinkJeJoinZaPredavanjeOdDrugogDana: QR ne čekira na staro predavanje', async () => {
+      init(saPredavanjem());
+      await posle(0);
+      http.expectOne('api/predavanja/17/cekiranje').flush({ ...info(TOKEN_A), datumNijeDanas: true });
+      expect(store.qrLink()).toBe(store.joinLink());
+      await posle(QR_CEKIRANJE_MS);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_B)); // datum ispravljen: opet čekira
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_B));
+    });
+
+    it('qrLinkJeJoinBezPredavanja', async () => {
+      init(stanje());
+      await posle(QR_CEKIRANJE_MS * 2);
+      expect(upit()).toHaveLength(0);
+      expect(store.qrLink()).toBe(store.joinLink());
+    });
+
+    it('qrLinkPadaNaJoinKadJeTokenNull (i posle greške)', async () => {
+      init(saPredavanjem());
+      await posle(0);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(null));
+      expect(store.qrLink()).toBe(store.joinLink());
+      await posle(QR_CEKIRANJE_MS);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_A));
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_A));
+      await posle(QR_CEKIRANJE_MS);
+      http.expectOne('api/predavanja/17/cekiranje').flush(null, { status: 500, statusText: 'Server Error' });
+      expect(store.qrLink()).toBe(store.joinLink());
+    });
+
+    it('neCitaInfoKadQrNijeNaEkranu: tek komanda Q (qrPrikazan) pokreće upit; skrivanje ga gasi', async () => {
+      init(saPredavanjem({ prikaz: 'SLAJD', qrPrikazan: false }));
+      await posle(QR_CEKIRANJE_MS * 2);
+      expect(upit()).toHaveLength(0);
+      expect(store.qrLink()).toBe(store.joinLink());
+
+      store.prihvati(saPredavanjem({ verzija: 2, prikaz: 'SLAJD', qrPrikazan: true }));
+      await posle(0);
+      http.expectOne('api/predavanja/17/cekiranje').flush(info(TOKEN_A));
+      expect(store.qrLink()).toBe(linkCekiranja(TOKEN_A));
+
+      store.prihvati(saPredavanjem({ verzija: 3, prikaz: 'SLAJD', qrPrikazan: false }));
+      await posle(QR_CEKIRANJE_MS * 2);
+      expect(upit()).toHaveLength(0);
+      expect(store.qrLink()).toBe(store.joinLink());
+    });
+
+    it('završeno izvođenje: QR je ulazak, bez upita', async () => {
+      const s = saPredavanjem();
+      init({ ...s, izvodjenje: { ...s.izvodjenje, status: 'ZAVRSENO' } });
+      await posle(QR_CEKIRANJE_MS);
+      expect(upit()).toHaveLength(0);
     });
   });
 });

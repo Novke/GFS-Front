@@ -1,22 +1,31 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, ErrorHandler, inject, signal } from '@angular/core';
+import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef, MatDialogState } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
+
+import { PORUKA_VEZBE, vezbaIzNaziva, vezbaIzPolja } from '../../../core/api/redosled-prezentacija';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
 import { PORUKE, greskePrezentacije } from '../data-access/slajd-pravila';
 import { PRIHVACENI_FAJLOVI, proveriImeFajla } from '../uvoz-pptx/ime-fajla';
 import { PredmetKratko, PrezentacijaDetails } from '../data-access/uzivo.models';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 
 export interface NovaPrezentacijaPodaci { predmeti: PredmetKratko[]; predmetId: number | null; }
 
 /** Napravljena prezentacija i, kad je početak "Iz PowerPointa", izabrani fajl (uvoz ga čita u sledećem koraku). */
 export interface NovaPrezentacijaIshod { prezentacija: PrezentacijaDetails; fajl: File | null; }
+
+/** Validator polja "Broj vežbe": prazno ili ceo broj 0-99. */
+export function vezbaValidator(c: AbstractControl<string>): ValidationErrors | null {
+  return vezbaIzPolja(c.value) === undefined ? { vezba: true } : null;
+}
 
 export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentacijaPodaci): Observable<NovaPrezentacijaIshod | undefined> {
   return dialog.open<NovaPrezentacijaDialog, NovaPrezentacijaPodaci, NovaPrezentacijaIshod>(NovaPrezentacijaDialog, {
@@ -24,7 +33,13 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
   }).afterClosed();
 }
 
-/** Nova prezentacija: predmet, naziv, opis -> `POST /prezentacije`; zatvara se sa napravljenom prezentacijom. */
+/** Poruka kad se deo za uvoz ne učita (najčešće kartica otvorena pre novog izdanja); prezentacija tada nije napravljena. */
+export const PORUKA_UVOZ_NIJE_UCITAN = 'Uvoz iz PowerPointa nije učitan, pa prezentacija nije napravljena. Osveži stranicu i pokušaj ponovo.';
+
+/**
+ * Nova prezentacija: predmet, naziv, opis -> `POST /prezentacije`; zatvara se sa napravljenom prezentacijom. Sa početkom
+ * "Iz PowerPointa" prvo učitava chunk uvoza, pa tek onda pravi prezentaciju (bez praznih prezentacija kad uvoz ne može da krene).
+ */
 @Component({
   selector: 'app-nova-prezentacija-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -67,6 +82,12 @@ export function otvoriNovuPrezentaciju(dialog: MatDialog, podaci: NovaPrezentaci
           <mat-error>{{ porukaNaziv }}</mat-error>
         </mat-form-field>
         <mat-form-field>
+          <mat-label>Broj vežbe (nije obavezan)</mat-label>
+          <input matInput formControlName="vezba" inputmode="numeric" maxlength="2" autocomplete="off" data-vezba>
+          <mat-hint>Redosled u listi i predlog „sledeće“. 0 = uvod; „Vežbe 3 i 4“ = 3.</mat-hint>
+          <mat-error>{{ porukaVezbe }}</mat-error>
+        </mat-form-field>
+        <mat-form-field>
           <mat-label>Opis (nije obavezan)</mat-label>
           <textarea matInput formControlName="opis" rows="3" maxlength="1000"></textarea>
         </mat-form-field>
@@ -85,8 +106,11 @@ export class NovaPrezentacijaDialog {
   protected readonly data = inject<NovaPrezentacijaPodaci>(MAT_DIALOG_DATA);
   private readonly ref = inject<MatDialogRef<NovaPrezentacijaDialog, NovaPrezentacijaIshod>>(MatDialogRef);
   private readonly api = inject(PrezentacijeApi);
+  private readonly uvoz = inject(UvozPptxOtvarac);
+  private readonly greske = inject(ErrorHandler);
 
   protected readonly porukaNaziv = PORUKE.naziv;
+  protected readonly porukaVezbe = PORUKA_VEZBE;
   protected readonly prihvaceniFajlovi = PRIHVACENI_FAJLOVI;
   protected readonly salje = signal(false);
   protected readonly greska = signal<string | null>(null);
@@ -99,7 +123,20 @@ export class NovaPrezentacijaDialog {
     predmetId: new FormControl<number | null>(this.data.predmetId, Validators.required),
     naziv: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(200)] }),
     opis: new FormControl('', { nonNullable: true }),
+    vezba: new FormControl('', { nonNullable: true, validators: vezbaValidator }),
   });
+  /** Broj vežbe koji je dijalog sam predložio iz naziva; ručno upisan broj se ne prepisuje. */
+  private predlogVezbe = '';
+
+  constructor() {
+    this.forma.controls.naziv.valueChanges.pipe(takeUntilDestroyed()).subscribe(naziv => {
+      const vezba = this.forma.controls.vezba;
+      if (vezba.value.trim() && vezba.value !== this.predlogVezbe) return;
+      const v = vezbaIzNaziva(naziv);
+      this.predlogVezbe = v === null ? '' : String(v);
+      vezba.setValue(this.predlogVezbe);
+    });
+  }
 
   protected promeniPocetak(v: 'prazna' | 'pptx'): void {
     this.pocetak.set(v);
@@ -128,20 +165,33 @@ export class NovaPrezentacijaDialog {
       return;
     }
     const { predmetId, naziv, opis } = this.forma.getRawValue();
+    const vezba = vezbaIzPolja(this.forma.controls.vezba.value);
     const greske = greskePrezentacije(naziv, opis);
-    if (this.forma.invalid || predmetId === null || greske.length) {
+    if (this.forma.invalid || predmetId === null || vezba === undefined || greske.length) {
       this.greska.set(greske[0] ?? null);
       return;
     }
     this.salje.set(true);
     this.greska.set(null);
     const fajl = this.pocetak() === 'pptx' ? this.fajl() : null;
-    this.api.kreiraj({ predmetId, naziv: naziv.trim(), opis: opis.trim() || null, tema: fajl ? 'BELA' : null }).subscribe({
+    const kreiraj = () => this.api.kreiraj({
+      predmetId, naziv: naziv.trim(), opis: opis.trim() || null, tema: fajl ? 'BELA' : null, vezba,
+    }).subscribe({
       next: p => this.ref.close({ prezentacija: p, fajl }),
       error: e => {
         this.salje.set(false);
         this.greska.set(razlogGreske(e, 'Prezentacija nije napravljena.'));
       },
+    });
+    if (!fajl) {
+      kreiraj();
+      return;
+    }
+    // Otkazan dijalog dok se chunk učitava ne sme kasnije da napravi prezentaciju.
+    this.uvoz.pripremi().then(() => this.ref.getState() === MatDialogState.OPEN && kreiraj(), e => {
+      this.greske.handleError(e); // GfsErrorHandler: provera izdanja, traka "Osveži" kad je kartica zastarela
+      this.salje.set(false);
+      this.greska.set(PORUKA_UVOZ_NIJE_UCITAN);
     });
   }
 }

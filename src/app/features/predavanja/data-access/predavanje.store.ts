@@ -174,8 +174,17 @@ export const PredavanjeStore = signalStore(
     _obavestenja: inject(NotificationStore),
     _registar: inject(RegistarCuvanja),
     _greske: inject(ErrorHandler),
-    /** Promenljivo knjigovodstvo (nije stanje): sesija tekućeg predavanja, učitavanje u toku, uništen store. */
-    _r: { sesija: null as Sesija | null, ucitavanje: null as Subscription | null, unisten: false },
+    /**
+     * Promenljivo knjigovodstvo (nije stanje): sesija tekućeg predavanja, učitavanje u toku, osvežavanje u toku (najviše
+     * jedno), uništen store.
+     */
+    _r: {
+      sesija: null as Sesija | null,
+      ucitavanje: null as Subscription | null,
+      osvezavanje: null as Subscription | null,
+      osvezavaSe: false,
+      unisten: false,
+    },
   })),
   withComputed(({ predavanje, studenti, _grupaIds }) => ({
     zavrseno: computed(() => predavanje()?.zavrseno === true),
@@ -483,6 +492,58 @@ export const PredavanjeStore = signalStore(
       );
     }
 
+    /**
+     * Odgovor osvežavanja: stanje sa servera važi samo za studente bez koraka u redu, bez nepoznatog stanja i bez potvrde
+     * stigle posle slanja upita (`potvrde` = brojači u trenutku slanja), pa ni klik na čekanju ni zastareo odgovor ne gube.
+     * Studenti sa aktivnošću koji nemaju pločicu (stariji koji su se čekirali) je dobijaju i dopunjuju se godinom.
+     */
+    function spojiOsvezeno(ses: Sesija, det: PredavanjeDetails, potvrde: ReadonlyMap<number, number>): void {
+      if (!aktivnaZa(ses)) {
+        return;
+      }
+      zaglavljeIz(det);
+      const aktivnosti = (det.aktivnosti ?? []).filter(a => a.student);
+      const poServeru = new Map(aktivnosti.map(a => [a.student.id, a]));
+      const slobodan = (sId: number) =>
+        (ses.naCekanju.get(sId) ?? 0) === 0 && !ses.nepoznato.has(sId) && ses.potvrda(sId) === (potvrde.get(sId) ?? 0);
+      const postojeci = store._poStudentu();
+      const novi: StudentListItem[] = aktivnosti
+        .filter(a => !postojeci.has(a.student.id) && slobodan(a.student.id))
+        .map(a => ({ ...a.student, godina: null, email: null, brojTelefona: null, grupa: null }));
+      const stanja: Record<number, StanjeStudenta> = {};
+      for (const sId of [...postojeci.keys(), ...novi.map(n => n.id)]) {
+        if (!slobodan(sId)) {
+          continue;
+        }
+        const st = stanjeIzAktivnosti(poServeru.get(sId));
+        if (ses.potvrdjeno.get(sId) !== st) {
+          ses.potvrdi(sId, st);
+        }
+        stanja[sId] = st;
+      }
+      patchState(store, s => {
+        if (!s.predavanje) {
+          return {};
+        }
+        const zadrzane = s.predavanje.aktivnosti.filter(a => !(a.student?.id in stanja));
+        const sveze = aktivnosti.filter(a => a.student.id in stanja);
+        return {
+          predavanje: { ...s.predavanje, aktivnosti: [...zadrzane, ...sveze] },
+          studenti: novi.length > 0 ? [...s.studenti, ...novi].sort(poIndeksu) : s.studenti,
+          stanjePoStudentu: { ...s.stanjePoStudentu, ...stanja },
+        };
+      });
+      if (novi.length > 0) {
+        const noviIds = new Set(novi.map(n => n.id));
+        dopuniVanGrupe({ ...det, aktivnosti: aktivnosti.filter(a => noviIds.has(a.student.id)) }, []).subscribe(dopunjeni => {
+          const m = new Map(dopunjeni.map(d => [d.id, d]));
+          if (aktivnaZa(ses) && m.size > 0) {
+            patchState(store, s => ({ studenti: s.studenti.map(x => m.get(x.id) ?? x).sort(poIndeksu) }));
+          }
+        });
+      }
+    }
+
     /** Samo polja zaglavlja iz odgovora: aktivnosti u store-u su potvrđene po studentu i ne prepisuju se. */
     function zaglavljeIz(det: PredavanjeDetails): void {
       patchState(store, s =>
@@ -503,6 +564,7 @@ export const PredavanjeStore = signalStore(
        */
       ucitaj(pId: number): void {
         store._r.ucitavanje?.unsubscribe();
+        store._r.osvezavanje?.unsubscribe();
         const stara = store._r.sesija;
         zatvoriSesiju();
         const ses = new Sesija(pId);
@@ -525,6 +587,24 @@ export const PredavanjeStore = signalStore(
             next: ({ p, grupa, vanGrupe }) => postaviPodatke(ses, p, grupa, vanGrupe),
             error: (e: unknown) => patchState(store, setError(porukaGreske(e))),
           });
+      },
+
+      /**
+       * Osvežavanje dok je predavanje živo (studenti se čekiraju telefonom, pa im server sam upiše prisustvo): tiho čita
+       * predavanje i spaja ga ({@link spojiOsvezeno}); preuzima i zaglavlje (završetak iz druge kartice). Ne radi pre
+       * učitavanja, na završenom predavanju ni dok je prethodni upit u toku; greška se ne prikazuje.
+       */
+      osvezi(): void {
+        const ses = store._r.sesija;
+        if (!ses || !aktivnaZa(ses) || store.status() !== 'loaded' || store.zavrseno() || store._r.osvezavaSe) {
+          return;
+        }
+        const potvrde = new Map(ses.potvrde);
+        store._r.osvezavaSe = true;
+        store._r.osvezavanje = store._api
+          .get(ses.pId, { tiho: true })
+          .pipe(finalize(() => (store._r.osvezavaSe = false)))
+          .subscribe({ next: det => spojiOsvezeno(ses, det, potvrde), error: () => undefined });
       },
 
       klik(sId: number): void {
@@ -640,6 +720,7 @@ export const PredavanjeStore = signalStore(
       store._r.unisten = true;
       store._r.ucitavanje?.unsubscribe();
       store._r.ucitavanje = null;
+      store._r.osvezavanje?.unsubscribe();
       store._zatvori();
     },
   }),

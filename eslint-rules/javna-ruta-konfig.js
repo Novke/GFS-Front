@@ -20,6 +20,8 @@ const JAVNO_DOZVOLJENO = [
   // (form-field, input) i shared/util/indeks. Nijedan ne zove HTTP.
   'shared/util/indeks',
   'shared/forms/indeks-polja',
+  // WhatsApp grupa (posle upisa i na Početnoj naloga, 2026-10-29): čista provera kanonskog linka, bez uvoza.
+  'shared/util/wa-link',
 ];
 
 // Dodatak po javnom feature-u (važi samo za njega): moduli iz istog feature-a van javnog dela. Svaki je proveren sa
@@ -47,13 +49,44 @@ const DOZVOLJENO_PO_FEATURE = {
     // ui/formula-markup -> mathlive/ssr, ui/formula-komande, ui/formula-sanitizer (bez uvoza).
     'features/uzivo/ui/tekst-formule.component', // formule $...$: uvozi @angular/core, ui/tekst-formule, ui/markdown i ui/formula-ucitavanje; mathlive/ssr samo dinamički (ui/formula-markup), stil i fontovi iz assets/mathlive/
     'features/uzivo/ui/tekst-formule', // čiste funkcije (tekstZaCitac), samo `import type` iz marked
+    // Pravila polja Zadatka (studentski portal faze 2-3, 2026-10-29: izdvojeno iz javno/zadatak-unos i javno/odgovor-unos da
+    // ih deli vežbanje na nalogu): čiste funkcije, uvozi samo ui/format (gore) i `import type` iz uzivo.models.
+    'features/uzivo/ui/polja-zadatka',
+    // "Izađi" i Nazad iz izvođenja (2026-10-29): pamti kod u sessionStorage da tab Čas naloga ne uđe sam ponovo. Bez uvoza.
+    'features/uzivo/izlaz-iz-izvodjenja',
   ],
   // Nalog studenta (spec prijave 10, 2026-10-20): stranice `nalog` i `nalog/moodle` zovu samo api/public/nalog/*,
   // api/public/lti/povezi i api/public/lti/povezivanje (ime Moodle naloga). Oba modula su proverena sa svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API
   // ni ljusku.
   'features/nalog': [
+    // Aplikacija na telefonu i push (spec „Aplikacija i obaveštenja“ 4 i 5): bez HTTP-a i bez store-a
+    'core/pwa/instalacija.pravila', // čiste funkcije, bez uvoza
+    'core/pwa/instalacija', // beforeinstallprompt i display-mode; uvozi samo @angular/core i instalacija.pravila
+    'core/pwa/uputstvo-instalacije.component', // uvozi samo @angular/core, instalacija i instalacija.pravila
+    'core/pwa/service-worker', // registracija assets/pwa/sw.js, bez uvoza
+    'core/pwa/manifest', // <link rel="manifest">, bez uvoza
+    'core/pwa/push-uredjaj', // klasa sa signalima; HTTP ide kroz PushApi koji daje feature (api/public/nalog/push); uvozi rxjs, instalacija.pravila, service-worker
     'shared/ui/confirm-dialog', // "Odjavi sve uređaje": uvozi samo @angular/core, @angular/material (button, dialog) i rxjs
     'shared/util/datum.pipe', // formatDatum (uređaji): uvozi samo @angular/core
+    'shared/util/termin', // naredni časovi (dan, datum, vreme termina): bez ijednog uvoza
+    // Studentski portal, faze 2 i 3 (2026-10-29; spec 12.9 tačke 8 i 11). Pregledano sa svim uvozima: nijedan ne zove HTTP
+    // (slike samo `api/public/mediji/*` kroz `medijUrl`), ne uvozi nastavnički API, store, `pages/` ni `core/state`.
+    // - vežbanje (strana `vezbanje`, `ui/vezbanje-unos`): ista polja kao na času. `ui/polja-zadatka` je gore (uzivo/javno);
+    //   `ui/tekst-formule.component` i `ui/tekst-formule` su isti moduli kao za telefon na času (formule $...$, lenji
+    //   `mathlive/ssr` samo kroz `ui/formula-ucitavanje`); `ui/format` su čiste funkcije bez uvoza.
+    'features/uzivo/ui/polja-zadatka',
+    'features/uzivo/ui/tekst-formule.component',
+    'features/uzivo/ui/tekst-formule',
+    'features/uzivo/ui/format',
+    // - pregled prezentacije (samo lenja strana `prezentacija/:id`, nikad ljuska ni rute): projektorski renderer slajda.
+    //   `ui/slajd-prikaz.component` uvozi samo `ui/*` (platno, pločice i rezultat pitanja, tajmer, formule, markdown, teme,
+    //   zadatak-prikaz) i `data-access/{sat,uzivo.models,platno.models,platno-koraci}` (čisti tipovi i funkcije); `mathlive/ssr`
+    //   samo lenjo (`ui/formula-ucitavanje`), editor, `fflate`, `pdfjs-dist` i ProseMirror nikad. `ui/slajd-za-prikaz` su samo
+    //   tipovi (ulaz renderera bez beleški).
+    'features/uzivo/ui/slajd-prikaz.component',
+    'features/uzivo/ui/slajd-za-prikaz',
+    // Tab Čas posle "Izađi" ili Nazad iz izvođenja nudi "Uđi u prezentaciju" umesto da sam uđe (isti modul kao uzivo/javno, bez uvoza).
+    'features/uzivo/izlaz-iz-izvodjenja',
   ],
 };
 

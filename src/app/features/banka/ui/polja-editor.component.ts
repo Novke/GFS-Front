@@ -141,7 +141,14 @@ export function prikazBroja(v: number | null): string {
                   <mat-checkbox [checked]="p.zanemariRazmake ?? true" (change)="promeni(i, { zanemariRazmake: $event.checked })" data-zanemari-razmake>
                     Zanemari razmake
                   </mat-checkbox>
+                  <mat-checkbox [checked]="p.zanemariVodeceNule === true" (change)="promeni(i, { zanemariVodeceNule: $event.checked })"
+                    [aria-describedby]="'bk-pe-nule-' + p.kljuc" data-zanemari-nule>
+                    Zanemari vodeće nule
+                  </mat-checkbox>
                 </div>
+                <p class="bk-pe-napomena" [id]="'bk-pe-nule-' + p.kljuc">
+                  01111111 je isto što i 1111111. Ne uključuj za komplement i zapis fiksne širine, gde je 00000101 drugo od 101.
+                </p>
               }
               @default {
                 @let opcije = p.opcije ?? [];

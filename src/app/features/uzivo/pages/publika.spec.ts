@@ -50,6 +50,7 @@ describe('PublikaPage', () => {
     greska: signal<string | null>(null),
     veza: signal<'povezivanje' | 'povezan' | 'prekinut'>('povezan'),
     joinLink: signal('http://localhost/uzivo/123456'),
+    qrLink: signal('http://localhost/uzivo/123456'),
     konzolaLink: signal(''),
     sat: signal(null),
     dozvoljene: signal(new Set()),

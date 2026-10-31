@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   afterNextRender,
@@ -13,21 +14,18 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { Router } from '@angular/router';
-import { finalize, Subscription } from 'rxjs';
+import { Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { godinaIzUpita, predlogGodine, prikazIndeksa } from '../../../shared/util/indeks';
-import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { NalogApi } from '../data-access/nalog.api';
 import { IndeksIGodina, PORUKA_KOD_POSLAT, PORUKA_POMOC, StudentJa } from '../data-access/nalog.models';
 import { javnoNazad, porukaGreske, putanjaCilja } from '../data-access/nalog.pravila';
 import { IndeksKorak } from '../ui/indeks-korak.component';
 import { KodKorak } from '../ui/kod-korak.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
-import { NalogPregled } from '../ui/nalog-pregled.component';
 
 export type KorakNaloga = 'ucitavanje' | 'greska' | 'indeks' | 'kod' | 'prijavljen';
 
@@ -39,24 +37,25 @@ const NASLOV: Record<KorakNaloga, string> = {
   prijavljen: 'Prijavljen si',
 };
 
-/** `1 uređaj`, `2 uređaja`, `5 uređaja`, `21 uređaj` (genitiv množine i paukal su isti). */
-const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređaj' : 'uređaja'}`;
+/** Tab Početna: podrazumevana strana prijavljenog studenta (pozdrav, WhatsApp grupa, naredni časovi). */
+export const NALOG_POCETNA = 'nalog/pocetna';
 
 /**
- * Javni nalog studenta (`/nalog`, u `PublicLayout`-u: student na telefonu, bez sesije nastavnika; spec prijave 5.1):
+ * Prijava studenta (`/nalog`, u `PublicLayout`-u: student na telefonu, bez sesije nastavnika; spec prijave 5.1):
  * indeks -> kod na mejl -> prijavljen na ovom telefonu (kolačić `gfs_student`, 365 dana). Zove **samo** `api/public/nalog/*`
  * (`NalogApi`); ESLint `gfs/javna-ruta-uvozi` drži uvoze, e2e `nalog.spec.ts` mrežu.
  *
- * Na prvom učitavanju `GET stanje` (i `GET ja` kad je prijavljen) bira početni korak. Posle uspešne prijave ide na `nazad`
- * (query, `withComponentInputBinding`) ako ga `javnoNazad` pusti (samo relativna putanja javne rute: `uzivo`, `upis`, `nalog`,
- * npr. `uzivo/ABC123`), inače pokazuje nalog; spoljni ili apsolutni URL i nastavnička ruta se nikad ne otvaraju, a `nazad` na
- * ovu istu stranicu (`nalog`) je ekran naloga. Već prijavljen student sa `nazad` dobija "Nastavi" (bez automatskog skoka,
+ * Na prvom učitavanju `GET stanje` bira korak. Prijavljen student bez `nazad` odmah ide na tab Početna (`nalog/pocetna`;
+ * nalog, uređaji i odjava su na tabu Ja). Posle uspešne prijave ide na `nazad` (query,
+ * `withComponentInputBinding`) ako ga `javnoNazad` pusti (samo relativna putanja javne rute: `uzivo`, `upis`, `nalog`, npr.
+ * `uzivo/ABC123`), inače na tab Početna; spoljni ili apsolutni URL i nastavnička ruta se nikad ne otvaraju, a `nazad` na ovu
+ * istu stranicu (`nalog`) je tab Početna. Već prijavljen student sa `nazad` dobija "Nastavi" (`GET ja` za ime; bez automatskog skoka,
  * pa nema petlje ako ga ciljna strana vrati ovde). Greške servera (401, 429, 503) su doslovno u baneru koraka; mreža i
- * ostale 5xx opšte poruke.
+ * ostale 5xx opšte poruke. Poruku posle odjave (tab Ja) donosi stanje istorije (`info`).
  */
 @Component({
   selector: 'app-nalog-page',
-  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogOkvir, NalogPregled],
+  imports: [FormErrorBanner, IndeksKorak, KodKorak, MatButton, MatProgressSpinner, NalogOkvir, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir>
@@ -105,15 +104,13 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
         @case ('prijavljen') {
           <app-form-error-banner [poruka]="greska()" />
           @if (ja(); as s) {
-            <app-nalog-pregled
-              [ja]="s"
-              [nastaviNa]="nastaviNa()"
-              [salje]="salje()"
-              (odjavi)="odjavi()"
-              (odjaviSvuda)="odjaviSvuda()"
-              (nastavi)="nastavi()"
-            />
+            <p class="ko" data-prijavljen>Prijavljen si kao <strong>{{ s.ime }} {{ s.prezime }}</strong>
+              (<span class="mono">{{ s.indeks }}@if (s.godina) {/{{ s.godina }}}</span>).</p>
           }
+          @if (nastaviNa()) {
+            <button type="button" mat-flat-button class="dugme" [disabled]="salje()" (click)="nastavi()">Nastavi</button>
+          }
+          <a matButton="outlined" class="dugme drugo" routerLink="/nalog/pocetna">Moj nalog</a>
         }
       }
     </app-nalog-okvir>
@@ -128,6 +125,9 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
     .poruka { margin: 0 0 16px; padding: 12px 16px; border: 1px solid transparent; border-radius: var(--radius-sm); }
     .poruka.opasnost { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
     .poruka.uspeh { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+    .ko { margin: 0 0 16px; overflow-wrap: anywhere; }
+    .mono { font-family: var(--font-mono); }
+    .drugo { margin-top: 8px; }
   `,
 })
 export class NalogPage {
@@ -141,12 +141,9 @@ export class NalogPage {
 
   private readonly api = inject(NalogApi);
   private readonly router = inject(Router);
-  private readonly dialog = inject(MatDialog);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
-  /** Potvrda o odjavi svih uređaja je otvorena: drugi klik ne otvara drugi dijalog. */
-  private potvrdaOtvorena = false;
 
   protected readonly korak = signal<KorakNaloga>('ucitavanje');
   protected readonly naslov = computed(() => NASLOV[this.korak()]);
@@ -170,9 +167,9 @@ export class NalogPage {
   protected readonly pomoc = signal<string | null>(null);
   protected readonly pomocSalje = signal(false);
   protected readonly ja = signal<StudentJa | null>(null);
-  /** Poruka posle odjave (na koraku indeksa). */
-  protected readonly info = signal<string | null>(null);
-  /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to ekran naloga). */
+  /** Poruka posle odjave (na koraku indeksa): tab Ja je šalje kroz stanje istorije (`{ info }`). */
+  protected readonly info = signal<string | null>(porukaIzIstorije(inject(Location).getState()));
+  /** Javni `nazad` koji ne vodi na ovu istu stranicu (`nalog`, `nalog?...`: posle prijave je to tab Početna). */
   protected readonly nastaviNa = computed(() => {
     const cilj = javnoNazad(this.nazad());
     return cilj !== null && putanjaCilja(cilj) !== 'nalog' ? cilj : null;
@@ -185,12 +182,20 @@ export class NalogPage {
     this.ucitaj(false);
   }
 
-  /** `GET stanje`, pa (prijavljen) `GET ja`: bira početni korak. */
+  /** `GET stanje` bira početni korak; prijavljen sa `nazad` još `GET ja` (ime uz "Nastavi"), bez njega tab Početna. */
   protected ucitaj(fokus = true): void {
     this.zahtev?.unsubscribe();
     this.korak.set('ucitavanje');
     this.zahtev = this.api.stanje().subscribe({
-      next: s => (s?.prijavljen ? this.ucitajJa(fokus) : this.idiNa('indeks', fokus)),
+      next: s => {
+        if (!s?.prijavljen) {
+          this.idiNa('indeks', fokus);
+        } else if (this.nastaviNa()) {
+          this.ucitajJa(fokus);
+        } else {
+          this.idiNaNalog();
+        }
+      },
       error: (e: unknown) => this.greskaPriUcitavanju(e, fokus),
     });
   }
@@ -230,8 +235,8 @@ export class NalogPage {
   }
 
   /**
-   * Prijava kodom, pa `nazad` ili ekran naloga. `salje` ostaje `true` dok navigacija ili `GET ja` ne završe, da dupli dodir
-   * ne pošalje drugu prijavu već iskorišćenim kodom (401 bi prijavljenom studentu pokazao "Kod nije ispravan").
+   * Prijava kodom, pa `nazad` ili tab Početna. `salje` ostaje `true` dok navigacija ne završi, da dupli dodir ne pošalje drugu
+   * prijavu već iskorišćenim kodom (401 bi prijavljenom studentu pokazao "Kod nije ispravan").
    */
   protected prijavi(kod: string): void {
     if (this.salje()) {
@@ -242,17 +247,9 @@ export class NalogPage {
       next: () => {
         const cilj = this.nastaviNa();
         if (cilj) {
-          // uspela navigacija uništava stranicu; neuspela (npr. lenji chunk bez mreže) vraća dugme
-          this.router.navigateByUrl(cilj).then(
-            ok => {
-              if (!ok) {
-                this.salje.set(false);
-              }
-            },
-            () => this.salje.set(false),
-          );
+          this.idi(this.router.navigateByUrl(cilj));
         } else {
-          this.ucitajJa(true);
+          this.idiNaNalog();
         }
       },
       error: (e: unknown) => this.neuspeh(e),
@@ -278,42 +275,6 @@ export class NalogPage {
     });
   }
 
-  protected odjavi(): void {
-    if (this.salje()) {
-      return;
-    }
-    this.pocni();
-    this.zahtev = this.api.odjavi().subscribe({
-      next: () => this.odjavljen('Odjavljen si sa ovog uređaja.'),
-      error: (e: unknown) => this.neuspehOdjave(e),
-    });
-  }
-
-  protected odjaviSvuda(): void {
-    if (this.salje() || this.potvrdaOtvorena) {
-      return;
-    }
-    this.potvrdaOtvorena = true;
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: 'Odjaviti sve uređaje?',
-      tekst: 'Odjavićeš se na svim uređajima, i na ovom. Na svakom posle možeš ponovo da se prijaviš kodom sa mejla.',
-      potvrdi: 'Odjavi sve',
-      destruktivno: true,
-    }).pipe(
-      finalize(() => (this.potvrdaOtvorena = false)),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe(da => {
-      if (!da) {
-        return;
-      }
-      this.pocni();
-      this.zahtev = this.api.odjaviSvuda().subscribe({
-        next: odg => this.odjavljen(`Odjavljeno: ${uredjaja(Math.max(0, Number(odg?.odjavljeno) || 0))}.`),
-        error: (e: unknown) => this.neuspehOdjave(e),
-      });
-    });
-  }
-
   protected nastavi(): void {
     const cilj = this.nastaviNa();
     if (cilj) {
@@ -331,6 +292,28 @@ export class NalogPage {
     if (fokus) {
       afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>('h2')?.focus(), { injector: this.injector });
     }
+  }
+
+  /** Tab Čas umesto `/nalog` u istoriji (dugme "nazad" ne vraća na prijavu). Uspela navigacija uništava stranicu. */
+  private idiNaNalog(): void {
+    this.salje.set(true);
+    this.idi(this.router.navigateByUrl(NALOG_POCETNA, { replaceUrl: true }));
+  }
+
+  /** Neuspela navigacija (npr. lenji chunk bez mreže) vraća dugme i kaže šta je bilo. */
+  private idi(navigacija: Promise<boolean>): void {
+    const neuspeh = () => {
+      this.salje.set(false);
+      if (this.korak() === 'ucitavanje') {
+        this.greskaUcitavanja.set('Stranica nije učitana. Proveri vezu i pokušaj ponovo.');
+        this.idiNa('greska');
+      }
+    };
+    navigacija.then(ok => {
+      if (!ok) {
+        neuspeh();
+      }
+    }, neuspeh);
   }
 
   private ucitajJa(fokus: boolean): void {
@@ -371,29 +354,14 @@ export class NalogPage {
     this.greska.set(porukaGreske(e));
   }
 
-  private neuspehOdjave(e: unknown): void {
-    if (e instanceof HttpErrorResponse && e.status === 401) {
-      // sesije studenta već nema: za odjavu je to uspeh
-      this.odjavljen('Odjavljen si sa ovog uređaja.');
-      return;
-    }
-    this.neuspeh(e);
-  }
-
-  private odjavljen(poruka: string): void {
-    this.salje.set(false);
-    this.ja.set(null);
-    this.pomoc.set(null);
-    // zajednički računar: indeks i maska prethodnog studenta ne smeju da ostanu u polju
-    this.indeks.set('');
-    this.unetaGodina.set(null);
-    this.maska.set('');
-    this.idiNa('indeks');
-    this.info.set(poruka);
-  }
-
   private greskaPriUcitavanju(e: unknown, fokus: boolean): void {
     this.greskaUcitavanja.set(porukaGreske(e));
     this.idiNa('greska', fokus);
   }
+}
+
+/** `{ info: string }` iz stanja istorije (odjava na tabu Ja), inače `null`. */
+function porukaIzIstorije(stanje: unknown): string | null {
+  const info = (stanje as { info?: unknown } | null)?.info;
+  return typeof info === 'string' && info.trim() !== '' && info.length <= 200 ? info : null;
 }

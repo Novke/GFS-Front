@@ -12,6 +12,7 @@ import { PokretPrelaza, PrelazDirective } from '../ui/prelaz.directive';
 import { PrijavaEkranComponent } from '../ui/prijava-ekran.component';
 import { QrKodComponent } from '../ui/qr-kod.component';
 import { RangListaComponent } from '../ui/rang-lista.component';
+import { RangTacnostiProjektorComponent } from '../ui/rang-tacnosti-projektor.component';
 import { KodTraka, SlajdPrikazComponent, TajmerUlaz } from '../ui/slajd-prikaz.component';
 import { vazecaTema } from '../ui/teme';
 
@@ -82,20 +83,27 @@ interface Omotac {
 @Component({
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, SlajdPrikazComponent],
+  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
-  // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3).
+  // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
+  // isto i rang tačnosti: budžet početnog zatvorenja u e2e/lenji-editor.spec.ts).
   styles: `
     .uz-scena-slajdovi { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
     .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
     .uz-scena-ulazni { position: relative; z-index: 1; }
+    /* rang tačnosti (L / Shift+L): cela širina, od vrha; slova postavlja komponenta, natpis u gornjem desnom uglu */
+    .uz-scena-rang--tacnost { justify-content: flex-start; gap: 1.2cqw; }
+    .uz-scena-rang--tacnost .uz-scena-naslov { font-size: 3.4cqw; }
+    .uz-scena-rang .uz-rang.uz-rt { width: 100%; }
+    .uz-scena-ugao { position: absolute; top: 1.4cqw; right: 2cqw; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; color: var(--muted); font-size: 1.6cqw; font-weight: 600; }
   `,
   template: `
     @let s = stanje();
     @switch (s.prikaz) {
       @case ('PRIJAVA') {
-        <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [imena]="imena()" [broj]="s.ucesnici.length" />
+        <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [qr]="qrSadrzaj()" [imena]="imena()" [broj]="s.ucesnici.length" />
       }
       @case ('SLAJD') {
         <div class="uz-scena-slajdovi">
@@ -129,7 +137,16 @@ interface Omotac {
         </div>
       }
     }
-    @if (s.rangListaPrikazana && s.prikaz !== 'KRAJ') {
+    @if (s.rangListaPrikazana && s.javniRangTacnosti) {
+      <!-- rang tačnosti (L van takmičenja, Shift+L uvek): i na kraju, preko "Hvala!" -->
+      <div class="uz-okvir uz-scena-sloj">
+        <section class="uz-platno uz-scena-rang uz-scena-rang--tacnost" [attr.aria-label]="naslovRanga()">
+          <p class="uz-scena-ugao">{{ ugaoRanga() }}</p>
+          <h1 class="uz-scena-naslov">{{ naslovRanga() }}</h1>
+          <app-rang-tacnosti-projektor [stavke]="s.javniRangTacnosti" />
+        </section>
+      </div>
+    } @else if (s.rangListaPrikazana && s.prikaz !== 'KRAJ') {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-rang" aria-label="Rang-lista">
           <h1 class="uz-scena-naslov">Rang-lista</h1>
@@ -140,7 +157,7 @@ interface Omotac {
     @if (s.qrPrikazan) {
       <div class="uz-okvir uz-scena-sloj">
         <section class="uz-platno uz-scena-qr" aria-label="QR kod za prijavu">
-          <app-qr-kod class="uz-scena-qr-kod" [tekst]="joinLink()" [velicina]="900" />
+          <app-qr-kod class="uz-scena-qr-kod" [tekst]="qrSadrzaj()" [velicina]="900" />
           <div class="uz-scena-qr-info">
             <p class="uz-scena-qr-link">{{ host() }}/uzivo</p>
             <p class="uz-scena-qr-kod-tekst">{{ kod() }}</p>
@@ -159,6 +176,17 @@ interface Omotac {
 export class PublikaScenaComponent {
   readonly stanje = input.required<NastavnickoStanje>();
   readonly joinLink = input.required<string>();
+  /** Sadržaj QR-a (`IzvodjenjeStore.qrLink`: link čekiranja za izvođenje sa predavanja); prazno = `joinLink`. Tekst ostaje kod. */
+  readonly qrLink = input<string>('');
+  protected readonly qrSadrzaj = computed(() => this.qrLink() || this.joinLink());
+  protected readonly naslovRanga = computed(() => this.stanje().rangPrikaz === 'PREDAVANJE' ? 'Rang predavanja' : 'Rang-lista');
+  /** Natpis u uglu ranga: koja prezentacija, ili koje predavanje (Shift+L). */
+  protected readonly ugaoRanga = computed(() => {
+    const s = this.stanje();
+    const p = s.izvodjenje.predavanje;
+    if (s.rangPrikaz === 'PREDAVANJE' && p) return `Predavanje ${p.rb}.${p.tema ? ' ' + p.tema : ''} · sve prezentacije`;
+    return `Prezentacija: ${s.izvodjenje.prezentacija.naziv}`;
+  });
   readonly sat = input<ServerskiSat | null>(null);
   /** Umanjen prikaz u konzoli: crn/beo ekran dobija natpis da se zna šta je na projektoru. */
   readonly umanjeno = input<boolean>(false);

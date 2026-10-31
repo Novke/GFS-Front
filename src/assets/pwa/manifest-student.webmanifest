@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "GFS · Građevinski fakultet Subotica",
+  "short_name": "GFS",
+  "description": "Nalog studenta: čas, predmeti i obaveštenja.",
+  "lang": "sr-Latn",
+  "start_url": "../../nalog",
+  "scope": "../../",
+  "display": "standalone",
+  "theme_color": "#111c30",
+  "background_color": "#111c30",
+  "icons": [
+    { "src": "ikona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "ikona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "ikona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

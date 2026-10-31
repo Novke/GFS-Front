@@ -44,6 +44,7 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
         <header class="uz-dalj-traka">
           <app-vreme-izvodjenja [izvodjenjeId]="s.izvodjenje.id" [pocetakMs]="s.pocetakMs" [sat]="store.sat()" [kompaktno]="true" />
           <span class="uz-dalj-polozaj">{{ polozaj() }}</span>
+          @if ((s.brojCekiranih ?? null) !== null) { <span class="uz-dalj-cekirano">čekirano {{ s.brojCekiranih }}</span> }
           <span class="uz-dalj-veza" [class.uz-dalj-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
         </header>
         <div class="uz-dalj-upozorenja">

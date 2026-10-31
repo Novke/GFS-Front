@@ -1,10 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject } from '@angular/core';
+import { computed, DOCUMENT, inject, signal } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState } from '@ngrx/signals';
+import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { RxStomp, RxStompState } from '@stomp/rx-stomp';
 import {
-  EMPTY, Observable, Subject, Subscription, TimeoutError, catchError, concatMap, defer, finalize, tap, timeout,
+  EMPTY, Observable, Subject, Subscription, TimeoutError, catchError, concatMap, defer, exhaustMap, filter, finalize, map, of,
+  pipe, switchMap, tap, timeout, timer,
 } from 'rxjs';
+import { CekiranjeApi, linkCekiranja } from '../../../core/api/cekiranje.api';
 import { IzvodjenjaApi } from './izvodjenja.api';
 import { dozvoljeneKomande } from './izvodjenje-pravila';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -35,6 +38,9 @@ const PORUKA_TIMEOUT = 'Server ne odgovara. Pokušaj ponovo.';
  */
 export const PONOVO_POVEZI_POSLE_MS = 5_000;
 
+/** Dok je QR za čekiranje na ekranu, token se čita na 3 s (menja se na 10 s, važi 20-30 s). */
+export const QR_CEKIRANJE_MS = 3_000;
+
 interface Posao { zahtev: () => Observable<NastavnickoStanje>; greska: string; }
 
 const POCETNO: IzvodjenjeState = { stanje: null, veza: 'povezivanje', greska: null, salje: false };
@@ -62,6 +68,10 @@ const link = (putanja: string) => new URL(putanja, document.baseURI).href;
  *   publika prvi snimak posle toga ne animira. Posle `destroy` ni `osvezi` ni `posleVracanja` ne rade ništa.
  * - `posleVracanja(skrivenoMs)` (uz `pratiPovratak`): stranica je ponovo vidljiva ili je mreža ponovo tu; uvek `osvezi`, a
  *   posle `PONOVO_POVEZI_POSLE_MS` i više (ili `Infinity` za `online`) još i `ponovoPovezi`.
+ * - `qrLink`: šta je u QR-u na tabli. Za aktivno izvođenje sa predavanja, dok je QR na ekranu (prijava ili taster Q),
+ *   to je link čekiranja (`nalog/cas/<token>`, token sa `GET predavanja/{id}/cekiranje` na 3 s dok je tab vidljiv):
+ *   student se čekira i odmah ulazi u izvođenje. Bez predavanja, kad QR nije na ekranu, kad je token `null` ili upit nije
+ *   uspeo, to je `joinLink` (kao pre čekiranja).
  */
 export const IzvodjenjeStore = signalStore(
   withState<IzvodjenjeState>(POCETNO),
@@ -69,6 +79,8 @@ export const IzvodjenjeStore = signalStore(
     _sat: new ServerskiSat(),
     /** Prvo viđeno preostalo vreme po rundi (pun krug tajmera kad pitanje nema ograničenje). */
     _prvoPreostalo: new Map<number, number>(),
+    /** Token čekiranja dok je QR predavanja na ekranu (`null` = nema, ili poslednji upit nije uspeo). */
+    _tokenCekiranja: signal<string | null>(null),
   })),
   withComputed(({ stanje, _sat, _prvoPreostalo }) => ({
     sat: computed(() => _sat),
@@ -89,6 +101,12 @@ export const IzvodjenjeStore = signalStore(
       const id = stanje()?.izvodjenje.id;
       return id ? link(UzivoPutanje.izvodjenjeDaljinski(id)) : '';
     }),
+    /** Predavanje čiji QR za čekiranje treba da bude na ekranu sada; `null` = QR (ako ga ima) je ulazak u izvođenje. */
+    _qrPredavanje: computed(() => {
+      const s = stanje();
+      const p = s?.izvodjenje.predavanje;
+      return s && p && s.izvodjenje.status === 'AKTIVNO' && (s.prikaz === 'PRIJAVA' || s.qrPrikazan) ? p.id : null;
+    }),
     /** Pun krug tajmera: vreme pitanja, a bez ograničenja prvo preostalo vreme viđeno u toj rundi. */
     ukupnoMs: computed(() => {
       const s = stanje();
@@ -102,6 +120,36 @@ export const IzvodjenjeStore = signalStore(
       return _prvoPreostalo.get(r.id)!;
     }),
   })),
+  withComputed(({ joinLink, _qrPredavanje, _tokenCekiranja }) => ({
+    qrLink: computed(() => {
+      const token = _tokenCekiranja();
+      return _qrPredavanje() !== null && token ? linkCekiranja(token) : joinLink();
+    }),
+  })),
+  withMethods(store => {
+    const cekiranje = inject(CekiranjeApi);
+    const dokument = inject(DOCUMENT);
+    return {
+      /** Prati `_qrPredavanje`: dok nije `null`, čita token na 3 s (tab vidljiv); `null` ili greška vraća QR na ulazak. */
+      _pratiCekiranje: rxMethod<number | null>(
+        pipe(
+          switchMap(id =>
+            id === null
+              ? of(null)
+              : timer(0, QR_CEKIRANJE_MS).pipe(
+                  filter(() => !dokument.hidden),
+                  // predavanje od drugog dana: QR ostaje ulazak u izvođenje, da QR na tabli ne čekira studente na staro
+                  // predavanje bez upozorenja (projektor predavanja to pita, konzola ne; bezbednosni pregled)
+                  exhaustMap(() =>
+                    cekiranje.info(id).pipe(map(i => (i.datumNijeDanas ? null : (i.token ?? null))), catchError(() => of(null))),
+                  ),
+                ),
+          ),
+          tap(token => store._tokenCekiranja.set(token)),
+        ),
+      ),
+    };
+  }),
   withMethods(store => {
     const api = inject(IzvodjenjaApi);
     const obavestenja = inject(NotificationStore);
@@ -252,6 +300,9 @@ export const IzvodjenjeStore = signalStore(
     };
   }),
   withHooks({
+    onInit(store) {
+      store._pratiCekiranje(store._qrPredavanje);
+    },
     onDestroy(store) {
       store.destroy();
     },

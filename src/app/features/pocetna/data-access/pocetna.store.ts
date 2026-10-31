@@ -3,6 +3,7 @@ import { patchState, signalStore, withComputed, withMethods, withProps, withStat
 
 import { KontrolnaTablaCeka } from '../../../core/api/pregled.api';
 import { DashboardCountsStore } from '../../../core/state/dashboard-counts.store';
+import { isoDatum } from '../../../shared/util/termin';
 import { agendaNedelje } from './pocetna.vreme';
 
 interface PocetnaState {
@@ -60,6 +61,15 @@ export const PocetnaStore = signalStore(
       uToku: computed(() => lista(tabla()?.uToku)),
       ceka,
       nedelja: computed(() => agendaNedelje(lista(tabla()?.nedelja), store.sada())),
+      raspored: computed(() => {
+        const r = tabla()?.raspored;
+        return { pokrivaDanas: r?.pokrivaDanas === true, naredni: lista(r?.naredni) };
+      }),
+      /** Današnji otkazani termini rasporeda (hero "Sledeće predavanje"). */
+      otkazanoDanas: computed(() => {
+        const danas = isoDatum(store.sada());
+        return lista(tabla()?.raspored?.naredni).filter(t => t.otkazan && t.datum === danas);
+      }),
     };
   }),
   withMethods(store => ({

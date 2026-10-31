@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, input, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, booleanAttribute, computed, input, viewChild } from '@angular/core';
 import { ServerskiSat } from '../data-access/sat';
-import { Faza, NastavnickiZadatak, Rezultat, SlajdDetails, Tema, medijUrl } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, Rezultat, Tema, medijUrl } from '../data-access/uzivo.models';
 import { kodSaRazmakom } from './format';
 import { meriFormule } from './mera-formule';
 import { renderMarkdown } from './markdown';
@@ -9,6 +9,7 @@ import { PlatnoPrikazComponent } from './platno-prikaz.component';
 import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
+import type { SlajdZaPrikaz } from './slajd-za-prikaz';
 import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 import { ZadatakPrikazComponent } from './zadatak-prikaz.component';
 
@@ -53,7 +54,8 @@ export interface KodTraka { host: string; kod: string; }
         </div>
       } @else if (slajd().tip === 'ZADATAK') {
         <app-zadatak-prikaz [slajd]="slajd()" [zadatak]="zadatak()" [faza]="faza()" [brojOdgovora]="brojOdgovora()"
-                            [odgovoriliOd]="odgovoriliOd()" [prikaziRezultat]="prikaziRezultat()" [tajmer]="tajmer()" />
+                            [odgovoriliOd]="odgovoriliOd()" [prikaziRezultat]="prikaziRezultat()" [tajmer]="tajmer()"
+                            [primer]="primerZadatka()" />
       } @else if (slajd().pitanje; as p) {
         <header class="uz-pitanje-zaglavlje">
           <app-tekst-formule class="uz-md uz-pitanje-tekst" [tekst]="p.tekst" [markdown]="true" />
@@ -86,7 +88,8 @@ export interface KodTraka { host: string; kod: string; }
   `,
 })
 export class SlajdPrikazComponent {
-  readonly slajd = input.required<SlajdDetails>();
+  /** Uži tip od `SlajdDetails` (bez beleški i prelaza): i studentski pregled prezentacije ga puni (`slajd-za-prikaz`). */
+  readonly slajd = input.required<SlajdZaPrikaz>();
   /** Broj otkrivenih stavki liste (INFO sa postepenim otkrivanjem). */
   readonly korak = input<number>(0);
   readonly postepeno = input<boolean>(false);
@@ -103,6 +106,8 @@ export class SlajdPrikazComponent {
   readonly kodTraka = input<KodTraka | null>(null);
   /** Tema prezentacije (snimak bez teme, npr. stari server, daje NACRT). */
   readonly tema = input<Tema>('NACRT');
+  /** ZADATAK u editoru (pregled, sličice): slika primera jedne varijante umesto opisa (`ZadatakPrikazComponent.primer`). */
+  readonly primerZadatka = input(false, { transform: booleanAttribute });
   /** Animacija prelaza za PLATNO (vidi `app-platno-prikaz`); null crta krajnje stanje koraka. */
   readonly animacija = input<{ kljuc: number; grupa: number } | null>(null);
 

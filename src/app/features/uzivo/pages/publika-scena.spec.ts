@@ -49,6 +49,34 @@ describe('PublikaScenaComponent (javne projekcije)', () => {
     expect(tekst(rang)).not.toContain('800');
   });
 
+  it('rang tačnosti (L van takmičenja): procenat, vreme i ★ iz javniRangTacnosti; Shift+L ima naslov "Rang predavanja"', async () => {
+    const red = { mesto: 1, ime: 'Ana', gost: false, tacnih: 2, dugovanih: 3, odgovorenih: 3, procenat: 67, prosekMs: 4120, zvezdice: 4, poeni: null };
+    const el = await prikazi(naPitanju('ZATVORENO', {
+      takmicenje: false, rangListaPrikazana: true, rangPrikaz: 'IZVODJENJE', javniRangTacnosti: [red],
+    }));
+    const rang = el.querySelector('[aria-label="Rang-lista"]');
+    expect(tekst(rang?.querySelector('ol .uz-rang-red') ?? null)).toBe('1.Ana2 tačnih1 netačnih67%4,1 s4 zvezdica');
+    expect(rang?.querySelector('.uz-rt-pilula')?.getAttribute('data-nivo')).toBe('3');
+    expect(tekst(rang?.querySelector('.uz-scena-ugao') ?? null)).toMatch(/^Prezentacija: /);
+    const el2 = await prikazi(naPitanju('ZATVORENO', {
+      takmicenje: true, rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE', javniRangTacnosti: [red],
+      izvodjenje: { ...stanje().izvodjenje, predavanje: { id: 9, rb: 4, datum: '2026-10-29', tema: 'Sile' } },
+      javnaRangLista: [{ mesto: 1, ucesnikId: null, ime: 'Bojan', poeni: 800 }],
+    }));
+    const rangPredavanja = el2.querySelector('[aria-label="Rang predavanja"]');
+    expect(tekst(rangPredavanja)).toContain('Ana');
+    expect(tekst(rangPredavanja)).not.toContain('Bojan');
+    expect(tekst(rangPredavanja?.querySelector('.uz-scena-ugao') ?? null)).toBe('Predavanje 4. Sile · sve prezentacije');
+  });
+
+  it('rang tačnosti ostaje i na kraju (preko "Hvala!")', async () => {
+    const el = await prikazi(stanje({
+      prikaz: 'KRAJ', takmicenje: false, rangListaPrikazana: true, rangPrikaz: 'IZVODJENJE',
+      javniRangTacnosti: [{ mesto: 1, ime: 'Ana', gost: false, tacnih: 1, dugovanih: 1, odgovorenih: 1, procenat: 100, prosekMs: 900, zvezdice: 1, poeni: null }],
+    }));
+    expect(tekst(el.querySelector('[aria-label="Rang-lista"]'))).toContain('Ana');
+  });
+
   it('L bez javne rang-liste (stari snimak, null): prazna lista, nikad nastavnička', async () => {
     const el = await prikazi(naPitanju('ZATVORENO', {
       takmicenje: true, rangListaPrikazana: true,
@@ -134,7 +162,8 @@ describe('PublikaScenaComponent (Zadatak slajd)', () => {
   });
 
   it('OTVORENO uz Space: "Odgovorilo x od y" (imenilac kao u konzoli) i tajmer runde, bez kartica', async () => {
-    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3, ucesnici: [], brojPovezanih: 7, rezultatiPrikazani: true } });
+    const ucesnici = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, ime: 'U' + (i + 1), poeni: 0, povezan: i < 4, odgovorio: i < 3 }));
+    const s = naZadatku('OTVORENO', { stanje: { brojOdgovora: 3, ucesnici, brojPovezanih: 4, rezultatiPrikazani: true } });
     s.runda = { id: 9, redniBroj: 1, rokMs: s.serverVremeMs + 60_000, preostaloMs: null, tajmerRadi: true };
     const fixture = TestBed.createComponent(PublikaScenaComponent);
     fixture.componentRef.setInput('stanje', s);
@@ -718,5 +747,38 @@ describe('PublikaScenaComponent (prelaz slajda)', () => {
     expect(t.prikazi().map(p => p.slajd().id)).toEqual([30, 40]);
     await t.zavrsiUlazni();
     expect(t.prikazi().map(p => p.slajd().id)).toEqual([40]);
+  });
+});
+
+describe('PublikaScenaComponent (QR za čekiranje)', () => {
+  const CEKIRANJE = 'http://localhost/nalog/cas/17.AAAAAAAAAAAAAAAAAAAAAA';
+
+  async function saQr(s: NastavnickoStanje, qrLink: string) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', s);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('qrLink', qrLink);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  }
+  const qr = (el: HTMLElement) => el.querySelector('app-qr-kod canvas')?.getAttribute('aria-label');
+
+  it('ekran prijave: QR je link čekiranja, a tekst ostaje kratka adresa izvođenja i kod', async () => {
+    const el = await saQr(stanje(), CEKIRANJE);
+    expect(qr(el)).toBe('QR kod: ' + CEKIRANJE);
+    expect(tekst(el.querySelector('.uz-prijava-link'))).toBe('localhost/uzivo/123456');
+    expect(tekst(el)).not.toContain('nalog/cas');
+  });
+
+  it('taster Q: QR preko slajda je link čekiranja, natpis ostaje /uzivo i kod', async () => {
+    const el = await saQr(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), qrPrikazan: true }), CEKIRANJE);
+    expect(qr(el)).toBe('QR kod: ' + CEKIRANJE);
+    expect(tekst(el.querySelector('.uz-scena-qr-link'))).toContain('/uzivo');
+  });
+
+  it('bez qrLink-a QR je ulazak u izvođenje (kao pre čekiranja)', async () => {
+    const el = await saQr(stanje(), '');
+    expect(qr(el)).toBe('QR kod: http://localhost/uzivo/123456');
   });
 });

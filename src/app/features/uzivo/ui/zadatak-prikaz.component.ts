@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Faza, NastavnickiZadatak, SlajdDetails } from '../data-access/uzivo.models';
+import { Faza, NastavnickiZadatak, medijUrl } from '../data-access/uzivo.models';
 import type { TajmerUlaz } from './slajd-prikaz.component';
+import type { SlajdZaPrikaz } from './slajd-za-prikaz';
 import { TajmerComponent } from './tajmer.component';
 import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.component';
 
@@ -12,7 +13,9 @@ import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.comp
  * Čita **samo** `javniRezultat`: nastavnički `rezultat` i `varijante` (sa id-jevima svih rešenja i tačnim vrednostima) se ovde
  * ne crtaju, pa slika rešenja ne postoji u DOM-u (ni zahtev na nju) dok nastavnik
  * ne uključi `RESENJE`. Imena učesnika se ne prikazuju. Bez stanja izvođenja (`zadatak` je `null`, npr. pregled u editoru i panel "Sledeće") statična kartica sa opisom
- * sa slajda: naziv grupe i "Različitih: N" (prazno = sve).
+ * sa slajda: naziv grupe i "Različitih: N" (prazno = sve). Uz `primer` (samo editor: pregled i sličice) i `primerSvgId` sa servera
+ * kartica umesto toga pokazuje sliku jedne varijante, da se odmah vidi kakav je zadatak. Konzola (panel "Sledeće") ga ne
+ * uključuje: njen ekran se često deli na projektor, a razred zadatak vidi tek na telefonu.
  */
 @Component({
   selector: 'app-zadatak-prikaz',
@@ -33,6 +36,13 @@ import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.comp
     .uz-zad-broj { font-size: 6.5cqw; font-weight: 700; line-height: 1.15; }
     /* mreža rezultata puni ostatak (apsolutno u okviru): redovi su jednake visine bez obzira na sadržaj kartica */
     .uz-zad-rezultat { position: relative; flex: 1 1 0; min-height: 0; }
+    /* primer u editoru: SVG je crn tekst bez pozadine, pa uvek na dnevnoj podlozi (\`rezim-dan\` na slici, i na tamnoj temi) */
+    .uz-zad-primer { flex: 1 1 0; min-height: 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1cqw; }
+    .uz-zad-primer-slika {
+      flex: 1 1 0; min-height: 0; max-width: 100%; object-fit: contain; padding: 1.2cqw; border-radius: 0.8cqw;
+      background: var(--surface);
+    }
+    .uz-zad-primer-opis { font-size: 1.8cqw; color: var(--muted); }
   `,
   template: `
     @if (zadatak(); as z) {
@@ -53,6 +63,17 @@ import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.comp
       } @else {
         <div class="uz-zad-opis" data-zadatak><p class="uz-zad-broj">{{ uputstvo() }}</p></div>
       }
+    } @else if (primerSvg(); as svg) {
+      <header class="uz-zad-zaglavlje">
+        <div class="uz-zad-naslovi">
+          <h1 class="uz-slajd-naslov">Zadatak</h1>
+          <p class="uz-zad-grupa">{{ grupa() }}</p>
+        </div>
+      </header>
+      <figure class="uz-zad-primer" data-primer>
+        <img class="uz-zad-primer-slika rezim-dan" [src]="url(svg)" [alt]="'Primer zadatka: ' + grupa()" loading="lazy">
+        <figcaption class="uz-zad-primer-opis">Primer jedne varijante · različitih: {{ slajd().zadatak?.brojVarijanti ?? 'sve' }}</figcaption>
+      </figure>
     } @else {
       <h1 class="uz-slajd-naslov">Zadatak</h1>
       <div class="uz-slajd-telo">
@@ -65,7 +86,7 @@ import { PrikazZadatka, ZadatakRezultatComponent } from './zadatak-rezultat.comp
   `,
 })
 export class ZadatakPrikazComponent {
-  readonly slajd = input.required<SlajdDetails>();
+  readonly slajd = input.required<SlajdZaPrikaz>();
   /** Nastavnički snimak Zadatak slajda; `null` bez stanja izvođenja. */
   readonly zadatak = input<NastavnickiZadatak | null>(null);
   readonly faza = input<Faza | null>(null);
@@ -75,6 +96,11 @@ export class ZadatakPrikazComponent {
   /** Prekidač "rezultati" (Space): pali "Odgovorilo x od y", a posle zatvaranja i kartice rezultata. */
   readonly prikaziRezultat = input<boolean>(false);
   readonly tajmer = input<TajmerUlaz | null>(null);
+  /** Editor: bez stanja izvođenja prikaži sliku primera (`ZadatakSlajdaInfo.primerSvgId`) umesto opisa. */
+  readonly primer = input<boolean>(false);
+
+  protected readonly url = medijUrl;
+  protected readonly primerSvg = computed(() => (this.primer() && !this.zadatak() ? this.slajd().zadatak?.primerSvgId ?? null : null));
 
   /** Opis sa slajda (kad je grupa obrisana, naziv je `null`); u stanju isti opis stiže u `zadatak.slajd`. */
   private readonly opis = computed(() => this.zadatak()?.slajd ?? this.slajd().zadatak ?? null);

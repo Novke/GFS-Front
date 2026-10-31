@@ -61,6 +61,9 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
       `GET /api/public/uzivo/${KOD}/ja`,
       `POST /api/public/uzivo/${KOD}/prijava`,
     ]);
+    // aplikacija na telefonu (spec „Aplikacija i obaveštenja“ 8): javna ruta nema manifest ni service worker
+    await expect(page.locator('link[rel=manifest]')).toHaveCount(0);
+    expect(await page.evaluate(() => navigator.serviceWorker.getRegistrations().then(r => r.length))).toBe(0);
     // javna ruta ne vuče fontove platna (spec 13): ni jedan zahtev za carlito, caladea, arimo, tinos, cousine, atkinson
     expect(zahtevi.filter(p => /carlito|caladea|arimo|tinos|cousine|atkinson/i.test(p)), 'fontovi platna na javnoj ruti').toEqual([]);
     expect(javnaMreza.ws).toEqual(['/api/public/ws']);
@@ -81,6 +84,33 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
       `/app/izvodjenja/${IZVODJENJE}/pocetno`, `/topic/izvodjenja/${IZVODJENJE}/javno`, '/user/queue/greske', '/user/queue/licno',
     ]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
+  test('tačnost u zaglavlju i na "Gledaj u tablu" tek kad je server pošalje; "Izađi" vodi gosta na unos koda', async ({ page, mock, javnaMreza }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const broker = await lazniBroker(
+      page, 'api/public/ws',
+      o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? pocetno('Mina') : undefined),
+      url => javnaMreza.ws.push(new URL(url).pathname),
+    );
+    await page.goto(`uzivo/${KOD}`);
+    await expect(page.getByText('Čekamo početak')).toBeVisible();
+    await expect(page.locator('[data-tacnost]')).toHaveCount(0); // nijedno pitanje još ne računa
+    await expect.poll(() => broker.pretplate).toContain('/user/queue/licno');
+
+    // posle "Tačno" na drugom pitanju server šalje lično stanje sa tačnošću; javni snimak prelazi na slajd
+    broker.posalji('/user/queue/licno', { ...pocetno('Mina').licno, verzija: 2, tacnih: 1, dugovanih: 2 });
+    broker.posalji(`/topic/izvodjenja/${IZVODJENJE}/javno`, { ...pocetno('Mina').javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PLATNO' });
+    await expect(page.locator('[data-tacnost]')).toHaveText('Tačno 1 od 2');
+    await expect(page.getByText('Gledaj u tablu')).toBeVisible();
+    await expect(page.locator('[data-skor]')).toHaveText('Do sada: Tačno 1 od 2');
+
+    // gost (bez naloga, nije došao sa časa): Izađi vodi na unos koda; napušteno izvođenje se pamti za tab Čas
+    await page.getByRole('button', { name: 'Izađi' }).click();
+    await expect(page).toHaveURL(/\/uzivo$/);
+    await expect(page.getByLabel('Kod sa table')).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('gfs-uzivo-izasao'))).toBe(KOD);
+    expect(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/'))).toEqual([]);
   });
 
   test('nepoznat kod: poruka uz polje, ostaje na unosu koda', async ({ page }) => {

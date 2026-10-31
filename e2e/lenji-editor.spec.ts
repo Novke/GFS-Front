@@ -16,8 +16,11 @@ import { NIZ_EDITORA, NIZ_FORMULE_EDITORA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI
  * Prijava (F1, 2026-10-19): početno je bilo 784 657 B, sesija nastavnika mora biti u početnom paketu (čuvar ljuske i svih
  * nastavničkih ruta, `SesijaStore`, `AuthApi`, provera 401 u interceptoru) i dodaje 3 247 B (787 904 B); dijalog isteka i
  * preusmerenje (`core/auth/istek-sesije`) su lenji chunk. Budžet je zato podignut za 5 kB, na 790 000 B.
+ * Izdanje (2026-10-28): početno je bilo 789 517 B; praćenje izdanja (`core/izdanje`: provera, traka "Osveži", `ErrorHandler`,
+ * interceptor, `NesacuvaneIzmene`) mora biti u početnom paketu, jer zastarela kartica posle deploy-a ne može da učita nijedan
+ * lenji chunk. Dodaje 6 974 B (796 491 B, 217 259 B gzip), pa je budžet 800 000 B.
  */
-const BUDZET_POCETNO = 790_000;
+const BUDZET_POCETNO = 800_000;
 const BUDZET_STRANICA = 215_000;
 const BUDZET_EDITOR_4B = 450_000;
 const BUDZET_EDITOR_4B_GZIP = 140_000;

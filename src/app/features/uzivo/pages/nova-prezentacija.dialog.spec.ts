@@ -1,24 +1,34 @@
 import { provideHttpClient } from '@angular/common/http';
+import { ErrorHandler } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef, MatDialogState } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { PRIHVACENI_FAJLOVI } from '../uvoz-pptx/ime-fajla';
-import { NovaPrezentacijaDialog } from './nova-prezentacija.dialog';
+import { NovaPrezentacijaDialog, PORUKA_UVOZ_NIJE_UCITAN } from './nova-prezentacija.dialog';
+import { UvozPptxOtvarac } from './uvoz-pptx-otvarac';
 
 describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
   let kreiraj: ReturnType<typeof vi.fn>;
   let zatvori: ReturnType<typeof vi.fn>;
+  let pripremi: ReturnType<typeof vi.fn>;
+  let handleError: ReturnType<typeof vi.fn>;
+  let stanje: MatDialogState;
 
-  function otvori() {
+  function otvori(chunkUvoza: () => Promise<void> = () => Promise.resolve()) {
     kreiraj = vi.fn(() => of({ id: 9, naziv: 'x' }));
     zatvori = vi.fn();
+    pripremi = vi.fn(chunkUvoza);
+    handleError = vi.fn();
+    stanje = MatDialogState.OPEN;
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
         { provide: PrezentacijeApi, useValue: { kreiraj } },
+        { provide: UvozPptxOtvarac, useValue: { pripremi } },
+        { provide: ErrorHandler, useValue: { handleError } },
         { provide: MAT_DIALOG_DATA, useValue: { predmeti: [{ id: 7, naziv: 'Statika' }], predmetId: 7 } },
-        { provide: MatDialogRef, useValue: { close: zatvori } },
+        { provide: MatDialogRef, useValue: { close: zatvori, getState: () => stanje } },
       ],
     });
     const f = TestBed.createComponent(NovaPrezentacijaDialog);
@@ -89,7 +99,9 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     await pptx(f);
     izaberi(f, 'Predavanje 3.pptx');
     napravi(f);
-    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Predavanje 3', opis: null, tema: 'BELA' });
+    await f.whenStable();
+    expect(pripremi).toHaveBeenCalledTimes(1);
+    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Predavanje 3', opis: null, tema: 'BELA', vezba: null });
     const ishod = zatvori.mock.calls[0][0];
     expect(ishod.prezentacija.id).toBe(9);
     expect(ishod.fajl.name).toBe('Predavanje 3.pptx');
@@ -100,7 +112,87 @@ describe('NovaPrezentacijaDialog (Iz PowerPointa)', () => {
     naziv(f).value = 'Prazna';
     naziv(f).dispatchEvent(new Event('input'));
     napravi(f);
-    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Prazna', opis: null, tema: null });
+    expect(kreiraj).toHaveBeenCalledWith({ predmetId: 7, naziv: 'Prazna', opis: null, tema: null, vezba: null });
     expect(zatvori.mock.calls[0][0].fajl).toBeNull();
+    expect(pripremi).not.toHaveBeenCalled();
+  });
+
+  it('chunk uvoza se učitava pre POST-a: dok ne stigne, prezentacija se ne pravi', async () => {
+    let pusti!: () => void;
+    const f = otvori(() => new Promise<void>(r => (pusti = r)));
+    await pptx(f);
+    izaberi(f, 'Predavanje 3.pptx');
+    napravi(f);
+    expect(pripremi).toHaveBeenCalledTimes(1);
+    expect(kreiraj).not.toHaveBeenCalled();
+    pusti();
+    await f.whenStable();
+    expect(kreiraj).toHaveBeenCalledTimes(1);
+  });
+
+  it('chunk uvoza se ne učita (zastarela kartica): bez POST-a, poruka u dijalogu, greška u ErrorHandler', async () => {
+    const greska = new TypeError('Failed to fetch dynamically imported module: https://gfs.trif.rs/chunk-Bc1bQlpj.js');
+    const f = otvori(() => Promise.reject(greska));
+    await pptx(f);
+    izaberi(f, 'Predavanje 3.pptx');
+    napravi(f);
+    await f.whenStable();
+    f.detectChanges();
+    expect(kreiraj).not.toHaveBeenCalled();
+    expect(zatvori).not.toHaveBeenCalled();
+    expect(handleError).toHaveBeenCalledWith(greska);
+    expect(el(f).querySelector('[role="alert"]')?.textContent).toContain(PORUKA_UVOZ_NIJE_UCITAN);
+    expect(el(f).querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+  });
+
+  it('dijalog zatvoren dok se chunk učitava: prezentacija se ne pravi ni kasnije', async () => {
+    let pusti!: () => void;
+    const f = otvori(() => new Promise<void>(r => (pusti = r)));
+    await pptx(f);
+    izaberi(f, 'Predavanje 3.pptx');
+    napravi(f);
+    stanje = MatDialogState.CLOSED;
+    pusti();
+    await f.whenStable();
+    expect(kreiraj).not.toHaveBeenCalled();
+  });
+
+  describe('broj vežbe', () => {
+    const vezba = (f: { nativeElement: HTMLElement }) => el(f).querySelector<HTMLInputElement>('[data-vezba]')!;
+    const upisi = (polje: HTMLInputElement, v: string) => { polje.value = v; polje.dispatchEvent(new Event('input')); };
+
+    it('predlaže se iz naziva "Vežbe N" i šalje; ručno upisan broj se ne prepisuje', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Vežbe 3 i 4 – zadaci');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('3');
+      upisi(vezba(f), '4');
+      upisi(naziv(f), 'Vežbe 5');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('4');
+      napravi(f);
+      expect(kreiraj).toHaveBeenCalledWith(expect.objectContaining({ naziv: 'Vežbe 5', vezba: 4 }));
+    });
+
+    it('predlog prati naziv dok ga korisnik ne promeni; naziv bez broja briše predlog', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Vežbe 2');
+      upisi(naziv(f), 'Vežbe 7');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('7');
+      upisi(naziv(f), 'Uvodno predavanje');
+      f.detectChanges();
+      expect(vezba(f).value).toBe('');
+    });
+
+    it('van 0-99 se ne šalje', () => {
+      const f = otvori();
+      upisi(naziv(f), 'Uvod');
+      upisi(vezba(f), '-1');
+      napravi(f);
+      f.detectChanges();
+      expect(kreiraj).not.toHaveBeenCalled();
+      expect(el(f).textContent).toContain('Broj vežbe mora biti od 0 do 99.');
+    });
   });
 });

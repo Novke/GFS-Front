@@ -6,10 +6,15 @@ import type { Page, Request, Route } from '@playwright/test';
 import type {
   BankaPretragaStavka, GrupaCmd, IskljucenaTemaCmd, PremestiCmd, RenderProbaCmd, VarijantaCmd,
 } from '../src/app/features/banka/data-access/banka.models';
+import type { NajavaCmd } from '../src/app/features/nalog/data-access/casovi.models';
 import type { LtiRegistracijaCmd, LtiRegistracijaInfo, LtiVrednostiZaMoodle } from '../src/app/features/podesavanja/data-access/lti.models';
+import { poVezbama, type VrstaPrezentacije } from '../src/app/core/api/redosled-prezentacija';
+import type { RasporedCmd, TerminCmd } from '../src/app/features/raspored/data-access/raspored.models';
 import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
+import { MockPortal } from './mock-portal';
+import { MockRaspored } from './mock-raspored';
 
 /*
  * Mokovan backend za e2e: `page.route('**\/api/**')` odgovara po metodi i putanji iz izmišljenih podataka
@@ -103,7 +108,7 @@ export interface IzvodjenjeNaPredavanju {
 interface Ucesnik { ucesnikId: number; ime: string; izvodjenjeId: number }
 /** `ObavestenjeInfo` (`GET api/obavestenja`), kao backend. */
 interface Obavestenje {
-  id: number; vrsta: 'NE_STIZE_KOD' | 'PREVISE_KODOVA'; studentId: number | null; studentIme: string | null; indeks: string | null;
+  id: number; vrsta: 'NE_STIZE_KOD' | 'PREVISE_KODOVA' | 'MNOGO_NAJAVA'; studentId: number | null; studentIme: string | null; indeks: string | null;
   podaci: Record<string, unknown> | null; kreirano: string; procitano: string | null; reseno: string | null;
 }
 /** `SesijaInfo` (`GET api/auth/sesije`): prijavljeni uređaji nastavnika. */
@@ -112,8 +117,12 @@ interface SesijaNastavnika { id: number; opis: string; kreirano: string; posledn
 interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
 interface NalogStudenta {
   indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
+  /** Grupa i generacija (tab Ja). */
+  grupa?: string | null; generacija?: number | null;
   /** Godina upisa; bez nje u fiksturi važi početna godina tekuće školske godine (ono što forma predlaže). */
   godina?: number;
+  /** Link WhatsApp grupe sopstvene grupe (Početna); fikstura ga nema, test ga postavlja. */
+  waLink?: string | null;
 }
 
 /** Početna godina tekuće školske godine (1. 10. Y do 30. 9. Y+1 = Y), kao predlog forme na `/nalog`. */
@@ -147,7 +156,7 @@ export interface Podaci extends BankaPodaci {
   prezentacije: UzivoPrezentacija[];
   /** Učesnici prijavljeni u ovom testu (kao da pregledač ima kolačić `gfs_uzivo`). */
   ucesnici: Ucesnik[];
-  /** Obaveštenja za nastavnika (značka, padajuća lista, kartica "Nalozi"); `reseno` != null nisu otvorena. */
+  /** Obaveštenja za nastavnika (značka, padajuća lista, kartica "Obaveštenja"); `reseno` != null nisu otvorena. */
   obavestenja: Obavestenje[];
   /** Prijavljeni uređaji nastavnika (`trenutna` = ovaj pregledač). */
   sesijeNastavnika: SesijaNastavnika[];
@@ -302,6 +311,12 @@ export class MockApi {
   /** Banka zadataka (`/banka`): stablo, varijante, render i preambula nad `podaci.banka*`. */
   readonly banka = new MockBanka(this.podaci, id => this.predmet(id) !== null, this.mediji);
   /**
+   * Nalog studenta, faze 2 i 3 (predmeti, vežbanje, pregled prezentacije, ocena) i nastavnički panel „Za vežbanje“ i statistika
+   * (`mock-portal.ts`): studentske rute traže `studentPrijavljen`, panel samo čvorove banke za predavanja.
+   */
+  readonly portal = new MockPortal(() => this.studentPrijavljen,
+    id => this.podaci.bankaGrupe.some(g => g.id === id && g.namena === 'PREDAVANJE'));
+  /**
    * Sesija nastavnika (kao kolačić `gfs_nastavnik`). Podrazumevano je nastavnik prijavljen, pa specovi pre prijave rade kao
    * ranije. Bez nje mok odgovara kao server: svaki nastavnički API (sve osim `public/*`, `auth/prijava` i `auth/ja`) daje 401
    * `Potrebna je prijava.`, pre zamena (`na`) i podrazumevanih ruta. Test je menja direktno (istek usred rada) ili kroz
@@ -333,6 +348,54 @@ export class MockApi {
   moodlePar = true;
   /** Ime Moodle naloga iz ulaska (`GET public/lti/povezivanje`); `null` = Moodle ga nije podelio. Izmišljeno, nije stvaran nalog. */
   moodleIme: string | null = 'Pera Test';
+  /**
+   * Čekiranje (studentski portal, faza 1). Projektor dobija nov token na svaki `GET predavanja/:id/cekiranje` (kao server
+   * na 10 s, ovde odmah, da test vidi promenu bez čekanja), `cekirani` vraća taj isti upit. Student: `skeniraj` bez sesije
+   * daje ključ čekanja (`kljucevi`), sa sesijom upisuje `predavanjeId`; `izvodjenje` test postavlja kad "pokrene" prezentaciju.
+   * `uToku`: današnje predavanje studentove grupe u toku (test ga postavlja); server ga šalje samo kad student nije na živom
+   * času, pa ga mok tada i vraća.
+   */
+  readonly cekiranje = {
+    tokena: 0,
+    cekirani: [] as { studentId: number; ime: string; prezime: string; indeks: string; vreme: string; kasnio: boolean; istiTelefonKao: number | null }[],
+    predavanjeId: null as number | null,
+    cekiranU: null as string | null,
+    izvodjenje: null as { kod: string; naziv: string } | null,
+    uToku: null as { predmet: string | null; tema: string | null } | null,
+    kljucevi: new Set<string>(),
+  };
+  /**
+   * Raspored časova i najave odsustva (`mock-raspored.ts`). Podrazumevano prazan (nijedan period), pa Početna i `/nalog`
+   * izgledaju kao ranije; spec ga puni sa `mock.raspored.primer()`. Obaveštenje `MNOGO_NAJAVA` ide u `podaci.obavestenja`
+   * jednom po terminu (ključ kao na serveru, samo u moku), a otkazivanje termina ga rešava.
+   */
+  readonly raspored = new MockRaspored({
+    predmet: id => this.predmet(id),
+    grupa: id => this.grupa(id),
+    studenti: () => this.podaci.studenti,
+    predavanje: (predmetId, grupaId, datum) =>
+      this.podaci.predavanja.filter(p => p.predmetId === predmetId && p.grupaId === grupaId && p.datum === datum)
+        .reduce<number | null>((max, p) => (max === null || p.id > max ? p.id : max), null),
+    mnogoNajava: (kljuc, podaci) => {
+      if (this.kljuceviObavestenja.has(kljuc)) {
+        return;
+      }
+      const id = this.sledeciId++;
+      this.kljuceviObavestenja.set(kljuc, id);
+      this.podaci.obavestenja.push({
+        id, vrsta: 'MNOGO_NAJAVA', studentId: null, studentIme: null, indeks: null, podaci, kreirano: lokalnoVreme(new Date()),
+        procitano: null, reseno: null,
+      });
+    },
+    resiPoKljucu: kljuc => {
+      const o = this.podaci.obavestenja.find(x => x.id === this.kljuceviObavestenja.get(kljuc));
+      if (o) {
+        o.reseno ??= lokalnoVreme(new Date());
+      }
+    },
+  });
+  /** Ključ obaveštenja (`MNOGO_NAJAVA:<stavka>:<datum>`) -> id; server ga drži u koloni `kljuc`, API ga ne vraća. */
+  private readonly kljuceviObavestenja = new Map<string, number>();
   private readonly zamene: Ruta[] = [];
   private readonly rute: Ruta[];
   private sledeciId = 10_000;
@@ -700,7 +763,20 @@ export class MockApi {
   }
 
   private prezentacijaOdgovor(x: UzivoPrezentacija): unknown {
-    return { ...x, slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
+    return { ...x, ...this.redosledPrezentacije(x), slajdovi: x.slajdovi.map(s => this.slajdOdgovor(s)) };
+  }
+
+  /** Kao server (V21): `vezba` se čuva, vrsta i broj zadataka se računaju iz slajdova, puštanje iz izvođenja. */
+  private redosledPrezentacije(x: UzivoPrezentacija) {
+    const pitanja = x.slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length;
+    const zadaci = x.slajdovi.filter(s => s.tip === 'ZADATAK').length;
+    const vrsta: VrstaPrezentacije = zadaci > 0 ? 'ZADACI' : pitanja > 0 ? 'PITANJA' : 'GRADIVO';
+    const pocetci = this.izvodjenjaPredavanja.filter(i => i.prezentacija.id === x.id).map(i => i.pocetak).sort();
+    return {
+      vezba: (x['vezba'] as number | null | undefined) ?? null, vrsta, brojZadataka: zadaci,
+      kreirano: (x['kreirano'] as string | undefined) ?? (x['izmenjeno'] as string | undefined) ?? '2026-10-01T10:00:00',
+      poslednjePustanje: (x['poslednjePustanje'] as string | null | undefined) ?? pocetci.at(-1) ?? null,
+    };
   }
 
   private kontrolnaTabla() {
@@ -715,10 +791,19 @@ export class MockApi {
       .map(s => this.sesijaInfo(s))
       .filter(s => s.otvorena && s.brojNaCekanju > 0)
       .map(s => ({ sesijaId: s.id, grupa: s.grupa, brojNaCekanju: s.brojNaCekanju, istice: s.istice }));
+    // predlog iz rasporeda (spec najave odsustva 8) kad neki period pokriva danas, inače kao ranije iz fiksture
+    const izRasporeda = this.raspored.sledece();
+    const sg = izRasporeda ? this.grupa(izRasporeda.grupaId) : g;
+    const sledece = izRasporeda
+      ? {
+        predmet: this.predmet(izRasporeda.predmetId), grupa: sg, rb: k.sledece.rb, brojStudenata: sg?.brojStudenata ?? 0,
+        brojStarijih: 0, termin: izRasporeda.termin, izvor: izRasporeda.izvor,
+      }
+      : { predmet: this.predmet(k.sledece.predmetId), grupa: g, rb: k.sledece.rb, brojStudenata: g?.brojStudenata ?? 0, brojStarijih: k.sledece.brojStarijih };
+    const raspored = this.raspored.tabla();
     return {
-      sledece: {
-        predmet: this.predmet(k.sledece.predmetId), grupa: g, rb: k.sledece.rb, brojStudenata: g?.brojStudenata ?? 0, brojStarijih: k.sledece.brojStarijih,
-      },
+      sledece,
+      ...(raspored ? { raspored } : {}),
       uToku: [],
       ceka: {
         testovi: testovi.map(t => this.testListItem(t)),
@@ -882,6 +967,16 @@ export class MockApi {
     get('predavanja/:id', (_z, p) => {
       const x = nadji(d.predavanja, p['id'], 'Predavanje');
       return jeOdgovor(x) ? x : ok(this.predavanjeDetails(x));
+    });
+    // čekiranje (nastavnik: projektor, stranica predavanja, Uživo QR): token se menja na svaki upit, završeno nema token
+    get('predavanja/:id/cekiranje', (_z, p) => {
+      const x = nadji(d.predavanja, p['id'], 'Predavanje');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const c = this.cekiranje;
+      const token = x.zavrseno ? null : `${x.id}.${String(++c.tokena).padStart(22, 'T')}`;
+      return ok({ token, vaziDoMs: token ? Date.now() + 20_000 : null, serverVremeMs: Date.now(), datumNijeDanas: false, cekirani: c.cekirani });
     });
     const aktivnost = (izmeni: (p: Predavanje, sId: number) => Odgovor | null): Rukovalac => (z, p) => {
       const x = nadji(d.predavanja, p['id'], 'Predavanje');
@@ -1113,6 +1208,14 @@ export class MockApi {
         .filter(i => (predavanjeId === null || i.predavanje?.id === Number(predavanjeId)) && (status === null || i.status === status))
         .sort((a, b) => b.pocetak.localeCompare(a.pocetak) || b.id - a.id));
     });
+    // rang tačnosti (bez odgovora u mokovanim podacima: prazni rangovi); predavanje vraća svoja izvođenja sa pitanjima, kao server
+    get('izvodjenja/:id/rang', () => ok([]));
+    get('predavanja/:id/rang', (_z, p) => ok({
+      predavanjeId: Number(p['id']), rang: [],
+      izvodjenja: this.izvodjenjaPredavanja.filter(i => i.predavanje?.id === Number(p['id']) && i.brojPitanja > 0),
+    }));
+    get('studenti/:id/uzivo', () => ok({ ukupno: null, casovi: [] }));
+    get('grupe/:id/uzivo', (_z, p) => ok({ grupaId: Number(p['id']), brojCasova: 0, rang: [] }));
     // pokretanje iz ekrana predavanja: kao server, jedno izvođenje u toku po prezentaciji (409), predavanje mora biti iz predmeta prezentacije
     post('prezentacije/:id/izvodjenja', (z, p) => {
       const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
@@ -1133,7 +1236,7 @@ export class MockApi {
       const id = this.sledeciId++;
       const novo: IzvodjenjeNaPredavanju = {
         id, kod: String(100000 + id), prezentacija: { id: x.id, naziv: x.naziv, predmetId: x.predmet.id }, status: 'AKTIVNO', cuvanje: cmd.cuvanje,
-        grupa: null, predavanje: pr ? { id: pr.id, rb: pr.rb, datum: pr.datum, tema: pr.tema } : null,
+        grupa: pr ? this.grupa(pr.grupaId) : null, predavanje: pr ? { id: pr.id, rb: pr.rb, datum: pr.datum, tema: pr.tema } : null,
         pocetak: lokalnoVreme(new Date()), kraj: null, brojUcesnika: 0, brojPitanja: 0, boduje: false,
       };
       this.izvodjenjaPredavanja.push(novo);
@@ -1143,14 +1246,61 @@ export class MockApi {
     const info = (x: UzivoPrezentacija) => {
       const { slajdovi, ...ostalo } = x;
       // kao server: slajdovi sa rundama (PITANJE i ZADATAK)
-      return { ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length };
+      return {
+        ...ostalo, brojSlajdova: slajdovi.length, brojPitanja: slajdovi.filter(s => s.tip === 'PITANJE' || s.tip === 'ZADATAK').length,
+        ...this.redosledPrezentacije(x),
+      };
     };
+    // GET prezentacije/izbor: redosled kao server (RedosledPrezentacija.REDOSLED), predlog za grupu (zaGrupu) ili posle date (posle)
+    get('prezentacije/izbor', z => {
+      const predmetId = Number(z.query.get('predmetId'));
+      const grupaId = z.query.get('grupaId') === null ? null : Number(z.query.get('grupaId'));
+      const posle = z.query.get('posle') === null ? null : Number(z.query.get('posle'));
+      if (!predmetId) {
+        return greska(400, 'Predmet je obavezan.');
+      }
+      const pusteno = (id: number) => this.izvodjenjaPredavanja
+        .filter(i => i.prezentacija.id === id && grupaId !== null && (i.grupa as { id?: number } | null)?.id === grupaId)
+        .map(i => i.pocetak).sort().at(-1) ?? null;
+      const uToku = (id: number) => d.prezentacije.find(x => x.id === id)?.['aktivnoIzvodjenjeId'] != null;
+      const stavke = poVezbama(d.prezentacije.filter(x => x.predmet.id === predmetId).map(info))
+        .map(p => ({ prezentacija: p, pustenoGrupi: pusteno(p.id) }));
+      let predlog: number[];
+      if (grupaId !== null) {
+        const najdalja = Math.max(-1, ...stavke.filter(s => s.pustenoGrupi && s.prezentacija.vezba !== null).map(s => s.prezentacija.vezba!));
+        const kandidati = stavke.filter(s => !s.pustenoGrupi && s.prezentacija.vezba !== null && !uToku(s.prezentacija.id));
+        predlog = [
+          ...kandidati.filter(s => s.prezentacija.vrsta === 'ZADACI' && s.prezentacija.vezba! < najdalja),
+          ...kandidati.filter(s => s.prezentacija.vezba! >= najdalja),
+        ].map(s => s.prezentacija.id).slice(0, 3);
+      } else {
+        const i = stavke.findIndex(s => s.prezentacija.id === posle);
+        predlog = i < 0 || stavke[i].prezentacija.vezba === null ? [] : stavke.slice(i + 1)
+          .filter(s => s.prezentacija.vezba !== null && !uToku(s.prezentacija.id)).map(s => s.prezentacija.id).slice(0, 3);
+      }
+      return ok({ stavke, predlog });
+    });
+    patch('prezentacije/:id/vezba', (z, p) => {
+      const x = nadji(d.prezentacije, p['id'], 'Prezentacija');
+      if (jeOdgovor(x)) {
+        return x;
+      }
+      const v = (z.telo as { vezba?: unknown }).vezba;
+      if (v !== null && (typeof v !== 'number' || !Number.isInteger(v))) {
+        return greska(400, 'Neispravan format podataka.');
+      }
+      if (v !== null && (v < 0 || v > 99)) {
+        return greska(400, 'Broj vežbe mora biti od 0 do 99.');
+      }
+      x['vezba'] = v;
+      return ok(info(x));
+    });
     get('prezentacije', z => {
       const predmetId = z.query.get('predmetId');
       return ok(d.prezentacije.filter(x => predmetId === null || x.predmet.id === Number(predmetId)).map(info));
     });
     post('prezentacije', z => {
-      const cmd = z.telo as { predmetId: number; naziv: string; opis?: string | null; tema?: string | null };
+      const cmd = z.telo as { predmetId: number; naziv: string; opis?: string | null; tema?: string | null; vezba?: number | null };
       const predmet = this.predmet(cmd.predmetId);
       if (!predmet) {
         return greska(404, 'Predmet ne postoji.');
@@ -1159,6 +1309,7 @@ export class MockApi {
         id: this.sledeciId++, naziv: cmd.naziv, opis: cmd.opis ?? null, predmet: { id: predmet.id, naziv: predmet.naziv },
         brojSlajdova: 0, brojPitanja: 0, izmenjeno: lokalnoVreme(new Date()), tema: cmd.tema ?? 'NACRT', takmicenje: false,
         telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: false, brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [],
+        vezba: cmd.vezba ?? null, kreirano: lokalnoVreme(new Date()),
       };
       d.prezentacije.push(x);
       return { status: 201, telo: x };
@@ -1226,7 +1377,9 @@ export class MockApi {
       if (jeOdgovor(x)) {
         return x;
       }
-      Object.assign(x, z.telo);
+      const telo = { ...(z.telo as Record<string, unknown>) };
+      delete telo['vezba']; // kao server: PUT ne menja broj vežbe
+      Object.assign(x, telo);
       return ok(this.prezentacijaOdgovor(x));
     });
     put('slajdovi/:id', (z, p) => {
@@ -1291,6 +1444,7 @@ export class MockApi {
       return b.redosled(Number(z.query.get('predmetId')), z.query.get('namena'), roditelj === null ? null : Number(roditelj), z.telo);
     });
     get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
+    this.portal.nastavnickeRute(get, put, del);
     put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
     del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
     post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
@@ -1351,6 +1505,17 @@ export class MockApi {
       return { status: 201, telo: ucesnik };
     });
 
+    // raspored časova i termini (nastavnik, spec najave odsustva 3 i 6; `mock-raspored.ts`); `termini` pre `:id`
+    const rs = this.raspored;
+    get('rasporedi', () => ok(rs.lista()));
+    post('rasporedi', z => rs.kreiraj(z.telo as RasporedCmd));
+    get('rasporedi/termini', z => rs.termini(z.query.get('od'), z.query.get('dana')));
+    post('rasporedi/termini/otkazi', z => rs.otkazi(z.telo as TerminCmd));
+    post('rasporedi/termini/vrati', z => rs.vrati(z.telo as TerminCmd));
+    get('rasporedi/:id', (_z, p) => rs.detalj(Number(p['id'])));
+    put('rasporedi/:id', (z, p) => rs.izmeni(Number(p['id']), z.telo as RasporedCmd));
+    del('rasporedi/:id', (_z, p) => rs.obrisi(Number(p['id'])));
+
     // nalog studenta (javno, spec prijave 5.1): isti odgovor na "kod" za svaki indeks; prijava samo kodom KOD_NALOGA za
     // indeks studenta iz fiksture; `ja` i odjave traže kolačić studenta (`studentPrijavljen`)
     const bezSesijeStudenta = () => greska(401, 'Potrebna je prijava.');
@@ -1395,6 +1560,56 @@ export class MockApi {
       return ok({ odjavljeno });
     });
     post('public/nalog/pomoc', () => ok({ poruka: 'Javili smo nastavniku.' }));
+    // naredni časovi i najava odsustva (javno, STUDENT; spec najave odsustva 4): bez kolačića studenta 401 kao server
+    get('public/nalog/casovi', () => (this.studentPrijavljen ? ok(rs.naredni()) : bezSesijeStudenta()));
+    post('public/nalog/casovi/najavi', z => (this.studentPrijavljen ? rs.najavi(z.telo as NajavaCmd) : bezSesijeStudenta()));
+    post('public/nalog/casovi/povuci', z => (this.studentPrijavljen ? rs.povuci(z.telo as NajavaCmd) : bezSesijeStudenta()));
+    // čekiranje studenta (`/nalog/cas`): token oblika `<id>.<22 znaka>` živog predavanja, inače 410 kao server
+    const casStanje = () => {
+      const c = this.cekiranje;
+      const x = c.predavanjeId === null ? undefined : d.predavanja.find(q => q.id === c.predavanjeId);
+      if (!x) {
+        return { predavanje: null, cekiranU: null, izvodjenje: null, uToku: c.uToku };
+      }
+      const predavanje = { id: x.id, predmet: this.predmet(x.predmetId)?.naziv ?? null, datum: x.datum, rb: x.rb, tema: x.tema, zavrseno: x.zavrseno };
+      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje, uToku: x.zavrseno ? c.uToku : null };
+    };
+    const cekiraj = (x: Predavanje) => {
+      this.cekiranje.predavanjeId = x.id;
+      this.cekiranje.cekiranU = lokalnoVreme(new Date());
+    };
+    post('public/nalog/cas/skeniraj', z => {
+      const token = String((z.telo as { token?: unknown } | null)?.token ?? '');
+      const m = /^(\d+)\.[A-Za-z0-9_-]{22}$/.exec(token);
+      const x = m ? d.predavanja.find(q => q.id === Number(m[1])) : undefined;
+      if (!x) {
+        return greska(410, 'QR je istekao. Skeniraj ponovo sa table.');
+      }
+      if (x.zavrseno) {
+        return greska(410, 'Čekiranje za ovaj čas je završeno.');
+      }
+      if (!this.studentPrijavljen) {
+        const kljuc = `K${x.id}`.padEnd(32, 'k');
+        this.cekiranje.kljucevi.add(kljuc);
+        return ok({ kljuc });
+      }
+      cekiraj(x);
+      return ok({ stanje: casStanje() });
+    });
+    post('public/nalog/cas/potvrdi', z => {
+      if (!this.studentPrijavljen) {
+        return bezSesijeStudenta();
+      }
+      const kljuc = String((z.telo as { kljuc?: unknown } | null)?.kljuc ?? '');
+      const x = this.cekiranje.kljucevi.delete(kljuc) ? d.predavanja.find(q => q.id === Number(kljuc.slice(1, kljuc.indexOf('k')))) : undefined;
+      if (!x) {
+        return greska(410, 'Čekiranje je isteklo. Skeniraj QR ponovo.');
+      }
+      cekiraj(x);
+      return ok(casStanje());
+    });
+    get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
+    this.portal.studentskeRute(get, post, put, del);
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));

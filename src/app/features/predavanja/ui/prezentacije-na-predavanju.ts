@@ -3,19 +3,26 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input
 import { MatButton } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
+import { RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predavanja.store';
 import { konzolaIzvodjenja, pregledIzvodjenja } from './izvodjenje-putanje';
+
+/** Rang predavanja se osvežava ovoliko često dok neka prezentacija traje i kartica je vidljiva. */
+export const RANG_PREDAVANJA_OSVEZAVANJE_MS = 10_000;
 
 /**
  * "Prezentacije na ovom predavanju": izvođenja prezentacija vezana za predavanje, sa statusom i vezom na konzolu (u toku)
  * ili pregled (završeno). Na predavanju koje traje otvara se NOVA kartica (beleženje se ne prekida), na završenom ista.
  * Lista se čita ponovo kad se kartica ponovo prikaže (konzola se zatvara u drugoj kartici). U beleženju se odeljak vidi tek
- * kad ima šta da pokaže ili kad je greška; na završenom predavanju uvek, da kaže da prezentacija nije bilo.
+ * kad ima šta da pokaže ili kad je greška; na završenom predavanju uvek, da kaže da prezentacija nije bilo. Ispod liste je
+ * rang tačnosti: jedan izveštaj kad je bilo jedno izvođenje sa pitanjima, zbir predavanja kad ih je više; dok neka
+ * prezentacija traje, osvežava se svakih {@link RANG_PREDAVANJA_OSVEZAVANJE_MS} ms. Studenti su linkovi tek na završenom
+ * predavanju (beleženje se ne napušta).
  */
 @Component({
   selector: 'app-prezentacije-na-predavanju',
-  imports: [DatePipe, MatButton, RouterLink, StatusChip],
+  imports: [DatePipe, MatButton, RangTacnostiTabela, RouterLink, StatusChip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (vidljivo()) {
@@ -51,6 +58,22 @@ import { konzolaIzvodjenja, pregledIzvodjenja } from './izvodjenje-putanje';
               </li>
             }
           </ul>
+          @if (store.rangGreska(); as g) {
+            <p class="greska" role="alert" data-rang-greska>{{ g }}</p>
+          } @else if (store.rang(); as r) {
+            @if (r.izvodjenja.length > 0) {
+              <section class="rang" aria-labelledby="naslov-rang-predavanja" data-rang-predavanja>
+                <h3 id="naslov-rang-predavanja">{{ r.izvodjenja.length > 1 ? 'Rang tačnosti predavanja' : 'Rang tačnosti' }}</h3>
+                <p class="meta">
+                  @if (r.izvodjenja.length > 1) { Sve prezentacije ovog predavanja zajedno ({{ r.izvodjenja.length }}). }
+                  Redosled: više ★, pa kraće prosečno vreme; tačnost (neodgovoreno je netačno) je podatak.
+                  @if (store.uToku().length > 0) { Osvežava se dok prezentacija traje. }
+                </p>
+                <app-rang-tacnosti-tabela [stavke]="r.rang" [kolone]="r.izvodjenja.length > 1 ? ['izvodjenja'] : []"
+                                          [linkoviStudenata]="zavrseno()" />
+              </section>
+            }
+          }
         }
       </section>
     }
@@ -65,6 +88,9 @@ import { konzolaIzvodjenja, pregledIzvodjenja } from './izvodjenje-putanje';
     .naziv { font-weight: 600; overflow-wrap: anywhere; }
     .meta, .prazno { font-size: 13px; color: var(--muted); }
     .greska { color: var(--danger-ink); }
+    .rang { margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .rang h3 { font-size: 16px; margin: 0 0 4px; }
+    .rang .meta { margin: 0 0 8px; }
     @media (max-width: 599.98px) { .stavka { flex-wrap: wrap; } .tekst { flex-basis: 100%; } }
   `,
 })
@@ -88,7 +114,14 @@ export class PrezentacijeNaPredavanju {
       if (this.dokument.visibilityState === 'visible') this.osvezi();
     };
     this.dokument.addEventListener('visibilitychange', slusalac);
-    inject(DestroyRef).onDestroy(() => this.dokument.removeEventListener('visibilitychange', slusalac));
+    // rang uživo: samo dok neko izvođenje traje i kartica se vidi
+    const tajmer = setInterval(() => {
+      if (this.dokument.visibilityState === 'visible' && this.store.uToku().length > 0) this.osvezi();
+    }, RANG_PREDAVANJA_OSVEZAVANJE_MS);
+    inject(DestroyRef).onDestroy(() => {
+      this.dokument.removeEventListener('visibilitychange', slusalac);
+      clearInterval(tajmer);
+    });
   }
 
   protected osvezi(): void {

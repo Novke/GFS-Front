@@ -248,7 +248,14 @@
   outline-offset: 2px;
 }
 
-.uz-st .uz-st-detalji-dugme {
+.uz-st-vrh-dugmad {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+}
+
+.uz-st .uz-st-detalji-dugme,
+.uz-st .uz-st-izadji {
   flex: none;
   min-height: 3rem;
   padding: 0.25rem 0.875rem;

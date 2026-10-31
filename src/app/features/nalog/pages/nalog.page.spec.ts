@@ -1,14 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
+import { Location } from '@angular/common';
 import { provideRouter, Router } from '@angular/router';
-import { of, Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { tekucaSkolska } from '../../../shared/util/indeks';
 import type { StudentJa } from '../data-access/nalog.models';
-import { NalogPage } from './nalog.page';
+import { NALOG_POCETNA, NalogPage } from './nalog.page';
 
 const STANJE = 'api/public/nalog/stanje';
 const JA = 'api/public/nalog/ja';
@@ -33,16 +32,17 @@ const G = tekucaSkolska();
 
 const greska = (status: number, statusText: string) => ({ status, statusText });
 
+/** Tab Početna sa zamenom `/nalog` u istoriji: kuda ide prijavljen student bez (bezbednog) `nazad` (spec studentskog dela 12.1). */
+const NA_CAS = [NALOG_POCETNA, { replaceUrl: true }] as const;
+
 /**
- * Javni nalog studenta (spec prijave 5.1): indeks -> kod na mejl -> prijavljen na ovom telefonu; posle prijave `nazad`
- * (samo bezbedna relativna putanja) ili ekran naloga. Stranica zove samo `api/public/nalog/*`.
+ * Prijava studenta (spec prijave 5.1): indeks -> kod na mejl -> prijavljen na ovom telefonu; posle prijave `nazad` (samo
+ * bezbedna relativna putanja) ili tab Početna. Stranica zove samo `api/public/nalog/*`; nalog i odjava su na tabu Ja (`ja.page.spec`).
  */
 describe('NalogPage', () => {
   let fixture: ComponentFixture<NalogPage>;
   let http: HttpTestingController;
   let navigacija: ReturnType<typeof vi.spyOn>;
-  let otvori: ReturnType<typeof vi.fn>;
-  let potvrda: boolean;
 
   const el = () => fixture.nativeElement as HTMLElement;
   const dugme = (tekst: string) =>
@@ -60,9 +60,8 @@ describe('NalogPage', () => {
     fixture.componentRef.setInput('nazad', nazad);
     fixture.detectChanges();
     http.expectOne(STANJE).flush({ prijavljen });
-    if (prijavljen) {
-      http.expectOne(JA).flush(JA_ODGOVOR);
-    }
+    // `GET ja` samo kad je student već prijavljen i ima bezbedan `nazad` (ime uz "Nastavi")
+    http.match(JA).forEach(r => r.flush(JA_ODGOVOR));
     await stabilno();
   }
 
@@ -86,15 +85,8 @@ describe('NalogPage', () => {
   }
 
   beforeEach(() => {
-    potvrda = true;
-    otvori = vi.fn(() => ({ afterClosed: () => of(potvrda) }));
     TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        provideRouter([]),
-        { provide: MatDialog, useValue: { open: otvori } },
-      ],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     http = TestBed.inject(HttpTestingController);
     navigacija = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
@@ -113,21 +105,31 @@ describe('NalogPage', () => {
       http.expectNone(JA);
     });
 
-    it('prijavljen: GET stanje i GET ja, pa ekran naloga', async () => {
+    it('prijavljen bez nazad: GET stanje, pa tab Početna umesto /nalog u istoriji (bez GET ja)', async () => {
       await otvoriStranu(null, true);
-      const tekst = el().textContent!;
-      expect(tekst).toContain('GD12');
-      expect(tekst).toContain('Ana Primerović');
-      expect(tekst).toContain('a***@example.test');
-      expect(tekst).toContain('Android · Chrome');
-      expect(tekst).toContain('Windows · Firefox');
-      expect(tekst).toContain('Ovaj uređaj');
-      expect(dugme('Odjavi se')).toBeDefined();
-      expect(dugme('Odjavi sve uređaje')).toBeDefined();
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+      http.expectNone(JA);
     });
 
-    it('prijavljen, ali GET ja 401 (sesija istekla u međuvremenu): ekran indeksa', async () => {
+    it('prijavljen, ali navigacija na tab Početna ne uspe (lenji chunk bez mreže): poruka i "Pokušaj ponovo"', async () => {
+      navigacija.mockResolvedValue(false);
+      await otvoriStranu(null, true);
+      await stabilno();
+      expect(el().querySelector('[role="alert"]')?.textContent).toContain('Stranica nije učitana.');
+      expect(dugme('Pokušaj ponovo')).toBeDefined();
+      http.expectNone(JA);
+    });
+
+    it('poruka posle odjave (tab Ja šalje `info` kroz stanje istorije) stoji iznad indeksa', async () => {
+      vi.spyOn(TestBed.inject(Location), 'getState').mockReturnValue({ info: 'Odjavljen si sa ovog uređaja.' });
+      await otvoriStranu();
+      expect(el().querySelector('[role="status"]')?.textContent).toContain('Odjavljen si sa ovog uređaja.');
+      expect(polje('broj-indeksa').value).toBe('');
+    });
+
+    it('prijavljen sa nazad, ali GET ja 401 (sesija istekla u međuvremenu): ekran indeksa', async () => {
       fixture = TestBed.createComponent(NalogPage);
+      fixture.componentRef.setInput('nazad', 'uzivo/ABC123');
       fixture.detectChanges();
       http.expectOne(STANJE).flush({ prijavljen: true });
       http.expectOne(JA).flush({ reason: 'Potrebna je prijava.' }, greska(401, 'Unauthorized'));
@@ -283,67 +285,62 @@ describe('NalogPage', () => {
       expect(dugme('Prijavi se')!.disabled).toBe(false);
     });
 
-    it('dupli dodir bez nazad: dok GET ja ne stigne, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+    it('bez nazad: posle prijave tab Početna (zamena u istoriji), bez GET ja', async () => {
       await otvoriStranu();
       await doKoda();
       await prijaviKodom();
       http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
       await stabilno();
-      const ja = http.expectOne(JA);
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+      http.expectNone(JA);
+    });
+
+    it('dupli dodir bez nazad: dok navigacija na tab Početna traje, "Prijavi se" je onemogućen i druga prijava ne ide', async () => {
+      let zavrsi!: (ok: boolean) => void;
+      navigacija.mockReturnValue(new Promise<boolean>(r => (zavrsi = r)));
+      await otvoriStranu();
+      await doKoda();
+      await prijaviKodom();
+      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
+      await stabilno();
       expect(dugme('Prijavi se')!.disabled).toBe(true);
       await prijaviKodom();
       http.expectNone(PRIJAVA);
-      ja.flush(JA_ODGOVOR);
+      zavrsi(false);
       await stabilno();
-      expect(el().textContent).toContain('Ana Primerović');
-    });
-
-    it('bez nazad, GET ja 401 posle prijave: indeks, "Pošalji kod" ponovo radi', async () => {
-      await otvoriStranu();
-      await doKoda();
-      await prijaviKodom();
-      http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
-      await stabilno();
-      http.expectOne(JA).flush(null, greska(401, 'Unauthorized'));
-      await stabilno();
-      expect(dugme('Pošalji kod')!.disabled).toBe(false);
+      expect(dugme('Prijavi se')!.disabled).toBe(false);
     });
 
     it.each(['//evil.com', 'https://x', '/\\evil', 'javascript:alert(1)', '../x'])(
-      'nazad=%s se ignoriše (Review Focus 4): ekran naloga, bez navigacije',
+      'nazad=%s se ignoriše (Review Focus 4): posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
         await prijaviKodom();
         http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
         await stabilno();
-        http.expectOne(JA).flush(JA_ODGOVOR);
-        await stabilno();
-        expect(navigacija).not.toHaveBeenCalled();
-        expect(el().textContent).toContain('Ana Primerović');
-        expect(dugme('Nastavi')).toBeUndefined();
+        expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+        http.expectNone(JA);
       },
     );
 
     it.each(['predavanja/3', 'studenti/1/pregled', 'prijava?nazad=uzivo', 'nalozi'])(
-      'nazad=%s (nastavnička ruta) se ignoriše kao da ga nema: ekran naloga, bez navigacije',
+      'nazad=%s (nastavnička ruta) se ignoriše kao da ga nema: posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
         await prijaviKodom();
         http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
         await stabilno();
-        http.expectOne(JA).flush(JA_ODGOVOR);
-        await stabilno();
-        expect(navigacija).not.toHaveBeenCalled();
-        expect(el().textContent).toContain('Ana Primerović');
-        expect(dugme('Nastavi')).toBeUndefined();
+        expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+        http.expectNone(JA);
       },
     );
 
-    it('već prijavljen sa nazad na nastavničku rutu: bez "Nastavi"', async () => {
+    it('već prijavljen sa nazad na nastavničku rutu: tab Početna, bez "Nastavi"', async () => {
       await otvoriStranu('predavanja/3', true);
-      expect(dugme('Nastavi')).toBeUndefined();
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+      http.expectNone(JA);
     });
 
     it.each(['upis/tok_en', 'nalog/moodle'])('nazad=%s (javna ruta) posle prijave: navigateByUrl', async nazad => {
@@ -356,95 +353,26 @@ describe('NalogPage', () => {
     });
 
     it.each(['nalog', 'nalog/', 'nalog?x=1'])(
-      'nazad=%s (ista stranica): posle prijave ekran naloga (GET ja), bez navigacije i bez "Nastavi"',
+      'nazad=%s (ista stranica): posle prijave tab Početna',
       async nazad => {
         await otvoriStranu(nazad);
         await doKoda();
         await prijaviKodom();
         http.expectOne(PRIJAVA).flush(null, { status: 204, statusText: 'No Content' });
         await stabilno();
-        http.expectOne(JA).flush(JA_ODGOVOR);
-        await stabilno();
-        expect(navigacija).not.toHaveBeenCalled();
-        expect(el().querySelector('h2')?.textContent).toBe('Prijavljen si');
-        expect(dugme('Nastavi')).toBeUndefined();
+        expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
+        http.expectNone(JA);
       },
     );
 
-    it('već prijavljen sa bezbednim nazad: "Nastavi" vodi tamo (bez automatskog skoka)', async () => {
+    it('već prijavljen sa bezbednim nazad: ime (GET ja) i "Nastavi" vodi tamo (bez automatskog skoka)', async () => {
       await otvoriStranu('uzivo/ABC123', true);
       expect(navigacija).not.toHaveBeenCalled();
+      expect(el().querySelector('h2')?.textContent).toBe('Prijavljen si');
+      expect(el().querySelector('[data-prijavljen]')?.textContent).toContain('Ana Primerović');
+      expect(el().querySelector('a[href="/nalog/pocetna"]')?.textContent).toContain('Moj nalog');
       dugme('Nastavi')!.click();
       expect(navigacija).toHaveBeenCalledExactlyOnceWith('uzivo/ABC123');
-    });
-  });
-
-  describe('prijavljen', () => {
-    it('"Odjavi se": POST odjava, pa ekran indeksa', async () => {
-      await otvoriStranu(null, true);
-      dugme('Odjavi se')!.click();
-      http.expectOne('api/public/nalog/odjava').flush(null, { status: 204, statusText: 'No Content' });
-      await stabilno();
-      expect(polje('broj-indeksa')).not.toBeNull();
-    });
-
-    it('"Odjavi sve uređaje": ConfirmDialog (destruktivno), pa POST odjava-svuda i ekran indeksa sa brojem', async () => {
-      await otvoriStranu(null, true);
-      dugme('Odjavi sve uređaje')!.click();
-      expect(otvori).toHaveBeenCalledOnce();
-      const cfg = (otvori.mock.calls[0] as unknown[])[1] as { data: { naslov: string; destruktivno: boolean } };
-      expect(cfg.data.naslov).toBe('Odjaviti sve uređaje?');
-      expect(cfg.data.destruktivno).toBe(true);
-      http.expectOne('api/public/nalog/odjava-svuda').flush({ odjavljeno: 2 });
-      await stabilno();
-      expect(polje('broj-indeksa')).not.toBeNull();
-      expect(el().querySelector('[role="status"]')?.textContent).toContain('Odjavljeno: 2 uređaja.');
-    });
-
-    it('posle "Odjavi se" polje indeksa je prazno (tuđ indeks ne ostaje na zajedničkom računaru)', async () => {
-      await otvoriStranu(null, true);
-      dugme('Odjavi se')!.click();
-      http.expectOne('api/public/nalog/odjava').flush(null, { status: 204, statusText: 'No Content' });
-      await stabilno();
-      expect(polje('broj-indeksa').value).toBe('');
-    });
-
-    it('posle "Odjavi sve uređaje" polje indeksa je prazno', async () => {
-      await otvoriStranu(null, true);
-      dugme('Odjavi sve uređaje')!.click();
-      http.expectOne('api/public/nalog/odjava-svuda').flush({ odjavljeno: 2 });
-      await stabilno();
-      expect(polje('broj-indeksa').value).toBe('');
-    });
-
-    it('drugi klik na "Odjavi sve uređaje" dok je potvrda otvorena ne otvara drugi dijalog', async () => {
-      const zatvaranje = new Subject<boolean>();
-      otvori.mockImplementation(() => ({ afterClosed: () => zatvaranje }));
-      await otvoriStranu(null, true);
-      dugme('Odjavi sve uređaje')!.click();
-      dugme('Odjavi sve uređaje')!.click();
-      expect(otvori).toHaveBeenCalledOnce();
-      zatvaranje.next(false);
-      zatvaranje.complete();
-      dugme('Odjavi sve uređaje')!.click();
-      expect(otvori).toHaveBeenCalledTimes(2);
-    });
-
-    it('"Odjavi sve uređaje" pa "Odustani": bez zahteva', async () => {
-      potvrda = false;
-      await otvoriStranu(null, true);
-      dugme('Odjavi sve uređaje')!.click();
-      http.expectNone('api/public/nalog/odjava-svuda');
-      expect(el().textContent).toContain('Ana Primerović');
-    });
-
-    it('greška odjave: tekst u baneru, ostaje na nalogu', async () => {
-      await otvoriStranu(null, true);
-      dugme('Odjavi se')!.click();
-      http.expectOne('api/public/nalog/odjava').error(new ProgressEvent('error'));
-      await stabilno();
-      expect(banner()).toBe('Nema veze sa serverom.');
-      expect(el().textContent).toContain('Ana Primerović');
     });
   });
 
@@ -491,8 +419,8 @@ describe('NalogPage', () => {
       const req = http.expectOne(PRIJAVA);
       expect(req.request.body).toEqual({ indeks: 'GD12', godina: G, kod: '654321' });
       req.flush(null, { status: 204, statusText: 'No Content' });
-      http.expectOne(JA).flush(JA_ODGOVOR);
       await stabilno();
+      expect(navigacija).toHaveBeenCalledExactlyOnceWith(...NA_CAS);
     });
 
     it('"Imam kod od nastavnika" bez broja indeksa: poruka ispod polja, ostaje na indeksu', async () => {

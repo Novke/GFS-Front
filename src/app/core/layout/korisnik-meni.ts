@@ -4,7 +4,7 @@ import { MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
@@ -15,7 +15,8 @@ import { NesacuvaneIzmene } from '../state/nesacuvane-izmene';
 import { NotificationStore } from '../state/notification.store';
 
 /**
- * Meni nastavnika u gornjoj traci: "Prijavljeni uređaji" (lenji `./sesije.dialog`) i "Odjava".
+ * Meni nastavnika u gornjoj traci: "Instaliraj na telefon" (stranica Podešavanja -> Obaveštenja na telefonu), "Prijavljeni
+ * uređaji" (lenji `./sesije.dialog`) i "Odjava".
  *
  * Odjava: ako sesije čuvanja imaju nesačuvanog (`NesacuvaneIzmene`), prvo pita (`ConfirmDialog`). Posle `SesijaStore.odjavi()`
  * uvek vodi na `/prijava` bez `nazad`, i kad server odgovori 401 (sesije već nema; store to prima kao uspeh, a 401 na
@@ -24,7 +25,7 @@ import { NotificationStore } from '../state/notification.store';
  */
 @Component({
   selector: 'app-korisnik-meni',
-  imports: [MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger],
+  imports: [MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button mat-icon-button type="button" class="okidac" data-korisnik [matMenuTriggerFor]="meni" [attr.aria-label]="labela()">
@@ -34,6 +35,10 @@ import { NotificationStore } from '../state/notification.store';
       @if (sesija.korisnik(); as korisnik) {
         <div class="ko" aria-hidden="true">{{ korisnik }}</div>
       }
+      <a mat-menu-item routerLink="/podesavanja/obavestenja" data-instaliraj-telefon>
+        <mat-icon svgIcon="notifications" aria-hidden="true" />
+        <span>Instaliraj na telefon</span>
+      </a>
       <button mat-menu-item type="button" data-uredjaji (click)="uredjaji()">
         <mat-icon svgIcon="devices" aria-hidden="true" />
         <span>Prijavljeni uređaji</span>

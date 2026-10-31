@@ -10,6 +10,15 @@ import type { IshodUvoza, UvozPptxPodaci } from '../uvoz-pptx/uvoz-pptx.dialog';
  */
 @Injectable({ providedIn: 'root' })
 export class UvozPptxOtvarac {
+  /**
+   * Učitava chunk uvoza bez otvaranja. "Nova prezentacija" -> "Iz PowerPointa" ga čeka **pre** `POST /prezentacije`: kad
+   * chunk ne može da se učita (zastarela kartica), prezentacija se ne pravi, pa ne ostaje prazna. Ponovljen `import()` istog
+   * modula ne preuzima ništa ponovo.
+   */
+  async pripremi(): Promise<void> {
+    await import('../uvoz-pptx/uvoz-pptx.dialog');
+  }
+
   async otvori(dialog: MatDialog, podaci: UvozPptxPodaci): Promise<Observable<IshodUvoza>> {
     const { otvoriUvozPptx } = await import('../uvoz-pptx/uvoz-pptx.dialog');
     return otvoriUvozPptx(dialog, podaci);

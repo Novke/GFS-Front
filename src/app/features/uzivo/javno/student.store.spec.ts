@@ -498,6 +498,29 @@ describe('StudentStore', () => {
       expect(navigacija).toHaveBeenCalledWith('nalog?nazad=uzivo/123456');
     });
 
+    it('izbacenSaCasVracaNaCas (store deo): 403 "Izbačen si iz ovog izvođenja." je faza izbacen, ne nalog', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavljenStudent: true });
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456/prijava')
+        .flush({ reason: 'Izbačen si iz ovog izvođenja.' }, { status: 403, statusText: 'Forbidden' });
+      expect(store.faza()).toBe('izbacen');
+      expect(navigacija).not.toHaveBeenCalled();
+      expect(putanje).toEqual([]);
+    });
+
+    it('bodovanoBezCekiranjaPrikazujePoruku (store deo): 403 "Prvo se čekiraj..." je faza cekiranje, bez forme i nove prijave', () => {
+      store.otvori('123456');
+      http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavaObavezna: true, prijavljenStudent: true });
+      http.expectOne('api/public/uzivo/123456/ja').flush(...nijePronadjeno('Nisi prijavljen.'));
+      http.expectOne('api/public/uzivo/123456/prijava')
+        .flush({ reason: 'Prvo se čekiraj: skeniraj QR sa table.' }, { status: 403, statusText: 'Forbidden' });
+      expect(store.faza()).toBe('cekiranje');
+      expect(store.greska()).toBe('Prvo se čekiraj: skeniraj QR sa table.');
+      expect(navigacija).not.toHaveBeenCalled();
+      http.expectNone('api/public/uzivo/123456/prijava');
+    });
+
     it('prijava bez forme koja ne uspe (409) je faza greške sa porukom servera, "Pokušaj ponovo" kreće iznova', () => {
       store.otvori('123456');
       http.expectOne('api/public/uzivo/123456').flush({ naziv: 'Statika 1', prijavljenStudent: true });

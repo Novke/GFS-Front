@@ -14,6 +14,7 @@ import { resetujPreducitavanje } from '../ui/preducitavanje';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { ServerskiSat } from '../data-access/sat';
 import { BeleskePanelComponent } from './beleske-panel.component';
+import { RezimProjektora } from '../../../core/layout/rezim-projektora';
 import { KonzolaPage } from './konzola.page';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 
@@ -23,6 +24,7 @@ describe('KonzolaPage: sledeći slajd', () => {
     greska: signal<string | null>(null),
     veza: signal<'povezivanje' | 'povezan' | 'prekinut'>('povezan'),
     joinLink: signal('http://localhost/uzivo/123456'),
+    qrLink: signal('http://localhost/uzivo/123456'),
     konzolaLink: signal(''),
     publikaLink: signal(''),
     sat: signal(new ServerskiSat()),
@@ -80,6 +82,7 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     greska: signal<string | null>(null),
     veza: signal<'povezivanje' | 'povezan' | 'prekinut'>('povezan'),
     joinLink: signal('http://localhost/uzivo/123456'),
+    qrLink: signal('http://localhost/uzivo/123456'),
     konzolaLink: signal('http://localhost/izvodjenja/5/konzola'),
     daljinskiLink: signal('http://localhost/izvodjenja/5/daljinski'),
     publikaLink: signal(''),
@@ -123,10 +126,35 @@ describe('KonzolaPage: zaglavlje, beleške, telefon, povratak', () => {
     lazniStore.stanje.set(null);
   });
 
+  it('posle kraja: završni ekran umesto konzole, prati dan/noć dok je prikazan', async () => {
+    const f = await prikazi();
+    const rezim = TestBed.inject(RezimProjektora);
+    expect(rezim.pratiRezim()).toBe(false);
+    const s = lazniStore.stanje()!;
+    lazniStore.stanje.set({ ...s, izvodjenje: { ...s.izvodjenje, status: 'ZAVRSENO', kraj: '2026-10-29T10:41:00' } });
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('app-kraj-izvodjenja')).not.toBeNull();
+    expect(el.querySelector('app-beleske-panel')).toBeNull();
+    expect(rezim.pratiRezim()).toBe(true);
+    f.destroy();
+    expect(rezim.pratiRezim()).toBe(false);
+  });
+
   it('zaglavlje ima vreme izvođenja i položaj sa korakom', async () => {
     const f = await prikazi();
     expect(f.debugElement.query(By.directive(VremeIzvodjenjaComponent))).not.toBeNull();
     expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).toContain('Slajd 1/3 · korak 1/3');
+  });
+
+  it('"čekirano N" u zaglavlju samo za izvođenje sa predavanja', async () => {
+    lazniStore.stanje.update(s => s && { ...s, brojCekiranih: 18, brojOcekivanih: 18 });
+    const f = await prikazi();
+    expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).toContain('čekirano 18');
+    lazniStore.stanje.update(s => s && { ...s, brojCekiranih: null });
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.uz-kon-meta')?.textContent).not.toContain('čekirano');
   });
 
   it('beleške su panel sa tekstom trenutnog slajda', async () => {
@@ -175,6 +203,7 @@ describe('KonzolaPage: Zadatak slajd i bodovan run', () => {
     greska: signal<string | null>(null),
     veza: signal<'povezivanje' | 'povezan' | 'prekinut'>('povezan'),
     joinLink: signal('http://localhost/uzivo/123456'),
+    qrLink: signal('http://localhost/uzivo/123456'),
     konzolaLink: signal(''),
     daljinskiLink: signal(''),
     publikaLink: signal(''),

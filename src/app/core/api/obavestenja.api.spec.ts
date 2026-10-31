@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOCAL_ERRORS } from './api-error';
-import { NAJVISE_OTVORENIH, ObavestenjaApi, ObavestenjeInfo, tekstObavestenja } from './obavestenja.api';
+import { NAJVISE_OTVORENIH, ObavestenjaApi, ObavestenjeInfo, tekstObavestenja, vezaObavestenja } from './obavestenja.api';
 
 const obavestenje = (izmene: Partial<ObavestenjeInfo> = {}): ObavestenjeInfo => ({
   id: 1, vrsta: 'NE_STIZE_KOD', studentId: 4, studentIme: 'Ana Primerović', indeks: 'GD1/2025',
@@ -37,6 +37,35 @@ describe('tekstObavestenja', () => {
 
   it('PREVISE_KODOVA', () => {
     expect(tekstObavestenja(obavestenje({ vrsta: 'PREVISE_KODOVA', podaci: { imaMejl: false } }))).toBe('Previše zahteva za kod: Ana Primerović');
+  });
+});
+
+const mnogoNajava = (podaci: ObavestenjeInfo['podaci']): ObavestenjeInfo => obavestenje({
+  vrsta: 'MNOGO_NAJAVA', studentId: null, studentIme: null, indeks: null, podaci,
+});
+
+describe('MNOGO_NAJAVA', () => {
+  const podaci = {
+    stavkaId: 7, datum: '2030-11-06', pocetak: '10:00', kraj: '13:00', predmet: 'Geodezija 1', grupa: 'GD-2026', broj: 6, prag: 5,
+  };
+
+  it('tekst: predmet, grupa, dan i datum, broj; nikad ime ni razlog', () => {
+    expect(tekstObavestenja(mnogoNajava(podaci))).toBe('Mnogo najava odsustva: Geodezija 1 · GD-2026 · sreda 6. 11. (6)');
+  });
+
+  it('tekst bez podataka ne puca', () => {
+    expect(tekstObavestenja(mnogoNajava(null))).toBe('Mnogo najava odsustva: —');
+    expect(tekstObavestenja(mnogoNajava({ predmet: ' ', broj: 9 }))).toBe('Mnogo najava odsustva: — (9)');
+  });
+
+  it('veza: termini od dana termina; bez ispravnog datuma samo termini', () => {
+    expect(vezaObavestenja(mnogoNajava(podaci))).toEqual({ putanja: ['/raspored/termini'], query: { od: '2030-11-06' }, oznaka: 'Termin' });
+    expect(vezaObavestenja(mnogoNajava({ datum: '6.11.2030' }))).toEqual({ putanja: ['/raspored/termini'], query: null, oznaka: 'Termini' });
+  });
+
+  it('veza ostalih vrsta: kartica studenta, ili ništa bez studenta', () => {
+    expect(vezaObavestenja(obavestenje())).toEqual({ putanja: ['/studenti', 4], query: null, oznaka: 'Kartica' });
+    expect(vezaObavestenja(obavestenje({ studentId: null }))).toBeNull();
   });
 });
 

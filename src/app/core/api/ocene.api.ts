@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 import { LOCAL_ERRORS } from './api-error';
 import { API_URL } from './api-url';
-import { KoeficijentiInfo, RezultatiStudentaInfo, SaveKoeficijentiCmd } from './ocene.models';
+import { KoeficijentiInfo, ObjavaOcenaInfo, RezultatiStudentaInfo, SaveKoeficijentiCmd } from './ocene.models';
 import type { OpcijeZahteva } from './opcije-zahteva';
 
 /** Predlog ocena i koeficijenti ocenjivanja (`OcenjivanjeRest`). Putanje su relativne na `<base href>`. */
@@ -31,5 +31,28 @@ export class OceneApi {
     return this.http.post<RezultatiStudentaInfo[]>(`${API_URL}/ocenjivanje/predmet/${predmetId}/rezultati`, { grupaId }, {
       context: this.kontekst(o),
     });
+  }
+
+  /**
+   * Stanje objave predloga ocena studentima (spec studentskog dela 12.4): `objavljeno` `null` = nije objavljeno (studenti
+   * na nalogu ne vide ništa o oceni).
+   */
+  objava(predmetId: number, grupaId: number, o: OpcijeZahteva = {}): Observable<ObjavaOcenaInfo> {
+    return this.http.get<ObjavaOcenaInfo>(`${API_URL}/ocenjivanje/predmet/${predmetId}/objava`, {
+      params: { grupa: grupaId },
+      context: this.kontekst(o),
+    });
+  }
+
+  /** `PUT`: objavi (ili ponovo objavi) snimak predloga za svakog studenta grupe; zamenjuje prethodni snimak. */
+  objavi(predmetId: number, grupaId: number, o: OpcijeZahteva = {}): Observable<ObjavaOcenaInfo> {
+    return this.http.put<ObjavaOcenaInfo>(`${API_URL}/ocenjivanje/predmet/${predmetId}/objava/${grupaId}`, null, {
+      context: this.kontekst(o),
+    });
+  }
+
+  /** `DELETE`: povuci objavu (studenti opet ne vide ništa o oceni). */
+  povuci(predmetId: number, grupaId: number, o: OpcijeZahteva = {}): Observable<void> {
+    return this.http.delete<void>(`${API_URL}/ocenjivanje/predmet/${predmetId}/objava/${grupaId}`, { context: this.kontekst(o) });
   }
 }

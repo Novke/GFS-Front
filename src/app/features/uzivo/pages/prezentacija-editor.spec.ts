@@ -48,6 +48,7 @@ const prezentacija: PrezentacijaDetails = {
   id: 1, naziv: 'Statika', opis: null, predmet: { id: 7, naziv: 'Mehanika' }, brojSlajdova: 1, brojPitanja: 0,
   izmenjeno: '2026-10-07T10:00:00', tema: 'NACRT', takmicenje: false, telefonPrikaz: 'DUGMAD', detaljiDozvoljeni: true,
   brojIzvodjenja: 0, aktivnoIzvodjenjeId: null, slajdovi: [slajd(11, 1, 'Uvod')],
+  vezba: null, vrsta: 'GRADIVO', brojZadataka: 0, kreirano: '2026-10-01T10:00:00', poslednjePustanje: null,
 };
 
 // Polja prelaza u formi slajda su `@defer (on immediate)` (F16). Prvi dinamički uvoz chunk-a traje van lažnog sata, pa bi
@@ -1380,5 +1381,16 @@ describe('PrezentacijaEditorPage: Zadatak slajd', () => {
     expect(pregled.textContent).toContain('Različitih: 2');
     const forma = fixture.debugElement.query(d => d.componentInstance instanceof ZadatakFormaComponent).componentInstance as ZadatakFormaComponent;
     expect(forma.predmetId()).toBe(7);
+  });
+  it('ZADATAK sa primerom sa servera: bočni pregled crta sliku varijante i kaže da je primer samo u editoru', () => {
+    const saPrimerom: SlajdDetails = { ...zadatak, zadatak: { ...zadatak.zadatak!, primerSvgId: 'svg-primer' } };
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, slajdovi: [slajd(11, 1, 'Uvod'), saPrimerom] });
+    store.izaberi(12);
+    fixture.detectChanges();
+    const pregled = el().querySelector('.uz-ed-pregled')!;
+    expect(pregled.querySelector('[data-primer] img')!.getAttribute('src')).toBe('api/public/mediji/svg-primer');
+    expect(pregled.textContent).toContain('Primer zadatka vidiš samo ovde.');
+    expect(pregled.textContent).not.toContain('Ovako slajd izgleda na projektoru.');
   });
 });

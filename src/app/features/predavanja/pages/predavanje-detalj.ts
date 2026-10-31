@@ -1,9 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DOCUMENT, effect, inject, input, untracked } from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { Router, RouterLink } from '@angular/router';
-import { filter, switchMap } from 'rxjs';
+import { catchError, exhaustMap, filter, map, of, switchMap, tap, timer } from 'rxjs';
+
+import { CekiranjeApi, CekiranStudent } from '../../../core/api/cekiranje.api';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
@@ -17,11 +20,15 @@ import { IzmenaZaglavlja, PredavanjeStore, StanjeStudenta } from '../data-access
 import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predavanja.store';
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { BrziUnos } from '../ui/brzi-unos';
+import { CekiraniPanel } from '../ui/cekirani-panel';
 import { NapomenaDialog } from '../ui/napomena-dialog';
 import { PokreniPrezentacijuDialog } from '../ui/pokreni-prezentaciju.dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';
 import { PrezentacijeNaPredavanju } from '../ui/prezentacije-na-predavanju';
 import { StudentskaPlocica } from '../ui/studentska-plocica';
+
+/** Dok je predavanje živo i tab vidljiv: pločice (čekiranja sa telefona) i panel "Čekirani" se osvežavaju na 5 s. */
+export const OSVEZAVANJE_DETALJA_MS = 5_000;
 
 const TIP_TEKST: Record<TipAktivnosti, string> = { PRISUSTVO: 'Prisustvo', ZADATAK: 'Zadatak', SA_ZVEZDICOM: 'Zadatak sa zvezdicom' };
 
@@ -47,6 +54,7 @@ export function brojAktivnosti(n: number): string {
   selector: 'app-predavanje-detalj',
   imports: [
     BrziUnos,
+    CekiraniPanel,
     EmptyState,
     ErrorPanel,
     IndeksPipe,
@@ -71,6 +79,8 @@ export class PredavanjeDetalj {
   private readonly preference = inject(PreferencesStore);
   private readonly obavestenja = inject(NotificationStore);
   private readonly prezentacije = inject(PrezentacijePredavanjaStore);
+  private readonly cekiranjeApi = inject(CekiranjeApi);
+  private readonly dokument = inject(DOCUMENT);
 
   /** Id iz putanje (`withComponentInputBinding`); matcher rute već propušta samo brojeve. */
   readonly id = input.required<string>();
@@ -99,6 +109,48 @@ export class PredavanjeDetalj {
     return p ? `Predavanje ${p.rb}${tema ? ' · ' + tema : ''}` : null;
   });
   protected readonly godinePoStudentu = computed(() => new Map(this.store.studenti().map(s => [s.id, s.godina])));
+
+  /** Id i "živo" učitanog predavanja; menja se samo pri učitavanju i završetku, ne na svaki klik. */
+  private readonly pracenje = computed(
+    () => {
+      const p = this.store.predavanje();
+      return p ? { id: p.id, zivo: !p.zavrseno } : null;
+    },
+    { equal: (a, b) => a?.id === b?.id && a?.zivo === b?.zivo },
+  );
+
+  /**
+   * Čekirani (`null` = još nisu učitani). Živo predavanje: na 5 s, dok je tab vidljiv, osvežava i pločice
+   * (`store.osvezi`, klikovi na čekanju se ne gaze), a neuspeo upit ostavlja poslednju listu; završeno: jednom, za
+   * pregled posle časa.
+   */
+  protected readonly cekirani = toSignal(
+    toObservable(this.pracenje).pipe(
+      switchMap(pr => {
+        if (!pr) {
+          return of(null);
+        }
+        const lista = this.cekiranjeApi.info(pr.id).pipe(
+          map(i => i.cekirani ?? []),
+          catchError(() => of(undefined)),
+        );
+        if (!pr.zivo) {
+          return lista.pipe(map(l => l ?? null));
+        }
+        return timer(0, OSVEZAVANJE_DETALJA_MS).pipe(
+          filter(() => !this.dokument.hidden),
+          tap(i => {
+            if (i > 0) {
+              this.store.osvezi();
+            }
+          }),
+          exhaustMap(() => lista),
+          filter((l): l is CekiranStudent[] => l !== undefined),
+        );
+      }),
+    ),
+    { initialValue: null as CekiranStudent[] | null },
+  );
 
   constructor() {
     effect(() => {
@@ -142,7 +194,9 @@ export class PredavanjeDetalj {
     if (!p?.predmet) {
       return;
     }
-    PokreniPrezentacijuDialog.otvori(this.dialog, { predavanjeId: p.id, predmetId: p.predmet.id }).subscribe(ishod => {
+    PokreniPrezentacijuDialog.otvori(this.dialog, {
+      predavanjeId: p.id, predmetId: p.predmet.id, grupa: p.grupa ? { id: p.grupa.id, naziv: p.grupa.naziv } : null,
+    }).subscribe(ishod => {
       this.prezentacije.ucitaj(p.id);
       if (ishod && !ishod.otvorena) {
         this.obavestenja.info('Prezentacija je pokrenuta, ali je pregledač blokirao novu karticu. Otvori konzolu dugmetom „Nastavi“ ispod.', {

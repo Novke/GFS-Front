@@ -96,6 +96,11 @@ const IZVORI: readonly ChipOpcija<IzvorVarijante>[] = [
           <mat-button-toggle value="TEST">Testovi</mat-button-toggle>
         </mat-button-toggle-group>
       </div>
+      @if (namenaV() === 'PREDAVANJE' && predmetId() !== null) {
+        <a akcije matButton="outlined" routerLink="/banka/vezbanje" [queryParams]="{ predmet: predmetId() }" data-statistika-vezbanja>
+          <mat-icon svgIcon="bar_chart" aria-hidden="true" />Statistika vežbanja
+        </a>
+      }
       <button akcije matButton="outlined" type="button" [disabled]="predmetId() === null" (click)="podesavanja()" data-preambula>
         <mat-icon svgIcon="settings" aria-hidden="true" />Podešavanja LaTeX-a
       </button>

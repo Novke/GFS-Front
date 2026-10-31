@@ -45,6 +45,12 @@ export interface StudentJa {
   moodlePovezan: boolean;
   /** Godina upisa (stari backend je ne šalje). */
   godina?: number;
+  /** Naziv sopstvene grupe (studentski portal, faza 2; stari backend ga ne šalje). */
+  grupa?: string | null;
+  /** Generacija: godina upisa grupe (stari backend je ne šalje). */
+  generacija?: number | null;
+  /** Link WhatsApp grupe sopstvene grupe (Početna); prikazuje se samo kanonski (`waLinkZaPrikaz`). */
+  waLink?: string | null;
 }
 
 /** `POST api/public/nalog/pomoc`: uvek "Javili smo nastavniku." (stvarno obaveštenje najviše 1/h po indeksu). */

@@ -6,7 +6,7 @@ import { RouterLink } from '@angular/router';
 
 import { DatumPipe } from '../../shared/util/datum.pipe';
 import { KodZaDiktiranjeApi } from '../api/kod-za-diktiranje.api';
-import { ObavestenjeInfo, tekstObavestenja } from '../api/obavestenja.api';
+import { ObavestenjeInfo, tekstObavestenja, vezaObavestenja } from '../api/obavestenja.api';
 import { ObavestenjaStore } from '../state/obavestenja.store';
 import { KodZaDiktiranjeDialog } from './kod-za-diktiranje-dialog';
 
@@ -21,8 +21,8 @@ const IVICA = 8;
  * fokus unutra, Esc i klik pored zatvaraju, fokus se vraća na zvono), jer stavka ima više radnji (kartica studenta,
  * "Pročitano", "Rešeno"), što meni (`role="menu"`) ne dozvoljava.
  *
- * Klik na stavku sa studentom označi je pročitanom, zatvori listu i otvori `studenti/<id>`; stavka bez studenta (indeks
- * koji ne postoji) nema vezu, ali ima "Pročitano" i "Rešeno". Stavka sa studentom ima i "Kod za diktiranje" (plan C):
+ * Klik na stavku sa studentom označi je pročitanom, zatvori listu i otvori `studenti/<id>` ("Mnogo najava odsustva":
+ * `raspored/termini?od=<datum termina>`); stavka bez studenta (indeks koji ne postoji) nema vezu, ali ima "Pročitano" i "Rešeno". Stavka sa studentom ima i "Kod za diktiranje" (plan C):
  * kod se prikaže jednom u dijalogu, bez mejla, a server rešava sva otvorena obaveštenja tog studenta.
  */
 @Component({
@@ -52,8 +52,8 @@ const IVICA = 8;
         <ul class="lista">
           @for (o of stavke(); track o.id) {
             <li [class.neprocitano]="!o.procitano" [attr.data-obavestenje]="o.id">
-              @if (o.studentId !== null) {
-                <a class="glavno" [routerLink]="['/studenti', o.studentId]" (click)="otvoriKarticu(o)">
+              @if (veza(o); as v) {
+                <a class="glavno" [routerLink]="v.putanja" [queryParams]="v.query" (click)="otvoriKarticu(o)">
                   <span class="tekst">{{ tekst(o) }}</span>
                   <span class="vreme">{{ o.kreirano | datum: 'sa-vremenom' }}@if (!o.procitano) {<span class="sr-only">, nepročitano</span>}</span>
                 </a>
@@ -117,6 +117,7 @@ export class ObavestenjaPanel {
   protected readonly stavke = computed(() => this.store.otvorena());
   protected readonly jos = computed(() => Math.max(0, this.store.broj().otvorena - this.stavke().length));
   protected readonly tekst = tekstObavestenja;
+  protected readonly veza = vezaObavestenja;
 
   constructor() {
     this.store.ucitaj();

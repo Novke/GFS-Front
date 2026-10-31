@@ -15,6 +15,8 @@ import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { MERA_FORMULE, TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { ZadatakRezultatComponent, oznakaVidljiva } from '../ui/zadatak-rezultat.component';
 import { NivoComponent } from '../../../shared/ui/nivo.component';
+import { RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
+import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
@@ -105,7 +107,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
-    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent],
+    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent, RangTacnostiTabela],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -141,6 +143,19 @@ export function ishodUkupno(u: UcesnikZadatka): string {
           @if (r.izvodjenje.status === 'AKTIVNO') {
             <p class="uz-ed-napomena">Izvođenje je još u toku, rezultati se menjaju.</p>
           }
+          <section class="rezim-dan uz-dan uz-pr-karta" aria-labelledby="pr-rang-tacnosti" data-rang-tacnosti>
+            <header class="uz-pr-karta-zaglavlje"><h2 id="pr-rang-tacnosti">Rang tačnosti</h2></header>
+            <div class="uz-pr-sadrzaj">
+              @if (rangGreska(); as g) {
+                <p class="uz-ed-greska" role="alert">{{ g }}</p>
+              } @else if (rang(); as rangLista) {
+                <app-rang-tacnosti-tabela [stavke]="rangLista" [kolone]="takmicenje() ? ['poeni'] : []" [linkoviStudenata]="true" />
+                <p class="uz-ed-napomena">Redosled: više ★ (pitanje 1, zadatak nivo varijante), pa kraće prosečno vreme. Tačnost (neodgovoreno je netačno) je podatak; klik na ★, ✓ ili ⏱ sortira.</p>
+              } @else {
+                <mat-progress-bar mode="indeterminate" aria-label="Učitavanje ranga" />
+              }
+            </div>
+          </section>
           @for (k of kartice(); track k.p.rundaId; let i = $index) {
             <section class="rezim-dan uz-dan uz-pr-karta" [attr.aria-labelledby]="'pitanje-' + k.p.rundaId">
               <header class="uz-pr-karta-zaglavlje">
@@ -245,6 +260,9 @@ export class IzvodjenjePregledPage {
   protected readonly rute = UzivoPutanje;
   protected readonly podaci = signal<IzvodjenjeRezultati | null>(null);
   protected readonly greska = signal<string | null>(null);
+  protected readonly rang = signal<RangTacnostiStavka[] | null>(null);
+  protected readonly rangGreska = signal<string | null>(null);
+  private readonly rangApi = inject(RangApi);
 
   protected readonly url = medijUrl;
   protected readonly tekst = procenatTacnihTekst;
@@ -272,6 +290,10 @@ export class IzvodjenjePregledPage {
         this.mrvice.postavi(`Pregled · ${r.izvodjenje.prezentacija.naziv}`);
       },
       error: e => this.greska.set(razlogGreske(e, 'Pregled nije učitan.')),
+    });
+    this.rangApi.izvodjenje(id).subscribe({
+      next: r => this.rang.set(r),
+      error: e => this.rangGreska.set(razlogGreske(e, 'Rang nije učitan.')),
     });
   }
 }

@@ -1,4 +1,5 @@
 import type { Platno, Potez, Tema } from './platno.models';
+import type { VrstaPrezentacije } from '../../../core/api/redosled-prezentacija';
 
 export type { Tema } from './platno.models';
 export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO' | 'ZADATAK';
@@ -23,7 +24,12 @@ export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' |
    * Zadatak slajd: prekidač rešenja (uključenje posle zatvaranja), broj različitih varijanti i nivo varijanti za sledeće
    * otvaranje (oba samo u CEKA).
    */
-  | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO';
+  | 'RESENJE' | 'BROJ_VARIJANTI' | 'NIVO'
+  /**
+   * Rang tačnosti celog predavanja na projektoru (Shift+L; `RANG_LISTA` (L) je rang ovog izvođenja) i koliko redova
+   * projektor prikazuje (`RANG_BROJ`, `vrednost` 0 ili `null` = svi, 1-30).
+   */
+  | 'RANG_PREDAVANJA' | 'RANG_BROJ';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -52,9 +58,15 @@ export interface PrezentacijaInfo {
   id: number; naziv: string; opis: string | null; predmet: PredmetKratko; brojSlajdova: number; brojPitanja: number;
   izmenjeno: string; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean;
   brojIzvodjenja: number; aktivnoIzvodjenjeId: number | null;
+  /** Redni broj vežbe 0-99 (`null` = bez broja); menja se samo kroz `PATCH prezentacije/{id}/vezba`. */
+  vezba: number | null;
+  /** Iz slajdova: ZADACI = bar jedan ZADATAK, PITANJA = bar jedno pitanje, inače GRADIVO. */
+  vrsta: VrstaPrezentacije; brojZadataka: number; kreirano: string;
+  /** Početak najnovijeg izvođenja (bilo koje grupe) ili `null`. */
+  poslednjePustanje: string | null;
 }
 export interface PrezentacijaDetails extends PrezentacijaInfo { slajdovi: SlajdDetails[]; }
-export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; }
+export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; vezba?: number | null; }
 export interface UpdatePrezentacijaCmd { naziv: string; opis: string | null; tema: Tema; takmicenje: boolean; telefonPrikaz: TelefonPrikaz; detaljiDozvoljeni: boolean; }
 export interface OpcijaCmd { tekst: string; tacna: boolean; }
 export interface PitanjeCmd {
@@ -99,9 +111,21 @@ export interface Rezultat {
 }
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }
-/** `varijantaId` i `tacno` važe za trenutnu Zadatak rundu (dodeljena varijanta i ishod), inače `null`. */
+/**
+ * `varijantaId` važi za trenutnu Zadatak rundu (dodeljena varijanta). `tacno`, `vremeMs` i `odgovor` (kratak prikaz:
+ * slova opcija, broj, tekst do 40 znakova, polja zadatka) važe za odgovor u trenutnoj rundi, inače `null`;
+ * `odgovorSakriven` = nastavnik je sakrio tekstualni odgovor. Stari backend (tokom izdanja) nema poslednja tri polja.
+ */
 export interface UcesnikStanje {
   id: number; ime: string; poeni: number; povezan: boolean; odgovorio: boolean; varijantaId?: number | null; tacno?: boolean | null;
+  vremeMs?: number | null; odgovor?: string | null; odgovorSakriven?: boolean;
+}
+/** Koji rang tačnosti je na projektoru: ovog izvođenja (L) ili celog predavanja (Shift+L). */
+export type RangPrikaz = 'IZVODJENJE' | 'PREDAVANJE';
+/** Red ranga tačnosti na projektoru (bez id-jeva; isti oblik kao `RangTacnostiStavka` iz `core/api/rang.api`). */
+export interface JavnaRangTacnostiStavka {
+  mesto: number | null; ime: string; gost: boolean; tacnih: number; dugovanih: number; odgovorenih: number;
+  procenat: number | null; prosekMs: number | null; zvezdice: number; poeni: number | null;
 }
 /**
  * Snimak za nastavnika. `rezultat` i `rangLista` su nastavnički (tačnost i poeni trenutne runde uživo, samo konzola);
@@ -119,6 +143,24 @@ export interface NastavnickoStanje {
   pocetakMs: number;
   /** Zadatak slajd (`null` van njega). */
   zadatak?: NastavnickiZadatak | null;
+  /**
+   * Imenilac "predalo x od y": neizbačeni učesnici plus studenti čekirani na predavanju izvođenja koji još nisu ušli.
+   * Nema ga kod starog backenda (tokom izdanja), pa važi broj učesnika.
+   */
+  brojOcekivanih?: number;
+  /** Broj studenata na času predavanja izvođenja; `null` kad izvođenje nema predavanje. */
+  brojCekiranih?: number | null;
+  /**
+   * Rang tačnosti na projektoru (prvih `rangBroj`, a bez njega svi do 30; kratka imena "Ana K."; `null` dok nije
+   * prikazan; u takmičenju rang izvođenja ostaje `javnaRangLista` po poenima). Trenutna runda ne ulazi pre TACAN.
+   * `rangPrikaz`: koji rang je prikazan (`null` = nijedan).
+   */
+  javniRangTacnosti?: JavnaRangTacnostiStavka[] | null;
+  rangPrikaz?: RangPrikaz | null;
+  /** Predavanje ima još izvođenja sa rundama, pa rang predavanja ima smisla (Shift+L). */
+  imaRangPredavanja?: boolean;
+  /** Koliko redova ranga projektor prikazuje (`RANG_BROJ`); `null` = svi. */
+  rangBroj?: number | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {
@@ -134,9 +176,13 @@ export interface JavnoStanje {
   rangLista: RangStavka[] | null; zadatak?: JavniZadatak | null;
 }
 export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null; }
+/**
+ * `tacnih` od `dugovanih`: sopstvena tačnost po pravilu ranga tačnosti (pitanja sa tačnim odgovorom i zadaci sa poljima,
+ * propušteno je netačno); trenutna runda ulazi tek posle "Tačno". Stari backend ih ne šalje.
+ */
 export interface LicnoStanje {
   verzija: number; ucesnikId: number; ime: string; poeni: number; mesto: number | null; brojUcesnika: number;
-  izbacen: boolean; odgovor: LicniOdgovor | null; zadatak?: LicniZadatak | null;
+  izbacen: boolean; odgovor: LicniOdgovor | null; zadatak?: LicniZadatak | null; tacnih?: number; dugovanih?: number;
 }
 export interface PocetnoStanje { javno: JavnoStanje; licno: LicnoStanje; }
 export interface UcesnikInfo { ucesnikId: number; ime: string; izvodjenjeId: number; }
@@ -177,12 +223,14 @@ export interface IzvodjenjeRezultati {
 export interface GrupaPutanja { id: number; naziv: string; }
 export type TipPoljaZadatka = 'BROJ' | 'TEKST' | 'JEDAN_TACAN' | 'VISE_TACNIH';
 /**
- * Polje šeme odgovora grupe: `odstupanje`/`odstupanjeTip` za BROJ, `zanemariVelicinu`/`zanemariRazmake` za TEKST, `opcije` za
+ * Polje šeme odgovora grupe: `odstupanje`/`odstupanjeTip` za BROJ, `zanemariVelicinu`/`zanemariRazmake`/`zanemariVodeceNule` za TEKST, `opcije` za
  * JEDAN_TACAN i VISE_TACNIH (tekst opcije sme da ima `$formule$`). Šema bez polja = rad na papiru.
  */
 export interface PoljeZadatka {
   kljuc: string; oznaka: string; tip: TipPoljaZadatka; odstupanje: number | null; odstupanjeTip: OdstupanjeTip | null;
   jedinica: string | null; zanemariVelicinu: boolean | null; zanemariRazmake: boolean | null; opcije: { id: number; tekst: string }[] | null;
+  /** TEKST: vodeće nule se ne računaju (`true`); `null`/izostavljeno = računaju se (stari snimak runde). */
+  zanemariVodeceNule?: boolean | null;
 }
 /** Tačan odgovor jednog polja: postavljeno je samo svojstvo tipa polja (BROJ `broj`, TEKST `prihvatljivi`, JEDAN `tacna`, VISE `tacne`). */
 export interface OdgovorPolja { broj: number | null; prihvatljivi: string[] | null; tacna: number | null; tacne: number[] | null; }
@@ -202,6 +250,11 @@ export interface ZadatakSlajdaInfo {
   grupaId: number | null; vremeSekunde: number | null; brojVarijanti: number | null; nivo: number | null; grupaNaziv: string | null;
   putanja: GrupaPutanja[]; list: boolean; brojAktivnihVarijanti: number; brojAktivnihPoNivou: number[] | null; polja: PoljeZadatka[] | null;
   iskljucena: boolean; iskljucenePodgrupe: GrupaPutanja[]; upozorenja: string[];
+  /**
+   * SVG teksta jedne varijante koju bi izvlačenje dalo (prvi list redom stabla, najmanji id, nivo slajda), samo za primer u
+   * editoru; `null` bez kandidata. Opciono jer ga stariji server ne šalje.
+   */
+  primerSvgId?: string | null;
 }
 /**
  * Izvučena varijanta trenutne runde (konzola): slika zadatka i rešenja, brojevi dodela, odgovora i tačnih i `nivo` varijante iz

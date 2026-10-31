@@ -58,7 +58,9 @@ export function dozvoljeneKomande(s: NastavnickoStanje | null): ReadonlySet<TipK
   }
   // broj različitih važi za sledeće otvaranje (i PONOVI), pa samo pre otvaranja
   if (zadatak && faza === 'CEKA') d.add('BROJ_VARIJANTI');
-  if (s.takmicenje || s.rangListaPrikazana) d.add('RANG_LISTA');
+  // rang tačnosti izvođenja uvek (u takmičenju je to rang po poenima); rang predavanja kad predavanje ima još izvođenja
+  d.add('RANG_LISTA');
+  if (s.imaRangPredavanja || s.rangPrikaz === 'PREDAVANJE') d.add('RANG_PREDAVANJA');
   if (runde && faza === 'OTVORENO' && s.runda) {
     d.add('TAJMER');
     if (s.runda.rokMs !== null || s.runda.preostaloMs !== null) {
@@ -75,12 +77,14 @@ export function ispravanIndeks(vrednost: number | undefined, brojSlajdova: numbe
 }
 
 /**
- * "Odgovorili x/y" u konzoli: imenilac su učesnici koji su povezani **ili** su već odgovorili u ovoj rundi (student koji
- * je odgovorio pa izgubio vezu se i dalje broji), pa nikad nema 31/30, a "svi odgovorili" ne pali pre vremena.
+ * "Odgovorili x/y" u konzoli: imenilac su svi neizbačeni učesnici izvođenja (server izbačene ne šalje), povezani ili ne,
+ * a za izvođenje sa predavanja i čekirani studenti koji još nisu ušli (`brojOcekivanih` sa servera; stari backend ga nema).
+ * Telefon u pozadini (kalkulator, zaključan ekran) gubi vezu, ali student i dalje radi, pa "svi odgovorili" ne pali dok
+ * neko ko je ušao još nije predao; ko je stvarno otišao, Novica ga "Izbaci". `povezan` je samo oznaka u panelu učesnika.
+ * `od` nikad nije manji od broja odgovora, pa nema 31/30.
  */
 export function odgovorili(s: NastavnickoStanje): { broj: number; od: number; svi: boolean } {
-  const aktivni = s.ucesnici.filter(u => u.povezan || u.odgovorio).length;
-  const od = Math.max(aktivni, s.brojPovezanih, s.brojOdgovora);
+  const od = Math.max(s.brojOcekivanih ?? s.ucesnici.length, s.brojOdgovora);
   return { broj: s.brojOdgovora, od, svi: od > 0 && s.brojOdgovora >= od };
 }
 

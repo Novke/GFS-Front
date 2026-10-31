@@ -11,7 +11,6 @@ import { neprazanParametar, putanjaSaId } from './core/route-matchers';
 import { DOMACI_RUTE } from './features/domaci/domaci.routes';
 import { GRUPE_RUTE } from './features/grupe/grupe.routes';
 import { legacyRedirects } from './features/legacy-redirects';
-import { NALOG_RUTE } from './features/nalog/nalog.routes';
 import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
@@ -88,7 +87,7 @@ const nastavnickeRute: Routes = [
     children: PREZENTACIJE_RUTE,
   },
   // Banka zadataka: stablo grupa, varijante (LaTeX), detalj grupe, editor varijante i pregled nacrta. Rute dece su lenje
-  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 790 000 B, `e2e/lenji-editor.spec.ts`).
+  // (`loadChildren`), da tabela ruta banke ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'banka',
     title: 'Banka zadataka',
@@ -124,6 +123,14 @@ const nastavnickeRute: Routes = [
     title: 'Predmeti',
     data: stalne(m('Predmeti'), m('Svi predmeti')),
     children: PREDMETI_RUTE,
+  },
+
+  // Raspored časova, termini i najave odsustva (spec najave odsustva, odeljak 7); deca su lenja
+  {
+    path: 'raspored',
+    title: 'Raspored časova',
+    data: stalne(m('Nastava'), m('Raspored časova')),
+    loadChildren: () => import('./features/raspored/raspored.routes').then(x => x.RASPORED_RUTE),
   },
 
   // Podešavanja (prijava, Moodle LTI): registracije alata i vrednosti za Moodle formu; deca su lenja
@@ -166,13 +173,14 @@ export const routes: Routes = [
 
   // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
   // api/public/lti/povezi i api/public/lti/povezivanje. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
+  // Tabela ruta je lenja (`loadChildren`, kao banka), da ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'nalog',
     component: PublicLayout,
-    children: [
-      ...NALOG_RUTE,
+    loadChildren: () => import('./features/nalog/nalog.routes').then(x => [
+      ...x.NALOG_RUTE,
       { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
-    ],
+    ]),
   },
 
   // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.
@@ -191,11 +199,12 @@ export const routes: Routes = [
   // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
   // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `prijava`; kasnije `render/slajd`) su bez njega.
 
-  // Projektor (bez ljuske, uvek svetao)
+  // Projektor (bez ljuske, uvek svetao). `projekcija`: ekran se gleda sa platna, bez trake novog izdanja (`IzdanjeTraka`).
   {
     matcher: putanjaSaId('predavanja/:id/projektor'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
+    data: { projekcija: true },
     children: [
       {
         path: '',
@@ -208,6 +217,7 @@ export const routes: Routes = [
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
+    data: { projekcija: true },
     children: [
       {
         path: '',
@@ -222,7 +232,7 @@ export const routes: Routes = [
     matcher: putanjaSaId('izvodjenja/:id/publika'),
     canMatch: [nastavnikGuard],
     component: ProjectorLayout,
-    data: { celaStrana: true },
+    data: { celaStrana: true, projekcija: true },
     children: [
       { path: '', title: 'Publika', loadComponent: () => import('./features/uzivo/pages/publika.page').then(x => x.PublikaPage) },
     ],

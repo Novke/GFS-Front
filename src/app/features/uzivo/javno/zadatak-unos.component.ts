@@ -1,58 +1,19 @@
 import {
   ChangeDetectionStrategy, Component, ElementRef, computed, effect, input, linkedSignal, output, signal, untracked, viewChild,
 } from '@angular/core';
-import { LicniZadatak, OdgovorPolja, PoljeZadatka, medijUrl } from '../data-access/uzivo.models';
-import { tacanBroj } from '../ui/format';
+import { LicniZadatak, PoljeZadatka, medijUrl } from '../data-access/uzivo.models';
+import {
+  VrednostPolja, jeOpcija, normalizujBroj, oznakaNaTelefonu, popunjeno, porukaZaBroj, tacnoPolja,
+} from '../ui/polja-zadatka';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { tekstZaCitac } from '../ui/tekst-formule';
-import { normalizujBroj, porukaZaBroj } from './odgovor-unos.component';
 
-/** Vrednost polja kako ide serveru: BROJ i TEKST string, JEDAN_TACAN i VISE_TACNIH lista id-jeva opcija. */
-export type VrednostPolja = string | number[];
+// Pravila polja (popunjeno, tačan odgovor, oznaka, broj) dele čas i vežbanje na nalogu studenta: `ui/polja-zadatka`.
+export { oznakaNaTelefonu, popunjeno, tacnoPolja } from '../ui/polja-zadatka';
+export type { VrednostPolja } from '../ui/polja-zadatka';
 
 /** Započet (neposlat) odgovor na svoj zadatak: roditelj ga čuva, pa unos preživi ponovno montiranje. */
 export interface NacrtZadatka { rundaId: number; polja: Record<string, VrednostPolja>; }
-
-/** Da li je polje popunjeno ("Pošalji" tek kad su sva): tekst posle skraćivanja, tačno jedna ili bar jedna opcija. */
-export function popunjeno(p: PoljeZadatka, v: VrednostPolja | undefined): boolean {
-  if (p.tip === 'BROJ' || p.tip === 'TEKST') return typeof v === 'string' && v.trim().length > 0;
-  return Array.isArray(v) && (p.tip === 'JEDAN_TACAN' ? v.length === 1 : v.length > 0);
-}
-
-/**
- * Tačan odgovor polja za prikaz (isti oblik kao `tacnoTekst` nastavničkog rezultata, ovde nad šemom svoje varijante, jer
- * javni deo ne sme da uvozi `ui/zadatak-rezultat`): BROJ sa svim decimalama i jedinicom, TEKST prihvatljivi spojeni zarezom,
- * opcije njihov tekst (redom opcija; sme da ima `$formule$`). Bez vrednosti prazan tekst.
- */
-export function tacnoPolja(p: PoljeZadatka, t: OdgovorPolja | null | undefined): string {
-  if (!t) return '';
-  switch (p.tip) {
-    case 'BROJ':
-      return t.broj === null ? '' : tacanBroj(t.broj) + (p.jedinica ? ' ' + p.jedinica : '');
-    case 'TEKST':
-      return (t.prihvatljivi ?? []).join(', ');
-    case 'JEDAN_TACAN':
-      return p.opcije?.find(o => o.id === t.tacna)?.tekst ?? '';
-    case 'VISE_TACNIH':
-      return (p.opcije ?? []).filter(o => t.tacne?.includes(o.id)).map(o => o.tekst).join(', ');
-  }
-}
-
-const jeOpcija = (p: PoljeZadatka) => p.tip === 'JEDAN_TACAN' || p.tip === 'VISE_TACNIH';
-
-/**
- * Oznaka stavke liste na početku: `a) `, `(b) `, `1) `, `12) ` (jedno slovo ili do dve cifre, zagrada, pa razmak). Server oznaku
- * skraćuje (`BankaPP.normalizujPolja`), pa posle razmaka uvek ima teksta; kratko zbog budžeta telefona (`e2e/lenji-formule.spec.ts`).
- */
-const OZNAKA_LISTE = /^\(?([a-z]|\d\d?)\)\s+/i;
-
-/**
- * Oznaka polja na telefonu. Kad šema ima samo jedno polje, slovo liste ("a) dekadna vrednost") ništa ne znači, pa se skida
- * (stare šeme i snimci rundi ga imaju); oznaka bez teksta posle slova ostaje kakva jeste. Više polja: oznake kakve jesu.
- */
-export function oznakaNaTelefonu(p: Pick<PoljeZadatka, 'oznaka'>, brojPolja: number): string {
-  return brojPolja === 1 ? p.oznaka.replace(OZNAKA_LISTE, '') : p.oznaka;
-}
 
 /**
  * Svoj zadatak na telefonu (banka spec 4.2, tačke 3 i 6): slika svoje varijante (zum prstima, "Uvećaj" preko celog ekrana),
