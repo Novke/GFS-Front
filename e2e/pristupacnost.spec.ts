@@ -188,7 +188,9 @@ for (const rezim of ['dan', 'noc'] as const) {
       await page.goto('raspored/3');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
       await expect(page.locator('[data-stavka]')).toHaveCount(3);
-      await page.locator('[data-kraj]').first().fill('09:00');
+      // 08:00 je pre početka svakog termina iz primera (08:15, 10:00, 14:00): forma ređa termine po danu u nedelji, pa koji je
+      // prvi zavisi od današnjeg dana (subotom je „sutra“ nedelja, a „prekosutra“ ponedeljak 08:15 dolazi prvi)
+      await page.locator('[data-kraj]').first().fill('08:00');
       await page.locator('[data-kraj]').first().blur();
       await expect(page.getByText('Početak mora biti pre kraja.')).toBeVisible();
       await page.locator('[data-vazi-do]').fill(pomeriDan(sutra, -1));
