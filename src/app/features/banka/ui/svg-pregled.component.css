@@ -1,6 +1,7 @@
 /*
- * Pregled render-probe: zaglavlje (naslov, čekanje, "Puna širina"), poruka stanja i okvir sa SVG-om, 84 mm kao na
- * telefonu ili preko cele kolone. Okvir je uvek dnevni (`.rezim-dan`): LaTeX je crn na providnom. Boje samo kroz tokene.
+ * Pregled render-probe: zaglavlje (naslov, čekanje), poruka stanja i okvir sa SVG-om; širinu daje `[style.width.mm]` po
+ * izabranoj veličini (84 / 126 mm), bez nje je okvir cela kolona. Okvir je uvek dnevni (`.rezim-dan`): LaTeX je crn na
+ * providnom. Boje samo kroz tokene.
  * Globalno (`ViewEncapsulation.None`, jer SVG stiže kao čvorovi kroz `importNode`, mimo šablona, pa nema atribute
  * enkapsulacije): svako pravilo počinje sa `app-svg-pregled` ili `.bk-sp`.
  */
@@ -26,8 +27,6 @@ app-svg-pregled { display: block; }
   font-size: 13px;
 }
 
-.bk-sp-sirina { margin-left: auto; }
-
 .bk-sp-poruka,
 .bk-sp-napomena { margin: 0; color: var(--muted); font-size: 13px; }
 
@@ -44,7 +43,7 @@ app-svg-pregled { display: block; }
 
 .bk-sp-okvir {
   box-sizing: border-box;
-  width: 84mm;
+  width: 100%;
   max-width: 100%;
   padding: 0;
   border: 1px solid var(--line);
@@ -55,7 +54,6 @@ app-svg-pregled { display: block; }
   transition: opacity .15s;
 }
 
-.bk-sp-puna { width: 100%; }
 .bk-sp-zastarelo { opacity: .45; }
 
 .bk-sp-svg > svg {

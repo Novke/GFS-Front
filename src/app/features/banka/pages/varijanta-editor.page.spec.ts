@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Location } from '@angular/common';
+import { OverlayContainer } from '@angular/cdk/overlay';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
@@ -16,6 +17,7 @@ import { BankaApi } from '../data-access/banka.api';
 import { GrupaDetails, OdgovorPolja, Polje, VarijantaCmd, VarijantaDetails } from '../data-access/banka.models';
 import { novoPolje } from '../data-access/polja';
 import { KASNJENJE_PREGLEDA } from '../data-access/render-proba';
+import { VELICINA_PREGLEDA_KLJUC, VelicinaPregledaPostavka } from '../data-access/velicina-pregleda';
 import { povratakNaPregled, VarijantaEditorPage } from './varijanta-editor.page';
 
 @Component({ template: 'druga' })
@@ -58,6 +60,10 @@ describe('VarijantaEditorPage', () => {
     izmeniVarijantu: vi.fn(),
     promeniNivo: vi.fn(),
     odobri: vi.fn(),
+    arhiviraj: vi.fn(),
+    vratiUNacrt: vi.fn(),
+    dupliraj: vi.fn(),
+    obrisiVarijantu: vi.fn(),
     render: vi.fn(),
     renderProba: vi.fn(),
     svg: vi.fn(),
@@ -72,10 +78,21 @@ describe('VarijantaEditorPage', () => {
       await new Promise(r => setTimeout(r));
     }
   }
-  async function otvori(url: string): Promise<HTMLElement> {
+  /** Otvara editor; sačuvana varijanta sa uspelim renderom se otvara u prikazu Pregled, pa se (osim sa `uPregledu`) prelazi na LaTeX. */
+  async function otvori(url: string, uPregledu = false): Promise<HTMLElement> {
     await harness.navigateByUrl(url);
     await stabilno();
+    if (!uPregledu) {
+      await urediLatex();
+    }
     return el();
+  }
+  async function urediLatex(): Promise<void> {
+    const dugmeLatex = el().querySelector<HTMLButtonElement>('[data-rezim="latex"][aria-pressed="false"]');
+    if (dugmeLatex) {
+      dugmeLatex.click();
+      await stabilno();
+    }
   }
   /** Polje editora dela; `mat-tab-group` iscrtava karticu tek kad je prvi put izabrana (`preserveContent` je posle čuva). */
   const editor = (deo: 'tekst' | 'resenje') => el().querySelector<HTMLTextAreaElement>(`app-latex-editor[data-deo="${deo}"] textarea`)!;
@@ -97,6 +114,7 @@ describe('VarijantaEditorPage', () => {
   const aktivniTab = () => el().querySelector('[role="tab"][aria-selected="true"]')!.textContent!.trim();
 
   beforeEach(async () => {
+    localStorage.removeItem(VELICINA_PREGLEDA_KLJUC);
     for (const f of Object.values(api)) {
       f.mockReset();
     }
@@ -572,7 +590,7 @@ describe('VarijantaEditorPage', () => {
 
   it('otvorena varijanta: pregled iz sačuvanih SVG-ova, bez render-probe dok se sadržaj ne izmeni', async () => {
     api.varijanta.mockReturnValue(of(varijanta({ ...OK, tekst: 'Zadatak', resenje: 'R', resenjeSvgId: 'svg-2' })));
-    await otvori('/banka/varijante/13');
+    await otvori('/banka/varijante/13', true);
     expect(api.svg.mock.calls).toEqual([['svg-1', { tiho: true }], ['svg-2', { tiho: true }]]);
     const [zadatak, resenje] = [...el().querySelectorAll('app-svg-pregled')];
     expect(zadatak.querySelector('.bk-sp-okvir svg path')!.id).toMatch(/svg-1$/);
@@ -582,6 +600,7 @@ describe('VarijantaEditorPage', () => {
     expect(api.renderProba).not.toHaveBeenCalled();
 
     // prva izmena: render-proba posle mira u kucanju
+    await urediLatex();
     await unesi(editor('tekst'), 'Zadatak 2');
     await vi.waitUntil(() => api.renderProba.mock.calls.length > 0, { timeout: 2000 });
     expect(api.renderProba).toHaveBeenCalledExactlyOnceWith({ predmetId: 7, tekst: 'Zadatak 2', resenje: 'R', prilozi: [] }, { tiho: true });
@@ -605,9 +624,11 @@ describe('VarijantaEditorPage', () => {
     await vi.waitUntil(() => api.renderProba.mock.calls.length > 0, { timeout: 2000 });
     await stabilno();
     expect(api.svg).not.toHaveBeenCalled();
-    const [zadatak] = [...el().querySelectorAll('app-svg-pregled')];
-    expect(zadatak.querySelector('.bk-sp-okvir svg path')!.id).toMatch(/zadatak$/);
+    // prikaz LaTeX otvara karticu dela sa greškom, pa pregled pored nje pokazuje grešku rešenja; kartica Tekst ima SVG zadatka
+    expect(aktivniTab()).toContain('Rešenje');
     expect(el().querySelector('#bk-ve-greska-resenje')!.textContent).toContain('Greška u liniji 2: X');
+    await klik(kartica('Tekst'));
+    expect(el().querySelector('app-svg-pregled .bk-sp-okvir svg path')!.id).toMatch(/zadatak$/);
   });
 
   it('prazan tekst: nema render-probe, pregled čeka tekst', async () => {
@@ -715,6 +736,229 @@ describe('VarijantaEditorPage', () => {
     await klik(dugme('data-sacuvaj'));
     expect(router.url).toBe('/banka/varijante/13?povratak=%2Fbanka%2Fpregled%3Fserija%3Dx');
     expect(el().querySelector('app-form-error-banner')!.textContent).toContain('render nije uspeo');
+  });
+
+  describe('prikaz: Pregled | Uredi LaTeX', () => {
+    const rezimi = () => [...el().querySelectorAll<HTMLButtonElement>('[data-rezim]')].map(b => `${b.dataset['rezim']}:${b.getAttribute('aria-pressed')}`);
+    const tasta = (key: string, meta: EventTarget = document.body) => meta.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+    beforeEach(() => {
+      api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'AKTIVNA', tekst: 'Zadatak', resenje: 'R', resenjeSvgId: 'svg-2' })));
+    });
+
+    it('sačuvana varijanta sa uspelim renderom: Pregled sa zadatkom i rešenjem, bez editora, a LaTeX na zahtev', async () => {
+      await otvori('/banka/varijante/13', true);
+      expect(rezimi()).toEqual(['pregled:true', 'latex:false']);
+      expect(el().querySelector('app-latex-editor')).toBeNull();
+      expect([...el().querySelectorAll('app-svg-pregled h3')].map(h => h.textContent!.trim())).toEqual(['Zadatak', 'Rešenje']);
+      expect(el().querySelector('app-odgovori-forma')).not.toBeNull();
+      expect(el().querySelector('app-prilozi')).not.toBeNull();
+
+      await klik(el().querySelector<HTMLButtonElement>('[data-rezim="latex"]')!);
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      expect(editor('tekst')).not.toBeNull();
+      // jedan pregled, kartice koja se uređuje
+      expect([...el().querySelectorAll('app-svg-pregled h3')].map(h => h.textContent!.trim())).toEqual(['Zadatak']);
+      expect(document.activeElement).toBe(editor('tekst'));
+      await klik(kartica('Rešenje'));
+      expect([...el().querySelectorAll('app-svg-pregled h3')].map(h => h.textContent!.trim())).toEqual(['Rešenje']);
+
+      await klik(el().querySelector<HTMLButtonElement>('[data-rezim="pregled"]')!);
+      expect(el().querySelector('app-latex-editor')).toBeNull();
+    });
+
+    it('nova varijanta i varijanta sa greškom rendera se otvaraju u prikazu LaTeX', async () => {
+      await otvori('/banka/varijante/nova?grupa=2', true);
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      api.varijanta.mockReturnValue(of(varijanta()));
+      await otvori('/banka/varijante/13', true);
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+    });
+
+    it('"Uredi" iz pregleda nacrta (?povratak) otvara editor odmah', async () => {
+      await otvori('/banka/varijante/13?povratak=/banka/pregled?serija=x', true);
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+    });
+
+    it('?povratak koji nije pregled nacrta ne menja podrazumevani prikaz (Pregled)', async () => {
+      await otvori('/banka/varijante/13?povratak=https://x', true);
+      expect(rezimi()).toEqual(['pregled:true', 'latex:false']);
+    });
+
+    it('veličina pregleda: 84 mm, 126 mm, cela kolona; izbor se pamti u ovom pregledaču', async () => {
+      await otvori('/banka/varijante/13', true);
+      const okviri = () => [...el().querySelectorAll<HTMLElement>('.bk-sp-okvir')].map(o => o.style.width);
+      expect(okviri()).toEqual(['126mm', '126mm']);
+      await klik(el().querySelector<HTMLButtonElement>('[data-velicina="telefon"]')!);
+      expect(okviri()).toEqual(['84mm', '84mm']);
+      expect(el().querySelector('[data-velicina="telefon"]')!.getAttribute('aria-pressed')).toBe('true');
+      expect(localStorage.getItem(VELICINA_PREGLEDA_KLJUC)).toBe('telefon');
+      await klik(el().querySelector<HTMLButtonElement>('[data-velicina="cela"]')!);
+      expect(okviri()).toEqual(['', '']);
+      expect(TestBed.inject(VelicinaPregledaPostavka).velicina()).toBe('cela');
+      expect(el().querySelector('mat-slide-toggle')).toBeNull();
+
+      // u prikazu LaTeX je pregled uvek preko cele kartice
+      await klik(el().querySelector<HTMLButtonElement>('[data-rezim="latex"]')!);
+      await klik(el().querySelector<HTMLButtonElement>('[data-rezim="pregled"]')!);
+      expect(okviri()).toEqual(['', '']);
+    });
+
+    it('prečice: E otvara editor, Esc vraća na pregled; ništa dok kucaš u polju ili je otvoren meni', async () => {
+      await otvori('/banka/varijante/13', true);
+      tasta('e');
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      expect(document.activeElement).toBe(editor('tekst'));
+
+      // u editoru Esc služi za izlazak iz polja
+      tasta('Escape', editor('tekst'));
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      tasta('Escape');
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:true', 'latex:false']);
+
+      // `E` u polju za unos (naziv) se ne hvata
+      await klik(el().querySelector<HTMLButtonElement>('[data-uredi-naziv]')!);
+      tasta('e', el().querySelector('input[data-naziv]')!);
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:true', 'latex:false']);
+
+      // otvoren meni: prečica čeka
+      await klik(dugme('data-meni'));
+      tasta('e');
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:true', 'latex:false']);
+    });
+
+    it('"Naziv" u prikazu Pregled otvara polje naziva (isto polje kao u prikazu LaTeX, nikad dva odjednom)', async () => {
+      await otvori('/banka/varijante/13', true);
+      expect(el().querySelector('input[data-naziv]')).toBeNull();
+      await klik(el().querySelector<HTMLButtonElement>('[data-uredi-naziv]')!);
+      expect(el().querySelectorAll('input[data-naziv]')).toHaveLength(1);
+      await unesi(el().querySelector<HTMLInputElement>('input[data-naziv]')!, 'Novi naziv');
+      expect(onemoguceno(dugme('data-sacuvaj'))).toBe(false);
+      await klik(el().querySelector<HTMLButtonElement>('[data-rezim="latex"]')!);
+      expect(el().querySelectorAll('input[data-naziv]')).toHaveLength(1);
+      expect(el().querySelector<HTMLInputElement>('input[data-naziv]')!.value).toBe('Novi naziv');
+    });
+
+    it('"Ubaci u tekst" iz prikaza Pregled otvara editor i umeće \\includegraphics', async () => {
+      await otvori('/banka/varijante/13', true);
+      stranica()['ubaci']('slika.png');
+      await stabilno();
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      expect(editor('tekst').value).toContain('\\includegraphics[width=\\linewidth]{slika.png}');
+    });
+
+    it('neuspeo render posle čuvanja iz prikaza Pregled otvara editor kartice sa greškom', async () => {
+      api.izmeniVarijantu.mockImplementation((id: number, cmd: VarijantaCmd) => of(varijanta({ id, ...izCmd(cmd), status: 'NACRT' })));
+      await otvori('/banka/varijante/13', true);
+      await klik(el().querySelector<HTMLButtonElement>('[data-uredi-naziv]')!);
+      await unesi(el().querySelector<HTMLInputElement>('input[data-naziv]')!, 'Drugi naziv');
+      await klik(dugme('data-sacuvaj'));
+      expect(rezimi()).toEqual(['pregled:false', 'latex:true']);
+      expect(aktivniTab()).toContain('Tekst');
+    });
+  });
+
+  describe('meni ⋮: Arhiviraj, Vrati u nacrt, Dupliraj, Obriši', () => {
+    const overlay = () => TestBed.inject(OverlayContainer).getContainerElement();
+    const stavke = () => [...overlay().querySelectorAll<HTMLElement>('[role=menuitem]')].map(b => b.textContent!.trim());
+    const stavka = (ime: string) => [...overlay().querySelectorAll<HTMLElement>('[role=menuitem]')].find(b => b.textContent!.trim() === ime)!;
+
+    it('aktivna: Arhiviraj menja status i osvežava oznaku; meni onda nudi Vrati u nacrt', async () => {
+      api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'AKTIVNA', tekst: 'Zadatak' })));
+      api.arhiviraj.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: 'ARHIVIRANA', tekst: 'Zadatak' })));
+      api.vratiUNacrt.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: 'NACRT', tekst: 'Zadatak' })));
+      const e = await otvori('/banka/varijante/13', true);
+      expect(e.querySelector('app-status-chip')!.textContent).toContain('Aktivna');
+      await klik(dugme('data-meni'));
+      expect(stavke()).toEqual(['Dupliraj', 'Arhiviraj', 'Obriši']);
+      await klik(stavka('Arhiviraj'));
+      expect(api.arhiviraj).toHaveBeenCalledExactlyOnceWith(13, { tiho: true });
+      expect(e.querySelector('app-status-chip')!.textContent).toContain('Arhivirana');
+      expect(router.url).toBe('/banka/varijante/13');
+
+      await klik(dugme('data-meni'));
+      expect(stavke()).toEqual(['Dupliraj', 'Vrati u nacrt', 'Obriši']);
+      await klik(stavka('Vrati u nacrt'));
+      expect(api.vratiUNacrt).toHaveBeenCalledExactlyOnceWith(13, { tiho: true });
+      expect(e.querySelector('app-status-chip')!.textContent).toContain('Nacrt');
+    });
+
+    it('nacrt nema ni Arhiviraj ni Vrati u nacrt; greška servera ide u traku, status ostaje', async () => {
+      api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'AKTIVNA', tekst: 'Zadatak' })));
+      api.arhiviraj.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { reason: 'Ne može sada.' } })));
+      const e = await otvori('/banka/varijante/13', true);
+      await klik(dugme('data-meni'));
+      await klik(stavka('Arhiviraj'));
+      expect(e.querySelector('app-form-error-banner')!.textContent).toContain('Ne može sada.');
+      expect(e.querySelector('app-status-chip')!.textContent).toContain('Aktivna');
+
+      api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'NACRT', tekst: 'Zadatak' })));
+      await otvori('/banka/varijante/14', true);
+      await klik(dugme('data-meni'));
+      expect(stavke()).toEqual(['Dupliraj', 'Obriši']);
+    });
+
+    it('Arhiviraj radi i sa nesačuvanim izmenama (forma ostaje), a Dupliraj čeka da se sačuvaju', async () => {
+      api.varijanta.mockReturnValue(of(varijanta({ ...OK, status: 'AKTIVNA', tekst: 'Zadatak' })));
+      api.arhiviraj.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: 'ARHIVIRANA', tekst: 'Zadatak' })));
+      await otvori('/banka/varijante/13');
+      await unesi(editor('tekst'), 'Izmenjen tekst');
+      await klik(dugme('data-meni'));
+      expect(onemoguceno(stavka('Dupliraj') as HTMLButtonElement)).toBe(true);
+      await klik(stavka('Arhiviraj'));
+      expect(api.arhiviraj).toHaveBeenCalledOnce();
+      expect(editor('tekst').value).toBe('Izmenjen tekst');
+      expect(onemoguceno(dugme('data-odbaci'))).toBe(false);
+    });
+
+    it('Dupliraj otvara kopiju (nacrt) na njenom editoru', async () => {
+      api.varijanta.mockImplementation((id: number) => of(varijanta({ ...OK, id, status: id === 13 ? 'AKTIVNA' : 'NACRT', tekst: 'Zadatak' })));
+      api.dupliraj.mockImplementation(() => of(varijanta({ ...OK, id: 21, status: 'NACRT', tekst: 'Zadatak' })));
+      const e = await otvori('/banka/varijante/13', true);
+      await klik(dugme('data-meni'));
+      await klik(stavka('Dupliraj'));
+      expect(api.dupliraj).toHaveBeenCalledExactlyOnceWith(13, { tiho: true });
+      expect(router.url).toBe('/banka/varijante/21');
+      expect(e.querySelector('app-status-chip')!.textContent).toContain('Nacrt');
+    });
+
+    it('Obriši traži potvrdu, briše i vraća u banku na grupu, bez pitanja za nesačuvane izmene', async () => {
+      api.obrisiVarijantu.mockReturnValue(of(undefined));
+      await otvori('/banka/varijante/13');
+      await unesi(editor('tekst'), 'Izmenjen tekst');
+      await klik(dugme('data-meni'));
+      await klik(stavka('Obriši'));
+      expect(overlay().textContent).toContain('Obrisati varijantu „100111 u dekadni“?');
+      expect(api.obrisiVarijantu).not.toHaveBeenCalled();
+      await klik([...overlay().querySelectorAll<HTMLElement>('button')].find(b => b.textContent!.includes('Obriši varijantu'))!);
+      expect(api.obrisiVarijantu).toHaveBeenCalledExactlyOnceWith(13, { tiho: true });
+      expect(router.url).toBe('/banka?predmet=7&namena=PREDAVANJE&grupa=2');
+    });
+
+    it('Obriši: odustajanje u dijalogu ne zove server; odbijeno brisanje (korišćena na času) ostavlja varijantu i javlja razlog', async () => {
+      api.obrisiVarijantu.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { reason: 'Korišćeno na času; arhiviraj.' } })));
+      const e = await otvori('/banka/varijante/13');
+      await klik(dugme('data-meni'));
+      await klik(stavka('Obriši'));
+      await klik([...overlay().querySelectorAll<HTMLElement>('button')].find(b => b.textContent!.includes('Odustani'))!);
+      expect(api.obrisiVarijantu).not.toHaveBeenCalled();
+
+      await klik(dugme('data-meni'));
+      await klik(stavka('Obriši'));
+      await klik([...overlay().querySelectorAll<HTMLElement>('button')].find(b => b.textContent!.includes('Obriši varijantu'))!);
+      expect(e.querySelector('app-form-error-banner')!.textContent).toContain('Korišćeno na času; arhiviraj.');
+      expect(router.url).toBe('/banka/varijante/13');
+    });
+
+    it('nova varijanta nema meni radnji', async () => {
+      const e = await otvori('/banka/varijante/nova?grupa=2');
+      expect(e.querySelector('[data-meni]')).toBeNull();
+    });
   });
 
   it('nepostojeća varijanta i nova bez ?grupa: prazno stanje sa vezom na banku', async () => {

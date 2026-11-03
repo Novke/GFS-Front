@@ -5,14 +5,13 @@ import {
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 let sledeci = 0;
-/** Visina linije kad je CSS ne da (jsdom); ista kao `--bk-le-visina`. */
-const VISINA_LINIJE = 20;
-
 /**
- * LaTeX polje editora varijante (`ControlValueAccessor` nad tekstom): `textarea` u monospace fontu bez prelamanja, pa je
- * svaki red tačno jedna linija, i levo gutter sa brojevima linija (pomera se sa skrolom polja kroz `--bk-le-pomak`, bez
- * detekcije promena). `greskaLinija` ističe liniju u gutter-u i iza teksta i, kad korisnik ne kuca u tom polju, pomera je
- * u vidno polje; `opisId` (id poruke greške, npr. u pregledu) ide u `aria-describedby` uz uputstvo ispod polja.
+ * LaTeX polje editora varijante (`ControlValueAccessor` nad tekstom): `textarea` u monospace fontu koja prelama dugačke
+ * redove (meko prelamanje) i raste sa tekstom, pa se ceo tekst vidi bez skrolovanja polja. Brojevi linija su poravnati sa
+ * stvarnim linijama teksta (ne sa prelomljenim redovima): svaka linija je red mreže sa brojem i nevidljivim ogledalom teksta
+ * iste širine i fonta, koje daje redu visinu, a `textarea` leži preko ogledala. `greskaLinija` ističe ceo red (broj i
+ * pozadinu iza teksta) i, kad korisnik ne kuca u tom polju, pomera ga u vidno polje stranice; `opisId` (id poruke greške,
+ * npr. u pregledu) ide u `aria-describedby` uz uputstvo ispod polja.
  *
  * Tastatura: Tab ubacuje dva razmaka (Shift+Tab i Tab odmah posle Esc ostaju pregledaču, pa polje nije zamka za tastaturu),
  * Ctrl+Enter (Cmd+Enter) emituje `pregled`, jednom po pritisku (ponavljanje držanog tastera se ne broji). Umetanje (Tab,
@@ -26,22 +25,17 @@ const VISINA_LINIJE = 20;
   styleUrl: './latex-editor.component.css',
   template: `
     <label class="bk-le-oznaka" [for]="idPolja">{{ oznaka() }}</label>
-    <div class="bk-le-okvir" [class.bk-le-onemoguceno]="onemoguceno()" [style.--bk-le-cifre]="cifre()">
-      <div class="bk-le-brojevi" aria-hidden="true">
-        <div class="bk-le-pomeri">
-          @for (n of linije(); track n) {
-            <span class="bk-le-broj" [class.bk-le-istaknuta]="n === istaknuta()">{{ n }}</span>
-          }
-        </div>
-      </div>
-      <div class="bk-le-telo">
-        @if (istaknuta(); as n) {
-          <div class="bk-le-traka" [style.--bk-le-linija]="n - 1"></div>
+    <div class="bk-le-okvir" [class.bk-le-onemoguceno]="onemoguceno()" [style.--bk-le-cifre]="cifre()" [style.--bk-le-redova]="redova()">
+      <div class="bk-le-redovi">
+        @for (red of redovi(); track $index) {
+          <div class="bk-le-red" [class.bk-le-istaknut]="$index + 1 === istaknuta()" aria-hidden="true">
+            <span class="bk-le-broj" [class.bk-le-istaknuta]="$index + 1 === istaknuta()">{{ $index + 1 }}</span>
+            <span class="bk-le-ogledalo">{{ red }}</span>
+          </div>
         }
-        <textarea #polje class="bk-le-polje" [id]="idPolja" [rows]="redova()" wrap="off" spellcheck="false" autocapitalize="off"
+        <textarea #polje class="bk-le-polje" [id]="idPolja" wrap="soft" spellcheck="false" autocapitalize="off"
           autocomplete="off" [value]="vrednost()" [disabled]="onemoguceno()" [attr.aria-invalid]="istaknuta() !== null ? 'true' : null"
-          [attr.aria-describedby]="opis()" (input)="unos($event)" (keydown)="taster($event)" (scroll)="sinhronizuj()"
-          (blur)="dodirnuto()"></textarea>
+          [attr.aria-describedby]="opis()" (input)="unos($event)" (keydown)="taster($event)" (blur)="dodirnuto()"></textarea>
       </div>
     </div>
     <p class="bk-le-uputstvo" [id]="idUputstva">Tab ubacuje dva razmaka (Esc pa Tab izlazi iz polja), Ctrl+Enter osvežava pregled.</p>
@@ -57,7 +51,8 @@ export class LatexEditorComponent implements ControlValueAccessor {
   readonly greskaLinija = input<number | null>(null);
   /** Id elementa sa porukom greške (`aria-describedby`); `null` kad greške nema. */
   readonly opisId = input<string | null>(null);
-  readonly redova = input(18);
+  /** Najmanja visina polja u linijama. */
+  readonly redova = input(12);
   /** Ctrl+Enter: pregled odmah. */
   readonly pregled = output<void>();
 
@@ -65,12 +60,13 @@ export class LatexEditorComponent implements ControlValueAccessor {
   protected readonly idUputstva = `${this.idPolja}-uputstvo`;
   protected readonly vrednost = signal('');
   protected readonly onemoguceno = signal(false);
-  protected readonly linije = computed(() => Array.from({ length: this.vrednost().split('\n').length }, (_, i) => i + 1));
-  protected readonly cifre = computed(() => String(this.linije().length).length);
+  /** Linije teksta; prazna linija i dalje ima visinu jedne linije (`min-height` u CSS-u). */
+  protected readonly redovi = computed(() => this.vrednost().split('\n'));
+  protected readonly cifre = computed(() => String(this.redovi().length).length);
   /** Istaknuta linija samo dok postoji u tekstu. */
   protected readonly istaknuta = computed(() => {
     const n = this.greskaLinija();
-    return n !== null && n >= 1 && n <= this.linije().length ? n : null;
+    return n !== null && n >= 1 && n <= this.redovi().length ? n : null;
   });
   protected readonly opis = computed(() => [this.idUputstva, this.opisId()].filter(Boolean).join(' '));
 
@@ -85,16 +81,10 @@ export class LatexEditorComponent implements ControlValueAccessor {
     afterRenderEffect(() => {
       const n = this.istaknuta();
       untracked(() => {
-        const t = this.polje().nativeElement;
-        if (n === null || this.document.activeElement === t) {
+        if (n === null || this.document.activeElement === this.polje().nativeElement) {
           return;
         }
-        const visina = Number.parseFloat(getComputedStyle(t).lineHeight) || VISINA_LINIJE;
-        const vrh = (n - 1) * visina;
-        if (vrh < t.scrollTop || vrh + visina > t.scrollTop + t.clientHeight) {
-          t.scrollTop = Math.max(0, vrh - (t.clientHeight - visina) / 2);
-        }
-        this.sinhronizuj();
+        this.host.nativeElement.querySelectorAll<HTMLElement>('.bk-le-red')[n - 1]?.scrollIntoView?.({ block: 'nearest' });
       });
     });
   }
@@ -145,10 +135,6 @@ export class LatexEditorComponent implements ControlValueAccessor {
         this.pregled.emit();
       }
     }
-  }
-
-  protected sinhronizuj(): void {
-    this.host.nativeElement.style.setProperty('--bk-le-pomak', `${-this.polje().nativeElement.scrollTop}px`);
   }
 
   protected dodirnuto(): void {

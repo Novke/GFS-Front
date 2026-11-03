@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RenderGreskaInfo } from '../data-access/banka.models';
 import type { StanjePregleda } from '../data-access/render-proba';
-import { ocistiSvg, SvgPregledComponent } from './svg-pregled.component';
+import { ocistiSvg, SvgPregledComponent, type VelicinaPregleda } from './svg-pregled.component';
 
 const NS = 'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"';
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAUCAIAAABwJOjsAAAABmJLR0QA/wD/AP+gvaeTAAAAJ0lEQVRIiWM8ISfHMBCAaUBsHbV41OJRi0ctHrV41OJRi0ctHhAAAF+MASwfHtbvAAAAAElFTkSuQmCC';
@@ -263,13 +263,13 @@ describe('ocistiSvg', () => {
 
 @Component({
   imports: [SvgPregledComponent],
-  template: `<app-svg-pregled naslov="Zadatak" [svg]="svg()" [greska]="greska()" [stanje]="stanje()" greskaId="gr-1" [(punaSirina)]="puna" />`,
+  template: `<app-svg-pregled naslov="Zadatak" [svg]="svg()" [greska]="greska()" [stanje]="stanje()" greskaId="gr-1" [velicina]="velicina()" />`,
 })
 class Domacin {
   readonly svg = signal<string | null>(null);
   readonly greska = signal<RenderGreskaInfo | null>(null);
   readonly stanje = signal<StanjePregleda>('prazno');
-  puna = false;
+  readonly velicina = signal<VelicinaPregleda>('telefon');
 }
 
 describe('SvgPregledComponent', () => {
@@ -294,7 +294,7 @@ describe('SvgPregledComponent', () => {
     await f.whenStable();
     const okvir = el().querySelector('.bk-sp-okvir')!;
     expect(okvir.classList).toContain('rezim-dan');
-    expect(okvir.classList).not.toContain('bk-sp-puna');
+    expect((okvir as HTMLElement).style.width).toBe('84mm');
     const slika = okvir.querySelector('[role="img"]')!;
     expect(slika.getAttribute('aria-label')).toBe('Pregled: Zadatak');
     expect(slika.querySelector('svg path')).not.toBeNull();
@@ -346,9 +346,9 @@ describe('SvgPregledComponent', () => {
     expect(najava()).toBe('Zadatak: render servis je zauzet.');
   });
 
-  it('napomena o širini: 84 mm, uvećano, a "umanjeno" kad je kolona uža od 84 mm', async () => {
+  it('napomena o širini: 84 mm, uvećano, a "umanjeno" kad je kolona uža od izabrane širine', async () => {
     const posmatrani: { cb: () => void; el: Element }[] = [];
-    const sirina = { px: 400 };
+    const sirina = { px: 600 };
     vi.stubGlobal('ResizeObserver', class {
       constructor(private readonly cb: () => void) {}
       observe(e: Element) { posmatrani.push({ cb: this.cb, el: e }); this.cb(); }
@@ -364,12 +364,15 @@ describe('SvgPregledComponent', () => {
       sirina.px = 275;
       posmatrani.at(-1)!.cb();
       await f.whenStable();
-      expect(napomena()).toBe('Umanjeno: kolona je uža od telefona (84 mm)');
-      el().querySelector<HTMLButtonElement>('mat-slide-toggle button')!.click();
+      expect(napomena()).toBe('Umanjeno: kolona je uža od 84 mm');
+      f.componentInstance.velicina.set('vece');
       await f.whenStable();
-      expect(napomena()).toBe('Umanjeno: kolona je uža od telefona (84 mm)');
+      expect(napomena()).toBe('Umanjeno: kolona je uža od 126 mm');
       sirina.px = 600;
       posmatrani.at(-1)!.cb();
+      await f.whenStable();
+      expect(napomena()).toBe('Uvećano 1,5 puta u odnosu na telefon');
+      f.componentInstance.velicina.set('cela');
       await f.whenStable();
       expect(napomena()).toBe('Uvećano na širinu kolone');
     } finally {
@@ -378,16 +381,19 @@ describe('SvgPregledComponent', () => {
     }
   });
 
-  it('"Puna širina" širi okvir preko cele kolone (dvosmerno vezano)', async () => {
+  it('veličina daje širinu okvira: 84 mm, 126 mm, a cela kolona nema zadatu širinu', async () => {
     f.componentInstance.svg.set(`<svg ${NS}><path d="M0 0"/></svg>`);
     f.componentInstance.stanje.set('ok');
     await f.whenStable();
-    const prekidac = el().querySelector<HTMLButtonElement>('mat-slide-toggle button')!;
-    expect(prekidac.getAttribute('aria-label')).toBe('Puna širina, Zadatak');
-    prekidac.click();
+    const okvir = () => el().querySelector<HTMLElement>('.bk-sp-okvir')!;
+    expect(okvir().style.width).toBe('84mm');
+    f.componentInstance.velicina.set('vece');
     await f.whenStable();
-    expect(f.componentInstance.puna).toBe(true);
-    expect(el().querySelector('.bk-sp-okvir')!.classList).toContain('bk-sp-puna');
+    expect(okvir().style.width).toBe('126mm');
+    f.componentInstance.velicina.set('cela');
+    await f.whenStable();
+    expect(okvir().style.width).toBe('');
+    expect(el().querySelector('mat-slide-toggle')).toBeNull();
   });
 
   it('najava stanja za čitač ekrana (polite), bez "Renderuje se" pri svakom kucanju', async () => {

@@ -1274,14 +1274,19 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Pages**: `banka.page` (subject + Predavanja/Testovi toggle, `PreferencesStore` key `banka` remembers the choice; left tree, right
   variant cards; "Nova varijanta" only for a leaf with a difficulty `tezina`), `grupa-detalj.page` (name, description, difficulty,
   instructions and the **field schema** editor; a type of a field stays locked while the group has active variants, adding a field to such
-  a group warns first and turns them into drafts), `varijanta-editor.page` (three columns: LaTeX tabs Tekst / Rešenje, live preview,
-  answers + attachments), `pregled.page` (draft review, below). Both editing pages also ask on tab close and reload
+  a group warns first and turns them into drafts), `varijanta-editor.page` (a 2 x 2 grid and a mode switch **Pregled | Uredi LaTeX**:
+  "Pregled" = rendered Zadatak | Rešenje, the default for a saved variant with a good render; "Uredi LaTeX" = editor (tabs Tekst / Rešenje) |
+  live preview of the active tab, the default for a new variant, a failed render and `?povratak` (Uredi from the draft review); the bottom row is
+  always Tačni odgovori | Prilozi. The mode is not stored; the preview size (`telefon` 84 mm / `vece` 126 mm, default / `cela`) is a browser
+  preference in its own localStorage key (`VelicinaPregledaPostavka`, not `PreferencesStore`: the initial bundle has no room). Keys `E` / `Esc`
+  only outside inputs and with no overlay open. The header ⋮ menu has Dupliraj, Arhiviraj / Vrati u nacrt and Obriši like the group card;
+  Dupliraj waits while there are unsaved edits), `pregled.page` (draft review, below). Both editing pages also ask on tab close and reload
   (`(window:beforeunload)` with the same condition as `unsavedChangesGuard`). A dialog opened from a ⋮ menu (tree or card) would
   restore focus to the removed menu item, so the pages put it back on that ⋮ button (cancel) or on the new/moved tree item
   (success), only when focus fell to `<body>`.
 - **`ui/`**: `stablo-grupa` (WAI-ARIA tree, roving tabindex, F2 rename, context menu), `varijanta-kartica`, `polja-editor`,
-  `odgovori-forma`, `latex-editor` (textarea with line-number gutter, error line highlight, Tab = two spaces, Ctrl+Enter = preview now),
-  `svg-pregled`, `prilozi`, the sections `iskljucene-teme` and `serije` (shared `sekcije-stabla.css`), `odgovori-pregled` (read-only
+  `odgovori-forma`, `latex-editor` (soft-wrapping textarea over a mirror of rows, so a line number sits at its logical line, error line highlight, Tab = two spaces,
+  Ctrl+Enter = preview now), `svg-pregled` (width from the `velicina` input), `prilozi`, the sections `iskljucene-teme` and `serije` (shared `sekcije-stabla.css`), `odgovori-pregled` (read-only
   answers of the review), and the dialogs `grupa-dialog`, `premesti-dialog`, `preambula-dialog` (per-subject LaTeX preamble; after
   saving it calls `renderuj-sve` until `preostalo` is 0, at most 10 rounds, then offers "Nastavi renderovanje", as after an error;
   `renderovano` and `neuspelo` are summed over the rounds). `renderuj-sve` never demotes: a failed variant keeps its status and its last
