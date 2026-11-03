@@ -1,7 +1,7 @@
 /*
- * Editor varijante: zaglavlje (putanja, status, dugmad), traka greške, napredak ili šta nedostaje, pa tri kolone od 1100 px
- * (LaTeX | pregled | odgovori i prilozi), ispod jedna ispod druge. Pregled je lepljiv dok se skroluje dugačak tekst ili šema.
- * Boje samo kroz tokene.
+ * Editor varijante: zaglavlje (putanja, status, dugmad i meni ⋮), traka greške, napredak ili šta nedostaje, traka za izbor
+ * prikaza (Pregled | Uredi LaTeX, veličina pregleda), pa mreža 2 × 2 od 1000 px (gore zadatak | rešenje ili editor | pregled, dole
+ * tačni odgovori | prilozi), ispod jedna ispod druge. Kartice istog reda su iste visine. Boje samo kroz tokene.
  */
 
 :host { display: block; }
@@ -67,29 +67,72 @@
   font-size: 13px;
 }
 
+.bk-ve-traka {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+}
+
+.bk-ve-razmak { flex: 1 1 0; }
+.bk-ve-savet { color: var(--muted); font-size: 13px; }
+
+.bk-ve-savet kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* izbor jedne od nekoliko stavki (prikaz, veličina pregleda): dugmad sa aria-pressed u zajedničkom okviru */
+.bk-ve-izbor {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.bk-ve-izbor > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bk-ve-izbor > button:first-child { border-left: 0; }
+.bk-ve-izbor > button:hover { background: var(--surface-2); }
+.bk-ve-izbor > button[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary-soft-ink); font-weight: 600; }
+.bk-ve-izbor > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.bk-ve-izbor .mat-icon { width: 18px; height: 18px; }
+
+.bk-ve-naziv-red { margin: 0 0 8px; max-width: 640px; }
+
 .bk-ve-mreza {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.bk-ve-kolona {
+.lista-kartica.bk-ve-odeljak {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-}
-
-.lista-kartica.bk-ve-kolona,
-.bk-ve-odeljak { padding: 14px 16px 16px; }
-
-.bk-ve-desno { gap: 16px; }
-
-.bk-ve-odeljak {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  padding: 14px 16px 16px;
 }
 
 .bk-ve-podnaslov { margin: 0; font-size: 17px; }
@@ -97,13 +140,12 @@
 .bk-ve-kartice { min-width: 0; }
 .bk-ve-kartice app-latex-editor { padding-top: 12px; }
 .bk-ve-greska-kartice { color: var(--danger); font-weight: 600; }
-.bk-ve-pregledi { gap: 20px; }
 
-@media (min-width: 1100px) {
-  .bk-ve-mreza { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .9fr); }
-  .bk-ve-pregledi { position: sticky; top: 16px; }
+@media (min-width: 1000px) {
+  .bk-ve-mreza { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 599.98px) {
   .bk-ve-akcije .mat-mdc-button-base { min-height: 44px; }
+  .bk-ve-izbor > button { min-height: 44px; }
 }

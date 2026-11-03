@@ -91,6 +91,7 @@ test.describe('banka zadataka: nivo varijante', () => {
     await nivoRadio(izbor, 3).click();
     await expect.poll(() => patchevi(mock, 12)).toEqual([{ nivo: 3 }]);
 
+    await page.getByRole('button', { name: 'Naziv', exact: true }).click();
     await page.getByLabel('Naziv (opciono)').fill('110010 u dekadni (izmenjen)');
     await page.getByRole('button', { name: /^Sačuvaj/ }).first().click();
     await expect.poll(() => mock.zahteviZa('banka/varijante/12', 'PUT').length).toBe(1);

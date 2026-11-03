@@ -1,7 +1,7 @@
 /*
- * LaTeX polje sa brojevima linija: okvir (gutter + polje) kao jedno polje forme, tekst bez prelamanja, istaknuta linija
- * greške u gutter-u i iza teksta. Gutter i traka se pomeraju sa skrolom kroz `--bk-le-pomak` (piše ga komponenta).
- * Boje samo kroz tokene.
+ * LaTeX polje sa brojevima linija: okvir kao jedno polje forme; svaka linija teksta je red mreže (broj + nevidljivo ogledalo
+ * teksta istog fonta i širine koje daje visinu i prelama kao polje), a `textarea` leži preko ogledala i raste sa njim, pa se
+ * dugački redovi prelamaju bez skrola polja. Istaknuta linija greške je pozadina celog reda. Boje samo kroz tokene.
  */
 
 :host {
@@ -19,12 +19,15 @@
 }
 
 .bk-le-okvir {
-  display: flex;
+  --bk-le-sirina-broja: calc(var(--bk-le-cifre, 1) * 1ch + 20px);
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
   overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: var(--bk-le-visina);
 }
 
 .bk-le-okvir:hover { border-color: var(--muted); }
@@ -37,71 +40,63 @@
 
 .bk-le-onemoguceno { opacity: .7; }
 
-.bk-le-brojevi {
-  flex: none;
-  min-width: calc(var(--bk-le-cifre, 1) * 1ch + 20px);
-  padding: var(--bk-le-pad) 0;
-  overflow: hidden;
-  border-right: 1px solid var(--line);
-  background: var(--surface-2);
+.bk-le-redovi {
+  position: relative;
+  min-height: calc(var(--bk-le-redova, 12) * var(--bk-le-visina) + 2 * var(--bk-le-pad));
+  /* pozadina gutter-a i ispod poslednje linije */
+  background: linear-gradient(to right, var(--surface-2) calc(var(--bk-le-sirina-broja) - 1px), var(--line) 0 var(--bk-le-sirina-broja), transparent 0);
+}
+
+.bk-le-red {
+  display: grid;
+  grid-template-columns: var(--bk-le-sirina-broja) minmax(0, 1fr);
+  min-height: var(--bk-le-visina);
+}
+
+.bk-le-red:first-of-type { padding-top: var(--bk-le-pad); }
+.bk-le-red:last-of-type { padding-bottom: var(--bk-le-pad); }
+
+.bk-le-broj {
+  padding: 0 8px 0 10px;
+  box-shadow: inset -1px 0 var(--line);
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: var(--bk-le-visina);
   text-align: right;
   user-select: none;
 }
 
-.bk-le-pomeri { transform: translateY(var(--bk-le-pomak, 0px)); }
-
-.bk-le-broj {
-  display: block;
-  height: var(--bk-le-visina);
-  padding: 0 8px 0 10px;
+.bk-le-ogledalo {
+  padding: 0 10px;
+  color: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  tab-size: 2;
+  user-select: none;
 }
 
+.bk-le-istaknut { background: var(--danger-soft); }
+
 .bk-le-istaknuta {
-  background: var(--danger-soft);
   color: var(--danger);
   font-weight: 600;
 }
 
-.bk-le-telo {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.bk-le-traka {
-  position: absolute;
-  top: calc(var(--bk-le-pad) + var(--bk-le-linija, 0) * var(--bk-le-visina));
-  right: 0;
-  left: 0;
-  height: var(--bk-le-visina);
-  background: var(--danger-soft);
-  transform: translateY(var(--bk-le-pomak, 0px));
-  pointer-events: none;
-}
-
 .bk-le-polje {
-  position: relative;
-  display: block;
+  position: absolute;
+  inset: 0 0 0 var(--bk-le-sirina-broja);
   box-sizing: border-box;
-  width: 100%;
-  min-height: calc(6 * var(--bk-le-visina) + 2 * var(--bk-le-pad));
+  width: calc(100% - var(--bk-le-sirina-broja));
+  height: 100%;
   margin: 0;
   padding: var(--bk-le-pad) 10px;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: var(--bk-le-visina);
-  white-space: pre;
-  overflow: auto;
-  resize: vertical;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  resize: none;
   tab-size: 2;
 }
 
