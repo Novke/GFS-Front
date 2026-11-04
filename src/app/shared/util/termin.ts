@@ -12,6 +12,11 @@ export const DANI_KRATKO: readonly string[] = ['', 'pon', 'uto', 'sre', 'čet', 
 /** Kratki nazivi meseci (`jan` ... `dec`), indeks 0 = januar; za blok datuma na kartici termina. */
 export const MESECI_KRATKO: readonly string[] = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
 
+/** Puni nazivi meseci, indeks 0 = januar; za naslov kalendara časova. */
+export const MESECI: readonly string[] = [
+  'januar', 'februar', 'mart', 'april', 'maj', 'jun', 'jul', 'avgust', 'septembar', 'oktobar', 'novembar', 'decembar',
+];
+
 const ISO_DAN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** `2026-11-04` -> lokalni datum (ponoć), ili `null` za nešto drugo i nepostojeći dan. */
@@ -71,4 +76,17 @@ export function relativniDan(iso: string, danas: string): string {
     return 'danas';
   }
   return dodajDane(danas, 1) === iso ? 'sutra' : '';
+}
+
+/**
+ * Koliko je dana do termina prema `danas` (oba ISO): `danas`, `sutra`, `za 3 dana`, `za 21 dan`; prošli dan i neispravan
+ * datum -> prazno.
+ */
+export function zaKoliko(iso: string, danas: string): string {
+  const [d, od] = [lokalniDatum(iso), lokalniDatum(danas)];
+  const dana = d && od ? Math.round((d.getTime() - od.getTime()) / 86_400_000) : -1;
+  if (dana < 2) {
+    return dana < 0 ? '' : relativniDan(iso, danas);
+  }
+  return `za ${dana} ${dana % 10 === 1 && dana % 100 !== 11 ? 'dan' : 'dana'}`;
 }
