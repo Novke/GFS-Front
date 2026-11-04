@@ -224,6 +224,22 @@ describe('BankaApi', () => {
     expect(rez).toHaveBeenCalledWith([]);
   });
 
+  it('odobriVise i povuciOdobrenje: POST sa { ids }', () => {
+    const rez = vi.fn();
+    api.odobriVise([16, 17], { tiho: true }).subscribe(rez);
+    const odobri = zahtev('POST', 'api/banka/varijante/odobri-vise');
+    expect(odobri.request.body).toEqual({ ids: [16, 17] });
+    expect(odobri.request.context.get(LOCAL_ERRORS)).toBe(true);
+    odobri.flush({ odobrene: [16], preskocene: [{ id: 17, naziv: null, razlog: 'Render nije uspeo.' }] });
+    expect(rez).toHaveBeenCalledExactlyOnceWith({ odobrene: [16], preskocene: [{ id: 17, naziv: null, razlog: 'Render nije uspeo.' }] });
+
+    api.povuciOdobrenje([16], { tiho: true }).subscribe(rez);
+    const povuci = zahtev('POST', 'api/banka/varijante/povuci-odobrenje');
+    expect(povuci.request.body).toEqual({ ids: [16] });
+    expect(povuci.request.context.get(LOCAL_ERRORS)).toBe(true);
+    povuci.flush({ vracene: [16], preskocene: [] });
+  });
+
   it('odbaciSeriju: POST banka/serije/{serija}/odbaci bez tela, serija enkodovana u putanji', () => {
     const rez = vi.fn();
     api.odbaciSeriju('uvoz x', { tiho: true }).subscribe(rez);

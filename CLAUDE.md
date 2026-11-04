@@ -1260,7 +1260,7 @@ and Claude's series, and reviews the drafts one by one (below).
   fields are always sent; the MCP fields `izvor` on groups, search rows and topics (variants have had it since phase 1), `serija`,
   `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`, `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
   A1 contract, new backend fields are always appended at the end of the record); `banka.api.ts` (`BankaApi`, all calls accept
-  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija` and leaves out `predmetId` when it is `null` (every subject), plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed),
+  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija` and leaves out `predmetId` when it is `null` (every subject), plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed), `odobriVise`, `povuciOdobrenje`,
   `iskljuceneTeme`, `iskljuciTemu` (no UI uses it) and `ukljuciTemu`); `banka.store.ts` (`BankaStore`, NgRx
   SignalStore provided by the `banka` page: tree, selected group, its variants, status and source filters (`filterStatusa`,
   `filterIzvora`; `imaFiltera`, `ocisti()` resets both), the subject's series and excluded topics (`serije`, `teme`: per subject, not
@@ -1376,7 +1376,7 @@ and Claude's series, and reviews the drafts one by one (below).
   reload), so a second `DELETE` (a 404) cannot be sent; after a failure it stays and can be retried. Focus that fell to `<body>`
   goes to the topic now in the removed one's place (or to the tree), on the group page to the name. **There is no form to add a
   topic** (spec decision): Novica tells Claude, which calls the MCP tool `iskljuci_temu`.
-- **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`; no "approve all" by design): one variant at a time. The
+- **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`): one variant at a time, plus "Odobri sve (N)" (below). The
   filter comes from the query (`filterPregleda`: an invalid value means no filter, `status` defaults to `NACRT`, `serija` must match the
   server pattern); the MCP link (`<front>/banka/pregled?serija=<s>`) carries only the series, so without `predmet` the review covers
   every subject. The backend's `predmetId` is optional (`BankaFilter`: `BankaSpecs.predmet(null)` is no subject filter, an unknown id
@@ -1403,7 +1403,12 @@ and Claude's series, and reviews the drafts one by one (below).
   `mat-menu`: a vertical menu neither handles `←`/`→` nor prevents letters, so they would act on the draft behind it), while any
   `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta/Shift (Shift+O, Shift+Delete and Shift+arrows are not shortcuts; `O`
   under Caps Lock without Shift is) and on auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
-  a polite status region names the draft now shown). "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
+  a polite status region names the draft now shown). "Odobri sve (N)" (`data-odobri-sve`, only with status NACRT and at least two in the list; also on the end screen while skipped
+  drafts remain) asks first, then sends the first 200 loaded ids to `POST banka/varijante/odobri-vise` (the dialog says so above 200 and when the list is `skraceno`). The server
+  skips a failed render or incomplete answers with a reason, and those drafts stay for one-by-one review; the list reloads on the draft shown when the server skipped it, otherwise
+  on the first one left. The snackbar "Odobreno X, preskočeno Y." has "Poništi" -> `POST banka/varijante/povuci-odobrenje` with `odobrene` (back to NACRT, a replaced original back to
+  AKTIVNA), then a reload on the draft shown before. The undo goes straight to the API, not through `akcija`: `exhaustMap` would drop it while busy and `rxMethod` is dead after
+  leaving the page, where the `POST` still goes and only the reload is skipped. "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
   the server deletes the series' never-approved Claude drafts in every subject and group and the Claude groups left empty, approved
   and manual items stay and come back in `preskoceno`, presentations are untouched. The confirmation says exactly that and shows
   **no number** (the plan asked for one): the list is narrowed by `predmet`, `grupa`, `status` and the page limit and does not know

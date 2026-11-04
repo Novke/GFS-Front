@@ -5,7 +5,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { provideRouter, Router, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { delay, of } from 'rxjs';
+import { delay, of, Subject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReferenceApi } from '../../../core/api/reference.api';
@@ -55,6 +55,8 @@ describe('PregledPage', () => {
     obrisiVarijantu: vi.fn(),
     odbaciSeriju: vi.fn(),
     promeniNivo: vi.fn(),
+    odobriVise: vi.fn(),
+    povuciOdobrenje: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 1, naziv: 'Uvod u računarstvo' }])),
@@ -354,6 +356,88 @@ describe('PregledPage', () => {
     dijalog()!.querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
     await stabilno();
     expect(api.odbaciSeriju).toHaveBeenCalledWith('uvoz-kol1-2024', { tiho: true });
+  });
+
+  describe('Odobri sve', () => {
+    const dugme = (e = el()) => e.querySelector<HTMLButtonElement>('[data-odobri-sve]');
+    const lista = (...ids: number[]) => api.pretraga.mockImplementation(() => of({
+      content: ids.map(id => stavka(id)), page: { size: 100, number: 0, totalElements: ids.length, totalPages: 1 },
+    }));
+
+    it('samo nad nacrtima i uz bar dva; N broji celu listu i posle "Preskoči"', async () => {
+      let e = await otvori('/banka/pregled?predmet=1');
+      expect(dugme(e)!.textContent).toContain('Odobri sve (3)');
+      expect(dugme(e)!.closest('[data-akcije]')).not.toBeNull();
+      await taster('ArrowRight');
+      expect(dugme()!.textContent).toContain('Odobri sve (3)');
+
+      e = await otvori('/banka/pregled?predmet=1&status=AKTIVNA');
+      expect(dugme(e)).toBeNull();
+
+      lista(17);
+      e = await otvori('/banka/pregled?predmet=2');
+      expect(naslov()).toBe('Kol. 1, zad. 17');
+      expect(dugme(e)).toBeNull();
+    });
+
+    it('na kraju, dok ima preskočenih, dugme ostaje', async () => {
+      await otvori('/banka/pregled?predmet=1');
+      await taster('ArrowRight');
+      await taster('ArrowRight');
+      await taster('ArrowRight');
+      expect(el().querySelector('[data-kraj]')).not.toBeNull();
+      expect(dugme()!.textContent).toContain('Odobri sve (3)');
+    });
+
+    it('potvrda sa brojem i posledicama, pa POST sa celom listom; "Odustani" ne šalje ništa', async () => {
+      await otvori('/banka/pregled?predmet=1');
+      dugme()!.click();
+      await stabilno();
+      const tekst = dijalog()!.textContent!;
+      expect(tekst).toContain('Odobri 3 nacrta?');
+      expect(tekst).toContain('odmah postaju aktivne i mogu da se pojave na času');
+      expect(tekst).toContain('Nacrti sa neuspelim renderom ili nepotpunim odgovorima se preskaču');
+      expect(tekst).not.toContain('odjednom');
+      expect(tekst).not.toContain('Lista nije cela');
+      dijalog()!.querySelector<HTMLButtonElement>('[data-odustani]')!.click();
+      await stabilno();
+      expect(api.odobriVise).not.toHaveBeenCalled();
+
+      api.odobriVise.mockImplementation(() => of({ odobrene: [16, 17, 18], preskocene: [] }));
+      lista();
+      dugme()!.click();
+      await stabilno();
+      dijalog()!.querySelector<HTMLButtonElement>('[data-potvrdi]')!.click();
+      await stabilno();
+      expect(api.odobriVise).toHaveBeenCalledExactlyOnceWith([16, 17, 18], { tiho: true });
+      expect(el().querySelector('[data-kraj]')).not.toBeNull();
+    });
+
+    it('preko 200 u listi: naslov nosi broj koji stvarno ide, tekst kaže da ide prvih 200; skraćena lista kaže da idu samo učitani', async () => {
+      api.varijanta.mockImplementation((id: number) => of(varijanta(id)));
+      api.pretraga.mockImplementation((_f: unknown, s: { page: number }) => of({
+        content: Array.from({ length: 100 }, (_, i) => stavka(1000 + s.page * 100 + i)),
+        page: { size: 100, number: s.page, totalElements: 1500, totalPages: 15 },
+      }));
+      await otvori('/banka/pregled?predmet=1');
+      expect(dugme()!.textContent).toContain('Odobri sve (1000)');
+      dugme()!.click();
+      await stabilno();
+      const tekst = dijalog()!.textContent!;
+      expect(tekst).toContain('Odobri 200 nacrta?');
+      expect(tekst).toContain('U listi ih je 1000, a odjednom se odobrava najviše 200');
+      expect(tekst).toContain('Lista nije cela, pa se odobravaju samo učitani nacrti.');
+    });
+
+    it('dok akcija traje dugme je onemogućeno i klik ne otvara dijalog', async () => {
+      await otvori('/banka/pregled?predmet=1');
+      api.odobri.mockImplementation(() => new Subject<VarijantaDetails>());
+      await taster('o');
+      expect(dugme()!.getAttribute('aria-disabled')).toBe('true');
+      dugme()!.click();
+      await stabilno();
+      expect(dijalog()).toBeNull();
+    });
   });
 
   it('lista skraćena na 1000: napomena; cela lista bez napomene', async () => {

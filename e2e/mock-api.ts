@@ -1454,6 +1454,8 @@ export class MockApi {
     put('banka/varijante/:id', (z, p) => b.izmeniVarijantu(Number(p['id']), z.telo as VarijantaCmd));
     del('banka/varijante/:id', (_z, p) => b.obrisiVarijantu(Number(p['id'])));
     patch('banka/varijante/:id/nivo', (z, p) => b.promeniNivo(Number(p['id']), z.telo as { nivo?: unknown } | null));
+    post('banka/varijante/odobri-vise', z => b.odobriVise(z.telo as { ids?: number[] } | null));
+    post('banka/varijante/povuci-odobrenje', z => b.povuciOdobrenje(z.telo as { ids?: number[] } | null));
     post('banka/varijante/:id/odobri', (_z, p) => b.promeniStatus(Number(p['id']), 'AKTIVNA'));
     post('banka/varijante/:id/arhiviraj', (_z, p) => b.promeniStatus(Number(p['id']), 'ARHIVIRANA'));
     post('banka/varijante/:id/vrati-u-nacrt', (_z, p) => b.promeniStatus(Number(p['id']), 'NACRT'));
