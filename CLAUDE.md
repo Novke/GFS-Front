@@ -740,7 +740,7 @@ over STOMP; teacher commands are REST.
   samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
 - **Slide editor, part 4a (phase 4: layers, shapes, images, properties, undo):** `editor-platna/` is the canvas editor
   of a PLATNO slide. The editor page renders it only inside `@defer (on immediate)` (one instance per slide, `@for ... track
-  kljuc` (since 5c `kljuc:tip`)), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
+  kljuc` (since 5c `kljuc:tip`, later plus `obnova`)), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
   `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
   (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
@@ -786,8 +786,8 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   the side nav (1366: canvas ~526 px, 1440: ~600 px); at 1280 the editor is 736 px and the panels go below a full-width
   canvas, as on a phone. `platno-prikaz`
   caches the prepared view per (layer object, index) in a `WeakMap`, so moving one layer rebuilds only that layer. Slide
-  list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (no
-  version check on the backend). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
+  list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (`verzija`
+  catches only Claude's writes, see "Claude changed an open slide"). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
   instance and from a panel, last `PUT` after Ctrl+S carries both canvas and notes with the page clock paused so the
   debounce cannot send it, layout at 1280/1366/1440/390 px), editor panels and the colour popover in `pristupacnost.spec.ts`.
 - **Slide editor, part 4b (text, tables, formulas, animations, preview):** all of it lives in the lazy editor chunk except the formula
@@ -908,7 +908,7 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   otherwise the dialog would drag in the editor's lazy chunks). Nothing of ProseMirror or MathLive is in the initial closure or the page
   file, and public routes load none of it (`NIZOVI_EDITORA`; `JavnaMreza` fails a public test on any `/assets/mathlive/` request
   unless the test sets `formule: true`, and then only `mathlive/ssr` may arrive, phase 5a).
-  **Two tabs editing one slide: the last `PUT` wins**, with no version check (the backend has none; adding one is out of scope).
+  **Two tabs editing one slide: the last `PUT` wins**: the teacher's own `PUT` never raises `verzija`, so only Claude's writes are caught ("Claude changed an open slide").
   **Known limitations:** a tab character in a table cell has no shortcut (Tab moves the cell); banding (`tabelaTraka`) is not recomputed
   after inserting a row, because the model carries resolved colours (decision 19); a neighbour merged across the edge of the range gets the
   border along its whole side; after a double click the caret goes to the end of the text; tab stops are not measured while typing (default 36 pt until the session ends); "Vrati 100%" (autofit) loses the
@@ -997,9 +997,20 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   nothing if it is no longer INFO or the editor was left; "Poništi pretvaranje" after leaving the editor only says that it is too
   late (the store is destroyed and no longer saves). Focus never falls to `body`: after the conversion it goes to the selected
   slide in the list (as after the PPTX import), after undo to "Pretvori u platno" of the new form (only while that slide is
-  still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip`, so a type change builds a new form and canvas
-  editor (the form builds its controls once). E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
+  still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip + ':' + obnova`, so a type change or a read from the server
+  builds a new form and canvas editor (the form builds its controls once). `obnova` must stay a field of the `izabraniNiz` item: `@for` computes
+  the key of the old item only while comparing, so a global signal in the track expression gives both items the same key and reuses the view.
+  E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
   Odustani/Pretvori, focus after both, exact `PUT` counts), form and dialog in `pristupacnost.spec.ts`.
+- **Claude changed an open slide (`SlajdDetails.verzija`).** Only Claude's MCP writes raise `verzija`, never the teacher's `PUT`, so the save pipeline stays
+  `switchMap` and there is no polling. Every `PUT slajdovi/{id}` carries the `verzija` of the slide in the store (`saVerzijom` at the `PUT` boundary, missing = `null` = no check);
+  `slajdUCmd` stays without it, so `POST`, import and duplicate cannot send it. A difference is 409 with `reason` exactly `Slajd je u međuvremenu izmenjen.` (`jeSukob`):
+  the slide goes to `EditorStore.sukobi` (separate from `greska`, which the next successful save of another slide clears; `zavrsi` restores `porukaSukoba`) and is never sent
+  again, not on an edit, not on leaving; other slides keep saving. The page shows the strip `[data-sukob]` with "Učitaj ponovo": `sacuvajOstale()` saves the other
+  slides first (a new conflict or an invalid slide stops it and discards nothing), then `ucitaj` drops the local edits of the conflicted slides only and raises `obnova`, which
+  rebuilds the form and canvas of the selected slide, conflicted or not (a stale form with the new `verzija` would overwrite Claude's edit). `sacuvajSve()` fails with the conflict
+  text instead of hanging, so Pokreni, Dupliraj and the imports stop. Leaving is not blocked: the guard asks with the conflict text and `sacuvajPreIzlaska` skips the slide.
+  Known narrow race: edits to other slides typed while the reload `GET` runs are lost with it. E2E `uzivo-editor-sukob.spec.ts`.
 - **PDF import (phase 5d; backend and nginx unchanged).** The editor's "PDF" button (accessible name "Uvezi iz PDF-a", next to
   "PowerPoint") turns pages of a PDF into PLATNO slides. **The PDF never goes to the server** (only page images do) and **the app
   never asks for a password**: `getDocument` gets no `password`/`onPassword`, so pdf.js rejects a locked file with

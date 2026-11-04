@@ -67,6 +67,8 @@ interface UzivoSlajd {
   postepeno: boolean; pitanje: unknown; platno: unknown; prelaz?: Prelaz | null;
   /** ZADATAK: samo izbor (`SlajdCmd.zadatak`); opis (`ZadatakSlajdaInfo`) mok računa pri svakom odgovoru, kao server. */
   zadatak?: ZadatakSlajda | null;
+  /** Raste samo sa Klodovim upisom (test je menja u `podaci`); fikstura bez polja = editor šalje `null`, bez provere. */
+  verzija?: number | null;
 }
 /** Prelaz na slajd (faza 5, Ugovor 4); slajd koji test doda bez polja front čita kao `null`. */
 interface Prelaz { efekat: string; smer: string | null; trajanjeMs: number }
@@ -1388,6 +1390,10 @@ export class MockApi {
         if (i >= 0) {
           const cmd = { ...(z.telo as UzivoSlajd & { slikaId?: string | null }) };
           delete cmd.slikaId; // `slika` (MedijInfo) ostaje kakva je: mok ne vodi medije
+          // kao server: `null` je bez provere, nastavnikov PUT ne menja verziju (raste samo Klodov upis: test je menja u `podaci`)
+          const verzija = cmd.verzija;
+          delete cmd.verzija;
+          if (verzija != null && verzija !== pr.slajdovi[i].verzija) return greska(409, 'Slajd je u međuvremenu izmenjen.');
           if (cmd.tip === 'ZADATAK') {
             const odbijeno = this.banka.proveriZadatak(pr.predmet.id, cmd.zadatak);
             if (odbijeno) return odbijeno;
