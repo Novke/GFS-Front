@@ -44,6 +44,12 @@
   --snack-ink: #ffffff;
   --snack-link: var(--accent);
   --star: #e89a1c;
+  // Boje predmeta u kalendaru časova studenta; nijedna nije crvena, ćilibar ni zelena (te tri znače stanje).
+  --predmet-1: #2456a6;
+  --predmet-2: #6a4bb5;
+  --predmet-3: #0f6e7c;
+  --predmet-4: #97306f;
+  --predmet-5: #4a5a78;
   --shadow: 0 1px 2px rgba(18, 26, 42, .06);
   // Milimetarski papir (≤ 4.5 % opacity); samo slike, veličina ćelije je --pattern-size.
   --pattern:
@@ -87,6 +93,11 @@
   --snack-ink: #0c1320;
   --snack-link: #1b4386;
   --star: #f2b544;
+  --predmet-1: #79a3f0;
+  --predmet-2: #b39df0;
+  --predmet-3: #5fc4d2;
+  --predmet-4: #e58cc2;
+  --predmet-5: #a5b3cb;
   --shadow: none;
   --pattern:
     linear-gradient(rgba(140, 170, 230, .035) 1px, transparent 1px),

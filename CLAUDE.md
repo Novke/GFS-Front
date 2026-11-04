@@ -416,7 +416,12 @@ computed on the server; the front never builds dates of termini itself.
   (`pages/pocetna.page`; before `feature/portal-pocetna` on the tab Čas); a signed-in `/nalog` goes there): **self-contained** (provides its
   own `CasoviStore`, loads in its constructor, no inputs or outputs). `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
   all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
-  "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
+  "Pokušaj ponovo". Layout (mockup A, 2026-11-04): the box "Sledeći čas" (first termin that is neither cancelled nor announced),
+  a month calendar (`ui/kalendar-casova.component`, pure functions in `ui/kalendar-casova.ts`) and below it the termini of the chosen day. Only days with a termin are
+  buttons (`[data-dan]`); the chosen day starts as the first termin, so a cancelled class next in line shows at once; the month always
+  follows the chosen day and the arrows walk only months that have termini. A cell has one stripe per termin, the subject colour
+  (`--predmet-1..5` in `_tokens.scss`, by alphabet, never red, amber or green), red when the whole day is cancelled, hatched amber
+  when the student skips every class of the day that is held. Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
   dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,
   started, cancelled meanwhile) show the server text next to that termin and reload the list silently. The response never
   carries counts or other students' names, and the card shows none.
