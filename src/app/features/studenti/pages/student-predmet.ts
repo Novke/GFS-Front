@@ -57,6 +57,9 @@ const daNe = (v: boolean | null | undefined): string => (v === true ? 'Da' : v =
           <span class="oznaka mono" data-indeks><span class="sr-only">Indeks: </span>{{ indeks() }}</span>
           <span class="oznaka ton-info" data-predmet><span class="sr-only">Predmet: </span>{{ d.predmet?.naziv ?? '—' }}</span>
           <span class="oznaka" data-grupa><span class="sr-only">Grupa: </span>{{ d.grupaNaziv || 'Bez grupe' }}</span>
+          @if (d.student.stariji) {
+            <span class="oznaka ton-warn" data-oznaka-stariji>Stariji student</span>
+          }
         </div>
         <a akcije matButton="outlined" [routerLink]="['/studenti', d.student.id]" data-profil>
           <mat-icon svgIcon="person" aria-hidden="true" />Profil studenta

@@ -18,7 +18,12 @@
         @let zakljucan = samoCitanje() || s.oslobodjen;
         <tr [attr.data-student]="s.id" [class.oslobodjen]="s.oslobodjen">
           <td class="c-rb mono">{{ i + 1 }}</td>
-          <td class="c-ime">{{ ime(s) }}</td>
+          <td class="c-ime">
+            {{ ime(s) }}
+            @if (s.stariji) {
+              <app-oznaka-stariji />
+            }
+          </td>
           <td class="c-indeks mono">{{ s.indeks | indeks: s.godina }}</td>
           <td class="c-aktivnost" [attr.data-labela]="'Aktivnost'" [attr.title]="s.predavanjaNapomene || null">
             @if (s.tip === 'ZADATAK') {

@@ -3,6 +3,8 @@ import type { StubacHistograma } from '../../shared/ui/histogram';
 /** Student u redu predloga; ogleda backend `dto/student/StudentInfo` (deo koji ocene prikazuju). */
 export interface OceneStudentInfo {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string | null;
   prezime: string | null;
   indeks: string | null;

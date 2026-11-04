@@ -48,6 +48,16 @@ describe('UcesniciPanelComponent', () => {
     expect(bojan).toContain('V2');
   });
 
+  it('oznaka "stariji" stoji uz označenog učesnika, ne uz ostale', () => {
+    const f = prikazi(null, [
+      { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: false, stariji: true },
+      { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: false },
+    ]);
+    const [ana, bojan] = redovi(f);
+    expect(ana).toContain('stariji');
+    expect(bojan).not.toContain('stariji');
+  });
+
   it('van Zadatak runde: bez varijante i ishoda (kao do sada)', () => {
     const f = prikazi(null, ucesnici.map(u => ({ ...u, varijantaId: null, tacno: null })));
     for (const r of redovi(f)) {

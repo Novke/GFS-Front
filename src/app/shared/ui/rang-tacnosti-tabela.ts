@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 import { RouterLink } from '@angular/router';
 
 import { kratakIndeks, nivoTacnosti, prikazVremena } from '../../core/api/rang.api';
+import { OznakaStariji } from './oznaka-stariji';
 
 /**
  * Red tabele ranga tačnosti: zajednički oblik `RangTacnostiStavka` (konzola, pregled izvođenja, predavanje, grupa) i
@@ -14,6 +15,7 @@ export interface RangRed {
   indeks?: string | null;
   ime: string;
   gost: boolean;
+  stariji?: boolean;
   tacnih: number;
   dugovanih: number;
   procenat: number | null;
@@ -39,7 +41,7 @@ export type RangSort = 'zvezdice' | 'tacnost' | 'vreme';
  */
 @Component({
   selector: 'app-rang-tacnosti-tabela',
-  imports: [RouterLink],
+  imports: [RouterLink, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (stavke().length) {
@@ -76,6 +78,7 @@ export type RangSort = 'zvezdice' | 'tacnost' | 'vreme';
                     {{ r.ime }}
                   }
                   @if (r.gost) { <span class="gost">gost</span> }
+                  @if (r.stariji) { <app-oznaka-stariji /> }
                 </td>
                 <td class="c-broj c-zvezdice zvezdice">
                   @if (r.zvezdice) { <span class="zvezda" aria-hidden="true">★</span> }{{ r.zvezdice }}
