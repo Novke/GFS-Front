@@ -140,6 +140,7 @@ for (const rezim of ['dan', 'noc'] as const) {
       await server.instaliraj(page);
       await page.goto('prezentacije');
       await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('.uz-ed-tabela')).toBeVisible();
       server.deploy();
       await vratiSeNaKarticu(page);
       await expect(traka(page)).toBeVisible();
