@@ -35,6 +35,7 @@ export interface RedStudenta {
   prezime: string;
   indeks: string;
   godina: number | null;
+  stariji: boolean;
   tip: TipAktivnosti | null;
   predavanjaNapomene: string | null;
   /** Oslobođen studenti su zaključani (bodovi 10 postavlja server). */
@@ -98,6 +99,7 @@ function uRed(r: DomaciStudentiInfo): RedStudenta {
     prezime: r.prezime ?? '',
     indeks: r.indeks ?? '',
     godina: r.godina ?? null,
+    stariji: r.stariji === true,
     tip: r.tip ?? null,
     predavanjaNapomene: r.predavanjaNapomene ?? null,
     oslobodjen: r.oslobodjen === true,

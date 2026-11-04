@@ -118,7 +118,7 @@ export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null
  */
 export interface UcesnikStanje {
   id: number; ime: string; poeni: number; povezan: boolean; odgovorio: boolean; varijantaId?: number | null; tacno?: boolean | null;
-  vremeMs?: number | null; odgovor?: string | null; odgovorSakriven?: boolean;
+  vremeMs?: number | null; odgovor?: string | null; odgovorSakriven?: boolean; stariji?: boolean;
 }
 /** Koji rang tačnosti je na projektoru: ovog izvođenja (L) ili celog predavanja (Shift+L). */
 export type RangPrikaz = 'IZVODJENJE' | 'PREDAVANJE';
@@ -312,6 +312,7 @@ export interface LicniZadatak {
 export interface UcesnikZadatka {
   ucesnikId: number; ime: string; varijantaId: number | null; varijantaNaziv: string | null; odgovorio: boolean;
   tacno: boolean | null; polja: Record<string, boolean> | null; uneto: Record<string, string> | null;
+  stariji?: boolean;
 }
 /**
  * Zadatak runda u pregledu (sve vidljivo); `slajdId` iz snimka ostaje i kad slajda više nema (`RezultatPitanja.slajdId` je tada

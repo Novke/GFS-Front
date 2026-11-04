@@ -57,6 +57,8 @@ export const TESTOVI_SORT_POLJA = ['datum', 'maxPoena'];
  */
 export interface TestStudentInfo {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string | null;
   prezime: string | null;
   indeks: string | null;

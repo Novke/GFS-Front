@@ -84,11 +84,37 @@ describe('StudentIzmenaDialog', () => {
     expect(z.request.method).toBe('PUT');
     expect(z.request.body).toEqual({
       grupaId: 4, ime: 'Ana', prezime: 'Radić-Kovač', indeks: 'GD12', godina: 2025, email: 'ana@gf.uns.ac.rs', brojTelefona: null,
-      datumRodjenja: '2006-03-04', opstina: 'Subotica',
+      datumRodjenja: '2006-03-04', opstina: 'Subotica', stariji: false,
     });
     z.flush({ ...odgovor(ana), prezime: 'Radić-Kovač' });
     await vi.waitFor(() => expect(rezultat).toHaveBeenCalledWith(true));
     expect(poruke.map(p => p.tekst)).toContain('Podaci studenta su sačuvani.');
+  });
+
+  it('oznaka "Stariji student": čekiranje se šalje', async () => {
+    await otvori('izmena');
+    overlay().querySelector<HTMLInputElement>('[data-stariji] input')!.click();
+    await sacuvaj();
+    const z = http.expectOne('api/studenti/5');
+    expect(z.request.body).toMatchObject({ stariji: true });
+    z.flush(odgovor(ana));
+    await vi.waitFor(() => expect(rezultat).toHaveBeenCalledWith(true));
+  });
+
+  it('već postavljena oznaka je čekirana, uz napomenu da ništa ne menja', async () => {
+    await otvori('izmena', { ...ana, stariji: true });
+    expect(overlay().querySelector<HTMLInputElement>('[data-stariji] input')!.checked).toBe(true);
+    expect(overlay().textContent).toContain('Ne menja grupu, bodove ni pristup.');
+  });
+
+  it('premeštanje ne prikazuje oznaku i šalje je nepromenjenu', async () => {
+    await otvori('premesti', { ...ana, stariji: true });
+    expect(overlay().querySelector('[data-stariji]')).toBeNull();
+    await sacuvaj();
+    const z = http.expectOne('api/studenti/5');
+    expect(z.request.body).toMatchObject({ stariji: true });
+    z.flush(odgovor(ana));
+    await vi.waitFor(() => expect(rezultat).toHaveBeenCalledWith(true));
   });
 
   it('premeštanje šalje novu grupu, a ostale podatke nepromenjene', async () => {

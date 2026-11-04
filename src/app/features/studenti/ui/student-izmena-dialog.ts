@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
+import { MatCheckbox } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
 import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -51,7 +52,7 @@ const prazno = (v: string): string | null => v.trim() || null;
 @Component({
   selector: 'app-student-izmena-dialog',
   imports: [
-    ErrorPanel, FormErrorBanner, MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, MatError,
+    ErrorPanel, FormErrorBanner, MatButton, MatCheckbox, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, MatError,
     MatFormField, MatInput, MatLabel, MatOption, MatProgressSpinner, MatSelect, ReactiveFormsModule,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -136,6 +137,10 @@ const prazno = (v: string): string | null => v.trim() || null;
                   <mat-error>{{ m }}</mat-error>
                 }
               </mat-form-field>
+              <div class="stariji">
+                <mat-checkbox formControlName="stariji" data-stariji>Stariji student</mat-checkbox>
+                <p class="pomoc">Samo oznaka. Ne menja grupu, bodove ni pristup.</p>
+              </div>
             }
           </div>
         }
@@ -154,6 +159,8 @@ const prazno = (v: string): string | null => v.trim() || null;
   styles: `
     .polja { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
     .uputstvo { grid-column: 1 / -1; margin: 0 0 12px; color: var(--ink-2); }
+    .stariji { grid-column: 1 / -1; }
+    .pomoc { margin: 0 0 8px 40px; font-size: 13px; color: var(--muted); }
     .ucitava { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--muted); }
     button mat-progress-spinner { display: inline-block; margin-right: 8px; }
     @media (max-width: 599.98px) { .polja { grid-template-columns: 1fr; } }
@@ -176,6 +183,7 @@ export class StudentIzmenaDialog implements OnInit {
     telefon: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(20)] }),
     datum: new FormControl('', { nonNullable: true, validators: [Validators.pattern(ISO_DATUM)] }),
     opstina: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(100)] }),
+    stariji: new FormControl(false, { nonNullable: true }),
   });
 
   protected readonly ucitava = signal(true);
@@ -217,6 +225,7 @@ export class StudentIzmenaDialog implements OnInit {
       telefon: s.brojTelefona ?? '',
       datum: s.datumRodjenja ?? '',
       opstina: s.opstina ?? '',
+      stariji: s.stariji === true,
     });
     this.forma.markAsPristine();
   }
@@ -250,6 +259,7 @@ export class StudentIzmenaDialog implements OnInit {
       brojTelefona: prazno(v.telefon),
       datumRodjenja: prazno(v.datum),
       opstina: prazno(v.opstina),
+      stariji: v.stariji,
     };
     this.salje.set(true);
     this.greska.set(null);

@@ -59,6 +59,11 @@ describe('RangTacnostiTabela', () => {
     expect(imena(el)).toEqual(['Ana', 'Bojan', 'Cvele', 'Dara']);
   });
 
+  it('oznaka "stariji" stoji samo uz označenog studenta', () => {
+    const el = napravi([{ ...red(1, 'Ana', 50, 1000, 1), stariji: true }, red(2, 'Bojan', 50, 1000, 1)]).nativeElement as HTMLElement;
+    expect([...el.querySelectorAll('tbody .ime')].map(td => td.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Ana stariji', 'Bojan']);
+  });
+
   it('bez indeksa (gosti, stari backend) nema kolone Indeks', () => {
     const el = napravi([red(1, 'Mile', 50, 1000, 1)]).nativeElement as HTMLElement;
     expect(el.querySelector('th.c-indeks')).toBeNull();

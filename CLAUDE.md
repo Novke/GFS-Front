@@ -125,6 +125,17 @@ pattern; keep it when touching any of them:
 Specs for these stores drive `HttpTestingController` with fake timers; a fix to a guarantee needs a spec that fails
 without it.
 
+## Label "stariji" (manual older-student flag)
+
+`stariji?: boolean` on the teacher DTOs (`StudentListItem`, `StudentInfo`, `TestStudentInfo`, `OceneStudentInfo`, `GrupaStudentInfo`, `PredavanjeStudentInfo`,
+`DomaciStudentiInfo`, `RangTacnostiStavka`, `UcesnikStanje`, `UcesnikZadatka`), optional because an older backend does not send it. Set with the checkbox
+"Stariji student" in `StudentIzmenaDialog` (edit mode only; "Premesti" sends the value unchanged). Next to a name it is `shared/ui/oznaka-stariji`
+(`<app-oznaka-stariji />`; it carries its own gap because table cells have no common layout); the student card uses `.oznaka.ton-warn`, the attendance matrix adds it to the sub-label.
+- **Display only.** The lecture tile and the test row already showed "stariji" for students outside the group or from an older generation; the flag is OR-ed in only at
+  display (`[stariji]` in `predavanje-detalj.html`, `redIz` in `test.store`). `PredavanjeStore.stariji` stays "outside the group", because `brojevi` counts it
+  ("31/38 +3"): never add the flag there.
+- **Never on the projector, phone, student account or `/upis`:** do not render it in `rang-tacnosti-projektor`, `publika-scena`, `javno/`, `nalog` or `upis`, and do not add it to `JavnaRangTacnostiStavka`.
+
 ## Public routes
 
 `upis/:token`, `uzivo`, `uzivo/:kod`, `nalog`, `nalog/moodle`, `nalog/cas`, `nalog/cas/:token` and the account tabs (`nalog/pocetna`, `nalog/predmeti`,

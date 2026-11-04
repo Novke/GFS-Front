@@ -51,7 +51,7 @@ export function uHeatmapu(m: PrisustvoMatricaInfo | null): { redovi: RedPrisustv
   const redovi = (m.studenti ?? []).map(r => ({
     kljuc: r.student.id,
     labela: imeStudenta(r.student),
-    podlabela: formatIndeks(r.student.indeks, r.student.godina),
+    podlabela: formatIndeks(r.student.indeks, r.student.godina) + (r.student.stariji ? ' · stariji' : ''),
     tip: r.tip ?? {},
   }));
   return { redovi, kolone };

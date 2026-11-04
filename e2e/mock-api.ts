@@ -33,7 +33,7 @@ interface TipTesta { id: number; naziv: string; predmetId: number; aktivan: bool
 interface Grupa { id: number; naziv: string; godinaUpisa: number | null; waLink?: string | null }
 interface Student {
   id: number; ime: string; prezime: string; indeks: string; godina: number | null; email: string | null;
-  brojTelefona: string | null; grupaId: number | null; datumRodjenja: string | null; opstina: string | null;
+  brojTelefona: string | null; grupaId: number | null; datumRodjenja: string | null; opstina: string | null; stariji?: boolean;
 }
 interface Beleska { id: number; studentId: number; tekst: string; kreirano: string; izmenjeno: string | null }
 interface Aktivnost { id: number; studentId: number; tip: TipAktivnosti; napomene: string | null }
@@ -518,14 +518,14 @@ export class MockApi {
   private studentListItem(s: Student) {
     return {
       id: s.id, ime: s.ime, prezime: s.prezime, indeks: s.indeks, godina: s.godina, email: s.email,
-      brojTelefona: s.brojTelefona, grupa: this.grupa(s.grupaId),
+      brojTelefona: s.brojTelefona, grupa: this.grupa(s.grupaId), stariji: s.stariji === true,
     };
   }
 
   private studentInfo(s: Student) {
     return {
       id: s.id, ime: s.ime, prezime: s.prezime, godina: s.godina ?? 0, indeks: s.indeks, brojTelefona: s.brojTelefona,
-      email: s.email, datumRodjenja: s.datumRodjenja, opstina: s.opstina,
+      email: s.email, datumRodjenja: s.datumRodjenja, opstina: s.opstina, stariji: s.stariji === true,
     };
   }
 
@@ -691,6 +691,7 @@ export class MockApi {
     return {
       id: s.id, ime: s.ime, prezime: s.prezime, godina: s.godina, indeks: s.indeks, brojTelefona: s.brojTelefona, email: s.email,
       datumRodjenja: s.datumRodjenja, opstina: s.opstina, grupa: this.grupa(s.grupaId)?.naziv ?? null, grupaId: s.grupaId,
+      stariji: s.stariji === true,
       aktivnosti: this.podaci.predavanja.flatMap(p =>
         p.aktivnosti.filter(a => a.studentId === s.id).map(a => ({ id: a.id, predavanjeId: p.id, tip: a.tip, napomene: a.napomene, datum: p.datum, tema: p.tema })),
       ),
