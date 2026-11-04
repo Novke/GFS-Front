@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { createEnvironmentInjector, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,8 +8,11 @@ import { ReferenceApi } from '../../../core/api/reference.api';
 import { NotificationStore, Poruka } from '../../../core/state/notification.store';
 import { Strana } from '../../../shared/models/strana';
 import { BankaApi } from './banka.api';
-import { BankaPretragaStavka, PonistavanjeInfo, VarijantaDetails } from './banka.models';
-import { filterPregleda, pocetakPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja, upitPregleda } from './pregled-nacrta.store';
+import { BankaPretragaStavka, OdobravanjeInfo, PonistavanjeInfo, PovlacenjeInfo, VarijantaDetails } from './banka.models';
+import {
+  filterPregleda, NAJVISE_ODOBRAVANJA, pocetakPregleda, PregledFilter, PregledNacrtaStore, porukaOdbacivanja, porukaOdobravanja, porukaPovlacenja,
+  upitPregleda,
+} from './pregled-nacrta.store';
 
 function stavka(id: number, izmena: Partial<BankaPretragaStavka> = {}): BankaPretragaStavka {
   return {
@@ -71,6 +75,20 @@ describe('porukaOdbacivanja', () => {
   });
 });
 
+describe('porukaOdobravanja i porukaPovlacenja', () => {
+  const preskocena = { id: 9, naziv: null, razlog: 'Render nije uspeo.' };
+
+  it('broji odobrene i preskočene', () => {
+    expect(porukaOdobravanja({ odobrene: [1, 2], preskocene: [preskocena] })).toBe('Odobreno 2, preskočeno 1.');
+    expect(porukaOdobravanja({ odobrene: [], preskocene: [] })).toBe('Odobreno 0, preskočeno 0.');
+  });
+
+  it('povlačenje: preskočene samo kad ih ima', () => {
+    expect(porukaPovlacenja({ vracene: [1, 2], preskocene: [] })).toBe('Vraćeno u nacrte: 2.');
+    expect(porukaPovlacenja({ vracene: [1], preskocene: [preskocena] })).toBe('Vraćeno u nacrte: 1. Preskočeno: 1.');
+  });
+});
+
 describe('pocetakPregleda', () => {
   it('bez `od` prva; `od` u listi je njeno mesto', () => {
     expect(pocetakPregleda([16, 17, 18], null)).toBe(0);
@@ -95,6 +113,8 @@ describe('PregledNacrtaStore', () => {
     obrisiVarijantu: vi.fn(),
     odbaciSeriju: vi.fn(),
     promeniNivo: vi.fn(),
+    odobriVise: vi.fn(),
+    povuciOdobrenje: vi.fn(),
   };
   const referenca = {
     predmeti: vi.fn(() => of([{ id: 1, naziv: 'Statika' }, { id: 2, naziv: 'Beton' }])),
@@ -532,6 +552,190 @@ describe('PregledNacrtaStore', () => {
       expect(store.ids()).toEqual([16, 17, 18]);
     });
   });
+  describe('odobriSve', () => {
+    const preskocena = (id: number) => ({ id, naziv: null, razlog: 'Render nije uspeo.' });
+    const odobrenje = (odobrene: number[], ...preskocene: number[]): OdobravanjeInfo => ({ odobrene, preskocene: preskocene.map(preskocena) });
+    const povlacenje = (vracene: number[]): PovlacenjeInfo => ({ vracene, preskocene: [] });
+    /** Klik na "Poništi" u poslednjoj poruci. */
+    const ponisti = () => poruke.at(-1)!.akcija!.run();
+
+    beforeEach(() => store.ucitaj(FILTER, null));
+
+    it('šalje celu listu i sa preskočenima; poruka sa brojevima i "Poništi"; lista iznova, ostaje prva koja je preostala', () => {
+      store.sledeca();
+      api.odobriVise.mockImplementation(() => of(odobrenje([16, 17], 18)));
+      lista(18);
+      store.odobriSve();
+
+      expect(api.odobriVise).toHaveBeenCalledExactlyOnceWith([16, 17, 18], { tiho: true });
+      expect(poruke.map(p => [p.tip, p.tekst, p.akcija?.label])).toEqual([['uspeh', 'Odobreno 2, preskočeno 1.', 'Poništi']]);
+      expect(store.ids()).toEqual([18]);
+      expect(store.trenutna()?.id).toBe(18);
+      expect(store.radi()).toBe(false);
+    });
+
+    it('prikazana koju je server preskočio ostaje prikazana', () => {
+      store.sledeca();
+      api.odobriVise.mockImplementation(() => of(odobrenje([16, 18], 17)));
+      lista(17);
+      store.odobriSve();
+      expect(store.trenutna()?.id).toBe(17);
+      expect(store.napredak()).toBe('1 / 1');
+    });
+
+    it('prikazana je odobrena, a preskočena je pre nje: preskočena se prikazuje (ne kraj)', () => {
+      store.sledeca();
+      store.sledeca();
+      expect(store.trenutna()?.id).toBe(18);
+      api.odobriVise.mockImplementation(() => of(odobrenje([17, 18], 16)));
+      lista(16);
+      store.odobriSve();
+      expect(store.kraj()).toBe(false);
+      expect(store.trenutna()?.id).toBe(16);
+    });
+
+    it('sve odobreno: kraj pregleda; original koji kopija zamenjuje izlazi sa novom listom', () => {
+      api.odobriVise.mockImplementation(() => of(odobrenje([16, 17, 18])));
+      lista();
+      store.odobriSve();
+      expect(store.kraj()).toBe(true);
+      expect(store.ids()).toEqual([]);
+    });
+
+    it('sa kraja (prikazana nije nijedna): šalje preskočene', () => {
+      store.sledeca();
+      store.sledeca();
+      store.sledeca();
+      expect(store.kraj()).toBe(true);
+      api.odobriVise.mockImplementation(() => of(odobrenje([16, 17], 18)));
+      lista(18);
+      store.odobriSve();
+      expect(api.odobriVise).toHaveBeenCalledExactlyOnceWith([16, 17, 18], { tiho: true });
+      expect(store.trenutna()?.id).toBe(18);
+    });
+
+    it('više od 200: ide prvih 200, po redu liste', () => {
+      const ids = Array.from({ length: 250 }, (_, i) => 1000 + i);
+      api.pretraga.mockImplementation((_f: unknown, s: { page: number }) =>
+        of(strana(ids.slice(s.page * 100, s.page * 100 + 100).map(id => stavka(id)), s.page, 3, 250)));
+      store.ucitaj(FILTER, null);
+      expect(store.ids()).toHaveLength(250);
+      api.odobriVise.mockImplementation(() => of(odobrenje(ids.slice(0, 200))));
+      lista(...ids.slice(200));
+      store.odobriSve();
+      expect(api.odobriVise.mock.calls[0][0]).toEqual(ids.slice(0, NAJVISE_ODOBRAVANJA));
+      expect(store.ids()).toEqual(ids.slice(200));
+    });
+
+    it('ništa odobreno: poruka bez "Poništi"', () => {
+      api.odobriVise.mockImplementation(() => of(odobrenje([], 16, 17, 18)));
+      store.odobriSve();
+      expect(poruke.map(p => [p.tekst, p.akcija])).toEqual([['Odobreno 0, preskočeno 3.', undefined]]);
+      expect(store.ids()).toEqual([16, 17, 18]);
+    });
+
+    it('dvostruki poziv šalje jedan zahtev; dok traje `radi`, a druge akcije se ne primaju', () => {
+      const odgovor = new Subject<OdobravanjeInfo>();
+      api.odobriVise.mockImplementation(() => odgovor);
+      store.odobriSve();
+      store.odobriSve();
+      store.odobri();
+      expect(api.odobriVise).toHaveBeenCalledTimes(1);
+      expect(api.odobri).not.toHaveBeenCalled();
+      expect(store.radi()).toBe(true);
+      odgovor.next(odobrenje([16, 17, 18]));
+      odgovor.complete();
+      expect(store.radi()).toBe(false);
+    });
+
+    it('samo nad nacrtima i dok se ne učitava', () => {
+      store.ucitaj({ ...FILTER, status: 'AKTIVNA' }, null);
+      store.odobriSve();
+      const odgovor = new Subject<VarijantaDetails>();
+      api.varijanta.mockImplementationOnce(() => odgovor);
+      store.ucitaj(FILTER, null);
+      expect(store.ucitava()).toBe(true);
+      store.odobriSve();
+      expect(api.odobriVise).not.toHaveBeenCalled();
+    });
+
+    it('greška: razlog servera, lista i mesto ostaju, a posle nje akcija ponovo radi', () => {
+      api.odobriVise.mockImplementationOnce((): Observable<never> => greskaServera(400, 'Najviše 200 varijanti odjednom.'));
+      store.odobriSve();
+      expect(poruke.map(p => [p.tip, p.tekst])).toEqual([['greska', 'Najviše 200 varijanti odjednom.']]);
+      expect(store.ids()).toEqual([16, 17, 18]);
+      expect(store.radi()).toBe(false);
+      api.odobriVise.mockImplementationOnce(() => of(odobrenje([16, 17, 18])));
+      store.odobriSve();
+      expect(api.odobriVise).toHaveBeenCalledTimes(2);
+    });
+
+    it('odgovor posle novog `ucitaj` se zanemaruje (bez poruke i bez nove liste)', () => {
+      const odgovor = new Subject<OdobravanjeInfo>();
+      api.odobriVise.mockImplementation(() => odgovor);
+      store.odobriSve();
+      store.ucitaj({ ...FILTER, nivo: 3 }, null);
+      api.pretraga.mockClear();
+      odgovor.next(odobrenje([16, 17, 18]));
+      odgovor.complete();
+      expect(poruke).toEqual([]);
+      expect(api.pretraga).not.toHaveBeenCalled();
+    });
+
+    describe('Poništi', () => {
+      beforeEach(() => {
+        store.sledeca();
+        api.odobriVise.mockImplementation(() => of(odobrenje([16, 17], 18)));
+        api.povuciOdobrenje.mockImplementation(() => of(povlacenje([16, 17])));
+        lista(18);
+        store.odobriSve();
+      });
+
+      it('vraća samo odobrene i čita listu iznova, od varijante koja je bila prikazana', () => {
+        lista(16, 17, 18);
+        ponisti();
+        expect(api.povuciOdobrenje).toHaveBeenCalledExactlyOnceWith([16, 17], { tiho: true });
+        expect(poruke.at(-1)?.tekst).toBe('Vraćeno u nacrte: 2.');
+        expect(store.ids()).toEqual([16, 17, 18]);
+        expect(store.trenutna()?.id).toBe(17);
+      });
+
+      it('ne zavisi od akcije u toku: `radi` ga ne odbacuje', () => {
+        const odgovor = new Subject<VarijantaDetails>();
+        api.odobri.mockImplementation(() => odgovor);
+        store.odobri();
+        expect(store.radi()).toBe(true);
+        ponisti();
+        expect(api.povuciOdobrenje).toHaveBeenCalledTimes(1);
+      });
+
+      it('greška: razlog servera, lista ostaje', () => {
+        api.povuciOdobrenje.mockImplementation((): Observable<never> => greskaServera(409, 'Varijanta je korišćena na času.'));
+        api.pretraga.mockClear();
+        ponisti();
+        expect(poruke.at(-1)).toMatchObject({ tip: 'greska', tekst: 'Varijanta je korišćena na času.' });
+        expect(api.pretraga).not.toHaveBeenCalled();
+      });
+    });
+
+    it('Poništi posle napuštanja stranice (poruka živi duže od store-a): zahtev ide, liste nema ko da čita', () => {
+      const injektor = createEnvironmentInjector([PregledNacrtaStore], TestBed.inject(EnvironmentInjector));
+      const drugi = injektor.get(PregledNacrtaStore);
+      drugi.ucitaj(FILTER, null);
+      api.odobriVise.mockImplementation(() => of(odobrenje([16, 17, 18])));
+      api.povuciOdobrenje.mockImplementation(() => of(povlacenje([16, 17, 18])));
+      drugi.odobriSve();
+      injektor.destroy();
+      api.pretraga.mockClear();
+
+      ponisti();
+      expect(api.povuciOdobrenje).toHaveBeenCalledExactlyOnceWith([16, 17, 18], { tiho: true });
+      expect(poruke.at(-1)?.tekst).toBe('Vraćeno u nacrte: 3.');
+      expect(api.pretraga).not.toHaveBeenCalled();
+      expect(drugi.ucitava()).toBe(false);
+    });
+  });
+
   describe('nivo', () => {
     beforeEach(() => store.ucitaj(FILTER, null));
 

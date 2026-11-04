@@ -216,6 +216,153 @@ describe('PrezentacijaEditorPage: Pokreni i Dupliraj čekaju čuvanje', () => {
   }));
 });
 
+describe('PrezentacijaEditorPage: Klodova izmena (409 na PUT)', () => {
+  let fixture: ComponentFixture<PrezentacijaEditorPage>;
+  let store: InstanceType<typeof EditorStore>;
+  let http: HttpTestingController;
+  let poruka: ReturnType<typeof vi.spyOn>;
+
+  const SUKOB = { reason: 'Slajd je u međuvremenu izmenjen.' };
+  const sa = (id: number, rb: number, naslov: string, verzija: number): SlajdDetails => ({ ...slajd(id, rb, naslov), verzija });
+  const dveVerzije = (prvi: SlajdDetails, drugi: SlajdDetails): PrezentacijaDetails => ({ ...prezentacija, brojSlajdova: 2, slajdovi: [prvi, drugi] });
+  const el = () => fixture.nativeElement as HTMLElement;
+  const traka = () => el().querySelector<HTMLElement>('[data-sukob]');
+  const dugme = () => el().querySelector<HTMLButtonElement>('[data-ucitaj-ponovo]');
+  const naslovForme = () => el().querySelector<HTMLInputElement>('app-slajd-forma input');
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    poruka = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+    fixture = TestBed.createComponent(PrezentacijaEditorPage);
+    store = fixture.debugElement.injector.get(EditorStore);
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush(dveVerzije(sa(11, 1, 'Uvod', 3), sa(12, 2, 'Drugi', 7)));
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    http.verify();
+    vi.restoreAllMocks();
+  });
+
+  async function sukob(): Promise<void> {
+    store.izmeniSlajd(11, info('Moje'));
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/11').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+  }
+
+  it('bez sukoba nema trake; posle 409 traka ostaje i kad se drugi slajd sačuva, a status je kratak', saLaznimSatom(async () => {
+    expect(traka()).toBeNull();
+    await sukob();
+    expect(traka()!.getAttribute('role')).toBe('alert');
+    expect(traka()!.textContent).toContain('Klod je izmenio slajd 1 dok je bio otvoren. Tvoje izmene tog slajda nisu sačuvane');
+    expect(el().querySelector('.uz-ed-status')!.textContent).toContain('Nije sačuvano');
+    expect(el().querySelectorAll('.uz-ed-stavka .uz-ed-upozorenje')).toHaveLength(1);
+
+    store.izmeniSlajd(12, info('Drugi 2'));
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/12').flush(sa(12, 2, 'Drugi 2', 7));
+    fixture.detectChanges();
+    expect(traka()).not.toBeNull();
+    expect(el().querySelector('.uz-ed-status')!.textContent).toContain('Nije sačuvano');
+  }));
+
+  it('"Učitaj ponovo": prvo PUT ostalih, pa GET; forma i lista pokazuju Klodov sadržaj, sledeća izmena nosi novu verziju', saLaznimSatom(async () => {
+    await sukob();
+    expect(naslovForme()!.value).toBe('Uvod');            // forma gradi kontrole jednom: ovde je bila izmena izvan nje
+    store.izmeniSlajd(12, info('Drugi 2'));
+    dugme()!.click();
+    const put = http.expectOne('api/slajdovi/12');
+    http.expectNone('api/prezentacije/1');
+    put.flush(sa(12, 2, 'Drugi 2', 7));
+    await isprazniMikrozadatke();
+    http.expectOne('api/prezentacije/1').flush(dveVerzije(sa(11, 1, 'Klodovo', 4), sa(12, 2, 'Drugi 2', 7)));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(traka()).toBeNull();
+    expect(naslovForme()!.value).toBe('Klodovo');
+    expect(fixture.componentInstance.imaNesacuvanihIzmena()).toBe(false);
+
+    naslovForme()!.value = 'Klodovo i moje';
+    naslovForme()!.dispatchEvent(new Event('input'));
+    await pomeriSat(800);
+    const novi = http.expectOne('api/slajdovi/11');
+    expect(novi.request.body).toMatchObject({ naslov: 'Klodovo i moje', verzija: 4 });
+    novi.flush(sa(11, 1, 'Klodovo i moje', 4));
+    await pomeriSat(800);
+  }));
+
+  it('forma slajda bez sukoba se takođe gradi iznova: sledeći PUT ne pregazi Klodovu izmenu starim sadržajem i novom verzijom', saLaznimSatom(async () => {
+    store.izaberi(12);
+    fixture.detectChanges();
+    expect(naslovForme()!.value).toBe('Drugi');
+    await sukob();
+    dugme()!.click();
+    await isprazniMikrozadatke();
+    http.expectOne('api/prezentacije/1').flush(dveVerzije(sa(11, 1, 'Klodovo', 4), sa(12, 2, 'I ovo je Klodovo', 8)));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.izabraniId()).toBe(12);
+    expect(naslovForme()!.value).toBe('I ovo je Klodovo');
+    await pomeriSat(800);
+  }));
+
+  it('fokus sa "Učitaj ponovo" ne pada na body: ide na izabrani slajd u listi', saLaznimSatom(async () => {
+    await sukob();
+    dugme()!.focus();
+    dugme()!.click();
+    await isprazniMikrozadatke();
+    http.expectOne('api/prezentacije/1').flush(dveVerzije(sa(11, 1, 'Klodovo', 4), sa(12, 2, 'Drugi', 7)));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(el().querySelector('.uz-ed-stavka-dugme[aria-current="true"]'));
+    await pomeriSat(800);
+  }));
+
+  it('nepotpun drugi slajd zaustavlja ponovno učitavanje: poruka kaže zašto, traka i izmene ostaju', saLaznimSatom(async () => {
+    await sukob();
+    store.dodaj('INFO');
+    dugme()!.click();
+    await isprazniMikrozadatke();
+    fixture.detectChanges();
+    expect(poruka).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Ponovno učitavanje je zaustavljeno: '));
+    expect(traka()).not.toBeNull();
+    expect(store.slajdovi()[0].naslov).toBe('Moje');
+    expect((fixture.componentInstance as unknown as { radi(): boolean }).radi()).toBe(false);
+    await pomeriSat(800);
+  }));
+
+  it('napuštanje: pita sa tekstom o sukobu, a posle "Učitaj ponovo" više ne pita', saLaznimSatom(async () => {
+    const editor = fixture.componentInstance;
+    await sukob();
+    expect(editor.imaNesacuvanihIzmena()).toBe(true);
+    expect(editor.tekstNapustanja()).toBe('Klod je izmenio slajd 1 dok je bio otvoren. Ako napustiš editor, tvoje izmene tog slajda se gube.');
+    dugme()!.click();
+    await isprazniMikrozadatke();
+    http.expectOne('api/prezentacije/1').flush(dveVerzije(sa(11, 1, 'Klodovo', 4), sa(12, 2, 'Drugi', 7)));
+    expect(editor.imaNesacuvanihIzmena()).toBe(false);
+    expect(editor.tekstNapustanja()).toBe('');
+    await pomeriSat(800);
+  }));
+
+  it('Pokreni uz sukob staje sa porukom, bez zahteva', saLaznimSatom(async () => {
+    await sukob();
+    (fixture.componentInstance as unknown as { pokreni(): void }).pokreni();
+    await isprazniMikrozadatke();
+    expect(poruka).toHaveBeenCalledExactlyOnceWith('Pokretanje je zaustavljeno: Klod je izmenio slajd 1 dok je bio otvoren.');
+    await pomeriSat(800);
+  }));
+});
+
 describe('PrezentacijaEditorPage: PLATNO i tema', () => {
   let fixture: ComponentFixture<PrezentacijaEditorPage>;
   let http: HttpTestingController;

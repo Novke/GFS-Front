@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject } from '@angular/core';
+import { computed, DestroyRef, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withProps, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, concatMap, defer, EMPTY, exhaustMap, finalize, map, Observable, of, pipe, switchMap, tap } from 'rxjs';
@@ -8,7 +8,9 @@ import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { sRecju } from '../../../shared/util/mnozina';
 import { BankaApi } from './banka.api';
-import { BankaFilter, BankaPretragaStavka, IzvorVarijante, NIVOI, PonistavanjeInfo, StatusVarijante, VarijantaDetails } from './banka.models';
+import {
+  BankaFilter, BankaPretragaStavka, IzvorVarijante, NIVOI, OdobravanjeInfo, PonistavanjeInfo, PovlacenjeInfo, StatusVarijante, VarijantaDetails,
+} from './banka.models';
 import { razlogBanke, TIHO, UPIS } from './greske';
 import { PromeneNivoa } from './promene-nivoa';
 
@@ -17,6 +19,8 @@ const VELICINA_STRANE = 100;
 const MAX_STRANA = 10;
 /** Najviše varijanti u pregledu (preko toga je `skraceno`). */
 export const NAJVISE_U_PREGLEDU = VELICINA_STRANE * MAX_STRANA;
+/** Najviše id-jeva u jednom `POST banka/varijante/odobri-vise` (ograničenje servera). */
+export const NAJVISE_ODOBRAVANJA = 200;
 /**
  * Redosled pregleda: kako su nastale (Klod piše seriju redom, zad. 1, 2, 3...), i stalan dok se pregleda. Podrazumevani sort
  * pretrage (`izmenjeno` opadajuće) bi izmenjenu varijantu (Uredi, pa nazad sa `od`) pomerio na prvo mesto i vratio preskočene posle nje.
@@ -101,6 +105,17 @@ export function porukaOdbacivanja(info: PonistavanjeInfo): string {
   return info.preskoceno.length > 0 ? `${poruka} Preskočeno: ${info.preskoceno.length}.` : poruka;
 }
 
+/** "Odobreno 5, preskočeno 1." */
+export function porukaOdobravanja(info: OdobravanjeInfo): string {
+  return `Odobreno ${info.odobrene.length}, preskočeno ${info.preskocene.length}.`;
+}
+
+/** "Vraćeno u nacrte: 5." (i " Preskočeno: N." kad server nešto nije vratio). */
+export function porukaPovlacenja(info: PovlacenjeInfo): string {
+  const poruka = `Vraćeno u nacrte: ${info.vracene.length}.`;
+  return info.preskocene.length > 0 ? `${poruka} Preskočeno: ${info.preskocene.length}.` : poruka;
+}
+
 interface PregledState {
   /** Filter poslednjeg `ucitaj` (`null` pre prvog). */
   filter: PregledFilter | null;
@@ -113,7 +128,7 @@ interface PregledState {
   original: VarijantaDetails | null;
   /** Učitava se lista ili prikazana varijanta. */
   ucitava: boolean;
-  /** Akcija (odobri, obriši, odbaci seriju) je u toku: druga se ne prima (dvostruki taster ili klik). */
+  /** Akcija (odobri, odobri sve, obriši, odbaci seriju) je u toku: druga se ne prima (dvostruki taster ili klik). */
   radi: boolean;
   /** Razlog neuspelog učitavanja liste ili varijante ("Pokušaj ponovo" je `ucitajPonovo`). */
   greska: string | null;
@@ -131,7 +146,7 @@ interface PregledState {
  * kopija (`zamenjuje`), njen original. Početak je `od` ({@link pocetakPregleda}: ili prva posle nje kad je izašla iz liste).
  * Posle odobravanja ili brisanja varijanta izlazi iz liste i prikazuje se sledeća (na istom mestu); `sledeca` posle
  * poslednje daje `kraj`. Varijanta koje u međuvremenu više nema (404) se preskače. Akcije idu jedna po jedna (`radi`), a
- * odgovor akcije posle novog `ucitaj` se zanemaruje. Greške učitavanja su u `greska`, greške akcija idu u `NotificationStore` (`razlogBanke`). Feature store:
+ * odgovor akcije posle novog `ucitaj` se zanemaruje. "Odobri sve" (`odobriSve`) šalje učitanu listu odjednom. Greške učitavanja su u `greska`, greške akcija idu u `NotificationStore` (`razlogBanke`). Feature store:
  * provajduje ga stranica pregleda.
  */
 export const PregledNacrtaStore = signalStore(
@@ -157,6 +172,7 @@ export const PregledNacrtaStore = signalStore(
     napredak: computed(() => (indeks() < ids().length ? `${indeks() + 1} / ${ids().length}` : '')),
   })),
   withMethods(store => {
+    const stranica = inject(DestroyRef);
     /** Raste sa svakim `ucitaj`: odgovor akcije iz prethodne liste se ne primenjuje na novu. */
     let generacija = 0;
 
@@ -282,6 +298,24 @@ export const PregledNacrtaStore = signalStore(
       ),
     );
 
+    /**
+     * "Poništi" posle "Odobri sve": varijante nazad u nacrte, pa lista od `od` (mesto pre odobravanja). Ide mimo `akcija`:
+     * poruka živi duže od stranice (`rxMethod` uništenog store-a tiho ne radi ništa), a `exhaustMap` bi ga odbacio dok traje druga
+     * akcija, pa bi varijante ostale aktivne bez ikakve poruke.
+     */
+    const ponistiOdobravanje = (ids: number[], od: number | null): void => {
+      store._api.povuciOdobrenje(ids, TIHO).subscribe({
+        next: info => {
+          store._obavestenja.uspeh(porukaPovlacenja(info));
+          const f = store.filter();
+          if (f && !stranica.destroyed) {
+            ucitaj(f, od);
+          }
+        },
+        error: (e: unknown) => store._obavestenja.greska(razlogBanke(e, UPIS)),
+      });
+    };
+
     /** Promene nivoa u letu (kao u `BankaStore`): optimistična izmena, pa vraćanje na potvrđeni nivo ({@link PromeneNivoa}). */
     const nivoi = new PromeneNivoa();
     const postaviNivo = (id: number, nivo: number): void =>
@@ -354,6 +388,30 @@ export const PregledNacrtaStore = signalStore(
           akcija({
             poziv: store._api.odobri(v.id, TIHO),
             posle: () => (v.zamenjuje === null ? ukloni(v.id) : ukloni(v.id, v.zamenjuje)),
+          });
+        }
+      },
+      /**
+       * "Odobri sve" (potvrdu traži stranica): `POST banka/varijante/odobri-vise` za prvih {@link NAJVISE_ODOBRAVANJA} iz liste,
+       * i za preskočene. Lista se čita iznova (odobrene i originali koje zamenjuju izlaze), od prikazane ako je server preskočio
+       * nju, a inače od prve koja je ostala: ostale su baš one koje treba pregledati, pa ne smeju da ostanu iza kraja. Poruka nosi
+       * "Poništi" kad je nešto odobreno.
+       */
+      odobriSve(): void {
+        const f = store.filter();
+        const ids = store.ids().slice(0, NAJVISE_ODOBRAVANJA);
+        if (f?.status === 'NACRT' && ids.length > 0 && !store.radi() && !store.ucitava()) {
+          const prikazana = store.trenutna()?.id ?? store.ids()[store.indeks()] ?? null;
+          akcija({
+            poziv: store._api.odobriVise(ids, TIHO),
+            posle: odgovor => {
+              const info = odgovor as OdobravanjeInfo;
+              store._obavestenja.uspeh(
+                porukaOdobravanja(info),
+                info.odobrene.length > 0 ? { label: 'Poništi', run: () => ponistiOdobravanje(info.odobrene, prikazana) } : undefined,
+              );
+              ucitaj(f, prikazana !== null && info.odobrene.includes(prikazana) ? null : prikazana);
+            },
           });
         }
       },

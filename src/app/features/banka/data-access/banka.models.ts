@@ -368,6 +368,25 @@ export interface PonistavanjeInfo {
   preskoceno: StavkaPonistavanja[];
 }
 
+/** Varijanta koju grupna radnja nije menjala (neuspeo render, nepotpuni odgovori...), sa razlogom servera. */
+export interface PreskocenaVarijanta {
+  id: number;
+  naziv: string | null;
+  razlog: string;
+}
+
+/** Odgovor `POST banka/varijante/odobri-vise`. */
+export interface OdobravanjeInfo {
+  odobrene: number[];
+  preskocene: PreskocenaVarijanta[];
+}
+
+/** Odgovor `POST banka/varijante/povuci-odobrenje`. */
+export interface PovlacenjeInfo {
+  vracene: number[];
+  preskocene: PreskocenaVarijanta[];
+}
+
 // ------------------------------------------------------------------------------------------------ isključene teme
 
 /** `POST predmeti/{id}/iskljucene-teme`: tema nad grupom (isključuje i celo podstablo) ili samo opis (`grupaId: null`). */

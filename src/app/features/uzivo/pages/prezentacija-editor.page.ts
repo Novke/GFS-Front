@@ -103,6 +103,14 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </div>
         }
 
+        @if (store.porukaSukoba(); as sukob) {
+          <div class="uz-ed-traka uz-ed-traka--sukob" role="alert" data-sukob>
+            <mat-icon aria-hidden="true" svgIcon="error" />
+            <span>{{ sukob }} Tvoje izmene {{ tihSlajdova() }} nisu sačuvane: „Učitaj ponovo“ ih odbacuje, a izmene ostalih slajdova prvo čuva.</span>
+            <button mat-flat-button type="button" [disabled]="radi()" disabledInteractive (click)="ucitajPonovo()" data-ucitaj-ponovo>Učitaj ponovo</button>
+          </div>
+        }
+
         <mat-expansion-panel class="uz-ed-podesavanja">
           <mat-expansion-panel-header>
             <mat-panel-title>Podešavanja</mat-panel-title>
@@ -173,7 +181,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                     <span class="uz-ed-rb">{{ s.rb }}</span>
                     <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)" [svgIcon]="ikona(s)" />
                     <span class="uz-ed-oznaka">{{ oznaka(s) }}</span>
-                    @if (store.neispravni().has(s.id) || s.id < 0) {
+                    @if (store.neispravni().has(s.id) || s.id < 0 || store.sukobi().includes(s.id)) {
                       <mat-icon class="uz-ed-upozorenje" aria-label="Nije sačuvan" title="Nije sačuvan" svgIcon="error" />
                     }
                   </button>
@@ -222,9 +230,10 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
           </mat-menu>
 
           <section class="uz-ed-sredina" aria-label="Izabrani slajd">
-            @for (s of izabraniNiz(); track store.kljuc(s.id) + ':' + s.tip) {
+            @for (x of izabraniNiz(); track store.kljuc(x.s.id) + ':' + x.s.tip + ':' + x.obnova) {
+              @let s = x.s;
               <!-- jedna instanca editora po slajdu (track kljuc: ista i kad nacrt dobije pravi id); lenj chunk; promena tipa
-                   (Pretvori u platno, Poništi) pravi novu formu i editor, jer forma gradi kontrole jednom -->
+                   (Pretvori u platno, Poništi) i čitanje sa servera (obnova) prave novu formu i editor, jer forma gradi kontrole jednom -->
               @if (s.tip === 'PLATNO' && s.platno) {
                 @defer (on immediate) {
                   <app-platno-editor [slajd]="s" [tema]="vazeca(p.tema)" />
@@ -310,12 +319,18 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly aktivno = signal<IzvodjenjeInfo | null>(null);
   /** Traje radnja nad celom prezentacijom (pokretanje, dupliranje, brisanje, uvoz). */
   protected readonly radi = signal(false);
+  /** `obnova` je u samoj stavci: @for ključ stare stavke računa tek pri poređenju, pa bi globalni signal dao isti ključ i staroj i novoj. */
   protected readonly izabraniNiz = computed(() => {
     const s = this.store.izabrani();
-    return s ? [s] : [];
+    return s ? [{ s, obnova: this.store.obnova() }] : [];
   });
-  protected readonly statusTekst = computed(() =>
-    this.store.cuvanje() === 'greska' ? this.store.greska() ?? 'Greška pri čuvanju.' : STATUS[this.store.cuvanje()]);
+  protected readonly tihSlajdova = computed(() => (this.store.sukobi().length === 1 ? 'tog slajda' : 'tih slajdova'));
+  /** Sukob je u traci ispod zaglavlja, pa ovde samo kratko. */
+  protected readonly statusTekst = computed(() => {
+    const greska = this.store.greska();
+    if (this.store.cuvanje() !== 'greska') return STATUS[this.store.cuvanje()];
+    return greska !== null && greska === this.store.porukaSukoba() ? 'Nije sačuvano' : greska ?? 'Greška pri čuvanju.';
+  });
   protected readonly opisPodesavanja = computed(() => {
     const p = this.store.prezentacija();
     if (!p) return '';
@@ -342,6 +357,21 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
       const pretplata = untracked(() => this.izvodjenja.lista(id, 'AKTIVNO'))
         .subscribe({ next: l => this.aktivno.set(l[0] ?? null), error: () => this.aktivno.set(null) });
       onCleanup(() => pretplata.unsubscribe());
+    });
+    // traka sukoba nestaje sa fokusom na "Učitaj ponovo": fokus koji je pao na body ide na izabrani slajd u listi
+    let biloSukoba = false;
+    effect(() => {
+      const ima = this.store.porukaSukoba() !== null;
+      untracked(() => {
+        if (biloSukoba && !ima) {
+          afterNextRender(() => {
+            if (document.activeElement === document.body) {
+              this.host.nativeElement.querySelector<HTMLElement>('.uz-ed-stavka-dugme[aria-current="true"]')?.focus();
+            }
+          }, { injector: this.injector });
+        }
+        biloSukoba = ima;
+      });
     });
     // Poslednja mrvica: naziv prezentacije (prati i izmenu naziva u zaglavlju).
     effect(() => {
@@ -376,7 +406,7 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
 
   /** Za `unsavedChangesGuard` (`canDeactivate`): potvrda kroz `ConfirmDialog` samo kad ima šta da se izgubi. */
   imaNesacuvanihIzmena(): boolean {
-    return this.nesacuvaniSlajdovi() > 0 || !!this.uvozUToku();
+    return this.nesacuvaniSlajdovi() > 0 || !!this.uvozUToku() || this.store.porukaSukoba() !== null;
   }
 
   tekstNapustanja(): string {
@@ -396,6 +426,8 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
       delovi.push(`Nesačuvanih slajdova: ${novi + postojeci} (nisu potpuni, vidi upozorenja u listi). `
         + `Ako napustiš editor, ${posledice.join(', ')}.`);
     }
+    const sukob = this.store.porukaSukoba();
+    if (sukob) delovi.push(`${sukob} Ako napustiš editor, tvoje izmene ${this.tihSlajdova()} se gube.`);
     return delovi.join(' ');
   }
 
@@ -501,6 +533,23 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     } finally {
       if (!dalje) kraj();
     }
+  }
+
+  /**
+   * "Učitaj ponovo" posle sukoba: izmene ostalih slajdova se prvo čuvaju, pa čitanje odbacuje samo izmene slajdova u sukobu.
+   * Ako neki drugi slajd ne može da se sačuva (npr. nepotpun), ništa se ne odbacuje i poruka kaže zašto.
+   */
+  protected ucitajPonovo(): void {
+    const p = this.store.prezentacija();
+    if (!p || this.radi()) return;
+    this.radi.set(true);
+    this.store.sacuvajOstale().subscribe({
+      next: () => {
+        this.radi.set(false);
+        this.store.ucitaj(p.id);
+      },
+      error: e => this.neuspeh(e, 'Izmene nisu sačuvane.', 'Ponovno učitavanje je zaustavljeno'),
+    });
   }
 
   /** Posle sledećeg crtanja fokus na `selektor` u stranici, ako je slajd `k` i dalje izabran (inače bi otišao na drugi). */

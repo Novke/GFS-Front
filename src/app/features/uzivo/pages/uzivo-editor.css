@@ -266,8 +266,22 @@ p.uz-ed-upozorenje {
   color: var(--primary-soft-ink);
 }
 
-.uz-ed-traka > a {
+.uz-ed-traka > a,
+.uz-ed-traka > button {
   margin-left: auto;
+}
+
+.uz-ed-traka--sukob {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.uz-ed-traka--sukob > span {
+  flex: 1 1 320px;
+}
+
+.uz-ed-traka .mat-icon {
+  flex: none;
 }
 
 .uz-ed-podesavanja-telo {

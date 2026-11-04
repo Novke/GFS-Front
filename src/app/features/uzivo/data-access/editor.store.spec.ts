@@ -1071,3 +1071,397 @@ describe('EditorStore: ZADATAK', () => {
     put.flush(zadatakSlajd({ brojVarijanti: 3 }));
   }));
 });
+
+describe('EditorStore: verzija slajda i Klodova izmena', () => {
+  let store: InstanceType<typeof EditorStore>;
+  let http: HttpTestingController;
+  let registar: RegistarCuvanja;
+  let nesacuvane: NesacuvaneIzmene;
+
+  const SUKOB = { reason: 'Slajd je u međuvremenu izmenjen.' };
+  const sa = (id: number, rb: number, verzija: number, naslov = `Slajd ${id}`): SlajdDetails => ({ ...slajd(id, rb, naslov), verzija });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [EditorStore, provideHttpClient(), provideHttpClientTesting()] });
+    store = TestBed.inject(EditorStore);
+    http = TestBed.inject(HttpTestingController);
+    registar = TestBed.inject(RegistarCuvanja);
+    nesacuvane = TestBed.inject(NesacuvaneIzmene);
+  });
+
+  afterEach(() => http.verify());
+
+  function ucitaj(slajdovi = [sa(11, 1, 3), sa(12, 2, 7)]): void {
+    store.ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush(prezentacija(slajdovi));
+  }
+
+  /** Izmena slajda 11, pa 409 servera: slajd je u sukobu. */
+  async function sukobNa11(): Promise<void> {
+    store.izmeniSlajd(11, info('Moje'));
+    await pomeriSat(800);
+    http.expectOne('api/slajdovi/11').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+  }
+
+  describe('slanje', () => {
+    it('PUT nosi verziju učitanog slajda', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(12, info('B'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/12');
+      expect(put.request.body.verzija).toBe(7);
+      put.flush(sa(12, 2, 7, 'B'));
+    }));
+
+    it('slajd bez verzije (stari odgovor) šalje `verzija: null`, ključ postoji', saLaznimSatom(async () => {
+      ucitaj([slajd(11, 1)]);
+      store.izmeniSlajd(11, info('A'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/11');
+      expect(put.request.body).toHaveProperty('verzija', null);
+      put.flush(slajd(11, 1, 'A'));
+    }));
+
+    it('ista verzija preko više čuvanja i otkazanog zahteva (nastavnikov upis je ne menja)', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Prvo'));
+      await pomeriSat(800);
+      const otkazan = http.expectOne('api/slajdovi/11');
+      expect(otkazan.request.body.verzija).toBe(3);
+      store.izmeniSlajd(11, info('Drugo'));
+      await pomeriSat(800);
+      expect(otkazan.cancelled).toBe(true);
+      const drugi = http.expectOne('api/slajdovi/11');
+      expect(drugi.request.body).toMatchObject({ naslov: 'Drugo', verzija: 3 });
+      drugi.flush(sa(11, 1, 3, 'Drugo'));
+      store.izmeniSlajd(11, info('Treće'));
+      await pomeriSat(800);
+      const treci = http.expectOne('api/slajdovi/11');
+      expect(treci.request.body).toMatchObject({ naslov: 'Treće', verzija: 3 });
+      treci.flush(sa(11, 1, 3, 'Treće'));
+    }));
+
+    it('nacrt: POST bez verzije, a sledeći PUT sa verzijom iz odgovora, i kad je izmena stigla dok je POST trajao', saLaznimSatom(async () => {
+      ucitaj();
+      store.dodaj('INFO');
+      const nacrt = store.izabraniId()!;
+      store.izmeniSlajd(nacrt, info('Nov'));
+      store.sacuvajOdmah();
+      const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+      expect(post.request.body).not.toHaveProperty('verzija');
+      store.izmeniSlajd(nacrt, info('Nov 2'));
+      post.flush(sa(30, 2, 5, 'Nov'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/30');
+      expect(put.request.body).toMatchObject({ naslov: 'Nov 2', verzija: 5 });
+      put.flush(sa(30, 2, 5, 'Nov 2'));
+    }));
+
+    it('dupliranje nesačuvanog slajda: POST bez verzije; dupliranje sačuvanog: server kopira, verzija kopije važi za njen PUT', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Lokalno'));
+      store.dupliraj(11);
+      const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+      expect(post.request.body).not.toHaveProperty('verzija');
+      http.expectOne('api/slajdovi/11').flush(sa(11, 1, 3, 'Lokalno'));
+      post.flush(sa(30, 2, 0, 'Lokalno'));
+      await pomeriSat(800);
+
+      store.dupliraj(12);
+      http.expectOne('api/slajdovi/12/dupliraj').flush(sa(31, 4, 9));
+      store.izmeniSlajd(31, info('Kopija'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/31');
+      expect(put.request.body.verzija).toBe(9);
+      put.flush(sa(31, 4, 9, 'Kopija'));
+    }));
+
+    it('primeniUvoz: slajd sa izmenom na čekanju ostaje na učitanoj verziji, ostali uzimaju novu; uvezen slajd nosi svoju', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Moje'));
+      store.primeniUvoz(prezentacija([sa(11, 1, 4), sa(12, 2, 8), sa(30, 3, 1)]));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/11');
+      expect(put.request.body.verzija).toBe(3);
+      put.flush(sa(11, 1, 3, 'Moje'));
+      store.izmeniSlajd(12, info('B'));
+      await pomeriSat(800);
+      const drugi = http.expectOne('api/slajdovi/12');
+      expect(drugi.request.body.verzija).toBe(8);
+      drugi.flush(sa(12, 2, 8, 'B'));
+    }));
+
+    it('sacuvajPreIzlaska: PUT nosi verziju, i kad editor napušta novu prezentaciju', () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Pre izlaska'));
+      store.ucitaj(2);
+      http.expectOne('api/prezentacije/2').flush({ ...prezentacija([sa(21, 1, 1)]), id: 2 });
+      const put = http.expectOne('api/slajdovi/11');
+      expect(put.request.body).toMatchObject({ naslov: 'Pre izlaska', verzija: 3 });
+      put.flush(sa(11, 1, 3, 'Pre izlaska'));
+    });
+
+    it('izmena nacrta stigla dok POST traje, pa prelaz na drugu prezentaciju: PUT posle POST-a nosi verziju iz odgovora', () => {
+      ucitaj();
+      store.dodaj('INFO');
+      const nacrt = store.izabraniId()!;
+      store.izmeniSlajd(nacrt, info('Nov'));
+      store.sacuvajOdmah();
+      const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+      store.izmeniSlajd(nacrt, info('Nov 2'));
+      store.ucitaj(2);
+      http.expectOne('api/prezentacije/2').flush({ ...prezentacija([sa(21, 1, 1)]), id: 2 });
+      post.flush(sa(30, 2, 5, 'Nov'));
+      const put = http.expectOne('api/slajdovi/30');
+      expect(put.request.body).toMatchObject({ naslov: 'Nov 2', verzija: 5 });
+      put.flush(sa(30, 2, 5, 'Nov 2'));
+    });
+
+    it('izmena nacrta stigla dok POST traje, pa napušten editor: PUT posle POST-a nosi verziju iz odgovora', () => {
+      const injektor = createEnvironmentInjector([EditorStore], TestBed.inject(EnvironmentInjector));
+      const drugi = injektor.get(EditorStore);
+      drugi.ucitaj(1);
+      http.expectOne('api/prezentacije/1').flush(prezentacija([sa(11, 1, 3)]));
+      drugi.dodaj('INFO');
+      const nacrt = drugi.izabraniId()!;
+      drugi.izmeniSlajd(nacrt, info('Nov'));
+      drugi.sacuvajOdmah();
+      const post = http.expectOne(r => r.url === 'api/prezentacije/1/slajdovi');
+      drugi.izmeniSlajd(nacrt, info('Nov 2'));
+      injektor.destroy();
+      post.flush(sa(30, 2, 5, 'Nov'));
+      const put = http.expectOne('api/slajdovi/30');
+      expect(put.request.body).toMatchObject({ naslov: 'Nov 2', verzija: 5 });
+      put.flush(sa(30, 2, 5, 'Nov 2'));
+    });
+  });
+
+  describe('409: Klod je izmenio slajd', () => {
+    it('poruka ostaje, slajd se više ne šalje (ni nova izmena, ni Ctrl+S, ni promena izbora)', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      expect(store.sukobi()).toEqual([11]);
+      expect(store.porukaSukoba()).toBe('Klod je izmenio slajd 1 dok je bio otvoren.');
+      expect(store.greska()).toBe('Klod je izmenio slajd 1 dok je bio otvoren.');
+      expect(store.cuvanje()).toBe('greska');
+
+      store.izmeniSlajd(11, info('Još moje'));
+      await pomeriSat(800);
+      store.sacuvajOdmah();
+      store.izaberi(12);
+      await pomeriSat(800);
+      http.expectNone('api/slajdovi/11');
+      expect(store.slajdovi()[0].naslov).toBe('Još moje');
+      expect(store.imaNesacuvano()).toBe(true);
+      expect(nesacuvane.broj()).toBeGreaterThan(0);
+    }));
+
+    it('ostali slajdovi se čuvaju, a njihov uspeh ne briše poruku o sukobu', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/12');
+      expect(put.request.body).toMatchObject({ naslov: 'Drugi', verzija: 7 });
+      put.flush(sa(12, 2, 7, 'Drugi'));
+      expect(store.sukobi()).toEqual([11]);
+      expect(store.greska()).toBe('Klod je izmenio slajd 1 dok je bio otvoren.');
+      expect(store.cuvanje()).toBe('greska');
+    }));
+
+    it('dva slajda u sukobu: jedna poruka sa oba broja', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+      await pomeriSat(800);
+      http.expectOne('api/slajdovi/12').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+      expect(store.porukaSukoba()).toBe('Klod je izmenio slajdove 1, 2 dok su bili otvoreni.');
+    }));
+
+    it('drugi 409 nije sukob: obična greška čuvanja, sledeća izmena se šalje', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('A'));
+      await pomeriSat(800);
+      http.expectOne('api/slajdovi/11').flush({ reason: 'Izvođenje je u toku.' }, { status: 409, statusText: 'Conflict' });
+      expect(store.sukobi()).toEqual([]);
+      expect(store.greska()).toBe('Izvođenje je u toku.');
+      store.izmeniSlajd(11, info('B'));
+      await pomeriSat(800);
+      http.expectOne('api/slajdovi/11').flush(sa(11, 1, 3, 'B'));
+      expect(store.greska()).toBeNull();
+    }));
+
+    it('sacuvajSve ne visi na slajdu u sukobu: greška sa porukom (Pokreni i uvoz staju)', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      const greska = vi.fn();
+      store.sacuvajSve().subscribe({ error: greska });
+      await isprazniMikrozadatke();
+      expect(greska).toHaveBeenCalledOnce();
+      expect(greska.mock.calls[0][0]).toBeInstanceOf(NijeSacuvano);
+      expect(greska.mock.calls[0][0].message).toBe('Klod je izmenio slajd 1 dok je bio otvoren.');
+    }));
+
+    it('sacuvajSve čija izmena dobije 409: greška, bez ponovnog slanja', saLaznimSatom(async () => {
+      ucitaj();
+      store.izmeniSlajd(11, info('Moje'));
+      const greska = vi.fn();
+      store.sacuvajSve().subscribe({ error: greska });
+      http.expectOne('api/slajdovi/11').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+      await isprazniMikrozadatke();
+      expect(greska.mock.calls[0][0].message).toBe('Klod je izmenio slajd 1 dok je bio otvoren.');
+      await pomeriSat(800);
+      http.expectNone('api/slajdovi/11');
+    }));
+
+    it('sacuvajPreIzlaska ne šalje slajd u sukobu, a ostale šalje', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+      store.sacuvajPreIzlaska();
+      http.expectNone('api/slajdovi/11');
+      http.expectOne('api/slajdovi/12').flush(sa(12, 2, 7, 'Drugi'));
+      await pomeriSat(800);
+    }));
+
+    it('409 kad editor više nije na ekranu: globalna poruka sa razlogom servera', () => {
+      const poruka = vi.spyOn(TestBed.inject(NotificationStore), 'greska');
+      ucitaj();
+      store.izmeniSlajd(11, info('Pre izlaska'));
+      store.ucitaj(2);
+      http.expectOne('api/prezentacije/2').flush({ ...prezentacija([sa(21, 1, 1)]), id: 2 });
+      http.expectOne('api/slajdovi/11').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+      expect(poruka).toHaveBeenCalledExactlyOnceWith('Izmena slajda nije sačuvana: Slajd je u međuvremenu izmenjen.', expect.anything());
+      expect(store.sukobi()).toEqual([]);
+      vi.restoreAllMocks();
+    });
+
+    it('obrisan slajd u sukobu ne drži poruku; Pokreni posle toga prolazi', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.obrisi(11);
+      http.expectOne('api/slajdovi/11').flush(null, { status: 204, statusText: 'No Content' });
+      expect(store.porukaSukoba()).toBeNull();
+      expect(store.greska()).toBeNull();
+      const kraj = vi.fn();
+      store.sacuvajSve().subscribe(kraj);
+      await isprazniMikrozadatke();
+      expect(kraj).toHaveBeenCalledOnce();
+    }));
+  });
+
+  describe('Učitaj ponovo (sacuvajOstale, pa ucitaj)', () => {
+    it('čuva izmene ostalih slajdova, pa čita; lokalne izmene sukoba nestaju, nova verzija važi', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+
+      const kraj = vi.fn();
+      store.sacuvajOstale().subscribe(kraj);
+      const put = http.expectOne('api/slajdovi/12');
+      expect(put.request.body.naslov).toBe('Drugi');
+      expect(kraj).not.toHaveBeenCalled();
+      put.flush(sa(12, 2, 7, 'Drugi'));
+      await isprazniMikrozadatke();
+      expect(kraj).toHaveBeenCalledOnce();
+
+      store.ucitaj(1);
+      expect(store.sukobi()).toEqual([11]);
+      http.expectOne('api/prezentacije/1').flush(prezentacija([sa(11, 1, 4, 'Klodovo'), sa(12, 2, 7, 'Drugi')]));
+      expect(store.sukobi()).toEqual([]);
+      expect(store.porukaSukoba()).toBeNull();
+      expect(store.greska()).toBeNull();
+      expect(store.cuvanje()).toBe('miruje');
+      expect(store.imaNesacuvano()).toBe(false);
+      expect(store.slajdovi()[0].naslov).toBe('Klodovo');
+      await pomeriSat(800);
+      http.expectNone('api/slajdovi/11');
+      expect(nesacuvane.broj()).toBe(0);
+
+      store.izmeniSlajd(11, info('Posle'));
+      await pomeriSat(800);
+      const novi = http.expectOne('api/slajdovi/11');
+      expect(novi.request.body).toMatchObject({ naslov: 'Posle', verzija: 4 });
+      novi.flush(sa(11, 1, 4, 'Posle'));
+    }));
+
+    it('nepotpun drugi slajd: `sacuvajOstale` je greška, ništa se ne odbacuje', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.dodaj('INFO');
+      const greska = vi.fn();
+      store.sacuvajOstale().subscribe({ error: greska });
+      await isprazniMikrozadatke();
+      expect(greska.mock.calls[0][0]).toBeInstanceOf(NijeSacuvano);
+      expect(store.sukobi()).toEqual([11]);
+      expect(store.slajdovi()[0].naslov).toBe('Moje');
+    }));
+
+    it('nov sukob dok se ostali čuvaju: greška, da se njegove izmene ne odbace bez reči', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+      const greska = vi.fn();
+      store.sacuvajOstale().subscribe({ error: greska });
+      http.expectOne('api/slajdovi/12').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+      await isprazniMikrozadatke();
+      expect(greska.mock.calls[0][0].message).toBe('Klod je izmenio slajdove 1, 2 dok su bili otvoreni.');
+      expect(store.sukobi()).toEqual([11, 12]);
+    }));
+
+    it('izmena slajda u sukobu dok čitanje traje se ne šalje ni posle odgovora', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.ucitaj(1);
+      const get = http.expectOne('api/prezentacije/1');
+      store.izmeniSlajd(11, info('Kasno'));
+      await pomeriSat(300);
+      get.flush(prezentacija([sa(11, 1, 4, 'Klodovo'), sa(12, 2, 7)]));
+      await pomeriSat(800);
+      http.expectNone('api/slajdovi/11');
+      expect(store.slajdovi()[0].naslov).toBe('Klodovo');
+      expect(store.imaNesacuvano()).toBe(false);
+    }));
+
+    it('otvoren dokument editora platna ide u slajd pre zamene: instanca koja nestaje ne preda ništa sveže učitanom slajdu', saLaznimSatom(async () => {
+      const dokument = platnoFabrika();
+      ucitaj([{ ...slajd(11, 1), tip: 'PLATNO', platno: platnoFabrika(), verzija: 3 }]);
+      store.izmeniPlatno(11, dokument);
+      await pomeriSat(800);
+      http.expectOne('api/slajdovi/11').flush(SUKOB, { status: 409, statusText: 'Conflict' });
+      store.ucitaj(1);
+      const otkucano = { ...dokument, slojevi: [] };
+      const odjava = store.registrujPraznjenje(() => store.izmeniPlatno(11, otkucano));
+      http.expectOne('api/prezentacije/1').flush(prezentacija([{ ...slajd(11, 1), tip: 'PLATNO', platno: platnoFabrika(), verzija: 4 }]));
+      odjava();
+      await pomeriSat(800);
+      http.expectNone('api/slajdovi/11');
+      expect(store.imaNesacuvano()).toBe(false);
+    }));
+
+    it('`obnova` raste sa svakim čitanjem, a ne sa čuvanjem (forma se ne gradi iznova posle PUT-a)', saLaznimSatom(async () => {
+      ucitaj();
+      const posleCitanja = store.obnova();
+      store.izmeniSlajd(11, info('A'));
+      await pomeriSat(800);
+      http.expectOne('api/slajdovi/11').flush(sa(11, 1, 3, 'A'));
+      expect(store.obnova()).toBe(posleCitanja);
+      store.ucitaj(1);
+      http.expectOne('api/prezentacije/1').flush(prezentacija([sa(11, 1, 3, 'A'), sa(12, 2, 7)]));
+      expect(store.obnova()).toBe(posleCitanja + 1);
+    }));
+
+    it('čeka zahtev u letu pre čitanja (registar), pa odgovor ne kasni iza upisa', saLaznimSatom(async () => {
+      ucitaj();
+      await sukobNa11();
+      store.izmeniSlajd(12, info('Drugi'));
+      await pomeriSat(800);
+      const put = http.expectOne('api/slajdovi/12');
+      expect(registar.zauzet('prezentacija-1')).toBe(true);
+      store.ucitaj(1);
+      http.expectNone('api/prezentacije/1');
+      put.flush(sa(12, 2, 7, 'Drugi'));
+      http.expectOne('api/prezentacije/1').flush(prezentacija([sa(11, 1, 4), sa(12, 2, 7, 'Drugi')]));
+    }));
+  });
+});

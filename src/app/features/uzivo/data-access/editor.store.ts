@@ -1,4 +1,5 @@
 import { moveItemInArray } from '@angular/cdk/drag-drop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -28,12 +29,23 @@ export interface EditorState {
   izabraniId: number | null;
   cuvanje: StanjeCuvanja;
   greska: string | null;
+  /** Slajdovi koje je Klod izmenio dok su bili otvoreni (409): ne šalju se dok se prezentacija ne učita ponovo. */
+  sukobi: number[];
+  /** Raste sa svakim čitanjem sa servera: forma i editor platna grade se jednom, pa posle čitanja moraju iznova (`track`). */
+  obnova: number;
 }
 
 /** Automatsko čuvanje: toliko posle poslednje izmene slajda (spec 6.3). */
 export const DEBOUNCE_MS = 800;
 
 const PORUKA_CUVANJE = 'Čuvanje nije uspelo. Pokušaj ponovo (Ctrl+S).';
+
+/** `reason` odgovora 409 na `PUT slajdovi/{id}` kad `verzija` nije ista; ostali 409 su obične greške čuvanja. */
+const RAZLOG_SUKOBA = 'Slajd je u međuvremenu izmenjen.';
+
+function jeSukob(e: unknown): boolean {
+  return e instanceof HttpErrorResponse && e.status === 409 && (e.error as { reason?: unknown } | null)?.reason === RAZLOG_SUKOBA;
+}
 
 /** Greška iz `sacuvajSve`: poruka je za korisnika (prva neispravnost ili razlog servera). */
 export class NijeSacuvano extends Error {
@@ -43,7 +55,7 @@ export class NijeSacuvano extends Error {
   }
 }
 
-const POCETNO: EditorState = { prezentacija: null, izabraniId: null, cuvanje: 'miruje', greska: null };
+const POCETNO: EditorState = { prezentacija: null, izabraniId: null, cuvanje: 'miruje', greska: null, sukobi: [], obnova: 0 };
 
 /**
  * POST nacrta na putu. Ako se editor napusti ili pređe na drugu prezentaciju pre odgovora, `sacuvajPreIzlaska` ovde
@@ -137,13 +149,24 @@ class SesijaPrezentacije implements SesijaCuvanja {
  * - PLATNO: editor platna predaje ceo dokument (`izmeniPlatno`) posle svake zabeležene izmene, a otvorenu sesiju (tekst,
  *   gest) upisuje funkcija iz `registrujPraznjenje`, koju store zove pre svakog čuvanja. Lista i forma proveravaju dokument
  *   samo jeftino (`greskeSlajda`); puna provera kao na serveru (`greskeSlajdaZaSlanje`) ide samo pred slanje.
+ * - Klodova izmena: svaki `PUT` nosi `verzija` slajda kako je učitan (`saVerzijom`; nastavnikovi upisi je ne menjaju, pa važi
+ *   i posle otkazanog zahteva). Na 409 slajd ulazi u `sukobi`: više se ne šalje i `greska` ostaje dok ima sukoba, a ostali
+ *   slajdovi se čuvaju normalno. Izlaz je `sacuvajOstale`, pa `ucitaj`: odbacuju se samo lokalne izmene slajdova u sukobu.
  */
 export const EditorStore = signalStore(
   withState<EditorState>(POCETNO),
-  withComputed(({ prezentacija, izabraniId }) => {
+  withComputed(({ prezentacija, izabraniId, sukobi }) => {
     const slajdovi = computed(() => prezentacija()?.slajdovi ?? []);
     return {
       slajdovi,
+      /** Šta je Klod izmenio dok je bilo otvoreno (`sukobi`, po rednim brojevima); `null` kad nema sukoba. */
+      porukaSukoba: computed(() => {
+        const rb = slajdovi().filter(s => sukobi().includes(s.id)).map(s => s.rb);
+        if (!rb.length) return null;
+        return rb.length === 1
+          ? `Klod je izmenio slajd ${rb[0]} dok je bio otvoren.`
+          : `Klod je izmenio slajdove ${rb.join(', ')} dok su bili otvoreni.`;
+      }),
       izabrani: computed(() => slajdovi().find(s => s.id === izabraniId()) ?? null),
       /** Sačuvani slajdovi sa rundama, pitanja i zadaci (o njima odlučuje dijalog "Pokreni"; kao `brojPitanja` servera). */
       brojPitanja: computed(() => slajdovi().filter(s => s.id > 0 && (s.tip === 'PITANJE' || s.tip === 'ZADATAK')).length),
@@ -185,6 +208,14 @@ export const EditorStore = signalStore(
 
     const razresi = (id: number) => zamene.get(id) ?? id;
     const naCekanju = (id: number) => (izmena.get(id) ?? 0) > (sacuvano.get(id) ?? 0);
+    const uSukobu = (id: number) => store.sukobi().includes(id);
+
+    /**
+     * Telo `PUT slajdovi/{id}`, jedino mesto gde komanda dobija `verzija`, pa `POST` nacrta i dupliranje ne mogu da je
+     * ponesu; `null` (slajd bez polja) je "bez provere".
+     */
+    const saVerzijom = (cmd: SlajdCmd, verzija: number | undefined): SlajdCmd => ({ ...cmd, verzija: verzija ?? null });
+    const verzijaSlajda = (id: number) => store.slajdovi().find(s => s.id === id)?.verzija;
 
     /** Svaki zahtev koji menja server ide kroz sesiju učitane prezentacije (registar čeka na njega). */
     const pratiZahtev = <T>(z: Observable<T>): Observable<T> => (sesija ? sesija.prati(z) : z);
@@ -229,7 +260,8 @@ export const EditorStore = signalStore(
     function zavrsi(ishod: string | null | undefined): void {
       uToku = Math.max(0, uToku - 1);
       if (ishod !== undefined) {
-        patchState(store, { greska: ishod });
+        // uspeh drugog slajda ne briše sukob: on traje do ponovnog učitavanja
+        patchState(store, { greska: ishod ?? store.porukaSukoba() });
       }
       if (typeof ishod === 'string') {
         brojGresaka++;
@@ -324,7 +356,7 @@ export const EditorStore = signalStore(
             if (gen !== generacija) {
               // u međuvremenu je učitana druga prezentacija: ono što je zapisano pri izlasku ide na pravi id
               if (posao.obrisan) posaljiPriIzlasku(s, api.obrisiSlajd(d.id), 'Brisanje slajda nije uspelo');
-              else if (posao.ostatak) posaljiPriIzlasku(s, api.izmeniSlajd(d.id, posao.ostatak));
+              else if (posao.ostatak) posaljiPriIzlasku(s, api.izmeniSlajd(d.id, saVerzijom(posao.ostatak, d.verzija)));
               return;
             }
             zamene.set(nacrt, d.id);
@@ -341,7 +373,7 @@ export const EditorStore = signalStore(
               obrisiNaServeru(d.id);
               return;
             }
-            zameni(nacrt, s => (izmena.get(d.id) === rev ? { ...d, rb: s.rb } : { ...s, id: d.id }));
+            zameni(nacrt, s => (izmena.get(d.id) === rev ? { ...d, rb: s.rb } : { ...s, id: d.id, verzija: d.verzija }));
             if (store.izabraniId() === nacrt) {
               patchState(store, { izabraniId: d.id });
             }
@@ -355,7 +387,7 @@ export const EditorStore = signalStore(
               } else if (posao.ostatak) {
                 // editor napušten dok je POST trajao: `cuvaj` (rxMethod) je ugašen, izmena ide direktno
                 sacuvano.set(d.id, izmena.get(d.id)!);
-                posaljiPriIzlasku(s, api.izmeniSlajd(d.id, posao.ostatak));
+                posaljiPriIzlasku(s, api.izmeniSlajd(d.id, saVerzijom(posao.ostatak, d.verzija)));
               }
             }
           },
@@ -370,7 +402,7 @@ export const EditorStore = signalStore(
     function posalji(id: number): Observable<unknown> {
       const kljuc = razresi(id);
       const cmd = cmdovi.get(kljuc);
-      if (!cmd || obrisani.has(kljuc) || !naCekanju(kljuc)) {
+      if (!cmd || obrisani.has(kljuc) || !naCekanju(kljuc) || uSukobu(kljuc)) {
         return EMPTY;
       }
       const greske = greskeSlajdaZaSlanje(cmd);
@@ -390,7 +422,7 @@ export const EditorStore = signalStore(
       const gen = generacija;
       let ishod: string | null | undefined;
       pocni();
-      return pratiZahtev(api.izmeniSlajd(kljuc, cmd)).pipe(
+      return pratiZahtev(api.izmeniSlajd(kljuc, saVerzijom(cmd, verzijaSlajda(kljuc)))).pipe(
         tap(d => {
           ishod = null;
           if (gen !== generacija) return;
@@ -401,6 +433,10 @@ export const EditorStore = signalStore(
         }),
         catchError(e => {
           ishod = razlogGreske(e, PORUKA_CUVANJE);
+          if (gen === generacija && jeSukob(e)) {
+            patchState(store, s => ({ sukobi: [...s.sukobi, kljuc] }));
+            ishod = store.porukaSukoba() ?? ishod;
+          }
           return EMPTY;
         }),
         finalize(() => {
@@ -502,12 +538,13 @@ export const EditorStore = signalStore(
 
     /**
      * Ishod čekanja u `sacuvajSve`: `undefined` = još traje, `null` = sve je na serveru, string = greška. Ispravne izmene
-     * koje su ostale (npr. stigle dok je POST nacrta trajao, pa čekaju debounce) šalju se odmah.
+     * koje su ostale (npr. stigle dok je POST nacrta trajao, pa čekaju debounce) šalju se odmah. Slajd u sukobu se ne šalje,
+     * pa se na njega ne čeka: on je greška, osim za `sacuvajOstale` (`saSukobima = false`).
      */
-    function ishodCuvanja(greskePre: number): string | null | undefined {
+    function ishodCuvanja(greskePre: number, saSukobima: boolean): string | null | undefined {
       if (uToku > 0 || nacrtiUSlanju.size > 0) return undefined;
       if (brojGresaka > greskePre) return store.greska() ?? PORUKA_CUVANJE;
-      const ostali = nesacuvani();
+      const ostali = nesacuvani().filter(id => !uSukobu(id));
       for (const id of ostali) {
         const greske = greskeSlajdaZaSlanje(cmdovi.get(id)!);
         if (greske.length) {
@@ -515,15 +552,30 @@ export const EditorStore = signalStore(
           return rb ? `Slajd ${rb} nije sačuvan: ${greske[0]}` : greske[0];
         }
       }
-      if (!ostali.length) return null;
+      if (!ostali.length) return saSukobima ? store.porukaSukoba() : null;
       // van tekućeg završetka zahteva (bez ulaska u rxMethod usred njegovog `finalize`); sledeći završetak ponovo procenjuje
       queueMicrotask(sacuvajOdmah);
       return undefined;
     }
 
+    function sacuvajDoKraja(saSukobima: boolean): Observable<void> {
+      return defer(() => {
+        isprazni();
+        const greskePre = brojGresaka;
+        sacuvajOdmah();
+        return concat(of(undefined), zavrseno$).pipe(
+          map(() => ishodCuvanja(greskePre, saSukobima)),
+          filter(ishod => ishod !== undefined),
+          take(1),
+          switchMap(ishod => (ishod === null ? of(undefined) : throwError(() => new NijeSacuvano(ishod)))),
+        );
+      });
+    }
+
     /**
      * Šalje sve ispravne nesačuvane izmene van rxMethod-a (preživi uništavanje store-a pri napuštanju editora). Za nacrt
-     * čiji POST upravo traje zapisuje šta je stiglo posle njega; to šalje odgovor na POST (`posaljiNacrt`).
+     * čiji POST upravo traje zapisuje šta je stiglo posle njega; to šalje odgovor na POST (`posaljiNacrt`). Slajd u sukobu se
+     * ne šalje: o gubitku tih izmena pita stranica pre izlaska.
      */
     function sacuvajPreIzlaska(): void {
       isprazni();
@@ -534,9 +586,9 @@ export const EditorStore = signalStore(
           posao.ostatak = !posao.obrisan && izmena.get(id)! > posao.rev && !greskeSlajdaZaSlanje(cmd).length ? cmd : null;
           continue;
         }
-        if (obrisani.has(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length) continue;
+        if (obrisani.has(id) || uSukobu(id) || !naCekanju(id) || greskeSlajdaZaSlanje(cmd).length) continue;
         sacuvano.set(id, izmena.get(id)!);
-        if (id > 0) posaljiPriIzlasku(sesija, api.izmeniSlajd(id, cmd));
+        if (id > 0) posaljiPriIzlasku(sesija, api.izmeniSlajd(id, saVerzijom(cmd, verzijaSlajda(id))));
         else posaljiPriIzlasku(sesija, api.dodajSlajd(prezentacijaId, cmd, posleZa(id).posle), 'Novi slajd nije sačuvan');
       }
     }
@@ -553,6 +605,10 @@ export const EditorStore = signalStore(
        *
        * `GET` ide tek kad sve sesije te prezentacije u registru (napušten editor, prelaz 5 -> 6 -> 5, i sopstveni zahtevi
        * pre ponovnog čitanja) završe svoje upise, pa učitano stanje nikad ne prethodi izmenama koje su još na putu.
+       *
+       * Sukobi važe do odgovora, pa se ni izmena otkucana dok čitanje traje ne šalje, a sa odgovorom se odbacuje. Odgovor uvećava
+       * `obnova`, jer bi forma ili editor platna inače ostali na starom sadržaju i sledeći `PUT` bi, sa novom `verzija`, pregazio
+       * upravo učitano (i slajd bez sukoba, ako ga je Klod menjao).
        */
       ucitaj(id: number): void {
         if (prezentacijaId && prezentacijaId !== id) {
@@ -582,9 +638,14 @@ export const EditorStore = signalStore(
         ).subscribe({
           next: p => {
             if (gen !== generacija) return;
+            // otvoren tekst ili gest ide u dokument pre zamene: instanca koja nestaje ga inače predaje sveže učitanom slajdu
+            isprazni();
+            for (const s of store.sukobi()) {
+              for (const m of [cmdovi, izmena, sacuvano]) m.delete(s);
+            }
             const slajdovi = [...p.slajdovi].sort((a, b) => a.rb - b.rb);
             const izabran = slajdovi.some(s => s.id === izabranPre) ? izabranPre : slajdovi[0]?.id ?? null;
-            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: izabran });
+            patchState(store, { prezentacija: { ...p, slajdovi }, izabraniId: izabran, sukobi: [], obnova: store.obnova() + 1 });
           },
           error: e => gen === generacija
             && patchState(store, { prezentacija: null, izabraniId: null, greska: razlogGreske(e, 'Prezentacija nije učitana.') }),
@@ -603,20 +664,18 @@ export const EditorStore = signalStore(
       /**
        * Šalje sve nesačuvano i završava se (jedna vrednost) tek kad na serveru nema ničeg nesačuvanog ni zahteva u toku
        * (PUT-ovi i POST-ovi nacrta). Greška `NijeSacuvano` kad neki slajd nije ispravan ili čuvanje padne posle poziva.
-       * Pokretanje i dupliranje čekaju ovo, da server vidi poslednje izmene.
+       * Pokretanje i dupliranje čekaju ovo, da server vidi poslednje izmene. Slajd u sukobu je takođe `NijeSacuvano`.
        */
       sacuvajSve(): Observable<void> {
-        return defer(() => {
-          isprazni();
-          const greskePre = brojGresaka;
-          sacuvajOdmah();
-          return concat(of(undefined), zavrseno$).pipe(
-            map(() => ishodCuvanja(greskePre)),
-            filter(ishod => ishod !== undefined),
-            take(1),
-            switchMap(ishod => (ishod === null ? of(undefined) : throwError(() => new NijeSacuvano(ishod)))),
-          );
-        });
+        return sacuvajDoKraja(true);
+      },
+
+      /**
+       * Kao `sacuvajSve`, ali slajdovi u sukobu nisu greška: "Učitaj ponovo" čuva sve ostalo, pa tek onda `ucitaj`. Novi
+       * sukob za to vreme je `NijeSacuvano`, da se izmene slajda o kome nastavnik još ne zna ne odbace bez reči.
+       */
+      sacuvajOstale(): Observable<void> {
+        return sacuvajDoKraja(false);
       },
 
       /**
