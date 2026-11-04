@@ -1,21 +1,28 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import {
+  afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, DOCUMENT, effect, ElementRef, inject, Injector, input, signal,
+  untracked, viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, concatMap, EMPTY, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
+import { catchError, concatMap, EMPTY, filter, finalize, map, Observable, of, Subject, switchMap, tap } from 'rxjs';
 
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { JE_ID } from '../../../core/route-matchers';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
+import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
 import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { PageHeader } from '../../../shared/ui/page-header';
@@ -31,6 +38,7 @@ import { PorukaPosleCuvanja } from '../data-access/poruka-posle-cuvanja';
 import {
   PRAZAN_PREGLED, panelResenja, panelZadatka, pregledUzivo, SacuvanRender, SadrzajPregleda, vazecaGreska,
 } from '../data-access/render-proba';
+import { VELICINE_PREGLEDA, VelicinaPregledaPostavka } from '../data-access/velicina-pregleda';
 import { LatexEditorComponent } from '../ui/latex-editor.component';
 import { OdgovoriFormaComponent } from '../ui/odgovori-forma.component';
 import { greskePriloga, PriloziComponent } from '../ui/prilozi.component';
@@ -73,6 +81,8 @@ interface GreskaUcitavanja {
 type Zahtev = { varijantaId: number } | { grupaId: number };
 type Ucitano = { g: GrupaDetails; v: VarijantaDetails | null; greska: null } | { g: null; v: null; greska: GreskaUcitavanja };
 type Zauzeto = 'cuva' | 'renderuje';
+/** Prikaz stranice: renderovan zadatak i rešenje (podrazumevano za sačuvanu varijantu) ili LaTeX editor sa pregledom pored. */
+type Rezim = 'pregled' | 'latex';
 
 /** Kao `prazanUNull` u `VarijantaService`: prazno (i od samih razmaka) je `null`, ostalo ostaje kako je (linije se ne pomeraju). */
 function prazanUNull(s: string): string | null {
@@ -146,10 +156,14 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
 }
 
 /**
- * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`). Tri kolone na širokom ekranu: LaTeX
- * (kartice Tekst i Rešenje, svaka sa svojim `app-latex-editor`), živi pregled (`pregledUzivo` nad `render-proba`, zadatak i
- * rešenje jedno ispod drugog) i tačni odgovori po šemi grupe sa prilozima. Grupa (`BankaApi.grupa`) daje predmet za
- * render-probu, šemu polja, putanju i težinu; nova varijanta u grupi bez težine se ne može sačuvati (server: 409), pa to
+ * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`). Mreža 2 × 2 uz traku za izbor prikaza.
+ * Prikaz "Pregled" (podrazumevan za sačuvanu varijantu): gore renderovani zadatak i rešenje, veličinu bira nastavnik
+ * (`VelicinaPregledaPostavka`). Prikaz "Uredi LaTeX" (podrazumevan za novu varijantu, kad render ne uspe i kad se dolazi iz pregleda nacrta kroz `?povratak`): gore editor (kartice
+ * Tekst i Rešenje, svaka sa svojim `app-latex-editor`) i pored njega živi pregled kartice koja se uređuje (`pregledUzivo` nad
+ * `render-proba`). U oba prikaza je dole red tačnih odgovora po šemi grupe i priloga. Prečice `E` (uredi) i `Esc` (pregled) rade
+ * samo van polja za unos i kad nije otvoren meni ili dijalog. Meni ⋮ u zaglavlju ima radnje kartice varijante u grupi: Arhiviraj
+ * (aktivna), Vrati u nacrt (arhivirana), Dupliraj i Obriši; odobravanje ostaje "Sačuvaj i odobri". Grupa (`BankaApi.grupa`) daje
+ * predmet za render-probu, šemu polja, putanju i težinu; nova varijanta u grupi bez težine se ne može sačuvati (server: 409), pa to
  * stranica kaže odmah, sa vezom na grupu.
  *
  * Čuvanje (`POST`/`PUT`, renderuje sinhrono, do minut) drži formu onemogućenom uz traku napretka; dok se prilog otprema, ne
@@ -167,12 +181,12 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
 @Component({
   selector: 'app-varijanta-editor-page',
   imports: [
-    EmptyState, ErrorPanel, FormErrorBanner, LatexEditorComponent, MatButton, MatFormField, MatHint, MatIcon, MatInput, MatLabel,
-    MatProgressBar, MatTab, MatTabGroup, MatTabLabel, NivoComponent, OdgovoriFormaComponent, PageHeader, PriloziComponent, ReactiveFormsModule,
-    RouterLink, SkeletonRows, StatusChip, SvgPregledComponent,
+    EmptyState, ErrorPanel, FormErrorBanner, LatexEditorComponent, MatButton, MatFormField, MatHint, MatIcon, MatIconButton, MatInput,
+    MatLabel, MatMenu, MatMenuItem, MatMenuTrigger, MatProgressBar, MatTab, MatTabGroup, MatTabLabel, NgTemplateOutlet, NivoComponent,
+    OdgovoriFormaComponent, PageHeader, PriloziComponent, ReactiveFormsModule, RouterLink, SkeletonRows, StatusChip, SvgPregledComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(window:beforeunload)': 'preIzlaska($event)' },
+  host: { '(window:beforeunload)': 'preIzlaska($event)', '(document:keydown)': 'precica($event)' },
   styleUrl: './varijanta-editor.page.css',
   template: `
     @if (greskaUcitavanja(); as gr) {
@@ -230,6 +244,29 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
               <mat-icon svgIcon="task_alt" aria-hidden="true" />Sačuvaj i odobri
             </button>
           }
+          @if (v) {
+            <button matIconButton type="button" [matMenuTriggerFor]="meni" aria-label="Još radnji za varijantu" data-meni>
+              <mat-icon svgIcon="more_vert" aria-hidden="true" />
+            </button>
+            <mat-menu #meni="matMenu" xPosition="before">
+              <button mat-menu-item type="button" disabledInteractive [disabled]="!mozeDuplirati()" (click)="dupliraj()" data-dupliraj>
+                <mat-icon svgIcon="content_copy" aria-hidden="true" />Dupliraj
+              </button>
+              @if (v.status === 'AKTIVNA') {
+                <button mat-menu-item type="button" disabledInteractive [disabled]="!mozeRadnju()" (click)="promeniStatus('arhiviraj')" data-arhiviraj>
+                  <mat-icon svgIcon="visibility_off" aria-hidden="true" />Arhiviraj
+                </button>
+              }
+              @if (v.status === 'ARHIVIRANA') {
+                <button mat-menu-item type="button" disabledInteractive [disabled]="!mozeRadnju()" (click)="promeniStatus('vratiUNacrt')" data-vrati-u-nacrt>
+                  <mat-icon svgIcon="undo" aria-hidden="true" />Vrati u nacrt
+                </button>
+              }
+              <button mat-menu-item type="button" disabledInteractive [disabled]="!mozeRadnju()" (click)="obrisi()" data-obrisi>
+                <mat-icon svgIcon="delete" aria-hidden="true" />Obriši
+              </button>
+            </mat-menu>
+          }
         </div>
       </app-page-header>
 
@@ -250,51 +287,100 @@ function porukaCuvanja(i: IshodCuvanja, odobri: boolean, aktivnaPre: boolean, pr
         <p class="bk-ve-nedostaje" data-nedostaje>Za čuvanje nedostaje: {{ nedostaje().join(', ') }}.</p>
       }
 
-      <div class="bk-ve-mreza" [attr.aria-busy]="zauzeto() !== null">
-        <section class="lista-kartica bk-ve-kolona" aria-labelledby="bk-ve-naslov-izvora">
-          <h2 id="bk-ve-naslov-izvora" class="bk-ve-podnaslov">LaTeX</h2>
-          <mat-form-field appearance="outline" class="bk-ve-naziv">
-            <mat-label>Naziv (opciono)</mat-label>
-            <input matInput [formControl]="forma.controls.naziv" [maxlength]="maxNaziv" autocomplete="off" data-naziv />
-            <mat-hint>Samo za tebe, u banci; bez naziva je „Zadatak {{ v?.rb ?? 'N' }}“</mat-hint>
-          </mat-form-field>
-          <mat-tab-group class="bk-ve-kartice" mat-stretch-tabs="false" preserveContent [selectedIndex]="kartica()"
-            (selectedIndexChange)="kartica.set($event)">
-            <mat-tab>
-              <ng-template mat-tab-label>Tekst@if (panelZ().stanje === 'greska') {<span class="bk-ve-greska-kartice">&nbsp;· greška</span>}</ng-template>
-              <app-latex-editor #edTekst data-deo="tekst" oznaka="LaTeX zadatka" [formControl]="forma.controls.tekst"
-                [greskaLinija]="linijaGreske().tekst" [opisId]="opisGreske().tekst" (pregled)="odmah.next()" />
-            </mat-tab>
-            <mat-tab>
-              <ng-template mat-tab-label>Rešenje@if (panelR().stanje === 'greska') {<span class="bk-ve-greska-kartice">&nbsp;· greška</span>}</ng-template>
-              <app-latex-editor #edResenje data-deo="resenje" oznaka="LaTeX rešenja (opciono)" [formControl]="forma.controls.resenje"
-                [greskaLinija]="linijaGreske().resenje" [opisId]="opisGreske().resenje" (pregled)="odmah.next()" />
-            </mat-tab>
-          </mat-tab-group>
-        </section>
-
-        <section class="lista-kartica bk-ve-kolona bk-ve-pregledi" aria-labelledby="bk-ve-naslov-pregleda">
-          <h2 id="bk-ve-naslov-pregleda" class="bk-ve-podnaslov">Pregled</h2>
-          @let pz = panelZ();
-          <app-svg-pregled naslov="Zadatak" [svg]="pz.svg" [stanje]="pz.stanje" [greska]="pz.greska" [praznaPoruka]="pz.prazno"
-            [greskaId]="idGreske.tekst" />
-          @let pr = panelR();
-          <app-svg-pregled naslov="Rešenje" [svg]="pr.svg" [stanje]="pr.stanje" [greska]="pr.greska" [praznaPoruka]="pr.prazno"
-            [greskaId]="idGreske.resenje" />
-        </section>
-
-        <div class="bk-ve-kolona bk-ve-desno">
-          <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-odgovora">
-            <h2 id="bk-ve-naslov-odgovora" class="bk-ve-podnaslov">Tačni odgovori</h2>
-            <app-odgovori-forma [polja]="g.polja" [odgovori]="odgovori()" [onemoguceno]="zauzeto() !== null" (odgovoriPromena)="odgovori.set($event)" />
-          </section>
-          <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-priloga">
-            <h2 id="bk-ve-naslov-priloga" class="bk-ve-podnaslov">Prilozi</h2>
-            <app-prilozi [prilozi]="prilozi()" [postojeci]="v?.prilozi ?? []" [onemoguceno]="zauzeto() !== null"
-              (priloziPromena)="prilozi.set($event)" (ubaci)="ubaci($event)" (otpremaUToku)="otpremaPriloga.set($event)" />
-          </section>
+      <div class="bk-ve-traka">
+        <div class="bk-ve-izbor" role="group" aria-label="Prikaz">
+          <button type="button" [attr.aria-pressed]="rezim() === 'pregled'" (click)="postaviRezim('pregled')" data-rezim="pregled">Pregled</button>
+          <button type="button" [attr.aria-pressed]="rezim() === 'latex'" (click)="postaviRezim('latex')" data-rezim="latex">
+            <mat-icon svgIcon="edit" aria-hidden="true" />Uredi LaTeX
+          </button>
         </div>
+        @if (rezim() === 'pregled') {
+          <span class="bk-ve-savet">LaTeX je sakriven dok ga ne otvoriš (prečica <kbd>E</kbd>).</span>
+          <button matButton type="button" [attr.aria-expanded]="nazivOtvoren()" aria-controls="bk-ve-naziv-polje" (click)="nazivOtvoren.set(!nazivOtvoren())"
+            data-uredi-naziv>
+            <mat-icon svgIcon="edit" aria-hidden="true" />Naziv
+          </button>
+          <span class="bk-ve-razmak"></span>
+          <div class="bk-ve-izbor" role="group" aria-label="Veličina pregleda">
+            @for (o of velicine; track o.vrednost) {
+              <button type="button" [attr.aria-pressed]="velicina() === o.vrednost" (click)="velicinaPostavka.postavi(o.vrednost)"
+                [attr.data-velicina]="o.vrednost">{{ o.natpis }}</button>
+            }
+          </div>
+        } @else {
+          <span class="bk-ve-savet">Pregled stoji pored dok kucaš (Ctrl+Enter = odmah). <kbd>Esc</kbd> van polja vraća na pregled.</span>
+        }
       </div>
+      @if (rezim() === 'pregled' && nazivOtvoren()) {
+        <div class="bk-ve-naziv-red" id="bk-ve-naziv-polje">
+          <ng-container *ngTemplateOutlet="polje" />
+        </div>
+      }
+
+      <div class="bk-ve-mreza" [attr.aria-busy]="zauzeto() !== null">
+        @if (rezim() === 'latex') {
+          <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-izvora">
+            <h2 id="bk-ve-naslov-izvora" class="bk-ve-podnaslov">LaTeX</h2>
+            <ng-container *ngTemplateOutlet="polje" />
+            <mat-tab-group class="bk-ve-kartice" mat-stretch-tabs="false" preserveContent [selectedIndex]="kartica()"
+              (selectedIndexChange)="kartica.set($event)">
+              <mat-tab>
+                <ng-template mat-tab-label>Tekst@if (panelZ().stanje === 'greska') {<span class="bk-ve-greska-kartice">&nbsp;· greška</span>}</ng-template>
+                <app-latex-editor #edTekst data-deo="tekst" oznaka="LaTeX zadatka" [formControl]="forma.controls.tekst"
+                  [greskaLinija]="linijaGreske().tekst" [opisId]="opisGreske().tekst" (pregled)="odmah.next()" />
+              </mat-tab>
+              <mat-tab>
+                <ng-template mat-tab-label>Rešenje@if (panelR().stanje === 'greska') {<span class="bk-ve-greska-kartice">&nbsp;· greška</span>}</ng-template>
+                <app-latex-editor #edResenje data-deo="resenje" oznaka="LaTeX rešenja (opciono)" [formControl]="forma.controls.resenje"
+                  [greskaLinija]="linijaGreske().resenje" [opisId]="opisGreske().resenje" (pregled)="odmah.next()" />
+              </mat-tab>
+            </mat-tab-group>
+          </section>
+          <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-pregleda">
+            <h2 id="bk-ve-naslov-pregleda" class="bk-ve-podnaslov">Pregled</h2>
+            @if (kartica() === 0) {
+              @let pz = panelZ();
+              <app-svg-pregled naslov="Zadatak" velicina="cela" [svg]="pz.svg" [stanje]="pz.stanje" [greska]="pz.greska" [praznaPoruka]="pz.prazno"
+                [greskaId]="idGreske.tekst" />
+            } @else {
+              @let pr = panelR();
+              <app-svg-pregled naslov="Rešenje" velicina="cela" [svg]="pr.svg" [stanje]="pr.stanje" [greska]="pr.greska" [praznaPoruka]="pr.prazno"
+                [greskaId]="idGreske.resenje" />
+            }
+          </section>
+        } @else {
+          <h2 class="sr-only">Pregled</h2>
+          <section class="lista-kartica bk-ve-odeljak" aria-label="Zadatak">
+            @let pz = panelZ();
+            <app-svg-pregled naslov="Zadatak" [velicina]="velicina()" [svg]="pz.svg" [stanje]="pz.stanje" [greska]="pz.greska"
+              [praznaPoruka]="pz.prazno" [greskaId]="idGreske.tekst" />
+          </section>
+          <section class="lista-kartica bk-ve-odeljak" aria-label="Rešenje">
+            @let pr = panelR();
+            <app-svg-pregled naslov="Rešenje" [velicina]="velicina()" [svg]="pr.svg" [stanje]="pr.stanje" [greska]="pr.greska"
+              [praznaPoruka]="pr.prazno" [greskaId]="idGreske.resenje" />
+          </section>
+        }
+
+        <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-odgovora">
+          <h2 id="bk-ve-naslov-odgovora" class="bk-ve-podnaslov">Tačni odgovori</h2>
+          <app-odgovori-forma [polja]="g.polja" [odgovori]="odgovori()" [onemoguceno]="zauzeto() !== null" (odgovoriPromena)="odgovori.set($event)" />
+        </section>
+        <section class="lista-kartica bk-ve-odeljak" aria-labelledby="bk-ve-naslov-priloga">
+          <h2 id="bk-ve-naslov-priloga" class="bk-ve-podnaslov">Prilozi</h2>
+          <app-prilozi [prilozi]="prilozi()" [postojeci]="v?.prilozi ?? []" [onemoguceno]="zauzeto() !== null"
+            (priloziPromena)="prilozi.set($event)" (ubaci)="ubaci($event)" (otpremaUToku)="otpremaPriloga.set($event)" />
+        </section>
+      </div>
+
+      <!-- naziv varijante: u prikazu LaTeX iznad editora, u prikazu Pregled u redu koji otvara dugme "Naziv" (nikad oba odjednom) -->
+      <ng-template #polje>
+        <mat-form-field appearance="outline" class="bk-ve-naziv">
+          <mat-label>Naziv (opciono)</mat-label>
+          <input matInput [formControl]="forma.controls.naziv" [maxlength]="maxNaziv" autocomplete="off" data-naziv />
+          <mat-hint>Samo za tebe, u banci; bez naziva je „Zadatak {{ v?.rb ?? 'N' }}“</mat-hint>
+        </mat-form-field>
+      </ng-template>
     } @else {
       <app-page-header [naslov]="jeNova() ? 'Nova varijanta' : 'Varijanta'" />
       <app-skeleton-rows [redovi]="6" />
@@ -306,6 +392,11 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   private readonly router = inject(Router);
   private readonly obavestenja = inject(NotificationStore);
   private readonly mrvice = inject(BreadcrumbService);
+  private readonly dialog = inject(MatDialog);
+  private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly velicinaPostavka = inject(VelicinaPregledaPostavka);
 
   /** Id iz putanje (izmena) ili `undefined` (nova); matcher rute propušta samo ceo pozitivan broj. */
   readonly id = input<string>();
@@ -318,6 +409,8 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   protected readonly prikazStatusa = prikazStatusa;
   protected readonly idGreske = ID_GRESKE;
   protected readonly maxNaziv = MAX_NAZIV_VARIJANTE;
+  protected readonly velicine = VELICINE_PREGLEDA;
+  protected readonly velicina = this.velicinaPostavka.velicina;
 
   protected readonly jeNova = computed(() => this.id() === undefined);
   private readonly zahtev = computed<Zahtev | null>(() => {
@@ -338,6 +431,16 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
   protected readonly zauzeto = signal<Zauzeto | null>(null);
   /** Izabrana kartica (0 Tekst, 1 Rešenje). */
   protected readonly kartica = signal(0);
+  /** Prikaz: pregled (sačuvana varijanta) ili LaTeX (nova varijanta i varijanta čiji render nije uspeo). Ne pamti se između poseta. */
+  protected readonly rezim = signal<Rezim>('pregled');
+  /** Red sa poljem "Naziv" u prikazu Pregled (u prikazu LaTeX je polje uvek iznad editora). */
+  protected readonly nazivOtvoren = signal(false);
+  /** Poziv servera nad varijantom (arhiviranje, vraćanje u nacrt, dupliranje, brisanje) je u toku: dotle nema čuvanja ni novih radnji. */
+  protected readonly radnjaUToku = signal(false);
+  /** Tekst koji čeka editor aktivne kartice (`ubaci` iz prikaza Pregled prvo otvara editor). */
+  private readonly zaUbacivanje = signal<string | null>(null);
+  /** Varijanta je obrisana: odlazak sa stranice ne pita za nesačuvane izmene. */
+  private obrisana = false;
   protected readonly odgovori = signal<Record<string, OdgovorPolja>>({});
   protected readonly prilozi = signal<PrilogCmd[]>([]);
   /** Prilog se otprema: dotle se ne čuva (posle čuvanja forma preuzima priloge iz odgovora, pa bi se novi izgubio). */
@@ -467,14 +570,19 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     }
     return razlozi;
   });
-  private readonly mozeSlati = computed(() => !!this.detaljiGrupe() && this.zauzeto() === null && !this.bezTezine() && this.nedostaje().length === 0);
+  private readonly mozeSlati = computed(() => !!this.detaljiGrupe() && this.zauzeto() === null && !this.radnjaUToku() && !this.bezTezine() && this.nedostaje().length === 0);
   protected readonly mozeNacrt = computed(() => this.mozeSlati() && (this.jeNova() || this.izmenjeno()));
   protected readonly mozeOdobriti = computed(() => this.mozeSlati() && this.osnova()?.status !== 'AKTIVNA');
   protected readonly tekstZauzeca = computed(() => {
     const z = this.zauzeto();
     return z === null ? '' : `${z === 'cuva' ? 'Čuva se i renderuje…' : 'Renderuje se…'} Renderovanje može potrajati do minut.`;
   });
-  protected readonly mozeRenderovati = computed(() => !!this.osnova() && !this.izmenjeno() && this.zauzeto() === null);
+  protected readonly mozeRenderovati = computed(() => !!this.osnova() && !this.izmenjeno() && this.zauzeto() === null && !this.radnjaUToku());
+  /** Radnje menija ⋮ (sačuvana varijanta, ništa se ne čuva i nema druge radnje u toku). */
+  protected readonly mozeRadnju = computed(() => !!this.osnova() && this.zauzeto() === null && !this.radnjaUToku() && !this.otpremaPriloga());
+  /** Kopija se pravi od sačuvane varijante, pa nesačuvane izmene prvo treba sačuvati ili odbaciti (inače bi ostale za sobom). */
+  protected readonly mozeDuplirati = computed(() => this.mozeRadnju() && !this.izmenjeno());
+  private readonly aktivniEditor = computed(() => (this.kartica() === KARTICA.resenje ? this.edResenje() : this.edTekst()));
 
   private readonly zahtevi = new Subject<Zahtev>();
   private unisten = false;
@@ -499,6 +607,9 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
         this.postaviOsnovu(u.v);
         this.postaviFormu(u.v, u.g.polja);
         this.kartica.set(u.v?.renderGreska && u.v.renderDeo === 'resenje' ? KARTICA.resenje : KARTICA.tekst);
+        // "Uredi" iz pregleda nacrta (`?povratak`) je namera da se menja, a varijantu je tamo već video
+        this.rezim.set(u.v && !u.v.renderGreska && !povratakNaPregled(this.povratak()) ? 'pregled' : 'latex');
+        this.nazivOtvoren.set(false);
         if (u.v && this.predataPoruka?.varijantaId === u.v.id) {
           this.greska.set(this.predataPoruka.poruka);
           this.predataPoruka = null;
@@ -508,6 +619,18 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     effect(() => {
       this.zahtev();
       untracked(() => this.ucitaj());
+    });
+
+    // `ubaci` iz prikaza Pregled: tekst se umeće čim se iscrta editor aktivne kartice
+    effect(() => {
+      const tekst = this.zaUbacivanje();
+      const editor = this.aktivniEditor();
+      if (tekst !== null && editor) {
+        untracked(() => {
+          this.zaUbacivanje.set(null);
+          editor.ubaci(tekst);
+        });
+      }
     });
 
     // bez `takeUntilDestroyed`: izbor nivoa ne sme da se izgubi ako korisnik odmah napusti stranicu
@@ -552,7 +675,7 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
 
   /** Za `unsavedChangesGuard`: izmene, ili čuvanje u toku (njegov ishod se vidi samo ovde). */
   imaNesacuvanihIzmena(): boolean {
-    return this.izmenjeno() || this.zauzeto() === 'cuva';
+    return !this.obrisana && (this.izmenjeno() || this.zauzeto() === 'cuva');
   }
 
   /** Zatvaranje kartice ili osvežavanje: pregledač pita "Napustiti sajt?" pod istim uslovom kao `unsavedChangesGuard`. */
@@ -600,11 +723,121 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
 
   /**
    * `\includegraphics[width=\linewidth]{ime}` na kursor editora izabrane kartice: omot je `varwidth=84mm`, pa slika bez širine
-   * veća od telefona izlazi iz okvira.
+   * veća od telefona izlazi iz okvira. U prikazu Pregled prvo se otvara editor.
    */
   protected ubaci(ime: string): void {
-    const editor = this.kartica() === KARTICA.resenje ? this.edResenje() : this.edTekst();
-    editor?.ubaci(`\\includegraphics[width=\\linewidth]{${ime}}`);
+    this.zaUbacivanje.set(`\\includegraphics[width=\\linewidth]{${ime}}`);
+    this.rezim.set('latex');
+  }
+
+  /** Prikaz Pregled / LaTeX; ulazak u LaTeX stavlja kursor u editor aktivne kartice. */
+  protected postaviRezim(r: Rezim): void {
+    if (r === this.rezim()) {
+      return;
+    }
+    this.rezim.set(r);
+    if (r === 'latex') {
+      afterNextRender(() => this.host.nativeElement.querySelector<HTMLTextAreaElement>('app-latex-editor textarea')?.focus(), { injector: this.injector });
+    }
+  }
+
+  /** `E` otvara editor, `Esc` vraća na pregled: samo van polja za unos (u editoru Esc služi za izlazak iz polja) i bez otvorenog menija ili dijaloga. */
+  protected precica(e: KeyboardEvent): void {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !this.detaljiGrupe()) {
+      return;
+    }
+    const meta = e.target instanceof Element ? e.target : null;
+    if (meta?.closest('input, textarea, select, [contenteditable], [role="textbox"], [role="combobox"]') || this.document.querySelector('.cdk-overlay-pane')) {
+      return;
+    }
+    if ((e.key === 'e' || e.key === 'E') && this.rezim() === 'pregled') {
+      e.preventDefault();
+      this.postaviRezim('latex');
+    } else if (e.key === 'Escape' && this.rezim() === 'latex') {
+      e.preventDefault();
+      this.postaviRezim('pregled');
+    }
+  }
+
+  /** Arhiviraj (aktivna) ili vrati u nacrt (arhivirana): forma i nesačuvane izmene ostaju, osnova nosi novi status. */
+  protected promeniStatus(radnja: 'arhiviraj' | 'vratiUNacrt'): void {
+    const v = this.osnova();
+    if (!v || !this.mozeRadnju()) {
+      return;
+    }
+    this.pocniRadnju();
+    this.api[radnja](v.id, TIHO)
+      .pipe(finalize(() => this.radnjaUToku.set(false)))
+      .subscribe({
+        next: nova => {
+          if (this.unisten || this.osnova()?.id !== nova.id) {
+            return;
+          }
+          this.postaviOsnovu(nova);
+          this.obavestenja.uspeh(radnja === 'arhiviraj' ? 'Varijanta je arhivirana.' : 'Varijanta je vraćena u nacrt.');
+        },
+        error: (e: unknown) => this.greska.set(razlogBanke(e, UPIS)),
+      });
+  }
+
+  /** Pravi kopiju sačuvane varijante (nacrt) i otvara je. */
+  protected dupliraj(): void {
+    const v = this.osnova();
+    if (!v || !this.mozeDuplirati()) {
+      return;
+    }
+    this.pocniRadnju();
+    this.api.dupliraj(v.id, TIHO)
+      .pipe(finalize(() => this.radnjaUToku.set(false)))
+      .subscribe({
+        next: kopija => {
+          this.obavestenja.uspeh('Varijanta je duplirana; otvorena je kopija.');
+          if (!this.unisten) {
+            void this.router.navigate(['/banka/varijante', kopija.id]);
+          }
+        },
+        error: (e: unknown) => this.greska.set(razlogBanke(e, UPIS)),
+      });
+  }
+
+  /** Briše varijantu posle potvrde (kao u grupi) i vraća u banku (ili na pregled nacrta iz `?povratak`). */
+  protected obrisi(): void {
+    const v = this.osnova();
+    const g = this.detaljiGrupe();
+    if (!v || !g || !this.mozeRadnju()) {
+      return;
+    }
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: `Obrisati varijantu „${imeVarijante(v)}“?`,
+      tekst: ['Varijanta i njen render se brišu trajno.', 'Varijanta korišćena na času se ne briše; nju arhiviraj.'],
+      potvrdi: 'Obriši varijantu',
+      destruktivno: true,
+    })
+      .pipe(
+        filter(Boolean),
+        switchMap(() => {
+          this.pocniRadnju();
+          return this.api.obrisiVarijantu(v.id, TIHO).pipe(finalize(() => this.radnjaUToku.set(false)));
+        }),
+      )
+      .subscribe({
+        next: () => {
+          this.obrisana = true;
+          this.obavestenja.uspeh('Varijanta je obrisana.');
+          const povratak = povratakNaPregled(this.povratak());
+          if (povratak) {
+            void this.router.navigateByUrl(povratak);
+          } else {
+            void this.router.navigate(['/banka'], { queryParams: { predmet: g.predmetId, namena: g.namena, grupa: g.id } });
+          }
+        },
+        error: (e: unknown) => this.greska.set(razlogBanke(e, UPIS)),
+      });
+  }
+
+  private pocniRadnju(): void {
+    this.radnjaUToku.set(true);
+    this.greska.set(null);
   }
 
   /**
@@ -725,7 +958,9 @@ export class VarijantaEditorPage implements NemaNesacuvanih {
     }
   }
 
+  /** Render nije uspeo: editor kartice dela sa greškom (prikaz LaTeX), da se linija vidi odmah. */
   private izaberiKarticu(v: VarijantaDetails): void {
+    this.rezim.set('latex');
     if (v.renderDeo) {
       this.kartica.set(KARTICA[v.renderDeo]);
     }

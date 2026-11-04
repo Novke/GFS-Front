@@ -16,7 +16,9 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { sRecju } from '../../../shared/util/mnozina';
 import { svgUrl, VarijantaDetails } from '../data-access/banka.models';
-import { filterPregleda, NAJVISE_U_PREGLEDU, PregledFilter, PregledNacrtaStore, upitPregleda } from '../data-access/pregled-nacrta.store';
+import {
+  filterPregleda, NAJVISE_ODOBRAVANJA, NAJVISE_U_PREGLEDU, PregledFilter, PregledNacrtaStore, upitPregleda,
+} from '../data-access/pregled-nacrta.store';
 import { OdgovoriPregledComponent } from '../ui/odgovori-pregled.component';
 import { imeVarijante, prikazStatusa } from '../ui/varijanta-kartica.component';
 
@@ -64,8 +66,9 @@ function opisGreske(v: VarijantaDetails): string {
  * `?povratak` na ovaj pregled sa `od=<id>`, pa se posle čuvanja vraća na isto mesto: isti nacrt, a posle "Sačuvaj i odobri"
  * sledeći), Preskoči (`→`) i Nazad (`←`); posle odobravanja i brisanja automatski sledeći. Prečice se ne obrađuju dok je
  * fokus u polju za unos ili u CDK overlay-u (meni), dok je otvoren dijalog i uz Ctrl/Alt/Meta/Shift. Uz seriju u filteru, pri vrhu
- * "Odbaci celu seriju" (potvrda bez broja: server briše sve neodobrene Klodove nacrte serije, ne samo ove iz filtera). Na
- * kraju liste "Nema više nacrta." sa vezom na banku. Nivo prikazane varijante (★ do ★★★) se menja na mestu pre odobravanja, a
+ * "Odbaci celu seriju" (potvrda bez broja: server briše sve neodobrene Klodove nacrte serije, ne samo ove iz filtera). Uz
+ * listu nacrta od bar dve varijante "Odobri sve (N)" (i na kraju, dok ima preskočenih): posle potvrde sve iz liste idu serveru
+ * odjednom, a poruka nosi "Poništi". Na kraju liste "Nema više nacrta." sa vezom na banku. Nivo prikazane varijante (★ do ★★★) se menja na mestu pre odobravanja, a
  * filter "Prikaži nivo" (`?nivo=1|2|3`, "Svi" ga skida) sužava listu na jedan nivo. `PregledNacrtaStore` je ovde (feature store stranice); bez animacija
  * pod `prefers-reduced-motion`.
  */
@@ -125,6 +128,7 @@ function opisGreske(v: VarijantaDetails): string {
               <mat-icon svgIcon="arrow_back" aria-hidden="true" />Nazad
             </button>
           }
+          <ng-container *ngTemplateOutlet="dugmeOdobriSve" />
           <a matButton="filled" routerLink="/banka" [queryParams]="vezaBanke()" data-fokus-kraj>Banka zadataka</a>
         </app-empty-state>
       </section>
@@ -157,6 +161,7 @@ function opisGreske(v: VarijantaDetails): string {
           (click)="odobri()" data-odobri>
           <mat-icon svgIcon="task_alt" aria-hidden="true" />Odobri<kbd aria-hidden="true">O</kbd>
         </button>
+        <ng-container *ngTemplateOutlet="dugmeOdobriSve" />
       </div>
 
       @if (v) {
@@ -208,6 +213,14 @@ function opisGreske(v: VarijantaDetails): string {
         <app-skeleton-rows [redovi]="6" />
       }
     }
+
+    <ng-template #dugmeOdobriSve>
+      @if (imaOdobriSve()) {
+        <button matButton="outlined" type="button" disabledInteractive [disabled]="zauzeto()" (click)="odobriSve()" data-odobri-sve>
+          <mat-icon svgIcon="task_alt" aria-hidden="true" />Odobri sve ({{ store.ids().length }})
+        </button>
+      }
+    </ng-template>
 
     <ng-template #sadrzaj let-v let-uz="uz">
       <figure class="bk-pn-slika">
@@ -292,6 +305,9 @@ export class PregledPage {
     const v = this.store.trenutna();
     return !!v && !this.store.radi() && v.status !== 'AKTIVNA' && v.renderStatus === 'OK';
   });
+  /** "Odobri sve" postoji samo nad nacrtima i kad ima bar dva: jedan je prosto "Odobri". */
+  protected readonly imaOdobriSve = computed(() => this.filterV().status === 'NACRT' && this.store.ids().length >= 2);
+  protected readonly zauzeto = computed(() => this.store.radi() || this.store.ucitava());
   protected readonly tekstKraja = computed(() => {
     const n = this.store.ids().length;
     return n > 0 ? `Preskočeno: ${sRecju(n, 'varijanta', 'varijante', 'varijanti')}. Nazad (←) vraća na poslednju.` : null;
@@ -352,6 +368,33 @@ export class PregledPage {
       this.radnjaKorisnika = true;
       this.store.odobri();
     }
+  }
+
+  /**
+   * "Odobri sve": potvrda sa brojem koji stvarno ide serveru. Lista broji i preskočene, a odjednom ide najviše
+   * {@link NAJVISE_ODOBRAVANJA}; kad je lista skraćena (`skraceno`), neučitani nacrti ostaju neodobreni.
+   */
+  protected odobriSve(): void {
+    if (!this.imaOdobriSve() || this.zauzeto()) {
+      return;
+    }
+    const uListi = this.store.ids().length;
+    const broj = Math.min(uListi, NAJVISE_ODOBRAVANJA);
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: `Odobri ${sRecju(broj, 'nacrt', 'nacrta', 'nacrta')}?`,
+      tekst: [
+        'Odobrene varijante odmah postaju aktivne i mogu da se pojave na času.',
+        'Nacrti sa neuspelim renderom ili nepotpunim odgovorima se preskaču i ostaju u listi za pregled.',
+        ...(uListi > broj ? [`U listi ih je ${uListi}, a odjednom se odobrava najviše ${broj}: idu prvi po redu, ostali ostaju u listi.`] : []),
+        ...(this.store.skraceno() ? ['Lista nije cela, pa se odobravaju samo učitani nacrti.'] : []),
+      ],
+      potvrdi: 'Odobri sve',
+    })
+      .pipe(filter(Boolean))
+      .subscribe(() => {
+        this.radnjaKorisnika = true;
+        this.store.odobriSve();
+      });
   }
 
   /** Klodov nacrt koji nikad nije odobren se briše odmah; ručna (ili ikad odobrena) varijanta tek posle potvrde. */

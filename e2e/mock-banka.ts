@@ -546,6 +546,43 @@ export class MockBanka {
     return { telo: this.varijantaDetails(v) };
   }
 
+  /**
+   * `POST banka/varijante/odobri-vise`: 1 do 200 id-jeva; varijanta sa neuspelim renderom ili nepotpunim odgovorima se preskače
+   * sa razlogom, ostale se odobravaju kao pojedinačno (`promeniStatus`, kopija arhivira original).
+   */
+  odobriVise(cmd: { ids?: number[] } | null): Ishod {
+    const ids = cmd?.ids ?? [];
+    if (ids.length < 1 || ids.length > 200) return greska(400, 'Grupna radnja prima od 1 do 200 varijanti.');
+    const odobrene: number[] = [];
+    const preskocene: { id: number; naziv: string | null; razlog: string }[] = [];
+    for (const id of ids) {
+      const odgovor = this.promeniStatus(id, 'AKTIVNA');
+      if (odgovor.status === undefined) odobrene.push(id);
+      else preskocene.push({ id, naziv: this.varijanta(id)?.naziv ?? null, razlog: (odgovor.telo as { reason: string }).reason });
+    }
+    return { telo: { odobrene, preskocene } };
+  }
+
+  /** `POST banka/varijante/povuci-odobrenje`: nazad u NACRT, a original koji je varijanta zamenila nazad u AKTIVNU. */
+  povuciOdobrenje(cmd: { ids?: number[] } | null): Ishod {
+    const ids = cmd?.ids ?? [];
+    if (ids.length < 1 || ids.length > 200) return greska(400, 'Grupna radnja prima od 1 do 200 varijanti.');
+    const vracene: number[] = [];
+    const preskocene: { id: number; naziv: string | null; razlog: string }[] = [];
+    for (const id of ids) {
+      const v = this.varijanta(id);
+      if (v?.status !== 'AKTIVNA') {
+        preskocene.push({ id, naziv: v?.naziv ?? null, razlog: 'Varijanta nije aktivna.' });
+        continue;
+      }
+      const original = v.zamenjuje === null ? undefined : this.varijanta(v.zamenjuje);
+      if (original?.status === 'ARHIVIRANA') original.status = 'AKTIVNA';
+      v.status = 'NACRT';
+      vracene.push(id);
+    }
+    return { telo: { vracene, preskocene } };
+  }
+
   /** Ponovni render bez obzira na keš. */
   renderVarijante(id: number): Ishod {
     const v = this.varijanta(id);

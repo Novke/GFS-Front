@@ -48,6 +48,15 @@ describe('slajd-pravila', () => {
     expect(slajdIzCmd(slajdUCmd(s), s)).toEqual(s);
   });
 
+  it('verzija: slajdUCmd je ne nosi (POST i dupliranje je ne šalju; PUT je dodaje store), slajdIzCmd je čuva za sledeći PUT', () => {
+    const s: SlajdDetails = {
+      id: 4, rb: 2, tip: 'INFO', naslov: 'N', sadrzaj: null, slika: null, beleske: null, postepeno: false, pitanje: null, platno: null, prelaz: null,
+      verzija: 4,
+    };
+    expect(slajdUCmd(s)).not.toHaveProperty('verzija');
+    expect(slajdIzCmd(slajdUCmd(s), s).verzija).toBe(4);
+  });
+
   it('slajdUCmd vraća platno neizmenjeno (izmena beleški ne briše slojeve)', () => {
     const platno = { verzija: 1, pozadina: { boja: '#FFFFFF', medijId: null }, slojevi: [], animacije: [] } as const;
     const s: SlajdDetails = {

@@ -1,4 +1,4 @@
-import { blokVremena, danIDatum, danUNedelji, dodajDane, hhmm, isoDatum, lokalniDatum, relativniDan } from './termin';
+import { blokVremena, danIDatum, danUNedelji, dodajDane, hhmm, isoDatum, lokalniDatum, relativniDan, zaKoliko } from './termin';
 
 describe('termin', () => {
   it('dan u nedelji po ISO (ponedeljak 1, nedelja 7)', () => {
@@ -39,5 +39,16 @@ describe('termin', () => {
     expect(relativniDan('2026-11-05', '2026-11-04')).toBe('sutra');
     expect(relativniDan('2026-11-06', '2026-11-04')).toBe('');
     expect(relativniDan('2027-01-01', '2026-12-31')).toBe('sutra');
+  });
+
+  it('koliko je dana do termina, sa padežom i preko promene računanja vremena', () => {
+    expect(zaKoliko('2026-11-04', '2026-11-04')).toBe('danas');
+    expect(zaKoliko('2026-11-05', '2026-11-04')).toBe('sutra');
+    expect(zaKoliko('2026-11-06', '2026-11-04')).toBe('za 2 dana');
+    expect(zaKoliko('2026-11-15', '2026-11-04')).toBe('za 11 dana');
+    expect(zaKoliko('2026-11-25', '2026-11-04')).toBe('za 21 dan');
+    expect(zaKoliko('2026-11-02', '2026-10-23')).toBe('za 10 dana'); // preko 25. 10.
+    expect(zaKoliko('2026-11-03', '2026-11-04')).toBe('');
+    expect(zaKoliko('x', '2026-11-04')).toBe('');
   });
 });

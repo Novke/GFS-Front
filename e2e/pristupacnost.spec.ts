@@ -323,6 +323,29 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('mat-dialog-container')).toHaveCount(0);
     });
 
+    // Klod izmeni otvoren slajd: traka sa bojama upozorenja (`--warn`) i dugmetom "Učitaj ponovo" postoji samo posle 409
+    test('/prezentacije/5 (traka Klodove izmene): bez serious/critical kršenja', async ({ page, mock }) => {
+      const slajd = mock.podaci.prezentacije.find(x => x.id === 5)!.slajdovi.find(s => s.id === 51)!;
+      slajd.verzija = 1;
+      await page.goto('prezentacije/5');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      const naslov = page.getByRole('textbox', { name: 'Naslov', exact: true });
+      await expect(naslov).toHaveValue('Uvod');
+      slajd.verzija = 2;
+      await naslov.fill('Moj naslov');
+      await expect(page.locator('[data-ucitaj-ponovo]')).toBeVisible();
+      expect(await ozbiljnaKrsenja(page, '[data-sukob]'), `axe: traka Klodove izmene (${rezim})`).toEqual([]);
+    });
+
+    test('/banka/pregled (dijalog "Odobri sve"): bez serious/critical kršenja', async ({ page }) => {
+      await page.goto('banka/pregled?serija=uvoz-kol1-2024');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await page.locator('[data-odobri-sve]').click();
+      await expect(page.getByRole('alertdialog', { name: 'Odobri 3 nacrta?' })).toBeVisible();
+      await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+      expect(await ozbiljnaKrsenja(page, 'mat-dialog-container'), `axe: dijalog Odobri sve (${rezim})`).toEqual([]);
+    });
+
     // Zadatak slajd (FE-2): forma sa upozorenjima servera (`--warn`) i vezom na banku (grupa 5: isključena, bez aktivnih),
     // bočni pregled (kartica zadatka) i dijalog izbora grupe (stablo radio dugmadi, čip "Isključeno")
     test('/prezentacije/6 (Zadatak slajd sa upozorenjima i dijalog izbora grupe): bez serious/critical kršenja', async ({ page, mock }) => {

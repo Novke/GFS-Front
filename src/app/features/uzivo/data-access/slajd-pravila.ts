@@ -387,6 +387,8 @@ export function slajdIzCmd(cmd: SlajdCmd, osnova: { id: number; rb: number } & P
     platno: cmd.tip === 'PLATNO' ? cmd.platno : null,
     prelaz: normalizujPrelaz(cmd.prelaz),
     zadatak: cmd.tip === 'ZADATAK' && cmd.zadatak ? zadatakIzCmd(cmd.zadatak, osnova.zadatak) : null,
+    // lokalna izmena ostaje na učitanoj verziji: po njoj server prepoznaje Klodov upis između dva čuvanja
+    verzija: osnova.verzija,
   };
 }
 

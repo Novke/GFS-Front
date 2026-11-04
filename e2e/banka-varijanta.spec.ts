@@ -6,12 +6,14 @@ import { expect, test } from './fixture';
  * Editor varijante banke (`/banka/varijante/nova?grupa=` i `/banka/varijante/:id`) nad mokom `mock-banka.ts` (fixture
  * `banka.json`: grupa 2 "2 → 10" sa poljem BROJ `a`, predmet 1; varijanta 13 ima grešku rendera u liniji 3 teksta). Mok
  * renderuje uvek, osim kad tekst ili rešenje sadrži `\foo` (greška u liniji tog dela); render-proba stiže posle 800 ms mira,
- * a otvorena sačuvana varijanta je ne traži dok se ne izmeni (pregled iz sačuvanih SVG-ova).
+ * a otvorena sačuvana varijanta je ne traži dok se ne izmeni (pregled iz sačuvanih SVG-ova). Sačuvana varijanta sa uspelim
+ * renderom se otvara u prikazu "Pregled" (LaTeX je sakriven); nova i ona sa greškom rendera u prikazu "Uredi LaTeX".
  */
 
 const editor = (page: Page, deo: 'tekst' | 'resenje') => page.locator(`app-latex-editor[data-deo="${deo}"] textarea`);
 const istaknuta = (page: Page, deo: 'tekst' | 'resenje') => page.locator(`app-latex-editor[data-deo="${deo}"] .bk-le-istaknuta`);
 const pregled = (page: Page, naslov: 'Zadatak' | 'Rešenje') => page.getByRole('img', { name: `Pregled: ${naslov}` });
+const urediLatex = (page: Page) => page.getByRole('button', { name: 'Uredi LaTeX' });
 const BEZ_ODGOVORA = { prihvatljivi: null, tacna: null, tacne: null };
 
 test.describe('banka zadataka: editor varijante', () => {
@@ -51,7 +53,10 @@ test.describe('banka zadataka: editor varijante', () => {
     await expect(pregled(page, 'Rešenje')).toContainText('Rešenje 12');
     await page.waitForTimeout(1000);
     expect(mock.zahteviZa('banka/render-proba', 'POST')).toHaveLength(0);
+    await expect(page.locator('app-latex-editor')).toHaveCount(0);
 
+    await urediLatex(page).click();
+    await expect(editor(page, 'tekst')).toBeFocused();
     await editor(page, 'tekst').fill('Pretvori $110011_2$ u dekadni.');
     await expect(pregled(page, 'Zadatak')).toContainText('Pretvori 110011_2 u dekadni.');
     expect(mock.zahteviZa('banka/render-proba', 'POST')).toHaveLength(1);
@@ -125,12 +130,13 @@ test.describe('banka zadataka: editor varijante', () => {
 
   test('"Sačuvaj i odobri" kad render rešenja padne: ostaje na varijanti, kartica Rešenje sa istaknutom linijom', async ({ page, mock }) => {
     await page.goto('banka/varijante/11');
+    await urediLatex(page).click();
     await page.getByRole('tab', { name: 'Rešenje' }).click();
     await editor(page, 'resenje').fill('Cifre množimo stepenima dvojke:\n$8+2+1 = \\foo$');
-    // greška je samo u rešenju: pregled zadatka ostaje (proba šalje i SVG zadatka)
+    // greška je samo u rešenju: pregled pored editora kaže to, a pregled zadatka ostaje (proba šalje i SVG zadatka)
     await expect(page.locator('#bk-ve-greska-resenje')).toHaveText('Greška u liniji 2: Undefined control sequence \\foo');
-    await expect(pregled(page, 'Zadatak')).toContainText('Pretvori binarni broj 1011_2 u dekadni.');
     await page.getByRole('tab', { name: /Tekst/ }).click();
+    await expect(pregled(page, 'Zadatak')).toContainText('Pretvori binarni broj 1011_2 u dekadni.');
     await page.getByRole('button', { name: 'Sačuvaj i odobri' }).click();
 
     const traka = page.locator('app-form-error-banner [role=alert]');
@@ -170,5 +176,52 @@ test.describe('banka zadataka: editor varijante', () => {
       odgovori: { a: { broj: 2.5, ...BEZ_ODGOVORA } }, prilozi: [{ ime: 'graf-funkcije', medijId }], izvor: 'RUCNO', nivo: 2,
     }]);
     await expect(page).toHaveURL(/banka\?predmet=1&namena=PREDAVANJE&grupa=2$/);
+  });
+
+  test('prikaz: Pregled sa zadatkom i rešenjem, veličina se pamti, prečica E otvara editor, Esc vraća', async ({ page }) => {
+    await page.goto('banka/varijante/12');
+    const okvir = page.locator('.bk-sp-okvir').first();
+    await expect(pregled(page, 'Zadatak')).toBeVisible();
+    await expect(pregled(page, 'Rešenje')).toBeVisible();
+    const sirina = async () => (await okvir.boundingBox())!.width;
+    const vece = await sirina();
+    // širina se menja tek pri sledećem crtanju, pa se čeka nova vrednost
+    await page.getByRole('button', { name: 'Kao na telefonu' }).click();
+    // 126 mm prema 84 mm (u užoj koloni okvir je ograničen kolonom)
+    await expect.poll(sirina).toBeLessThan(vece / 1.2);
+    await page.getByRole('button', { name: 'Cela širina' }).click();
+    await expect.poll(sirina).toBeGreaterThanOrEqual(vece);
+
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Cela širina' })).toHaveAttribute('aria-pressed', 'true');
+
+    await page.keyboard.press('e');
+    await expect(editor(page, 'tekst')).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Uredi LaTeX' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Pregled', exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('app-latex-editor')).toHaveCount(0);
+  });
+
+  test('meni ⋮: Arhiviraj aktivne varijante, pa Vrati u nacrt; Dupliraj otvara kopiju', async ({ page, mock }) => {
+    await page.goto('banka/varijante/12');
+    const status = page.locator('app-page-header app-status-chip');
+    await expect(status).toContainText('Aktivna');
+    await page.getByRole('button', { name: 'Još radnji za varijantu' }).click();
+    await page.getByRole('menuitem', { name: 'Arhiviraj' }).click();
+    await expect(status).toContainText('Arhivirana');
+    expect(mock.zahteviZa('banka/varijante/12/arhiviraj', 'POST')).toHaveLength(1);
+    expect(mock.podaci.bankaVarijante.find(v => v.id === 12)!.status).toBe('ARHIVIRANA');
+
+    await page.getByRole('button', { name: 'Još radnji za varijantu' }).click();
+    await page.getByRole('menuitem', { name: 'Vrati u nacrt' }).click();
+    await expect(status).toContainText('Nacrt');
+    expect(mock.zahteviZa('banka/varijante/12/vrati-u-nacrt', 'POST')).toHaveLength(1);
+
+    await page.getByRole('button', { name: 'Još radnji za varijantu' }).click();
+    await page.getByRole('menuitem', { name: 'Dupliraj' }).click();
+    await expect(page).not.toHaveURL(/varijante\/12$/);
+    await expect(page).toHaveURL(/banka\/varijante\/\d+$/);
+    expect(mock.zahteviZa('banka/varijante/12/dupliraj', 'POST')).toHaveLength(1);
   });
 });

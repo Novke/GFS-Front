@@ -416,7 +416,12 @@ computed on the server; the front never builds dates of termini itself.
   (`pages/pocetna.page`; before `feature/portal-pocetna` on the tab Čas); a signed-in `/nalog` goes there): **self-contained** (provides its
   own `CasoviStore`, loads in its constructor, no inputs or outputs). `CasoviApi` = only `api/public/nalog/casovi`, `/najavi`, `/povuci`,
   all `LOCAL_ERRORS`; the student comes from the cookie. Hidden while loading and when the student has no termini; an error shows
-  "Pokušaj ponovo". Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
+  "Pokušaj ponovo". Layout (mockup A, 2026-11-04): the box "Sledeći čas" (first termin that is neither cancelled nor announced),
+  a month calendar (`ui/kalendar-casova.component`, pure functions in `ui/kalendar-casova.ts`) and below it the termini of the chosen day. Only days with a termin are
+  buttons (`[data-dan]`); the chosen day starts as the first termin, so a cancelled class next in line shows at once; the month always
+  follows the chosen day and the arrows walk only months that have termini. A cell has one stripe per termin, the subject colour
+  (`--predmet-1..5` in `_tokens.scss`, by alphabet, never red, amber or green), red when the whole day is cancelled, hatched amber
+  when the student skips every class of the day that is held. Per termin: "Neću doći" (one tap, no reason), then "Dodaj/Izmeni razlog" (textarea, 200 chars) and "Ipak
   dolazim"; a cancelled termin shows "Nema časa." plus the teacher's note and no buttons. 404/409 from the server (not your line,
   started, cancelled meanwhile) show the server text next to that termin and reload the list silently. The response never
   carries counts or other students' names, and the card shows none.
@@ -735,7 +740,7 @@ over STOMP; teacher commands are REST.
   samples are private and **never go into the repo** (not text, images or XML; fixtures are synthetic).
 - **Slide editor, part 4a (phase 4: layers, shapes, images, properties, undo):** `editor-platna/` is the canvas editor
   of a PLATNO slide. The editor page renders it only inside `@defer (on immediate)` (one instance per slide, `@for ... track
-  kljuc` (since 5c `kljuc:tip`)), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
+  kljuc` (since 5c `kljuc:tip`, later plus `obnova`)), so it is a lazy chunk: nothing outside `editor-platna/` imports it statically, and the host attribute
   `data-oznaka="gfs-editor-platna"` (`OZNAKA_EDITORA_PLATNA` in `oznake.ts`) marks the chunk. `e2e/lenji-editor.spec.ts`
   (no browser, over `dist/`) checks it with the helpers of `e2e/chunkovi.ts` and records sizes as test annotations
   (`velicina`): the initial closure (scripts and `modulepreload` of `index.html`, everything they import statically, plus
@@ -781,8 +786,8 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   the side nav (1366: canvas ~526 px, 1440: ~600 px); at 1280 the editor is 736 px and the panels go below a full-width
   canvas, as on a phone. `platno-prikaz`
   caches the prepared view per (layer object, index) in a `WeakMap`, so moving one layer rebuilds only that layer. Slide
-  list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (no
-  version check on the backend). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
+  list thumbnails are `@defer (on viewport)` and `inert`. Two tabs editing the same slide: the last `PUT` wins (`verzija`
+  catches only Claude's writes, see "Claude changed an open slide"). E2E: `e2e/uzivo-editor-platna.spec.ts` (mouse, keyboard only, image upload, undo per
   instance and from a panel, last `PUT` after Ctrl+S carries both canvas and notes with the page clock paused so the
   debounce cannot send it, layout at 1280/1366/1440/390 px), editor panels and the colour popover in `pristupacnost.spec.ts`.
 - **Slide editor, part 4b (text, tables, formulas, animations, preview):** all of it lives in the lazy editor chunk except the formula
@@ -903,7 +908,7 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   otherwise the dialog would drag in the editor's lazy chunks). Nothing of ProseMirror or MathLive is in the initial closure or the page
   file, and public routes load none of it (`NIZOVI_EDITORA`; `JavnaMreza` fails a public test on any `/assets/mathlive/` request
   unless the test sets `formule: true`, and then only `mathlive/ssr` may arrive, phase 5a).
-  **Two tabs editing one slide: the last `PUT` wins**, with no version check (the backend has none; adding one is out of scope).
+  **Two tabs editing one slide: the last `PUT` wins**: the teacher's own `PUT` never raises `verzija`, so only Claude's writes are caught ("Claude changed an open slide").
   **Known limitations:** a tab character in a table cell has no shortcut (Tab moves the cell); banding (`tabelaTraka`) is not recomputed
   after inserting a row, because the model carries resolved colours (decision 19); a neighbour merged across the edge of the range gets the
   border along its whole side; after a double click the caret goes to the end of the text; tab stops are not measured while typing (default 36 pt until the session ends); "Vrati 100%" (autofit) loses the
@@ -992,9 +997,20 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   nothing if it is no longer INFO or the editor was left; "Poništi pretvaranje" after leaving the editor only says that it is too
   late (the store is destroyed and no longer saves). Focus never falls to `body`: after the conversion it goes to the selected
   slide in the list (as after the PPTX import), after undo to "Pretvori u platno" of the new form (only while that slide is
-  still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip`, so a type change builds a new form and canvas
-  editor (the form builds its controls once). E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
+  still selected). The middle column uses `@for ... track kljuc(id) + ':' + tip + ':' + obnova`, so a type change or a read from the server
+  builds a new form and canvas editor (the form builds its controls once). `obnova` must stay a field of the `izabraniNiz` item: `@for` computes
+  the key of the old item only while comparing, so a global signal in the track expression gives both items the same key and reuses the view.
+  E2E `uzivo-pretvori.spec.ts` (list with steps by keyboard, link with
   Odustani/Pretvori, focus after both, exact `PUT` counts), form and dialog in `pristupacnost.spec.ts`.
+- **Claude changed an open slide (`SlajdDetails.verzija`).** Only Claude's MCP writes raise `verzija`, never the teacher's `PUT`, so the save pipeline stays
+  `switchMap` and there is no polling. Every `PUT slajdovi/{id}` carries the `verzija` of the slide in the store (`saVerzijom` at the `PUT` boundary, missing = `null` = no check);
+  `slajdUCmd` stays without it, so `POST`, import and duplicate cannot send it. A difference is 409 with `reason` exactly `Slajd je u međuvremenu izmenjen.` (`jeSukob`):
+  the slide goes to `EditorStore.sukobi` (separate from `greska`, which the next successful save of another slide clears; `zavrsi` restores `porukaSukoba`) and is never sent
+  again, not on an edit, not on leaving; other slides keep saving. The page shows the strip `[data-sukob]` with "Učitaj ponovo": `sacuvajOstale()` saves the other
+  slides first (a new conflict or an invalid slide stops it and discards nothing), then `ucitaj` drops the local edits of the conflicted slides only and raises `obnova`, which
+  rebuilds the form and canvas of the selected slide, conflicted or not (a stale form with the new `verzija` would overwrite Claude's edit). `sacuvajSve()` fails with the conflict
+  text instead of hanging, so Pokreni, Dupliraj and the imports stop. Leaving is not blocked: the guard asks with the conflict text and `sacuvajPreIzlaska` skips the slide.
+  Known narrow race: edits to other slides typed while the reload `GET` runs are lost with it. E2E `uzivo-editor-sukob.spec.ts`.
 - **PDF import (phase 5d; backend and nginx unchanged).** The editor's "PDF" button (accessible name "Uvezi iz PDF-a", next to
   "PowerPoint") turns pages of a PDF into PLATNO slides. **The PDF never goes to the server** (only page images do) and **the app
   never asks for a password**: `getDocument` gets no `password`/`onPassword`, so pdf.js rejects a locked file with
@@ -1255,7 +1271,7 @@ and Claude's series, and reviews the drafts one by one (below).
   fields are always sent; the MCP fields `izvor` on groups, search rows and topics (variants have had it since phase 1), `serija`,
   `ikadOdobrena`, `zamenjuje`, `brojClaudeNacrta`, `iskljucena`, `iskljucenjeId` and the types `SerijaInfo`, `PonistavanjeInfo`/`StavkaPonistavanja`, `IskljucenaTemaCmd`/`IskljucenaTemaInfo` are the
   A1 contract, new backend fields are always appended at the end of the record); `banka.api.ts` (`BankaApi`, all calls accept
-  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija` and leaves out `predmetId` when it is `null` (every subject), plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed),
+  `{ tiho: true }`; `pretraga` also sends `izvor` and `serija` and leaves out `predmetId` when it is `null` (every subject), plus `serije`, `odbaciSeriju` (series `encodeURIComponent`-ed), `odobriVise`, `povuciOdobrenje`,
   `iskljuceneTeme`, `iskljuciTemu` (no UI uses it) and `ukljuciTemu`); `banka.store.ts` (`BankaStore`, NgRx
   SignalStore provided by the `banka` page: tree, selected group, its variants, status and source filters (`filterStatusa`,
   `filterIzvora`; `imaFiltera`, `ocisti()` resets both), the subject's series and excluded topics (`serije`, `teme`: per subject, not
@@ -1274,14 +1290,19 @@ and Claude's series, and reviews the drafts one by one (below).
 - **Pages**: `banka.page` (subject + Predavanja/Testovi toggle, `PreferencesStore` key `banka` remembers the choice; left tree, right
   variant cards; "Nova varijanta" only for a leaf with a difficulty `tezina`), `grupa-detalj.page` (name, description, difficulty,
   instructions and the **field schema** editor; a type of a field stays locked while the group has active variants, adding a field to such
-  a group warns first and turns them into drafts), `varijanta-editor.page` (three columns: LaTeX tabs Tekst / Rešenje, live preview,
-  answers + attachments), `pregled.page` (draft review, below). Both editing pages also ask on tab close and reload
+  a group warns first and turns them into drafts), `varijanta-editor.page` (a 2 x 2 grid and a mode switch **Pregled | Uredi LaTeX**:
+  "Pregled" = rendered Zadatak | Rešenje, the default for a saved variant with a good render; "Uredi LaTeX" = editor (tabs Tekst / Rešenje) |
+  live preview of the active tab, the default for a new variant, a failed render and `?povratak` (Uredi from the draft review); the bottom row is
+  always Tačni odgovori | Prilozi. The mode is not stored; the preview size (`telefon` 84 mm / `vece` 126 mm, default / `cela`) is a browser
+  preference in its own localStorage key (`VelicinaPregledaPostavka`, not `PreferencesStore`: the initial bundle has no room). Keys `E` / `Esc`
+  only outside inputs and with no overlay open. The header ⋮ menu has Dupliraj, Arhiviraj / Vrati u nacrt and Obriši like the group card;
+  Dupliraj waits while there are unsaved edits), `pregled.page` (draft review, below). Both editing pages also ask on tab close and reload
   (`(window:beforeunload)` with the same condition as `unsavedChangesGuard`). A dialog opened from a ⋮ menu (tree or card) would
   restore focus to the removed menu item, so the pages put it back on that ⋮ button (cancel) or on the new/moved tree item
   (success), only when focus fell to `<body>`.
 - **`ui/`**: `stablo-grupa` (WAI-ARIA tree, roving tabindex, F2 rename, context menu), `varijanta-kartica`, `polja-editor`,
-  `odgovori-forma`, `latex-editor` (textarea with line-number gutter, error line highlight, Tab = two spaces, Ctrl+Enter = preview now),
-  `svg-pregled`, `prilozi`, the sections `iskljucene-teme` and `serije` (shared `sekcije-stabla.css`), `odgovori-pregled` (read-only
+  `odgovori-forma`, `latex-editor` (soft-wrapping textarea over a mirror of rows, so a line number sits at its logical line, error line highlight, Tab = two spaces,
+  Ctrl+Enter = preview now), `svg-pregled` (width from the `velicina` input), `prilozi`, the sections `iskljucene-teme` and `serije` (shared `sekcije-stabla.css`), `odgovori-pregled` (read-only
   answers of the review), and the dialogs `grupa-dialog`, `premesti-dialog`, `preambula-dialog` (per-subject LaTeX preamble; after
   saving it calls `renderuj-sve` until `preostalo` is 0, at most 10 rounds, then offers "Nastavi renderovanje", as after an error;
   `renderovano` and `neuspelo` are summed over the rounds). `renderuj-sve` never demotes: a failed variant keeps its status and its last
@@ -1366,7 +1387,7 @@ and Claude's series, and reviews the drafts one by one (below).
   reload), so a second `DELETE` (a 404) cannot be sent; after a failure it stays and can be retried. Focus that fell to `<body>`
   goes to the topic now in the removed one's place (or to the tree), on the group page to the name. **There is no form to add a
   topic** (spec decision): Novica tells Claude, which calls the MCP tool `iskljuci_temu`.
-- **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`; no "approve all" by design): one variant at a time. The
+- **Draft review** (`pages/pregled.page`, `data-access/pregled-nacrta.store`): one variant at a time, plus "Odobri sve (N)" (below). The
   filter comes from the query (`filterPregleda`: an invalid value means no filter, `status` defaults to `NACRT`, `serija` must match the
   server pattern); the MCP link (`<front>/banka/pregled?serija=<s>`) carries only the series, so without `predmet` the review covers
   every subject. The backend's `predmetId` is optional (`BankaFilter`: `BankaSpecs.predmet(null)` is no subject filter, an unknown id
@@ -1393,7 +1414,12 @@ and Claude's series, and reviews the drafts one by one (below).
   `mat-menu`: a vertical menu neither handles `←`/`→` nor prevents letters, so they would act on the draft behind it), while any
   `MatDialog` is open (`openDialogs.length`), with Ctrl/Alt/Meta/Shift (Shift+O, Shift+Delete and Shift+arrows are not shortcuts; `O`
   under Caps Lock without Shift is) and on auto-repeat; letters on a Cyrillic layout are read by `e.code`, as in the uživo console. Progress "12 / 48" (`role="progressbar"`;
-  a polite status region names the draft now shown). "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
+  a polite status region names the draft now shown). "Odobri sve (N)" (`data-odobri-sve`, only with status NACRT and at least two in the list; also on the end screen while skipped
+  drafts remain) asks first, then sends the first 200 loaded ids to `POST banka/varijante/odobri-vise` (the dialog says so above 200 and when the list is `skraceno`). The server
+  skips a failed render or incomplete answers with a reason, and those drafts stay for one-by-one review; the list reloads on the draft shown when the server skipped it, otherwise
+  on the first one left. The snackbar "Odobreno X, preskočeno Y." has "Poništi" -> `POST banka/varijante/povuci-odobrenje` with `odobrene` (back to NACRT, a replaced original back to
+  AKTIVNA), then a reload on the draft shown before. The undo goes straight to the API, not through `akcija`: `exhaustMap` would drop it while busy and `rxMethod` is dead after
+  leaving the page, where the `POST` still goes and only the reload is skipped. "Odbaci celu seriju" (only with `serija`) -> `POST banka/serije/{serija}/odbaci`:
   the server deletes the series' never-approved Claude drafts in every subject and group and the Claude groups left empty, approved
   and manual items stay and come back in `preskoceno`, presentations are untouched. The confirmation says exactly that and shows
   **no number** (the plan asked for one): the list is narrowed by `predmet`, `grupa`, `status` and the page limit and does not know

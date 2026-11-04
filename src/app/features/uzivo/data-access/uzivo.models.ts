@@ -48,6 +48,8 @@ export interface SlajdDetails {
   prelaz: Prelaz | null;
   /** Samo ZADATAK (inače `null`; stari odgovori i fixture-i bez polja). */
   zadatak?: ZadatakSlajdaInfo | null;
+  /** Raste samo sa Klodovim upisom kroz MCP, nikad sa nastavnikovim `PUT`-om (stari odgovori i fixture-i bez polja). */
+  verzija?: number;
 }
 /**
  * Potezi jednog CRTEZ sloja (`GET slajdovi/{id}/potezi`, redom slojeva). Snimak izvođenja ih ne nosi (`CrtezSloj.potezi`
@@ -79,6 +81,11 @@ export interface SlajdCmd {
   pitanje: PitanjeCmd | null; platno: Platno | null; prelaz: Prelaz | null;
   /** Obavezan za ZADATAK, `null` za ostale tipove. */
   zadatak?: ZadatakSlajda | null;
+  /**
+   * Samo `PUT slajdovi/{id}`: `verzija` učitanog slajda (dodaje je `EditorStore` pri slanju); `null` = bez provere. Druga
+   * vrednost na serveru je 409 `Slajd je u međuvremenu izmenjen.`. `POST`, uvoz i dupliranje je ne šalju.
+   */
+  verzija?: number | null;
 }
 /** Uvoz više slajdova odjednom (PowerPoint): `posle` = id slajda posle kog se ubacuju, `null` = na kraj. */
 export interface UvozSlajdovaCmd { posle: number | null; slajdovi: SlajdCmd[]; }

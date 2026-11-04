@@ -12,6 +12,7 @@ import { expect, test } from './fixture';
 
 const napredak = (page: Page) => page.locator('[data-napredak]');
 const naziv = (page: Page) => page.locator('[data-naziv]');
+const odobriSve = (page: Page) => page.locator('[data-odobri-sve]');
 
 test.describe('banka zadataka: pregled nacrta', () => {
   test('serija iz MCP linka (bez predmeta): kopija pored originala, O dva puta, Uredi pa nazad na isti nacrt, Odbaci celu seriju', async ({ page, mock }) => {
@@ -175,7 +176,7 @@ test.describe('banka zadataka: pregled nacrta', () => {
     await expect(napredak(page)).toHaveText('2 / 2');
     await expect(naziv(page)).toHaveText('100111 u dekadni');
     await expect(page.locator('[data-nacrt]')).toContainText('linija 3: Undefined control sequence \\foo');
-    await expect(page.getByRole('button', { name: 'Odobri' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('button', { name: 'Odobri', exact: true })).toHaveAttribute('aria-disabled', 'true');
 
     await page.keyboard.press('Delete');
     const potvrda = page.getByRole('alertdialog', { name: 'Obrisati varijantu „100111 u dekadni“?' });
@@ -190,5 +191,57 @@ test.describe('banka zadataka: pregled nacrta', () => {
     expect(mock.zahteviZa('banka/varijante/13', 'DELETE')).toHaveLength(0);
     await expect(naziv(page)).toHaveText('100111 u dekadni');
     await expect(napredak(page)).toHaveText('2 / 2');
+  });
+
+  test('Odobri sve: potvrda, kopija arhivira original, a Poništi vraća i nacrte i original', async ({ page, mock }) => {
+    const status = (id: number) => mock.podaci.bankaVarijante.find(v => v.id === id)!.status;
+    await page.goto('banka/pregled?serija=uvoz-kol1-2024');
+    await expect(napredak(page)).toHaveText('1 / 3');
+
+    await odobriSve(page).click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Odobri 3 nacrta?' });
+    await expect(potvrda).toContainText('odmah postaju aktivne i mogu da se pojave na času');
+    await expect(potvrda).toContainText('Nacrti sa neuspelim renderom ili nepotpunim odgovorima se preskaču');
+    await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+    await potvrda.getByRole('button', { name: 'Odobri sve' }).click();
+
+    await expect.poll(() => mock.zahteviZa('banka/varijante/odobri-vise', 'POST').length).toBe(1);
+    expect(mock.zahteviZa('banka/varijante/odobri-vise', 'POST')[0].telo).toEqual({ ids: [16, 17, 18] });
+    await expect(page.getByText('Odobreno 3, preskočeno 0.')).toBeVisible();
+    await expect(page.locator('[data-kraj]')).toContainText('Nema više nacrta.');
+    expect([15, 16, 17, 18].map(status)).toEqual(['ARHIVIRANA', 'AKTIVNA', 'AKTIVNA', 'AKTIVNA']);
+
+    await page.getByRole('button', { name: 'Poništi' }).click();
+    await expect.poll(() => mock.zahteviZa('banka/varijante/povuci-odobrenje', 'POST').length).toBe(1);
+    expect(mock.zahteviZa('banka/varijante/povuci-odobrenje', 'POST')[0].telo).toEqual({ ids: [16, 17, 18] });
+    await expect(page.getByText('Vraćeno u nacrte: 3.')).toBeVisible();
+    await expect(napredak(page)).toHaveText('1 / 3');
+    await expect(naziv(page)).toHaveText('Kol. 1, 2024/25, zad. 2');
+    expect([15, 16, 17, 18].map(status)).toEqual(['AKTIVNA', 'NACRT', 'NACRT', 'NACRT']);
+  });
+
+  test('Odobri sve: nacrt sa greškom u renderu ostaje za pregled jedan po jedan, a sa jednim nacrtom dugmeta više nema', async ({ page, mock }) => {
+    await page.goto('banka/pregled?predmet=1&izvor=RUCNO');
+    await expect(napredak(page)).toHaveText('1 / 2');
+    await expect(naziv(page)).toHaveText('1011 u dekadni');
+
+    await odobriSve(page).click();
+    const potvrda = page.getByRole('alertdialog', { name: 'Odobri 2 nacrta?' });
+    await posleOtvaranjaDijaloga(page, page.locator('mat-dialog-container'));
+    await potvrda.getByRole('button', { name: 'Odobri sve' }).click();
+
+    await expect(page.getByText('Odobreno 1, preskočeno 1.')).toBeVisible();
+    await expect(napredak(page)).toHaveText('1 / 1');
+    await expect(naziv(page)).toHaveText('100111 u dekadni');
+    await expect(odobriSve(page)).toHaveCount(0);
+    expect(mock.zahteviZa('banka/varijante/odobri-vise', 'POST')[0].telo).toEqual({ ids: [11, 13] });
+    expect(mock.podaci.bankaVarijante.find(v => v.id === 13)!.status).toBe('NACRT');
+  });
+
+  test('Odobri sve postoji samo u pregledu nacrta', async ({ page }) => {
+    await page.goto('banka/pregled?predmet=1&status=AKTIVNA');
+    await expect(page.getByRole('heading', { level: 1, name: 'Pregled nacrta' })).toBeVisible();
+    await expect(napredak(page)).toBeVisible();
+    await expect(odobriSve(page)).toHaveCount(0);
   });
 });

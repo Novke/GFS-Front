@@ -8,8 +8,8 @@ import type { OpcijeZahteva } from '../../../core/api/opcije-zahteva';
 import { Strana } from '../../../shared/models/strana';
 import {
   BankaFilter, BankaPretragaStavka, GrupaCmd, GrupaCvor, GrupaDetails, IskljucenaTemaCmd, IskljucenaTemaInfo, MedijInfo, Namena, NivoCmd,
-  OtvorenoZaGrupu, PonistavanjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo, RenderujSveInfo, SerijaInfo,
-  StatistikaFilter, StatistikaTipa, StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
+  OdobravanjeInfo, OtvorenoZaGrupu, PonistavanjeInfo, PovlacenjeInfo, PreambulaCmd, PreambulaInfo, PremestiCmd, RenderProbaCmd, RenderProbaInfo,
+  RenderujSveInfo, SerijaInfo, StatistikaFilter, StatistikaTipa, StatusVarijante, svgUrl, VarijantaCmd, VarijantaDetails, VarijantaInfo,
 } from './banka.models';
 
 /** Strana liste `GET banka/pretraga` (Spring `page` je 0-based, `size` najviše 100). */
@@ -117,6 +117,19 @@ export class BankaApi {
   /** `POST banka/varijante/{id}/odobri`: u AKTIVNU (409 bez uspelog rendera). */
   odobri(id: number, o: OpcijeZahteva = {}): Observable<VarijantaDetails> {
     return this.http.post<VarijantaDetails>(`${API_URL}/banka/varijante/${id}/odobri`, null, { context: this.kontekst(o) });
+  }
+
+  /**
+   * `POST banka/varijante/odobri-vise` (1 do 200 id-jeva): varijante sa neuspelim renderom ili nepotpunim odgovorima server
+   * preskače sa razlogom, ostale odobrava; kopija arhivira original, kao pojedinačno odobravanje.
+   */
+  odobriVise(ids: readonly number[], o: OpcijeZahteva = {}): Observable<OdobravanjeInfo> {
+    return this.http.post<OdobravanjeInfo>(`${API_URL}/banka/varijante/odobri-vise`, { ids }, { context: this.kontekst(o) });
+  }
+
+  /** `POST banka/varijante/povuci-odobrenje`: vraća varijante u NACRT, a original koji su zamenile u AKTIVNU. */
+  povuciOdobrenje(ids: readonly number[], o: OpcijeZahteva = {}): Observable<PovlacenjeInfo> {
+    return this.http.post<PovlacenjeInfo>(`${API_URL}/banka/varijante/povuci-odobrenje`, { ids }, { context: this.kontekst(o) });
   }
 
   /** `POST banka/varijante/{id}/arhiviraj`. */

@@ -86,6 +86,13 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
   host: { class: 'uz-kon-ucesnici' },
   // Zadatak runda: varijanta i ishod uz ime (u komponenti: početni paket je na granici budžeta)
   styles: `
+    /* red se lomi: ime dobija bar 10 em (pre toga je u uskoj konzoli ostajalo ~30 px i ime se lomilo slovo po slovo), a čip
+       varijante, ishod, vreme i dugmad idu u sledeći red kad ne staju */
+    .uz-kon-ucesnik { flex-wrap: wrap; row-gap: 0; }
+    .uz-kon-ucesnik .uz-kon-ucesnik-ime { flex: 1 1 10em; overflow-wrap: break-word; padding: 6px 0; }
+    .uz-kon-ucesnik-stanje { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-left: auto; padding-bottom: 4px; }
+    .uz-kon-akcije { display: flex; flex: none; align-items: center; margin-left: auto; }
+    .uz-kon-ucesnik-stanje + .uz-kon-akcije { margin-left: 0; }
     .uz-kon-varijanta {
       flex: none; max-width: 7em; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;
       font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -117,34 +124,38 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
                 </span>
               }
             </span>
-            @if (varijantaOd(u); as v) {
-              <span class="uz-kon-varijanta" [title]="'Varijanta ' + v.naziv">{{ v.naziv }}</span>
-              @if (v.papir) {
-                <span class="uz-kon-ishod">na papiru</span>
-              } @else {
-                @let ishod = u.tacno === true ? 'tačno' : u.tacno === false ? 'netačno' : u.odgovorio ? 'odgovorio' : 'nije odgovorio';
-                <span class="uz-kon-ishod" [class.uz-kon-ishod--tacno]="u.tacno === true" [class.uz-kon-ishod--netacno]="u.tacno === false">{{ ishod }}</span>
+            <span class="uz-kon-ucesnik-stanje">
+              @if (varijantaOd(u); as v) {
+                <span class="uz-kon-varijanta" [title]="'Varijanta ' + v.naziv">{{ v.naziv }}</span>
+                @if (v.papir) {
+                  <span class="uz-kon-ishod">na papiru</span>
+                } @else {
+                  @let ishod = u.tacno === true ? 'tačno' : u.tacno === false ? 'netačno' : u.odgovorio ? 'odgovorio' : 'nije odgovorio';
+                  <span class="uz-kon-ishod" [class.uz-kon-ishod--tacno]="u.tacno === true" [class.uz-kon-ishod--netacno]="u.tacno === false">{{ ishod }}</span>
+                }
               }
-            }
-            @if (u.odgovorio && u.vremeMs !== null && u.vremeMs !== undefined) { <span class="uz-kon-vreme">{{ vreme(u.vremeMs) }}</span> }
-            @if (u.odgovorio) {
-              @if (varijantaOd(u)) {
-                <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
-              } @else if (u.tacno === true) {
-                <mat-icon class="uz-kon-ikona-tacno" aria-label="tačno" svgIcon="check_circle" />
-              } @else if (u.tacno === false) {
-                <mat-icon class="uz-kon-ikona-netacno" aria-label="netačno" svgIcon="cancel" />
-              } @else {
-                <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
+              @if (u.odgovorio && u.vremeMs !== null && u.vremeMs !== undefined) { <span class="uz-kon-vreme">{{ vreme(u.vremeMs) }}</span> }
+              @if (u.odgovorio) {
+                @if (varijantaOd(u)) {
+                  <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
+                } @else if (u.tacno === true) {
+                  <mat-icon class="uz-kon-ikona-tacno" aria-label="tačno" svgIcon="check_circle" />
+                } @else if (u.tacno === false) {
+                  <mat-icon class="uz-kon-ikona-netacno" aria-label="netačno" svgIcon="cancel" />
+                } @else {
+                  <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
+                }
               }
-            }
-            @if (takmicenje()) { <span class="uz-kon-poeni">{{ poeni(u.poeni) }}</span> }
-            <button mat-icon-button type="button" [attr.aria-label]="'Preimenuj ' + u.ime" (click)="preimenujDialog(u)">
-              <mat-icon svgIcon="edit" />
-            </button>
-            <button mat-icon-button type="button" [attr.aria-label]="'Izbaci ' + u.ime" (click)="izbaciPotvrda(u)">
-              <mat-icon svgIcon="person_remove" />
-            </button>
+              @if (takmicenje()) { <span class="uz-kon-poeni">{{ poeni(u.poeni) }}</span> }
+            </span>
+            <span class="uz-kon-akcije">
+              <button mat-icon-button type="button" [attr.aria-label]="'Preimenuj ' + u.ime" (click)="preimenujDialog(u)">
+                <mat-icon svgIcon="edit" />
+              </button>
+              <button mat-icon-button type="button" [attr.aria-label]="'Izbaci ' + u.ime" (click)="izbaciPotvrda(u)">
+                <mat-icon svgIcon="person_remove" />
+              </button>
+            </span>
           </li>
         }
       </ul>

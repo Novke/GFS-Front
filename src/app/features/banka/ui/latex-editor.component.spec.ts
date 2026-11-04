@@ -1,7 +1,7 @@
 import { Component, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LatexEditorComponent } from './latex-editor.component';
 
@@ -38,16 +38,20 @@ describe('LatexEditorComponent', () => {
     return e;
   }
 
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
   beforeEach(async () => {
     f = TestBed.createComponent(Domacin);
     await stabilno();
   });
 
-  it('oznaka je labela polja; monospace polje bez prelamanja, bez provere pravopisa', () => {
+  it('oznaka je labela polja; monospace polje koje prelama dugačke redove, bez provere pravopisa', () => {
     const labela = el().querySelector('label')!;
     expect(labela.textContent!.trim()).toBe('LaTeX zadatka');
     expect(labela.htmlFor).toBe(polje().id);
-    expect(polje().getAttribute('wrap')).toBe('off');
+    expect(polje().getAttribute('wrap')).toBe('soft');
     expect(polje().getAttribute('spellcheck')).toBe('false');
   });
 
@@ -63,7 +67,9 @@ describe('LatexEditorComponent', () => {
     expect(f.componentInstance.c.value).toBe('a\nb\nc\n');
     expect(brojevi()).toEqual(['1', '2', '3', '4']);
     // gutter je samo vizuelan: čitač ekrana čita tekst polja
-    expect(el().querySelector('.bk-le-brojevi')!.getAttribute('aria-hidden')).toBe('true');
+    for (const red of el().querySelectorAll('.bk-le-red')) {
+      expect(red.getAttribute('aria-hidden')).toBe('true');
+    }
   });
 
   it('Tab ubacuje dva razmaka na mestu kursora (i umesto izbora) i javlja vrednost formi', async () => {
@@ -115,7 +121,7 @@ describe('LatexEditorComponent', () => {
     await stabilno();
     const istaknute = [...el().querySelectorAll('.bk-le-istaknuta')].map(b => b.textContent!.trim());
     expect(istaknute).toEqual(['3']);
-    expect(el().querySelector<HTMLElement>('.bk-le-traka')!.style.getPropertyValue('--bk-le-linija')).toBe('2');
+    expect([...el().querySelectorAll('.bk-le-red')].map(r => r.classList.contains('bk-le-istaknut'))).toEqual([false, false, true, false]);
     expect(polje().getAttribute('aria-invalid')).toBe('true');
     const opisi = polje().getAttribute('aria-describedby')!.split(' ');
     expect(opisi).toContain('greska-x');
@@ -125,32 +131,32 @@ describe('LatexEditorComponent', () => {
     f.componentInstance.opis.set(null);
     await stabilno();
     expect(el().querySelectorAll('.bk-le-istaknuta').length).toBe(0);
-    expect(el().querySelector('.bk-le-traka')).toBeNull();
+    expect(el().querySelectorAll('.bk-le-istaknut').length).toBe(0);
     expect(polje().getAttribute('aria-invalid')).toBeNull();
     expect(polje().getAttribute('aria-describedby')).toBe(el().querySelector('.bk-le-uputstvo')!.id);
   });
 
+  it('svaka linija je jedan red sa ogledalom teksta (visina reda prati prelomljen tekst)', async () => {
+    f.componentInstance.c.setValue('prva linija\n\ntreća');
+    await stabilno();
+    const ogledala = [...el().querySelectorAll('.bk-le-ogledalo')].map(o => o.textContent);
+    expect(ogledala).toEqual(['prva linija', '', 'treća']);
+  });
+
   it('istaknuta linija se pomera u vidno polje, ali ne dok korisnik kuca u polju', async () => {
+    const pomeri = vi.fn();
+    Element.prototype.scrollIntoView = pomeri;
     f.componentInstance.c.setValue(Array.from({ length: 60 }, (_, i) => `linija ${i + 1}`).join('\n'));
     await stabilno();
     f.componentInstance.linija.set(50);
     await stabilno();
-    expect(polje().scrollTop).toBeGreaterThan(0);
-    // pomeraj gutter-a prati skrol polja
-    expect(el().querySelector<HTMLElement>('app-latex-editor')!.style.getPropertyValue('--bk-le-pomak')).toBe(`${-polje().scrollTop}px`);
+    expect(pomeri).toHaveBeenCalledTimes(1);
+    expect(pomeri.mock.contexts[0]).toBe(el().querySelectorAll('.bk-le-red')[49]);
 
-    polje().scrollTop = 0;
-    polje().dispatchEvent(new Event('scroll'));
     polje().focus();
     f.componentInstance.linija.set(40);
     await stabilno();
-    expect(polje().scrollTop).toBe(0);
-  });
-
-  it('skrol polja pomera gutter (CSS promenljiva)', () => {
-    polje().scrollTop = 120;
-    polje().dispatchEvent(new Event('scroll'));
-    expect(el().querySelector<HTMLElement>('app-latex-editor')!.style.getPropertyValue('--bk-le-pomak')).toBe('-120px');
+    expect(pomeri).toHaveBeenCalledTimes(1);
   });
 
   it('ubaci() umeće tekst na poslednji položaj kursora, fokusira polje i javlja vrednost', async () => {

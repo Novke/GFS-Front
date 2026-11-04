@@ -1,12 +1,14 @@
 import {
-  afterRenderEffect, ChangeDetectionStrategy, Component, computed, DOCUMENT, ElementRef, inject, input, model, signal, viewChild,
+  afterRenderEffect, ChangeDetectionStrategy, Component, computed, DOCUMENT, ElementRef, inject, input, signal, viewChild,
   ViewEncapsulation,
 } from '@angular/core';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatSlideToggle } from '@angular/material/slide-toggle';
 
 import type { RenderGreskaInfo } from '../data-access/banka.models';
 import type { StanjePregleda } from '../data-access/render-proba';
+import type { VelicinaPregleda } from '../data-access/velicina-pregleda';
+
+export type { VelicinaPregleda };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
@@ -175,14 +177,16 @@ export function ocistiSvg(svg: string, prefiks: string): Element | null {
 
 let sledeci = 0;
 
-/** 84 mm u CSS pikselima (1 in = 96 px): širina okvira kao na telefonu. */
-const SIRINA_TELEFONA_PX = (84 * 96) / 25.4;
+/** Širina okvira u mm po veličini (`cela` nema, ona je 100% kolone). */
+const SIRINA_MM: Record<VelicinaPregleda, number | null> = { telefon: 84, vece: 126, cela: null };
+/** 1 in = 96 px, 25,4 mm = 1 in. */
+const mmUPx = (mm: number): number => (mm * 96) / 25.4;
 
 /**
- * Pregled render-probe jednog dela varijante (zadatak ili rešenje): SVG u okviru širine 84 mm, kao na telefonu u
- * portretu (render je `varwidth=84mm`, telefon ga širi na 100%; u koloni užoj od toga napomena kaže "umanjeno"), na beloj
- * podlozi i noću (`.rezim-dan`), sa prekidačem
- * "Puna širina" dok ima SVG (`punaSirina`, dvosmerno; ime prekidača nosi naslov, jer stranica ima dva pregleda). SVG ide u
+ * Pregled render-probe jednog dela varijante (zadatak ili rešenje): SVG u okviru širine `velicina` (84 mm kao na telefonu u
+ * portretu, 126 mm ili cela kolona; render je `varwidth=84mm`, SVG se samo razvlači; u koloni užoj od izabrane širine
+ * napomena kaže "umanjeno"), na beloj podlozi i noću (`.rezim-dan`). Veličinu bira stranica (zajednički prekidač za oba
+ * pregleda), pregled je samo prikazuje. SVG ide u
  * stranicu kao čvorovi (`importNode` očišćenog korena iz {@link ocistiSvg}), nikad kroz `innerHTML`, pa se nikad ne parsira kao
  * HTML; telo sme biti samo odgovor `render-proba` našeg servera.
  *
@@ -193,7 +197,7 @@ const SIRINA_TELEFONA_PX = (84 * 96) / 25.4;
  */
 @Component({
   selector: 'app-svg-pregled',
-  imports: [MatProgressSpinner, MatSlideToggle],
+  imports: [MatProgressSpinner],
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   styleUrl: './svg-pregled.component.css',
@@ -203,10 +207,6 @@ const SIRINA_TELEFONA_PX = (84 * 96) / 25.4;
         <h3 class="bk-sp-naslov" [id]="idNaslova">{{ naslov() }}</h3>
         @if (stanje() === 'ceka') {
           <span class="bk-sp-ceka"><mat-progress-spinner mode="indeterminate" diameter="16" aria-hidden="true" />Renderuje se…</span>
-        }
-        @if (prikaz()) {
-          <mat-slide-toggle class="bk-sp-sirina" [checked]="punaSirina()" [aria-label]="'Puna širina, ' + naslov()"
-            (change)="punaSirina.set($event.checked)">Puna širina</mat-slide-toggle>
         }
       </header>
       <span class="sr-only" role="status">{{ najava() }}</span>
@@ -225,7 +225,8 @@ const SIRINA_TELEFONA_PX = (84 * 96) / 25.4;
         }
       }
       @if (prikaz()) {
-        <div #okvir class="bk-sp-okvir rezim-dan" [class.bk-sp-puna]="punaSirina()" [class.bk-sp-zastarelo]="stanje() === 'ceka'">
+        <div #okvir class="bk-sp-okvir rezim-dan" [style.width.mm]="sirinaMm()"
+          [class.bk-sp-zastarelo]="stanje() === 'ceka'">
           <div #slika class="bk-sp-svg" role="img" [attr.aria-label]="'Pregled: ' + naslov()"></div>
         </div>
         <p class="bk-sp-napomena">{{ napomena() }}</p>
@@ -249,7 +250,8 @@ export class SvgPregledComponent {
   readonly greskaId = input<string | null>(null);
   /** Poruka stanja `prazno` (npr. "Rešenje nije uneto."); `null` = podrazumevana. */
   readonly praznaPoruka = input<string | null>(null);
-  readonly punaSirina = model(false);
+  /** Širina okvira (zajednička za oba pregleda na stranici). */
+  readonly velicina = input<VelicinaPregleda>('telefon');
 
   private readonly prefiks = `bk-sp-${++sledeci}-`;
   protected readonly idNaslova = `${this.prefiks}naslov`;
@@ -265,13 +267,22 @@ export class SvgPregledComponent {
   });
   private readonly slika = viewChild<ElementRef<HTMLElement>>('slika');
   private readonly okvir = viewChild<ElementRef<HTMLElement>>('okvir');
-  /** Okvir je uži od 84 mm (kolona na ekranu od 1100 do ~1410 px): pregled je umanjen u odnosu na telefon. */
+  protected readonly sirinaMm = computed(() => SIRINA_MM[this.velicina()]);
+  /** Okvir je uži od izabrane širine (uska kolona): pregled je umanjen. */
   private readonly umanjeno = signal(false);
   protected readonly napomena = computed(() => {
+    const mm = this.sirinaMm();
     if (this.umanjeno()) {
-      return 'Umanjeno: kolona je uža od telefona (84 mm)';
+      return mm === null ? 'Umanjeno: kolona je uža od pregleda' : `Umanjeno: kolona je uža od ${mm} mm`;
     }
-    return this.punaSirina() ? 'Uvećano na širinu kolone' : 'Širina kao na telefonu (84 mm)';
+    switch (this.velicina()) {
+      case 'telefon':
+        return 'Širina kao na telefonu (84 mm)';
+      case 'vece':
+        return 'Uvećano 1,5 puta u odnosu na telefon';
+      default:
+        return 'Uvećano na širinu kolone';
+    }
   });
   protected readonly porukaGreske = computed(() => {
     const g = this.greska();
@@ -305,14 +316,15 @@ export class SvgPregledComponent {
       this.slika()?.nativeElement.replaceChildren(...(svg ? [this.document.importNode(svg, true)] : []));
     });
 
-    // širina okvira (84 mm, ali najviše širina kolone): napomena kaže "umanjeno" kad je uža od telefona
+    // širina okvira (izabrana, ali najviše širina kolone): napomena kaže "umanjeno" kad je kolona uža od nje
     afterRenderEffect(onCleanup => {
       const okvir = this.okvir()?.nativeElement;
-      if (!okvir || typeof ResizeObserver === 'undefined') {
+      const mm = this.sirinaMm();
+      if (!okvir || mm === null || typeof ResizeObserver === 'undefined') {
         this.umanjeno.set(false);
         return;
       }
-      const posmatrac = new ResizeObserver(() => this.umanjeno.set(okvir.getBoundingClientRect().width < SIRINA_TELEFONA_PX - 0.5));
+      const posmatrac = new ResizeObserver(() => this.umanjeno.set(okvir.getBoundingClientRect().width < mmUPx(mm) - 0.5));
       posmatrac.observe(okvir);
       onCleanup(() => posmatrac.disconnect());
     });
