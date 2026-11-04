@@ -144,6 +144,24 @@ describe('OdgovorUnosComponent', () => {
     expect(poslato).toEqual([{ rundaId: 7, broj: '3,5' }]);
   });
 
+  it('BROJ: dugme ± daje minus koji numerička tastatura telefona nema', () => {
+    napravi(pitanje('BROJ', { opcije: null, brojOpcija: null }), true);
+    const nacrti: NacrtOdgovora[] = [];
+    fixture.componentInstance.nacrtPromena.subscribe(n => nacrti.push(n));
+    const polje = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    polje.value = '5';
+    polje.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const znak = fixture.nativeElement.querySelector('button[data-znak]') as HTMLButtonElement;
+    expect(znak.getAttribute('aria-label')).toBe('Promeni znak');
+    znak.click();
+    fixture.detectChanges();
+    expect(polje.value).toBe('-5');
+    expect(nacrti.at(-1)?.broj).toBe('-5');
+    dugme('Pošalji').click();
+    expect(poslato).toEqual([{ rundaId: 7, broj: '-5' }]);
+  });
+
   it('BROJ u režimu DUGMAD (bez Detalja): jedinica stoji uz polje', () => {
     // server šalje jedinicu u svakom režimu telefona; tekst pitanja ostaje skriven
     napravi(pitanje('BROJ', { opcije: null, brojOpcija: null, jedinica: 'm/s²' }), false);
