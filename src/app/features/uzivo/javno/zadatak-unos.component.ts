@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { LicniZadatak, PoljeZadatka, medijUrl } from '../data-access/uzivo.models';
 import {
-  VrednostPolja, jeOpcija, normalizujBroj, oznakaNaTelefonu, popunjeno, porukaZaBroj, tacnoPolja,
+  VrednostPolja, jeOpcija, normalizujBroj, oznakaNaTelefonu, popunjeno, porukaZaBroj, promeniZnak, tacnoPolja,
 } from '../ui/polja-zadatka';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { tekstZaCitac } from '../ui/tekst-formule';
@@ -103,6 +103,10 @@ export interface NacrtZadatka { rundaId: number; polja: Record<string, VrednostP
             <div class="uz-st-zd-polje">
               <label class="uz-st-oznaka" [for]="'uz-st-zd-' + i">{{ oznaka(p) }}</label>
               <div class="uz-st-polje-red">
+                @if (p.tip === 'BROJ') {
+                  <button type="button" class="uz-st-dugme" data-znak aria-label="Promeni znak" [disabled]="onemoguceno()"
+                          (mousedown)="$event.preventDefault()" (click)="znak(p.kljuc)">±</button>
+                }
                 <input class="uz-st-polje" type="text" autocomplete="off" [id]="'uz-st-zd-' + i" [attr.data-polje]="p.kljuc"
                        [attr.inputmode]="p.tip === 'BROJ' ? 'decimal' : null" [attr.maxlength]="p.tip === 'TEKST' ? 200 : null"
                        [value]="tekst(p.kljuc)" [disabled]="onemoguceno()" (input)="upisi(p.kljuc, $event)"
@@ -217,7 +221,14 @@ export class ZadatakUnosComponent {
   }
 
   protected upisi(kljuc: string, e: Event): void {
-    const v = (e.target as HTMLInputElement).value;
+    this.postavi(kljuc, (e.target as HTMLInputElement).value);
+  }
+
+  protected znak(kljuc: string): void {
+    this.postavi(kljuc, promeniZnak(this.tekst(kljuc)));
+  }
+
+  private postavi(kljuc: string, v: string): void {
     this.vrednosti.update(s => ({ ...s, [kljuc]: v }));
     this.greske.update(g => ({ ...g, [kljuc]: '' }));
     this.javiNacrt();

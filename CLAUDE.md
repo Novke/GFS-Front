@@ -1158,6 +1158,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   task and solution images, the counters line and "✓ tačno: …", no chips; with both results and solution on the solution wins, and
   switching it off returns to the chips. Sizes are in `cqw` per column count (`kolone`). A field label is shown only when the variant
   has more than one field (`oznakaVidljiva`; old schemas and round snapshots carry "a) …" on single fields).
+- **Number fields on the phone** (`zadatak-unos`, `odgovor-unos`, `vezbanje-unos`): `inputmode="decimal"` keeps the numeric keyboard, which has no
+  minus on iPhone and on part of Android, so every BROJ field has a ± button (`promeniZnak` in `ui/polja-zadatka`; `mousedown` is prevented, so the
+  keyboard stays open). It is shown for every BROJ field: hiding it on positive answers would leak the sign.
 - **Phone:** `javno/zadatak-ekran` + `javno/zadatak-unos` (lazy, `@defer`) show the participant's own variant (`LicnoStanje.zadatak`:
   field labels through `oznakaNaTelefonu`: on a one-field schema a leading list marker `a) `, `(b) `, `1) ` is stripped, nothing else;
   SVG through `api/public/mediji/<own id>`, the fields of its schema), the outcome after closing, correct values only with `TACAN`
@@ -1183,8 +1186,8 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   top of the old reserve; the task screen itself is a lazy chunk with its own budget. Accepted deliberately (plan FE-5). On
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
-  (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision.
+  (Izađi, own accuracy, exit marker) and the ± button the closure is 121 472 of 121 518 B: the next growth of the phone page needs a
+  lazy chunk or a new decision.
 
 ### Rang tačnosti (leaderboard)
 

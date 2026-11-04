@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LicniZadatak, OdgovorPolja, PoljeZadatka } from '../data-access/uzivo.models';
+import { promeniZnak } from '../ui/polja-zadatka';
 import { NacrtZadatka, ZadatakUnosComponent, oznakaNaTelefonu, popunjeno, tacnoPolja } from './zadatak-unos.component';
 
 const BEZ: OdgovorPolja = { broj: null, prihvatljivi: null, tacna: null, tacne: null };
@@ -53,6 +54,18 @@ describe('zadatak-unos: pravila', () => {
   });
 });
 
+describe('promeniZnak', () => {
+  it('dodaje i skida minus; plus postaje minus; prazno daje minus, pa se broj kuca posle njega', () => {
+    expect(promeniZnak('5')).toBe('-5');
+    expect(promeniZnak('-5')).toBe('5');
+    expect(promeniZnak('+5')).toBe('-5');
+    expect(promeniZnak(' 5')).toBe('-5');
+    expect(promeniZnak('3,5')).toBe('-3,5');
+    expect(promeniZnak('')).toBe('-');
+    expect(promeniZnak('-')).toBe('');
+  });
+});
+
 describe('ZadatakUnosComponent', () => {
   let fixture: ComponentFixture<ZadatakUnosComponent>;
   let poslato: Record<string, string | number[]>[];
@@ -86,6 +99,30 @@ describe('ZadatakUnosComponent', () => {
     expect(slika.alt).toBe('Zadatak');
     expect(slika.closest('.uz-st-zd-slika')).not.toBeNull();
     expect(el().querySelector('img[alt="Rešenje"]')).toBeNull();
+  });
+
+  it('BROJ: dugme ± daje minus koji numerička tastatura telefona nema; TEKST ga nema', () => {
+    napravi(zadatak({ polja: [polje('a', 'BROJ'), polje('b', 'TEKST')] }));
+    const broj = el().querySelector<HTMLInputElement>('input[data-polje="a"]')!;
+    const znak = el().querySelectorAll<HTMLButtonElement>('button[data-znak]');
+    expect(znak.length).toBe(1);
+    expect(znak[0].getAttribute('aria-label')).toBe('Promeni znak');
+    expect(znak[0].type).toBe('button');
+    upisi(broj, '5');
+    upisi(el().querySelector<HTMLInputElement>('input[data-polje="b"]')!, 'x');
+    znak[0].click();
+    fixture.detectChanges();
+    expect(broj.value).toBe('-5');
+    expect(nacrti.at(-1)).toEqual({ rundaId: 55, polja: { a: '-5', b: 'x' } });
+    dugme('Pošalji')!.click();
+    expect(poslato).toEqual([{ a: '-5', b: 'x' }]);
+  });
+
+  it('dugme ± ne uzima fokus polju (tastatura telefona ostaje otvorena)', () => {
+    napravi(zadatak());
+    const dogadjaj = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    el().querySelector('button[data-znak]')!.dispatchEvent(dogadjaj);
+    expect(dogadjaj.defaultPrevented).toBe(true);
   });
 
   it('polja po šemi; "Pošalji" tek kad je sve popunjeno, pa šalje {"a":"45","c":[2]} jednom', () => {
