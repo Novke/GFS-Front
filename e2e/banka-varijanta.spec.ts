@@ -185,12 +185,12 @@ test.describe('banka zadataka: editor varijante', () => {
     await expect(pregled(page, 'Rešenje')).toBeVisible();
     const sirina = async () => (await okvir.boundingBox())!.width;
     const vece = await sirina();
+    // širina se menja tek pri sledećem crtanju, pa se čeka nova vrednost
     await page.getByRole('button', { name: 'Kao na telefonu' }).click();
-    const telefon = await sirina();
     // 126 mm prema 84 mm (u užoj koloni okvir je ograničen kolonom)
-    expect(vece).toBeGreaterThan(telefon * 1.2);
+    await expect.poll(sirina).toBeLessThan(vece / 1.2);
     await page.getByRole('button', { name: 'Cela širina' }).click();
-    expect(await sirina()).toBeGreaterThanOrEqual(vece);
+    await expect.poll(sirina).toBeGreaterThanOrEqual(vece);
 
     await page.reload();
     await expect(page.getByRole('button', { name: 'Cela širina' })).toHaveAttribute('aria-pressed', 'true');
