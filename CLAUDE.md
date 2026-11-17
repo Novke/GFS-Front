@@ -687,7 +687,7 @@ over STOMP; teacher commands are REST.
   through the Web Animations API; a new instance per slide, and a fast second click cancels the running animations and
   jumps the previous group to its end state, so no layer stays hidden or transparent. Keyframes never animate `visibility`:
   each target gets inline `visibility: visible` while its group runs and has it reset explicitly after `cancel()` (Chromium
-  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 5 themes; an
+  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 6 themes (the sixth, FAKULTET, has a left strip with the faculty mark and a title rule for INFO, PITANJE and ZADATAK slides, never PLATNO; the strip rules live in the `styles` of `slajd-prikaz`, not in the global `uzivo-tokeni.css`, which is part of the initial bundle; `TemaOpis.traka`/`linijaNaslova` are optional and `promenljiveTeme` emits them only when present; mark `assets/images/gfs-znak-beli.png`); an
   unknown or missing `tema` means NACRT; the NACRT title is ink, and `teme.spec.ts` checks WCAG AA contrast of every
   theme. Fonts of the canvas: `ui/platno-fontovi.ts` plus `src/styles/_fontovi-platna.scss` (fontsource, OFL: Carlito,
   Caladea, Arimo, Tinos, Cousine, IBM Plex Sans/Mono, Atkinson Hyperlegible; `font-display: block`). `ui/preducitavanje.ts`

@@ -155,6 +155,26 @@ describe('SlajdPrikazComponent: PLATNO i teme', () => {
     expect(koren(bez).classList).not.toContain('rezim-noc');
   });
 
+  it('tema Fakultet: traka sa znakom za INFO, PITANJE i ZADATAK; nema je za PLATNO ni u drugim temama', async () => {
+    const traka = (el: HTMLElement) => el.querySelector('.uz-slajd-traka');
+    for (const slajd of [info('- a'), slajdPitanje, zadatakSlajd()]) {
+      const { el } = await prikazi({ slajd, tema: 'FAKULTET' });
+      expect(traka(el)).not.toBeNull();
+      expect(traka(el)!.getAttribute('aria-hidden')).toBe('true');
+      expect(traka(el)!.querySelector('img')!.getAttribute('alt')).toBe('');
+      expect(traka(el)!.querySelector('img')!.getAttribute('src')).toBe('assets/images/gfs-znak-beli.png');
+      expect(koren(el).classList).toContain('uz-slajd--traka');
+    }
+    const { el: platnoEl } = await prikazi({ slajd: platnoSlajd(), tema: 'FAKULTET' });
+    expect(traka(platnoEl)).toBeNull();
+    expect(koren(platnoEl).classList).not.toContain('uz-slajd--traka');
+    for (const t of ['NACRT', 'BELA', 'PAPIR', 'TAMNA', 'PONOC']) {
+      const { el } = await prikazi({ slajd: info('- a'), tema: t });
+      expect(traka(el)).toBeNull();
+      expect(koren(el).classList).not.toContain('uz-slajd--traka');
+    }
+  });
+
   describe('animacije: nova instanca platna po slajdu', () => {
     let animate: ReturnType<typeof vi.fn>;
     let cancel: ReturnType<typeof vi.fn>;

@@ -205,6 +205,11 @@ export class MockIzvodjenje {
     return this.f.izvodjenje.id;
   }
 
+  /** Tema prezentacije u snimcima izvođenja (podrazumevano NACRT). */
+  postaviTemu(tema: string): void {
+    this.f.tema = tema;
+  }
+
   /** Menja slajd u fiksturi (pre ili tokom testa); vidi se u sledećem snimku. */
   izmeniSlajd(indeks: number, izmene: Record<string, unknown>): void {
     Object.assign(this.f.slajdovi[indeks], izmene);

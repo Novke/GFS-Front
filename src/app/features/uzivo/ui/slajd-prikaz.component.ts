@@ -10,7 +10,7 @@ import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 import type { SlajdZaPrikaz } from './slajd-za-prikaz';
-import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
+import { TEME, promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 import { ZadatakPrikazComponent } from './zadatak-prikaz.component';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
@@ -39,9 +39,30 @@ export interface KodTraka { host: string; kod: string; }
     ZadatakPrikazComponent,
   ],
   host: { class: 'uz-okvir' },
+  // Traka teme Fakultet živi ovde, ne u `uzivo-tokeni.css`: globalni stil ulazi u početni bundle i u telefonsku stranu.
+  styles: `
+    .uz-slajd--traka { padding-left: 9.6cqw; }
+    .uz-slajd--traka .uz-slajd-naslov {
+      padding-bottom: 1.1cqw;
+      border-bottom: 0.22cqw solid var(--uz-tema-linija);
+    }
+    .uz-slajd-traka {
+      position: absolute; inset: 0 auto 0 0; width: 5.6cqw; background: var(--uz-tema-traka);
+    }
+    .uz-slajd-traka img {
+      position: absolute; top: 2.6cqw; left: 50%; transform: translateX(-50%); height: 5cqw; width: auto;
+    }
+    .uz-slajd-traka::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 34%;
+      background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.34) 0 0.2cqw, transparent 0.2cqw 0.62cqw);
+      -webkit-mask-image: linear-gradient(to top, #000 35%, transparent);
+      mask-image: linear-gradient(to top, #000 35%, transparent);
+    }
+  `,
   template: `
     <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'" [class.rezim-noc]="tamna()"
-             [style]="promenljive()">
+             [class.uz-slajd--traka]="imaTraku()" [style]="promenljive()">
+      @if (imaTraku()) { <span class="uz-slajd-traka" aria-hidden="true"><img src="assets/images/gfs-znak-beli.png" alt=""></span> }
       <!-- Nova instanca platna po slajdu (track id): animacija koja traje nikad ne prelazi na drugi slajd. -->
       @for (sl of platnoNiz(); track sl.id) {
         <app-platno-prikaz [platno]="sl.platno" [korak]="korak()" [animacija]="animacija()" />
@@ -117,6 +138,8 @@ export class SlajdPrikazComponent {
   private readonly vazeca = computed(() => vazecaTema(this.tema()));
   protected readonly promenljive = computed(() => promenljiveTeme(this.vazeca()));
   protected readonly tamna = computed(() => tamnaTema(this.vazeca()));
+  /** Leva traka sa znakom: tema je ima, a slajd nije PLATNO (platno zauzima ceo slajd). */
+  protected readonly imaTraku = computed(() => !!TEME[this.vazeca()].traka && this.slajd().tip !== 'PLATNO');
   /** [slajd] za PLATNO sa dokumentom, inače prazno; `track id` u šablonu daje novu instancu platna po slajdu. */
   protected readonly platnoNiz = computed(() => {
     const s = this.slajd();

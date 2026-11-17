@@ -253,6 +253,20 @@ test.describe('uživo: editor sa PLATNO slajdom', () => {
   });
 });
 
+test.describe('tema Fakultet na projektoru', () => {
+  test('INFO slajd ima traku sa znakom u boji teme i levi razmak; PLATNO je nema', async ({ page, mock }) => {
+    mock.izvodjenje.postaviTemu('FAKULTET');
+    mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (INFO)
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    const traka = page.locator('app-publika-scena .uz-slajd-traka');
+    await expect(traka).toBeVisible();
+    expect(await traka.evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(21, 63, 119)');
+    await expect(traka.locator('img')).toHaveJSProperty('complete', true);
+    await expect(page.locator('app-publika-scena .uz-slajd--traka')).toHaveCount(1);
+  });
+});
+
 /*
  * Formula bez slike izvora (F15/F19): projektor (`publika`) i konzola crtaju je pravim putem (snimak izvođenja ->
  * `platno-prikaz` -> lenji `mathlive/ssr` -> sanitizer -> markup), ne kroz učitavače iz specova komponenti. Slajd 2

@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { kontrast, promenljiveTeme, tamnaTema, TEME, vazecaTema } from './teme';
 import type { Tema } from '../data-access/platno.models';
 
-const SVE: Tema[] = ['NACRT', 'BELA', 'PAPIR', 'TAMNA', 'PONOC'];
+const SVE: Tema[] = ['NACRT', 'BELA', 'PAPIR', 'TAMNA', 'PONOC', 'FAKULTET'];
 
 describe('teme', () => {
-  it('ima svih pet tema', () => {
+  it('ima svih šest tema', () => {
     expect(Object.keys(TEME).sort()).toEqual([...SVE].sort());
     for (const t of SVE) expect(TEME[t].tema).toBe(t);
   });
@@ -20,6 +20,15 @@ describe('teme', () => {
       expect(kontrast(o.akcenti[0], o.pozadina)).toBeGreaterThanOrEqual(4.5);
     });
   }
+
+  it('FAKULTET: traka i linija naslova samo u njemu; ostale teme ih nemaju', () => {
+    const p = promenljiveTeme('FAKULTET');
+    expect(p['--uz-tema-traka']).toBe('#153F77');
+    expect(p['--uz-tema-linija']).toBe('#D3E2F1');
+    for (const t of SVE.filter((x) => x !== 'FAKULTET')) {
+      expect(Object.keys(promenljiveTeme(t)).some((k) => k === '--uz-tema-traka' || k === '--uz-tema-linija')).toBe(false);
+    }
+  });
 
   it('kontrast crne i bele je 21', () => {
     expect(kontrast('#000000', '#FFFFFF')).toBeCloseTo(21, 2);
