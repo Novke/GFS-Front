@@ -306,6 +306,26 @@ test.describe('pitanje sa slikom: slika preko većeg dela slajda', () => {
     expect(plocice[0]).toBeGreaterThanOrEqual(kutija.y + kutija.height - 1);
   });
 
+  test('kratke opcije: otkrivanje tačnog ne menja veličinu slike ni visinu reda pločica', async ({ page, mock }) => {
+    const img = await otvori(page, mock, { tip: 'JEDAN_TACAN', opcije: op('A', 'B', 'C', 'D') });
+    const mere = async () => ({
+      slika: await img.evaluate(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }),
+      red: await page.locator('app-publika-scena .uz-plocica').evaluateAll(l => Math.max(...l.map(e => e.getBoundingClientRect().height))),
+    });
+    for (const k of ['OTVORI_ZATVORI', 'OTVORI_ZATVORI'] as const) mock.izvodjenje.primeni(k); // zatvorena runda, tačan još skriven
+    await page.reload();
+    await expect.poll(() => img.evaluate(e => (e as HTMLImageElement).complete)).toBe(true);
+    const pre = await mere();
+    mock.izvodjenje.primeni('TACAN');
+    await page.reload();
+    await expect(page.locator('app-publika-scena .uz-plocica-tacno')).toBeVisible();
+    await expect.poll(() => img.evaluate(e => (e as HTMLImageElement).complete)).toBe(true);
+    const posle = await mere();
+    expect(Math.abs(posle.slika[0] - pre.slika[0])).toBeLessThan(1);
+    expect(Math.abs(posle.slika[1] - pre.slika[1])).toBeLessThan(1);
+    expect(Math.abs(posle.red - pre.red)).toBeLessThan(1);
+  });
+
   test('duge opcije: raspored kao pre, slika levo od pločica', async ({ page, mock }) => {
     const img = await otvori(page, mock, { tip: 'JEDAN_TACAN', opcije: op('Levo poravnanje bez uvlačenja', 'Obostrano poravnanje teksta', 'Centrirano poravnanje naslova', 'Desno poravnanje sa razmakom') });
     const kutija = (await img.boundingBox())!;

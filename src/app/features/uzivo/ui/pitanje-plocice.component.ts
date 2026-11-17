@@ -34,9 +34,11 @@ import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
       height: auto; grid-template-columns: repeat(var(--uz-n, 4), minmax(0, 1fr)); grid-auto-rows: auto;
     }
     :host(.uz-plocice--sazeto) .uz-plocica { min-height: 7cqw; }
-    :host(.uz-plocice--sazeto) .uz-plocica { flex-wrap: wrap; justify-content: center; }
-    :host(.uz-plocice--sazeto) .uz-plocica-tekst { flex: 1 1 auto; text-align: center; }
-    :host(.uz-plocice--sazeto) .uz-plocica-tacno { flex: none; }
+    :host(.uz-plocice--sazeto) .uz-plocica { position: relative; flex-wrap: nowrap; overflow: visible; }
+    :host(.uz-plocice--sazeto) .uz-plocica--tacna { border-width: 0.12em; box-shadow: 0 0 0 0.06em var(--ok); }
+    :host(.uz-plocice--sazeto) .uz-plocica-tacno {
+      position: absolute; top: -0.6cqw; right: 0.8cqw; font-size: 0.62em; line-height: 1.3;
+    }
   `,
   template: `
     @if (sazeto() && unos()) {
