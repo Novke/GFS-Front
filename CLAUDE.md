@@ -687,7 +687,7 @@ over STOMP; teacher commands are REST.
   through the Web Animations API; a new instance per slide, and a fast second click cancels the running animations and
   jumps the previous group to its end state, so no layer stays hidden or transparent. Keyframes never animate `visibility`:
   each target gets inline `visibility: visible` while its group runs and has it reset explicitly after `cancel()` (Chromium
-  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 5 themes; an
+  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 6 themes (the sixth, FAKULTET, has a left strip with the faculty mark and a title rule for INFO, PITANJE and ZADATAK slides, never PLATNO; the strip rules live in the `styles` of `slajd-prikaz`, not in the global `uzivo-tokeni.css`, which is part of the initial bundle; `TemaOpis.traka`/`linijaNaslova` are optional and `promenljiveTeme` emits them only when present; mark `assets/images/gfs-znak-beli.png`); an
   unknown or missing `tema` means NACRT; the NACRT title is ink, and `teme.spec.ts` checks WCAG AA contrast of every
   theme. Fonts of the canvas: `ui/platno-fontovi.ts` plus `src/styles/_fontovi-platna.scss` (fontsource, OFL: Carlito,
   Caladea, Arimo, Tinos, Cousine, IBM Plex Sans/Mono, Atkinson Hyperlegible; `font-display: block`). `ui/preducitavanje.ts`
@@ -700,6 +700,7 @@ over STOMP; teacher commands are REST.
   **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (the page always sends the store's
   `platno`, never the form's (`izmenaForme`), and `slajdUCmd` copies it from the slide; omitting it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
+  - **Question with an image: large layout (`slikaVelika` in `slajd-prikaz`).** A PITANJE slide with an image and no shown result gets the image over most of the slide (grid: image row, then a compact row) when the question is BROJ, KRATAK_TEKST or SKALA (the input description shrinks to a small pill in the corner, `PitanjePlociceComponent` input `sazeto`, the correct answer sits in the same row), or has 1-6 options each of at most 16 characters (all tiles in one row under the image, `--uz-n` columns). Anything else keeps the old two-column layout (image left, tiles right). The phone never shows this. The rules live in component `styles`, not in the global CSS (initial bundle budget). e2e `uzivo-platno.spec.ts` "slika preko većeg dela slajda".
 - **Console and remote (phase 3 of the slide builder):** the console (`konzola`) shows the position with the step ("korak k/n"
   from the server's `korak`/`brojStavki`, never from `brojKoraka`), `sledece-panel` (state after the next click; on a
   question in CEKA/OTVORENO the action plus "Zatim:", pure function `sledeciKlik` in `izvodjenje-pravila`),

@@ -759,6 +759,18 @@ test.describe('pristupačnost (axe): pitanje sa formulom, dan', () => {
     expect(await ozbiljnaKrsenja(page), 'axe: projektor, pitanje sa formulom').toEqual([]);
   });
 
+  test('/izvodjenja/7/publika (projektor, tema Fakultet: traka sa znakom na INFO slajdu): bez serious/critical kršenja', async ({ page, mock }) => {
+    mock.izvodjenje.postaviTemu('FAKULTET');
+    mock.izvodjenje.primeni('SLEDECI'); // prijava -> slajd 1 (INFO)
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    const traka = page.locator('app-publika-scena .uz-slajd-traka');
+    await expect(traka).toBeVisible();
+    await expect(traka.locator('img')).toHaveAttribute('alt', '');
+    await page.waitForLoadState('networkidle');
+    expect(await ozbiljnaKrsenja(page), 'axe: projektor, tema Fakultet').toEqual([]);
+  });
+
   // Zadatak slajd (FE-4): opis u CEKA, pa zatvorena runda sa uključenim rezultatima, tačnim i rešenjem (mreža 2 kartice),
   // pa bez rešenja (samo krupni uneti brojevi)
   test('/izvodjenja/7/publika (projektor, Zadatak slajd, opis i rezultati sa rešenjem): bez serious/critical kršenja', async ({ page, mock }) => {

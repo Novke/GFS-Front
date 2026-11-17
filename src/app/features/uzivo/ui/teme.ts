@@ -2,7 +2,7 @@ import type { Tema } from '../data-access/platno.models';
 import { cssFonta } from './platno-fontovi';
 
 /**
- * Pet tema slajda. Ovo je jedino mesto u aplikaciji gde se boje pišu kao heks vrednosti: tema je podatak platna,
+ * Šest tema slajda. Ovo je jedino mesto u aplikaciji gde se boje pišu kao heks vrednosti: tema je podatak platna,
  * ne stil aplikacije. NACRT preuzima dnevne vrednosti iz `src/styles/_tokens.scss` (--ink, --primary, --accent,
  * --ok, --danger, --warn, --muted); ako se tokeni promene, ovde ih ručno uskladiti.
  */
@@ -11,6 +11,10 @@ export interface TemaOpis {
   akcenti: readonly [string, string, string, string, string, string];
   fontNaslova: string; fontTela: string;
   tabelaZaglavlje: string; tabelaZaglavljeTekst: string; tabelaTraka: string;
+  /** Boja leve trake sa znakom fakulteta (INFO, PITANJE, ZADATAK); bez polja nema trake. */
+  traka?: string;
+  /** Boja linije ispod naslova INFO slajda (uz traku). */
+  linijaNaslova?: string;
 }
 
 export const TEME: Record<Tema, TemaOpis> = {
@@ -45,6 +49,13 @@ export const TEME: Record<Tema, TemaOpis> = {
     fontNaslova: 'IBM Plex Sans', fontTela: 'IBM Plex Sans',
     tabelaZaglavlje: '#3CC6C8', tabelaZaglavljeTekst: '#0F1B2D', tabelaTraka: '#17263D',
   },
+  FAKULTET: {
+    tema: 'FAKULTET', naziv: 'Fakultet', pozadina: '#FFFFFF', tekst: '#0F2238', naslov: '#153F77',
+    akcenti: ['#1F5FA8', '#B12E57', '#1D7A55', '#8A5300', '#5F6C84', '#153F77'],
+    fontNaslova: 'Caladea', fontTela: 'Carlito',
+    tabelaZaglavlje: '#153F77', tabelaZaglavljeTekst: '#FFFFFF', tabelaTraka: '#EAF1F8',
+    traka: '#153F77', linijaNaslova: '#D3E2F1',
+  },
 };
 
 /** Tema iz snimka ili prezentacije; odsutna (stari server, e2e fixture-i) ili nepoznata je NACRT. */
@@ -72,6 +83,8 @@ export function promenljiveTeme(t: Tema): Record<string, string> {
     '--uz-tema-font-tela': cssFonta(o.fontTela),
   };
   o.akcenti.forEach((a, i) => { p[`--uz-tema-akcent-${i + 1}`] = a; });
+  if (o.traka) { p['--uz-tema-traka'] = o.traka; }
+  if (o.linijaNaslova) { p['--uz-tema-linija'] = o.linijaNaslova; }
   return p;
 }
 

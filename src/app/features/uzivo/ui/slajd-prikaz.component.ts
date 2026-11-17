@@ -10,7 +10,7 @@ import { RezultatPrikazComponent } from './rezultat-prikaz.component';
 import { TajmerComponent } from './tajmer.component';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 import type { SlajdZaPrikaz } from './slajd-za-prikaz';
-import { promenljiveTeme, tamnaTema, vazecaTema } from './teme';
+import { TEME, promenljiveTeme, tamnaTema, vazecaTema } from './teme';
 import { ZadatakPrikazComponent } from './zadatak-prikaz.component';
 
 export interface TajmerUlaz { rokMs: number | null; preostaloMs: number | null; sat: ServerskiSat; }
@@ -39,9 +39,34 @@ export interface KodTraka { host: string; kod: string; }
     ZadatakPrikazComponent,
   ],
   host: { class: 'uz-okvir' },
+  // Traka teme Fakultet živi ovde, ne u `uzivo-tokeni.css`: globalni stil ulazi u početni bundle i u telefonsku stranu.
+  styles: `
+    .uz-slajd--traka { padding-left: 9.6cqw; }
+    /* Pitanje sa slikom: slika preko cele širine i preostale visine, unos ili kratke opcije u redu ispod. */
+    .uz-pitanje-telo--slika-velika {
+      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 1.2cqw;
+    }
+    .uz-slajd--traka .uz-slajd-naslov {
+      padding-bottom: 1.1cqw;
+      border-bottom: 0.22cqw solid var(--uz-tema-linija);
+    }
+    .uz-slajd-traka {
+      position: absolute; inset: 0 auto 0 0; width: 5.6cqw; background: var(--uz-tema-traka);
+    }
+    .uz-slajd-traka img {
+      position: absolute; top: 2.6cqw; left: 50%; transform: translateX(-50%); height: 5cqw; width: auto;
+    }
+    .uz-slajd-traka::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 34%;
+      background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.34) 0 0.2cqw, transparent 0.2cqw 0.62cqw);
+      -webkit-mask-image: linear-gradient(to top, #000 35%, transparent);
+      mask-image: linear-gradient(to top, #000 35%, transparent);
+    }
+  `,
   template: `
     <article class="uz-platno uz-slajd" [class.uz-slajd--pitanje]="slajd().tip === 'PITANJE'" [class.rezim-noc]="tamna()"
-             [style]="promenljive()">
+             [class.uz-slajd--traka]="imaTraku()" [style]="promenljive()">
+      @if (imaTraku()) { <span class="uz-slajd-traka" aria-hidden="true"><img src="assets/images/gfs-znak-beli.png" alt=""></span> }
       <!-- Nova instanca platna po slajdu (track id): animacija koja traje nikad ne prelazi na drugi slajd. -->
       @for (sl of platnoNiz(); track sl.id) {
         <app-platno-prikaz [platno]="sl.platno" [korak]="korak()" [animacija]="animacija()" />
@@ -64,12 +89,13 @@ export interface KodTraka { host: string; kod: string; }
                         [ukupnoMs]="p.vremeSekunde ? p.vremeSekunde * 1000 : null" />
           }
         </header>
-        <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat()">
+        <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat() && !slikaVelika()"
+             [class.uz-pitanje-telo--slika-velika]="slikaVelika()">
           @if (prikazanRezultat(); as r) {
             <app-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [pitanje]="p" />
           } @else {
             @if (p.slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
-            <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" />
+            <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" [sazeto]="slikaVelika()" />
           }
         </div>
       }
@@ -117,6 +143,8 @@ export class SlajdPrikazComponent {
   private readonly vazeca = computed(() => vazecaTema(this.tema()));
   protected readonly promenljive = computed(() => promenljiveTeme(this.vazeca()));
   protected readonly tamna = computed(() => tamnaTema(this.vazeca()));
+  /** Leva traka sa znakom: tema je ima, a slajd nije PLATNO (platno zauzima ceo slajd). */
+  protected readonly imaTraku = computed(() => !!TEME[this.vazeca()].traka && this.slajd().tip !== 'PLATNO');
   /** [slajd] za PLATNO sa dokumentom, inače prazno; `track id` u šablonu daje novu instancu platna po slajdu. */
   protected readonly platnoNiz = computed(() => {
     const s = this.slajd();
@@ -125,6 +153,20 @@ export class SlajdPrikazComponent {
   protected readonly traka = computed(() => (this.slajd().tip === 'PLATNO' ? null : this.kodTraka()));
   protected readonly kod = kodSaRazmakom;
   protected readonly html = computed(() => (this.slajd().tip === 'INFO' ? renderMarkdown(this.slajd().sadrzaj) : ''));
+  /**
+   * Pitanje sa slikom bez prikazanog rezultata, kome pločice ne trebaju mnogo mesta: BROJ, KRATAK_TEKST, SKALA, ili
+   * 1-6 opcija čiji je tekst najviše 16 znakova. Slika tada dobija ceo slajd (vidi `styles`).
+   */
+  protected readonly slikaVelika = computed(() => {
+    const p = this.slajd().pitanje;
+    if (this.slajd().tip !== 'PITANJE' || !p?.slika || this.prikazanRezultat()) {
+      return false;
+    }
+    if (p.tip === 'BROJ' || p.tip === 'KRATAK_TEKST' || p.tip === 'SKALA') {
+      return true;
+    }
+    return p.opcije.length >= 1 && p.opcije.length <= 6 && p.opcije.every(o => o.tekst.length <= 16);
+  });
   protected readonly prikazanRezultat = computed(() => (this.prikaziRezultat() ? this.rezultat() : null));
   protected readonly aktivanTajmer = computed(() => {
     const t = this.tajmer();
