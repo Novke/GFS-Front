@@ -267,6 +267,53 @@ test.describe('tema Fakultet na projektoru', () => {
   });
 });
 
+test.describe('pitanje sa slikom: slika preko većeg dela slajda', () => {
+  const osn = { vremeSekunde: null, brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null, prihvatljiviOdgovori: null, skalaMinOznaka: null, skalaMaxOznaka: null };
+  const slika = { id: 'm1', naziv: 'Slika', mime: 'image/svg+xml', velicina: 1 };
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="700"><rect width="1600" height="700" fill="#cde"/></svg>';
+  const op = (...t: string[]) => t.map((tekst, i) => ({ id: i + 1, rb: i + 1, tekst, tacna: i === 1 }));
+
+  async function otvori(page: import('@playwright/test').Page, mock: Parameters<typeof nastavnickiBroker>[1], pitanje: object) {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    mock.izvodjenje.postaviTemu('FAKULTET');
+    mock.izvodjenje.izmeniSlajd(2, { pitanje: { ...osn, id: 51, tekst: 'Pitanje?', ...pitanje, slika } });
+    await page.route('**/api/public/mediji/**', r => r.fulfill({ contentType: 'image/svg+xml', body: svg }));
+    mock.izvodjenje.primeni('IDI_NA', 2);
+    await nastavnickiBroker(page, mock);
+    await page.goto('izvodjenja/7/publika');
+    const slika$ = page.locator('app-publika-scena .uz-pitanje-telo img').first();
+    await expect(slika$).toBeVisible();
+    await expect.poll(() => slika$.evaluate(e => (e as HTMLImageElement).complete)).toBe(true);
+    return slika$;
+  }
+
+  test('kratak tekst: slika zauzima većinu širine, unos je mala pločica', async ({ page, mock }) => {
+    const img = await otvori(page, mock, { tip: 'KRATAK_TEKST', opcije: [] });
+    const okvir = (await page.locator('app-publika-scena .uz-okvir').first().boundingBox())!;
+    const kutija = (await img.boundingBox())!;
+    expect(kutija.width / okvir.width).toBeGreaterThan(0.7);
+    const pilula = (await page.locator('.uz-sazeto-unos').boundingBox())!;
+    expect(pilula.height / okvir.height).toBeLessThan(0.08);
+    await expect(page.locator('.uz-unos')).toHaveCount(0);
+  });
+
+  test('kratke opcije: slika iznad, sve pločice u jednom redu ispod nje', async ({ page, mock }) => {
+    const img = await otvori(page, mock, { tip: 'JEDAN_TACAN', opcije: op('A', 'B', 'C', 'D') });
+    const kutija = (await img.boundingBox())!;
+    const plocice = await page.locator('app-publika-scena .uz-plocica').evaluateAll(l => l.map(e => e.getBoundingClientRect().top));
+    expect(plocice).toHaveLength(4);
+    expect(new Set(plocice.map(Math.round)).size).toBe(1);
+    expect(plocice[0]).toBeGreaterThanOrEqual(kutija.y + kutija.height - 1);
+  });
+
+  test('duge opcije: raspored kao pre, slika levo od pločica', async ({ page, mock }) => {
+    const img = await otvori(page, mock, { tip: 'JEDAN_TACAN', opcije: op('Levo poravnanje bez uvlačenja', 'Obostrano poravnanje teksta', 'Centrirano poravnanje naslova', 'Desno poravnanje sa razmakom') });
+    const kutija = (await img.boundingBox())!;
+    const prva = (await page.locator('app-publika-scena .uz-plocica').first().boundingBox())!;
+    expect(prva.x).toBeGreaterThanOrEqual(kutija.x + kutija.width - 1);
+  });
+});
+
 /*
  * Formula bez slike izvora (F15/F19): projektor (`publika`) i konzola crtaju je pravim putem (snimak izvođenja ->
  * `platno-prikaz` -> lenji `mathlive/ssr` -> sanitizer -> markup), ne kroz učitavače iz specova komponenti. Slajd 2

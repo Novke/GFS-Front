@@ -42,6 +42,10 @@ export interface KodTraka { host: string; kod: string; }
   // Traka teme Fakultet živi ovde, ne u `uzivo-tokeni.css`: globalni stil ulazi u početni bundle i u telefonsku stranu.
   styles: `
     .uz-slajd--traka { padding-left: 9.6cqw; }
+    /* Pitanje sa slikom: slika preko cele širine i preostale visine, unos ili kratke opcije u redu ispod. */
+    .uz-pitanje-telo--slika-velika {
+      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 1.2cqw;
+    }
     .uz-slajd--traka .uz-slajd-naslov {
       padding-bottom: 1.1cqw;
       border-bottom: 0.22cqw solid var(--uz-tema-linija);
@@ -85,12 +89,13 @@ export interface KodTraka { host: string; kod: string; }
                         [ukupnoMs]="p.vremeSekunde ? p.vremeSekunde * 1000 : null" />
           }
         </header>
-        <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat()">
+        <div class="uz-pitanje-telo" [class.uz-pitanje-telo--slika]="!!p.slika && !prikazanRezultat() && !slikaVelika()"
+             [class.uz-pitanje-telo--slika-velika]="slikaVelika()">
           @if (prikazanRezultat(); as r) {
             <app-rezultat-prikaz class="uz-slajd-rezultat" [rezultat]="r" [pitanje]="p" />
           } @else {
             @if (p.slika; as slika) { <img class="uz-slajd-slika" [src]="url(slika.id)" [alt]="slika.naziv"> }
-            <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" />
+            <app-pitanje-plocice [pitanje]="p" [tacne]="tacne()" [sazeto]="slikaVelika()" />
           }
         </div>
       }
@@ -148,6 +153,20 @@ export class SlajdPrikazComponent {
   protected readonly traka = computed(() => (this.slajd().tip === 'PLATNO' ? null : this.kodTraka()));
   protected readonly kod = kodSaRazmakom;
   protected readonly html = computed(() => (this.slajd().tip === 'INFO' ? renderMarkdown(this.slajd().sadrzaj) : ''));
+  /**
+   * Pitanje sa slikom bez prikazanog rezultata, kome pločice ne trebaju mnogo mesta: BROJ, KRATAK_TEKST, SKALA, ili
+   * 1-6 opcija čiji je tekst najviše 16 znakova. Slika tada dobija ceo slajd (vidi `styles`).
+   */
+  protected readonly slikaVelika = computed(() => {
+    const p = this.slajd().pitanje;
+    if (this.slajd().tip !== 'PITANJE' || !p?.slika || this.prikazanRezultat()) {
+      return false;
+    }
+    if (p.tip === 'BROJ' || p.tip === 'KRATAK_TEKST' || p.tip === 'SKALA') {
+      return true;
+    }
+    return p.opcije.length >= 1 && p.opcije.length <= 6 && p.opcije.every(o => o.tekst.length <= 16);
+  });
   protected readonly prikazanRezultat = computed(() => (this.prikaziRezultat() ? this.rezultat() : null));
   protected readonly aktivanTajmer = computed(() => {
     const t = this.tajmer();
