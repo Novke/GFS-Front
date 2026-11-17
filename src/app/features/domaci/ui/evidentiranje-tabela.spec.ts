@@ -14,6 +14,7 @@ const student = (id: number, ime: string, prezime: string, indeks: string, izmen
   ime,
   prezime,
   indeks,
+  stariji: false,
   godina: 2025,
   tip: null,
   predavanjaNapomene: null,
@@ -71,7 +72,7 @@ describe('EvidentiranjeTabela', () => {
 
   it('red po studentu: ime, indeks sa godinom, aktivnost, bodovi, napomena', () => {
     const { red, polje } = napravi();
-    expect(red(1).querySelector('.c-ime')!.textContent).toBe('Ana Radić');
+    expect(red(1).querySelector('.c-ime')!.textContent!.trim()).toBe('Ana Radić');
     expect(red(1).querySelector('.c-indeks')!.textContent).toBe('GD2/2025');
     expect(red(1).querySelector('.c-aktivnost')!.textContent!.trim()).toBe('Zadatak');
     expect(red(3).querySelector('.c-aktivnost')!.textContent!.trim()).toBe('Prisutan');
@@ -79,6 +80,14 @@ describe('EvidentiranjeTabela', () => {
     expect(polje(1, 'bodovi')!.value).toBe('7');
     expect(polje(1, 'napomene')!.value).toBe('dobro');
     expect(polje(3, 'bodovi')!.value).toBe('');
+  });
+
+  it('oznaka "stariji" stoji uz ime označenog studenta', () => {
+    const { f, h, red } = napravi();
+    h.studenti.update(l => l.map(s => (s.id === 1 ? { ...s, stariji: true } : s)));
+    f.detectChanges();
+    expect(red(1).querySelector('.c-ime')!.textContent).toContain('stariji');
+    expect(red(3).querySelector('.c-ime')!.textContent).not.toContain('stariji');
   });
 
   it('domaći bez predavanja: aktivnost je —', () => {

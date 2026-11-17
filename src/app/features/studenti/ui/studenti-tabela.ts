@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { RouterLink } from '@angular/router';
 
 import { StudentListItem } from '../../../core/api/studenti.api';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { mailtoHref, punoIme, telHref } from '../data-access/studenti.models';
 
@@ -18,7 +19,7 @@ export type PoljeSortaStudenata = 'prezime' | 'indeks' | 'godina';
  */
 @Component({
   selector: 'app-studenti-tabela',
-  imports: [RouterLink],
+  imports: [RouterLink, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="tabela-okvir">
@@ -47,6 +48,9 @@ export type PoljeSortaStudenata = 'prezime' | 'indeks' | 'godina';
             <tr (click)="otvori.emit(s.id)" [attr.data-student]="s.id">
               <td class="c-glavno">
                 <a class="otvori" [routerLink]="['/studenti', s.id]" (click)="$event.stopPropagation()">{{ prezimeIme(s) }}</a>
+                @if (s.stariji) {
+                  <app-oznaka-stariji />
+                }
               </td>
               <td class="samo-desktop mono brojevi-sitno">{{ indeks(s) }}</td>
               @if (prikazGrupe()) {

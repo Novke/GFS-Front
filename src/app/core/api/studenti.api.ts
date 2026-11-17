@@ -15,6 +15,8 @@ import type { OpcijeZahteva } from './opcije-zahteva';
  */
 export interface StudentListItem {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string;
   prezime: string;
   indeks: string;
@@ -43,6 +45,8 @@ export interface StudentiPretraga {
 /** `StudentInfo`: odgovor `PUT studenti/{id}` i student u kartici po predmetu; `godina` je godina upisa (`int` na serveru). */
 export interface StudentInfo {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string;
   prezime: string;
   godina: number | null;
@@ -59,6 +63,8 @@ export interface StudentInfo {
  * indeks 2-20, godina 2000-2100, email do 255, telefon do 20, opština do 100.
  */
 export interface UpdateStudentCmd {
+  /** Izostavljeno = oznaka ostaje kakva je. */
+  stariji?: boolean;
   grupaId: number;
   ime: string;
   prezime: string;
@@ -115,6 +121,8 @@ export interface StudentPregledTestInfo {
  */
 export interface StudentPregledDetails {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string | null;
   prezime: string | null;
   godina: number | null;
@@ -185,6 +193,8 @@ export interface BeleskaInfo {
 /** Student u `GET grupe/{id}` (`GrupaStudentInfo`); server ih vraća sortirane po broju iz indeksa. */
 export interface GrupaStudentInfo {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string | null;
   prezime: string | null;
   indeks: string | null;

@@ -15,6 +15,8 @@ export type UpdateGrupaCmd = CreateGrupaCmd;
 /** `StudentInfo` (red G2, red matrice, odgovor `POST`/`PUT studenti`); `godina` je godina upisa (`int` na serveru). */
 export interface StudentInfo {
   id: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   ime: string | null;
   prezime: string | null;
   godina: number | null;

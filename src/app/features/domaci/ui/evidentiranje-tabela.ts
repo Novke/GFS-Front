@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output, 
 import { MatIcon } from '@angular/material/icon';
 
 import { SaveStatus, StanjeCuvanja } from '../../../shared/ui/save-status';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
@@ -26,7 +27,7 @@ const AKTIVNOST_TEKST: Record<TipAktivnosti, string> = { PRISUSTVO: 'Prisutan', 
  */
 @Component({
   selector: 'app-evidentiranje-tabela',
-  imports: [IndeksPipe, MatIcon, SaveStatus, StatusChip],
+  imports: [IndeksPipe, MatIcon, OznakaStariji, SaveStatus, StatusChip],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './evidentiranje-tabela.html',
   styleUrl: './evidentiranje-tabela.scss',

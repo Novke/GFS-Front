@@ -14,6 +14,8 @@ import { IzvodjenjeNaPredavanju } from './prezentacije-predavanja.api';
  * gosta). Redosled: više ★, pa kraći prosek, pa ime; tačnost samo informiše.
  */
 export interface RangTacnostiStavka {
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   mesto: number | null;
   ucesnikId: number | null;
   studentId: number | null;

@@ -41,6 +41,9 @@ import { StudentNalogComponent } from '../ui/student-nalog.component';
               <span class="oznaka" data-grupa><span class="sr-only">Grupa: </span>{{ p.grupa || 'Bez grupe' }}</span>
             }
             <span class="oznaka" data-godina>Upis: {{ p.godina ?? '—' }}</span>
+            @if (p.stariji) {
+              <span class="oznaka ton-warn" data-oznaka-stariji>Stariji student</span>
+            }
             @if (mail(); as href) {
               <a class="oznaka ton-info" [href]="href" data-mail><mat-icon svgIcon="mail" aria-hidden="true" /><span class="sr-only">Email: </span>{{ p.email }}</a>
             } @else {

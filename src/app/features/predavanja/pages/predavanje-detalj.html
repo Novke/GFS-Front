@@ -49,7 +49,7 @@
         <app-studentska-plocica
           [student]="s"
           [stanje]="store.stanjePoStudentu()[s.id] ?? 'odsutan'"
-          [stariji]="store.stariji().has(s.id)"
+          [stariji]="store.stariji().has(s.id) || s.stariji === true"
           [cekanje]="store.cekanje()[s.id] ?? false"
           [samoCitanje]="store.zavrseno()"
           [napomenaTekst]="napomenePoStudentu().get(s.id)"

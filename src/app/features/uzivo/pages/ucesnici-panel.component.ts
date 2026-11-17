@@ -9,6 +9,7 @@ import { NastavnickiZadatak, UcesnikStanje } from '../data-access/uzivo.models';
 import { grupisiCifre } from '../ui/format';
 import { prikazVremena } from '../../../core/api/rang.api';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 
 /** Ime učesnika: 1-40 znakova posle `trim` (kao server, spec 2.8). */
 export const IME_MAKS = 40;
@@ -82,7 +83,7 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
 @Component({
   selector: 'app-ucesnici-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [MatButtonModule, MatIconModule, OznakaStariji],
   host: { class: 'uz-kon-ucesnici' },
   // Zadatak runda: varijanta i ishod uz ime (u komponenti: početni paket je na granici budžeta)
   styles: `
@@ -118,6 +119,9 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
             <span class="uz-kon-tacka" [class.uz-kon-tacka--da]="u.povezan" aria-hidden="true"></span>
             <span class="uz-kon-ucesnik-ime">
               {{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}</span>
+              @if (u.stariji) {
+                <app-oznaka-stariji />
+              }
               @if (u.odgovorio && u.odgovor) {
                 <span class="uz-kon-odgovor" [class.uz-kon-odgovor--sakriven]="u.odgovorSakriven" [title]="u.odgovor">
                   {{ u.odgovorSakriven ? '(sakriveno) ' : '' }}{{ u.odgovor }}

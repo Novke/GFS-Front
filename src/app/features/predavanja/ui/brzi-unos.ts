@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { MatIcon } from '@angular/material/icon';
 
 import { StudentListItem } from '../../../core/api/studenti.api';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { formatIndeks, IndeksPipe } from '../../../shared/util/indeks.pipe';
 
 const MAX_POGODAKA = 8;
@@ -58,7 +59,7 @@ let sledeciId = 0;
  */
 @Component({
   selector: 'app-brzi-unos',
-  imports: [IndeksPipe, MatIcon],
+  imports: [IndeksPipe, MatIcon, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <label class="polje" [for]="idPolja">
@@ -92,6 +93,9 @@ let sledeciId = 0;
             (mousedown)="izaberi(s.id, $event)"
           >
             <span class="ime">{{ s.prezime }} {{ s.ime }}</span>
+            @if (s.stariji) {
+              <app-oznaka-stariji />
+            }
             <span class="indeks">{{ s.indeks | indeks: s.godina }}</span>
           </li>
         } @empty {

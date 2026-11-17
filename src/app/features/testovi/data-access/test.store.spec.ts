@@ -440,6 +440,11 @@ describe('TestStore', () => {
     expect(poruke.at(-1)?.tekst).toContain('Ana P');
   });
 
+  it('ručna oznaka: student grupe sa oznakom "stariji" je stariji i bez ranije godine upisa', () => {
+    ucitaj([polaganje(1, 'Ana', 'GD2', null), { ...polaganje(2, 'Bojan', 'GD3', null), student: { ...polaganje(2, 'Bojan', 'GD3', null).student, stariji: true } }]);
+    expect(store.redovi().map(r => r.stariji)).toEqual([false, true]);
+  });
+
   it('stariji student dodat kroz birač ulazi u tabelu (POST polaganje sa { id })', () => {
     ucitaj([polaganje(1, 'Ana', 'GD2', null)]);
     const stariji: StudentListItem = {

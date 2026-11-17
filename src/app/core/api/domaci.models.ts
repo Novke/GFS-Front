@@ -77,6 +77,8 @@ export interface CreateUradjenDomaciCmd {
 /** Red tabele evidentiranja (`DomaciStudentiInfo`): student grupe, aktivnost na predavanju i urađeni domaći. */
 export interface DomaciStudentiInfo {
   studentId: number;
+  /** Ručna oznaka "Stariji student": samo za nastavnika, ništa ne menja (starije backend verzije je ne šalju). */
+  stariji?: boolean;
   domaciId: number;
   ime: string | null;
   prezime: string | null;

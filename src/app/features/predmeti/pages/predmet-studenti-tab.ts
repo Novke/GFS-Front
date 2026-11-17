@@ -8,6 +8,7 @@ import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { ReferenceStore } from '../../../core/state/reference.store';
 import { FilterBar } from '../../../shared/ui/filter-bar';
 import { EmptyState, ErrorPanel, SkeletonRows } from '../../../shared/ui/list-states';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { formatIndeks } from '../../../shared/util/indeks.pipe';
 import { formatSkolskaGodina } from '../../../shared/util/skolska-godina';
 import { GrupeApi } from '../../../core/api/grupe.api';
@@ -47,7 +48,7 @@ interface Ucitano {
  */
 @Component({
   selector: 'app-predmet-studenti-tab',
-  imports: [EmptyState, ErrorPanel, FilterBar, RouterLink, SkeletonRows],
+  imports: [EmptyState, ErrorPanel, FilterBar, RouterLink, SkeletonRows, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (predmet.statusNastave() === 'error') {
@@ -86,6 +87,9 @@ interface Ucitano {
                   <tr [attr.data-student]="r.stat.student.id">
                     <td class="c-glavno">
                       <a class="otvori" [routerLink]="['/studenti', r.stat.student.id, 'predmeti', predmet.id()]">{{ ime(r) }}</a>
+                      @if (r.stat.student.stariji) {
+                        <app-oznaka-stariji />
+                      }
                     </td>
                     <td class="samo-desktop mono brojevi-sitno">{{ indeks(r) }}</td>
                     <td class="samo-desktop brojevi-sitno">{{ r.grupa.naziv }}</td>

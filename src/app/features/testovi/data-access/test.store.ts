@@ -254,7 +254,7 @@ function redIz(s: TestStudentInfo | StudentListItem, grupaGodina: number | null 
     prezime: s.prezime ?? '',
     indeks: s.indeks ?? '',
     godina,
-    stariji: jeStariji(godina, grupaGodina),
+    stariji: jeStariji(godina, grupaGodina) || s.stariji === true,
   };
 }
 

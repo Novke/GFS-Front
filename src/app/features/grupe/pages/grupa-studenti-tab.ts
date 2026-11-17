@@ -11,6 +11,7 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { ReferenceStore } from '../../../core/state/reference.store';
 import { FilterBar } from '../../../shared/ui/filter-bar';
 import { EmptyState } from '../../../shared/ui/list-states';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { IndeksPipe } from '../../../shared/util/indeks.pipe';
 import { kopirajTekst } from '../../../shared/util/kopiraj';
@@ -105,7 +106,7 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
  */
 @Component({
   selector: 'app-grupa-studenti-tab',
-  imports: [DatumPipe, EmptyState, FilterBar, IndeksPipe, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink],
+  imports: [DatumPipe, EmptyState, FilterBar, IndeksPipe, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="alati ne-stampaj">
@@ -178,6 +179,9 @@ export function sortirajStudente(redovi: readonly GrupaStudentStat[], sort: Sort
                   <td class="rb mono samo-desktop">{{ i + 1 }}</td>
                   <td class="c-glavno">
                     <button type="button" class="otvori" (click)="$event.stopPropagation(); otvoriStudenta(r.student.id)">{{ ime(r.student) }}</button>
+                    @if (r.student.stariji) {
+                      <app-oznaka-stariji />
+                    }
                   </td>
                   <td class="mono nowrap">{{ r.student.indeks | indeks: r.student.godina }}</td>
                   <td class="samo-desktop nowrap">

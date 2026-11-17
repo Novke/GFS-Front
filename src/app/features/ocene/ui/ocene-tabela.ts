@@ -1,3 +1,4 @@
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 import { formatNumber } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, input, LOCALE_ID, signal } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
@@ -26,7 +27,7 @@ function jeBroj(v: number | null | undefined): v is number {
  */
 @Component({
   selector: 'app-ocene-tabela',
-  imports: [MatIcon, RouterLink],
+  imports: [MatIcon, RouterLink, OznakaStariji],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="tabela-okvir">
@@ -61,6 +62,9 @@ function jeBroj(v: number | null | undefined): v is number {
                   <a class="otvori" [routerLink]="['/studenti', sid, 'predmeti', predmetId()]">{{ imePrezime(r) }}</a>
                 } @else {
                   {{ imePrezime(r) }}
+                }
+                @if (r.studentInfo?.stariji) {
+                  <app-oznaka-stariji />
                 }
               </td>
               <td class="samo-desktop mono brojevi-sitno">{{ indeks(r) }}</td>

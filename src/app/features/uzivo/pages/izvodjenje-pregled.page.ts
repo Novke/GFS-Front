@@ -18,6 +18,7 @@ import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { OznakaStariji } from '../../../shared/ui/oznaka-stariji';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
 export function procenatTacnihTekst(p: Pick<RezultatPitanja, 'brojOdgovora' | 'procenatTacnih'>): string {
@@ -107,7 +108,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
-    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent, RangTacnostiTabela],
+    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent, RangTacnostiTabela, OznakaStariji],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -198,7 +199,12 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                       <tbody>
                         @for (u of z.ucesnici; track u.ucesnikId) {
                           <tr>
-                            <td>{{ u.ime }}</td>
+                            <td>
+                              {{ u.ime }}
+                              @if (u.stariji) {
+                                <app-oznaka-stariji />
+                              }
+                            </td>
                             <td>
                               {{ u.varijantaNaziv ?? '—' }}
                               @if (nivoVarijante(z, u.varijantaId); as nivo) {
