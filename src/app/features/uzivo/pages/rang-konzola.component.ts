@@ -9,7 +9,7 @@ import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { RangKolona, RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
 import { RANG_NA_TABLI, RangNaTabli } from '../data-access/rang-na-tabli';
 import { NastavnickoStanje } from '../data-access/uzivo.models';
-import { UcesniciPanelComponent } from './ucesnici-panel.component';
+import { Moderacija, UcesniciPanelComponent } from './ucesnici-panel.component';
 
 /** Najviše jedan zahtev za rang na ovoliko ms dok odgovori stižu (poslednja promena se uvek učita). */
 export const RANG_OSVEZAVANJE_MS = 2000;
@@ -76,7 +76,8 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
       @switch (tab()) {
         @case ('pitanje') {
           <app-ucesnici-panel [ucesnici]="stanje().ucesnici" [takmicenje]="stanje().takmicenje" [zadatak]="stanje().zadatak ?? null"
-                              (preimenuj)="preimenuj.emit($event)" (izbaci)="izbaci.emit($event)" />
+                              [predavanje]="!!stanje().izvodjenje.predavanje" [tekstRunda]="tekstRunda()"
+                              (preimenuj)="preimenuj.emit($event)" (moderacija)="moderacija.emit($event)" />
         }
         @case ('prezentacija') {
           <app-rang-tacnosti-tabela [stavke]="rangIzvodjenja() ?? []" [kolone]="koloneIzvodjenja()" [zbijeno]="true"
@@ -107,7 +108,8 @@ export type RangTab = 'pitanje' | 'prezentacija' | 'predavanje';
 export class RangKonzolaComponent {
   readonly stanje = input.required<NastavnickoStanje>();
   readonly preimenuj = output<{ id: number; ime: string }>();
-  readonly izbaci = output<number>();
+  /** Moderacija učesnika (meni u tabu "Ovo pitanje"). */
+  readonly moderacija = output<Moderacija>();
   /** Koliko redova ranga ide na projektor (`RANG_BROJ`: 0 = svi). */
   readonly rangBroj = output<number>();
 
@@ -118,6 +120,13 @@ export class RangKonzolaComponent {
   /** `verzija` stanja na koju je poslat `RANG_BROJ` (jednom po verziji, pa nema petlje ni kad server zaostane). */
   private poslatoNaVerziji: number | null = null;
   protected readonly tab = signal<RangTab>('pitanje');
+  /** Runda pitanja "kratak tekst" na trenutnom slajdu: samo tada se odgovor učesnika sakriva iz menija. */
+  protected readonly tekstRunda = computed(() => {
+    const s = this.stanje();
+    // tip runde iz snimka (rezultat), slajd samo dok rezultata nema: izmena slajda tokom izvođenja ne menja rundu
+    const tip = s.rezultat?.tip ?? s.trenutniSlajd?.pitanje?.tip;
+    return s.runda && tip === 'KRATAK_TEKST' ? s.runda.id : null;
+  });
   protected readonly rangIzvodjenja = signal<RangTacnostiStavka[] | null>(null);
   protected readonly rangPredavanja = signal<RangTacnostiStavka[] | null>(null);
   protected readonly greska = signal<string | null>(null);

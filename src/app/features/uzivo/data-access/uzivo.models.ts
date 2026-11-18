@@ -126,7 +126,15 @@ export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null
 export interface UcesnikStanje {
   id: number; ime: string; poeni: number; povezan: boolean; odgovorio: boolean; varijantaId?: number | null; tacno?: boolean | null;
   vremeMs?: number | null; odgovor?: string | null; odgovorSakriven?: boolean;
+  /**
+   * Moderacija (samo konzola; stari backend ih nema): `utisan` do kraja izvođenja, `oznacen` = student već ima oznaku
+   * ponašanja na ovom predavanju (narandžast red), `brojOznaka` = sve oznake na kartonu (gost 0), `student` = prijavljen
+   * student (ima karton).
+   */
+  utisan?: Utisanje | null; oznacen?: boolean; brojOznaka?: number; student?: boolean;
 }
+/** Utišan učesnik: `PITALICE` ne odgovara na pitanja, `SVE` ni na zadatke. */
+export type Utisanje = 'PITALICE' | 'SVE';
 /** Koji rang tačnosti je na projektoru: ovog izvođenja (L) ili celog predavanja (Shift+L). */
 export type RangPrikaz = 'IZVODJENJE' | 'PREDAVANJE';
 /** Red ranga tačnosti na projektoru (bez id-jeva; isti oblik kao `RangTacnostiStavka` iz `core/api/rang.api`). */
@@ -190,6 +198,8 @@ export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boole
 export interface LicnoStanje {
   verzija: number; ucesnikId: number; ime: string; poeni: number; mesto: number | null; brojUcesnika: number;
   izbacen: boolean; odgovor: LicniOdgovor | null; zadatak?: LicniZadatak | null; tacnih?: number; dugovanih?: number;
+  /** Nastavnik je isključio odgovaranje do kraja izvođenja (telefon umesto polja pokazuje poruku). */
+  utisan?: Utisanje | null;
 }
 export interface PocetnoStanje { javno: JavnoStanje; licno: LicnoStanje; }
 export interface UcesnikInfo { ucesnikId: number; ime: string; izvodjenjeId: number; }

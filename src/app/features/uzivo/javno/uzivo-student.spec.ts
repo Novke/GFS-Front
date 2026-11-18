@@ -50,7 +50,7 @@ function lazniStore() {
     greska: signal<string | null>(null), ucesnik: signal(null), info: signal(null), kod: signal('123456'),
     veza: signal<Veza>('povezan'), salje: signal(false),
     runda: signal<JavnoPitanje | JavniZadatak | null>(null), zadatak: signal<LicniZadatak | null>(null), nacrtZadatka: signal(null),
-    otvori: vi.fn(), prijavi: vi.fn(), odgovori: vi.fn(), sacuvajNacrt: vi.fn(), ponovoUdji: vi.fn(),
+    otvori: vi.fn(), prijavi: vi.fn(), odgovori: vi.fn(), sacuvajNacrt: vi.fn(),
     odgovoriZadatak: vi.fn(), sacuvajNacrtZadatka: vi.fn(),
   };
 }

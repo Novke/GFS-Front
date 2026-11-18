@@ -395,8 +395,8 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   `[data-skor]`); both come only from the server (`LicnoStanje.tacnih`/`dugovanih`, the leaderboard rule: owed questions with a
   correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
-  connection closes); 403 `IZBACEN` is `izbacen` (a signed-in student sees "Nastavnik te je uklonio iz ovog izvođenja." without
-  "Uđi ponovo"); any other 403 goes to `nalog` as before.
+  connection closes); 403 `IZBACEN` is `izbacen` ("Nastavnik te je uklonio iz ovog izvođenja.", for a guest and a student alike: since the
+  moderation work there is no "Uđi ponovo" any more, the server refuses the same phone by its `gfs_uzivo` cookie); any other 403 goes to `nalog` as before.
 - **Tests:** unit specs next to each file; e2e `e2e/cekiranje.spec.ts` (scan -> wait -> run -> end -> back on the lecture,
   login with a key, server messages, `/nalog` to Početna and the lecture on the tab Čas, no loop on Back, Izađi and "Uđi u
   prezentaciju", the "Predavanje je u toku" strip and Čas view, axe in day mode, projector QR changes and shows no names, a finished
@@ -1242,6 +1242,25 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
   the console panel; the counts with no level are the largest per-level count (as the server's `brojZaOtvaranje`). The form shows the server text
   `ZadaciSlajdova.NIVO_NIJE_IZABRAN` itself (`nivoNijeIzabran`), from the form's current level rather than the saved slide, and hides the server's
   copy. The e2e mock (`e2e/mock-izvodjenje.ts`) draws the first variant's level when none is chosen.
+
+### Moderacija uživo (console menu, phone mute, card flags)
+
+Spec `docs/superpowers/specs/2026-11-18-moderacija-uzivo-design.md` (deploy repo); backend V25.
+- **Console:** every row of `UcesniciPanelComponent` has a menu button `[data-moderacija]` (more_vert, `MatMenu` with `matMenuContent`):
+  "Sakrij odgovor" / "Vrati odgovor" (only when the round is KRATAK_TEKST, `tekstRunda` from `RangKonzolaComponent`, and the row has an answer),
+  "Utišaj pitalice", "Utišaj pitalice i zadatke", "Ukloni utišavanje", "Izbaci…". The panel emits one `moderacija` output (`Moderacija` union in
+  `pages/ucesnici-panel.component.ts`), the card passes it on and `KonzolaPage.moderisi` calls the store (`izbaci(id, predavanje)`, `utisaj`,
+  `sakrijUcesnika`). `IzbaciDialog` (alertdialog) offers "Samo iz ove prezentacije" and, only for a run with a lecture, "Do kraja predavanja";
+  for a student it adds "Na kartonu studenta ostaje oznaka." (`UcesnikStanje.student`). A row with `oznacen` is orange (`uz-kon-ucesnik--oznacen`,
+  `color-mix` of `--warn`), `brojOznaka > 0` shows "⚑ n" (`[data-oznake]`) and a muted participant a chip (`[data-utisan]`). Icons reuse existing
+  ones (`pause`, `play_arrow`, `visibility_off`, `visibility`, `person_remove`) so the initial bundle does not grow.
+- **Phone:** `javno/utisanje.ts` `porukaUtisanja(utisan, zadatak)`: `SVE` -> "…na pitalice i zadatke.", `PITALICE` -> "…na pitalice." only on a
+  question. The question input is replaced by that message (`[data-utisan]`, `role="status"`); on a Zadatak screen with `SVE` the task stays visible
+  and the input is locked. `StudentStore.ponovoUdji` is gone.
+- **Student card:** `features/studenti/ui/student-ponasanje.component.ts` (`app-student-ponasanje`, after `app-student-nalog` on the profile):
+  section "Ponašanje na času", hidden when the student has no flags, list `[data-oznaka]` with kind, date, subject · presentation and the hidden
+  text, delete `[data-obrisi]` through `ConfirmDialog` (a 404 also removes the row). API `data-access/oznake-ponasanja.api.ts`. Specs that render the
+  profile flush `api/studenti/{id}/oznake-ponasanja`; the e2e mock answers it with `[]`.
 
 ## Banka zadataka (`features/banka`)
 
