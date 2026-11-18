@@ -1541,3 +1541,41 @@ describe('PrezentacijaEditorPage: Zadatak slajd', () => {
     expect(pregled.textContent).not.toContain('Ovako slajd izgleda na projektoru.');
   });
 });
+
+describe('PrezentacijaEditorPage: linkovi iz opisa', () => {
+  function otvori(opis: string | null) {
+    TestBed.configureTestingModule({
+      imports: [PrezentacijaEditorPage],
+      providers: [
+        provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const f = TestBed.createComponent(PrezentacijaEditorPage);
+    f.debugElement.injector.get(EditorStore).ucitaj(1);
+    http.expectOne('api/prezentacije/1').flush({ ...prezentacija, opis });
+    f.detectChanges();
+    return { el: f.nativeElement as HTMLElement, http };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('svaki link iz opisa je ispod polja, otvara se u novoj kartici, sa imenom servera', () => {
+    const drive = 'https://drive.google.com/drive/folders/abc';
+    const { el, http } = otvori(`Fajlovi: ${drive}. Uputstvo: https://www.grf.rs/word (i opet ${drive})`);
+    const linkovi = [...el.querySelectorAll<HTMLAnchorElement>('[data-linkovi-opisa] a')];
+    expect(linkovi.map(a => a.getAttribute('href'))).toEqual([drive, 'https://www.grf.rs/word']);
+    expect(linkovi.map(a => a.textContent?.trim())).toEqual(['drive.google.com', 'grf.rs']);
+    expect(linkovi[0].target).toBe('_blank');
+    expect(linkovi[0].rel).toBe('noopener noreferrer');
+    expect(linkovi[0].getAttribute('aria-label')).toBe(`Otvori link iz opisa: ${drive}`);
+    http.verify();
+  });
+
+  it('opis bez linka ili bez opisa: nema reda sa linkovima', () => {
+    const { el, http } = otvori('Prvi čas Worda.');
+    expect(el.querySelector('[data-linkovi-opisa]')).toBeNull();
+    http.verify();
+  });
+});

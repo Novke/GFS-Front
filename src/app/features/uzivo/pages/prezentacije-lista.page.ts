@@ -16,6 +16,7 @@ import {
 } from '../../../core/api/redosled-prezentacija';
 import { opisSadrzaja } from '../../../shared/ui/izbor-prezentacije';
 import { StatusChip, TonStatusa } from '../../../shared/ui/status-chip';
+import { TekstSaLinkovima } from '../../../shared/ui/tekst-sa-linkovima';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { razlogGreske } from '../data-access/razlog-greske';
@@ -94,7 +95,7 @@ interface GrupaListe {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressBarModule,
-    MatSelectModule, StatusChip,
+    MatSelectModule, StatusChip, TekstSaLinkovima,
   ],
   template: `
     <div class="uz-ed-strana">
@@ -173,7 +174,7 @@ interface GrupaListe {
                           <span class="uz-cip uz-ed-u-toku">U toku</span>
                         }
                         @if (p.opis) {
-                          <div class="uz-ed-opis-red">{{ p.opis }}</div>
+                          <div class="uz-ed-opis-red"><app-tekst-sa-linkovima [tekst]="p.opis" /></div>
                         }
                       </td>
                       <td><app-status-chip [tekst]="oznakaVrste[p.vrsta]" [ton]="tonVrste[p.vrsta]" [ikona]="null" /></td>

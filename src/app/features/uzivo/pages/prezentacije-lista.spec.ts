@@ -126,6 +126,16 @@ describe('PrezentacijeListaPage: redosled, grupe i filteri', () => {
     expect(el.querySelector('[data-prezentacija="1"]')?.textContent).toContain('nikad');
   });
 
+  it('adresa u opisu je link, ostatak opisa je tekst', () => {
+    const drive = 'https://drive.google.com/drive/folders/abc';
+    const el = prikazi({ predmet: '7' }, [info(1, 'Vežbe 6', 6, { opis: `Fajlovi: ${drive}.` })]);
+    const opis = el.querySelector('[data-prezentacija="1"] .uz-ed-opis-red')!;
+    expect(opis.textContent).toBe(`Fajlovi: ${drive}.`);
+    const a = opis.querySelector('a')!;
+    expect(a.getAttribute('href')).toBe(drive);
+    expect(a.target).toBe('_blank');
+  });
+
   it('svi predmeti: naslov grupe nosi predmet', () => {
     const el = prikazi({}, lista);
     expect(el.querySelector('[data-grupa-vezbe]')?.textContent).toContain('Statika · Vežbe 1');

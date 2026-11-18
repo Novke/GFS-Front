@@ -40,6 +40,7 @@ import { RegistarCuvanja } from '../../../core/state/registar-cuvanja';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
 import { NemaNesacuvanih } from '../../../shared/forms/unsaved-changes.guard';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
+import { kratakNatpisLinka, linkoviIzTeksta } from '../../../shared/util/linkovi';
 
 const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuvano: 'Sačuvano' };
 
@@ -74,6 +75,14 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                    (change)="sacuvajNaziv($any($event.target))" (keydown.enter)="$any($event.target).blur()">
             <input class="uz-ed-opis" aria-label="Opis prezentacije" maxlength="1000" placeholder="Dodaj opis…"
                    [value]="p.opis ?? ''" (change)="sacuvajOpis($any($event.target))" (keydown.enter)="$any($event.target).blur()">
+            @if (linkoviOpisa().length) {
+              <span class="uz-ed-opis-linkovi" data-linkovi-opisa>
+                @for (l of linkoviOpisa(); track l) {
+                  <a [href]="l" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'Otvori link iz opisa: ' + l"
+                     [title]="l"><mat-icon aria-hidden="true" svgIcon="open_in_new" />{{ natpisLinka(l) }}</a>
+                }
+              </span>
+            }
             <span class="uz-ed-predmet">{{ p.predmet.naziv }}</span>
           </div>
           <span class="uz-ed-status" role="status" [class.uz-ed-status--greska]="store.cuvanje() === 'greska'">
@@ -324,6 +333,9 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     const s = this.store.izabrani();
     return s ? [{ s, obnova: this.store.obnova() }] : [];
   });
+  /** Linkovi iz opisa (npr. Drive folder sa fajlovima za čas): polje opisa je `input`, pa se linkovi otvaraju ispod njega. */
+  protected readonly linkoviOpisa = computed(() => linkoviIzTeksta(this.store.prezentacija()?.opis));
+  protected readonly natpisLinka = kratakNatpisLinka;
   protected readonly tihSlajdova = computed(() => (this.store.sukobi().length === 1 ? 'tog slajda' : 'tih slajdova'));
   /** Sukob je u traci ispod zaglavlja, pa ovde samo kratko. */
   protected readonly statusTekst = computed(() => {
