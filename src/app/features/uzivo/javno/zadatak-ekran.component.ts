@@ -3,6 +3,7 @@ import { LicniZadatak } from '../data-access/uzivo.models';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { StudentStore, naslovIshoda } from './student.store';
 import { ZadatakUnosComponent } from './zadatak-unos.component';
+import { porukaUtisanja } from './utisanje';
 
 /**
  * Ekrani svoje varijante na telefonu (`zadatak`, `zadatakPrimljen`, `zadatakIshod`): red stanja runde (tajmer, "Odgovor
@@ -39,13 +40,16 @@ import { ZadatakUnosComponent } from './zadatak-unos.component';
                       [ukupnoMs]="s.ukupnoMs()" />
         }
       </div>
-      <app-zadatak-unos [zadatak]="z" [nacrt]="s.nacrtZadatka()" [zakljucan]="e !== 'zadatak'"
+      @let utisan = utisanje(s.licno()?.utisan, true);
+      @if (utisan && e === 'zadatak') { <p class="uz-st-tekst" role="status" data-utisan>{{ utisan }}</p> }
+      <app-zadatak-unos [zadatak]="z" [nacrt]="s.nacrtZadatka()" [zakljucan]="e !== 'zadatak' || !!utisan"
                         (nacrtPromena)="s.sacuvajNacrtZadatka($event)" (posalji)="s.odgovoriZadatak($event)" />
     }
   `,
 })
 export class ZadatakEkranComponent {
   protected readonly store = inject(StudentStore);
+  protected readonly utisanje = porukaUtisanja;
 
   /** Zadatak nije takmičenje: "Tačno!", "Netačno", "Odgovor primljen" (bez ocene) ili "Nisi odgovorio", bez poena. */
   protected naslov(z: LicniZadatak): string {

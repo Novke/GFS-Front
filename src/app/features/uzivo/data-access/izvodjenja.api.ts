@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
 import {
-  IzvodjenjeInfo, IzvodjenjeRezultati, KomandaCmd, NastavnickoStanje, PokreniCmd, StatusIzvodjenja,
+  IzvodjenjeInfo, IzvodjenjeRezultati, KomandaCmd, NastavnickoStanje, PokreniCmd, StatusIzvodjenja, Utisanje,
 } from './uzivo.models';
 
 /** REST za nastavnika (pokretanje i vođenje izvođenja). Stanje uživo stiže kroz STOMP, ovo je za start i povratak.
@@ -40,8 +40,22 @@ export class IzvodjenjaApi {
     return this.http.put<NastavnickoStanje>(`${this.api}/izvodjenja/${id}/ucesnici/${ucesnikId}`, { ime }, { context: this.context });
   }
 
-  izbaci(id: number, ucesnikId: number): Observable<NastavnickoStanje> {
-    return this.http.delete<NastavnickoStanje>(`${this.api}/izvodjenja/${id}/ucesnici/${ucesnikId}`, { context: this.context });
+  /** `predavanje`: i iz svih izvođenja predavanja ovog izvođenja ("do kraja predavanja"). */
+  izbaci(id: number, ucesnikId: number, predavanje = false): Observable<NastavnickoStanje> {
+    return this.http.delete<NastavnickoStanje>(`${this.api}/izvodjenja/${id}/ucesnici/${ucesnikId}`,
+      { context: this.context, params: predavanje ? { predavanje: 'true' } : {} });
+  }
+
+  /** Utišava do kraja izvođenja (`null` skida utišavanje). */
+  utisaj(id: number, ucesnikId: number, utisan: Utisanje | null): Observable<NastavnickoStanje> {
+    return this.http.put<NastavnickoStanje>(`${this.api}/izvodjenja/${id}/ucesnici/${ucesnikId}/utisan`, { utisan },
+      { context: this.context });
+  }
+
+  /** Sakriva (ili vraća) trenutni tekstualni odgovor učesnika i sve iste tekstove runde. */
+  sakrijUcesnika(id: number, rundaId: number, ucesnikId: number, sakriven: boolean): Observable<NastavnickoStanje> {
+    return this.http.put<NastavnickoStanje>(`${this.api}/izvodjenja/${id}/runde/${rundaId}/sakrij`, { ucesnikId, sakriven },
+      { context: this.context });
   }
 
   /** `kljuc` je normalizovan tekst odgovora (`RezultatTekst.kljuc`). */

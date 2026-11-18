@@ -10,7 +10,7 @@ export type VrstaAnimacije = 'ULAZ' | 'IZLAZ';
 export type Efekat = 'POJAVI' | 'FADE' | 'ULET' | 'PODELI' | 'BRISANJE' | 'ZUM' | 'ISCRTAJ';
 export type Smer = 'LEVO' | 'DESNO' | 'GORE' | 'DOLE' | 'HORIZONTALNO' | 'VERTIKALNO';
 export type Okidac = 'KLIK' | 'SA_PRETHODNIM' | 'POSLE_PRETHODNOG';
-export type Tema = 'NACRT' | 'BELA' | 'PAPIR' | 'TAMNA' | 'PONOC';
+export type Tema = 'NACRT' | 'BELA' | 'PAPIR' | 'TAMNA' | 'PONOC' | 'FAKULTET';
 
 export interface Tacka { x: number; y: number; }
 export interface Ivica { boja: string; debljina: number; crtica: Crtica; }

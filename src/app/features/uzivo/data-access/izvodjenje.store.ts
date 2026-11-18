@@ -14,7 +14,7 @@ import { NotificationStore } from '../../../core/state/notification.store';
 import { razlogGreske } from './razlog-greske';
 import { ServerskiSat } from './sat';
 import { STOMP_FABRIKA } from './stomp';
-import { NastavnickoStanje, TipKomande } from './uzivo.models';
+import { NastavnickoStanje, TipKomande, Utisanje } from './uzivo.models';
 import { UzivoPutanje } from '../uzivo-putanje';
 
 export type Veza = 'povezivanje' | 'povezan' | 'prekinut';
@@ -278,8 +278,16 @@ export const IzvodjenjeStore = signalStore(
         posalji(() => api.preimenuj(izvodjenjeId!, ucesnikId, ime), 'Preimenovanje nije uspelo.');
       },
 
-      izbaci(ucesnikId: number): void {
-        posalji(() => api.izbaci(izvodjenjeId!, ucesnikId), 'Izbacivanje nije uspelo.');
+      izbaci(ucesnikId: number, predavanje = false): void {
+        posalji(() => api.izbaci(izvodjenjeId!, ucesnikId, predavanje), 'Izbacivanje nije uspelo.');
+      },
+
+      utisaj(ucesnikId: number, utisan: Utisanje | null): void {
+        posalji(() => api.utisaj(izvodjenjeId!, ucesnikId, utisan), 'Utišavanje nije uspelo.');
+      },
+
+      sakrijUcesnika(rundaId: number, ucesnikId: number, sakriven: boolean): void {
+        posalji(() => api.sakrijUcesnika(izvodjenjeId!, rundaId, ucesnikId, sakriven), 'Izmena nije uspela.');
       },
 
       sakrij(rundaId: number, kljuc: string, sakriven: boolean): void {

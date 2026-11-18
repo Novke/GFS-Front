@@ -14,8 +14,8 @@ const naPlatnu = (tema: Tema, sloj: Sloj): Platno =>
   ({ verzija: 1, pozadina: { boja: TEME[tema].pozadina, medijId: null }, slojevi: [sloj], animacije: [] });
 
 describe('platno-novo: fabrike prolaze proveru servera', () => {
-  it('ima svih 5 tema', () => {
-    expect(SVE_TEME).toHaveLength(5);
+  it('ima svih 6 tema', () => {
+    expect(SVE_TEME).toHaveLength(6);
   });
 
   it.each(SVE_TEME)('%s: svaka fabrika daje dokument koji server prima', (tema) => {

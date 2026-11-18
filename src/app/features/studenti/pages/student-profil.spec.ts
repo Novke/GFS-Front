@@ -90,6 +90,7 @@ describe('StudentProfil', () => {
   async function nalogStudenta(id: number, imaMejl = true) {
     harness.detectChanges();
     http.expectOne(`api/studenti/${id}/nalog`).flush({ ...NALOG, imaMejl });
+    http.expectOne(`api/studenti/${id}/oznake-ponasanja`).flush([]);
     await stani();
   }
 

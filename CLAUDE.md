@@ -395,8 +395,8 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   `[data-skor]`); both come only from the server (`LicnoStanje.tacnih`/`dugovanih`, the leaderboard rule: owed questions with a
   correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
-  connection closes); 403 `IZBACEN` is `izbacen` (a signed-in student sees "Nastavnik te je uklonio iz ovog izvođenja." without
-  "Uđi ponovo"); any other 403 goes to `nalog` as before.
+  connection closes); 403 `IZBACEN` is `izbacen` ("Nastavnik te je uklonio iz ovog izvođenja.", for a guest and a student alike: since the
+  moderation work there is no "Uđi ponovo" any more, the server refuses the same phone by its `gfs_uzivo` cookie); any other 403 goes to `nalog` as before.
 - **Tests:** unit specs next to each file; e2e `e2e/cekiranje.spec.ts` (scan -> wait -> run -> end -> back on the lecture,
   login with a key, server messages, `/nalog` to Početna and the lecture on the tab Čas, no loop on Back, Izađi and "Uđi u
   prezentaciju", the "Predavanje je u toku" strip and Čas view, axe in day mode, projector QR changes and shows no names, a finished
@@ -687,7 +687,7 @@ over STOMP; teacher commands are REST.
   through the Web Animations API; a new instance per slide, and a fast second click cancels the running animations and
   jumps the previous group to its end state, so no layer stays hidden or transparent. Keyframes never animate `visibility`:
   each target gets inline `visibility: visible` while its group runs and has it reset explicitly after `cancel()` (Chromium
-  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 5 themes; an
+  can otherwise keep a stale inherited `visibility` after fast steps; e2e `uzivo-platno.spec.ts` "brzi koraci"). `ui/teme.ts`: 6 themes (the sixth, FAKULTET, has a left strip with the faculty mark and a title rule for INFO, PITANJE and ZADATAK slides, never PLATNO; the strip rules live in the `styles` of `slajd-prikaz`, not in the global `uzivo-tokeni.css`, which is part of the initial bundle; `TemaOpis.traka`/`linijaNaslova` are optional and `promenljiveTeme` emits them only when present; mark `assets/images/gfs-znak-beli.png`); an
   unknown or missing `tema` means NACRT; the NACRT title is ink, and `teme.spec.ts` checks WCAG AA contrast of every
   theme. Fonts of the canvas: `ui/platno-fontovi.ts` plus `src/styles/_fontovi-platna.scss` (fontsource, OFL: Carlito,
   Caladea, Arimo, Tinos, Cousine, IBM Plex Sans/Mono, Atkinson Hyperlegible; `font-display: block`). `ui/preducitavanje.ts`
@@ -700,6 +700,7 @@ over STOMP; teacher commands are REST.
   **`PUT /slajdovi/{id}` of a PLATNO slide must send `platno` back unchanged** (the page always sends the store's
   `platno`, never the form's (`izmenaForme`), and `slajdUCmd` copies it from the slide; omitting it wipes the layers). **`javno/` imports none of this** (no `platno.*`, `teme`, `platno-*`, `preducitavanje`; `uzivo.models`, which `javno/` may import, only `import type`s `platno.models`, erased at compile time, so no platno runtime code reaches public routes): the
   phone never gets the canvas and loads no canvas fonts (`e2e/uzivo-javno.spec.ts` checks it); e2e `uzivo-platno.spec.ts`.
+  - **Question with an image: large layout (`slikaVelika` in `slajd-prikaz`).** A PITANJE slide with an image and no shown result gets the image over most of the slide (grid: image row, then a compact row) when the question is BROJ, KRATAK_TEKST or SKALA (the input description shrinks to a small pill in the corner, `PitanjePlociceComponent` input `sazeto`, the correct answer sits in the same row), or has 1-6 options each of at most 16 characters (all tiles in one row under the image, `--uz-n` columns). Anything else keeps the old two-column layout (image left, tiles right). The phone never shows this. The rules live in component `styles`, not in the global CSS (initial bundle budget). e2e `uzivo-platno.spec.ts` "slika preko većeg dela slajda".
 - **Console and remote (phase 3 of the slide builder):** the console (`konzola`) shows the position with the step ("korak k/n"
   from the server's `korak`/`brojStavki`, never from `brojKoraka`), `sledece-panel` (state after the next click; on a
   question in CEKA/OTVORENO the action plus "Zatim:", pure function `sledeciKlik` in `izvodjenje-pravila`),
@@ -1241,6 +1242,25 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
   the console panel; the counts with no level are the largest per-level count (as the server's `brojZaOtvaranje`). The form shows the server text
   `ZadaciSlajdova.NIVO_NIJE_IZABRAN` itself (`nivoNijeIzabran`), from the form's current level rather than the saved slide, and hides the server's
   copy. The e2e mock (`e2e/mock-izvodjenje.ts`) draws the first variant's level when none is chosen.
+
+### Moderacija uživo (console menu, phone mute, card flags)
+
+Spec `docs/superpowers/specs/2026-11-18-moderacija-uzivo-design.md` (deploy repo); backend V25.
+- **Console:** every row of `UcesniciPanelComponent` has a menu button `[data-moderacija]` (more_vert, `MatMenu` with `matMenuContent`):
+  "Sakrij odgovor" / "Vrati odgovor" (only when the round is KRATAK_TEKST, `tekstRunda` from `RangKonzolaComponent`, and the row has an answer),
+  "Utišaj pitalice", "Utišaj pitalice i zadatke", "Ukloni utišavanje", "Izbaci…". The panel emits one `moderacija` output (`Moderacija` union in
+  `pages/ucesnici-panel.component.ts`), the card passes it on and `KonzolaPage.moderisi` calls the store (`izbaci(id, predavanje)`, `utisaj`,
+  `sakrijUcesnika`). `IzbaciDialog` (alertdialog) offers "Samo iz ove prezentacije" and, only for a run with a lecture, "Do kraja predavanja";
+  for a student it adds "Na kartonu studenta ostaje oznaka." (`UcesnikStanje.student`). A row with `oznacen` is orange (`uz-kon-ucesnik--oznacen`,
+  `color-mix` of `--warn`), `brojOznaka > 0` shows "⚑ n" (`[data-oznake]`) and a muted participant a chip (`[data-utisan]`). Icons reuse existing
+  ones (`pause`, `play_arrow`, `visibility_off`, `visibility`, `person_remove`) so the initial bundle does not grow.
+- **Phone:** `javno/utisanje.ts` `porukaUtisanja(utisan, zadatak)`: `SVE` -> "…na pitalice i zadatke.", `PITALICE` -> "…na pitalice." only on a
+  question. The question input is replaced by that message (`[data-utisan]`, `role="status"`); on a Zadatak screen with `SVE` the task stays visible
+  and the input is locked. `StudentStore.ponovoUdji` is gone.
+- **Student card:** `features/studenti/ui/student-ponasanje.component.ts` (`app-student-ponasanje`, after `app-student-nalog` on the profile):
+  section "Ponašanje na času", hidden when the student has no flags, list `[data-oznaka]` with kind, date, subject · presentation and the hidden
+  text, delete `[data-obrisi]` through `ConfirmDialog` (a 404 also removes the row). API `data-access/oznake-ponasanja.api.ts`. Specs that render the
+  profile flush `api/studenti/{id}/oznake-ponasanja`; the e2e mock answers it with `[]`.
 
 ## Banka zadataka (`features/banka`)
 

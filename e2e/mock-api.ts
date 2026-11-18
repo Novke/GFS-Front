@@ -1113,6 +1113,12 @@ export class MockApi {
       const n = nalogKartice(s.id);
       return ok({ imaMejl: !!s.email, uredjaji: n.uredjaji, moodle: n.moodle, poslednjaPrijava: n.poslednjaPrijava });
     });
+    // moderacija uživo: oznake ponašanja na kartonu (fixture ih nema; prazna lista = sekcije nema)
+    get('studenti/:id/oznake-ponasanja', (_z, p) => {
+      const s = nadji(d.studenti, p['id'], 'Student');
+      return jeOdgovor(s) ? s : ok([]);
+    });
+    del('oznake-ponasanja/:id', () => greska(404, 'Oznaka ne postoji.'));
     post('studenti/:id/nalog/posalji-kod', (_z, p) => {
       const s = nadji(d.studenti, p['id'], 'Student');
       if (jeOdgovor(s)) {

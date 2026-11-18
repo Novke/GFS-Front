@@ -34,6 +34,16 @@ describe('BeleskePanelComponent', () => {
     expect(p.classList.contains('uz-beleske-tekst')).toBe(true);
   });
 
+  it('adresa u beleškama je link koji se otvara u novoj kartici', async () => {
+    const drive = 'https://drive.google.com/drive/folders/1cbUKIFMvrJCGQMBFkKI8W_BEIuOeJTeI';
+    fixture.componentInstance.tekst.set(`Fajlovi su na Drive-u (${drive}):\n- 1. krug`);
+    await fixture.whenStable();
+    const a = el().querySelector<HTMLAnchorElement>('.uz-beleske-tekst a')!;
+    expect(a.getAttribute('href')).toBe(drive);
+    expect(a.target).toBe('_blank');
+    expect(el().querySelector('.uz-beleske-tekst')!.textContent).toBe(`Fajlovi su na Drive-u (${drive}):\n- 1. krug`);
+  });
+
   it('bez teksta prikazuje poruku', async () => {
     fixture.componentInstance.tekst.set(null);
     await fixture.whenStable();

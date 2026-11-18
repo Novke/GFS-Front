@@ -86,6 +86,7 @@ describe('StudentBeleskeTab', () => {
     await stani();
     // sekcija "Nalog" profila (nije tema ovog spec-a)
     http.expectOne('api/studenti/5/nalog').flush({ imaMejl: false, uredjaji: [], moodle: { povezan: false, poslednjiUlaz: null }, poslednjaPrijava: null });
+    http.expectOne('api/studenti/5/oznake-ponasanja').flush([]);
     http.expectOne('api/studenti/5/beleske').flush(beleske);
     await stani();
   }
@@ -212,6 +213,7 @@ describe('StudentBeleskeTab', () => {
     await stani();
     // sekcija "Nalog" profila (nije tema ovog spec-a)
     http.expectOne('api/studenti/5/nalog').flush({ imaMejl: false, uredjaji: [], moodle: { povezan: false, poslednjiUlaz: null }, poslednjaPrijava: null });
+    http.expectOne('api/studenti/5/oznake-ponasanja').flush([]);
     http.expectOne('api/studenti/5/beleske').flush({ reason: 'Nema veze' }, { status: 400, statusText: 'Bad Request' });
     await stani();
     expect(el().querySelector('app-error-panel')!.textContent).toContain('Nema veze');

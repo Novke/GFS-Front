@@ -155,6 +155,66 @@ describe('SlajdPrikazComponent: PLATNO i teme', () => {
     expect(koren(bez).classList).not.toContain('rezim-noc');
   });
 
+  it('tema Fakultet: traka sa znakom za INFO, PITANJE i ZADATAK; nema je za PLATNO ni u drugim temama', async () => {
+    const traka = (el: HTMLElement) => el.querySelector('.uz-slajd-traka');
+    for (const slajd of [info('- a'), slajdPitanje, zadatakSlajd()]) {
+      const { el } = await prikazi({ slajd, tema: 'FAKULTET' });
+      expect(traka(el)).not.toBeNull();
+      expect(traka(el)!.getAttribute('aria-hidden')).toBe('true');
+      expect(traka(el)!.querySelector('img')!.getAttribute('alt')).toBe('');
+      expect(traka(el)!.querySelector('img')!.getAttribute('src')).toBe('assets/images/gfs-znak-beli.png');
+      expect(koren(el).classList).toContain('uz-slajd--traka');
+    }
+    const { el: platnoEl } = await prikazi({ slajd: platnoSlajd(), tema: 'FAKULTET' });
+    expect(traka(platnoEl)).toBeNull();
+    expect(koren(platnoEl).classList).not.toContain('uz-slajd--traka');
+    for (const t of ['NACRT', 'BELA', 'PAPIR', 'TAMNA', 'PONOC']) {
+      const { el } = await prikazi({ slajd: info('- a'), tema: t });
+      expect(traka(el)).toBeNull();
+      expect(koren(el).classList).not.toContain('uz-slajd--traka');
+    }
+  });
+
+  describe('pitanje sa slikom: raspored', () => {
+    const sl = { id: 'm1', naziv: 'Slika', mime: 'image/png', velicina: 100 };
+    const sa = (izmene: Partial<PitanjeDetails>): SlajdDetails => ({ ...slajdPitanje, pitanje: { ...pitanje, slika: sl, ...izmene } });
+    const opcije = (...t: string[]) => t.map((tekst, i) => ({ id: i + 1, rb: i + 1, tekst, tacna: i === 0 }));
+    const stanje = async (slajd: SlajdDetails, ulazi: Record<string, unknown> = {}) => {
+      const { el } = await prikazi({ slajd, ...ulazi });
+      return {
+        velika: !!el.querySelector('.uz-pitanje-telo--slika-velika'),
+        stara: !!el.querySelector('.uz-pitanje-telo--slika'),
+        sazeto: !!el.querySelector('app-pitanje-plocice.uz-plocice--sazeto'),
+      };
+    };
+    const VELIKA = { velika: true, stara: false, sazeto: true };
+
+    it('KRATAK_TEKST, BROJ i SKALA sa slikom: velika slika i sažeto', async () => {
+      for (const tip of ['KRATAK_TEKST', 'BROJ', 'SKALA'] as const) {
+        expect(await stanje(sa({ tip, opcije: [] })), tip).toEqual(VELIKA);
+      }
+    });
+
+    it('kratke opcije (najviše 6, svaka do 16 znakova) sa slikom: velika slika', async () => {
+      expect(await stanje(sa({ opcije: opcije('A', 'B', 'C', 'D') }))).toEqual(VELIKA);
+      expect(await stanje(sa({ opcije: opcije('1234567890123456', 'B', 'C', 'D', 'E', 'F') }))).toEqual(VELIKA);
+    });
+
+    it('duge opcije, više od 6 opcija: stari raspored u dve kolone', async () => {
+      const stari = { velika: false, stara: true, sazeto: false };
+      expect(await stanje(sa({ opcije: opcije('12345678901234567', 'B') }))).toEqual(stari);
+      expect(await stanje(sa({ opcije: opcije('A', 'B', 'C', 'D', 'E', 'F', 'G') }))).toEqual(stari);
+    });
+
+    it('bez slike: nijedna klasa; prikazan rezultat: nijedna klasa', async () => {
+      expect(await stanje(sa({ slika: null, opcije: opcije('A', 'B') }))).toEqual({ velika: false, stara: false, sazeto: false });
+      const r = { brojOdgovora: 0, opcije: [], prosek: null } as unknown as Rezultat;
+      const { el } = await prikazi({ slajd: sa({ opcije: opcije('A', 'B') }), rezultat: r, prikaziRezultat: true });
+      expect(el.querySelector('.uz-pitanje-telo--slika-velika')).toBeNull();
+      expect(el.querySelector('.uz-pitanje-telo--slika')).toBeNull();
+    });
+  });
+
   describe('animacije: nova instanca platna po slajdu', () => {
     let animate: ReturnType<typeof vi.fn>;
     let cancel: ReturnType<typeof vi.fn>;

@@ -209,6 +209,26 @@ p.uz-ed-upozorenje {
   font-size: 14px;
 }
 
+.uz-ed-opis-linkovi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.uz-ed-opis-linkovi a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+}
+
+.uz-ed-opis-linkovi mat-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .uz-ed-naziv:hover,
 .uz-ed-opis:hover {
   border-color: var(--line);
