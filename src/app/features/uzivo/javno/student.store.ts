@@ -576,11 +576,6 @@ export const StudentStore = signalStore(
         if (store.faza() === 'uzivo' && n.rundaId === store.runda()?.rundaId) patchState(store, { nacrtZadatka: n });
       },
 
-      /** Posle izbacivanja: novo ime (isti kod, naziv ostaje); prijavljen student ulazi ponovo bez forme. */
-      ponovoUdji(): void {
-        bezUcesnika();
-      },
-
       /** Zatvara STOMP vezu, zahteve i tajmere (zove se i iz `onDestroy`). */
       destroy(): void {
         zatvoriVezu();

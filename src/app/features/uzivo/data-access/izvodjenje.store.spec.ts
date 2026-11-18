@@ -357,6 +357,29 @@ describe('IzvodjenjeStore', () => {
       s.flush(stanje({ verzija: 4 }));
       expect(store.stanje()!.verzija).toBe(4);
     });
+
+    it('moderacija: izbaci do kraja predavanja, utišaj i sakrij odgovor učesnika', () => {
+      init();
+      store.izbaci(2, true);
+      store.utisaj(3, 'PITALICE');
+      store.utisaj(3, null);
+      store.sakrijUcesnika(9, 4, true);
+      const i = http.expectOne(r => r.url === 'api/izvodjenja/5/ucesnici/2');
+      expect(i.request.method).toBe('DELETE');
+      expect(i.request.params.get('predavanje')).toBe('true');
+      i.flush(stanje({ verzija: 2 }));
+      const u = http.expectOne('api/izvodjenja/5/ucesnici/3/utisan');
+      expect(u.request.method).toBe('PUT');
+      expect(u.request.body).toEqual({ utisan: 'PITALICE' });
+      u.flush(stanje({ verzija: 3 }));
+      const u2 = http.expectOne('api/izvodjenja/5/ucesnici/3/utisan');
+      expect(u2.request.body).toEqual({ utisan: null });
+      u2.flush(stanje({ verzija: 4 }));
+      const s = http.expectOne('api/izvodjenja/5/runde/9/sakrij');
+      expect(s.request.body).toEqual({ ucesnikId: 4, sakriven: true });
+      s.flush(stanje({ verzija: 5 }));
+      expect(store.stanje()!.verzija).toBe(5);
+    });
   });
 
   describe('ukupnoMs (pun krug tajmera)', () => {

@@ -15,6 +15,7 @@ import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore, naslovIshoda } from './student.store';
 import { ZadatakEkranComponent } from './zadatak-ekran.component';
+import { porukaUtisanja } from './utisanje';
 
 /** Posle kraja izvođenja (ili izbacivanja) telefon sa `?sa=cas` se ovoliko zadrži, pa se vrati na `/nalog/cas`. */
 export const POVRATAK_NA_CAS_MS = 3_000;
@@ -87,12 +88,7 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
       }
       @case ('izbacen') {
         <div class="uz-st-sredina">
-          @if (s.info()?.prijavljenStudent) {
-            <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio iz ovog izvođenja.</p>
-          } @else {
-            <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio. Možeš ponovo da uđeš sa drugim imenom.</p>
-            <button type="button" class="uz-st-dugme uz-st-dugme--glavno" (click)="s.ponovoUdji()">Uđi ponovo</button>
-          }
+          <p class="uz-st-tekst" role="alert">Nastavnik te je uklonio iz ovog izvođenja.</p>
           @if (saCasa) { <p class="uz-st-tekst" role="status" data-na-cas>Vraćam te na čas…</p> }
         </div>
       }
@@ -177,9 +173,13 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
                     @if (celoPitanje() && p.slikaId) {
                       <img class="uz-st-slika" [src]="slika(p.slikaId)" alt="Slika uz pitanje" />
                     }
-                    <!-- montira se samo dok je unos otvoren; nacrt čuva izbor i tekst kroz zaključavanje i otključavanje -->
-                    <app-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [nacrt]="s.nacrt()"
-                                      (nacrtPromena)="s.sacuvajNacrt($event)" (posalji)="s.odgovori($event)" />
+                    @if (utisanje(l?.utisan, false); as poruka) {
+                      <p class="uz-st-tekst" role="status" data-utisan>{{ poruka }}</p>
+                    } @else {
+                      <!-- montira se samo dok je unos otvoren; nacrt čuva izbor i tekst kroz zaključavanje i otključavanje -->
+                      <app-odgovor-unos [pitanje]="p" [celoPitanje]="celoPitanje()" [nacrt]="s.nacrt()"
+                                        (nacrtPromena)="s.sacuvajNacrt($event)" (posalji)="s.odgovori($event)" />
+                    }
                   </div>
                 }
               }
@@ -262,6 +262,7 @@ export class UzivoStudentPage {
   protected readonly poeni = grupisiCifre;
   protected readonly ishod = naslovIshoda;
   protected readonly tekstOpcije = tekstOpcije;
+  protected readonly utisanje = porukaUtisanja;
   protected readonly slika = medijUrl;
 
   /** Režim A: tekst pitanja i opcija na telefonu. */

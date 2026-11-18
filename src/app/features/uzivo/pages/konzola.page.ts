@@ -30,6 +30,7 @@ import { PublikaScenaComponent } from './publika-scena.component';
 import { RangKonzolaComponent } from './rang-konzola.component';
 import { SledecePanelComponent } from './sledece-panel.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
+import type { Moderacija } from './ucesnici-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
@@ -222,7 +223,7 @@ export class IzborEkranaDialog {
 
       <ng-template #ucesniciTpl>
         <section class="uz-kon-kartica" aria-label="Učesnici i rang">
-          <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (izbaci)="store.izbaci($event)"
+          <app-rang-konzola [stanje]="s" (preimenuj)="store.preimenuj($event.id, $event.ime)" (moderacija)="moderisi($event)"
                             (rangBroj)="store.komanda('RANG_BROJ', $event)" />
         </section>
       </ng-template>
@@ -343,6 +344,15 @@ export class KonzolaPage {
 
   protected ima(tip: TipKomande): boolean {
     return this.store.dozvoljene().has(tip);
+  }
+
+  /** Meni moderacije učesnika: sakrij odgovor, utišaj, izbaci (svaki zahtev ide kroz red komandi store-a). */
+  protected moderisi(m: Moderacija): void {
+    switch (m.vrsta) {
+      case 'izbaci': this.store.izbaci(m.id, m.predavanje); break;
+      case 'utisaj': this.store.utisaj(m.id, m.utisan); break;
+      case 'sakrij': this.store.sakrijUcesnika(m.rundaId, m.id, m.sakriven); break;
+    }
   }
 
   protected komanda(z: KomandaZahtev): void {

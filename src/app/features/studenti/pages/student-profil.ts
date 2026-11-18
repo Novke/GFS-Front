@@ -15,6 +15,7 @@ import { StudentStore } from '../data-access/student.store';
 import { mailtoHref, telHref } from '../data-access/studenti.models';
 import { StudentIzmenaDialog } from '../ui/student-izmena-dialog';
 import { StudentNalogComponent } from '../ui/student-nalog.component';
+import { StudentPonasanjeComponent } from '../ui/student-ponasanje.component';
 
 /**
  * Profil studenta (`/studenti/:id/{pregled,hronologija,beleske}`): zaglavlje (ime, indeks sa godinom upisa, grupa kao
@@ -25,7 +26,7 @@ import { StudentNalogComponent } from '../ui/student-nalog.component';
  */
 @Component({
   selector: 'app-student-profil',
-  imports: [ErrorPanel, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, RouterLinkActive, RouterOutlet, SkeletonRows, StudentNalogComponent],
+  imports: [ErrorPanel, MatButton, MatIcon, MatIconButton, MatMenu, MatMenuItem, MatMenuTrigger, RouterLink, RouterLinkActive, RouterOutlet, SkeletonRows, StudentNalogComponent, StudentPonasanjeComponent],
   providers: [StudentStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -79,6 +80,7 @@ import { StudentNalogComponent } from '../ui/student-nalog.component';
 
       @if (sId(); as nid) {
         <app-student-nalog [studentId]="nid" [email]="p.email" />
+        <app-student-ponasanje [studentId]="nid" />
       }
 
       <nav class="tabovi" aria-label="Odeljci studenta">

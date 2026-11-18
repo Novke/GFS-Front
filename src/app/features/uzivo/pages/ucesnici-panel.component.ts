@@ -5,10 +5,10 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { NastavnickiZadatak, UcesnikStanje } from '../data-access/uzivo.models';
+import { MatMenuModule } from '@angular/material/menu';
+import { NastavnickiZadatak, UcesnikStanje, Utisanje } from '../data-access/uzivo.models';
 import { grupisiCifre } from '../ui/format';
 import { prikazVremena } from '../../../core/api/rang.api';
-import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 
 /** Ime učesnika: 1-40 znakova posle `trim` (kao server, spec 2.8). */
 export const IME_MAKS = 40;
@@ -51,6 +51,60 @@ export class PreimenujDialog {
   }
 }
 
+/** Podaci dijaloga izbacivanja: ime, da li izvođenje ima predavanje, da li je učesnik prijavljen student (ima karton). */
+export interface IzbaciPodaci { ime: string; predavanje: boolean; student: boolean; }
+/** Ishod dijaloga izbacivanja: samo iz ovog izvođenja ili do kraja predavanja; `undefined` = odustao. */
+export type IzbaciIshod = 'izvodjenje' | 'predavanje';
+
+/**
+ * Izbacivanje (moderacija, spec 2026-11-18): "Samo iz ove prezentacije" ili, kad je izvođenje pokrenuto sa predavanja,
+ * "Do kraja predavanja". Ni gost ne ulazi ponovo sa istog telefona (kolačić), pa tekst ne nudi "novo ime".
+ */
+@Component({
+  selector: 'app-izbaci-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MatButtonModule, MatDialogModule],
+  styles: `
+    .destruktivno {
+      --mat-button-filled-container-color: var(--mat-sys-error);
+      --mat-button-filled-label-text-color: var(--mat-sys-on-error);
+    }
+  `,
+  template: `
+    <h2 mat-dialog-title>Izbaciti „{{ p.ime }}“?</h2>
+    <mat-dialog-content id="uz-izbaci-opis">
+      <p>Učesnik više ne može da odgovara, a njegovi odgovori nestaju sa table. Sa istog telefona ne može ponovo da uđe.</p>
+      @if (p.predavanje) {
+        <p>„Do kraja predavanja“ ga ne pušta ni u ostale prezentacije ovog predavanja.</p>
+      }
+      @if (p.student) { <p>Na kartonu studenta ostaje oznaka.</p> }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button matButton data-odustani [mat-dialog-close]="undefined" cdkFocusInitial>Odustani</button>
+      <button matButton="filled" class="destruktivno" data-izbaci-izvodjenje [mat-dialog-close]="'izvodjenje'">
+        Samo iz ove prezentacije
+      </button>
+      @if (p.predavanje) {
+        <button matButton="filled" class="destruktivno" data-izbaci-predavanje [mat-dialog-close]="'predavanje'">
+          Do kraja predavanja
+        </button>
+      }
+    </mat-dialog-actions>
+  `,
+})
+export class IzbaciDialog {
+  protected readonly p = inject<IzbaciPodaci>(MAT_DIALOG_DATA);
+}
+
+/** Šta konzola traži od servera za jednog učesnika (meni moderacije). */
+export type Moderacija =
+  | { vrsta: 'izbaci'; id: number; predavanje: boolean }
+  | { vrsta: 'utisaj'; id: number; utisan: Utisanje | null }
+  | { vrsta: 'sakrij'; id: number; rundaId: number; sakriven: boolean };
+
+/** Kratak opis utišavanja uz ime. */
+export const OPIS_UTISANJA: Record<Utisanje, string> = { PITALICE: 'utišan: pitalice', SVE: 'utišan: pitalice i zadaci' };
+
 /** Varijanta učesnika u trenutnoj Zadatak rundi: naziv (ili redni broj izvučene) i da li se radi na papiru. */
 interface VarijantaUcesnika { naziv: string; papir: boolean; }
 
@@ -82,7 +136,7 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
 @Component({
   selector: 'app-ucesnici-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule],
   host: { class: 'uz-kon-ucesnici' },
   // Zadatak runda: varijanta i ishod uz ime (u komponenti: početni paket je na granici budžeta)
   styles: `
@@ -106,6 +160,12 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
     .uz-kon-vreme { flex: none; color: var(--muted); font-size: 13px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
     .uz-kon-ikona-tacno { flex: none; color: var(--ok); }
     .uz-kon-ikona-netacno { flex: none; color: var(--danger); }
+    /* moderacija: student koji na ovom predavanju već ima oznaku ponašanja */
+    .uz-kon-ucesnik--oznacen { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border-radius: 6px; }
+    .uz-kon-ucesnik--oznacen .uz-kon-ucesnik-ime { color: var(--ink); }
+    .uz-kon-oznake { margin-left: 6px; color: var(--warn); font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .uz-kon-utisan { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px;
+      color: var(--muted); font-size: 12px; white-space: nowrap; }
   `,
   template: `
     <p class="uz-kon-zbir">Povezano {{ povezanih() }} od {{ ucesnici().length }}</p>
@@ -113,11 +173,18 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
       <ul class="uz-kon-ucesnici-lista">
         @for (r of redosled(); track r.u.id) {
           @let u = r.u;
-          <li class="uz-kon-ucesnik" [class.uz-kon-ucesnik--odsutan]="!u.povezan">
+          <li class="uz-kon-ucesnik" [class.uz-kon-ucesnik--odsutan]="!u.povezan" [class.uz-kon-ucesnik--oznacen]="u.oznacen"
+              [attr.data-ucesnik]="u.id">
             <span class="uz-kon-rb">{{ r.rb ? r.rb + '.' : '' }}</span>
             <span class="uz-kon-tacka" [class.uz-kon-tacka--da]="u.povezan" aria-hidden="true"></span>
             <span class="uz-kon-ucesnik-ime">
-              {{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}</span>
+              {{ u.ime }}<span class="uz-sr">{{ u.povezan ? ', povezan' : ', nije povezan' }}{{ u.oznacen ? ', već označen na ovom predavanju' : '' }}</span>
+              @if (u.brojOznaka) {
+                <span class="uz-kon-oznake" data-oznake [title]="'Oznaka ponašanja na kartonu: ' + u.brojOznaka">
+                  <span aria-hidden="true">⚑ {{ u.brojOznaka }}</span><span class="uz-sr">, oznaka na kartonu: {{ u.brojOznaka }}</span>
+                </span>
+              }
+              @if (u.utisan; as ut) { <span class="uz-kon-utisan" data-utisan>{{ opisUtisanja[ut] }}</span> }
               @if (u.odgovorio && u.odgovor) {
                 <span class="uz-kon-odgovor" [class.uz-kon-odgovor--sakriven]="u.odgovorSakriven" [title]="u.odgovor">
                   {{ u.odgovorSakriven ? '(sakriveno) ' : '' }}{{ u.odgovor }}
@@ -152,8 +219,9 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
               <button mat-icon-button type="button" [attr.aria-label]="'Preimenuj ' + u.ime" (click)="preimenujDialog(u)">
                 <mat-icon svgIcon="edit" />
               </button>
-              <button mat-icon-button type="button" [attr.aria-label]="'Izbaci ' + u.ime" (click)="izbaciPotvrda(u)">
-                <mat-icon svgIcon="person_remove" />
+              <button mat-icon-button type="button" [attr.aria-label]="'Moderacija: ' + u.ime" [matMenuTriggerFor]="meni"
+                      [matMenuTriggerData]="{ u }" data-moderacija>
+                <mat-icon svgIcon="more_vert" />
               </button>
             </span>
           </li>
@@ -162,6 +230,39 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
     } @else {
       <p class="uz-prazno">Još niko nije ušao.</p>
     }
+    <mat-menu #meni="matMenu">
+      <ng-template matMenuContent let-u="u">
+        @if (mozeSakriti(u)) {
+          @if (u.odgovorSakriven) {
+            <button mat-menu-item type="button" data-vrati-odgovor (click)="sakrij(u, false)">
+              <mat-icon svgIcon="visibility" />Vrati odgovor na tablu
+            </button>
+          } @else {
+            <button mat-menu-item type="button" data-sakrij-odgovor (click)="sakrij(u, true)">
+              <mat-icon svgIcon="visibility_off" />Sakrij odgovor sa table
+            </button>
+          }
+        }
+        @if (u.utisan !== 'PITALICE') {
+          <button mat-menu-item type="button" data-utisaj="PITALICE" (click)="utisaj(u, 'PITALICE')">
+            <mat-icon svgIcon="pause" />Utišaj pitalice
+          </button>
+        }
+        @if (u.utisan !== 'SVE') {
+          <button mat-menu-item type="button" data-utisaj="SVE" (click)="utisaj(u, 'SVE')">
+            <mat-icon svgIcon="pause" />Utišaj pitalice i zadatke
+          </button>
+        }
+        @if (u.utisan) {
+          <button mat-menu-item type="button" data-ukloni-utisavanje (click)="utisaj(u, null)">
+            <mat-icon svgIcon="play_arrow" />Ukloni utišavanje
+          </button>
+        }
+        <button mat-menu-item type="button" data-izbaci (click)="izbaciPotvrda(u)">
+          <mat-icon svgIcon="person_remove" />Izbaci…
+        </button>
+      </ng-template>
+    </mat-menu>
   `,
 })
 export class UcesniciPanelComponent {
@@ -169,12 +270,17 @@ export class UcesniciPanelComponent {
   readonly takmicenje = input<boolean>(false);
   /** Zadatak trenutnog slajda (`null` van njega): nazivi izvučenih varijanti i rad na papiru. */
   readonly zadatak = input<NastavnickiZadatak | null>(null);
+  /** Izvođenje je pokrenuto sa predavanja: izbacivanje nudi i "Do kraja predavanja". */
+  readonly predavanje = input<boolean>(false);
+  /** Trenutna runda kad je pitanje kratak tekst (`null` inače): tada meni nudi sakrivanje odgovora učesnika. */
+  readonly tekstRunda = input<number | null>(null);
   readonly preimenuj = output<{ id: number; ime: string }>();
-  readonly izbaci = output<number>();
+  readonly moderacija = output<Moderacija>();
 
   private readonly dialog = inject(MatDialog);
   protected readonly poeni = grupisiCifre;
   protected readonly vreme = prikazVremena;
+  protected readonly opisUtisanja = OPIS_UTISANJA;
   protected readonly redosled = computed(() => redosledOdgovora(this.ucesnici()));
   protected readonly povezanih = computed(() => this.ucesnici().filter(u => u.povezan).length);
   protected readonly varijante = computed(() => {
@@ -197,13 +303,26 @@ export class UcesniciPanelComponent {
       });
   }
 
+  /** Sakrivanje odgovora iz menija: samo kratak tekst u trenutnoj rundi i samo kad učesnik ima odgovor. */
+  protected mozeSakriti(u: UcesnikStanje): boolean {
+    return this.tekstRunda() != null && u.odgovorio && !!u.odgovor;
+  }
+
+  protected sakrij(u: UcesnikStanje, sakriven: boolean): void {
+    const rundaId = this.tekstRunda();
+    if (rundaId != null) this.moderacija.emit({ vrsta: 'sakrij', id: u.id, rundaId, sakriven });
+  }
+
+  protected utisaj(u: UcesnikStanje, utisan: Utisanje | null): void {
+    this.moderacija.emit({ vrsta: 'utisaj', id: u.id, utisan });
+  }
+
   protected izbaciPotvrda(u: UcesnikStanje): void {
-    ConfirmDialog.otvori(this.dialog, {
-      naslov: `Izbaciti „${u.ime}“?`,
-      tekst: 'Učesnik više ne može da odgovara; može ponovo da uđe pod novim imenom.',
-      potvrdi: 'Izbaci', destruktivno: true,
-    }).subscribe(da => {
-      if (da) this.izbaci.emit(u.id);
+    const data: IzbaciPodaci = { ime: u.ime, predavanje: this.predavanje(), student: !!u.student };
+    this.dialog.open<IzbaciDialog, IzbaciPodaci, IzbaciIshod>(IzbaciDialog, {
+      data, width: '480px', maxWidth: '95vw', role: 'alertdialog', ariaDescribedBy: 'uz-izbaci-opis',
+    }).afterClosed().subscribe(ishod => {
+      if (ishod) this.moderacija.emit({ vrsta: 'izbaci', id: u.id, predavanje: ishod === 'predavanje' });
     });
   }
 }

@@ -212,14 +212,11 @@ describe('StudentStore', () => {
       expect(store.licno()!.poeni).toBe(850);
     });
 
-    it('izbacen=true -> faza izbacen i veza se zatvara; "Uđi ponovo" vodi na ime', () => {
+    it('izbacen=true -> faza izbacen i veza se zatvara (nema "Uđi ponovo": server ne pušta isti telefon)', () => {
       udji();
       stomp().posalji('/user/queue/licno', licno({ verzija: 2, izbacen: true }));
       expect(store.faza()).toBe('izbacen');
       expect(stomp().deactivate).toHaveBeenCalled();
-      store.ponovoUdji();
-      expect(store.faza()).toBe('ime');
-      expect(store.ucesnik()).toBeNull();
     });
 
     it('status ZAVRSENO -> faza kraj; lično stanje koje stigne posle javnog još ažurira konačno mesto, pa se veza zatvara', saLaznimSatom(async () => {
