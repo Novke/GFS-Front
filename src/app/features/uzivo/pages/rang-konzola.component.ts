@@ -123,7 +123,9 @@ export class RangKonzolaComponent {
   /** Runda pitanja "kratak tekst" na trenutnom slajdu: samo tada se odgovor učesnika sakriva iz menija. */
   protected readonly tekstRunda = computed(() => {
     const s = this.stanje();
-    return s.runda && s.trenutniSlajd?.pitanje?.tip === 'KRATAK_TEKST' ? s.runda.id : null;
+    // tip runde iz snimka (rezultat), slajd samo dok rezultata nema: izmena slajda tokom izvođenja ne menja rundu
+    const tip = s.rezultat?.tip ?? s.trenutniSlajd?.pitanje?.tip;
+    return s.runda && tip === 'KRATAK_TEKST' ? s.runda.id : null;
   });
   protected readonly rangIzvodjenja = signal<RangTacnostiStavka[] | null>(null);
   protected readonly rangPredavanja = signal<RangTacnostiStavka[] | null>(null);
