@@ -5,15 +5,17 @@ import {
 import {
   PreferencesStore, VELICINE_BELESKI, manjaVelicinaBeleski, vecaVelicinaBeleski,
 } from '../../../core/state/preferences.store';
+import { TekstSaLinkovima } from '../../../shared/ui/tekst-sa-linkovima';
 import { pustiFokusPosleKlika } from './precice';
 
 /**
  * Beleške slajda sa A-/A+ (veličina je jedna postavka za konzolu i daljinski). Prelomi redova su sačuvani, dugačke
- * reči se lome, a pri promeni slajda (`kljucSlajda`) skrol se vraća na vrh.
+ * reči se lome, `http(s)://` adrese su linkovi, a pri promeni slajda (`kljucSlajda`) skrol se vraća na vrh.
  */
 @Component({
   selector: 'app-beleske-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TekstSaLinkovima],
   host: { class: 'uz-beleske' },
   template: `
     <div class="uz-beleske-alati" role="group" aria-label="Veličina slova beležaka">
@@ -24,7 +26,7 @@ import { pustiFokusPosleKlika } from './precice';
     </div>
     <div #telo class="uz-beleske-telo" tabindex="0" role="region" aria-label="Beleške" [style.font-size.px]="velicina()">
       @if (tekst(); as t) {
-        <p class="uz-beleske-tekst">{{ t }}</p>
+        <p class="uz-beleske-tekst"><app-tekst-sa-linkovima [tekst]="t" /></p>
       } @else {
         <p class="uz-prazno">{{ prazno() }}</p>
       }
