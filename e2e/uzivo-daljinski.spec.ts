@@ -246,6 +246,23 @@ test.describe('daljinski na telefonu (390 x 844)', () => {
     await expect(veza(page)).toHaveText('Povezano');
     await expect(stoperica).toHaveText(/^0:[0-5]\d$/);
   });
+
+  test('link za fajlove: dugme pali i gasi traku na tabli (K) i šalje FAJLOVI', async ({ page, mock }) => {
+    pomeriServer(mock, 1);
+    mock.izvodjenje.fajlovi = { kod: '1234', link: 'gfs.trif.rs/f/1234', fajlovi: [] };
+    mock.izvodjenje.fajloviNaTabli = false;
+    await nastavnickiBroker(page, mock);
+    await otvori(page);
+    const dugme = page.getByRole('button', { name: 'Link na tablu' });
+    await expect(dugme).toHaveAttribute('aria-pressed', 'false');
+    await dodirni(page, dugme);
+    const skloni = page.getByRole('button', { name: 'Skloni link' });
+    await expect(skloni).toHaveAttribute('aria-pressed', 'true');
+    expect(tipoviKomandi(mock)).toEqual(['FAJLOVI']);
+    // dugme ne izlazi van ekrana telefona
+    const b = await skloni.boundingBox();
+    expect(b!.x + b!.width).toBeLessThanOrEqual(390 + 1);
+  });
 });
 
 test.describe('daljinski: vrlo duge beleške na 360 x 740', () => {

@@ -74,6 +74,27 @@ describe('KonzolaKontroleComponent', () => {
     expect(dugme(el, 'Tačan odgovor').disabled).toBe(false);
   });
 
+  it('K: „Link za fajlove” onemogućen bez fajlova; sa linkom šalje FAJLOVI i pokazuje stanje table', () => {
+    const f = TestBed.createComponent(DomacinKontrola);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(dugme(el, 'Link za fajlove').disabled).toBe(true);
+
+    const s = naPitanju('ZATVORENO', { fajlovi: { kod: '1234', link: 'gfs.trif.rs/f/1234', fajlovi: [] }, fajloviNaTabli: false });
+    f.componentInstance.stanje.set(s);
+    f.componentInstance.dozvoljene.set(dozvoljeneKomande(s));
+    f.detectChanges();
+    const k = dugme(el, 'Link za fajlove');
+    expect(k.disabled).toBe(false);
+    expect(k.getAttribute('aria-pressed')).toBe('false');
+    expect(k.getAttribute('aria-keyshortcuts')).toBe('K');
+    k.click();
+    expect(f.componentInstance.kliknuto).toEqual([{ tip: 'FAJLOVI', vrednost: undefined }]);
+    f.componentInstance.stanje.set({ ...s, fajloviNaTabli: true });
+    f.detectChanges();
+    expect(dugme(el, 'Link za fajlove').getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('Rešenje (Shift+R): onemogućeno u CEKA i na pitanju, prekidač posle zatvaranja Zadatak runde', () => {
     const f = TestBed.createComponent(DomacinKontrola);
     const postavi = (s: ReturnType<typeof naZadatku>) => {

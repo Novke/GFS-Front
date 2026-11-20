@@ -47,6 +47,7 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 'm': case 'M': return { komanda: 'TELEFON_PRIKAZ' };
     case 'd': case 'D': return { komanda: 'DETALJI' };
     case 'q': case 'Q': return { komanda: 'QR' };
+    case 'k': case 'K': return { komanda: 'FAJLOVI' };
     case 'b': case 'B': case '.': return { komanda: 'EKRAN_CRN' };
     case 'w': case 'W': return { komanda: 'EKRAN_BEO' };
     case 'f': case 'F': return { lokalno: 'CEO_EKRAN' };

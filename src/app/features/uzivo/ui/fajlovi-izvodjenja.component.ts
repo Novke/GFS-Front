@@ -28,7 +28,10 @@ export class FajloviTrakaComponent {
   readonly fajlovi = input.required<FajloviSlajda>();
 }
 
-/** Kartica za konzolu i daljinski: isti link i imena fajlova trenutnog slajda (`kompaktno` = jedan red, za telefon). */
+/**
+ * Kartica za konzolu i daljinski: isti link i imena fajlova trenutnog mesta (`kompaktno` = jedan red, za telefon).
+ * Spisak može biti prazan (link postoji zbog tastera K). `naTabli` (konzola) kaže da li je traka sa linkom na projektoru.
+ */
 @Component({
   selector: 'app-fajlovi-kartica',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -39,21 +42,31 @@ export class FajloviTrakaComponent {
     .fk-lista { margin: 4px 0 0; padding-left: 1.2em; color: var(--ink-2); font-size: 0.9em; }
     .fk-meta { color: var(--muted); }
     :host(.uz-fajlovi-kartica--kompaktno) { padding: 6px 12px; font-size: 14px; color: var(--ink-2); }
+    .fk-prazno { margin: 4px 0 0; font-size: 0.9em; }
     :host(.uz-fajlovi-kartica--kompaktno) .fk-lista { display: none; }
   `,
   template: `
     <p class="fk-red" style="margin:0">Fajlovi za studente: <span class="fk-link" data-fajlovi-link>{{ fajlovi().link }}</span></p>
-    <ul class="fk-lista" data-fajlovi-imena>
-      @for (f of fajlovi().fajlovi; track f.id) {
-        <li>{{ f.naziv }} <span class="fk-meta">· {{ vrsta(f.vrsta) }}, {{ velicina(f.velicina) }}</span></li>
-      }
-    </ul>
+    @if (fajlovi().fajlovi.length) {
+      <ul class="fk-lista" data-fajlovi-imena>
+        @for (f of fajlovi().fajlovi; track f.id) {
+          <li>{{ f.naziv }} <span class="fk-meta">· {{ vrsta(f.vrsta) }}, {{ velicina(f.velicina) }}</span></li>
+        }
+      </ul>
+    } @else if (!kompaktno()) {
+      <p class="fk-meta fk-prazno" data-fajlovi-prazno>Uz ovaj slajd nema fajlova; link vodi na fajlove već prikazanih slajdova.</p>
+    }
+    @if (naTabli() !== null) {
+      <p class="fk-meta fk-prazno" data-fajlovi-tabla>{{ naTabli() ? 'Link je na tabli (K ga sklanja).' : 'Link nije na tabli (K ga pokazuje).' }}</p>
+    }
     @if (kompaktno()) { <span class="fk-meta" data-fajlovi-sazetak>{{ sazetak() }}</span> }
   `,
 })
 export class FajloviKarticaComponent {
   readonly fajlovi = input.required<FajloviSlajda>();
   readonly kompaktno = input(false);
+  /** Da li je traka sa linkom na projektoru; `null` = ne prikazuj (daljinski ima dugme). */
+  readonly naTabli = input<boolean | null>(null);
   protected readonly vrsta = oznakaVrste;
   protected readonly velicina = velicinaFajla;
   protected readonly sazetak = computed(() => this.fajlovi().fajlovi.map(f => f.naziv).join(', '));
