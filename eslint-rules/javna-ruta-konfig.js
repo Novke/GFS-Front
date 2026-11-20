@@ -3,7 +3,7 @@
 
 // Javne rute (student na telefonu, bez basic-auth-a): smeju da zovu samo assets/* i api/public/*.
 // Direktorijumi su u odnosu na src/app.
-const JAVNI_FEATURE = ['features/upis', 'features/uzivo/javno', 'features/nalog'];
+const JAVNI_FEATURE = ['features/upis', 'features/uzivo/javno', 'features/nalog', 'features/fajlovi'];
 
 // Šta javni feature sme da uvozi pored sebe (putanje u odnosu na src/app, bez ekstenzije; "/**" = ceo direktorijum).
 // Pravilo proverava samo DIREKTNE uvoze fajla, ne i ono što dozvoljeni modul uvozi dalje: svaki dodatak ovde mora
@@ -22,6 +22,13 @@ const JAVNO_DOZVOLJENO = [
   'shared/forms/indeks-polja',
   // WhatsApp grupa (posle upisa i na Početnoj naloga, 2026-10-29): čista provera kanonskog linka, bez uvoza.
   'shared/util/wa-link',
+  // Fajlovi uz prezentaciju (2026-11-20): tipovi i čiste funkcije (veličina, kod, relativni URL-ovi api/public/*), bez uvoza.
+  'shared/util/fajlovi',
+  // Spisak fajlova (nalog i telefon uživo): `shared/ui/fajlovi-spisak.component` uvozi samo @angular/core, @angular/router
+  // (RouterLink), shared/util/fajlovi i `import type` iz shared/util/fajlovi-mejl. `shared/util/fajlovi-mejl` uvozi
+  // @angular/common/http (samo HttpErrorResponse, tip), @angular/core, rxjs i `import type` iz shared/util/fajlovi; bez HTTP poziva.
+  'shared/ui/fajlovi-spisak.component',
+  'shared/util/fajlovi-mejl',
 ];
 
 // Dodatak po javnom feature-u (važi samo za njega): moduli iz istog feature-a van javnog dela. Svaki je proveren sa

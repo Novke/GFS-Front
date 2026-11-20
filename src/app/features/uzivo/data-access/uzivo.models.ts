@@ -1,5 +1,6 @@
 import type { Platno, Potez, Tema } from './platno.models';
 import type { VrstaPrezentacije } from '../../../core/api/redosled-prezentacija';
+import type { FajlKratko, FajloviSlajda } from '../../../shared/util/fajlovi';
 
 export type { Tema } from './platno.models';
 export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO' | 'ZADATAK';
@@ -176,6 +177,8 @@ export interface NastavnickoStanje {
   imaRangPredavanja?: boolean;
   /** Koliko redova ranga projektor prikazuje (`RANG_BROJ`); `null` = svi. */
   rangBroj?: number | null;
+  /** Fajlovi trenutnog slajda i kratak link `gfs.trif.rs/f/1234` (`null` bez fajla ili bez važećeg koda; stari backend ga ne šalje). */
+  fajlovi?: FajloviSlajda | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {
@@ -189,6 +192,8 @@ export interface JavnoStanje {
   prikaz: Prikaz; slajdTip: TipSlajda | null; ekran: Ekran; takmicenje: boolean; telefonPrikaz: TelefonPrikaz;
   detaljiDozvoljeni: boolean; brojUcesnika: number; pitanje: JavnoPitanje | null; rezultat: Rezultat | null;
   rangLista: RangStavka[] | null; zadatak?: JavniZadatak | null;
+  /** Fajlovi trenutnog slajda (za „Pošalji mi na mejl”); prazno ili bez polja kod starog backenda. */
+  fajlovi?: FajlKratko[];
 }
 export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null; }
 /**
