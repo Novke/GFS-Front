@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import {
-  NacrtOdgovora, OdgovorUnosComponent, mozeDaPosalje, normalizujBroj, porukaZaBroj, porukaZaTekst, tekstOpcije,
+  NATPIS_VISE_TACNIH_TELEFON, NacrtOdgovora, OdgovorUnosComponent, mozeDaPosalje, normalizujBroj, porukaZaBroj, porukaZaTekst, tekstOpcije,
 } from './odgovor-unos.component';
 
 function pitanje(tip: TipPitanja, izmene: Partial<JavnoPitanje> = {}): JavnoPitanje {
@@ -123,6 +123,31 @@ describe('OdgovorUnosComponent', () => {
     dugme('Pošalji').click();
     dugme('Pošalji').click();
     expect(poslato).toEqual([{ rundaId: 7, opcije: [11, 13] }]);
+  });
+
+  it('VISE_TACNIH: natpis, prazne kućice na svim opcijama, Pošalji (n)', () => {
+    napravi(pitanje('VISE_TACNIH', { opcije: [{ id: 11, tekst: null }, { id: 12, tekst: null }, { id: 13, tekst: null }, { id: 14, tekst: null }] }));
+    const el = fixture.nativeElement as HTMLElement;
+    expect(NATPIS_VISE_TACNIH_TELEFON).toBe('Može biti više tačnih · označi sve tačne');
+    expect(el.querySelector('[data-natpis-vise]')!.textContent!.trim()).toBe(NATPIS_VISE_TACNIH_TELEFON);
+    const kucice = Array.from(el.querySelectorAll('.uz-st-opcija-kvacica'));
+    expect(kucice.length).toBe(4);
+    expect(kucice.every(k => k.textContent!.trim() === '')).toBe(true);
+    expect(dugme('Pošalji').disabled).toBe(true);
+    dugmad()[0].click();
+    dugmad()[1].click();
+    fixture.detectChanges();
+    expect(dugme('Pošalji').textContent!.trim()).toBe('Pošalji (2)');
+    expect(el.querySelectorAll('.uz-st-opcija-kvacica')[0].textContent!.trim()).toBe('✓');
+  });
+
+  it('VISE_TACNIH: isti DOM za pitanje sa 1 i 2 tačna; ostali tipovi nemaju natpis', () => {
+    napravi(pitanje('VISE_TACNIH', { tacneOpcije: [11] }));
+    const jedan = fixture.nativeElement.innerHTML;
+    napravi(pitanje('VISE_TACNIH', { tacneOpcije: [11, 12] }));
+    expect(fixture.nativeElement.innerHTML).toBe(jedan);
+    napravi(pitanje('JEDAN_TACAN'));
+    expect(fixture.nativeElement.querySelector('[data-natpis-vise]')).toBeNull();
   });
 
   it('BROJ: neispravan unos pokazuje "Unesi broj." i ne šalje; ispravan šalje tekst sa zarezom', () => {

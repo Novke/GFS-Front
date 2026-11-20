@@ -9,7 +9,7 @@ import { IzvodjenjeNaPredavanju } from './prezentacije-predavanja.api';
 /**
  * Red ranga tačnosti (backend `RangTacnostiStavka`). `mesto` je `null` samo za studenta grupe koji nije dugovao nijedno
  * pitanje (dno liste grupe); `procenat` = ceo procenat `tacnih/dugovanih`; `prosekMs` = prosečno vreme odgovorenih
- * (`null` bez odgovora); `zvezdice` = ★ tačnih (pitanje 1, zadatak nivo varijante). `poeni` samo u takmičenju,
+ * (`null` bez odgovora); `zvezdice` = ★ tačnih (pitanje 1, zadatak nivo varijante); `tacnih` i `zvezdice` su decimalni brojevi (udeo delimično tačnog, zaokruženo na 0.01). `poeni` samo u takmičenju,
  * `izvodjenja` u zbiru predavanja, `casova` u zbiru grupe i studenta. `indeks` studenta (kanonski, `GD5`; `null` za
  * gosta). Redosled: više ★, pa kraći prosek, pa ime; tačnost samo informiše.
  */

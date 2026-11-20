@@ -10,6 +10,9 @@ export { PORUKA_BROJ, normalizujBroj, porukaZaBroj } from '../ui/polja-zadatka';
 
 const MAX_TEKST = 200;
 
+/** Vidljiv natpis iznad opcija za svako VISE_TACNIH pitanje (ne zavisi od broja tačnih: DOM je isti pre "Tačno"). */
+export const NATPIS_VISE_TACNIH_TELEFON = 'Može biti više tačnih · označi sve tačne';
+
 export const PORUKA_TEKST = 'Odgovor mora imati od 1 do 200 znakova.';
 
 export function porukaZaTekst(unos: string): string | null {
@@ -106,8 +109,10 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         }
       }
       @default {
+        @if (p.tip === 'VISE_TACNIH') { <p id="uz-st-vise" class="uz-st-natpis-vise" data-natpis-vise>{{ natpisVise }}</p> }
         <div class="uz-st-opcije" [class.uz-st-opcije--dve]="opcije().length <= 2" role="group"
-             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? 'Izaberi jedan ili više odgovora' : 'Izaberi odgovor'">
+             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? null : 'Izaberi odgovor'"
+             [attr.aria-describedby]="p.tip === 'VISE_TACNIH' ? 'uz-st-vise' : null">
           @for (o of opcije(); track o.id; let i = $index) {
             <button type="button" class="uz-st-opcija" [style.--uz-boja]="boja(i)" [disabled]="onemoguceno()"
                     [class.uz-st-opcija--izabrana]="izabrane().includes(o.id)"
@@ -123,7 +128,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         </div>
         @if (p.tip === 'VISE_TACNIH') {
           <button type="button" class="uz-st-dugme uz-st-dugme--glavno uz-st-posalji" [disabled]="onemoguceno() || !mozeSlati()"
-                  (click)="posalji1({ rundaId: p.rundaId!, opcije: izabraneRedom() })">Pošalji</button>
+                  (click)="posalji1({ rundaId: p.rundaId!, opcije: izabraneRedom() })">Pošalji{{ izabrane().length ? ' (' + izabrane().length + ')' : '' }}</button>
         }
       }
     }
@@ -139,6 +144,7 @@ export class OdgovorUnosComponent {
   readonly nacrtPromena = output<NacrtOdgovora>();
 
   protected readonly skala = SKALA;
+  protected readonly natpisVise = NATPIS_VISE_TACNIH_TELEFON;
   private readonly rundaId = computed(() => this.pitanje().rundaId);
   /** Runda u kojoj je ova komponenta već poslala odgovor (lokalna brava protiv dvostrukog dodira). */
   private readonly poslataRunda = signal<number | null>(null);

@@ -5,6 +5,9 @@ import { meriFormule } from './mera-formule';
 import { OpcijaOblikComponent, oblikOpcije } from './opcija-oblik';
 import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
 
+/** Natpis na tabli iznad opcija pitanja sa više tačnih (isto pravilo kao na telefonu: za svako VISE_TACNIH). */
+export const NATPIS_VISE_TACNIH_TABLA = 'Može biti više tačnih';
+
 /**
  * Pločice opcija na projektoru: mreža 2x2 (do 4 opcije) ili 3x2 (5-6), svaka sa oblikom, slovom i tekstom. Za broj,
  * kratak tekst i skalu umesto pločica kratak opis šta se unosi na telefonu.
@@ -21,6 +24,7 @@ import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
   // Sažeti oblik (pitanje sa velikom slikom): stil je ovde, ne u globalnom `uzivo-tokeni.css` (ulazi u početni paket i
   // na telefon). Sve mere u cqw/em, pa isto radi u umanjenim prikazima.
   styles: `
+    .uz-natpis-vise { margin: 0 0 0.6cqw; font-size: 1.8cqw; font-weight: 700; color: var(--muted); }
     .uz-sazeto-red { display: flex; align-items: center; justify-content: flex-end; gap: 2cqw; }
     .uz-sazeto-tacno { margin: 0; font-size: 2.4cqw; }
     .uz-sazeto-unos {
@@ -84,6 +88,7 @@ import { MERA_FORMULE, TekstFormuleComponent } from './tekst-formule.component';
         </div>
       }
       @default {
+        @if (pitanje().tip === 'VISE_TACNIH') { <p class="uz-natpis-vise" data-natpis-vise>{{ natpisVise }}</p> }
         <ul class="uz-plocice-mreza" [class.uz-plocice-mreza--tri]="opcije().length > 4 && !sazeto()"
             [style.--uz-n]="sazeto() ? opcije().length : null">
           @for (o of opcije(); track o.id) {
@@ -106,6 +111,7 @@ export class PitanjePlociceComponent {
   /** Sažeti oblik uz veliku sliku: unos kao mala pločica u ćošku, kratke opcije u jednom redu. */
   readonly sazeto = input(false);
 
+  protected readonly natpisVise = NATPIS_VISE_TACNIH_TABLA;
   protected readonly unos = computed(() => ['BROJ', 'KRATAK_TEKST', 'SKALA'].includes(this.pitanje().tip));
 
   protected readonly opcije = computed(() => {
