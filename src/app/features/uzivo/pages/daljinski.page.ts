@@ -37,6 +37,14 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
   providers: [IzvodjenjeStore],
   imports: [BeleskePanelComponent, FajloviKarticaComponent, VremeIzvodjenjaComponent],
   host: { class: 'uz-dalj', lang: 'sr-Latn' },
+  // red sa linkom za fajlove: kartica levo, prekidač trake na tabli (K) desno; u komponenti, ne u globalnom CSS-u (početni budžet)
+  styles: `
+    .uz-dalj-fajlovi { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+    .uz-dalj-fajlovi app-fajlovi-kartica { flex: 1 1 auto; min-width: 0; }
+    .uz-dalj-fajlovi-dugme { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--surface); color: var(--ink); font: 600 15px/1.2 var(--font); touch-action: manipulation; user-select: none; }
+    .uz-dalj-fajlovi-dugme[aria-pressed='true'] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-soft-ink); }
+  `,
   template: `
     @if (store.stanje(); as s) {
       @if (zavrseno()) {
@@ -64,7 +72,13 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
             }
           }
         </div>
-        @if (s.fajlovi; as fajlovi) { <app-fajlovi-kartica [fajlovi]="fajlovi" [kompaktno]="true" /> }
+        @if (s.fajlovi; as fajlovi) {
+          <div class="uz-dalj-fajlovi">
+            <app-fajlovi-kartica [fajlovi]="fajlovi" [kompaktno]="true" />
+            <button type="button" class="uz-dalj-fajlovi-dugme" [disabled]="!ima('FAJLOVI')" [attr.aria-pressed]="s.fajloviNaTabli ?? true"
+                    (click)="dodir('FAJLOVI')">{{ (s.fajloviNaTabli ?? true) ? 'Skloni link' : 'Link na tablu' }}</button>
+          </div>
+        }
         <app-beleske-panel class="uz-dalj-beleske" [tekst]="s.trenutniSlajd?.beleske ?? null"
                            [kljucSlajda]="s.trenutniSlajd?.id ?? s.prikaz" [prazno]="prazno()" />
         @if (runda(); as vrsta) {

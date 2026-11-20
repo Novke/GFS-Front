@@ -794,4 +794,29 @@ describe('PublikaScenaComponent (fajlovi za vežbu)', () => {
     const nula = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi: null }));
     expect(nula.querySelector('app-fajlovi-traka')).toBeNull();
   });
+
+  it('traka prati fajloviNaTabli: na slajdu i na prijavi, a ne na kraju', async () => {
+    const ugasena = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: false }));
+    expect(ugasena.querySelector('app-fajlovi-traka')).toBeNull();
+    expect(ugasena.classList.contains('uz-scena--fajlovi')).toBe(false);
+    const upaljena = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: true }));
+    expect(upaljena.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    expect(upaljena.classList.contains('uz-scena--fajlovi')).toBe(true);
+    const prijava = await prikazi(stanje({ fajlovi, fajloviNaTabli: true }));
+    expect(prijava.querySelector('app-prijava-ekran')).not.toBeNull();
+    expect(prijava.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    // stari backend ne šalje fajlove na prijavi; i bez fajloviNaTabli prijava ostaje bez trake
+    const prijavaStari = await prikazi(stanje({ fajlovi }));
+    expect(prijavaStari.querySelector('app-fajlovi-traka')).toBeNull();
+    const kraj = await prikazi(stanje({ prikaz: 'KRAJ', indeks: 3, fajlovi, fajloviNaTabli: true }));
+    expect(kraj.querySelector('app-fajlovi-traka')).toBeNull();
+  });
+
+  it('Q ekran nosi link za fajlove kad postoji, i kad traka nije na tabli', async () => {
+    const sa = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: false, qrPrikazan: true }));
+    expect(sa.querySelector('[data-qr-fajlovi]')?.textContent).toContain('gfs.trif.rs/f/1234');
+    const bez = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), qrPrikazan: true }));
+    expect(bez.querySelector('.uz-scena-qr')).not.toBeNull();
+    expect(bez.querySelector('[data-qr-fajlovi]')).toBeNull();
+  });
 });

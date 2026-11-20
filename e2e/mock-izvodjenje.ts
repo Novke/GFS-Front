@@ -184,6 +184,9 @@ export class MockIzvodjenje {
   private verzija = 1;
   /** Test postavlja `fajlovi` (kao `NastavnickoStanje.fajlovi`); bez toga polja nema u snimku (stari backend). */
   fajlovi: unknown;
+  /** `NastavnickoStanje.fajloviNaTabli`; bez vrednosti polja nema (stari backend). `FAJLOVI` (K) ga prebacuje. */
+  fajloviNaTabli: boolean | undefined;
+  private qrPrikazan = false;
   private prikaz: Prikaz = 'PRIJAVA';
   private indeks = -1;
   private korak = 0;
@@ -265,12 +268,13 @@ export class MockIzvodjenje {
       korak: this.korak, brojStavki: brojKoraka(trenutni), indeks: this.indeks, brojSlajdova: sl.length,
       trenutniSlajd: zaSnimak(trenutni), sledeciSlajd: this.prikaz === 'KRAJ' ? null : zaSnimak(sl[this.indeks + 1] ?? null),
       faza: this.faza, runda: this.runda, rezultatiPrikazani: this.rezultatiPrikazani, tacanPrikazan: this.tacanPrikazan,
-      rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: this.f.telefonPrikaz,
+      rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: this.qrPrikazan, telefonPrikaz: this.f.telefonPrikaz,
       detaljiDozvoljeni: this.f.detaljiDozvoljeni, takmicenje: this.f.takmicenje, tema: this.f.tema, rezultat,
       brojOdgovora: this.odgovoriZadatka.size, brojPovezanih: this.f.ucesnici.filter(u => u.povezan).length,
       rangLista: [], javniRezultat: javni, javnaRangLista: null, pocetakMs: this.pocetakMs,
       ucesnici: this.ucesniciSnimka(), zadatak: this.zadatakSnimak(trenutni),
       ...(this.fajlovi === undefined ? {} : { fajlovi: this.fajlovi }),
+      ...(this.fajloviNaTabli === undefined ? {} : { fajloviNaTabli: this.fajloviNaTabli }),
     };
   }
 
@@ -346,6 +350,14 @@ export class MockIzvodjenje {
         this.izmenaNivoa = n;
         break;
       }
+      case 'QR':
+        this.qrPrikazan = !this.qrPrikazan;
+        break;
+      case 'FAJLOVI':
+        // kao server: bez linka 409; inače traka na ovom mestu u suprotno stanje (mok ne briše prekidač pri promeni slajda)
+        if (!this.fajlovi) return greska(409, 'Uz ovu prezentaciju nema fajlova za studente.');
+        this.fajloviNaTabli = !(this.fajloviNaTabli ?? true);
+        break;
       default:
         return greska(409, 'Mok: komanda nije podržana.');
     }

@@ -220,7 +220,7 @@ export class IzborEkranaDialog {
         @if (s.fajlovi; as fajlovi) {
           <section class="uz-kon-kartica" aria-label="Fajlovi za studente">
             <h2 class="uz-kon-naslov">Fajlovi za studente</h2>
-            <app-fajlovi-kartica [fajlovi]="fajlovi" />
+            <app-fajlovi-kartica [fajlovi]="fajlovi" [naTabli]="s.fajloviNaTabli ?? true" />
           </section>
         }
       </ng-template>

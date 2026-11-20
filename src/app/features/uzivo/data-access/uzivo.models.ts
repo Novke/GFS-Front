@@ -30,7 +30,9 @@ export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' |
    * Rang tačnosti celog predavanja na projektoru (Shift+L; `RANG_LISTA` (L) je rang ovog izvođenja) i koliko redova
    * projektor prikazuje (`RANG_BROJ`, `vrednost` 0 ili `null` = svi, 1-30).
    */
-  | 'RANG_PREDAVANJA' | 'RANG_BROJ';
+  | 'RANG_PREDAVANJA' | 'RANG_BROJ'
+  /** Traka sa linkom fajlova na trenutnom slajdu ili prijavi (K): pali ili gasi do sledeće promene slajda. */
+  | 'FAJLOVI';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -177,8 +179,17 @@ export interface NastavnickoStanje {
   imaRangPredavanja?: boolean;
   /** Koliko redova ranga projektor prikazuje (`RANG_BROJ`); `null` = svi. */
   rangBroj?: number | null;
-  /** Fajlovi trenutnog slajda i kratak link `gfs.trif.rs/f/1234` (`null` bez fajla ili bez važećeg koda; stari backend ga ne šalje). */
+  /**
+   * Kratak link `gfs.trif.rs/f/1234` i fajlovi trenutnog mesta (na slajdu njegovi i oni uz celu prezentaciju, na prijavi
+   * samo oni uz celu prezentaciju; spisak može biti prazan). `null` kad prezentacija nema fajlova, kod ne važi ili je kraj;
+   * stari backend ga ne šalje.
+   */
   fajlovi?: FajloviSlajda | null;
+  /**
+   * Traka sa linkom na projektoru: sama na slajdu sa svojim fajlovima, a za fajlove uz celu prezentaciju na prijavi i
+   * prvom slajdu; `K` je pali ili gasi do sledeće promene slajda. Stari backend ga ne šalje (tada traka prati `fajlovi`).
+   */
+  fajloviNaTabli?: boolean;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {

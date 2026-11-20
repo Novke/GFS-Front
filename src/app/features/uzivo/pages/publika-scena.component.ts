@@ -4,6 +4,7 @@ import { odgovorili } from '../data-access/izvodjenje-pravila';
 import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { ServerskiSat } from '../data-access/sat';
 import { Faza, NastavnickiZadatak, NastavnickoStanje, Prelaz, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
+import type { FajloviSlajda } from '../../../shared/util/fajlovi';
 import { FajloviTrakaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
 import { smanjenoKretanje } from '../ui/kretanje';
@@ -85,7 +86,7 @@ interface Omotac {
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FajloviTrakaComponent, PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
-  host: { class: 'uz-scena rezim-dan uz-dan', '[class.uz-scena--fajlovi]': 'saFajlovima()' },
+  host: { class: 'uz-scena rezim-dan uz-dan', '[class.uz-scena--fajlovi]': '!!trakaFajlova()' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
   // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
   // isto i rang tačnosti: budžet početnog zatvorenja u e2e/lenji-editor.spec.ts).
@@ -99,6 +100,9 @@ interface Omotac {
     .uz-scena-rang--tacnost { justify-content: flex-start; gap: 1.2cqw; }
     .uz-scena-rang--tacnost .uz-scena-naslov { font-size: 3.4cqw; }
     .uz-scena-rang .uz-rang.uz-rt { width: 100%; }
+    /* Q ekran: link za fajlove ispod koda za ulazak, za kasnioce (manji od koda, da kod ostane glavni) */
+    .uz-scena-qr-fajlovi { margin: 1.5cqw 0 0; font-size: 2.2cqw; font-weight: 600; color: var(--muted); }
+    .uz-scena-qr-fajlovi strong { display: block; font-family: var(--font-mono); font-size: 3.2cqw; color: var(--ink); }
     .uz-scena-ugao { position: absolute; top: 1.4cqw; right: 2cqw; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap; color: var(--muted); font-size: 1.6cqw; font-weight: 600; }
   `,
@@ -107,6 +111,8 @@ interface Omotac {
     @switch (s.prikaz) {
       @case ('PRIJAVA') {
         <app-prijava-ekran [kod]="s.izvodjenje.kod" [link]="joinLink()" [qr]="qrSadrzaj()" [imena]="imena()" [broj]="s.ucesnici.length" />
+        <!-- fajlovi uz celu prezentaciju: link dok se studenti okupljaju (i na K) -->
+        @if (trakaFajlova(); as fajlovi) { <app-fajlovi-traka [fajlovi]="fajlovi" /> }
       }
       @case ('SLAJD') {
         <div class="uz-scena-slajdovi">
@@ -125,8 +131,8 @@ interface Omotac {
             </div>
           }
         </div>
-        <!-- fajlovi za vežbu: link ispod slajda, ne preko podnožja (stari backend nema polje, pa se ništa ne prikazuje) -->
-        @if (s.fajlovi; as fajlovi) { <app-fajlovi-traka [fajlovi]="fajlovi" /> }
+        <!-- fajlovi za vežbu: link ispod slajda, ne preko podnožja; samo gde server kaže (fajloviNaTabli) -->
+        @if (trakaFajlova(); as fajlovi) { <app-fajlovi-traka [fajlovi]="fajlovi" /> }
       }
       @case ('KRAJ') {
         <div class="uz-okvir">
@@ -166,6 +172,9 @@ interface Omotac {
           <div class="uz-scena-qr-info">
             <p class="uz-scena-qr-link">{{ host() }}/uzivo</p>
             <p class="uz-scena-qr-kod-tekst">{{ kod() }}</p>
+            @if (s.fajlovi; as fajlovi) {
+              <p class="uz-scena-qr-fajlovi" data-qr-fajlovi>Fajlovi za vežbu: <strong>{{ fajlovi.link }}</strong></p>
+            }
           </div>
         </section>
       </div>
@@ -292,8 +301,15 @@ export class PublikaScenaComponent {
   protected readonly imena = computed(() => this.stanje().ucesnici.map(u => u.ime));
   /** Ulazi trenutnog slajda; `kodTraka` je poseban, da ne bude nov objekat sa svakim snimkom. */
   protected readonly ulazi = computed(() => ulaziSlajda(this.stanje(), this.sat(), this.host()));
-  /** Traka sa linkom za fajlove je ispod slajda: scena je tada viša (projektor je sužava, vidi stilove). */
-  protected readonly saFajlovima = computed(() => this.stanje().prikaz === 'SLAJD' && !!this.stanje().fajlovi);
+  /**
+   * Traka sa linkom za fajlove (ispod slajda ili ekrana za prijavu; scena je tada viša, projektor je sužava, vidi stilove):
+   * samo kad server kaže `fajloviNaTabli`. Stari backend to polje ne šalje: tada kao pre, na svakom slajdu sa fajlovima.
+   */
+  protected readonly trakaFajlova = computed<FajloviSlajda | null>(() => {
+    const s = this.stanje();
+    if (!s.fajlovi || (s.prikaz !== 'SLAJD' && s.prikaz !== 'PRIJAVA')) return null;
+    return (s.fajloviNaTabli ?? s.prikaz === 'SLAJD') ? s.fajlovi : null;
+  });
   protected readonly kodTraka = computed<KodTraka>(() => ({ host: this.host(), kod: this.stanje().izvodjenje.kod }));
 
   protected krajPrelaza(kljuc: number): void {

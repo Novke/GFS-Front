@@ -41,4 +41,20 @@ describe('FajloviKarticaComponent', () => {
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('[data-fajlovi-sazetak]')?.textContent).toBe('vezba.docx, podaci.xlsx');
   });
+
+  it('prazan spisak (link za K): poruka umesto liste; stanje table samo kad je dato', () => {
+    const f = TestBed.createComponent(FajloviKarticaComponent);
+    f.componentRef.setInput('fajlovi', { ...fajlovi, fajlovi: [] });
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-fajlovi-imena]')).toBeNull();
+    expect(el.querySelector('[data-fajlovi-prazno]')).not.toBeNull();
+    expect(el.querySelector('[data-fajlovi-tabla]')).toBeNull();
+    f.componentRef.setInput('naTabli', false);
+    f.detectChanges();
+    expect(el.querySelector('[data-fajlovi-tabla]')?.textContent).toContain('nije na tabli');
+    f.componentRef.setInput('naTabli', true);
+    f.detectChanges();
+    expect(el.querySelector('[data-fajlovi-tabla]')?.textContent).toContain('Link je na tabli');
+  });
 });

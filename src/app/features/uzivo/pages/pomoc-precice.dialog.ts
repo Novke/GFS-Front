@@ -26,6 +26,7 @@ export function precice(kontekst: KontekstPrecica): Red[] {
     { tasteri: ['M'], opis: 'Telefon: samo dugmad ili celo pitanje' },
     { tasteri: ['D'], opis: 'Dozvoli ili zabrani „Detalje“ na telefonu' },
     { tasteri: ['Q'], opis: 'QR preko celog ekrana' },
+    { tasteri: ['K'], opis: 'Link za fajlove na tabli (do sledećeg slajda)' },
     { tasteri: ['B', '.'], opis: 'Crn ekran' },
     { tasteri: ['W'], opis: 'Beo ekran' },
     { tasteri: ['F'], opis: 'Ceo ekran (samo ovaj prozor)' },
