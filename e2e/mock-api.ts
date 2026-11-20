@@ -1181,6 +1181,23 @@ export class MockApi {
     // početna
     get('pregled/kontrolna-tabla', () => ok(this.kontrolnaTabla()));
 
+    // fajlovi uz prezentaciju (editor): podrazumevano bez fajlova; spec koji ih proverava menja rutu kroz `mock.na`
+    get('prezentacije/:id/fajlovi', () => ok([]));
+
+    // javna stranica `/f/<kod>`: fajlovi časa; samo kod 1234 važi (ostalo 404, kao server)
+    get('public/fajlovi/:token', (_z, p) => {
+      if (p['token'] !== '1234') {
+        return greska(404, 'Kod ne važi.');
+      }
+      return ok({
+        kod: '1234', predmet: 'Uvod u primenu računara', tema: 'Vežbe 3', datum: '2026-11-20',
+        fajlovi: [
+          { id: 5, naziv: 'Zadatak 1.docx', vrsta: 'DOCX', velicina: 15360, prezentacija: 'Vežbe 3' },
+          { id: 6, naziv: 'Tabela.xlsx', vrsta: 'XLSX', velicina: 2048, prezentacija: 'Vežbe 3' },
+        ],
+      });
+    });
+
     // javni upis (jedino što javna ruta sme da zove)
     const sesijaZaToken = (token: string) => d.sesije.find(s => s.token === token);
     get('public/upis/:token', (_z, p) => {

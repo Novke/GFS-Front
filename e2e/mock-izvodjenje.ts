@@ -115,6 +115,8 @@ export interface NastavnickoSnimak {
   takmicenje: boolean; tema: string; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
   ucesnici: Ucesnik[]; rangLista: unknown[]; javniRezultat: Rezultat | null; javnaRangLista: unknown[] | null;
   pocetakMs: number; zadatak: ZadatakSnimak | null;
+  /** Fajlovi uz prezentaciju (`FajloviSlajda`); `undefined` = stari backend bez polja. */
+  fajlovi?: unknown;
 }
 
 export interface IshodKomande { status: number; telo: unknown }
@@ -180,6 +182,8 @@ export class MockIzvodjenje {
   private readonly f: FiksturaIzvodjenja;
   private readonly pocetakMs = Date.now() - (12 * 60 + 2) * 1000;
   private verzija = 1;
+  /** Test postavlja `fajlovi` (kao `NastavnickoStanje.fajlovi`); bez toga polja nema u snimku (stari backend). */
+  fajlovi: unknown;
   private prikaz: Prikaz = 'PRIJAVA';
   private indeks = -1;
   private korak = 0;
@@ -266,6 +270,7 @@ export class MockIzvodjenje {
       brojOdgovora: this.odgovoriZadatka.size, brojPovezanih: this.f.ucesnici.filter(u => u.povezan).length,
       rangLista: [], javniRezultat: javni, javnaRangLista: null, pocetakMs: this.pocetakMs,
       ucesnici: this.ucesniciSnimka(), zadatak: this.zadatakSnimak(trenutni),
+      ...(this.fajlovi === undefined ? {} : { fajlovi: this.fajlovi }),
     };
   }
 

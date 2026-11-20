@@ -782,3 +782,16 @@ describe('PublikaScenaComponent (QR za čekiranje)', () => {
     expect(qr(el)).toBe('QR kod: http://localhost/uzivo/123456');
   });
 });
+
+describe('PublikaScenaComponent (fajlovi za vežbu)', () => {
+  const fajlovi = { kod: '1234', link: 'gfs.trif.rs/f/1234', fajlovi: [{ id: 1, naziv: 'vezba.docx', vrsta: 'DOCX' as const, velicina: 100 }] };
+
+  it('slajd sa fajlovima: traka sa krupnim linkom; bez polja (stari backend) i sa null ništa', async () => {
+    const sa = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi }));
+    expect(sa.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    const bezPolja = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() }));
+    expect(bezPolja.querySelector('app-fajlovi-traka')).toBeNull();
+    const nula = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi: null }));
+    expect(nula.querySelector('app-fajlovi-traka')).toBeNull();
+  });
+});

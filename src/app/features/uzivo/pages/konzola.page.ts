@@ -24,6 +24,7 @@ import { TajmerComponent } from '../ui/tajmer.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
 import { KrajIzvodjenjaComponent } from './kraj-izvodjenja.component';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
+import { FajloviKarticaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
@@ -111,6 +112,7 @@ export class IzborEkranaDialog {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
   imports: [
+    FajloviKarticaComponent,
     NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatMenuModule, MatTabsModule, KonzolaKontroleComponent,
     PublikaScenaComponent, RezultatPrikazComponent, SledecePanelComponent, TajmerComponent, TekstoviPanelComponent,
     RangKonzolaComponent, BeleskePanelComponent, VremeIzvodjenjaComponent, ZadatakPanelComponent, KrajIzvodjenjaComponent,
@@ -214,6 +216,15 @@ export class IzborEkranaDialog {
         }
       </ng-template>
 
+      <ng-template #fajloviTpl>
+        @if (s.fajlovi; as fajlovi) {
+          <section class="uz-kon-kartica" aria-label="Fajlovi za studente">
+            <h2 class="uz-kon-naslov">Fajlovi za studente</h2>
+            <app-fajlovi-kartica [fajlovi]="fajlovi" />
+          </section>
+        }
+      </ng-template>
+
       <ng-template #beleskeTpl>
         <section class="uz-kon-kartica" aria-label="Beleške predavača">
           <h2 class="uz-kon-naslov">Beleške</h2>
@@ -236,6 +247,7 @@ export class IzborEkranaDialog {
         <mat-tab-group class="uz-kon-tabovi" mat-stretch-tabs animationDuration="0ms">
           <mat-tab label="Kontrole">
             <ng-container [ngTemplateOutlet]="trenutniTpl" />
+            <ng-container [ngTemplateOutlet]="fajloviTpl" />
             <ng-container [ngTemplateOutlet]="tajmerTpl" />
             <ng-container [ngTemplateOutlet]="kontroleTpl" />
           </mat-tab>
@@ -256,6 +268,7 @@ export class IzborEkranaDialog {
         <div class="uz-kon-telo">
           <div class="uz-kon-kolona">
             <ng-container [ngTemplateOutlet]="trenutniTpl" />
+            <ng-container [ngTemplateOutlet]="fajloviTpl" />
             <app-sledece-panel [stanje]="s" />
           </div>
           <div class="uz-kon-kolona uz-kon-kolona--srednja">
