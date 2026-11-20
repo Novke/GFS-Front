@@ -56,6 +56,7 @@ describe('PredmetPage', () => {
     http.expectOne(PREDMETI).flush([PREDMET]);
     await stabilno();
     http.expectOne(`${P}/prezentacije`).flush([{ id: 4, naziv: 'Vežbe 3', odrzana: '2026-10-28T11:30:00', slajdova: 12 }]);
+    http.expectOne(`${P}/fajlovi`).flush([]);
     http.expectOne(`${P}/vezbanje`).flush([{ naziv: 'Konverzije', tipovi: [
       { tipId: 5, naziv: 'Binarni u dekadni', putanja: [], poNivou: [1, 2, 0], ukupno: 3, papir: false, provereno: 2, tacno: 1 }] }]);
     http.expectNone(`${P}/ocena`);
@@ -67,6 +68,43 @@ describe('PredmetPage', () => {
     expect(tip.getAttribute('href')).toBe('/nalog/predmet/3/vezbanje/5');
     expect(tip.textContent).toContain('1 od 2 tačno');
     expect(el().textContent).not.toMatch(/banka/i);
+  });
+
+  it('Materijali: Fajlovi po prezentaciji, Preuzmi i „Pošalji mi na mejl” (poruka sa maskom, pa greška 429)', async () => {
+    await otvori();
+    http.expectOne(PREDMETI).flush([PREDMET]);
+    await stabilno();
+    http.expectOne(`${P}/prezentacije`).flush([]);
+    http.expectOne(`${P}/vezbanje`).flush([]);
+    http.expectOne(`${P}/fajlovi`).flush([{ prezentacijaId: 4, naziv: 'Vežbe 3', odrzana: '2026-10-28T11:30:00', fajlovi: [
+      { id: 7, naziv: 'Zadaci.docx', vrsta: 'DOCX', velicina: 20480 }, { id: 8, naziv: 'Podaci.xlsx', vrsta: 'XLSX', velicina: 2048 }] }]);
+    await stabilno();
+    expect(el().querySelector('[data-fajlovi] h3')?.textContent).toBe('Fajlovi');
+    expect(el().querySelector('[data-fajlovi] h4')?.textContent).toContain('Vežbe 3');
+    expect(el().querySelector('[data-fajl="7"] [data-preuzmi]')?.getAttribute('href')).toBe('api/public/nalog/fajlovi/7');
+    el().querySelector<HTMLButtonElement>('[data-fajl="7"] [data-mejl]')!.click();
+    const r = http.expectOne('api/public/nalog/fajlovi/7/mejl');
+    expect(r.request.method).toBe('POST');
+    r.flush({ poslatoNa: 'n•••@gmail.com' }, { status: 202, statusText: 'Accepted' });
+    await stabilno();
+    expect(el().querySelector('[data-fajl="7"] [data-poruka]')?.textContent).toBe('Poslato na n•••@gmail.com.');
+    el().querySelector<HTMLButtonElement>('[data-fajl="8"] [data-mejl]')!.click();
+    http.expectOne('api/public/nalog/fajlovi/8/mejl')
+      .flush({ reason: 'Već si poslao dosta fajlova. Pokušaj ponovo za sat.' }, { status: 429, statusText: 'Too Many Requests' });
+    await stabilno();
+    expect(el().querySelector('[data-fajl="8"] [data-poruka]')?.textContent).toContain('Već si poslao dosta fajlova.');
+  });
+
+  it('Materijali: stari backend (404 na fajlove) ili prazan spisak, odeljak Fajlovi se ne prikazuje, ostalo radi', async () => {
+    await otvori();
+    http.expectOne(PREDMETI).flush([PREDMET]);
+    await stabilno();
+    http.expectOne(`${P}/prezentacije`).flush([{ id: 4, naziv: 'Vežbe 3', odrzana: '2026-10-28T11:30:00', slajdova: 12 }]);
+    http.expectOne(`${P}/vezbanje`).flush([]);
+    http.expectOne(`${P}/fajlovi`).flush({ reason: 'Nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
+    await stabilno();
+    expect(el().querySelector('[data-fajlovi]')).toBeNull();
+    expect(el().querySelector('[data-prezentacija="4"]')).not.toBeNull();
   });
 
   it('Istorija: prisustvo (bez bodova) i moji zadaci sa časa sa "Vežbaj ovaj tip"', async () => {

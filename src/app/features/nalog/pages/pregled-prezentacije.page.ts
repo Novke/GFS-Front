@@ -4,6 +4,9 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 
+import { FajloviSpisakComponent } from '../../../shared/ui/fajlovi-spisak.component';
+import { urlFajlaNaloga } from '../../../shared/util/fajlovi';
+import { MejlFajlova } from '../../../shared/util/fajlovi-mejl';
 import { decimalni, tacanBroj } from '../../uzivo/ui/format';
 import { SlajdPrikazComponent } from '../../uzivo/ui/slajd-prikaz.component';
 import type { PitanjeDetails, SlajdZaPrikaz } from '../../uzivo/ui/slajd-za-prikaz';
@@ -45,12 +48,19 @@ export function tacanTekst(p: PitanjeDetails): string | null {
  */
 @Component({
   selector: 'app-pregled-prezentacije-page',
-  imports: [MatButton, MatProgressSpinner, MojZadatakKartica, NalogOkvir, RouterLink, SlajdPrikazComponent],
+  imports: [FajloviSpisakComponent, MatButton, MatProgressSpinner, MojZadatakKartica, NalogOkvir, RouterLink, SlajdPrikazComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir [naslov]="pregled()?.naziv ?? 'Prezentacija'">
       @if (pregled(); as p) {
         <a class="nazad" [routerLink]="['/nalog/predmet', p.predmetId]">← Nazad na predmet</a>
+        @if (p.fajlovi?.length) {
+          <section class="fajlovi" aria-labelledby="naslov-fajlovi" data-fajlovi>
+            <h2 id="naslov-fajlovi">Fajlovi uz prezentaciju</h2>
+            <app-fajlovi-spisak [fajlovi]="p.fajlovi!" [hrefZa]="hrefFajla" [mejl]="true" [poruke]="mejl.poruke()"
+                                (posaljiMejl)="mejl.posalji($event)" />
+          </section>
+        }
         <h2>Slajdovi sa časa</h2>
         @if (p.slajdovi.length === 0) {
           <p class="prazno">Nema slajdova za pregled.</p>
@@ -138,6 +148,7 @@ export function tacanTekst(p: PitanjeDetails): string | null {
     .poruka { margin: 0 0 16px; padding: 12px 16px; border: 1px solid transparent; border-radius: var(--radius-sm); }
     .poruka.opasnost { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
     .poruka.info { border-color: var(--line); }
+    .fajlovi { margin: 0 0 18px; }
     .slajdovi { display: flex; flex-direction: column; gap: 18px; margin: 0; padding: 0; list-style: none; }
     .slajd { display: flex; flex-direction: column; gap: 8px; }
     .okvir { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
@@ -162,6 +173,8 @@ export class PregledPrezentacijePage {
 
   private readonly api = inject(PortalApi);
   private readonly router = inject(Router);
+  protected readonly hrefFajla = (f: { id: number }) => urlFajlaNaloga(f.id);
+  protected readonly mejl = new MejlFajlova(id => this.api.posaljiFajlMejlom(id), inject(DestroyRef));
 
   private readonly prezentacijaId = computed(() => idIzRute(this.id()));
   protected readonly decimalni = decimalni;

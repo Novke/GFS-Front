@@ -151,7 +151,7 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     expect(procitano.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`)).toEqual([]);
   });
 
-  // delimično tačno (V26): posle "Tačno" telefon iz snimka servera (`LicniOdgovor.izabrane`, `udeo`) crta spisak opcija sa
+  // delimično tačno (V27): posle "Tačno" telefon iz snimka servera (`LicniOdgovor.izabrane`, `udeo`) crta spisak opcija sa
   // stanjem; u režimu "samo dugmad" bez teksta opcija. Lenji chunk ekrana ishoda je heširan fajl, dakle javna putanja.
   test('više tačnih posle "Tačno": "Delimično tačno +425", spisak po opciji, i posle osvežavanja; axe (dan)', async ({ page, mock, javnaMreza }) => {
     mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });

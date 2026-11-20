@@ -26,6 +26,8 @@ describe('PortalApi', () => {
     ['vezbanje', () => api.vezbanje(3), 'GET', 'api/public/nalog/predmeti/3/vezbanje', null],
     ['mojiZadaci', () => api.mojiZadaci(3), 'GET', 'api/public/nalog/predmeti/3/moji-zadaci', null],
     ['prezentacije', () => api.prezentacije(3), 'GET', 'api/public/nalog/predmeti/3/prezentacije', null],
+    ['fajlovi', () => api.fajlovi(3), 'GET', 'api/public/nalog/predmeti/3/fajlovi', null],
+    ['posaljiFajlMejlom', () => api.posaljiFajlMejlom(5), 'POST', 'api/public/nalog/fajlovi/5/mejl', null],
     ['ocena', () => api.ocena(3), 'GET', 'api/public/nalog/predmeti/3/ocena', null],
     ['pregled', () => api.pregled(9), 'GET', 'api/public/nalog/prezentacije/9', null],
     ['noviZadatak', () => api.noviZadatak(5, 2), 'POST', 'api/public/nalog/vezbanje', { tipId: 5, nivo: 2 }],
@@ -45,5 +47,17 @@ describe('PortalApi', () => {
     expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
     expect(req.request.url.startsWith('api/public/nalog/')).toBe(true);
     req.flush(null);
+  });
+
+  it('fajlovi: 404 (stari backend) je prazan spisak, ostale greške idu dalje', () => {
+    let rezultat: unknown = 'nije stiglo';
+    api.fajlovi(3).subscribe(r => (rezultat = r));
+    http.expectOne('api/public/nalog/predmeti/3/fajlovi').flush({ reason: 'Nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
+    expect(rezultat).toEqual([]);
+
+    let status = 0;
+    api.fajlovi(3).subscribe({ error: (e: { status: number }) => (status = e.status) });
+    http.expectOne('api/public/nalog/predmeti/3/fajlovi').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(status).toBe(401);
   });
 });

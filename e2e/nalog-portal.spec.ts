@@ -15,7 +15,7 @@ import { PREDMET, PREDMET_OCENA, PREZENTACIJA, TACNO, TIP } from './mock-portal'
  * banke i statistika vežbanja.
  */
 
-const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|ocena))?|prezentacije\/\d+|vezbanje(\/\d+\/(provera|resenje))?)$|^(GET|PUT) \/api\/public\/nalog\/podesavanja$|^GET \/api\/public\/mediji\/[\w-]+$|^(GET \/api\/public\/nalog\/(obavestenja|push)|POST \/api\/public\/nalog\/obavestenja\/otvoreno)$/;
+const API_PORTALA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|fajlovi|ocena))?|prezentacije\/\d+|fajlovi\/\d+\/mejl|vezbanje(\/\d+\/(provera|resenje))?)$|^(GET|PUT) \/api\/public\/nalog\/podesavanja$|^GET \/api\/public\/mediji\/[\w-]+$|^(GET \/api\/public\/nalog\/(obavestenja|push)|POST \/api\/public\/nalog\/obavestenja\/otvoreno)$/;
 
 async function posleAnimacija(page: Page): Promise<void> {
   await expect

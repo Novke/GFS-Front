@@ -11,6 +11,7 @@ import { odgovorili, oznakaDalje, oznakaOtvoriZatvori, oznakaPolozajaKratko } fr
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { pratiPovratak } from '../data-access/povratak';
 import { TipKomande } from '../data-access/uzivo.models';
+import { FajloviKarticaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
 
@@ -34,7 +35,7 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
   selector: 'app-daljinski',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
-  imports: [BeleskePanelComponent, VremeIzvodjenjaComponent],
+  imports: [BeleskePanelComponent, FajloviKarticaComponent, VremeIzvodjenjaComponent],
   host: { class: 'uz-dalj', lang: 'sr-Latn' },
   template: `
     @if (store.stanje(); as s) {
@@ -63,6 +64,7 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
             }
           }
         </div>
+        @if (s.fajlovi; as fajlovi) { <app-fajlovi-kartica [fajlovi]="fajlovi" [kompaktno]="true" /> }
         <app-beleske-panel class="uz-dalj-beleske" [tekst]="s.trenutniSlajd?.beleske ?? null"
                            [kljucSlajda]="s.trenutniSlajd?.id ?? s.prikaz" [prazno]="prazno()" />
         @if (runda(); as vrsta) {

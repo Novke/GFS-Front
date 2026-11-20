@@ -15,6 +15,7 @@ import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { IshodEkranComponent } from './ishod-ekran.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore } from './student.store';
+import { FajloviTelefonComponent } from './fajlovi-telefon.component';
 import { ZadatakEkranComponent } from './zadatak-ekran.component';
 import { porukaUtisanja } from './utisanje';
 
@@ -56,7 +57,7 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
   providers: [StudentStore],
   imports: [
     RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
-    ZadatakEkranComponent, IshodEkranComponent,
+    ZadatakEkranComponent, IshodEkranComponent, FajloviTelefonComponent,
   ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
@@ -228,6 +229,12 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
             }
           }
         </div>
+        @if (s.faza() === 'uzivo' && j?.fajlovi?.length) {
+          <!-- lenji blok: spisak fajlova trenutnog slajda (budžet statičkog zatvorenja, e2e/lenji-formule.spec.ts) -->
+          @defer (on immediate) {
+            <app-fajlovi-telefon />
+          }
+        }
         @if (detaljiOtvoreni() && detaljiMoguci() && p) {
           <div class="uz-st-detalji" role="dialog" aria-modal="true" aria-labelledby="uz-st-detalji-naslov">
             <div class="uz-st-detalji-vrh">
