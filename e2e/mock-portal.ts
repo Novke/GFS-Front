@@ -87,7 +87,7 @@ function prezentacije(predmet: number): PrezentacijaStudenta[] {
   return predmet === PREDMET ? [{ id: PREZENTACIJA, naziv: 'Konverzije – vežbe', odrzana: '2026-10-20T10:00:00', slajdova: 3 }] : [];
 }
 
-function pregled(): PregledPrezentacije {
+function pregled(delimicno = false): PregledPrezentacije {
   return {
     id: PREZENTACIJA, naziv: 'Konverzije – vežbe', tema: 'NACRT', predmetId: PREDMET, slajdovi: [
       {
@@ -102,7 +102,7 @@ function pregled(): PregledPrezentacije {
           brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null, prihvatljiviOdgovori: null,
           skalaMinOznaka: null, skalaMaxOznaka: null,
         },
-        mojOdgovor: { tekst: '8', tacno: false },
+        mojOdgovor: delimicno ? { tekst: '8, 16', tacno: false, udeo: 0.5 } : { tekst: '8', tacno: false },
         tacanPoznat: true,
       },
       {
@@ -153,6 +153,8 @@ export class MockPortal {
   readonly zvono: Zvono = { novo: true, stavke: ZVONO };
   /** Push na ovom uređaju: server zna pretplatu samo posle `PUT push`. */
   pushPretplacen = false;
+  /** Pregled prezentacije: moj odgovor na pitanje je delimično tačan (udeo 0,5, VISE_TACNIH). */
+  delimicnoTacno = false;
   /** Stanje panela „Za vežbanje“ po čvoru banke (nastavnik); bez unosa: podrazumevano za predmet čvora. */
   readonly otvoreno = new Map<number, OtvorenoZaGrupu[]>();
   private sledeci = 500;
@@ -179,7 +181,7 @@ export class MockPortal {
     get('public/nalog/predmeti/:id/moji-zadaci', zaPredmet(mojiZadaci));
     get('public/nalog/predmeti/:id/prezentacije', zaPredmet(prezentacije));
     get('public/nalog/predmeti/:id/ocena', zaPredmet(ocena));
-    get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled()) : NEMA())));
+    get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled(this.delimicnoTacno)) : NEMA())));
 
     get('public/nalog/podesavanja', student(() => ok({ ...this.podesavanja })));
     put('public/nalog/podesavanja', student(z => {

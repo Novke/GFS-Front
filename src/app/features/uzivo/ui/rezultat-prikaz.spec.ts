@@ -199,6 +199,14 @@ describe('tacnihTekst i gustinaCipova', () => {
     expect(tacnihTekst(brojRez([], 0))).toBeNull();
   });
 
+  it('sa delimično tačnim: "Tačno 2 · ◐ delimično 7 od 9 · 61 %" (procenat iz zbira udela, bez njega iz tačnih)', () => {
+    const r = { ...brojRez([[1, 9, true]], 2), delimicnih: 7, zbirUdela: 5.5 };
+    expect(tacnihTekst(r)).toBe('Tačno 2 · ◐ delimično 7 od 9 · 61 %');
+    expect(tacnihTekst({ ...r, zbirUdela: null })).toBe('Tačno 2 · ◐ delimično 7 od 9 · 22 %');
+    expect(tacnihTekst({ ...r, delimicnih: 0, zbirUdela: null })).toBe('Tačno 2 od 9 · 22 %');
+    expect(tacnihTekst({ ...r, delimicnih: null, zbirUdela: null })).toBe('Tačno 2 od 9 · 22 %');
+  });
+
   it('gustina po broju čipova', () => {
     expect([1, 4, 5, 12, 13, 20, 21, MAKS_CIPOVA + 1].map(gustinaCipova))
       .toEqual(['malo', 'malo', 'srednje', 'srednje', 'mnogo', 'mnogo', 'vrlo', 'vrlo']);

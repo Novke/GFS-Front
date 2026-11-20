@@ -140,10 +140,16 @@ export function gustinaCipova(n: number): 'malo' | 'srednje' | 'mnogo' | 'vrlo' 
   return n <= 4 ? 'malo' : n <= 12 ? 'srednje' : n <= 20 ? 'mnogo' : 'vrlo';
 }
 
-/** "Tačno 7 od 12 · 58 %" kad je tačnost vidljiva i ima odgovora, inače `null`. */
+/**
+ * "Tačno 7 od 12 · 58 %" kad je tačnost vidljiva i ima odgovora, inače `null`. Sa delimično tačnim (VISE_TACNIH):
+ * "Tačno 2 · ◐ delimično 7 od 9 · 61 %", procenat iz zbira udela (`zbirUdela`; stari backend ga nema pa iz tačnih).
+ */
 export function tacnihTekst(r: Rezultat): string | null {
   if (r.tacnih === null || r.tacnih === undefined || r.ukupno <= 0) return null;
-  return `Tačno ${r.tacnih} od ${r.ukupno} · ${Math.round((r.tacnih * 100) / r.ukupno)} %`;
+  const udeo = r.zbirUdela ?? r.tacnih;
+  const procenat = Math.round((udeo * 100) / r.ukupno);
+  if (r.delimicnih && r.delimicnih > 0) return `Tačno ${r.tacnih} · ◐ delimično ${r.delimicnih} od ${r.ukupno} · ${procenat} %`;
+  return `Tačno ${r.tacnih} od ${r.ukupno} · ${procenat} %`;
 }
 
 /**

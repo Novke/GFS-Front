@@ -1246,6 +1246,13 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
   a finished lecture. Student profile tab `/studenti/:id/uzivo` (`StudentUzivoTab`: totals and one row per class with "2 od 4") and group tab
   `/grupe/:id/uzivo` (`GrupaUzivoTab`, roster rank with "Časova"); both filter by subject and school year locally (not in the URL).
 - e2e: `e2e/mock-api.ts` answers the four endpoints with empty ranks (an unknown route fails a test).
+- **Partial credit in teacher views (VISE_TACNIH, V26; every field optional, an old backend renders exactly as before):** `tacnihTekst`
+  gives "Tačno 2 · ◐ delimično 7 od 9 · 61 %" when `Rezultat.delimicnih > 0` (percentage from `zbirUdela`, else from `tacnih`). The console
+  participants panel shows `◐ delimično 0,5` (`--warn`, `UcesnikStanje.udeo` strictly between 0 and 1, with `tacno=false`) instead of ✗; the
+  student review shows "◐ Delimično tačno 0,5" (`OdgovorPregleda.udeo`). ◐ is always a text glyph with `aria-hidden` next to the word, never an
+  icon (`icons.ts` and the initial bundle budget stay untouched). Rank `tacnih` and `zvezdice` are decimals: every decimal goes through
+  `decimalni` (Serbian comma, 2 places; lives in `shared/util/broj.ts`, re-exported by `features/uzivo/ui/format`), the projector's "netačnih" is
+  `dugovanih - tacnih` rounded to 0.01 (never a float tail or -0). The board shows nothing partial before TACAN: it only reads `javniRezultat`.
 - **Zadatak level (same revision):** every student of a round gets the same level; without a level on the slide or in the console the server
   draws one per opening. The level picker's `null` option is "Nasumično" (`app-nivo ... saSvima nasumicno`, no total count) on the Zadatak form and
   the console panel; the counts with no level are the largest per-level count (as the server's `brojZaOtvaranje`). The form shows the server text

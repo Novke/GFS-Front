@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { decimalni } from '../util/broj';
 import { kratakIndeks, nivoTacnosti, prikazVremena } from '../../core/api/rang.api';
 
 /**
@@ -78,12 +79,12 @@ export type RangSort = 'zvezdice' | 'tacnost' | 'vreme';
                   @if (r.gost) { <span class="gost">gost</span> }
                 </td>
                 <td class="c-broj c-zvezdice zvezdice">
-                  @if (r.zvezdice) { <span class="zvezda" aria-hidden="true">★</span> }{{ r.zvezdice }}
+                  @if (r.zvezdice) { <span class="zvezda" aria-hidden="true">★</span> }{{ decimalni(r.zvezdice) }}
                 </td>
                 <td class="c-broj c-tacnost">
                   @if (r.procenat !== null) {
                     <span class="pilula" [attr.data-nivo]="nivo(r.procenat)">{{ r.procenat }}%</span>
-                    <span class="razlomak">{{ r.tacnih }}/{{ r.dugovanih }}</span>
+                    <span class="razlomak">{{ decimalni(r.tacnih) }}/{{ r.dugovanih }}</span>
                   } @else { — }
                 </td>
                 <td class="c-broj c-vreme">{{ vreme(r.prosekMs) }}</td>
@@ -165,6 +166,7 @@ export class RangTacnostiTabela {
     { id: 'tacnost', ikona: '✓', opis: 'Tačnost' },
     { id: 'vreme', ikona: '⏱', opis: 'Prosečno vreme odgovora' },
   ];
+  protected readonly decimalni = decimalni;
   protected readonly vreme = prikazVremena;
   protected readonly nivo = nivoTacnosti;
   protected readonly indeks = kratakIndeks;

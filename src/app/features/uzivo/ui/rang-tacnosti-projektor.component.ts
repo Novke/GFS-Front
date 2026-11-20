@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { JavnaRangTacnostiStavka } from '../data-access/uzivo.models';
+import { decimalni } from '../../../shared/util/broj';
 import { nivoTacnosti, prikazVremena } from '../../../core/api/rang.api';
 
 /** Najveća veličina slova reda (cqw) u jednoj i u dve kolone; dve kolone su uže, pa manje. */
@@ -72,11 +73,11 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
               <li class="uz-rang-red uz-rt-red">
                 <span class="uz-rang-mesto">{{ s.mesto }}.</span>
                 <span class="uz-rang-ime">{{ s.ime }}</span>
-                <span class="uz-rt-broj uz-rt-tacnih">{{ s.tacnih }}<span class="uz-sr"> tačnih</span></span>
-                <span class="uz-rt-broj uz-rt-netacnih">{{ s.dugovanih - s.tacnih }}<span class="uz-sr"> netačnih</span></span>
+                <span class="uz-rt-broj uz-rt-tacnih">{{ decimalni(s.tacnih) }}<span class="uz-sr"> tačnih</span></span>
+                <span class="uz-rt-broj uz-rt-netacnih">{{ decimalni(netacnih(s)) }}<span class="uz-sr"> netačnih</span></span>
                 <span class="uz-rt-broj"><span class="uz-rt-pilula" [attr.data-nivo]="nivo(s.procenat)">{{ s.procenat ?? 0 }}%</span></span>
                 <span class="uz-rt-broj uz-rt-vreme">{{ vreme(s.prosekMs) }}</span>
-                <span class="uz-rt-broj uz-rt-zvezde">{{ s.zvezdice }}<span class="uz-sr"> zvezdica</span></span>
+                <span class="uz-rt-broj uz-rt-zvezde">{{ decimalni(s.zvezdice) }}<span class="uz-sr"> zvezdica</span></span>
               </li>
             }
           </ol>
@@ -89,7 +90,12 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
 })
 export class RangTacnostiProjektorComponent {
   readonly stavke = input<readonly JavnaRangTacnostiStavka[]>([]);
+  protected readonly decimalni = decimalni;
   protected readonly vreme = prikazVremena;
+  /** Netačnih = dugovanih - tačnih, na dve decimale (tačnih je decimalno) i nikad ispod nule ni -0. */
+  protected netacnih(s: JavnaRangTacnostiStavka): number {
+    return Math.max(0, Math.round((s.dugovanih - s.tacnih) * 100) / 100) + 0;
+  }
   protected readonly nivo = nivoTacnosti;
 
   /** Jedna ili dve kolone (šta daje veća slova) i veličina slova u cqw. */

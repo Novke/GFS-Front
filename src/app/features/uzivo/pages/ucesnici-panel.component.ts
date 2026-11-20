@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
 import { NastavnickiZadatak, UcesnikStanje, Utisanje } from '../data-access/uzivo.models';
-import { grupisiCifre } from '../ui/format';
+import { decimalni, grupisiCifre } from '../ui/format';
 import { prikazVremena } from '../../../core/api/rang.api';
 
 /** Ime učesnika: 1-40 znakova posle `trim` (kao server, spec 2.8). */
@@ -153,6 +153,7 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
     }
     .uz-kon-ishod { flex: none; color: var(--muted); font-size: 13px; }
     .uz-kon-ishod--tacno { color: var(--ok); font-weight: 600; }
+    .uz-kon-ishod--delimicno { color: var(--warn); font-weight: 600; }
     .uz-kon-ishod--netacno { color: var(--danger); font-weight: 600; }
     .uz-kon-rb { flex: none; min-width: 1.6em; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
     .uz-kon-odgovor { display: block; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -207,6 +208,8 @@ export function redosledOdgovora(ucesnici: readonly UcesnikStanje[]): UcesnikRed
                   <mat-icon class="uz-kon-odgovorio" aria-label="odgovorio" svgIcon="check" />
                 } @else if (u.tacno === true) {
                   <mat-icon class="uz-kon-ikona-tacno" aria-label="tačno" svgIcon="check_circle" />
+                } @else if (u.tacno === false && delimicno(u.udeo)) {
+                  <span class="uz-kon-ishod uz-kon-ishod--delimicno"><span aria-hidden="true">◐</span> delimično {{ decimalni(u.udeo ?? 0) }}</span>
                 } @else if (u.tacno === false) {
                   <mat-icon class="uz-kon-ikona-netacno" aria-label="netačno" svgIcon="cancel" />
                 } @else {
@@ -279,6 +282,9 @@ export class UcesniciPanelComponent {
 
   private readonly dialog = inject(MatDialog);
   protected readonly poeni = grupisiCifre;
+  protected readonly decimalni = decimalni;
+  /** Delimično tačno: udeo strogo između 0 i 1 (VISE_TACNIH); stari backend ga ne šalje. */
+  protected delimicno(udeo: number | null | undefined): boolean { return udeo != null && udeo > 0 && udeo < 1; }
   protected readonly vreme = prikazVremena;
   protected readonly opisUtisanja = OPIS_UTISANJA;
   protected readonly redosled = computed(() => redosledOdgovora(this.ucesnici()));

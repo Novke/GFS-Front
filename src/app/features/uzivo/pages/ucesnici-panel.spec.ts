@@ -40,6 +40,22 @@ describe('UcesniciPanelComponent', () => {
     expect(varijanta?.getAttribute('title')).toBe('Varijanta V11');
   });
 
+  it('delimično tačan odgovor: ◐ i "delimično 0,5" umesto ✗ i "netačno"; stari backend (bez udela) kao do sada', () => {
+    const f = prikazi(null, [
+      { id: 1, ime: 'Ana', poeni: 0, povezan: true, odgovorio: true, tacno: false, udeo: 0.5 },
+      { id: 2, ime: 'Bojan', poeni: 0, povezan: true, odgovorio: true, tacno: false, udeo: 0 },
+      { id: 3, ime: 'Ceca', poeni: 0, povezan: true, odgovorio: true, tacno: false },
+    ]);
+    const [ana, bojan, ceca] = redovi(f);
+    expect(ana).toContain('◐');
+    expect(ana).toContain('delimično 0,5');
+    expect(ana).not.toContain('netačno');
+    expect(f.nativeElement.querySelector('.uz-kon-ishod--delimicno [aria-hidden="true"]')?.textContent).toBe('◐');
+    expect(f.nativeElement.querySelectorAll('li')[0].querySelector('mat-icon[aria-label="netačno"]')).toBeNull();
+    for (const r of [bojan, ceca]) expect(r).not.toContain('◐');
+    expect(f.nativeElement.querySelectorAll('li')[1].querySelector('mat-icon[aria-label="netačno"]')).not.toBeNull();
+  });
+
   it('varijanta bez naziva dobija redni broj izvučene; rad na papiru piše "na papiru"', () => {
     const z = naZadatku('ZATVORENO', { polja: [] }).zadatak!;
     const f = prikazi({ ...z, varijante: z.varijante!.map((v, i) => (i === 1 ? { ...v, naziv: null } : v)) });

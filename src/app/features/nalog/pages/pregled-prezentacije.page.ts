@@ -4,7 +4,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 
-import { tacanBroj } from '../../uzivo/ui/format';
+import { decimalni, tacanBroj } from '../../uzivo/ui/format';
 import { SlajdPrikazComponent } from '../../uzivo/ui/slajd-prikaz.component';
 import type { PitanjeDetails, SlajdZaPrikaz } from '../../uzivo/ui/slajd-za-prikaz';
 import { porukaGreske } from '../data-access/nalog.pravila';
@@ -93,7 +93,9 @@ export function tacanTekst(p: PitanjeDetails): string | null {
                     @if (s.mojOdgovor; as o) {
                       <p data-moj-odgovor>Tvoj odgovor: <strong>{{ o.tekst ?? '—' }}</strong>
                         @if (o.tacno === true) { <span class="ok"> · tačno</span> }
-                        @if (o.tacno === false) { <span class="lose"> · netačno</span> }
+                        @if (o.tacno === false && o.udeo && o.udeo > 0 && o.udeo < 1) {
+                          <span class="delimicno"> · <span aria-hidden="true">◐</span> Delimično tačno {{ decimalni(o.udeo) }}</span>
+                        } @else if (o.tacno === false) { <span class="lose"> · netačno</span> }
                       </p>
                     }
                     @if (s.tacanPoznat && imaTacan(q)) {
@@ -146,6 +148,7 @@ export function tacanTekst(p: PitanjeDetails): string | null {
     .pitanje-dno p { margin: 0; overflow-wrap: anywhere; }
     .ok { color: var(--ok); }
     .lose { color: var(--danger); }
+    .delimicno { color: var(--warn); }
     .vezbaj { display: flex; flex-wrap: wrap; gap: 8px; }
     .dugme-link { display: inline-flex; align-self: flex-start; align-items: center; min-height: 44px; padding: 0 14px;
       border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--primary); font: inherit;
@@ -161,6 +164,7 @@ export class PregledPrezentacijePage {
   private readonly router = inject(Router);
 
   private readonly prezentacijaId = computed(() => idIzRute(this.id()));
+  protected readonly decimalni = decimalni;
   protected readonly pregled = signal<PregledPrezentacije | null>(null);
   protected readonly nema = signal(false);
   protected readonly greska = signal<string | null>(null);
