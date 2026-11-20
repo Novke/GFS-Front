@@ -21,9 +21,10 @@ export const HESIRANA_GRANA = String.raw`[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|c
  * sa izdanjem prijave: Novica ga dodaje kroz `staging public gfs` (README wrapper-a, "Prijava"); do tada je ovde ispred
  * servera, da e2e već proverava budući izraz. `/nalog/moodle` mora biti javna: backend posle ulaska iz Moodle-a preusmerava
  * studenta tamo bez ikakve sesije, a njen jedini poziv van `api/public/nalog/*` je `api/public/lti/povezi` (pod `api/public`).
+ * `f(/|$)` (fajlovi sa časa: `/f` i `/f/<kod>`, spec fajlova 8) stoji posle `nalog(/|$)`; isti izraz ide na stejdžing kroz `staging public gfs`.
  */
 // jedan red, doslovno kao na serveru (lakše poređenje); spec proverava da sadrži HESIRANA_GRANA
-export const JAVNI_IZRAZ = String.raw`^/(uzivo(/|$)|upis(/|$)|nalog(/|$)|api/public(/|$)|assets/|media/|favicon\.ico$|[A-Za-z0-9_.-]+\.[0-9a-f]{8,}\.(js|css|woff2?)$|[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$)`;
+export const JAVNI_IZRAZ = String.raw`^/(uzivo(/|$)|upis(/|$)|nalog(/|$)|f(/|$)|api/public(/|$)|assets/|media/|favicon\.ico$|[A-Za-z0-9_.-]+\.[0-9a-f]{8,}\.(js|css|woff2?)$|[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$)`;
 
 export const JAVNA_PUTANJA = new RegExp(JAVNI_IZRAZ);
 

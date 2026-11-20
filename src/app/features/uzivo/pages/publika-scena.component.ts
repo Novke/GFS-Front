@@ -4,6 +4,7 @@ import { odgovorili } from '../data-access/izvodjenje-pravila';
 import { PoteziCrteza } from '../data-access/potezi-crteza';
 import { ServerskiSat } from '../data-access/sat';
 import { Faza, NastavnickiZadatak, NastavnickoStanje, Prelaz, Rezultat, SlajdDetails } from '../data-access/uzivo.models';
+import { FajloviTrakaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { bezProtokola, kodSaRazmakom } from '../ui/format';
 import { smanjenoKretanje } from '../ui/kretanje';
 import { PostoljeComponent } from '../ui/postolje.component';
@@ -83,7 +84,7 @@ interface Omotac {
 @Component({
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
+  imports: [FajloviTrakaComponent, PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
   host: { class: 'uz-scena rezim-dan uz-dan' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
   // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
@@ -122,6 +123,8 @@ interface Omotac {
             </div>
           }
         </div>
+        <!-- fajlovi za vežbu: kod sa table pri dnu slajda (stari backend nema polje, pa se ništa ne prikazuje) -->
+        @if (s.fajlovi; as fajlovi) { <app-fajlovi-traka [fajlovi]="fajlovi" /> }
       }
       @case ('KRAJ') {
         <div class="uz-okvir">

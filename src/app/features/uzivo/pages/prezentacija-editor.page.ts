@@ -16,6 +16,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable, distinctUntilChanged, finalize, from, map, of, switchMap } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { EditorStore, NijeSacuvano } from '../data-access/editor.store';
+import { FajloviEditorStore } from '../data-access/fajlovi-editor.store';
 import { IzvodjenjaApi } from '../data-access/izvodjenja.api';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
 import { greskePlatna } from '../data-access/platno-provera';
@@ -27,6 +28,7 @@ import { kodSaRazmakom } from '../ui/format';
 import { DIMENZIJE_SLIKE } from '../ui/dimenzije-slike';
 import { SlajdPrikazComponent } from '../ui/slajd-prikaz.component';
 import { TEME, promenljiveTeme, vazecaTema } from '../ui/teme';
+import { FajloviPanelComponent, SlajdZaFajl } from './fajlovi-panel.component';
 import { IzborGrupeOtvarac } from './izbor-grupe-otvarac';
 import { otvoriPokreni, pokretanjeBezDijaloga } from './pokreni.dialog';
 import { SlajdFormaComponent } from './slajd-forma.component';
@@ -53,10 +55,27 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 @Component({
   selector: 'app-prezentacija-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [EditorStore],
+  providers: [EditorStore, FajloviEditorStore],
+  // znak fajlova u listi slajdova: stil uz komponentu (lenja), ne u globalni uzivo-editor.css (početni paket)
+  styles: `
+    .uz-ed-fajlovi {
+      display: inline-flex;
+      flex: none;
+      gap: 2px;
+      align-items: center;
+      color: var(--primary);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .uz-ed-fajlovi .mat-icon {
+      width: 16px;
+      height: 16px;
+      font-size: 16px;
+    }
+  `,
   imports: [
     CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatExpansionModule, MatIconModule, MatMenuModule,
-    MatProgressBarModule, MatRadioModule, MatSlideToggleModule, SlajdFormaComponent, SlajdPrikazComponent,
+    MatProgressBarModule, MatRadioModule, MatSlideToggleModule, FajloviPanelComponent, SlajdFormaComponent, SlajdPrikazComponent,
     // samo u @defer bloku: kompajler pravi dinamički uvoz, editor platna je zaseban (lenj) chunk
     PlatnoEditorComponent,
   ],
@@ -190,6 +209,10 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
                     <span class="uz-ed-rb">{{ s.rb }}</span>
                     <mat-icon class="uz-ed-ikona" [attr.aria-label]="nazivTipa(s)" [svgIcon]="ikona(s)" />
                     <span class="uz-ed-oznaka">{{ oznaka(s) }}</span>
+                    @if (fajlovi.poSlajdu().get(s.id); as brojFajlova) {
+                      <span class="uz-ed-fajlovi" data-fajlovi-slajda [attr.title]="'Fajlova za studente: ' + brojFajlova"
+                            [attr.aria-label]="'Fajlova za studente: ' + brojFajlova"><mat-icon aria-hidden="true" svgIcon="description" />{{ brojFajlova }}</span>
+                    }
                     @if (store.neispravni().has(s.id) || s.id < 0 || store.sukobi().includes(s.id)) {
                       <mat-icon class="uz-ed-upozorenje" aria-label="Nije sačuvan" title="Nije sačuvan" svgIcon="error" />
                     }
@@ -273,6 +296,9 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
             }
           }
         </div>
+
+        <!-- ispod tela editora: ne gura okvir platna niz stranu (e2e raspored 1280 x 800) -->
+        <app-fajlovi-panel [slajdovi]="slajdoviZaFajlove()" />
       </div>
     } @else if (store.greska(); as g) {
       <div class="uz-ed-strana">
@@ -286,6 +312,7 @@ const STATUS: Record<string, string> = { miruje: '', cuva: 'Čuva se…', sacuva
 })
 export class PrezentacijaEditorPage implements NemaNesacuvanih {
   protected readonly store = inject(EditorStore);
+  protected readonly fajlovi = inject(FajloviEditorStore);
   private readonly api = inject(PrezentacijeApi);
   private readonly izvodjenja = inject(IzvodjenjaApi);
   private readonly route = inject(ActivatedRoute);
@@ -336,6 +363,9 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
   /** Linkovi iz opisa (npr. Drive folder sa fajlovima za čas): polje opisa je `input`, pa se linkovi otvaraju ispod njega. */
   protected readonly linkoviOpisa = computed(() => linkoviIzTeksta(this.store.prezentacija()?.opis));
   protected readonly natpisLinka = kratakNatpisLinka;
+  /** Sačuvani slajdovi (pravi id) za izbor slajda u panelu fajlova. */
+  protected readonly slajdoviZaFajlove = computed<SlajdZaFajl[]>(() =>
+    this.store.slajdovi().filter(s => s.id > 0).map(s => ({ id: s.id, rb: s.rb, oznaka: oznakaSlajda(s, 30) })));
   protected readonly tihSlajdova = computed(() => (this.store.sukobi().length === 1 ? 'tog slajda' : 'tih slajdova'));
   /** Sukob je u traci ispod zaglavlja, pa ovde samo kratko. */
   protected readonly statusTekst = computed(() => {
@@ -361,7 +391,10 @@ export class PrezentacijaEditorPage implements NemaNesacuvanih {
     this.route.paramMap.pipe(map(p => Number(p.get('id'))), distinctUntilChanged(), takeUntilDestroyed())
       .subscribe(id => {
         this.aktivno.set(null);
-        if (id > 0) this.store.ucitaj(id);
+        if (id > 0) {
+          this.store.ucitaj(id);
+          this.fajlovi.ucitaj(id);
+        }
       });
     effect(onCleanup => {
       const id = this.aktivnoZa();
