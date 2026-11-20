@@ -111,7 +111,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
       @default {
         @if (p.tip === 'VISE_TACNIH') { <p id="uz-st-vise" class="uz-st-natpis-vise" data-natpis-vise>{{ natpisVise }}</p> }
         <div class="uz-st-opcije" [class.uz-st-opcije--dve]="opcije().length <= 2" role="group"
-             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? null : 'Izaberi odgovor'"
+             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? 'Odgovori' : 'Izaberi odgovor'"
              [attr.aria-describedby]="p.tip === 'VISE_TACNIH' ? 'uz-st-vise' : null">
           @for (o of opcije(); track o.id; let i = $index) {
             <button type="button" class="uz-st-opcija" [style.--uz-boja]="boja(i)" [disabled]="onemoguceno()"

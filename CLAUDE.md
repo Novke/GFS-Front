@@ -391,9 +391,13 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…", `replaceUrl`). The header has **"Izađi"** (`[data-izadji]`): with `?sa=cas` to
   `nalog/cas` (`replaceUrl`), a signed-in student (`prijavljenStudent`) to `nalog/pocetna`, a guest to the code entry `uzivo`; leaving
   a running run records the exit marker above. Under the name the header shows the participant's own accuracy (`[data-tacnost]`,
-  `tacnostUcesnika`: "Tačno x od y", plus "N poena · " in takmičenje) and the "Gledaj u tablu" screen repeats it ("Do sada: …",
+  `tacnostUcesnika`: "Tačno x od y", x a sum of shares since V26 ("Tačno 3,5 od 5"), plus "N poena · " in takmičenje) and the "Gledaj u tablu" screen repeats it ("Do sada: …",
   `[data-skor]`); both come only from the server (`LicnoStanje.tacnih`/`dugovanih`, the leaderboard rule: owed questions with a
-  correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). A scored run of a lecture requires a check-in: the join 403 with
+  correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). After "Tačno"
+  a VISE_TACNIH question with the participant's own `LicniOdgovor.izabrane` shows "Tačno!" / "Delimično tačno" (`--warn`) /
+  "Netačno" by `udeo`, a line "Pogodio si 1 od 2 tačna." and every option with its state (`[data-stanje]` pogodjena, pogresna,
+  propustena, ostala; option text only when the snapshot carries it, so DUGMAD mode shows shape and letter only); a reload
+  rebuilds it from the server snapshot. A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
   connection closes); 403 `IZBACEN` is `izbacen` ("Nastavnik te je uklonio iz ovog izvođenja.", for a guest and a student alike: since the
   moderation work there is no "Uđi ponovo" any more, the server refuses the same phone by its `gfs_uzivo` cookie); any other 403 goes to `nalog` as before.
@@ -1201,7 +1205,9 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
   (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision.
+  a new decision. Since `feature/delimicno-tacno` the whole screen after "Tačno" (`javno/ishod-vise-tacnih.component`: outcome
+  title, per-option list for VISE_TACNIH, otherwise the correct answer, place) is a lazy chunk like the task screen (own budget
+  5 942 B + 10 %), which brought the closure down to 120 623 B.
 
 ### Rang tačnosti (leaderboard)
 

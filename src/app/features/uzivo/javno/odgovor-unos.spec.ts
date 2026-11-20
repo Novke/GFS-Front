@@ -130,6 +130,10 @@ describe('OdgovorUnosComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(NATPIS_VISE_TACNIH_TELEFON).toBe('Može biti više tačnih · označi sve tačne');
     expect(el.querySelector('[data-natpis-vise]')!.textContent!.trim()).toBe(NATPIS_VISE_TACNIH_TELEFON);
+    // grupa opcija ima ime ("Odgovori") i opis (natpis)
+    const grupa = el.querySelector('.uz-st-opcije')!;
+    expect(grupa.getAttribute('aria-label')).toBe('Odgovori');
+    expect(grupa.getAttribute('aria-describedby')).toBe('uz-st-vise');
     const kucice = Array.from(el.querySelectorAll('.uz-st-opcija-kvacica'));
     expect(kucice.length).toBe(4);
     expect(kucice.every(k => k.textContent!.trim() === '')).toBe(true);

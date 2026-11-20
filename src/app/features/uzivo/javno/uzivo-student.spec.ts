@@ -7,7 +7,7 @@ import {
 } from '../data-access/uzivo.models';
 import { ServerskiSat } from '../data-access/sat';
 import { IZASAO_IZ_IZVODJENJA, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
-import { EkranStudenta, FazaStudenta, StudentStore, TacanOdgovor, Veza } from './student.store';
+import { EkranStudenta, FazaStudenta, IshodPitanja, StudentStore, TacanOdgovor, Veza } from './student.store';
 import { POVRATAK_NA_CAS_MS, tacnostUcesnika, UzivoStudentPage } from './uzivo-student.page';
 
 // Uništena stranica izvođenja koje traje pamti izlazak u sessionStorage (`zapamtiIzlazak`), a jsdom ga deli sa ostalim spec
@@ -46,7 +46,7 @@ function lazniStore() {
   return {
     faza: signal<FazaStudenta>('uzivo'), ekran: signal<EkranStudenta>('unos'), javno: signal<JavnoStanje | null>(null),
     licno: signal<LicnoStanje | null>(null), pitanje: signal<JavnoPitanje | null>(null), sat: signal(new ServerskiSat()),
-    ukupnoMs: signal<number | null>(null), nacrt: signal(null), ishod: signal(null), tacan: signal<TacanOdgovor | null>(null),
+    ukupnoMs: signal<number | null>(null), nacrt: signal(null), ishod: signal<IshodPitanja | null>(null), tacan: signal<TacanOdgovor | null>(null),
     greska: signal<string | null>(null), ucesnik: signal(null), info: signal(null), kod: signal('123456'),
     veza: signal<Veza>('povezan'), salje: signal(false),
     runda: signal<JavnoPitanje | JavniZadatak | null>(null), zadatak: signal<LicniZadatak | null>(null), nacrtZadatka: signal(null),
@@ -111,8 +111,10 @@ describe('UzivoStudentPage: formule u pitanju i odgovorima', () => {
     expect(el.querySelector('.uz-st-detalji-dugme')).toBeNull();
   });
 
-  it('tačan odgovor: tekst tačne opcije je app-tekst-formule; prihvatljiv tekst ostaje običan tekst', () => {
+  it('tačan odgovor (lenji ekran ishoda): tekst tačne opcije je app-tekst-formule; prihvatljiv tekst ostaje običan tekst', async () => {
     const el = napravi(javno('PITANJE', pitanje({ faza: 'ZATVORENO' })), 'tacan', { opcije: [{ indeks: 1, tekst: '$13$' }], tekst: null });
+    await fixture.whenStable();
+    fixture.detectChanges();
     const t = el.querySelector<HTMLElement>('.uz-st-tacna app-tekst-formule');
     expect(t).not.toBeNull();
     expect(t!.querySelector('span.uz-formula')?.textContent).toBe('$13$');
@@ -120,6 +122,8 @@ describe('UzivoStudentPage: formule u pitanju i odgovorima', () => {
     fixture.destroy();
     const el2 = napravi(javno('PITANJE', pitanje({ tip: 'KRATAK_TEKST', faza: 'ZATVORENO', opcije: null })), 'tacan',
       { opcije: [], tekst: '$x$ ili y' });
+    await fixture.whenStable();
+    fixture.detectChanges();
     const tacna = el2.querySelector<HTMLElement>('.uz-st-tacna')!;
     expect(tacna.querySelector('app-tekst-formule')).toBeNull();
     expect(tacna.querySelector('strong')?.textContent).toBe('$x$ ili y');
@@ -312,6 +316,72 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
   });
 });
 
+describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-vise-tacnih)', () => {
+  let lazni: ReturnType<typeof lazniStore>;
+
+  const vise = (izmene: Partial<JavnoPitanje> = {}) => pitanje({
+    tip: 'VISE_TACNIH', faza: 'ZATVORENO', brojOpcija: 3,
+    opcije: [{ id: 21, tekst: 'Enter' }, { id: 22, tekst: 'Ctrl + Enter' }, { id: 23, tekst: 'Insert' }],
+    tacneOpcije: [22, 23], ...izmene,
+  });
+
+  async function napravi(j: JavnoStanje, ishod: IshodPitanja | null, tacan: TacanOdgovor | null = null): Promise<HTMLElement> {
+    lazni.javno.set(j);
+    lazni.pitanje.set(j.pitanje);
+    lazni.ekran.set('tacan');
+    lazni.ishod.set(ishod);
+    lazni.tacan.set(tacan);
+    const fixture = TestBed.createComponent(UzivoStudentPage);
+    fixture.detectChanges();
+    // ishod više tačnih je lenj (`@defer`): sačeka se njegov chunk
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  beforeEach(async () => {
+    lazni = lazniStore();
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ kod: '123456' })) } },
+      ],
+    });
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    await TestBed.compileComponents();
+  });
+
+  it('posle TACAN sa izabranim opcijama (bez nacrta): naslov "Delimično tačno" i spisak sa propuštenom opcijom', async () => {
+    const el = await napravi(javno('PITANJE', vise()), { odgovorio: true, tacno: false, poeni: null, udeo: 0.5, izabrane: [22] });
+    const ishod = el.querySelector('app-ishod-vise-tacnih')!;
+    expect(ishod).not.toBeNull();
+    expect(ishod.querySelector('[data-naslov]')?.textContent?.trim()).toBe('Delimično tačno');
+    expect(ishod.querySelector('[data-stanje="propustena"]')?.textContent).toContain('Insert');
+    expect(ishod.querySelector('[data-stanje="pogodjena"]')?.textContent).toContain('Ctrl + Enter');
+    // stari prikaz "Tačan odgovor:" se ne crta pored spiska
+    expect(el.querySelector('.uz-st-tacna')).toBeNull();
+  });
+
+  it('režim "samo dugmad": spisak ima samo oblike i slova, bez teksta opcija', async () => {
+    const p = vise({ opcije: [{ id: 21, tekst: null }, { id: 22, tekst: null }, { id: 23, tekst: null }] });
+    const el = await napravi(javno('DUGMAD', p), { odgovorio: true, tacno: false, poeni: null, udeo: 0.5, izabrane: [22] });
+    const ishod = el.querySelector('app-ishod-vise-tacnih')!;
+    expect(ishod.querySelectorAll('li app-opcija-oblik').length).toBe(3);
+    expect(ishod.querySelector('[data-stanje="propustena"]')).not.toBeNull();
+    expect(ishod.querySelector('app-tekst-formule')).toBeNull();
+  });
+
+  it('bez izabranih (stari backend ili nije odgovorio): stari prikaz "Tačan odgovor:"', async () => {
+    const tacan: TacanOdgovor = { opcije: [{ indeks: 1, tekst: 'Ctrl + Enter' }, { indeks: 2, tekst: 'Insert' }], tekst: null };
+    const el = await napravi(javno('PITANJE', vise()), { odgovorio: true, tacno: false, poeni: null }, tacan);
+    // isti lenji ekran ishoda, ali bez spiska po opciji
+    expect(el.querySelector('app-ishod-vise-tacnih [data-stanje]')).toBeNull();
+    expect(el.querySelectorAll('app-ishod-vise-tacnih .uz-st-tacna').length).toBe(2);
+    expect(el.textContent).toContain('Netačno');
+  });
+});
+
 function licno(izmene: Partial<LicnoStanje> = {}): LicnoStanje {
   return { verzija: 1, ucesnikId: 5, ime: 'Ana', poeni: 1200, mesto: 2, brojUcesnika: 9, izbacen: false, odgovor: null, ...izmene };
 }
@@ -323,6 +393,7 @@ describe('tacnostUcesnika', () => {
     [licno({ tacnih: 0, dugovanih: 0 }), null],
     [licno({ tacnih: 0, dugovanih: 2 }), 'Tačno 0 od 2'],
     [licno({ tacnih: 3, dugovanih: 5 }), 'Tačno 3 od 5'],
+    [licno({ tacnih: 3.5, dugovanih: 5 }), 'Tačno 3,5 od 5'],
   ] as const)('%j -> %s', (l, ocekivano) => {
     expect(tacnostUcesnika(l)).toBe(ocekivano);
   });

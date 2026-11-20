@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
 import {
@@ -147,6 +148,69 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     const procitano = await Promise.all(tela);
     expect(procitano.some(x => /\/main-[^/]+\.js$/.test(x.putanja)), 'provera je pročitala glavni bundle').toBe(true);
     expect(procitano.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`)).toEqual([]);
+  });
+
+  // delimično tačno (V26): posle "Tačno" telefon iz snimka servera (`LicniOdgovor.izabrane`, `udeo`) crta spisak opcija sa
+  // stanjem; u režimu "samo dugmad" bez teksta opcija. Lenji chunk ekrana ishoda je heširan fajl, dakle javna putanja.
+  test('više tačnih posle "Tačno": "Delimično tačno +425", spisak po opciji, i posle osvežavanja; axe (dan)', async ({ page, mock, javnaMreza }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const p0 = pocetno('Mina');
+    const pitanje = {
+      tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 43, brojOpcija: 4,
+      opcije: [{ id: 1, tekst: null }, { id: 2, tekst: null }, { id: 3, tekst: null }, { id: 4, tekst: null }],
+      tekst: null, slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+      tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+    };
+    const otvoreno = { ...p0.javno, verzija: 2, takmicenje: true, prikaz: 'SLAJD', slajdTip: 'PITANJE', pitanje };
+    const posleTacan = {
+      javno: { ...otvoreno, verzija: 3, pitanje: { ...pitanje, faza: 'ZATVORENO', tacneOpcije: [2, 4] } },
+      licno: {
+        ...p0.licno, verzija: 3, poeni: 425, mesto: 1, tacnih: 0.5, dugovanih: 1,
+        odgovor: { rundaId: 43, primljen: true, tacno: false, poeni: 425, izabrane: [2], udeo: 0.5 },
+      },
+    };
+    let snimak: unknown = { javno: otvoreno, licno: p0.licno };
+    const broker = await lazniBroker(
+      page, 'api/public/ws',
+      o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined),
+      url => javnaMreza.ws.push(new URL(url).pathname),
+    );
+    await page.goto(`uzivo/${KOD}`);
+    await expect(page.locator('[data-natpis-vise]')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Odgovori' })).toBeVisible();
+    await expect.poll(() => broker.pretplate).toContain('/user/queue/licno');
+
+    // TACAN: server šalje lično pa javno stanje
+    snimak = posleTacan;
+    broker.posalji('/user/queue/licno', posleTacan.licno);
+    broker.posalji(`/topic/izvodjenja/${IZVODJENJE}/javno`, posleTacan.javno);
+    const proveri = async () => {
+      const ishod = page.locator('app-ishod-vise-tacnih');
+      await expect(ishod.locator('[data-naslov]')).toHaveText('Delimično tačno +425');
+      await expect(ishod.locator('[data-opis]')).toHaveText('Pogodio si 1 od 2 tačna.');
+      await expect(ishod.locator('li')).toHaveCount(4);
+      expect(await ishod.locator('li').evaluateAll(l => l.map(x => x.getAttribute('data-stanje'))))
+        .toEqual(['pogodjena', 'propustena', 'ostala', 'ostala']);
+      await expect(ishod.locator('[data-stanje="pogodjena"]')).toContainText('✓ Tvoj izbor, tačno');
+      await expect(ishod.locator('[data-stanje="propustena"]')).toContainText('○ I ovo je tačno, nisi zaokružio');
+      // samo dugmad: oblik i slovo, bez teksta opcija
+      await expect(ishod.locator('[data-stanje="propustena"] app-opcija-oblik')).toHaveAttribute('aria-label', 'D, zeleni kvadrat');
+      await expect(ishod.locator('app-tekst-formule')).toHaveCount(0);
+      await expect(page.locator('[data-tacnost]')).toHaveText('425 poena · Tačno 0,5 od 1');
+    };
+    await proveri();
+
+    const axe = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze())
+      .violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
+      .map(v => ({ pravilo: v.id, elementi: v.nodes.map(n => n.target.join(' ')).slice(0, 5) }));
+    expect(axe, 'axe: ishod više tačnih (dan)').toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    // osvežavanje posle "Tačno": isti spisak iz početnog snimka servera, ništa iz lokalne memorije
+    await page.reload();
+    await proveri();
+    expect(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/')), 'samo javni GET-ovi').toEqual([]);
+    expect(javnaMreza.odgovori401).toEqual([]);
   });
 });
 

@@ -8,7 +8,8 @@ import {
   dinamickiUvozi, fajlSa, jsFajlovi, skripteIndeksa, sopstvenoZatvorenje, statickiUvozi, tekst, zatvorenje, zbir, zbirGzip,
 } from './chunkovi';
 import {
-  NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_REDA_ZADATKA, NIZ_STUDENTA, NIZ_ZADATKA_STUDENTA, NIZOVI_CRTEZA, nizoviEditora,
+  NIZ_ISHODA_STUDENTA, NIZ_MATHLIVE, NIZ_MATHLIVE_CEO, NIZ_REDA_ZADATKA, NIZ_STUDENTA, NIZ_ZADATKA_STUDENTA, NIZOVI_CRTEZA,
+  nizoviEditora,
 } from './nizovi-editora';
 
 /**
@@ -32,6 +33,8 @@ const RAST_ZADATKA = 1_300;
  * Rezerva odobrena 2026-10-28 (Novica, uz rezultate slobodnog unosa kao čipove): zatvorenje je bilo 117 512 od 117 518 B, pa
  * bi i sitna ispravka telefona pala na granici. Sama ta izmena studentsku stranicu ne menja (rezultate crtaju projektor,
  * konzola i pregled; izmereno i posle nje 117 512 B), pa je ovo samo prostor za sledeće izmene telefona, ne nov rast.
+ * Posle `feature/portal-pocetna` i natpisa više tačnih: 121 495 B. Ishod po opciji za pitanje sa više tačnih (2026-11-20)
+ * ide u lenji chunk zajedno sa celim ekranom posle "Tačno" (naslov, tačan odgovor, mesto), pa je zatvorenje 120 623 B.
  */
 const REZERVA_2026_10_28 = 4_000;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28;
@@ -42,6 +45,13 @@ const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10
  */
 const IZMERENO_ZADATAK = 13_544;
 const BUDZET_ZADATKA = Math.floor(IZMERENO_ZADATAK * 1.1);
+/**
+ * Ekran ishoda posle "Tačno" (`app-ishod-vise-tacnih`: naslov, spisak opcija sa stanjem kod više tačnih, inače tačan
+ * odgovor, mesto; stilovi u komponenti): samo dinamički uvoz iz studentske stranice. Izmereno 2026-11-20: 5 942 B
+ * (2 341 B gzip); granica + 10 %.
+ */
+const IZMERENO_ISHOD = 5_942;
+const BUDZET_ISHODA = Math.floor(IZMERENO_ISHOD * 1.1);
 /**
  * `mathlive/ssr` (formula u tekstu na telefonu, lenji chunk) kao sopstveno zatvorenje posle početnog i studentske stranice.
  * Izmereno 2026-10-14 (e13cfdd): 348 195 B / 102 932 B gzip. Granica: izmereno + 5 % i nikad iznad 380 000 B (granica
@@ -83,6 +93,8 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
     expect(zadatak).toContain(NIZ_ZADATKA_STUDENTA);
     const ekran = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'zadatak-ekran.component.ts'), 'utf8');
     expect(ekran).toContain(NIZ_REDA_ZADATKA);
+    const ishod = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'ishod-vise-tacnih.ts'), 'utf8');
+    expect(ishod).toContain(NIZ_ISHODA_STUDENTA);
     // ceo mathlive (dijalog formule editora) ima niz, a ssr ne: bez toga bi filter `ssrFajlovi` bio prazan ili pogrešan
     expect(js.filter(f => tekst(f).includes(NIZ_MATHLIVE_CEO) && tekst(f).includes(NIZ_MATHLIVE)).length, 'ceo mathlive').toBe(1);
     expect(ssrFajlovi.length, 'tačno jedan chunk sa mathlive/ssr').toBe(1);
@@ -117,6 +129,21 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
       .map(f => ({ f, nizovi: [...nizoviEditora(tekst(f)), ...NIZOVI_PLATNA.filter(n => tekst(f).includes(n))] }))
       .filter(x => x.nizovi.length);
     expect(sporni, 'MathLive, kod editora ili platna u chunk-u zadatka').toEqual([]);
+  });
+
+  test('ishod posle "Tačno" na telefonu: samo dinamički uvoz iz studentske stranice, van njenog zatvorenja, u budžetu', () => {
+    const ishod = fajlSa(NIZ_ISHODA_STUDENTA, js);
+    const ucitano = new Set([...pocetno, ...zatvorenjeStudenta]);
+    expect(ucitano.has(ishod), 'ishod u početnom zatvorenju ili zatvorenju studentske stranice').toBe(false);
+    expect(js.filter(u => statickiUvozi(tekst(u)).includes(ishod)), 'statički uvoz ishoda').toEqual([]);
+    expect(dinamickiUvozi(tekst(student)), 'dinamički uvoz iz studentske stranice').toContain(ishod);
+    const sopstveno = sopstvenoZatvorenje([ishod], ucitano);
+    zapisi('ishod na telefonu (sopstveno zatvorenje)', zbir(sopstveno), zbirGzip(sopstveno));
+    expect(zbir(sopstveno)).toBeLessThanOrEqual(BUDZET_ISHODA);
+    const sporni = [...sopstveno]
+      .map(f => ({ f, nizovi: [...nizoviEditora(tekst(f)), ...NIZOVI_PLATNA.filter(n => tekst(f).includes(n))] }))
+      .filter(x => x.nizovi.length);
+    expect(sporni, 'MathLive, kod editora ili platna u chunk-u ishoda').toEqual([]);
   });
 
   test('mathlive/ssr: samo dinamički uvoz, van početnog i studentskog zatvorenja, sopstveno zatvorenje u budžetu', () => {

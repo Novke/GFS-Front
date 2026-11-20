@@ -7,13 +7,14 @@ import { distinctUntilChanged, map } from 'rxjs';
 import { zaboraviIzlazak, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { LicnoStanje, medijUrl } from '../data-access/uzivo.models';
-import { grupisiCifre } from '../ui/format';
+import { decimalni, grupisiCifre } from '../ui/format';
 import { OpcijaOblikComponent } from '../ui/opcija-oblik';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
+import { IshodViseTacnihComponent } from './ishod-vise-tacnih.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
-import { StudentStore, naslovIshoda } from './student.store';
+import { StudentStore } from './student.store';
 import { ZadatakEkranComponent } from './zadatak-ekran.component';
 import { porukaUtisanja } from './utisanje';
 
@@ -21,12 +22,13 @@ import { porukaUtisanja } from './utisanje';
 export const POVRATAK_NA_CAS_MS = 3_000;
 
 /**
- * Sopstvena tačnost u zaglavlju: `Tačno 3 od 5`, `null` dok nema nijednog pitanja koje se računa (stari backend je ne šalje).
+ * Sopstvena tačnost u zaglavlju: `Tačno 3 od 5` (`Tačno 3,5 od 5` sa delimičnim udelima), `null` dok nema nijednog pitanja
+ * koje se računa (stari backend je ne šalje).
  * Server je računa po pravilu ranga tačnosti, a trenutna runda ulazi tek posle "Tačno" (nikad ranije).
  */
 export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | null {
   const d = l?.dugovanih;
-  return typeof d === 'number' && d > 0 ? `Tačno ${Math.max(0, l?.tacnih ?? 0)} od ${d}` : null;
+  return typeof d === 'number' && d > 0 ? `Tačno ${decimalni(Math.max(0, l?.tacnih ?? 0))} od ${d}` : null;
 }
 
 /**
@@ -37,7 +39,8 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
  * ima formulu. Prihvatljivi odgovori, jedinica i oznake skale ostaju običan tekst (plan faze 5, odluka 2).
  * Zadatak slajd: "Zadatak stiže…", pa `app-zadatak-ekran` (stanje runde i svoja varijanta u `app-zadatak-unos`) u
  * lenjom bloku (`@defer`): telefon vuče njegov chunk tek na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu, pa ovde
- * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`).
+ * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`). Isto za ekran posle "Tačno"
+ * (`app-ishod-vise-tacnih`: naslov ishoda, kod više tačnih spisak opcija sa stanjem, inače tačan odgovor; mesto).
  * Sa `?sa=cas` (student je došao sa `/nalog/cas`): posle kraja ili izbacivanja se za {@link POVRATAK_NA_CAS_MS} vraća na
  * čas (`replaceUrl`, završeno izvođenje ne ostaje u istoriji), gde čeka sledeću prezentaciju. Bodovano izvođenje bez
  * čekiranja (faza `cekiranje`) pokazuje samo poruku servera.
@@ -52,7 +55,7 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
   providers: [StudentStore],
   imports: [
     RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
-    ZadatakEkranComponent,
+    ZadatakEkranComponent, IshodViseTacnihComponent,
   ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
@@ -194,25 +197,9 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
               }
               @case ('isteklo') { <p class="uz-st-veliko" role="status">Vreme je isteklo</p> }
               @case ('tacan') {
+                <!-- ceo ekran ishoda (naslov, spisak opcija ili tačan odgovor, mesto) je lenji chunk, kao zadatak -->
                 <div class="uz-st-poruka" role="status">
-                  @if (s.ishod(); as i) {
-                    <p class="uz-st-veliko" [class.uz-st-ok]="i.tacno === true" [class.uz-st-lose]="i.tacno === false">
-                      {{ ishod(i, !!j?.takmicenje) }}
-                    </p>
-                  }
-                  @if (s.tacan(); as t) {
-                    <p class="uz-st-tekst">Tačan odgovor:</p>
-                    @for (o of t.opcije; track o.indeks) {
-                      <p class="uz-st-tacna">
-                        <app-opcija-oblik [indeks]="o.indeks" [velicina]="40" />
-                        @if (o.tekst) { <app-tekst-formule [tekst]="o.tekst" /> }
-                      </p>
-                    }
-                    @if (t.tekst) { <p class="uz-st-tacna"><strong>{{ t.tekst }}</strong></p> }
-                  }
-                  @if (j?.takmicenje && l?.mesto) {
-                    <p class="uz-st-mesto">Tvoje mesto: {{ l!.mesto }} · {{ poeni(l!.poeni) }}</p>
-                  }
+                  @defer (on immediate) { <app-ishod-vise-tacnih /> } @error { <p class="uz-st-tekst" role="alert">Osveži stranicu.</p> }
                 </div>
               }
               @case ('kraj') {
@@ -260,7 +247,6 @@ export class UzivoStudentPage {
   protected readonly store = inject(StudentStore);
   protected readonly rute = UzivoPutanje;
   protected readonly poeni = grupisiCifre;
-  protected readonly ishod = naslovIshoda;
   protected readonly tekstOpcije = tekstOpcije;
   protected readonly utisanje = porukaUtisanja;
   protected readonly slika = medijUrl;

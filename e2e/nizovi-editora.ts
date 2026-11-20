@@ -21,6 +21,8 @@ export const NIZ_STUDENTA = 'Gledaj u tablu';
 export const NIZ_ZADATKA_STUDENTA = 'Reši na papiru.';
 /** Red stanja zadatka na telefonu (`javno/zadatak-ekran.component.ts`): samo u lenjom chunk-u, nikad u stranici ni u CSS-u. */
 export const NIZ_REDA_ZADATKA = 'uz-st-zd-vrh';
+/** Samo lenji ekran ishoda na telefonu (`javno/ishod-vise-tacnih.ts`; `lenji-formule.spec.ts` proverava izvor). */
+export const NIZ_ISHODA_STUDENTA = 'I ovo je tačno, nisi zaokružio';
 /**
  * Javna ruta ovo nikad ne učitava (5a): `ML__latex` sme samo kao `mathlive/ssr` (formula u tekstu pitanja ili opcije),
  * bez `NIZ_MATHLIVE_CEO`; kod editora platna, ProseMirror i dijalog formule nikad.
