@@ -1210,7 +1210,11 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   place; pure VISE_TACNIH rules in `javno/ishod-vise-tacnih.ts`) is a lazy chunk like the task screen, for the budget (own budget
   5 942 B + 10 %; closure 121 495 -> 120 855 B, initial unchanged). Its `@defer` has a placeholder "Učitavanje…" and an error
   text; a second `@defer (on idle) { @if (false) { … } }` right after joining loads the chunk ahead, so a classroom does not fetch
-  it at "Tačno" (`prefetch on idle` / `when` would add ~350 B of Angular instructions to the initial bundle).
+  it at "Tačno" (`prefetch on idle` / `when` would add ~350 B of Angular instructions to the initial bundle). The VISE_TACNIH
+  check box of the answer buttons (`.uz-st-opcija-kvacica`, mockup: empty translucent with a white border, selected white with ✓;
+  in "celo pitanje" mode it sits in the button's row after the text, so it never covers it) lives in the `styles` of
+  `javno/odgovor-unos.component`, not in the global `uzivo-javno.css`: that freed 243 B of the initial bundle (799 723 of 800 000 B)
+  and costs the student closure, now **121 460 of 121 518 B** (58 B left: the next growth of the phone page needs a lazy chunk).
 
 ### Rang tačnosti (leaderboard)
 
@@ -1249,7 +1253,10 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
 - **Partial credit in teacher views (VISE_TACNIH, V26; every field optional, an old backend renders exactly as before):** `tacnihTekst`
   gives "Tačno 2 · ◐ delimično 7 od 9 · 61 %" when `Rezultat.delimicnih > 0` (percentage from `zbirUdela`, else from `tacnih`; `RezultatPrikazComponent` renders the ◐ in its own `aria-hidden` span, the string stays whole for tests). The console
   participants panel shows `◐ delimično 0,5` (`--warn`, `UcesnikStanje.udeo` strictly between 0 and 1, with `tacno=false`) instead of ✗; the
-  student review shows "◐ Delimično tačno 0,5" (`OdgovorPregleda.udeo`). ◐ is always a text glyph with `aria-hidden` next to the word, never an
+  student review shows "◐ Delimično tačno 0,5" (`OdgovorPregleda.udeo`), and the run overview's round header "Odgovora 23 · tačnih 61 % ·
+  ◐ delimično 3" (`delimicnihRunde`, only when `rezultat.delimicnih > 0`). On the projector the board cue "Može biti više tačnih" sits above
+  the tile grid: `pitanje-plocice` makes its host a flex column (host class `uz-plocice--natpis`, not in the large-image `sazeto` layout) so
+  the grid shares the height instead of `height: 100%` (`e2e/uzivo-plocice.spec.ts` checks that no tile leaves the host). ◐ is always a text glyph with `aria-hidden` next to the word, never an
   icon (`icons.ts` and the initial bundle budget stay untouched). Rank `tacnih` and `zvezdice` are decimals: every decimal goes through
   `decimalni` (Serbian comma, 2 places; lives in `shared/util/broj.ts`, re-exported by `features/uzivo/ui/format`), the projector's "netačnih" is
   `dugovanih - tacnih` rounded to 0.01 (its number columns are 3.6em, sized for 5 characters like "12,67"; `RED_EM` in the component follows; `e2e/uzivo-rang-ime.spec.ts` checks no cell overflows) (never a float tail or -0). The board shows nothing partial before TACAN: it only reads `javniRezultat`.
