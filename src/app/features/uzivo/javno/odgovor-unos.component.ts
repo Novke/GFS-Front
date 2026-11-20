@@ -68,6 +68,19 @@ const SKALA = [1, 2, 3, 4, 5] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-st-unos', '[class.uz-st-unos--celo]': 'celoPitanje()' },
+  // Kućica "više tačnih" je samo ovde, ne u globalnom `uzivo-javno.css` (početni paket). Obojene pločice (maketa): prazna
+  // providna sa belim okvirom, izabrana bela sa ✓. Celo pitanje: kućica je u redu dugmeta posle teksta, pa ga ne pokriva.
+  styles: `
+    .uz-st-natpis-vise { margin: 0 0 0.5rem; font-weight: 700; }
+    .uz-st-opcija-kvacica {
+      position: absolute; top: 0.5rem; right: 0.75rem; width: 2rem; height: 2rem; border: 2px solid #fff;
+      border-radius: 0.3rem; background: rgb(255 255 255 / 0.15); font-size: 1.5rem; line-height: 1.75rem; text-align: center;
+    }
+    .uz-st-opcija--izabrana .uz-st-opcija-kvacica { background: #fff; color: var(--ink); }
+    :host(.uz-st-unos--celo) .uz-st-opcija-kvacica {
+      position: static; flex: none; margin-left: auto; border-color: currentColor; background: var(--surface);
+    }
+  `,
   template: `
     @let p = pitanje();
     @switch (p.tip) {

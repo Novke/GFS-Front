@@ -169,6 +169,15 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
       assert.doesNotMatch(izvor, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
     });
 
+    it('features/uzivo/ui/format uvozi samo shared/util/broj, a broj nema nijedan uvoz ni ponovni izvoz', () => {
+      const fs = require('node:fs');
+      const format = fs.readFileSync(path.join(KORENI, 'src/app/features/uzivo/ui/format.ts'), 'utf8');
+      assert.doesNotMatch(format, /^\s*import\b|\bimport\s*\(|\brequire\s*\(/m);
+      assert.deepEqual([...format.matchAll(/\bfrom\s+'([^']+)'/g)].map(m => m[1]), ['../../../shared/util/broj']);
+      const broj = fs.readFileSync(path.join(KORENI, 'src/app/shared/util/broj.ts'), 'utf8');
+      assert.doesNotMatch(broj, /^\s*import\b|\bimport\s*\(|\brequire\s*\(|\bfrom\s+['"]/m);
+    });
+
     for (const modul of ['src/app/shared/util/wa-link.ts', 'src/app/features/uzivo/izlaz-iz-izvodjenja.ts']) {
       it(`${modul} (Početna, izlaz iz izvođenja) nema nijedan uvoz`, () => {
         const izvor = require('node:fs').readFileSync(path.join(KORENI, modul), 'utf8');

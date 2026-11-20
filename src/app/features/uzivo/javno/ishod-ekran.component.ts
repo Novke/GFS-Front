@@ -8,7 +8,9 @@ import { IshodPitanja, StudentStore, naslovIshoda } from './student.store';
 /** Klasa naslova po udelu: zeleno, ćilibar (`--warn`), crveno. */
 const KLASA_NASLOVA = { 'Tačno!': 'uz-st-ok', 'Delimično tačno': 'uz-st-pola', 'Netačno': 'uz-st-lose' } as const;
 
-interface StavkaIshoda { id: number; indeks: number; tekst: string | null; stanje: StanjeOpcije; oznaka: string | null; }
+interface StavkaIshoda {
+  id: number; indeks: number; tekst: string | null; stanje: StanjeOpcije; oznaka: { znak: string; tekst: string } | null;
+}
 
 /**
  * Ekran ishoda na telefonu posle "Tačno" (ekran `tacan`). Pitanje sa više tačnih, kad server pošalje svoje izabrane opcije
@@ -55,7 +57,9 @@ interface StavkaIshoda { id: number; indeks: number; tekst: string | null; stanj
           <li [class]="o.stanje" [attr.data-stanje]="o.stanje">
             <app-opcija-oblik [indeks]="o.indeks" [velicina]="32" />
             @if (o.tekst) { <app-tekst-formule [tekst]="o.tekst" /> }
-            @if (o.oznaka) { <span class="uz-st-iv-s" data-oznaka-stanja>{{ o.oznaka }}</span> }
+            @if (o.oznaka; as z) {
+              <span class="uz-st-iv-s" data-oznaka-stanja><span aria-hidden="true">{{ z.znak }}</span> {{ z.tekst }}</span>
+            }
           </li>
         }
       </ul>

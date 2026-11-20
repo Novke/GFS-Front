@@ -46,6 +46,9 @@ describe('IshodEkranComponent', () => {
     expect(li[0].textContent).toContain('✓ Tvoj izbor, tačno');
     expect(li[0].textContent).toContain('Ctrl + Enter');
     expect(li[1].textContent).toContain('○ I ovo je tačno, nisi zaokružio');
+    // znak je samo za oko: čitač ekrana čita reči, ne "kvačica" / "krug"
+    const znaci = Array.from(el.querySelectorAll('[data-oznaka-stanja] [aria-hidden="true"]')).map(z => z.textContent);
+    expect(znaci).toEqual(['✓', '○']);
     // formula u tekstu opcije ide kroz app-tekst-formule
     expect(li[1].querySelector('app-tekst-formule span.uz-formula')?.textContent).toBe('$x^2$');
     // ostale opcije: bez reda stanja

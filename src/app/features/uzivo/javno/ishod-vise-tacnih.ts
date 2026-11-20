@@ -20,11 +20,11 @@ export function stanjaOpcija(
 /** Redosled na spisku (maketa): pogođene, pa pogrešne, pa propuštene, pa ostale; u istom stanju redom opcija. */
 export const RED_STANJA: Readonly<Record<StanjeOpcije, number>> = { pogodjena: 0, pogresna: 1, propustena: 2, ostala: 3 };
 
-/** Red ispod opcije; ostale opcije nemaju red. */
-export const OZNAKE_STANJA: Readonly<Record<StanjeOpcije, string | null>> = {
-  pogodjena: '✓ Tvoj izbor, tačno',
-  propustena: '○ I ovo je tačno, nisi zaokružio',
-  pogresna: '✗ Tvoj izbor, nije tačno',
+/** Red ispod opcije: znak (samo za oko, čitač ekrana ga preskače) i reči koje nose značenje; ostale opcije nemaju red. */
+export const OZNAKE_STANJA: Readonly<Record<StanjeOpcije, { znak: string; tekst: string } | null>> = {
+  pogodjena: { znak: '✓', tekst: 'Tvoj izbor, tačno' },
+  propustena: { znak: '○', tekst: 'I ovo je tačno, nisi zaokružio' },
+  pogresna: { znak: '✗', tekst: 'Tvoj izbor, nije tačno' },
   ostala: null,
 };
 

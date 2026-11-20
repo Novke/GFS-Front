@@ -385,25 +385,6 @@
   overflow-wrap: anywhere;
 }
 
-.uz-st-opcija-kvacica {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.75rem;
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid;
-  background: #fff;
-  color: var(--ink);
-  font-size: 1.5rem;
-  line-height: 1.75rem;
-  text-align: center;
-}
-
-.uz-st-natpis-vise {
-  margin: 0 0 0.5rem;
-  font-weight: 700;
-}
-
 /* Režim A: dugmad sa tekstom u redovima, tamni tekst na svetloj podlozi (kontrast i uz žutu). */
 .uz-st-unos--celo .uz-st-opcije {
   flex: 0 0 auto;

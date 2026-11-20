@@ -20,11 +20,18 @@ export const NATPIS_VISE_TACNIH_TABLA = 'Može biti više tačnih';
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
-  host: { class: 'uz-plocice', '[class.uz-plocice--sazeto]': 'sazeto()' },
+  host: {
+    class: 'uz-plocice', '[class.uz-plocice--sazeto]': 'sazeto()',
+    '[class.uz-plocice--natpis]': "pitanje().tip === 'VISE_TACNIH'",
+  },
   // Sažeti oblik (pitanje sa velikom slikom): stil je ovde, ne u globalnom `uzivo-tokeni.css` (ulazi u početni paket i
   // na telefon). Sve mere u cqw/em, pa isto radi u umanjenim prikazima.
   styles: `
-    .uz-natpis-vise { margin: 0 0 0.6cqw; font-size: 1.8cqw; font-weight: 700; color: var(--muted); }
+    .uz-natpis-vise { flex: none; margin: 0 0 0.6cqw; font-size: 1.8cqw; font-weight: 700; color: var(--muted); }
+    /* natpis iznad mreže: domaćin ima overflow: hidden (uzivo-tokeni.css), pa mreža deli visinu sa natpisom umesto
+       height: 100% (donji red bi se sekao); sažeti oblik ostaje kakav jeste */
+    :host(.uz-plocice--natpis:not(.uz-plocice--sazeto)) { display: flex; flex-direction: column; }
+    :host(.uz-plocice--natpis:not(.uz-plocice--sazeto)) .uz-plocice-mreza { flex: 1; min-height: 0; height: auto; }
     .uz-sazeto-red { display: flex; align-items: center; justify-content: flex-end; gap: 2cqw; }
     .uz-sazeto-tacno { margin: 0; font-size: 2.4cqw; }
     .uz-sazeto-unos {

@@ -25,7 +25,7 @@ describe('RangTacnostiProjektorComponent', () => {
     expect(kolone(30).kolone).toEqual([15, 15]);
     expect(velicinaSlova(5, 1)).toBeCloseTo(91 / 35.2);
     expect(velicinaSlova(10, 1)).toBeCloseTo(19 / 11);
-    // dve kolone ograničava širina: sa 18,8 em kolona brojeva, ime od 8 em mora da stane u pola slajda
+    // dve kolone ograničava širina: sa 21,6 em kolona brojeva, ime od 8 em mora da stane u pola slajda
     expect(velicinaSlova(10, 2)).toBeCloseTo(91 / (2 * 35.2 + 1.6));
     // 30 redova: visina je uža od širine
     expect(velicinaSlova(30, 2)).toBeCloseTo(19 / 16);

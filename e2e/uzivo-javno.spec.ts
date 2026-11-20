@@ -227,6 +227,37 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     expect(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/')), 'samo javni GET-ovi').toEqual([]);
     expect(javnaMreza.odgovori401).toEqual([]);
   });
+
+  // "celo pitanje" (režim A) na 360 px: kućica je u redu dugmeta posle teksta, pa ni dugačak tekst opcije ne ide ispod nje
+  test('više tačnih, celo pitanje, 360 px: kućica ne pokriva tekst opcije', async ({ page, mock }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const p0 = pocetno('Mina');
+    const dugacak = 'Sila kojom Zemlja privlači telo mase jednog kilograma na nivou mora';
+    const pitanje = {
+      tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 44, brojOpcija: 3,
+      opcije: [{ id: 1, tekst: dugacak }, { id: 2, tekst: 'Njutn' }, { id: 3, tekst: 'Kratka opcija jednog reda' }],
+      tekst: 'Šta je tačno?', slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null,
+      preostaloMs: null, tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+    };
+    const snimak = { javno: { ...p0.javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PITANJE', telefonPrikaz: 'PITANJE', pitanje }, licno: p0.licno };
+    await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined));
+    await page.goto(`uzivo/${KOD}`);
+    const opcije = page.getByRole('group', { name: 'Odgovori' }).locator('.uz-st-opcija');
+    await expect(opcije).toHaveCount(3);
+    await opcije.nth(2).click();
+    await expect(opcije.nth(2).locator('.uz-st-opcija-kvacica')).toHaveText('✓');
+    // za svaku opciju: desna ivica svakog reda teksta levo od kućice (Range daje pravougaonik svakog reda)
+    const preklopi = await opcije.evaluateAll(dugmad => dugmad.map(d => {
+      const kucica = d.querySelector('.uz-st-opcija-kvacica')!.getBoundingClientRect();
+      const opseg = document.createRange();
+      opseg.selectNodeContents(d.querySelector('.uz-st-opcija-tekst')!);
+      const redovi = [...opseg.getClientRects()].filter(r => r.width > 0);
+      return redovi.length > 0 && redovi.every(r => r.right <= kucica.left + 0.5) ? 'ok' : `preklop: ${d.textContent}`;
+    }));
+    expect(preklopi).toEqual(['ok', 'ok', 'ok']);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  });
 });
 
 /**
