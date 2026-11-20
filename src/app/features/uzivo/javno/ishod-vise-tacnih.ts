@@ -1,6 +1,6 @@
 /**
  * Ishod pitanja sa više tačnih na telefonu posle "Tačno" (spec delimično tačno, maketa deo 2): čiste funkcije za
- * `app-ishod-vise-tacnih`. Sve je u lenjom chunk-u tog ekrana (budžet studentske stranice, `e2e/lenji-formule.spec.ts`).
+ * `app-ishod-ekran`. Sve je u lenjom chunk-u tog ekrana (budžet studentske stranice, `e2e/lenji-formule.spec.ts`).
  */
 
 /** Stanje opcije u ishodu: tačna i izabrana, tačna a neizabrana, izabrana a netačna, ni jedno ni drugo. */

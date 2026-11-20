@@ -34,7 +34,8 @@ const RAST_ZADATKA = 1_300;
  * bi i sitna ispravka telefona pala na granici. Sama ta izmena studentsku stranicu ne menja (rezultate crtaju projektor,
  * konzola i pregled; izmereno i posle nje 117 512 B), pa je ovo samo prostor za sledeće izmene telefona, ne nov rast.
  * Posle `feature/portal-pocetna` i natpisa više tačnih: 121 495 B. Ishod po opciji za pitanje sa više tačnih (2026-11-20)
- * ide u lenji chunk zajedno sa celim ekranom posle "Tačno" (naslov, tačan odgovor, mesto), pa je zatvorenje 120 623 B.
+ * ide u lenji chunk zajedno sa celim ekranom posle "Tačno" (naslov, tačan odgovor, mesto), pa je zatvorenje 120 623 B;
+ * sa učitavanjem tog chunk-a unapred (`@defer (on idle)` koji ništa ne crta) 120 855 B.
  */
 const REZERVA_2026_10_28 = 4_000;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28;
@@ -46,7 +47,7 @@ const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10
 const IZMERENO_ZADATAK = 13_544;
 const BUDZET_ZADATKA = Math.floor(IZMERENO_ZADATAK * 1.1);
 /**
- * Ekran ishoda posle "Tačno" (`app-ishod-vise-tacnih`: naslov, spisak opcija sa stanjem kod više tačnih, inače tačan
+ * Ekran ishoda posle "Tačno" (`app-ishod-ekran`: naslov, spisak opcija sa stanjem kod više tačnih, inače tačan
  * odgovor, mesto; stilovi u komponenti): samo dinamički uvoz iz studentske stranice. Izmereno 2026-11-20: 5 942 B
  * (2 341 B gzip); granica + 10 %.
  */
@@ -95,6 +96,9 @@ test.describe('formule na javnoj ruti: telefon bez formule ne plaća ništa, mat
     expect(ekran).toContain(NIZ_REDA_ZADATKA);
     const ishod = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'ishod-vise-tacnih.ts'), 'utf8');
     expect(ishod).toContain(NIZ_ISHODA_STUDENTA);
+    // niz ide u chunk ekrana ishoda jer ga uvozi samo `ishod-ekran.component` (lenji `@defer` stranice)
+    const ishodEkran = readFileSync(join(__dirname, '..', 'src', 'app', 'features', 'uzivo', 'javno', 'ishod-ekran.component.ts'), 'utf8');
+    expect(ishodEkran).toContain("from './ishod-vise-tacnih'");
     // ceo mathlive (dijalog formule editora) ima niz, a ssr ne: bez toga bi filter `ssrFajlovi` bio prazan ili pogrešan
     expect(js.filter(f => tekst(f).includes(NIZ_MATHLIVE_CEO) && tekst(f).includes(NIZ_MATHLIVE)).length, 'ceo mathlive').toBe(1);
     expect(ssrFajlovi.length, 'tačno jedan chunk sa mathlive/ssr').toBe(1);

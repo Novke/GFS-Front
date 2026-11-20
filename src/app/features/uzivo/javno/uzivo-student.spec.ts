@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import {
@@ -316,7 +316,7 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
   });
 });
 
-describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-vise-tacnih)', () => {
+describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-ekran)', () => {
   let lazni: ReturnType<typeof lazniStore>;
 
   const vise = (izmene: Partial<JavnoPitanje> = {}) => pitanje({
@@ -354,7 +354,7 @@ describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-vise
 
   it('posle TACAN sa izabranim opcijama (bez nacrta): naslov "Delimično tačno" i spisak sa propuštenom opcijom', async () => {
     const el = await napravi(javno('PITANJE', vise()), { odgovorio: true, tacno: false, poeni: null, udeo: 0.5, izabrane: [22] });
-    const ishod = el.querySelector('app-ishod-vise-tacnih')!;
+    const ishod = el.querySelector('app-ishod-ekran')!;
     expect(ishod).not.toBeNull();
     expect(ishod.querySelector('[data-naslov]')?.textContent?.trim()).toBe('Delimično tačno');
     expect(ishod.querySelector('[data-stanje="propustena"]')?.textContent).toContain('Insert');
@@ -366,7 +366,7 @@ describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-vise
   it('režim "samo dugmad": spisak ima samo oblike i slova, bez teksta opcija', async () => {
     const p = vise({ opcije: [{ id: 21, tekst: null }, { id: 22, tekst: null }, { id: 23, tekst: null }] });
     const el = await napravi(javno('DUGMAD', p), { odgovorio: true, tacno: false, poeni: null, udeo: 0.5, izabrane: [22] });
-    const ishod = el.querySelector('app-ishod-vise-tacnih')!;
+    const ishod = el.querySelector('app-ishod-ekran')!;
     expect(ishod.querySelectorAll('li app-opcija-oblik').length).toBe(3);
     expect(ishod.querySelector('[data-stanje="propustena"]')).not.toBeNull();
     expect(ishod.querySelector('app-tekst-formule')).toBeNull();
@@ -376,9 +376,50 @@ describe('UzivoStudentPage: ishod pitanja sa više tačnih (lenji app-ishod-vise
     const tacan: TacanOdgovor = { opcije: [{ indeks: 1, tekst: 'Ctrl + Enter' }, { indeks: 2, tekst: 'Insert' }], tekst: null };
     const el = await napravi(javno('PITANJE', vise()), { odgovorio: true, tacno: false, poeni: null }, tacan);
     // isti lenji ekran ishoda, ali bez spiska po opciji
-    expect(el.querySelector('app-ishod-vise-tacnih [data-stanje]')).toBeNull();
-    expect(el.querySelectorAll('app-ishod-vise-tacnih .uz-st-tacna').length).toBe(2);
+    expect(el.querySelector('app-ishod-ekran [data-stanje]')).toBeNull();
+    expect(el.querySelectorAll('app-ishod-ekran .uz-st-tacna').length).toBe(2);
     expect(el.textContent).toContain('Netačno');
+  });
+});
+
+describe('UzivoStudentPage: ekran ishoda dok se chunk učitava', () => {
+  it('posle TACAN: "Učitavanje…" dok chunk ne stigne, pa ekran ishoda; greška učitavanja ima poruku', async () => {
+    const lazni = lazniStore();
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]),
+        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ kod: '123456' })) } },
+      ],
+      deferBlockBehavior: DeferBlockBehavior.Manual,
+    });
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    await TestBed.compileComponents();
+    const p = pitanje({ faza: 'ZATVORENO', tacneOpcije: [22] });
+    lazni.javno.set(javno('PITANJE', p));
+    lazni.pitanje.set(p);
+    lazni.ekran.set('tacan');
+    lazni.ishod.set({ odgovorio: true, tacno: true, poeni: null });
+    async function stranica() {
+      const fixture = TestBed.createComponent(UzivoStudentPage);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      // dva bloka: unapred dohvatanje (nikad se ne crta) i ekran ishoda; ovaj drugi je u `.uz-st-poruka`
+      const blokovi = await fixture.getDeferBlocks();
+      expect(blokovi.length).toBe(2);
+      return { fixture, poruka: () => el.querySelector('.uz-st-poruka')!, ishod: blokovi[1] };
+    }
+
+    const prva = await stranica();
+    expect(prva.poruka().textContent!.trim()).toBe('Učitavanje…');
+    expect(prva.poruka().querySelector('app-ishod-ekran')).toBeNull();
+    await prva.ishod.render(DeferBlockState.Complete);
+    expect(prva.poruka().querySelector('app-ishod-ekran p.uz-st-veliko')?.textContent?.trim()).toBe('Tačno!');
+    prva.fixture.destroy();
+
+    const druga = await stranica();
+    await druga.ishod.render(DeferBlockState.Error);
+    expect(druga.poruka().textContent!.trim()).toBe('Ishod nije učitan. Osveži stranicu.');
   });
 });
 

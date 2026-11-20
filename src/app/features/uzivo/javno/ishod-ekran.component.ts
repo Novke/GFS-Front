@@ -23,7 +23,7 @@ interface StavkaIshoda { id: number; indeks: number; tekst: string | null; stanj
  * {@link StudentStore} stranice (ubrizgan, bez ulaza). Uvozi samo module dozvoljene javnom delu.
  */
 @Component({
-  selector: 'app-ishod-vise-tacnih',
+  selector: 'app-ishod-ekran',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
   styles: `
@@ -81,7 +81,7 @@ interface StavkaIshoda { id: number; indeks: number; tekst: string | null; stanj
     }
   `,
 })
-export class IshodViseTacnihComponent {
+export class IshodEkranComponent {
   protected readonly store = inject(StudentStore);
   protected readonly poeni = grupisiCifre;
 

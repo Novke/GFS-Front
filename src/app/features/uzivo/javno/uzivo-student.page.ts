@@ -12,7 +12,7 @@ import { OpcijaOblikComponent } from '../ui/opcija-oblik';
 import { RangListaComponent } from '../ui/rang-lista.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
-import { IshodViseTacnihComponent } from './ishod-vise-tacnih.component';
+import { IshodEkranComponent } from './ishod-ekran.component';
 import { OdgovorUnosComponent, tekstOpcije } from './odgovor-unos.component';
 import { StudentStore } from './student.store';
 import { ZadatakEkranComponent } from './zadatak-ekran.component';
@@ -40,7 +40,8 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
  * Zadatak slajd: "Zadatak stiže…", pa `app-zadatak-ekran` (stanje runde i svoja varijanta u `app-zadatak-unos`) u
  * lenjom bloku (`@defer`): telefon vuče njegov chunk tek na Zadatak slajdu, kao `mathlive/ssr` tek uz formulu, pa ovde
  * ostaje samo ulaz u blok (budžet statičkog zatvorenja, `e2e/lenji-formule.spec.ts`). Isto za ekran posle "Tačno"
- * (`app-ishod-vise-tacnih`: naslov ishoda, kod više tačnih spisak opcija sa stanjem, inače tačan odgovor; mesto).
+ * (`app-ishod-ekran`: naslov ishoda, kod više tačnih spisak opcija sa stanjem, inače tačan odgovor; mesto); njegov chunk se
+ * učita unapred u mirovanju čim je student u izvođenju (`@defer (on idle)` koji ništa ne crta), pa telefoni ne vuku chunk tek na "Tačno".
  * Sa `?sa=cas` (student je došao sa `/nalog/cas`): posle kraja ili izbacivanja se za {@link POVRATAK_NA_CAS_MS} vraća na
  * čas (`replaceUrl`, završeno izvođenje ne ostaje u istoriji), gde čeka sledeću prezentaciju. Bodovano izvođenje bez
  * čekiranja (faza `cekiranje`) pokazuje samo poruku servera.
@@ -55,7 +56,7 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
   providers: [StudentStore],
   imports: [
     RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
-    ZadatakEkranComponent, IshodViseTacnihComponent,
+    ZadatakEkranComponent, IshodEkranComponent,
   ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
@@ -129,6 +130,9 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
         @if (s.greska(); as g) {
           <p class="uz-st-greska" role="alert">{{ g }}</p>
         }
+        <!-- chunk ekrana ishoda se učita u mirovanju posle ulaska, da ga ceo razred ne vuče tek na "Tačno"; ništa se ne crta.
+             "on idle" umesto "prefetch on idle"/"when": te instrukcije bi ušle u početni paket (e2e/lenji-editor.spec.ts) -->
+        @defer (on idle) { @if (false) { <app-ishod-ekran /> } }
         <div class="uz-st-telo" [class.uz-st-telo--unos]="s.ekran() === 'unos'">
           @if (rangVidljiv() && j?.rangLista; as rang) {
             <section class="uz-st-rang" aria-labelledby="uz-st-rang-naslov">
@@ -199,7 +203,13 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
               @case ('tacan') {
                 <!-- ceo ekran ishoda (naslov, spisak opcija ili tačan odgovor, mesto) je lenji chunk, kao zadatak -->
                 <div class="uz-st-poruka" role="status">
-                  @defer (on immediate) { <app-ishod-vise-tacnih /> } @error { <p class="uz-st-tekst" role="alert">Osveži stranicu.</p> }
+                  @defer (on immediate) {
+                    <app-ishod-ekran />
+                  } @placeholder {
+                    <p class="uz-st-tekst">Učitavanje…</p>
+                  } @error {
+                    <p class="uz-st-tekst" role="alert">Ishod nije učitan. Osveži stranicu.</p>
+                  }
                 </div>
               }
               @case ('kraj') {

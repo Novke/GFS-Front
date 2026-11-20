@@ -2,7 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
 import {
-  NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, nizoviCrteza, zabranjeniJavno,
+  NIZ_ISHODA_STUDENTA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, nizoviCrteza,
+  zabranjeniJavno,
 } from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
 import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
@@ -170,6 +171,17 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
       },
     };
     let snimak: unknown = { javno: otvoreno, licno: p0.licno };
+    // chunk ekrana ishoda: dohvaćen unapred (prefetch u mirovanju), pre "Tačno"
+    const ishodPreTacan: string[] = [];
+    let tacanPoslat = false;
+    page.on('response', r => {
+      const putanja = new URL(r.url()).pathname;
+      if (putanja.endsWith('.js')) {
+        void r.text().then(t => {
+          if (t.includes(NIZ_ISHODA_STUDENTA) && !tacanPoslat) ishodPreTacan.push(putanja);
+        }, () => undefined);
+      }
+    });
     const broker = await lazniBroker(
       page, 'api/public/ws',
       o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined),
@@ -179,13 +191,16 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     await expect(page.locator('[data-natpis-vise]')).toBeVisible();
     await expect(page.getByRole('group', { name: 'Odgovori' })).toBeVisible();
     await expect.poll(() => broker.pretplate).toContain('/user/queue/licno');
+    await expect.poll(() => ishodPreTacan.length, 'chunk ishoda dohvaćen pre "Tačno"').toBe(1);
+    await expect(page.locator('app-ishod-ekran')).toHaveCount(0);
 
     // TACAN: server šalje lično pa javno stanje
+    tacanPoslat = true;
     snimak = posleTacan;
     broker.posalji('/user/queue/licno', posleTacan.licno);
     broker.posalji(`/topic/izvodjenja/${IZVODJENJE}/javno`, posleTacan.javno);
     const proveri = async () => {
-      const ishod = page.locator('app-ishod-vise-tacnih');
+      const ishod = page.locator('app-ishod-ekran');
       await expect(ishod.locator('[data-naslov]')).toHaveText('Delimično tačno +425');
       await expect(ishod.locator('[data-opis]')).toHaveText('Pogodio si 1 od 2 tačna.');
       await expect(ishod.locator('li')).toHaveCount(4);

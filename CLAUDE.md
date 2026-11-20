@@ -1205,9 +1205,12 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
   (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision. Since `feature/delimicno-tacno` the whole screen after "Tačno" (`javno/ishod-vise-tacnih.component`: outcome
-  title, per-option list for VISE_TACNIH, otherwise the correct answer, place) is a lazy chunk like the task screen (own budget
-  5 942 B + 10 %), which brought the closure down to 120 623 B.
+  a new decision. Since `feature/delimicno-tacno` the post-"Tačno" outcome screen of **every** question type
+  (`javno/ishod-ekran.component`, `app-ishod-ekran`: outcome title, the VISE_TACNIH per-option list, otherwise the correct answer,
+  place; pure VISE_TACNIH rules in `javno/ishod-vise-tacnih.ts`) is a lazy chunk like the task screen, for the budget (own budget
+  5 942 B + 10 %; closure 121 495 -> 120 855 B, initial unchanged). Its `@defer` has a placeholder "Učitavanje…" and an error
+  text; a second `@defer (on idle) { @if (false) { … } }` right after joining loads the chunk ahead, so a classroom does not fetch
+  it at "Tačno" (`prefetch on idle` / `when` would add ~350 B of Angular instructions to the initial bundle).
 
 ### Rang tačnosti (leaderboard)
 
