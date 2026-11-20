@@ -5,12 +5,13 @@
  * Pravila koja gađaju h1/h2/p imaju bar (0,2,0), jer <body class="mat-typography"> ih stilizuje sa (0,1,1).
  */
 
+/* Ceo ekran ispod trake okruženja: `PublicLayout` sa `celaStrana` je kolona visoka najmanje 100dvh (ne 100dvh ovde, inače
+   traka STAGING gura unos ispod ivice ekrana). */
 .uz-st {
   box-sizing: border-box;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
   background: var(--surface);
   color: var(--ink);
   font-size: 1rem;

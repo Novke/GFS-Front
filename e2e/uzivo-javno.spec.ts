@@ -228,6 +228,39 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     expect(javnaMreza.odgovori401).toEqual([]);
   });
 
+  // unos (samo dugmad) staje u ekran bez vertikalnog skrola, i sa trakom "STAGING" iznad stranice (Novica, 2026-11-20:
+  // na stejdžingu su četiri kartice i "Pošalji" bile 100 % visine ekrana plus traka, pa se pojavljivao skrol)
+  for (const okruzenje of ['prod', 'staging']) {
+    test(`više tačnih, samo dugmad, 360 x 640, ${okruzenje}: unos staje bez vertikalnog skrola`, async ({ page, mock }) => {
+      await page.setViewportSize({ width: 360, height: 640 });
+      await page.route('**/assets/env.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: `{"env":"${okruzenje}"}` }));
+      mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+      const p0 = pocetno('Mina');
+      const pitanje = {
+        tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 45, brojOpcija: 4,
+        opcije: [{ id: 1, tekst: null }, { id: 2, tekst: null }, { id: 3, tekst: null }, { id: 4, tekst: null }],
+        tekst: null, slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+        tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+      };
+      const snimak = { javno: { ...p0.javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PITANJE', pitanje }, licno: p0.licno };
+      await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined));
+      await page.goto(`uzivo/${KOD}`);
+      const opcije = page.getByRole('group', { name: 'Odgovori' }).locator('.uz-st-opcija');
+      await expect(opcije).toHaveCount(4);
+      if (okruzenje === 'staging') await expect(page.getByText('STAGING — test podaci')).toBeVisible();
+      await opcije.nth(1).click();
+      const posalji = page.getByRole('button', { name: /^Pošalji/ });
+      await expect(posalji).toBeVisible();
+      const mere = await page.evaluate(() => ({
+        visina: window.innerHeight,
+        dokument: document.documentElement.scrollHeight,
+        dnoPosalji: document.querySelector('.uz-st-posalji')!.getBoundingClientRect().bottom,
+      }));
+      expect(mere.dokument, `dokument ${mere.dokument} px u ekranu od ${mere.visina} px`).toBeLessThanOrEqual(mere.visina);
+      expect(mere.dnoPosalji).toBeLessThanOrEqual(mere.visina);
+    });
+  }
+
   // "celo pitanje" (režim A) na 360 px: kućica je u redu dugmeta posle teksta, pa ni dugačak tekst opcije ne ide ispod nje
   test('više tačnih, celo pitanje, 360 px: kućica ne pokriva tekst opcije', async ({ page, mock }) => {
     await page.setViewportSize({ width: 360, height: 740 });

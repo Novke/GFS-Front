@@ -24,15 +24,18 @@ import { Okruzenje } from './okruzenje';
   `,
   styles: `
     :host { display: block; min-height: 100dvh; color: var(--ink); }
+    :host:has(> .cela-strana) { display: flex; flex-direction: column; }
     .javni-sadrzaj { max-width: 640px; margin: 0 auto; padding: 16px; }
-    .cela-strana { max-width: none; margin: 0; padding: 0; }
+    .cela-strana { flex: 1; display: flex; flex-direction: column; max-width: none; margin: 0; padding: 0; }
   `,
 })
 export class PublicLayout {
   protected readonly okruzenje = inject(Okruzenje);
   /**
    * Iz `data: { celaStrana: true }` rute layouta (withComponentInputBinding): sadržaj bez okvira (širina, razmak), za
-   * strane koje same crtaju ceo ekran (uživo). Bez tog podatka binding upisuje `undefined` (-> false).
+   * strane koje same crtaju ceo ekran (uživo). Bez tog podatka binding upisuje `undefined` (-> false). Tada je layout
+   * kolona: traka STAGING pa sadržaj koji zauzima samo ostatak ekrana (`.uz-st` ima `flex: 1`), pa unos uživo staje bez
+   * vertikalnog skrola i na stejdžingu.
    */
   readonly celaStrana = input(false, { transform: booleanAttribute });
 }
