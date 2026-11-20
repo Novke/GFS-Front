@@ -1272,7 +1272,9 @@ no imports, on the public allow-list). `NastavnickoStanje.fajlovi` and `JavnoSta
   `data-access/fajlovi-editor.store.ts`, API `data-access/fajlovi-prezentacije.api.ts`; the slide list shows a file mark and count. Files may change
   while the presentation runs (a file hung up mid-class shows at once).
 - **Projector, console, remote:** `ui/fajlovi-izvodjenja.component.ts` renders `stanje.fajlovi.link` (e.g. `gfs.trif.rs/f/1234`, host from the backend)
-  big at the bottom of the slide on the projector, and the link plus file names in the console and the remote. Nothing without `fajlovi`.
+  big in a bar **below** the slide on the projector (never over the slide footer with the join code and answer count: the scene host gets
+  `uz-scena--fajlovi`, the bar is 5.4 % of the scene width high and the projector narrows the scene so slide plus bar fit; e2e checks 1920 x 1080
+  and 1280 x 720), and the link plus file names in the console and the remote. Nothing without `fajlovi`.
 - **Public `/f` and `/f/:kod`** (`features/fajlovi/`, one lazy `loadChildren` entry in `app.routes.ts` because the initial bundle sits at the
   800 kB warning, `PublicLayout`): code field, then subject, topic and download links `api/public/fajlovi/<kod>/<id>`; polls every 20 s while the tab is
   visible; 404 "Kod ne važi…", 429 from the server. Calls only `api/public/fajlovi/*`. `features/fajlovi` is in `JAVNI_FEATURE`; `core/auth/istek-sesije`

@@ -83,4 +83,30 @@ nastavnik.describe('projektor: traka "Fajlovi za vežbu"', () => {
     await ocekujNastavnik(nova.locator('[data-fajlovi-link]')).toHaveText('gfs.trif.rs/f/1234');
     await ocekujNastavnik(nova.locator('app-fajlovi-traka')).toContainText('Fajlovi za vežbu:');
   });
+
+  // Traka je ispod slajda, ne preko podnožja (kod za ulazak, „Odgovora”): slajd i traka se ne preklapaju i oba staju u ekran.
+  for (const [w, h] of [[1920, 1080], [1280, 720]] as const) {
+    nastavnik(`traka ne prekriva slajd i staje u ${w} x ${h}`, async ({ page, mock }) => {
+      await page.setViewportSize({ width: w, height: h });
+      mock.izvodjenje.primeni('SLEDECI');
+      mock.izvodjenje.fajlovi = {
+        kod: '1234', link: 'gfs.trif.rs/f/1234',
+        fajlovi: [{ id: 5, naziv: 'Zadatak 1.docx', vrsta: 'DOCX', velicina: 15360 }],
+      };
+      await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/publika');
+      const traka = page.locator('app-fajlovi-traka');
+      await ocekujNastavnik(traka).toBeVisible();
+      const slajd = await page.locator('app-publika-scena .uz-scena-ulazni .uz-platno').first().boundingBox();
+      const t = await traka.boundingBox();
+      ocekujNastavnik(slajd && t).toBeTruthy();
+      ocekujNastavnik(t!.y).toBeGreaterThanOrEqual(slajd!.y + slajd!.height - 1);
+      ocekujNastavnik(t!.y + t!.height).toBeLessThanOrEqual(h + 1);
+      ocekujNastavnik(slajd!.x).toBeGreaterThanOrEqual(-1);
+      ocekujNastavnik(slajd!.x + slajd!.width).toBeLessThanOrEqual(w + 1);
+      // link je krupan: bar 3 % visine ekrana
+      const link = await page.locator('[data-fajlovi-link]').boundingBox();
+      ocekujNastavnik(link!.height).toBeGreaterThan(h * 0.03);
+    });
+  }
 });

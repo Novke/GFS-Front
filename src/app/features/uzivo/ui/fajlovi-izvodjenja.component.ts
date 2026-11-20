@@ -2,17 +2,23 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { FajloviSlajda, oznakaVrste, velicinaFajla } from '../../../shared/util/fajlovi';
 
 /**
- * Traka na projektoru (spec 2026-11-20, odeljak 6): „Fajlovi za vežbu:” + krupan link sa koda sa table. Veličine su u `cqw`
- * (domaćin je `container-type: inline-size`): slova oko 3,2 % visine scene 16:9, mono font iz tokena. Boje su fiksne
- * (tamna traka, svetla slova), pa je kontrast isti u svim temama prezentacije. Samo za prikaz: ne zove HTTP.
+ * Traka na projektoru (spec 2026-11-20, odeljak 6): „Fajlovi za vežbu:” + krupan link sa koda sa table. Stoji ISPOD slajda,
+ * ne preko njega: podnožje slajda (kod za ulazak, „Odgovora”, „Zatvoreno”), pločice i dno platna ostaju vidljivi; scena
+ * je zato za visinu trake viša (`uz-scena--fajlovi`, projektor je sužava da sve stane u ekran). Visina je stalna,
+ * {@link VISINA_TRAKE_CQW} % širine scene, a slova u `cqw` (domaćin je `container-type: inline-size`), mono font iz
+ * tokena. Boje su fiksne (tamna traka, svetla slova), pa je kontrast isti u svim temama. Samo za prikaz: ne zove HTTP.
  */
+/** Visina trake u % širine scene; ista vrednost je u `.ft` dole i u širini scene projektora (`publika-scena`). */
+export const VISINA_TRAKE_CQW = 5.4;
+
 @Component({
   selector: 'app-fajlovi-traka',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'uz-fajlovi-traka', role: 'status', '[attr.aria-label]': '"Fajlovi za vežbu: " + fajlovi().link' },
   styles: `
-    :host { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; container-type: inline-size; pointer-events: none; }
-    .ft { display: flex; align-items: baseline; justify-content: center; gap: 2cqw; padding: 0.7cqw 2cqw; background: var(--snack-bg); color: var(--snack-ink); }
+    :host { display: block; container-type: inline-size; }
+    .ft { box-sizing: border-box; height: 5.4cqw; display: flex; align-items: center; justify-content: center; gap: 2cqw;
+      padding: 0 2cqw; line-height: 1; white-space: nowrap; overflow: hidden; background: var(--snack-bg); color: var(--snack-ink); }
     .ft-natpis { font-size: 2.2cqw; font-weight: 600; }
     .ft-link { font-family: var(--font-mono); font-size: 3.6cqw; font-weight: 700; letter-spacing: 0.02em; }
   `,

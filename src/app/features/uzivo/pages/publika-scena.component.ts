@@ -85,12 +85,14 @@ interface Omotac {
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FajloviTrakaComponent, PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
-  host: { class: 'uz-scena rezim-dan uz-dan' },
+  host: { class: 'uz-scena rezim-dan uz-dan', '[class.uz-scena--fajlovi]': 'saFajlovima()' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
   // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
   // isto i rang tačnosti: budžet početnog zatvorenja u e2e/lenji-editor.spec.ts).
   styles: `
     .uz-scena-slajdovi { display: grid; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+    /* fajlovi za vežbu: traka je ispod slajda (5,4 % širine), pa je projektor za toliko sužava da slajd i traka staju u ekran */
+    :host(.uz-pub-scena.uz-scena--fajlovi) { width: min(100vw, calc(100dvh / (9 / 16 + 0.054))); }
     .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
     .uz-scena-ulazni { position: relative; z-index: 1; }
     /* rang tačnosti (L / Shift+L): cela širina, od vrha; slova postavlja komponenta, natpis u gornjem desnom uglu */
@@ -123,7 +125,7 @@ interface Omotac {
             </div>
           }
         </div>
-        <!-- fajlovi za vežbu: kod sa table pri dnu slajda (stari backend nema polje, pa se ništa ne prikazuje) -->
+        <!-- fajlovi za vežbu: link ispod slajda, ne preko podnožja (stari backend nema polje, pa se ništa ne prikazuje) -->
         @if (s.fajlovi; as fajlovi) { <app-fajlovi-traka [fajlovi]="fajlovi" /> }
       }
       @case ('KRAJ') {
@@ -290,6 +292,8 @@ export class PublikaScenaComponent {
   protected readonly imena = computed(() => this.stanje().ucesnici.map(u => u.ime));
   /** Ulazi trenutnog slajda; `kodTraka` je poseban, da ne bude nov objekat sa svakim snimkom. */
   protected readonly ulazi = computed(() => ulaziSlajda(this.stanje(), this.sat(), this.host()));
+  /** Traka sa linkom za fajlove je ispod slajda: scena je tada viša (projektor je sužava, vidi stilove). */
+  protected readonly saFajlovima = computed(() => this.stanje().prikaz === 'SLAJD' && !!this.stanje().fajlovi);
   protected readonly kodTraka = computed<KodTraka>(() => ({ host: this.host(), kod: this.stanje().izvodjenje.kod }));
 
   protected krajPrelaza(kljuc: number): void {
