@@ -24,6 +24,11 @@ const JAVNO_DOZVOLJENO = [
   'shared/util/wa-link',
   // Fajlovi uz prezentaciju (2026-11-20): tipovi i čiste funkcije (veličina, kod, relativni URL-ovi api/public/*), bez uvoza.
   'shared/util/fajlovi',
+  // Spisak fajlova (nalog i telefon uživo): `shared/ui/fajlovi-spisak.component` uvozi samo @angular/core, @angular/router
+  // (RouterLink), shared/util/fajlovi i `import type` iz shared/util/fajlovi-mejl. `shared/util/fajlovi-mejl` uvozi
+  // @angular/common/http (samo HttpErrorResponse, tip), @angular/core, rxjs i `import type` iz shared/util/fajlovi; bez HTTP poziva.
+  'shared/ui/fajlovi-spisak.component',
+  'shared/util/fajlovi-mejl',
 ];
 
 // Dodatak po javnom feature-u (važi samo za njega): moduli iz istog feature-a van javnog dela. Svaki je proveren sa

@@ -1,9 +1,10 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of, throwError } from 'rxjs';
 
 import { LOCAL_ERRORS } from '../../../core/api/api-error';
 import { API_URL } from '../../../core/api/api-url';
+import { FajloviPrezentacije, MejlFajlaOdgovor } from '../../../shared/util/fajlovi';
 import { VrednostPolja } from '../../uzivo/ui/polja-zadatka';
 import {
   MojZadatak, OcenaStudenta, PodesavanjaNaloga, PredmetStudenta, PregledPrezentacije, PrezentacijaStudenta, PrisustvoStudenta,
@@ -39,6 +40,18 @@ export class PortalApi {
 
   prezentacije(predmetId: number): Observable<PrezentacijaStudenta[]> {
     return this.http.get<PrezentacijaStudenta[]>(`${this.predmet(predmetId)}/prezentacije`, { context: this.lokalneGreske });
+  }
+
+  /** Fajlovi uz prezentacije predmeta; stari backend (404) = nema fajlova, odeljak se ne prikazuje. */
+  fajlovi(predmetId: number): Observable<FajloviPrezentacije[]> {
+    return this.http.get<FajloviPrezentacije[]>(`${this.predmet(predmetId)}/fajlovi`, { context: this.lokalneGreske }).pipe(
+      catchError((e: unknown) => (e instanceof HttpErrorResponse && e.status === 404 ? of([]) : throwError(() => e))),
+    );
+  }
+
+  /** „Pošalji mi na mejl”: 202 `{poslatoNa}`; 404, 409, 429 i 503 nose poruku u `reason`. */
+  posaljiFajlMejlom(fajlId: number): Observable<MejlFajlaOdgovor> {
+    return this.http.post<MejlFajlaOdgovor>(`${this.koren}/fajlovi/${fajlId}/mejl`, null, { context: this.lokalneGreske });
   }
 
   ocena(predmetId: number): Observable<OcenaStudenta> {
