@@ -3,7 +3,8 @@ import { grupisiCifre } from '../ui/format';
 import { OpcijaOblikComponent } from '../ui/opcija-oblik';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
 import { OZNAKE_STANJA, RED_STANJA, StanjeOpcije, naslovUdela, opisUdela, stanjaOpcija } from './ishod-vise-tacnih';
-import { IshodPitanja, StudentStore, naslovIshoda } from './student.store';
+import { naslovIshoda } from './naslov-ishoda';
+import { IshodPitanja, StudentStore } from './student.store';
 
 /** Klasa naslova po udelu: zeleno, ćilibar (`--warn`), crveno. */
 const KLASA_NASLOVA = { 'Tačno!': 'uz-st-ok', 'Delimično tačno': 'uz-st-pola', 'Netačno': 'uz-st-lose' } as const;

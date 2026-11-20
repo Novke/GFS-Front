@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { LicniZadatak } from '../data-access/uzivo.models';
 import { TajmerComponent } from '../ui/tajmer.component';
-import { StudentStore, naslovIshoda } from './student.store';
+import { naslovIshoda } from './naslov-ishoda';
+import { StudentStore } from './student.store';
 import { ZadatakUnosComponent } from './zadatak-unos.component';
 import { porukaUtisanja } from './utisanje';
 

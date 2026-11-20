@@ -36,6 +36,8 @@ const RAST_ZADATKA = 1_300;
  * Posle `feature/portal-pocetna` i natpisa više tačnih: 121 495 B. Ishod po opciji za pitanje sa više tačnih (2026-11-20)
  * ide u lenji chunk zajedno sa celim ekranom posle "Tačno" (naslov, tačan odgovor, mesto), pa je zatvorenje 120 623 B;
  * sa učitavanjem tog chunk-a unapred (`@defer (on idle)` koji ništa ne crta) 120 855 B.
+ * Posle spajanja sa fajlovima uz prezentaciju (2026-11-20): 121 706 B; `naslovIshoda` je prešao u `javno/naslov-ishoda.ts`
+ * (uvoze ga samo lenji ekrani ishoda i zadatka), pa je zatvorenje 121 481 B.
  */
 const REZERVA_2026_10_28 = 4_000;
 const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28;

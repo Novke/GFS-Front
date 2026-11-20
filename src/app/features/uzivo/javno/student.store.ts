@@ -10,7 +10,7 @@ import { STOMP_FABRIKA } from '../data-access/stomp';
 import {
   JavniZadatak, JavnoIzvodjenjeInfo, JavnoPitanje, JavnoStanje, LicnoStanje, OdgovorCmd, PocetnoStanje, UcesnikInfo,
 } from '../data-access/uzivo.models';
-import { decimalni, grupisiCifre } from '../ui/format';
+import { decimalni } from '../ui/format';
 import { JavnoApi } from './javno.api';
 import type { NacrtOdgovora } from './odgovor-unos.component';
 import type { NacrtZadatka } from './zadatak-unos.component';
@@ -176,18 +176,6 @@ export function tacanOdgovor(p: JavnoPitanje): TacanOdgovor | null {
  */
 export interface IshodPitanja {
   odgovorio: boolean; tacno: boolean | null; poeni: number | null; udeo?: number | null; izabrane?: number[] | null;
-}
-
-/**
- * Naslov ličnog ishoda posle `C` (i svog zadatka posle zatvaranja): "Tačno! +850", "Delimično tačno +425" (0 < udeo < 1),
- * "Netačno", "Nisi odgovorio". Bez `udeo` (zadatak, stari backend) odlučuje samo `tacno`.
- */
-export function naslovIshoda(ishod: IshodPitanja, takmicenje: boolean): string {
-  if (!ishod.odgovorio) return 'Nisi odgovorio';
-  if (ishod.tacno === null) return 'Odgovor primljen';
-  const u = ishod.udeo ?? +ishod.tacno;
-  if (!(u > 0)) return 'Netačno';
-  return (u < 1 ? 'Delimično tačno' : 'Tačno!') + (takmicenje && ishod.poeni ? ` +${grupisiCifre(ishod.poeni)}` : '');
 }
 
 const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : 0);

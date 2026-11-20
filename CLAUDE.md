@@ -1214,7 +1214,11 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   check box of the answer buttons (`.uz-st-opcija-kvacica`, mockup: empty translucent with a white border, selected white with ✓;
   in "celo pitanje" mode it sits in the button's row after the text, so it never covers it) lives in the `styles` of
   `javno/odgovor-unos.component`, not in the global `uzivo-javno.css`: that freed 243 B of the initial bundle (799 723 of 800 000 B)
-  and costs the student closure, now **121 460 of 121 518 B** (58 B left: the next growth of the phone page needs a lazy chunk).
+  and costs the student closure, then 121 460 of 121 518 B. After the merge with "fajlovi uz prezentaciju" (2026-11-20) the closure was
+  121 706 B (over): `naslovIshoda` moved from `student.store.ts` to `javno/naslov-ishoda.ts`, imported only by the lazy
+  `ishod-ekran` and `zadatak-ekran`, so the closure is now **121 481 of 121 518 B** (37 B left; initial 799 906 of 800 000 B). The
+  account's presentation review (`e2e/lenji-pregled.spec.ts`) got `REZERVA_2026_11_20_GZIP = 100` B: both features together are
+  34 161 B gzip against 34 062 (raw 96 819 B stays under its old limit); Novica's decision pending.
 
 ### Rang tačnosti (leaderboard)
 
