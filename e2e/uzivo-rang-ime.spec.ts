@@ -35,8 +35,8 @@ test('konzola, "Ovo pitanje" u Zadatak rundi: ime nije stisnuto i ne lomi se slo
 for (const n of [4, 12, 24, 30]) {
   test(`projektor, rang sa ${n} redova: ime je vidljivo celo`, async ({ page, mock }) => {
     const stavke = Array.from({ length: n }, (_, i) => ({
-      mesto: i + 1, ime: IMENA[i % IMENA.length].replace(/(\S+) (\S).*/, '$1 $2.'), tacnih: 5 - (i % 3), dugovanih: 6, procenat: 80 - i,
-      prosekMs: 4200 + i * 100, zvezdice: 9 - (i % 5),
+      mesto: i + 1, ime: IMENA[i % IMENA.length].replace(/(\S+) (\S).*/, '$1 $2.'), tacnih: i % 2 ? 12.67 : 5 - (i % 3), dugovanih: i % 2 ? 24 : 6, procenat: 80 - i,
+      prosekMs: 4200 + i * 100, zvezdice: i % 2 ? 12.67 : 9 - (i % 5),
     }));
     const snimak = { ...(mock.izvodjenje.stanje() as unknown as Record<string, unknown>), rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE', javniRangTacnosti: stavke };
     await lazniBroker(page, 'api/ws', o => (o === '/app/izvodjenja/7/nastavnik-pocetno' ? snimak : undefined));
@@ -52,6 +52,10 @@ for (const n of [4, 12, 24, 30]) {
       expect(mere.klijent, `red ${i + 1}`).toBeGreaterThan(60);
       expect(mere.scroll, `red ${i + 1}`).toBeLessThanOrEqual(mere.klijent);
     }
+    // brojevi do 5 znakova ("12,67", "11,33") staju u svoju ćeliju bez odsecanja
+    const brojevi = await page.locator('.uz-rt-red:not(.uz-rt-zaglavlje) .uz-rt-broj').evaluateAll(
+      es => es.filter(e => e.scrollWidth > e.clientWidth + 1).length);
+    expect(brojevi).toBe(0);
     // nijedan red ne štrči iz svoje kolone (poslednja kolona sa ★ ostaje unutra)
     const prelivanje = await page.locator('.uz-rt-kolona').evaluateAll(ks => ks.filter(k => k.scrollWidth > k.clientWidth + 1).length);
     expect(prelivanje).toBe(0);

@@ -9,12 +9,12 @@ const MAKS_DVE = 2;
 /** Visina koju lista sme da zauzme, preračunata u "cqw po redu": slova = RASPOLOZIVO / (redova + zaglavlje). */
 const RASPOLOZIVO = 19;
 /**
- * Širina koju lista sme da zauzme (cqw) i širina jednog reda u em: kolone sa brojevima (18,8 em), razmaci i uvlačenje
+ * Širina koju lista sme da zauzme (cqw) i širina jednog reda u em: kolone sa brojevima (21,6 em, tri su za do 5 znakova, npr. "12,67" u rangu predavanja), razmaci i uvlačenje
  * (5,6 em) i ime (najmanje 8 em, "Aleksandra P."). Bez ovoga dve kolone na većim slovima ostave imenu 0 px (vidi se samo
  * prvo slovo), jer su kolone sa brojevima fiksne.
  */
 const SIRINA = 91;
-const RED_EM = 32.4;
+const RED_EM = 35.2;
 /** Razmak između kolona u em (`gap` hosta). */
 const RAZMAK_EM = 1.6;
 
@@ -41,7 +41,7 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
   styles: `
     :host { display: flex !important; gap: 1.6em; width: 100%; }
     .uz-rt-kolona { flex: 1 1 0; min-width: 0; }
-    .uz-rang-red.uz-rt-red { grid-template-columns: 2em minmax(8em, 1fr) 2.4em 2.4em 4.4em 4.4em 3.2em; column-gap: .7em;
+    .uz-rang-red.uz-rt-red { grid-template-columns: 2em minmax(8em, 1fr) 3.6em 3.6em 4.4em 4.4em 3.6em; column-gap: .7em;
       padding: .3em .7em; }
     .uz-rt-zaglavlje { padding: 0 .7em .2em; background: none; color: var(--muted); font-size: .8em; font-weight: 600; }
     .uz-rt-broj { font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
