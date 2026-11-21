@@ -21,6 +21,8 @@ function zavrseno(id: number, predavanjeId: number, prezentacijaId = 5): Izvodje
 test.describe('prezentacije na predavanju', () => {
   test('predavanje u toku: izbor prezentacije pokreće izvođenje vezano za predavanje, konzola u novoj kartici, beleženje ostaje', async ({ page, mock }) => {
     await prazneKonzole(page);
+    // prezentacija 6 ima dva fajla: dijalog to piše uz broj slajdova i pitanja, kao server (`brojFajlova`)
+    mock.podaci.prezentacije.find(x => x.id === 6)!['brojFajlova'] = 2;
     await page.goto('predavanja/1');
     await expect(page.locator('app-studentska-plocica').first()).toBeVisible();
     // bez izvođenja odeljak se ne vidi
@@ -38,6 +40,9 @@ test.describe('prezentacije na predavanju', () => {
     await expect(dijalog.locator('[data-predlog] h3')).toContainText('Sledeće za');
     await expect(dijalog.locator('[data-predlog-stavka]')).toHaveCount(1);
     await expect(dijalog.locator('[data-predlog-stavka="6"]')).toBeVisible();
+    await expect(dijalog.locator('[data-predlog-stavka="6"] .meta').first()).toContainText('· 2 fajla');
+    await expect(dijalog.locator('li[data-prezentacija="6"] .meta').first()).toContainText('· 2 fajla');
+    await expect(dijalog.locator('li[data-prezentacija="5"] .meta').first()).not.toContainText('fajl');
     expect(mock.zahteviZa('prezentacije/izbor', 'GET')[0].query.get('grupaId')).toBe('1');
     await expect(dijalog.locator('[data-pretraga]')).toHaveCount(0);
 

@@ -9,7 +9,8 @@ import { VrstaPrezentacije } from './redosled-prezentacija';
 /**
  * Prezentacija predmeta kao stavka izbora (`GET prezentacije?predmetId`, `GET prezentacije/izbor`); `aktivnoIzvodjenjeId` =
  * izvođenje u toku, ako ga ima. `vezba` je redni broj vežbe (`null` = bez broja), `vrsta` se računa iz slajdova,
- * `brojZadataka` broji ZADATAK slajdove, `poslednjePustanje` je početak najnovijeg izvođenja bilo koje grupe.
+ * `brojZadataka` broji ZADATAK slajdove, `poslednjePustanje` je početak najnovijeg izvođenja bilo koje grupe, `brojFajlova`
+ * broji fajlove uz prezentaciju (uz celu i uz slajdove; stariji backend ga ne šalje).
  */
 export interface PrezentacijaZaIzbor {
   id: number;
@@ -23,6 +24,7 @@ export interface PrezentacijaZaIzbor {
   brojZadataka: number;
   kreirano: string;
   poslednjePustanje: string | null;
+  brojFajlova?: number;
 }
 
 /** Stavka izbora: prezentacija i kad ju je grupa iz upita poslednji put puštala (`null` = nije, ili upit bez grupe). */
