@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { JavnaRangTacnostiStavka } from '../data-access/uzivo.models';
+import { decimalni } from '../../../shared/util/broj';
 import { nivoTacnosti, prikazVremena } from '../../../core/api/rang.api';
 
 /** Najveća veličina slova reda (cqw) u jednoj i u dve kolone; dve kolone su uže, pa manje. */
@@ -8,12 +9,12 @@ const MAKS_DVE = 2;
 /** Visina koju lista sme da zauzme, preračunata u "cqw po redu": slova = RASPOLOZIVO / (redova + zaglavlje). */
 const RASPOLOZIVO = 19;
 /**
- * Širina koju lista sme da zauzme (cqw) i širina jednog reda u em: kolone sa brojevima (18,8 em), razmaci i uvlačenje
+ * Širina koju lista sme da zauzme (cqw) i širina jednog reda u em: kolone sa brojevima (21,6 em, tri su za do 5 znakova, npr. "12,67" u rangu predavanja), razmaci i uvlačenje
  * (5,6 em) i ime (najmanje 8 em, "Aleksandra P."). Bez ovoga dve kolone na većim slovima ostave imenu 0 px (vidi se samo
  * prvo slovo), jer su kolone sa brojevima fiksne.
  */
 const SIRINA = 91;
-const RED_EM = 32.4;
+const RED_EM = 35.2;
 /** Razmak između kolona u em (`gap` hosta). */
 const RAZMAK_EM = 1.6;
 
@@ -40,7 +41,7 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
   styles: `
     :host { display: flex !important; gap: 1.6em; width: 100%; }
     .uz-rt-kolona { flex: 1 1 0; min-width: 0; }
-    .uz-rang-red.uz-rt-red { grid-template-columns: 2em minmax(8em, 1fr) 2.4em 2.4em 4.4em 4.4em 3.2em; column-gap: .7em;
+    .uz-rang-red.uz-rt-red { grid-template-columns: 2em minmax(8em, 1fr) 3.6em 3.6em 4.4em 4.4em 3.6em; column-gap: .7em;
       padding: .3em .7em; }
     .uz-rt-zaglavlje { padding: 0 .7em .2em; background: none; color: var(--muted); font-size: .8em; font-weight: 600; }
     .uz-rt-broj { font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
@@ -72,11 +73,11 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
               <li class="uz-rang-red uz-rt-red">
                 <span class="uz-rang-mesto">{{ s.mesto }}.</span>
                 <span class="uz-rang-ime">{{ s.ime }}</span>
-                <span class="uz-rt-broj uz-rt-tacnih">{{ s.tacnih }}<span class="uz-sr"> tačnih</span></span>
-                <span class="uz-rt-broj uz-rt-netacnih">{{ s.dugovanih - s.tacnih }}<span class="uz-sr"> netačnih</span></span>
+                <span class="uz-rt-broj uz-rt-tacnih">{{ decimalni(s.tacnih) }}<span class="uz-sr"> tačnih</span></span>
+                <span class="uz-rt-broj uz-rt-netacnih">{{ decimalni(netacnih(s)) }}<span class="uz-sr"> netačnih</span></span>
                 <span class="uz-rt-broj"><span class="uz-rt-pilula" [attr.data-nivo]="nivo(s.procenat)">{{ s.procenat ?? 0 }}%</span></span>
                 <span class="uz-rt-broj uz-rt-vreme">{{ vreme(s.prosekMs) }}</span>
-                <span class="uz-rt-broj uz-rt-zvezde">{{ s.zvezdice }}<span class="uz-sr"> zvezdica</span></span>
+                <span class="uz-rt-broj uz-rt-zvezde">{{ decimalni(s.zvezdice) }}<span class="uz-sr"> zvezdica</span></span>
               </li>
             }
           </ol>
@@ -89,7 +90,12 @@ export function velicinaSlova(redova: number, kolona: 1 | 2): number {
 })
 export class RangTacnostiProjektorComponent {
   readonly stavke = input<readonly JavnaRangTacnostiStavka[]>([]);
+  protected readonly decimalni = decimalni;
   protected readonly vreme = prikazVremena;
+  /** Netačnih = dugovanih - tačnih, na dve decimale (tačnih je decimalno) i nikad ispod nule ni -0. */
+  protected netacnih(s: JavnaRangTacnostiStavka): number {
+    return Math.max(0, Math.round((s.dugovanih - s.tacnih) * 100) / 100) + 0;
+  }
   protected readonly nivo = nivoTacnosti;
 
   /** Jedna ili dve kolone (šta daje veća slova) i veličina slova u cqw. */

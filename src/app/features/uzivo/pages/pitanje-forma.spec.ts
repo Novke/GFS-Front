@@ -194,6 +194,17 @@ describe('PitanjeFormaComponent: uputstvo i upozorenje za formule', () => {
     vi.useRealTimers();
   });
 
+  it('JEDAN_TACAN nema napomenu o natpisu "više tačnih"', () => {
+    expect(napravi(pitanje('JEDAN_TACAN', { opcije: [o('a', true), o('b')] })).el.querySelector('[data-napomena-vise]')).toBeNull();
+  });
+
+  it('VISE_TACNIH: napomena o natpisu za studente', () => {
+    const opcije = [o('a', true), o('b')];
+    const { el } = napravi(pitanje('VISE_TACNIH', { opcije }));
+    expect(el.querySelector('[data-napomena-vise]')!.textContent!.trim())
+      .toBe('Studenti vide „Može biti više tačnih“; sme da bude i samo jedan tačan.');
+  });
+
   it('ispod teksta pitanja je uputstvo za formule (mat-hint, povezan sa poljem)', () => {
     const { el } = napravi(pitanje('KRATAK_TEKST'));
     const hint = el.querySelector('mat-hint')!;

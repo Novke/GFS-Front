@@ -199,6 +199,14 @@ describe('tacnihTekst i gustinaCipova', () => {
     expect(tacnihTekst(brojRez([], 0))).toBeNull();
   });
 
+  it('sa delimično tačnim: "Tačno 2 · ◐ delimično 7 od 9 · 61 %" (procenat iz zbira udela, bez njega iz tačnih)', () => {
+    const r = { ...brojRez([[1, 9, true]], 2), delimicnih: 7, zbirUdela: 5.5 };
+    expect(tacnihTekst(r)).toBe('Tačno 2 · ◐ delimično 7 od 9 · 61 %');
+    expect(tacnihTekst({ ...r, zbirUdela: null })).toBe('Tačno 2 · ◐ delimično 7 od 9 · 22 %');
+    expect(tacnihTekst({ ...r, delimicnih: 0, zbirUdela: null })).toBe('Tačno 2 od 9 · 22 %');
+    expect(tacnihTekst({ ...r, delimicnih: null, zbirUdela: null })).toBe('Tačno 2 od 9 · 22 %');
+  });
+
   it('gustina po broju čipova', () => {
     expect([1, 4, 5, 12, 13, 20, 21, MAKS_CIPOVA + 1].map(gustinaCipova))
       .toEqual(['malo', 'malo', 'srednje', 'srednje', 'mnogo', 'mnogo', 'vrlo', 'vrlo']);
@@ -216,6 +224,17 @@ describe('RezultatPrikazComponent: čipovi i tačnih', () => {
     return fixture.nativeElement as HTMLElement;
   }
   const tekst = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  it('delimično tačno: red "Tačno 2 · ◐ delimično 7 od 9 · 61 %" vidljiv ceo, a ◐ je aria-hidden', async () => {
+    const el = await prikazi({ ...brojRez([[1, 9, true]], 2), delimicnih: 7, zbirUdela: 5.5 }, BEZ_TACNOG);
+    const red = el.querySelector('.uz-rez-tacnih')!;
+    expect(tekst(red)).toBe('✓Tačno 2 · ◐ delimično 7 od 9 · 61 %');
+    const glif = [...red.querySelectorAll('[aria-hidden="true"]')].find(e => e.textContent === '◐');
+    expect(glif).toBeDefined();
+    // bez skrivenih delova čitač ekrana dobija samo reči
+    const vidljivo = [...red.childNodes].filter(n => !(n instanceof Element && n.getAttribute('aria-hidden') === 'true')).map(n => n.textContent).join('');
+    expect(vidljivo).not.toContain('◐');
+  });
 
   it('broj: čipovi umesto medijane, broj u zagradi tek kad je više od jednog', async () => {
     const el = await prikazi(brojRez([[199, 2, null], [198, 1, null]], null), BEZ_TACNOG);

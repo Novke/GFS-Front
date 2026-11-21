@@ -1,7 +1,9 @@
+import AxeBuilder from '@axe-core/playwright';
 import { devices, type Page } from '@playwright/test';
 import { expect, test } from './javna-mreza';
 import {
-  NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, nizoviCrteza, zabranjeniJavno,
+  NIZ_ISHODA_STUDENTA, NIZ_MATHLIVE, NIZ_PROSEMIRROR, NIZOVI_EDITORA, NIZOVI_ZABRANJENI_JAVNO, nizoviCrteza,
+  zabranjeniJavno,
 } from './nizovi-editora';
 import { lazniBroker } from './lazni-stomp';
 import { IZVORI_TEKSTA, OPCIJE_SA_FORMULOM, SPREMNIH_FORMULA, TEKST_SA_FORMULOM } from './mock-izvodjenje';
@@ -147,6 +149,147 @@ test.describe('javni uživo (telefon studenta, bez basic-auth-a)', () => {
     const procitano = await Promise.all(tela);
     expect(procitano.some(x => /\/main-[^/]+\.js$/.test(x.putanja)), 'provera je pročitala glavni bundle').toBe(true);
     expect(procitano.filter(x => x.nizovi.length).map(x => `${x.putanja}: ${x.nizovi.join(', ')}`)).toEqual([]);
+  });
+
+  // delimično tačno (V27): posle "Tačno" telefon iz snimka servera (`LicniOdgovor.izabrane`, `udeo`) crta spisak opcija sa
+  // stanjem; u režimu "samo dugmad" bez teksta opcija. Lenji chunk ekrana ishoda je heširan fajl, dakle javna putanja.
+  test('više tačnih posle "Tačno": "Delimično tačno +425", spisak po opciji, i posle osvežavanja; axe (dan)', async ({ page, mock, javnaMreza }) => {
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const p0 = pocetno('Mina');
+    const pitanje = {
+      tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 43, brojOpcija: 4,
+      opcije: [{ id: 1, tekst: null }, { id: 2, tekst: null }, { id: 3, tekst: null }, { id: 4, tekst: null }],
+      tekst: null, slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+      tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+    };
+    const otvoreno = { ...p0.javno, verzija: 2, takmicenje: true, prikaz: 'SLAJD', slajdTip: 'PITANJE', pitanje };
+    const posleTacan = {
+      javno: { ...otvoreno, verzija: 3, pitanje: { ...pitanje, faza: 'ZATVORENO', tacneOpcije: [2, 4] } },
+      licno: {
+        ...p0.licno, verzija: 3, poeni: 425, mesto: 1, tacnih: 0.5, dugovanih: 1,
+        odgovor: { rundaId: 43, primljen: true, tacno: false, poeni: 425, izabrane: [2], udeo: 0.5 },
+      },
+    };
+    let snimak: unknown = { javno: otvoreno, licno: p0.licno };
+    // chunk ekrana ishoda: dohvaćen unapred (prefetch u mirovanju), pre "Tačno"
+    const ishodPreTacan: string[] = [];
+    let tacanPoslat = false;
+    page.on('response', r => {
+      const putanja = new URL(r.url()).pathname;
+      if (putanja.endsWith('.js')) {
+        void r.text().then(t => {
+          if (t.includes(NIZ_ISHODA_STUDENTA) && !tacanPoslat) ishodPreTacan.push(putanja);
+        }, () => undefined);
+      }
+    });
+    const broker = await lazniBroker(
+      page, 'api/public/ws',
+      o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined),
+      url => javnaMreza.ws.push(new URL(url).pathname),
+    );
+    await page.goto(`uzivo/${KOD}`);
+    await expect(page.locator('[data-natpis-vise]')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Odgovori' })).toBeVisible();
+    await expect.poll(() => broker.pretplate).toContain('/user/queue/licno');
+    await expect.poll(() => ishodPreTacan.length, 'chunk ishoda dohvaćen pre "Tačno"').toBe(1);
+    await expect(page.locator('app-ishod-ekran')).toHaveCount(0);
+
+    // TACAN: server šalje lično pa javno stanje
+    tacanPoslat = true;
+    snimak = posleTacan;
+    broker.posalji('/user/queue/licno', posleTacan.licno);
+    broker.posalji(`/topic/izvodjenja/${IZVODJENJE}/javno`, posleTacan.javno);
+    const proveri = async () => {
+      const ishod = page.locator('app-ishod-ekran');
+      await expect(ishod.locator('[data-naslov]')).toHaveText('Delimično tačno +425');
+      await expect(ishod.locator('[data-opis]')).toHaveText('Pogodio si 1 od 2 tačna.');
+      await expect(ishod.locator('li')).toHaveCount(4);
+      expect(await ishod.locator('li').evaluateAll(l => l.map(x => x.getAttribute('data-stanje'))))
+        .toEqual(['pogodjena', 'propustena', 'ostala', 'ostala']);
+      await expect(ishod.locator('[data-stanje="pogodjena"]')).toContainText('✓ Tvoj izbor, tačno');
+      await expect(ishod.locator('[data-stanje="propustena"]')).toContainText('○ I ovo je tačno, nisi zaokružio');
+      // samo dugmad: oblik i slovo, bez teksta opcija
+      await expect(ishod.locator('[data-stanje="propustena"] app-opcija-oblik')).toHaveAttribute('aria-label', 'D, zeleni kvadrat');
+      await expect(ishod.locator('app-tekst-formule')).toHaveCount(0);
+      await expect(page.locator('[data-tacnost]')).toHaveText('425 poena · Tačno 0,5 od 1');
+    };
+    await proveri();
+
+    const axe = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze())
+      .violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
+      .map(v => ({ pravilo: v.id, elementi: v.nodes.map(n => n.target.join(' ')).slice(0, 5) }));
+    expect(axe, 'axe: ishod više tačnih (dan)').toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    // osvežavanje posle "Tačno": isti spisak iz početnog snimka servera, ništa iz lokalne memorije
+    await page.reload();
+    await proveri();
+    expect(javnaMreza.api.filter(z => !z.startsWith('GET /api/public/uzivo/')), 'samo javni GET-ovi').toEqual([]);
+    expect(javnaMreza.odgovori401).toEqual([]);
+  });
+
+  // unos (samo dugmad) staje u ekran bez vertikalnog skrola, i sa trakom "STAGING" iznad stranice (Novica, 2026-11-20:
+  // na stejdžingu su četiri kartice i "Pošalji" bile 100 % visine ekrana plus traka, pa se pojavljivao skrol)
+  for (const okruzenje of ['prod', 'staging']) {
+    test(`više tačnih, samo dugmad, 360 x 640, ${okruzenje}: unos staje bez vertikalnog skrola`, async ({ page, mock }) => {
+      await page.setViewportSize({ width: 360, height: 640 });
+      await page.route('**/assets/env.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: `{"env":"${okruzenje}"}` }));
+      mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+      const p0 = pocetno('Mina');
+      const pitanje = {
+        tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 45, brojOpcija: 4,
+        opcije: [{ id: 1, tekst: null }, { id: 2, tekst: null }, { id: 3, tekst: null }, { id: 4, tekst: null }],
+        tekst: null, slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null, preostaloMs: null,
+        tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+      };
+      const snimak = { javno: { ...p0.javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PITANJE', pitanje }, licno: p0.licno };
+      await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined));
+      await page.goto(`uzivo/${KOD}`);
+      const opcije = page.getByRole('group', { name: 'Odgovori' }).locator('.uz-st-opcija');
+      await expect(opcije).toHaveCount(4);
+      if (okruzenje === 'staging') await expect(page.getByText('STAGING — test podaci')).toBeVisible();
+      await opcije.nth(1).click();
+      const posalji = page.getByRole('button', { name: /^Pošalji/ });
+      await expect(posalji).toBeVisible();
+      const mere = await page.evaluate(() => ({
+        visina: window.innerHeight,
+        dokument: document.documentElement.scrollHeight,
+        dnoPosalji: document.querySelector('.uz-st-posalji')!.getBoundingClientRect().bottom,
+      }));
+      expect(mere.dokument, `dokument ${mere.dokument} px u ekranu od ${mere.visina} px`).toBeLessThanOrEqual(mere.visina);
+      expect(mere.dnoPosalji).toBeLessThanOrEqual(mere.visina);
+    });
+  }
+
+  // "celo pitanje" (režim A) na 360 px: kućica je u redu dugmeta posle teksta, pa ni dugačak tekst opcije ne ide ispod nje
+  test('više tačnih, celo pitanje, 360 px: kućica ne pokriva tekst opcije', async ({ page, mock }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
+    const p0 = pocetno('Mina');
+    const dugacak = 'Sila kojom Zemlja privlači telo mase jednog kilograma na nivou mora';
+    const pitanje = {
+      tip: 'VISE_TACNIH', faza: 'OTVORENO', rundaId: 44, brojOpcija: 3,
+      opcije: [{ id: 1, tekst: dugacak }, { id: 2, tekst: 'Njutn' }, { id: 3, tekst: 'Kratka opcija jednog reda' }],
+      tekst: 'Šta je tačno?', slikaId: null, jedinica: null, skalaMinOznaka: null, skalaMaxOznaka: null, rokMs: null,
+      preostaloMs: null, tacneOpcije: null, tacanBroj: null, prihvatljiviOdgovori: null,
+    };
+    const snimak = { javno: { ...p0.javno, verzija: 2, prikaz: 'SLAJD', slajdTip: 'PITANJE', telefonPrikaz: 'PITANJE', pitanje }, licno: p0.licno };
+    await lazniBroker(page, 'api/public/ws', o => (o === `/app/izvodjenja/${IZVODJENJE}/pocetno` ? snimak : undefined));
+    await page.goto(`uzivo/${KOD}`);
+    const opcije = page.getByRole('group', { name: 'Odgovori' }).locator('.uz-st-opcija');
+    await expect(opcije).toHaveCount(3);
+    await opcije.nth(2).click();
+    await expect(opcije.nth(2).locator('.uz-st-opcija-kvacica')).toHaveText('✓');
+    // za svaku opciju: desna ivica svakog reda teksta levo od kućice (Range daje pravougaonik svakog reda)
+    const preklopi = await opcije.evaluateAll(dugmad => dugmad.map(d => {
+      const kucica = d.querySelector('.uz-st-opcija-kvacica')!.getBoundingClientRect();
+      const opseg = document.createRange();
+      opseg.selectNodeContents(d.querySelector('.uz-st-opcija-tekst')!);
+      const redovi = [...opseg.getClientRects()].filter(r => r.width > 0);
+      return redovi.length > 0 && redovi.every(r => r.right <= kucica.left + 0.5) ? 'ok' : `preklop: ${d.textContent}`;
+    }));
+    expect(preklopi).toEqual(['ok', 'ok', 'ok']);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   });
 });
 

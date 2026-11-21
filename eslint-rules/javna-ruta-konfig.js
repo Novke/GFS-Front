@@ -41,7 +41,7 @@ const DOZVOLJENO_PO_FEATURE = {
     'features/uzivo/data-access/stomp', // RxStomp na 'api/ws' | 'api/public/ws' (javno koristi samo api/public/ws)
     'features/uzivo/data-access/sat', // čista klasa, bez uvoza
     'features/uzivo/data-access/razlog-greske', // samo HttpErrorResponse (tip), bez HTTP poziva
-    'features/uzivo/ui/format', // čiste funkcije, bez uvoza
+    'features/uzivo/ui/format', // čiste funkcije; jedini uvoz je ponovni izvoz iz shared/util/broj (bez uvoza)
     'features/uzivo/ui/markdown', // paket marked i ui/tekst-formule (markdownSaFormulama; tekst-formule ima samo `import type` iz marked)
     'features/uzivo/ui/opcija-oblik', // komponenta, samo @angular/core
     'features/uzivo/ui/rang-lista.component', // uvozi samo uzivo.models i ui/format (oba gore)
@@ -80,7 +80,8 @@ const DOZVOLJENO_PO_FEATURE = {
     // (slike samo `api/public/mediji/*` kroz `medijUrl`), ne uvozi nastavnički API, store, `pages/` ni `core/state`.
     // - vežbanje (strana `vezbanje`, `ui/vezbanje-unos`): ista polja kao na času. `ui/polja-zadatka` je gore (uzivo/javno);
     //   `ui/tekst-formule.component` i `ui/tekst-formule` su isti moduli kao za telefon na času (formule $...$, lenji
-    //   `mathlive/ssr` samo kroz `ui/formula-ucitavanje`); `ui/format` su čiste funkcije bez uvoza.
+    //   `mathlive/ssr` samo kroz `ui/formula-ucitavanje`); `ui/format` su čiste funkcije, jedini uvoz je ponovni izvoz
+    //   iz `shared/util/broj` (bez uvoza).
     'features/uzivo/ui/polja-zadatka',
     'features/uzivo/ui/tekst-formule.component',
     'features/uzivo/ui/tekst-formule',

@@ -39,6 +39,13 @@ describe('RangTacnostiTabela', () => {
     expect([...el.querySelectorAll('.pilula')].map(p => p.getAttribute('data-nivo'))).toEqual(['2', '4', '1']);
   });
 
+  it('decimale (delimično tačno): ★1,5 i 1,5/2 sa zarezom; celi brojevi kao do sada', () => {
+    const el = napravi([{ ...red(1, 'Ana', 75, 9000, 1.5), tacnih: 1.5, dugovanih: 2 }, red(2, 'Bojan', 50, 3000, 1)])
+      .nativeElement as HTMLElement;
+    expect([...el.querySelectorAll('tbody .zvezdice')].map(td => td.textContent!.replace(/\s+/g, '').trim())).toEqual(['★1,5', '★1']);
+    expect([...el.querySelectorAll('tbody .razlomak')].map(td => td.textContent!.trim())).toEqual(['1,5/2', '1/2']);
+  });
+
   it('klik na ✓ sortira po tačnosti opadajuće, ponovni klik rastuće; ⏱ najbrži prvi; mesto ostaje, red bez mesta na dnu', () => {
     const f = napravi(stavke);
     const el = f.nativeElement as HTMLElement;

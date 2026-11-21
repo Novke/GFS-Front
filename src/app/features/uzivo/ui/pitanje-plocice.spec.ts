@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { pitanjeSlajd } from '../data-access/izvodjenje-podaci.testing';
 import { PitanjeDetails } from '../data-access/uzivo.models';
-import { PitanjePlociceComponent } from './pitanje-plocice.component';
+import { NATPIS_VISE_TACNIH_TABLA, PitanjePlociceComponent } from './pitanje-plocice.component';
 
 async function prikazi(pitanje: PitanjeDetails, ulazi: Record<string, unknown> = {}) {
   const fixture = TestBed.createComponent(PitanjePlociceComponent);
@@ -78,5 +78,18 @@ describe('PitanjePlociceComponent: sažeti oblik (velika slika)', () => {
     const el = await prikazi({ ...osnova, tip: 'KRATAK_TEKST', opcije: [] });
     expect(el.querySelector('.uz-unos')).not.toBeNull();
     expect(el.querySelector('.uz-sazeto-red')).toBeNull();
+  });
+});
+
+describe('PitanjePlociceComponent: natpis za više tačnih', () => {
+  const opc = [{ id: 1, rb: 1, tekst: 'a', tacna: true }, { id: 2, rb: 2, tekst: 'b', tacna: false }];
+  it('samo VISE_TACNIH ima natpis', async () => {
+    expect(NATPIS_VISE_TACNIH_TABLA).toBe('Može biti više tačnih');
+    const el = await prikazi(pitanjeSlajd('VISE_TACNIH', { opcije: opc }).pitanje!);
+    expect(el.querySelector('[data-natpis-vise]')!.textContent!.trim()).toBe(NATPIS_VISE_TACNIH_TABLA);
+    for (const tip of ['JEDAN_TACAN', 'ANKETA'] as const) {
+      const e = await prikazi(pitanjeSlajd(tip, { opcije: opc }).pitanje!);
+      expect(e.querySelector('[data-natpis-vise]')).toBeNull();
+    }
   });
 });

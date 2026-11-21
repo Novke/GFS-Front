@@ -102,7 +102,7 @@ function fajloviPredmeta(predmet: number): FajloviPrezentacije[] {
     : [];
 }
 
-function pregled(): PregledPrezentacije {
+function pregled(delimicno = false): PregledPrezentacije {
   return {
     id: PREZENTACIJA, naziv: 'Konverzije – vežbe', tema: 'NACRT', predmetId: PREDMET, fajlovi: FAJLOVI_PREZENTACIJE, slajdovi: [
       {
@@ -117,7 +117,7 @@ function pregled(): PregledPrezentacije {
           brojTacno: null, brojOdstupanje: null, odstupanjeTip: null, jedinica: null, tekstPrikaz: null, prihvatljiviOdgovori: null,
           skalaMinOznaka: null, skalaMaxOznaka: null,
         },
-        mojOdgovor: { tekst: '8', tacno: false },
+        mojOdgovor: delimicno ? { tekst: '8, 16', tacno: false, udeo: 0.5 } : { tekst: '8', tacno: false },
         tacanPoznat: true,
       },
       {
@@ -168,6 +168,8 @@ export class MockPortal {
   readonly zvono: Zvono = { novo: true, stavke: ZVONO };
   /** Push na ovom uređaju: server zna pretplatu samo posle `PUT push`. */
   pushPretplacen = false;
+  /** Pregled prezentacije: moj odgovor na pitanje je delimično tačan (udeo 0,5, VISE_TACNIH). */
+  delimicnoTacno = false;
   /** Fajlovi koje je student tražio mejlom (id-jevi, redom). */
   readonly poslatiFajlovi: number[] = [];
   /** `reason` za 429 na „Pošalji mi na mejl”; `null` = uspeh (202 sa maskom). */
@@ -210,7 +212,7 @@ export class MockPortal {
       this.poslatiFajlovi.push(id);
       return { status: 202, telo: { poslatoNa: 'n•••@gmail.com' } };
     }));
-    get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled()) : NEMA())));
+    get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled(this.delimicnoTacno)) : NEMA())));
 
     get('public/nalog/podesavanja', student(() => ok({ ...this.podesavanja })));
     put('public/nalog/podesavanja', student(z => {

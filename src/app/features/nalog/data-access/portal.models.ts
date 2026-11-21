@@ -120,6 +120,8 @@ export interface ZadatakPregleda {
 export interface OdgovorPregleda {
   tekst: string | null;
   tacno: boolean | null;
+  /** Udeo tačnog 0-1 (VISE_TACNIH); stari backend ga nema. */
+  udeo?: number | null;
 }
 
 /**

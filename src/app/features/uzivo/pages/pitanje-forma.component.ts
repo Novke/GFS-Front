@@ -290,6 +290,9 @@ let sledeciId = 0;
           @if (!tn) {
             <p class="uz-ed-napomena">Formule važe i u odgovorima: $x^2$.</p>
           }
+          @if (tip === 'VISE_TACNIH') {
+            <p class="uz-ed-napomena" data-napomena-vise>Studenti vide „Može biti više tačnih“; sme da bude i samo jedan tačan.</p>
+          }
           @for (o of f.controls.opcije.controls; track o; let i = $index, prva = $first, poslednja = $last) {
             <div class="uz-ed-opcija">
               <app-opcija-oblik [indeks]="i" [velicina]="34" />

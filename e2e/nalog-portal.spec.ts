@@ -132,6 +132,18 @@ test.describe('nalog studenta: tabovi, predmet, vežbanje, pregled (telefon)', (
     ocekuj(skripte.saEditorom).toEqual([]);
   });
 
+  for (const rezim of ['dan', 'noć'] as const) {
+    test(`pregled: delimično tačan odgovor (◐ Delimično tačno 0,5), axe ${rezim}`, async ({ page, mock }) => {
+      mock.studentPrijavljen = true;
+      mock.portal.delimicnoTacno = true;
+      await page.emulateMedia({ colorScheme: rezim === 'noć' ? 'dark' : 'light' });
+      await page.goto(`nalog/prezentacija/${PREZENTACIJA}`);
+      await ocekuj(page.locator('[data-moj-odgovor]')).toContainText('Delimično tačno 0,5');
+      await ocekuj(page.locator('[data-moj-odgovor]')).not.toContainText('netačno');
+      await bezOzbiljnihKrsenja(page);
+    });
+  }
+
   test('pregled održane prezentacije: slajdovi, moj odgovor i tačan na dodir, Zadatak sa "Vežbaj"; nepoznata je 404', async ({ page, mock, javnaMreza }) => {
     mock.studentPrijavljen = true;
     await page.goto(`nalog/prezentacija/${PREZENTACIJA}`);

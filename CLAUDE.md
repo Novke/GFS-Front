@@ -391,9 +391,13 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   (`POVRATAK_NA_CAS_MS`, text "Vraćam te na čas…", `replaceUrl`). The header has **"Izađi"** (`[data-izadji]`): with `?sa=cas` to
   `nalog/cas` (`replaceUrl`), a signed-in student (`prijavljenStudent`) to `nalog/pocetna`, a guest to the code entry `uzivo`; leaving
   a running run records the exit marker above. Under the name the header shows the participant's own accuracy (`[data-tacnost]`,
-  `tacnostUcesnika`: "Tačno x od y", plus "N poena · " in takmičenje) and the "Gledaj u tablu" screen repeats it ("Do sada: …",
+  `tacnostUcesnika`: "Tačno x od y", x a sum of shares since V27 ("Tačno 3,5 od 5"), plus "N poena · " in takmičenje) and the "Gledaj u tablu" screen repeats it ("Do sada: …",
   `[data-skor]`); both come only from the server (`LicnoStanje.tacnih`/`dugovanih`, the leaderboard rule: owed questions with a
-  correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). A scored run of a lecture requires a check-in: the join 403 with
+  correct answer, the current round counts only after "Tačno"), and nothing shows while `dugovanih` is 0 or missing (old backend). After "Tačno"
+  a VISE_TACNIH question with the participant's own `LicniOdgovor.izabrane` shows "Tačno!" / "Delimično tačno" (`--warn`) /
+  "Netačno" by `udeo`, a line "Pogodio si 1 od 2 tačna." and every option with its state (`[data-stanje]` pogodjena, pogresna,
+  propustena, ostala; option text only when the snapshot carries it, so DUGMAD mode shows shape and letter only); a reload
+  rebuilds it from the server snapshot. A scored run of a lecture requires a check-in: the join 403 with
   `PRVO_CEKIRANJE` ("Prvo se čekiraj: skeniraj QR sa table.") is phase `cekiranje` (message and "Moj nalog", no retry, the
   connection closes); 403 `IZBACEN` is `izbacen` ("Nastavnik te je uklonio iz ovog izvođenja.", for a guest and a student alike: since the
   moderation work there is no "Uđi ponovo" any more, the server refuses the same phone by its `gfs_uzivo` cookie); any other 403 goes to `nalog` as before.
@@ -1201,7 +1205,20 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
   (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision.
+  a new decision. Since `feature/delimicno-tacno` the post-"Tačno" outcome screen of **every** question type
+  (`javno/ishod-ekran.component`, `app-ishod-ekran`: outcome title, the VISE_TACNIH per-option list, otherwise the correct answer,
+  place; pure VISE_TACNIH rules in `javno/ishod-vise-tacnih.ts`) is a lazy chunk like the task screen, for the budget (own budget
+  5 942 B + 10 %; closure 121 495 -> 120 855 B, initial unchanged). Its `@defer` has a placeholder "Učitavanje…" and an error
+  text; a second `@defer (on idle) { @if (false) { … } }` right after joining loads the chunk ahead, so a classroom does not fetch
+  it at "Tačno" (`prefetch on idle` / `when` would add ~350 B of Angular instructions to the initial bundle). The VISE_TACNIH
+  check box of the answer buttons (`.uz-st-opcija-kvacica`, mockup: empty translucent with a white border, selected white with ✓;
+  in "celo pitanje" mode it sits in the button's row after the text, so it never covers it) lives in the `styles` of
+  `javno/odgovor-unos.component`, not in the global `uzivo-javno.css`: that freed 243 B of the initial bundle (799 723 of 800 000 B)
+  and costs the student closure, then 121 460 of 121 518 B. After the merge with "fajlovi uz prezentaciju" (2026-11-20) the closure was
+  121 706 B (over): `naslovIshoda` moved from `student.store.ts` to `javno/naslov-ishoda.ts`, imported only by the lazy
+  `ishod-ekran` and `zadatak-ekran`, so the closure is now **121 481 of 121 518 B** (37 B left; initial 799 906 of 800 000 B). The
+  account's presentation review (`e2e/lenji-pregled.spec.ts`) got `REZERVA_2026_11_20_GZIP = 100` B: both features together are
+  34 161 B gzip against 34 062 (raw 96 819 B stays under its old limit); Novica's decision pending.
 
 ### Rang tačnosti (leaderboard)
 
@@ -1237,6 +1254,16 @@ is wrong) is shown, never ranked. Teacher only, nothing public.
   a finished lecture. Student profile tab `/studenti/:id/uzivo` (`StudentUzivoTab`: totals and one row per class with "2 od 4") and group tab
   `/grupe/:id/uzivo` (`GrupaUzivoTab`, roster rank with "Časova"); both filter by subject and school year locally (not in the URL).
 - e2e: `e2e/mock-api.ts` answers the four endpoints with empty ranks (an unknown route fails a test).
+- **Partial credit in teacher views (VISE_TACNIH, V27; every field optional, an old backend renders exactly as before):** `tacnihTekst`
+  gives "Tačno 2 · ◐ delimično 7 od 9 · 61 %" when `Rezultat.delimicnih > 0` (percentage from `zbirUdela`, else from `tacnih`; `RezultatPrikazComponent` renders the ◐ in its own `aria-hidden` span, the string stays whole for tests). The console
+  participants panel shows `◐ delimično 0,5` (`--warn`, `UcesnikStanje.udeo` strictly between 0 and 1, with `tacno=false`) instead of ✗; the
+  student review shows "◐ Delimično tačno 0,5" (`OdgovorPregleda.udeo`), and the run overview's round header "Odgovora 23 · tačnih 61 % ·
+  ◐ delimično 3" (`delimicnihRunde`, only when `rezultat.delimicnih > 0`). On the projector the board cue "Može biti više tačnih" sits above
+  the tile grid: `pitanje-plocice` makes its host a flex column (host class `uz-plocice--natpis`, not in the large-image `sazeto` layout) so
+  the grid shares the height instead of `height: 100%` (`e2e/uzivo-plocice.spec.ts` checks that no tile leaves the host). ◐ is always a text glyph with `aria-hidden` next to the word, never an
+  icon (`icons.ts` and the initial bundle budget stay untouched). Rank `tacnih` and `zvezdice` are decimals: every decimal goes through
+  `decimalni` (Serbian comma, 2 places; lives in `shared/util/broj.ts`, re-exported by `features/uzivo/ui/format`), the projector's "netačnih" is
+  `dugovanih - tacnih` rounded to 0.01 (its number columns are 3.6em, sized for 5 characters like "12,67"; `RED_EM` in the component follows; `e2e/uzivo-rang-ime.spec.ts` checks no cell overflows) (never a float tail or -0). The board shows nothing partial before TACAN: it only reads `javniRezultat`.
 - **Zadatak level (same revision):** every student of a round gets the same level; without a level on the slide or in the console the server
   draws one per opening. The level picker's `null` option is "Nasumično" (`app-nivo ... saSvima nasumicno`, no total count) on the Zadatak form and
   the console panel; the counts with no level are the largest per-level count (as the server's `brojZaOtvaranje`). The form shows the server text

@@ -25,6 +25,12 @@ export function procenatTacnihTekst(p: Pick<RezultatPitanja, 'brojOdgovora' | 'p
   return p.procenatTacnih === null || p.procenatTacnih === undefined ? odgovora : `${odgovora} · tačnih ${p.procenatTacnih} %`;
 }
 
+/** Broj delimično tačnih odgovora runde ("više tačnih"), kad ih ima; inače `null` (zaglavlje tada ne dodaje ništa). */
+export function delimicnihRunde(p: Pick<RezultatPitanja, 'rezultat'>): number | null {
+  const n = p.rezultat?.delimicnih;
+  return n !== null && n !== undefined && n > 0 ? n : null;
+}
+
 export interface OznakaRunde {
   /** Redni broj runde istog slajda (1, 2, ...). */
   runda: number;
@@ -227,7 +233,7 @@ export function ishodUkupno(u: UcesnikZadatka): string {
                 }
               </div>
               <p class="uz-pr-podnozje">
-                {{ tekst(k.p) }}
+                {{ tekst(k.p) }}@if (delimicnih(k.p); as n) {<span data-delimicnih> · <span aria-hidden="true">◐</span> delimično {{ n }}</span>}
                 @if (k.oznaka.ukupno > 1 && takmicenje() && k.oznaka.runda < k.oznaka.ukupno) {
                   <span class="uz-ed-napomena">Za poene važi samo poslednja runda.</span>
                 }
@@ -266,6 +272,7 @@ export class IzvodjenjePregledPage {
 
   protected readonly url = medijUrl;
   protected readonly tekst = procenatTacnihTekst;
+  protected readonly delimicnih = delimicnihRunde;
   protected readonly putanja = putanjaTekst;
   protected readonly uneto = unetoUcesnika;
   protected readonly ukupnoUcesnika = ishodUkupno;

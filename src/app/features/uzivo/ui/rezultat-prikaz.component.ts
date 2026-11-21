@@ -140,10 +140,16 @@ export function gustinaCipova(n: number): 'malo' | 'srednje' | 'mnogo' | 'vrlo' 
   return n <= 4 ? 'malo' : n <= 12 ? 'srednje' : n <= 20 ? 'mnogo' : 'vrlo';
 }
 
-/** "Tačno 7 od 12 · 58 %" kad je tačnost vidljiva i ima odgovora, inače `null`. */
+/**
+ * "Tačno 7 od 12 · 58 %" kad je tačnost vidljiva i ima odgovora, inače `null`. Sa delimično tačnim (VISE_TACNIH):
+ * "Tačno 2 · ◐ delimično 7 od 9 · 61 %", procenat iz zbira udela (`zbirUdela`; stari backend ga nema pa iz tačnih).
+ */
 export function tacnihTekst(r: Rezultat): string | null {
   if (r.tacnih === null || r.tacnih === undefined || r.ukupno <= 0) return null;
-  return `Tačno ${r.tacnih} od ${r.ukupno} · ${Math.round((r.tacnih * 100) / r.ukupno)} %`;
+  const udeo = r.zbirUdela ?? r.tacnih;
+  const procenat = Math.round((udeo * 100) / r.ukupno);
+  if (r.delimicnih && r.delimicnih > 0) return `Tačno ${r.tacnih} · ◐ delimično ${r.delimicnih} od ${r.ukupno} · ${procenat} %`;
+  return `Tačno ${r.tacnih} od ${r.ukupno} · ${procenat} %`;
 }
 
 /**
@@ -160,8 +166,8 @@ export function tacnihTekst(r: Rezultat): string | null {
   imports: [CipoviOdgovoraComponent, OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-rez', '[class.uz-rez--kompaktno]': 'kompaktno()', '[class.uz-rez--sa-tacnih]': '!!tacnih()' },
   template: `
-    @if (tacnih(); as t) {
-      <p class="uz-rez-tacnih"><span class="uz-tacno-znak" aria-hidden="true">✓</span>{{ t }}</p>
+    @if (tacnihDelovi(); as t) {
+      <p class="uz-rez-tacnih"><span class="uz-tacno-znak" aria-hidden="true">✓</span>{{ t.pre }}@if (t.glif) {<span aria-hidden="true">◐</span>{{ t.posle }}}</p>
     }
     @switch (vrsta()) {
       @case ('opcije') {
@@ -254,6 +260,13 @@ export class RezultatPrikazComponent {
 
   protected readonly maksCipova = MAKS_CIPOVA;
   protected readonly vrsta = computed(() => vrstaRezultata(this.rezultat().tip, this.pitanje()));
+  /** Red "Tačno ..." sa ◐ (delimično tačno) izdvojenim da ga čitač ekrana ne izgovara (`aria-hidden`); tekst ostaje isti. */
+  protected readonly tacnihDelovi = computed(() => {
+    const t = this.tacnih();
+    if (!t) return null;
+    const [pre, posle] = t.split('◐');
+    return { pre, glif: posle !== undefined, posle: posle ?? '' };
+  });
   protected readonly tacnih = computed(() => (this.prikaziTacnih() ? tacnihTekst(this.rezultat()) : null));
   protected readonly cipovi = computed(() => (this.vrsta() === 'cipovi' ? cipoviRezultata(this.rezultat(), this.pitanje()) : []));
   protected readonly gustina = computed(() => gustinaCipova(Math.min(this.cipovi().length, MAKS_CIPOVA + 1)));

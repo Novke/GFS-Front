@@ -108,6 +108,18 @@ describe('PregledPrezentacijePage', () => {
     expect(dugme.textContent).toContain('Sakrij');
   });
 
+  it('PITANJE: delimično tačan odgovor (udeo 0,5) piše "Delimično tačno 0,5", ne "netačno"', async () => {
+    await otvori();
+    const p = structuredClone(PREGLED);
+    p.slajdovi[1] = { ...p.slajdovi[1], mojOdgovor: { tekst: 'B, C', tacno: false, udeo: 0.5 } };
+    http.expectOne(URL).flush(p);
+    await stabilno();
+    const tekst = el().querySelector('[data-moj-odgovor]')!.textContent!;
+    expect(tekst).toContain('Delimično tačno');
+    expect(tekst).toContain('0,5');
+    expect(tekst).not.toContain('netačno');
+  });
+
   it('PITANJE bez snimka runde (tacanPoznat: false): nema prekidača tačnog odgovora', async () => {
     await otvori();
     const bezSnimka = structuredClone(PREGLED);

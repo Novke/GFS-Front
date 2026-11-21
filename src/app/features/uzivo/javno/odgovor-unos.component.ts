@@ -10,6 +10,9 @@ export { PORUKA_BROJ, normalizujBroj, porukaZaBroj } from '../ui/polja-zadatka';
 
 const MAX_TEKST = 200;
 
+/** Vidljiv natpis iznad opcija za svako VISE_TACNIH pitanje (ne zavisi od broja tačnih: DOM je isti pre "Tačno"). */
+export const NATPIS_VISE_TACNIH_TELEFON = 'Može biti više tačnih · označi sve tačne';
+
 export const PORUKA_TEKST = 'Odgovor mora imati od 1 do 200 znakova.';
 
 export function porukaZaTekst(unos: string): string | null {
@@ -65,6 +68,19 @@ const SKALA = [1, 2, 3, 4, 5] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [OpcijaOblikComponent, TekstFormuleComponent],
   host: { class: 'uz-st-unos', '[class.uz-st-unos--celo]': 'celoPitanje()' },
+  // Kućica "više tačnih" je samo ovde, ne u globalnom `uzivo-javno.css` (početni paket). Obojene pločice (maketa): prazna
+  // providna sa belim okvirom, izabrana bela sa ✓. Celo pitanje: kućica je u redu dugmeta posle teksta, pa ga ne pokriva.
+  styles: `
+    .uz-st-natpis-vise { margin: 0 0 0.5rem; font-weight: 700; }
+    .uz-st-opcija-kvacica {
+      position: absolute; top: 0.5rem; right: 0.75rem; width: 2rem; height: 2rem; border: 2px solid #fff;
+      border-radius: 0.3rem; background: rgb(255 255 255 / 0.15); font-size: 1.5rem; line-height: 1.75rem; text-align: center;
+    }
+    .uz-st-opcija--izabrana .uz-st-opcija-kvacica { background: #fff; color: var(--ink); }
+    :host(.uz-st-unos--celo) .uz-st-opcija-kvacica {
+      position: static; flex: none; margin-left: auto; border-color: currentColor; background: var(--surface);
+    }
+  `,
   template: `
     @let p = pitanje();
     @switch (p.tip) {
@@ -106,8 +122,10 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         }
       }
       @default {
+        @if (p.tip === 'VISE_TACNIH') { <p id="uz-st-vise" class="uz-st-natpis-vise" data-natpis-vise>{{ natpisVise }}</p> }
         <div class="uz-st-opcije" [class.uz-st-opcije--dve]="opcije().length <= 2" role="group"
-             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? 'Izaberi jedan ili više odgovora' : 'Izaberi odgovor'">
+             [attr.aria-label]="p.tip === 'VISE_TACNIH' ? 'Odgovori' : 'Izaberi odgovor'"
+             [attr.aria-describedby]="p.tip === 'VISE_TACNIH' ? 'uz-st-vise' : null">
           @for (o of opcije(); track o.id; let i = $index) {
             <button type="button" class="uz-st-opcija" [style.--uz-boja]="boja(i)" [disabled]="onemoguceno()"
                     [class.uz-st-opcija--izabrana]="izabrane().includes(o.id)"
@@ -123,7 +141,7 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         </div>
         @if (p.tip === 'VISE_TACNIH') {
           <button type="button" class="uz-st-dugme uz-st-dugme--glavno uz-st-posalji" [disabled]="onemoguceno() || !mozeSlati()"
-                  (click)="posalji1({ rundaId: p.rundaId!, opcije: izabraneRedom() })">Pošalji</button>
+                  (click)="posalji1({ rundaId: p.rundaId!, opcije: izabraneRedom() })">Pošalji{{ izabrane().length ? ' (' + izabrane().length + ')' : '' }}</button>
         }
       }
     }
@@ -139,6 +157,7 @@ export class OdgovorUnosComponent {
   readonly nacrtPromena = output<NacrtOdgovora>();
 
   protected readonly skala = SKALA;
+  protected readonly natpisVise = NATPIS_VISE_TACNIH_TELEFON;
   private readonly rundaId = computed(() => this.pitanje().rundaId);
   /** Runda u kojoj je ova komponenta već poslala odgovor (lokalna brava protiv dvostrukog dodira). */
   private readonly poslataRunda = signal<number | null>(null);

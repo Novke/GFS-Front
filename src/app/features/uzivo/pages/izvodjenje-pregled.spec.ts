@@ -4,7 +4,9 @@ import { RangTacnostiStavka } from '../../../core/api/rang.api';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, PregledZadatka, RezultatPitanja } from '../data-access/uzivo.models';
-import { IzvodjenjePregledPage, ishodUkupno, oznakeRundi, procenatTacnihTekst, unetoUcesnika } from './izvodjenje-pregled.page';
+import {
+  IzvodjenjePregledPage, delimicnihRunde, ishodUkupno, oznakeRundi, procenatTacnihTekst, unetoUcesnika,
+} from './izvodjenje-pregled.page';
 
 function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 + 2?'): PitanjeSnimak {
   return {
@@ -73,6 +75,18 @@ describe('procenatTacnihTekst', () => {
   it('bez tačnog odgovora ili bez odgovora nema procenta', () => {
     expect(procenatTacnihTekst({ brojOdgovora: 12, procenatTacnih: null })).toBe('Odgovora 12');
     expect(procenatTacnihTekst({ brojOdgovora: 0, procenatTacnih: null })).toBe('Odgovora 0');
+  });
+});
+
+describe('delimicnihRunde', () => {
+  it('broj delimičnih samo kad ih ima', () => {
+    const r = (delimicnih: number | null | undefined) =>
+      ({ rezultat: { delimicnih } }) as unknown as Parameters<typeof delimicnihRunde>[0];
+    expect(delimicnihRunde(r(3))).toBe(3);
+    expect(delimicnihRunde(r(0))).toBeNull();
+    expect(delimicnihRunde(r(null))).toBeNull();
+    expect(delimicnihRunde(r(undefined))).toBeNull();
+    expect(delimicnihRunde({ rezultat: null } as unknown as Parameters<typeof delimicnihRunde>[0])).toBeNull();
   });
 });
 

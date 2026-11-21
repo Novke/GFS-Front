@@ -10,7 +10,7 @@ import { STOMP_FABRIKA } from '../data-access/stomp';
 import {
   JavniZadatak, JavnoIzvodjenjeInfo, JavnoPitanje, JavnoStanje, LicnoStanje, OdgovorCmd, PocetnoStanje, UcesnikInfo,
 } from '../data-access/uzivo.models';
-import { decimalni, grupisiCifre } from '../ui/format';
+import { decimalni } from '../ui/format';
 import { JavnoApi } from './javno.api';
 import type { NacrtOdgovora } from './odgovor-unos.component';
 import type { NacrtZadatka } from './zadatak-unos.component';
@@ -170,14 +170,12 @@ export function tacanOdgovor(p: JavnoPitanje): TacanOdgovor | null {
   return null;
 }
 
-/** Naslov ličnog ishoda posle `C` (i svog zadatka posle zatvaranja): "Tačno! +850", "Netačno", "Nisi odgovorio". */
-export function naslovIshoda(
-  ishod: { odgovorio: boolean; tacno: boolean | null; poeni: number | null }, takmicenje: boolean,
-): string {
-  if (!ishod.odgovorio) return 'Nisi odgovorio';
-  if (ishod.tacno === null) return 'Odgovor primljen';
-  if (!ishod.tacno) return 'Netačno';
-  return 'Tačno!' + (takmicenje && ishod.poeni ? ` +${grupisiCifre(ishod.poeni)}` : '');
+/**
+ * Lični ishod runde posle `C`. `udeo` (0-1, samo VISE_TACNIH) i `izabrane` (svoje opcije) šalje server tek posle "Tačno";
+ * Zadatak i stari backend ih nemaju.
+ */
+export interface IshodPitanja {
+  odgovorio: boolean; tacno: boolean | null; poeni: number | null; udeo?: number | null; izabrane?: number[] | null;
 }
 
 const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : 0);
@@ -227,13 +225,13 @@ export const StudentStore = signalStore(
         const p = pitanje();
         return p && ekran() === 'tacan' ? tacanOdgovor(p) : null;
       }),
-      /** Lični ishod trenutne runde posle `C` (null dok nije prikazan). */
-      ishod: computed(() => {
+      /** Lični ishod trenutne runde posle `C` (null dok nije prikazan), sa `udeo` i `izabrane` kad ih server pošalje. */
+      ishod: computed<IshodPitanja | null>(() => {
         const p = pitanje();
         const o = store.licno()?.odgovor;
         if (!p || ekran() !== 'tacan') return null;
         if (!o || o.rundaId !== p.rundaId || !o.primljen) return { odgovorio: false, tacno: null, poeni: null };
-        return { odgovorio: true, tacno: o.tacno, poeni: o.poeni };
+        return { ...o, odgovorio: true };
       }),
       ukupnoMs: computed(() => {
         const p = runda();

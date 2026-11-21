@@ -194,6 +194,16 @@ describe('StudentStore', () => {
   });
 
   describe('stanje', () => {
+    it('ishod posle TACAN (i iz početnog snimka posle osvežavanja) nosi svoje izabrane opcije i udeo', () => {
+      udji();
+      pocetno(
+        naPitanju(3, { tip: 'VISE_TACNIH', faza: 'ZATVORENO', tacneOpcije: [11, 12] }),
+        licno({ odgovor: { rundaId: 7, primljen: true, tacno: false, poeni: 425, izabrane: [12], udeo: 0.5 } }),
+      );
+      expect(store.ekran()).toBe('tacan');
+      expect(store.ishod()).toMatchObject({ odgovorio: true, tacno: false, poeni: 425, udeo: 0.5, izabrane: [12] });
+    });
+
     it('starija verzija javnog stanja se ignoriše, jednaka i novija se prihvataju', () => {
       udji();
       store.prihvatiJavno(javno({ verzija: 4, brojUcesnika: 2 }));

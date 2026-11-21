@@ -118,6 +118,8 @@ export interface RezultatSkala { raspodela: number[]; prosek: number | null; }
 export interface Rezultat {
   tip: TipPitanja; ukupno: number; opcije: RezultatOpcija[] | null; brojevi: RezultatBrojevi | null;
   tekstovi: RezultatTekst[] | null; skala: RezultatSkala | null; tacnih: number | null;
+  /** VISE_TACNIH (delimično tačno; stari backend ih nema): broj delimičnih i zbir udela (decimalno, 0.01). */
+  delimicnih?: number | null; zbirUdela?: number | null;
 }
 export interface RangStavka { mesto: number; ucesnikId: number | null; ime: string; poeni: number; }
 export interface RundaInfo { id: number; redniBroj: number; rokMs: number | null; preostaloMs: number | null; tajmerRadi: boolean; }
@@ -135,6 +137,8 @@ export interface UcesnikStanje {
    * student (ima karton).
    */
   utisan?: Utisanje | null; oznacen?: boolean; brojOznaka?: number; student?: boolean;
+  /** Udeo tačnog u trenutnom odgovoru (0-1, VISE_TACNIH; ostali tipovi 1/0), `null` bez odgovora. */
+  udeo?: number | null;
 }
 /** Utišan učesnik: `PITALICE` ne odgovara na pitanja, `SVE` ni na zadatke. */
 export type Utisanje = 'PITALICE' | 'SVE';
@@ -206,10 +210,14 @@ export interface JavnoStanje {
   /** Fajlovi trenutnog slajda (za „Pošalji mi na mejl”); prazno ili bez polja kod starog backenda. */
   fajlovi?: FajlKratko[];
 }
-export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null; }
+/** `izabrane` = ids izabranih opcija (posle "Tačno"), `udeo` = 0-1 (VISE_TACNIH); stari backend ih nema. */
+export interface LicniOdgovor {
+  rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null;
+  izabrane?: number[] | null; udeo?: number | null;
+}
 /**
  * `tacnih` od `dugovanih`: sopstvena tačnost po pravilu ranga tačnosti (pitanja sa tačnim odgovorom i zadaci sa poljima,
- * propušteno je netačno); trenutna runda ulazi tek posle "Tačno". Stari backend ih ne šalje.
+ * propušteno je netačno; `tacnih` je decimalan zbir udela, zaokružen na 0.01); trenutna runda ulazi tek posle "Tačno". Stari backend ih ne šalje.
  */
 export interface LicnoStanje {
   verzija: number; ucesnikId: number; ime: string; poeni: number; mesto: number | null; brojUcesnika: number;
