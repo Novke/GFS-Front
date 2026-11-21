@@ -10,6 +10,14 @@ const PORT = Number(process.env['E2E_PORT'] || 4300);
 const CI = !!process.env['CI'];
 const REUSE = process.env['E2E_REUSE'] === '1';
 
+/**
+ * Ista zona za pregledač i za Node: mokovi (npr. `e2e/mock-raspored.ts`) računaju „danas“ sa `new Date()` u Node-u, a
+ * aplikacija u pregledaču. Na GitHub runneru Node je u UTC-u, pa je od 23 do 24 h UTC (u Beogradu već sutra) test
+ * „Kasnije“ u rasporedu očekivao dan ranije. Radnici nasleđuju `process.env`, a Node odmah primenjuje promenu `TZ`.
+ */
+const ZONA = 'Europe/Belgrade';
+process.env['TZ'] = ZONA;
+
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
@@ -22,7 +30,7 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     locale: 'sr-Latn-RS',
-    timezoneId: 'Europe/Belgrade',
+    timezoneId: ZONA,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
