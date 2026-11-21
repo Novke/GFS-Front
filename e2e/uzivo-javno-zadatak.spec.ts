@@ -190,6 +190,28 @@ test.describe('javni uživo: Zadatak slajd na telefonu', () => {
     await expect(uvecaj).toBeFocused();
   });
 
+  test('±: minus bez tastera na tastaturi, fokus ostaje u polju, šalje "-5"; red staje u 360 px', async ({ page, javnaMreza }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    const cas = new Cas('Mina');
+    await cas.povezi(page, javnaMreza.ws);
+    await page.goto(`uzivo/${KOD}`);
+    await page.getByLabel('Tvoje ime').fill('Mina');
+    await page.getByRole('button', { name: 'Uđi' }).click();
+    await expect.poll(() => cas.broker.pretplate).toContain(`/topic/izvodjenja/${IZVODJENJE}/javno`);
+    cas.posalji(javniZadatak('OTVORENO', { preostaloMs: 120_000 }), licniZadatak({ polja: [POLJA[0]] }));
+
+    const polje = page.getByLabel('Dekadno');
+    await expect(polje).toHaveAttribute('inputmode', 'decimal');
+    await polje.fill('5');
+    await page.getByRole('button', { name: 'Promeni znak' }).tap();
+    await expect(polje).toHaveValue('-5');
+    await expect(polje).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole('button', { name: 'Pošalji' }).click();
+    await expect.poll(() => cas.broker.slanja.length).toBe(1);
+    expect(JSON.parse(cas.broker.slanja[0].telo)).toEqual({ rundaId: RUNDA, polja: { a: '-5' } });
+  });
+
   test('papir: "Reši na papiru." bez polja i bez "Pošalji"', async ({ page, mock, javnaMreza }) => {
     mock.podaci.ucesnici.push({ ucesnikId: 10_000, ime: 'Mina', izvodjenjeId: IZVODJENJE });
     const cas = new Cas('Mina');

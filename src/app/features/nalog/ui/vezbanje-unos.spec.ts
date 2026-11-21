@@ -55,6 +55,16 @@ describe('VezbanjeUnos', () => {
     expect(el().textContent).toContain('a) dekadna vrednost');
   });
 
+  it('BROJ: dugme ± daje minus koji numerička tastatura telefona nema', () => {
+    upisi('a', '5');
+    opcija('drugi').click();
+    dugme('button[data-znak]').click();
+    fixture.detectChanges();
+    expect(unos('a').value).toBe('-5');
+    dugme('[data-proveri]').click();
+    expect(provereno).toEqual([{ a: '-5', b: [2] }]);
+  });
+
   it('"Proveri" tek kad su sva polja popunjena; broj se normalizuje, neispravan broj ostaje kod studenta', () => {
     expect(dugme('[data-proveri]').disabled).toBe(true);
     upisi('a', '1 2,5');

@@ -25,6 +25,15 @@ export function porukaZaBroj(unos: string): string | null {
   return BROJ.test(normalizujBroj(unos)) ? null : PORUKA_BROJ;
 }
 
+/**
+ * Dugme ± uz polje broja: tastatura `inputmode=decimal` na iPhone-u i delu Androida nema minus, a pun tekstualni raspored bi
+ * svim studentima sklonio numeričku tastaturu. Prazno polje daje `-`, pa se broj kuca posle njega.
+ */
+export function promeniZnak(unos: string): string {
+  const t = unos.trimStart();
+  return t.startsWith('-') ? t.slice(1) : '-' + t.replace(/^\+/, '');
+}
+
 /** Polje sa opcijama (dugmad), a ne tekst. */
 export function jeOpcija(p: Pick<PoljeZadatka, 'tip'>): boolean {
   return p.tip === 'JEDAN_TACAN' || p.tip === 'VISE_TACNIH';

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, outp
 import { JavnoPitanje, OdgovorCmd, TipPitanja } from '../data-access/uzivo.models';
 import { OpcijaOblikComponent, oblikOpcije } from '../ui/opcija-oblik';
 import { TekstFormuleComponent } from '../ui/tekst-formule.component';
-import { normalizujBroj, porukaZaBroj } from '../ui/polja-zadatka';
+import { normalizujBroj, porukaZaBroj, promeniZnak } from '../ui/polja-zadatka';
 import { tekstZaCitac } from '../ui/tekst-formule';
 
 // Broj (pravilo `Normalizacija.broj` sa servera) deli i Zadatak i vežbanje na nalogu: `ui/polja-zadatka`.
@@ -72,8 +72,10 @@ const SKALA = [1, 2, 3, 4, 5] as const;
         <form class="uz-st-polje-forma" (submit)="$event.preventDefault(); posaljiBroj()">
           <label class="uz-st-oznaka" for="uz-st-broj">Tvoj odgovor (broj)</label>
           <div class="uz-st-polje-red">
+            <button type="button" class="uz-st-dugme" data-znak aria-label="Promeni znak" [disabled]="onemoguceno()"
+                    (mousedown)="$event.preventDefault()" (click)="postaviBroj(promeniZnak(broj()))">±</button>
             <input id="uz-st-broj" class="uz-st-polje" type="text" inputmode="decimal" autocomplete="off"
-                   [value]="broj()" (input)="broj.set(vrednost($event)); porukaBroja.set(null); javiNacrt()" [disabled]="onemoguceno()"
+                   [value]="broj()" (input)="postaviBroj(vrednost($event))" [disabled]="onemoguceno()"
                    [attr.aria-invalid]="porukaBroja() ? 'true' : null"
                    [attr.aria-describedby]="p.jedinica ? 'uz-st-jedinica uz-st-broj-poruka' : 'uz-st-broj-poruka'" />
             @if (p.jedinica) { <span id="uz-st-jedinica" class="uz-st-jedinica">{{ p.jedinica }}</span> }
@@ -183,6 +185,14 @@ export class OdgovorUnosComponent {
   }
 
   protected vrednost(e: Event): string { return (e.target as HTMLInputElement).value; }
+
+  protected readonly promeniZnak = promeniZnak;
+
+  protected postaviBroj(v: string): void {
+    this.broj.set(v);
+    this.porukaBroja.set(null);
+    this.javiNacrt();
+  }
 
   protected dodir(id: number): void {
     if (this.onemoguceno()) return;

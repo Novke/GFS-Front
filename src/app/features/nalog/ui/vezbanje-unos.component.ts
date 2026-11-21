@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 
 import {
-  PoljeZadatka, VrednostPolja, jeOpcija, normalizujBroj, oznakaNaTelefonu, popunjeno, porukaZaBroj, tacnoPolja,
+  PoljeZadatka, VrednostPolja, jeOpcija, normalizujBroj, oznakaNaTelefonu, popunjeno, porukaZaBroj, promeniZnak, tacnoPolja,
 } from '../../uzivo/ui/polja-zadatka';
 import { TekstFormuleComponent } from '../../uzivo/ui/tekst-formule.component';
 import { tekstZaCitac } from '../../uzivo/ui/tekst-formule';
@@ -49,6 +49,10 @@ import { SlikaZadatka } from './slika-zadatka.component';
             <div class="polje">
               <label class="oznaka" [for]="'vz-' + i">{{ oznaka(p) }}</label>
               <div class="red">
+                @if (p.tip === 'BROJ') {
+                  <button type="button" class="dugme" data-znak aria-label="Promeni znak" [disabled]="salje()"
+                          (mousedown)="$event.preventDefault()" (click)="znak(p.kljuc)">±</button>
+                }
                 <input class="unos" type="text" autocomplete="off" [id]="'vz-' + i" [attr.data-polje]="p.kljuc"
                        [attr.inputmode]="p.tip === 'BROJ' ? 'decimal' : null" [attr.maxlength]="p.tip === 'TEKST' ? 200 : null"
                        [value]="tekst(p.kljuc)" [disabled]="salje()" (input)="upisi(p.kljuc, $event)"
@@ -172,7 +176,14 @@ export class VezbanjeUnos {
   }
 
   protected upisi(kljuc: string, e: Event): void {
-    const v = (e.target as HTMLInputElement).value;
+    this.postavi(kljuc, (e.target as HTMLInputElement).value);
+  }
+
+  protected znak(kljuc: string): void {
+    this.postavi(kljuc, promeniZnak(this.tekst(kljuc)));
+  }
+
+  private postavi(kljuc: string, v: string): void {
     this.vrednosti.update(s => ({ ...s, [kljuc]: v }));
     this.greske.update(g => ({ ...g, [kljuc]: '' }));
     this.oznaciIzmenu(kljuc);
