@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { MatButton } from '@angular/material/button';
 
 import { AnketaTrakeComponent } from '../../../shared/ui/anketa-trake.component';
 import { AnketaStudentu } from '../data-access/ankete-studenta.models';
@@ -13,7 +14,7 @@ import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
 @Component({
   selector: 'app-ankete-kartice',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnketaTrakeComponent],
+  imports: [AnketaTrakeComponent, MatButton],
   template: `
     @for (a of lista(); track a.id) {
       <section class="ak" [class.ak--rezultat]="a.rezultat && !a.otvorena" [attr.aria-labelledby]="'anketa-kartica-' + a.id"
@@ -28,10 +29,12 @@ import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
         }
         @if (a.otvorena) {
           <div class="ak-dno">
-            @if (a.mojGlas) { <span class="ak-glasao">Glas je zabeležen ✓</span> }
-            <button type="button" class="ak-dugme" [class.ak-dugme--sporedno]="!!a.mojGlas" (click)="store.otvori(a.id)" data-anketa-glasaj>
-              {{ a.mojGlas ? 'Promeni glas' : 'Glasaj' }}
-            </button>
+            @if (a.mojGlas) {
+              <span class="ak-glasao">Glas je zabeležen ✓</span>
+              <button mat-stroked-button type="button" class="ak-dugme" (click)="store.otvori(a.id)" data-anketa-glasaj>Promeni glas</button>
+            } @else {
+              <button mat-flat-button type="button" class="ak-dugme" (click)="store.otvori(a.id)" data-anketa-glasaj>Glasaj</button>
+            }
           </div>
         }
       </section>
@@ -49,12 +52,7 @@ import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
     .ak-ishod { font-weight: 600; color: var(--ink); }
     .ak-dno { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
     .ak-glasao { margin-right: auto; font-size: 14px; color: var(--ok); font-weight: 600; }
-    .ak-dugme {
-      min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--primary); color: var(--primary-ink);
-      font: inherit; font-weight: 600; cursor: pointer; touch-action: manipulation;
-    }
-    .ak-dugme--sporedno { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
-    .ak-dugme:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .ak-dugme { min-height: 44px; }
   `,
 })
 export class AnketeKarticeComponent {

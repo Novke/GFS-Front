@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
+import { MatButton } from '@angular/material/button';
 import { Subscription } from 'rxjs';
 
 import { AnketaTrakeComponent } from '../../../shared/ui/anketa-trake.component';
@@ -22,7 +23,7 @@ import { status } from '../data-access/portal.pravila';
 @Component({
   selector: 'app-anketa-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AnketaTrakeComponent],
+  imports: [AnketaTrakeComponent, MatButton],
   host: { '[class.al--uzivo]': "izvor() === 'uzivo'" },
   template: `
     @if (store.list(); as a) {
@@ -46,7 +47,7 @@ import { status } from '../data-access/portal.pravila';
             }
           </fieldset>
           @if (a.otvorena) {
-            <button type="button" class="al-posalji" [disabled]="!zaSlanje(a) || store.salje() !== null" (click)="posalji(a)" data-anketa-posalji>
+            <button mat-flat-button type="button" class="al-posalji" [disabled]="!zaSlanje(a) || store.salje() !== null" (click)="posalji(a)" data-anketa-posalji>
               {{ a.mojGlas ? 'Promeni glas' : 'Pošalji' }}
             </button>
           }
@@ -76,7 +77,7 @@ import { status } from '../data-access/portal.pravila';
           }
         </p>
         <div class="al-dno">
-          <button type="button" class="al-skloni" (click)="store.skloni()" data-anketa-skloni>{{ a.mojGlas || !a.otvorena ? 'Zatvori' : 'Kasnije' }}</button>
+          <button mat-button type="button" class="al-skloni" (click)="store.skloni()" data-anketa-skloni>{{ a.mojGlas || !a.otvorena ? 'Zatvori' : 'Kasnije' }}</button>
         </div>
       </section>
     }
@@ -109,12 +110,8 @@ import { status } from '../data-access/portal.pravila';
     .al-glas:disabled, .al-odgovori:disabled .al-glas { cursor: default; }
     .al-glas:focus-visible, .al-kucica:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
     .al-kucica input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
-    .al-posalji, .al-skloni {
-      min-height: 44px; padding: 0 18px; border-radius: 999px; font: inherit; font-weight: 600; cursor: pointer; touch-action: manipulation;
-    }
-    .al-posalji { width: 100%; margin-top: 10px; border: 0; background: var(--primary); color: var(--primary-ink); }
-    .al-posalji:disabled { opacity: .5; cursor: default; }
-    .al-skloni { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+    .al-posalji { width: 100%; min-height: 48px; margin-top: 10px; font-size: 16px; }
+    .al-skloni { min-height: 44px; }
     .al-rezultat { margin-top: 14px; }
     .al-rezultat-naslov { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
     .al-stanje { min-height: 1.4em; margin: 10px 0 0; font-size: 13px; color: var(--muted); text-align: center; }

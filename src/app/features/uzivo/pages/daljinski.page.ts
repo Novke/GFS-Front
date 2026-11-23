@@ -15,7 +15,7 @@ import { TipKomande } from '../data-access/uzivo.models';
 import { FajloviKarticaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
-import { otvoriAnketu } from '../../ankete/ui/otvori-anketu';
+import { otvoriAnketu, registrujIkoneAnkete } from '../../ankete/ui/otvori-anketu';
 import { istiKontekst, kontekstAnketeIzvodjenja } from './anketa-kontekst';
 
 /** Dok STOMP nije povezan, stanje se osvežava GET-om (komande sa laptopa se vide i bez WebSocket-a na telefonu). */
@@ -175,6 +175,7 @@ export class DaljinskiPage {
   }
 
   constructor() {
+    registrujIkoneAnkete(); // ikone dugmeta "Anketa" i panela (van početnog paketa)
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));

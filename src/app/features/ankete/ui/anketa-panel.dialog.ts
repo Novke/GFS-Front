@@ -1,5 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { ChangeDetectionStrategy, Component, Signal, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Signal, computed, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -11,7 +11,7 @@ import { KontekstAnkete } from '../data-access/ankete.models';
 import { akcijaPanela, opisKonteksta } from '../data-access/ankete.pravila';
 import { FolderEkranComponent } from './folder-ekran.component';
 import { IstorijaEkranComponent } from './istorija-ekran.component';
-import { KLASA_PUN_EKRAN, SIROK_PANEL } from './otvori-anketu';
+import { SIROK_PANEL } from './otvori-anketu';
 import { PocetniEkranComponent } from './pocetni-ekran.component';
 import { ProveraEkranComponent } from './provera-ekran.component';
 import { RezultatiEkranComponent } from './rezultati-ekran.component';
@@ -116,19 +116,20 @@ export class AnketaPanelDialog {
 
   constructor() {
     this.store.init(inject<Signal<KontekstAnkete>>(MAT_DIALOG_DATA));
-    // promena širine prozora (laptop ↔ telefon) menja i okvir dijaloga
+    const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    // promena širine prozora (laptop ↔ telefon) menja i okvir dijaloga; na telefonu bez zaobljenja (token oblika dijaloga na
+    // okviru, ne globalna klasa: globalni stil ide u početni paket, a on je na granici budžeta)
     let prvi = true;
     effect(() => {
       const siroko = this.siroko();
+      host.closest<HTMLElement>('.cdk-overlay-pane')?.style.setProperty('--mat-dialog-container-shape', siroko ? null : '0');
       if (prvi) {
         prvi = false;
         return;
       }
       if (siroko) {
-        this.ref.removePanelClass(KLASA_PUN_EKRAN);
         this.ref.updateSize('min(1100px, 96vw)', 'min(760px, 92dvh)');
       } else {
-        this.ref.addPanelClass(KLASA_PUN_EKRAN);
         this.ref.updateSize('100vw', '100dvh');
       }
     });

@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { IKONE } from '../../../core/layout/icons';
 import { AnketeSabloniInfo } from '../data-access/ankete.models';
 import { anketa, sablon } from '../data-access/ankete.testing';
-import { KontekstAnkete, otvoriAnketu } from './otvori-anketu';
+import { IKONE_ANKETE, KontekstAnkete, otvoriAnketu } from './otvori-anketu';
 
 const K: KontekstAnkete = { predavanjeId: 5, grupaId: 4, grupaNaziv: 'GD-2026', predmetNaziv: 'UPR', brojCekiranih: 27 };
 const INFO: AnketeSabloniInfo = {
@@ -34,7 +34,7 @@ describe('AnketaPanelDialog', () => {
     dialog = TestBed.inject(MatDialog);
     const registry = TestBed.inject(MatIconRegistry);
     const sanitizer = TestBed.inject(DomSanitizer);
-    for (const ime of IKONE) {
+    for (const ime of [...IKONE, ...IKONE_ANKETE]) {
       registry.addSvgIconLiteral(ime, sanitizer.bypassSecurityTrustHtml('<svg></svg>'));
     }
   });

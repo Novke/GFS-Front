@@ -21,7 +21,7 @@ import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predava
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { BrziUnos } from '../ui/brzi-unos';
 import { CekiraniPanel } from '../ui/cekirani-panel';
-import { KontekstAnkete, otvoriAnketu } from '../../ankete/ui/otvori-anketu';
+import { KontekstAnkete, otvoriAnketu, registrujIkoneAnkete } from '../../ankete/ui/otvori-anketu';
 import { NapomenaDialog } from '../ui/napomena-dialog';
 import { PokreniPrezentacijuDialog } from '../ui/pokreni-prezentaciju.dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';
@@ -154,6 +154,7 @@ export class PredavanjeDetalj {
   );
 
   constructor() {
+    registrujIkoneAnkete(); // ikone dugmeta "Anketa" i panela (van početnog paketa)
     effect(() => {
       const id = this.pId();
       if (id !== null) {

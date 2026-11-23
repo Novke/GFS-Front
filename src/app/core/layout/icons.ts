@@ -42,8 +42,6 @@ export const IKONE = [
   'notifications', 'account_circle', 'logout', 'devices',
   // Aplikacija i obaveštenja (faza 4): „Pošalji u WhatsApp“ posle otkazivanja termina.
   'send',
-  // Brza anketa: dugme „Anketa“ (konzola, daljinski, predavanje) i folderi sačuvanih pitanja.
-  'how_to_vote', 'folder',
 ] as const;
 
 export type NazivIkone = (typeof IKONE)[number];

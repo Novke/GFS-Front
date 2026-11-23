@@ -37,7 +37,7 @@ import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { RezimProjektora } from '../../../core/layout/rezim-projektora';
-import { otvoriAnketu } from '../../ankete/ui/otvori-anketu';
+import { otvoriAnketu, registrujIkoneAnkete } from '../../ankete/ui/otvori-anketu';
 import { istiKontekst, kontekstAnketeIzvodjenja } from './anketa-kontekst';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
@@ -339,6 +339,7 @@ export class KonzolaPage {
   protected readonly zavrseno = computed(() => this.store.stanje()?.izvodjenje.status === 'ZAVRSENO');
 
   constructor() {
+    registrujIkoneAnkete(); // ikone dugmeta "Anketa" i panela (van početnog paketa)
     window.name = PROZOR_KONZOLE;
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
