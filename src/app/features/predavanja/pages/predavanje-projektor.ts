@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, DOCUMENT, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DOCUMENT, inject, input, signal, viewChild } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -15,6 +15,7 @@ import { StudentiApi } from '../../../core/api/studenti.api';
 import { sviStudentiGrupe } from '../data-access/predavanje.store';
 import { PredavanjaApi } from '../../../core/api/predavanja.api';
 import { PredavanjeDetails } from '../../../core/api/predavanja.models';
+import { AnketaProjektorComponent } from '../../ankete/ui/anketa-projektor.component';
 
 /** Projektor osvežava broj prisutnih na 10 s (samo dok je tab vidljiv). */
 export const OSVEZAVANJE_MS = 10_000;
@@ -32,11 +33,12 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
  *
  * Dok je predavanje živo, desno je QR za čekiranje (`nalog/cas/<token>`): token sa servera (tajna ga ne napušta),
  * nov na 10 s, čita se na 3 s dok je tab vidljiv; ispod QR-a je ista adresa kao tekst i "Čekirano: N" (bez imena).
- * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR.
+ * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR. Dok je predavanje živo, brza anketa
+ * (`app-anketa-projektor`, spec brze ankete 6.2) stoji desno na mestu QR-a, koji se vraća kad anketa ode sa ekrana.
  */
 @Component({
   selector: 'app-predavanje-projektor',
-  imports: [MatButton, MatIcon, RouterLink, QrKodComponent],
+  imports: [AnketaProjektorComponent, MatButton, MatIcon, RouterLink, QrKodComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'esc()',
@@ -52,7 +54,7 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
     @switch (stanje().tip) {
       @case ('ok') {
         @if (predavanje(); as p) {
-          <div class="ekran" [class.sa-qr]="!!qr()">
+          <div class="ekran" [class.sa-qr]="!!qr() || anketaNaEkranu()">
             <section class="sadrzaj" aria-live="polite">
               <p class="kontekst">{{ kontekst() }}</p>
               <h1 class="tema">{{ p.tema?.trim() || 'Predavanje ' + p.rb }}</h1>
@@ -67,7 +69,7 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
                 <p class="drugi-datum" role="alert" data-drugi-datum>Ovo predavanje je od {{ d }} Da li si hteo novo predavanje?</p>
               }
             </section>
-            @if (qr(); as q) {
+            @if (!anketaNaEkranu() && qr(); as q) {
               <section class="cekiranje" aria-label="Čekiranje">
                 <p class="uputstvo">Skeniraj telefonom da potvrdiš prisustvo</p>
                 <app-qr-kod [tekst]="q.link" [velicina]="720" />
@@ -75,6 +77,7 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
                 <p class="cekirano" data-cekirano>Čekirano: {{ q.broj }}</p>
               </section>
             }
+            <app-anketa-projektor [predavanjeId]="zivoId()" [ugradjen]="true" />
           </div>
         }
       }
@@ -178,7 +181,11 @@ export class PredavanjeProjektor {
     return { izGrupe, stariji: prisutni.size - izGrupe, od: grupa.size as number | null };
   });
   /** Id živog predavanja (`null` = nije učitano ili je završeno): samo tada se čita token čekiranja. */
-  private readonly zivoId = computed(() => {
+  private readonly anketa = viewChild(AnketaProjektorComponent);
+  /** Brza anketa na ekranu stoji desno umesto QR-a (pola pokrivenog QR-a ionako ne bi moglo da se skenira). */
+  protected readonly anketaNaEkranu = computed(() => this.anketa()?.prikazana() ?? false);
+
+  protected readonly zivoId = computed(() => {
     const p = this.predavanje();
     return p && !p.zavrseno ? p.id : null;
   });

@@ -49,6 +49,19 @@ describe('PodesavanjaObavestenja', () => {
     expect(el.querySelector('[data-sacuvano]')).not.toBeNull();
   });
 
+  it('brza anketa: red "Ankete" sa prekidačem Telefon (pushAnkete) i "Zvono: uvek"; bez polja na serveru reda nema', async () => {
+    const { f, el } = await napravi({ ...SVE, pushAnkete: true });
+    const red = [...el.querySelectorAll('.vrsta')].find(v => v.querySelector('.naziv')?.textContent?.trim() === 'Ankete')!;
+    expect(red.textContent).toContain('Zvono: uvek');
+    red.querySelector<HTMLInputElement>('[data-prekidac="pushAnkete"]')!.click();
+    await f.whenStable();
+    const put = http.expectOne(r => r.method === 'PUT');
+    expect(put.request.body).toEqual({ ...SVE, pushAnkete: false });
+    put.flush({ ...SVE, pushAnkete: false });
+    await f.whenStable();
+    expect(el.querySelector<HTMLInputElement>('[data-prekidac="pushAnkete"]')!.checked).toBe(false);
+  });
+
   it('greška vraća prethodno stanje i prikazuje poruku servera', async () => {
     const { f, el } = await napravi(SVE);
     el.querySelector<HTMLInputElement>('[data-prekidac="pushPodsetnik"]')!.click();

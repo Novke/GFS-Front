@@ -16,7 +16,7 @@ import { MockApi } from './mock-api';
 
 const API = new RegExp(
   // `casovi`: kartica "Naredni časovi" na Početnoj (najava odsustva; bez rasporeda u moku prazna); `obavestenja`: zvono ljuske
-  '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi|obavestenja)$'
+  '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi|obavestenja|ankete|ankete/\\d+/glas)$'
   + '|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$',
 );
 /** Token oblika servera (`<predavanjeId>.<22 znaka>`) za živo predavanje 1 iz fiksture. */
@@ -116,6 +116,27 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
       'POST /api/public/nalog/prijava',
       'POST /api/public/nalog/cas/potvrdi',
     ]);
+  });
+
+  test('cas: ključ izgubljen tokom prijave (druga kartica): napomena da skenira ponovo, bez potvrde', async ({ page, mock }) => {
+    mock.cekiranje.uToku = { predmet: 'Programiranje u građevinarstvu', tema: 'Petlje i nizovi' };
+    await page.goto(`nalog/cas/${TOKEN}`);
+    await ocekuj(page).toHaveURL(/\/nalog\?nazad=nalog(\/|%2F)cas$/);
+    // kao da se student prijavio u novoj kartici ili u aplikaciji: sessionStorage (ključ) je drugi, localStorage isti
+    ocekuj(await page.evaluate(() => localStorage.getItem('gfs-cas-skenirano'))).not.toBeNull();
+    await page.evaluate(() => sessionStorage.clear());
+    await page.getByLabel('Broj indeksa').fill('01');
+    await page.getByRole('button', { name: 'Pošalji kod' }).click();
+    await page.getByLabel('Kod iz mejla').fill(MockApi.KOD_NALOGA);
+    await page.getByRole('button', { name: 'Prijavi se' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page.locator('[data-poruka]')).toHaveText(
+      'Skeniranje se izgubilo tokom prijave. Skeniraj QR ponovo: sad si prijavljen, pa ide odmah.',
+    );
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Predavanje je u toku' })).toBeVisible();
+    await ocekuj(page.locator('[data-skener-mesto]')).toBeAttached();
+    ocekuj(mock.zahteviZa('public/nalog/cas/potvrdi', 'POST')).toHaveLength(0);
+    ocekuj(await page.evaluate(() => localStorage.getItem('gfs-cas-skenirano'))).toBeNull();
   });
 
   test('istekao QR i završen čas: poruka servera, bez praćenja', async ({ page, mock }) => {

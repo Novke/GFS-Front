@@ -7,12 +7,15 @@ import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { izasaoIz } from '../../uzivo/izlaz-iz-izvodjenja';
+import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
 import { CasApi } from '../data-access/cas.api';
 import { CasStanje } from '../data-access/cas.models';
 import {
-  KLJUC_CEKANJA, odlaganjeKoraka429, odlaganjePosle429, opisCasa, opisUToku, putanjaUzivo, sledeciUpitMs, sledeciUpitVanCasaMs,
+  KLJUC_CEKANJA, odlaganjeKoraka429, odlaganjePosle429, opisCasa, opisUToku, PORUKA_SKENIRANJE_IZGUBLJENO, putanjaUzivo,
+  skeniranoSkoro, SKENIRANO_U, sledeciUpitMs, sledeciUpitVanCasaMs,
 } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
+import { AnketeKarticeComponent } from '../ui/ankete-kartice.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { SkenerQr } from '../ui/skener-qr.component';
 
@@ -42,6 +45,27 @@ function pisiKljuc(kljuc: string | null): void {
   }
 }
 
+/** Oznaka skeniranja (`SKENIRANO_U`) u `localStorage`; bez skladišta je nema, pa ni napomene. */
+function citajOznaku(): string | null {
+  try {
+    return localStorage.getItem(SKENIRANO_U);
+  } catch {
+    return null;
+  }
+}
+
+function pisiOznaku(ms: number | null): void {
+  try {
+    if (ms === null) {
+      localStorage.removeItem(SKENIRANO_U);
+    } else {
+      localStorage.setItem(SKENIRANO_U, String(ms));
+    }
+  } catch {
+    // bez skladišta: posle izgubljenog ključa ostaje obično "Nisi na času"
+  }
+}
+
 const status = (e: unknown) => (e instanceof HttpErrorResponse ? e.status : -1);
 
 /** Koliko puta se skeniranje ili potvrda sami ponove posle 429, pre poruke sa "Pokušaj ponovo". */
@@ -58,7 +82,9 @@ const POKUSAJA_429 = 5;
  * - Sa tokenom: adresa se odmah menja u `/nalog/cas` (token ne ostaje u istoriji), pa `POST skeniraj`. Prijavljen student
  *   dobija stanje časa; neprijavljen ključ čekanja, koji ide u `sessionStorage`, a stranica na `/nalog?nazad=nalog/cas`.
  * - Bez tokena: ključ iz `sessionStorage` (posle prijave) ide na `POST potvrdi` i briše se (401 ga čuva i vodi na prijavu);
- *   bez ključa `GET` stanja (401 vodi na prijavu).
+ *   bez ključa `GET` stanja (401 vodi na prijavu). Uz ključ se u `localStorage` pamti i vreme skeniranja (`SKENIRANO_U`, bez
+ *   ključa): kad ključa nema, a skeniranje je iz poslednjih 15 min (prijava u drugoj kartici ili u aplikaciji), van časa
+ *   stoji napomena da skenira ponovo. Oznaka se briše potvrdom, prikazom napomene i skeniranjem prijavljenog studenta.
  * - Na času: upit stanja na 10 s ± 2 s i odmah kad se stranica vrati (`visibilitychange`); skrivena stranica ne pita. Kad
  *   stanje ima izvođenje, ide u Uživo (`uzivo/<kod>?sa=cas`, **`replaceUrl`**: Nazad odande ne vraća na ovaj tab, koji bi
  *   opet ušao; odande se posle kraja vraća ovde). Ako je student sam izašao iz tog izvođenja ("Izađi" ili Nazad,
@@ -66,15 +92,18 @@ const POKUSAJA_429 = 5;
  *   prekid mreže zadržava prikaz.
  * - Van časa (nije čekiran, čas završen, prisustvo uklonjeno): prikaz sa napomenom i upit na 30 s dok je predavanje grupe u
  *   toku, inače 60 s, samo dok je stranica vidljiva (kao na času).
+ * - Ankete studenta (`CasStanje.ankete`, i u odgovorima skeniranja i potvrde) idu u `AnketeStudentaStore`: kartice iznad
+ *   prikaza (`AnketeKarticeComponent`), a donji list crta ljuska.
  * - 429 na skeniranju ili potvrdi (cela učionica odjednom): isti korak se sam ponovi posle 1-9 s (`odlaganjeKoraka429`), do
  *   `POKUSAJA_429` puta, pa poruka sa "Pokušaj ponovo"; ključ ostaje.
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
+  imports: [AnketeKarticeComponent, MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
+      <app-ankete-kartice mesto="cas" />
       @switch (faza()) {
         @case ('ucitavanje') {
           <h2>Čekiranje</h2>
@@ -145,6 +174,7 @@ export class CasPage implements OnInit {
   readonly token = input<string | null | undefined>(null);
 
   private readonly api = inject(CasApi);
+  private readonly ankete = inject(AnketeStudentaStore);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly dokument = inject(DOCUMENT);
@@ -178,6 +208,8 @@ export class CasPage implements OnInit {
   private broj429Koraka = 0;
   /** Bar jednom prikazano "na času": prazno stanje posle toga je "Nisi više na času.". */
   private bioNaCasu = false;
+  /** Skeniranje iz poslednjih 15 min bez ključa (izgubljen usput): van časa napomena da skenira ponovo. */
+  private skeniranjeIzgubljeno = false;
   /** Praćenje je završeno (navigacija ili konačna poruka): ni tajmer ni povratak na stranicu više ne pitaju. */
   private gotovo = false;
   private poslednjiKorak: () => void = () => this.upit();
@@ -208,6 +240,8 @@ export class CasPage implements OnInit {
     if (kljuc) {
       this.potvrdi(kljuc);
     } else {
+      this.skeniranjeIzgubljeno = skeniranoSkoro(citajOznaku(), Date.now());
+      pisiOznaku(null);
       this.upit();
     }
   }
@@ -227,9 +261,11 @@ export class CasPage implements OnInit {
         this.zahtev = null;
         if (odg?.kljuc) {
           pisiKljuc(odg.kljuc);
+          pisiOznaku(Date.now());
           this.idi(NA_PRIJAVU, false);
           return;
         }
+        pisiOznaku(null);
         this.prikazi(odg?.stanje ?? {});
       },
       error: (e: unknown) => {
@@ -247,6 +283,7 @@ export class CasPage implements OnInit {
       next: s => {
         this.zahtev = null;
         pisiKljuc(null);
+        pisiOznaku(null);
         this.prikazi(s ?? {});
       },
       error: (e: unknown) => {
@@ -263,6 +300,7 @@ export class CasPage implements OnInit {
           return;
         }
         pisiKljuc(null);
+        pisiOznaku(null);
         this.greskaKoraka(e);
       },
     });
@@ -300,6 +338,7 @@ export class CasPage implements OnInit {
   }
 
   private prikazi(s: CasStanje): void {
+    this.ankete.primi(s.ankete);
     const p = s.predavanje ?? null;
     const izvodjenje = s.izvodjenje ?? null;
     this.ponovo.set(false);
@@ -309,6 +348,7 @@ export class CasPage implements OnInit {
         return;
       }
       this.bioNaCasu = true;
+      this.skeniranjeIzgubljeno = false;
       this.stanje.set(s);
       this.napomena.set('');
       this.faza.set('naCasu');
@@ -316,7 +356,11 @@ export class CasPage implements OnInit {
       return;
     }
     // van časa: praćenje se nastavlja ređe (traka "Predavanje je u toku" se pojavi i nestane sama)
-    this.napomena.set(p?.zavrseno ? 'Čas je završen.' : this.bioNaCasu ? 'Nisi više na času.' : '');
+    this.napomena.set(
+      p?.zavrseno ? 'Čas je završen.'
+        : this.bioNaCasu ? 'Nisi više na času.'
+          : this.skeniranjeIzgubljeno ? PORUKA_SKENIRANJE_IZGUBLJENO : '',
+    );
     this.stanje.set(s);
     this.faza.set('nijeNaCasu');
     this.zakazi(sledeciUpitVanCasaMs(!!s.uToku));

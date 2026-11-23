@@ -28,4 +28,12 @@ describe('precice (tabela pomoći)', () => {
     expect(d?.opis).toContain('Ctrl+Z');
     expect(precice('publika').some(r => r.tasteri.join('+') === 'D')).toBe(false);
   });
+
+  it('A (brza anketa) samo u konzoli, pre pomoći', () => {
+    const konzola = precice('konzola');
+    const a = konzola.findIndex(red => red.tasteri.length === 1 && red.tasteri[0] === 'A');
+    expect(a).toBe(konzola.length - 2);
+    expect(konzola[a].opis).toContain('Brza anketa');
+    expect(precice('publika').some(red => red.tasteri[0] === 'A')).toBe(false);
+  });
 });

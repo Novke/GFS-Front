@@ -3,9 +3,9 @@ import { TipKomande } from './data-access/uzivo.models';
 /**
  * Lokalne akcije prozora (server ih ne zna). `CRTANJE` (`D`) uključuje ili gasi crtanje (samo konzola; publika ga
  * preskače); `ALAT` (`1`-`7`, `vrednost` 0-6), `PONISTI` (Ctrl+Z), `VRATI` (Ctrl+Y, Ctrl+Shift+Z) i `ESC` važe samo dok
- * konzola crta ({@link tasterCrtanja}).
+ * konzola crta ({@link tasterCrtanja}). `ANKETA` (taster A) otvara panel brze ankete samo u konzoli; publika ga preskače.
  */
-export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC' | 'CRTANJE' | 'ALAT' | 'PONISTI' | 'VRATI' | 'ESC';
+export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC' | 'ANKETA' | 'CRTANJE' | 'ALAT' | 'PONISTI' | 'VRATI' | 'ESC';
 export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija; vrednost?: number };
 type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string; shiftKey?: boolean };
 
@@ -59,6 +59,7 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 'w': case 'W': return { komanda: 'EKRAN_BEO' };
     case 'f': case 'F': return { lokalno: 'CEO_EKRAN' };
     case 'p': case 'P': return { lokalno: 'KONZOLA' };
+    case 'a': case 'A': return { lokalno: 'ANKETA' };
     case '?': return { lokalno: 'POMOC' };
     default: return null;
   }

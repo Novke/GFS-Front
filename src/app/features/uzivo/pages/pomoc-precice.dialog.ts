@@ -8,14 +8,14 @@ interface Red { tasteri: string[]; opis: string; }
 
 /**
  * Tabela prečica iz spec-a 6.4, `Shift+R` za rešenje zadatka i `Shift+L` za rang predavanja (ista u publici i konzoli;
- * razlikuju se samo P i crtanje `D`, koje postoji samo u konzoli). `R` se pritiska dvaput u oba prozora, a `Shift+M` i
- * `Shift+D` su zamenili `M` i `D` (plan crtanja, dopune).
+ * razlikuju se P, crtanje `D` i brza anketa `A`, koji postoje samo u konzoli). `R` se pritiska dvaput u oba prozora, a
+ * `Shift+M` i `Shift+D` su zamenili `M` i `D` (plan crtanja, dopune).
  */
 export function precice(kontekst: KontekstPrecica): Red[] {
   const crtanje: Red[] = kontekst === 'konzola'
     ? [{ tasteri: ['D'], opis: 'Crtanje preko slajda: uključi ili završi (u crtanju 1–7 alat, Ctrl+Z poništi, Ctrl+Y vrati, Esc završi)' }]
     : [];
-  return [
+  const redovi: Red[] = [
     { tasteri: ['→', 'PageDown', 'Enter'], opis: 'Dalje: sledeća stavka, otvori ili zatvori pitanje, sledeći slajd' },
     { tasteri: ['←', 'PageUp'], opis: 'Nazad' },
     { tasteri: ['Home'], opis: 'Prijava (QR i kod)' },
@@ -41,6 +41,11 @@ export function precice(kontekst: KontekstPrecica): Red[] {
     { tasteri: ['P'], opis: kontekst === 'publika' ? 'Otvori konzolu' : 'Otvori prikaz za publiku' },
     { tasteri: ['?'], opis: 'Ova pomoć' },
   ];
+  if (kontekst === 'konzola') {
+    // brza anketa (spec brze ankete 6.1): samo konzola; u otvorenom panelu 1-9, Enter, R i Esc
+    redovi.splice(redovi.length - 1, 0, { tasteri: ['A'], opis: 'Brza anketa (u panelu: 1–9 prečica, Enter zatvori anketu, R rezultat, Esc zatvori panel)' });
+  }
+  return redovi;
 }
 
 /** Pomoć sa prečicama (`?`). Stilovi su ovde, ne u globalnom CSS-u: početni paket je na granici budžeta. */

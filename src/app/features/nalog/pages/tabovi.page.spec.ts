@@ -166,4 +166,18 @@ describe('NalogTabovi', () => {
     http.expectOne(CAS).flush({ reason: 'Potrebna je prijava.' }, { status: 401, statusText: 'Unauthorized' });
     expect(navigacija).toHaveBeenCalledExactlyOnceWith('nalog?nazad=nalog/predmet/3?k=ocena');
   });
+
+  it('ankete iz stanja časa: otvorena bez glasa iskače kao donji list na svakom tabu', async () => {
+    await harness.navigateByUrl('/nalog/predmeti');
+    const anketa = {
+      id: 9, pitanje: 'Kolokvijum 1: koji datum?', opcije: ['Sreda', 'Petak'], viseOdgovora: false, publika: 'GRUPA',
+      rokMs: null, otvorena: true, mojGlas: null, rezultat: null, sadaMs: 0,
+    };
+    http.expectOne(CAS).flush({ ankete: [anketa] });
+    harness.detectChanges();
+    expect(document.querySelector('[data-anketa-list]')?.textContent).toContain('Kolokvijum 1: koji datum?');
+    document.querySelector<HTMLButtonElement>('[data-anketa-skloni]')!.click();
+    harness.detectChanges();
+    expect(document.querySelector('[data-anketa-list]')).toBeNull();
+  });
 });

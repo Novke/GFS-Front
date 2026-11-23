@@ -21,6 +21,7 @@ import { PrezentacijePredavanjaStore } from '../data-access/prezentacije-predava
 import { TipAktivnosti } from '../../../core/api/predavanja.models';
 import { BrziUnos } from '../ui/brzi-unos';
 import { CekiraniPanel } from '../ui/cekirani-panel';
+import { KontekstAnkete, otvoriAnketu, registrujIkoneAnkete } from '../../ankete/ui/otvori-anketu';
 import { NapomenaDialog } from '../ui/napomena-dialog';
 import { PokreniPrezentacijuDialog } from '../ui/pokreni-prezentaciju.dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';
@@ -155,6 +156,7 @@ export class PredavanjeDetalj {
   );
 
   constructor() {
+    registrujIkoneAnkete(); // ikone dugmeta "Anketa" i panela (van početnog paketa)
     effect(() => {
       const id = this.pId();
       if (id !== null) {
@@ -191,6 +193,26 @@ export class PredavanjeDetalj {
    * "Pokreni prezentaciju": izbor prezentacije predmeta, start vezan za ovo predavanje i konzola u novoj kartici (beleženje
    * ovde ne staje). Predmet dolazi sa predavanjem; dok nije učitano dugme ne postoji.
    */
+  /** Kontekst brze ankete: ovo predavanje, njegova grupa i broj čekiranih (osvežava se sa listom čekiranih). */
+  private readonly kontekstAnkete = computed<KontekstAnkete>(
+    () => {
+      const p = this.store.predavanje();
+      return {
+        predavanjeId: p?.id ?? null, grupaId: p?.grupa?.id ?? null, grupaNaziv: p?.grupa?.naziv ?? null,
+        predmetNaziv: p?.predmet?.naziv ?? null, brojCekiranih: this.cekirani()?.length ?? null,
+      };
+    },
+    {
+      equal: (a, b) => a.predavanjeId === b.predavanjeId && a.grupaId === b.grupaId && a.grupaNaziv === b.grupaNaziv
+        && a.predmetNaziv === b.predmetNaziv && a.brojCekiranih === b.brojCekiranih,
+    },
+  );
+
+  /** Brza anketa sa stranice živog predavanja (spec brze ankete 6.1). */
+  protected anketa(): void {
+    void otvoriAnketu(this.dialog, this.kontekstAnkete);
+  }
+
   protected pokreniPrezentaciju(): void {
     const p = this.store.predavanje();
     if (!p?.predmet) {
