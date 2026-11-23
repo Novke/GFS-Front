@@ -108,7 +108,7 @@ describe('KonzolaKontroleComponent', () => {
     // pitanje: dugme postoji, ali nema šta da prikaže
     expect(resenje().disabled).toBe(true);
     expect(resenje().getAttribute('aria-keyshortcuts')).toBe('Shift+R');
-    expect(resenje().querySelector('kbd')?.textContent).toBe('Shift+R');
+    expect(resenje().querySelector('kbd')?.textContent).toBe('⇧R');
 
     postavi(naZadatku('CEKA'));
     expect(resenje().disabled).toBe(true);

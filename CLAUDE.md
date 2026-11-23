@@ -1347,6 +1347,9 @@ Spec `docs/superpowers/specs/2026-11-23-crtanje-uzivo-design.md` and plan `docs/
 - **Keys** (`tastatura.ts`, help `pages/pomoc-precice.dialog.ts`): `D` = drawing (console only; the audience ignores it),
   `Shift+D` = Detalji (was `D`), `Shift+M` = phone view (was `M`; plain `M` does nothing), `R` = repeat question only when pressed
   twice within 2 s, in the console too (`DvaputR`; a hint "Pritisni R ponovo…"); the console's "Ponovi" button keeps its confirm.
+  Console buttons with a long key (`Space`, `Shift+…`) show it as `⇧R` (`prikazTastera`; `aria-keyshortcuts` keeps the full name)
+  floated in the label's top-right corner, so it never covers the label and buttons do not grow: the console at 1366x768 must not
+  scroll, otherwise the classic scrollbar narrows the columns and `e2e/uzivo-formule-tekst.spec.ts` (konzola 1366) fails.
   While drawing, `tasterCrtanja` (after the `G` mode) takes `1`-`7`, `Ctrl+Z`, `Ctrl+Y`/`Ctrl+Shift+Z` and `Esc`; other shortcuts work as before.
 - **Budgets:** new CSS lives in component styles (the `.uz-pomoc*`, phone-dialog and screen-choice rules moved out of the global
   `uzivo-izvodjenje.css` to make room); initial closure 799 497 B after this feature (`e2e/lenji-editor.spec.ts`, limit 800 000).
