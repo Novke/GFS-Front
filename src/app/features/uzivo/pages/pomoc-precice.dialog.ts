@@ -6,9 +6,12 @@ export type KontekstPrecica = 'publika' | 'konzola';
 
 interface Red { tasteri: string[]; opis: string; }
 
-/** Tabela prečica iz spec-a 6.4, `Shift+R` za rešenje zadatka i `Shift+L` za rang predavanja (ista u publici i konzoli; razlikuju se samo R i P). */
+/**
+ * Tabela prečica iz spec-a 6.4, `Shift+R` za rešenje zadatka i `Shift+L` za rang predavanja (ista u publici i konzoli; razlikuju
+ * se R i P, a `A` (brza anketa) postoji samo u konzoli).
+ */
 export function precice(kontekst: KontekstPrecica): Red[] {
-  return [
+  const redovi: Red[] = [
     { tasteri: ['→', 'PageDown', 'Enter'], opis: 'Dalje: sledeća stavka, otvori ili zatvori pitanje, sledeći slajd' },
     { tasteri: ['←', 'PageUp'], opis: 'Nazad' },
     { tasteri: ['Home'], opis: 'Prijava (QR i kod)' },
@@ -33,6 +36,11 @@ export function precice(kontekst: KontekstPrecica): Red[] {
     { tasteri: ['P'], opis: kontekst === 'publika' ? 'Otvori konzolu' : 'Otvori prikaz za publiku' },
     { tasteri: ['?'], opis: 'Ova pomoć' },
   ];
+  if (kontekst === 'konzola') {
+    // brza anketa (spec brze ankete 6.1): samo konzola; u otvorenom panelu 1-9, Enter, R i Esc
+    redovi.splice(redovi.length - 1, 0, { tasteri: ['A'], opis: 'Brza anketa (u panelu: 1–9 prečica, Enter zatvori anketu, R rezultat, Esc zatvori panel)' });
+  }
+  return redovi;
 }
 
 /** Pomoć sa prečicama (`?`). */

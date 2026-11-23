@@ -7,6 +7,7 @@ import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { izasaoIz } from '../../uzivo/izlaz-iz-izvodjenja';
+import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
 import { CasApi } from '../data-access/cas.api';
 import { CasStanje } from '../data-access/cas.models';
 import {
@@ -14,6 +15,7 @@ import {
   skeniranoSkoro, SKENIRANO_U, sledeciUpitMs, sledeciUpitVanCasaMs,
 } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
+import { AnketeKarticeComponent } from '../ui/ankete-kartice.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { SkenerQr } from '../ui/skener-qr.component';
 
@@ -90,15 +92,18 @@ const POKUSAJA_429 = 5;
  *   prekid mreže zadržava prikaz.
  * - Van časa (nije čekiran, čas završen, prisustvo uklonjeno): prikaz sa napomenom i upit na 30 s dok je predavanje grupe u
  *   toku, inače 60 s, samo dok je stranica vidljiva (kao na času).
+ * - Ankete studenta (`CasStanje.ankete`, i u odgovorima skeniranja i potvrde) idu u `AnketeStudentaStore`: kartice iznad
+ *   prikaza (`AnketeKarticeComponent`), a donji list crta ljuska.
  * - 429 na skeniranju ili potvrdi (cela učionica odjednom): isti korak se sam ponovi posle 1-9 s (`odlaganjeKoraka429`), do
  *   `POKUSAJA_429` puta, pa poruka sa "Pokušaj ponovo"; ključ ostaje.
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
+  imports: [AnketeKarticeComponent, MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
+      <app-ankete-kartice mesto="cas" />
       @switch (faza()) {
         @case ('ucitavanje') {
           <h2>Čekiranje</h2>
@@ -169,6 +174,7 @@ export class CasPage implements OnInit {
   readonly token = input<string | null | undefined>(null);
 
   private readonly api = inject(CasApi);
+  private readonly ankete = inject(AnketeStudentaStore);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly dokument = inject(DOCUMENT);
@@ -332,6 +338,7 @@ export class CasPage implements OnInit {
   }
 
   private prikazi(s: CasStanje): void {
+    this.ankete.primi(s.ankete);
     const p = s.predavanje ?? null;
     const izvodjenje = s.izvodjenje ?? null;
     this.ponovo.set(false);

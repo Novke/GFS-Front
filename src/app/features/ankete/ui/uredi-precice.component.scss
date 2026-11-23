@@ -1,0 +1,36 @@
+:host { display: block; }
+.up-naslov { margin: 0; font-size: 16px; font-weight: 600; }
+.up-pod { margin: 2px 0 10px; font-size: 13px; color: var(--muted); }
+.up-lista { list-style: none; margin: 0 0 12px; padding: 0; }
+.up-red { display: flex; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+.up-red--izabrana { background: var(--primary-soft); }
+.up-red.cdk-drag-preview { box-shadow: var(--shadow); border-radius: var(--radius-sm); }
+.up-red.cdk-drag-placeholder { opacity: .3; }
+.up-hvataljka { display: inline-flex; color: var(--muted); cursor: grab; touch-action: none; }
+.up-boja { flex: none; width: 14px; height: 14px; border-radius: 4px; }
+.up-glavno {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px 2px; border: 0; background: none; color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.up-glavno:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.up-ime { font-weight: 600; overflow-wrap: anywhere; }
+.up-opis { font-size: 12px; color: var(--muted); }
+.up-prazno { color: var(--muted); padding: 8px 0; }
+.up-izgled { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.up-sekcija { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.up-pun { width: 100%; }
+.up-pola { width: 100%; max-width: 280px; }
+.up-ikonice { display: flex; flex-wrap: wrap; gap: 6px; }
+.up-ikonica {
+  min-width: 40px; height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--ink); font: inherit; font-size: 18px; cursor: pointer;
+}
+.up-ikonica[aria-pressed='true'] { border: 2px solid var(--primary); background: var(--primary-soft); }
+.up-boje { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 2px; }
+.up-boja-izbor { width: 32px; height: 32px; border: 0; border-radius: 8px; cursor: pointer; }
+.up-boja-izbor[aria-pressed='true'] { outline: 3px solid var(--ink); outline-offset: 2px; }
+.up-boja-izbor:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.up-trajanje { flex-wrap: wrap; }
+.up-greska { color: var(--danger); }
+.up-red-opc { margin: 4px 0; }
+.up-dugmad { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 8px; }

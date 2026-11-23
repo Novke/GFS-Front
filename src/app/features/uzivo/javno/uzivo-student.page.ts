@@ -4,6 +4,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
+import { AnketaListComponent } from '../../nalog/ui/anketa-list.component';
 import { zaboraviIzlazak, zapamtiIzlazak } from '../izlaz-iz-izvodjenja';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { LicnoStanje, medijUrl } from '../data-access/uzivo.models';
@@ -32,7 +33,8 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
 
 /**
  * Javna studentska stranica `uzivo/:kod` (spec 6.5): ime, pa tok uživo preko STOMP-a. Sme da zove samo
- * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`).
+ * `api/public/uzivo/*`, `api/public/mediji/*` i `api/public/ws` (sve kroz {@link StudentStore} i `medijUrl`), a sa `?sa=cas`
+ * i `api/public/nalog/ankete*` (donji list brze ankete iz `features/nalog`, lenji blok; STOMP i stanje izvođenja ne dira).
  * U javnom layoutu (`PublicLayout`, bez ljuske); uvek svetle boje, mobile-first. Tekst pitanja i opcija (i tačne opcije)
  * ide kroz `app-tekst-formule` (formule `$...$`): lenji `mathlive/ssr` chunk i `assets/mathlive/` traže se samo kad tekst
  * ima formulu. Prihvatljivi odgovori, jedinica i oznake skale ostaju običan tekst (plan faze 5, odluka 2).
@@ -53,7 +55,7 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
   providers: [StudentStore],
   imports: [
     RouterLink, OdgovorUnosComponent, OpcijaOblikComponent, RangListaComponent, TajmerComponent, TekstFormuleComponent,
-    ZadatakEkranComponent, FajloviTelefonComponent,
+    ZadatakEkranComponent, FajloviTelefonComponent, AnketaListComponent,
   ],
   host: { class: 'uz-st rezim-dan uz-dan', lang: 'sr-Latn', '(document:keydown.escape)': 'detaljiOtvoreni.set(false)' },
   template: `
@@ -259,6 +261,12 @@ export function tacnostUcesnika(l: LicnoStanje | null | undefined): string | nul
             }
           </div>
         }
+      }
+    }
+    @if (saCasa) {
+      <!-- brza anketa preko slajda (prijavljen student sa časa); lenji blok, budžet statičkog zatvorenja -->
+      @defer (on immediate) {
+        <app-anketa-list izvor="uzivo" />
       }
     }
   `,

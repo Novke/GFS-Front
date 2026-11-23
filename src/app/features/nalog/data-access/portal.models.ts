@@ -186,4 +186,6 @@ export interface PodesavanjaNaloga {
   pushPosleCasa?: boolean;
   zvonoOcene?: boolean;
   zvonoPosleCasa?: boolean;
+  /** Push brze ankete (na času i za grupu; podrazumevano uključen). Stariji backend ga nema. */
+  pushAnkete?: boolean;
 }

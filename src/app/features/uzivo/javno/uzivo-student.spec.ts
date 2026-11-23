@@ -1,5 +1,7 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import {
@@ -245,8 +247,10 @@ describe('UzivoStudentPage: povratak na čas (?sa=cas)', () => {
     lazni = lazniStore();
     TestBed.configureTestingModule({
       imports: [UzivoStudentPage],
+      // lenji list brze ankete (`?sa=cas`) se ovde ne crta: njegov upit bi držao stranicu nestabilnom (`whenStable`)
+      deferBlockBehavior: DeferBlockBehavior.Manual,
       providers: [
-        provideZonelessChangeDetection(), provideRouter([]),
+        provideZonelessChangeDetection(), provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
           useValue: { paramMap: of(convertToParamMap({ kod: '123456' })), snapshot: { queryParamMap: convertToParamMap(query) } },
@@ -338,7 +342,7 @@ describe('UzivoStudentPage: Izađi, tačnost i pamćenje izlaska', () => {
     TestBed.configureTestingModule({
       imports: [UzivoStudentPage],
       providers: [
-        provideZonelessChangeDetection(), provideRouter([]),
+        provideZonelessChangeDetection(), provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
           useValue: { paramMap: of(convertToParamMap({ kod: '123456' })), snapshot: { queryParamMap: convertToParamMap(query) } },
@@ -409,5 +413,58 @@ describe('UzivoStudentPage: Izađi, tačnost i pamćenje izlaska', () => {
     f.detectChanges();
     expect((f.nativeElement as HTMLElement).querySelector('[data-tacnost]')?.textContent?.replace(/\s+/g, ' ').trim())
       .toBe('1 200 poena · Tačno 1 od 2');
+  });
+});
+
+describe('UzivoStudentPage: brza anketa preko slajda', () => {
+  const ANKETA = {
+    id: 31, pitanje: 'Da li vam treba pauza?', opcije: ['Da', 'Ne'], viseOdgovora: false, publika: 'NA_CASU', rokMs: null,
+    otvorena: true, mojGlas: null, rezultat: null, sadaMs: 0,
+  };
+
+  async function pripremi(query: Record<string, string>): Promise<{ f: ComponentFixture<UzivoStudentPage>; http: HttpTestingController }> {
+    TestBed.configureTestingModule({
+      imports: [UzivoStudentPage],
+      providers: [
+        provideZonelessChangeDetection(), provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: { paramMap: of(convertToParamMap({ kod: '123456' })), snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+      ],
+    });
+    const lazni = lazniStore();
+    lazni.ekran.set('tabla');
+    TestBed.overrideComponent(UzivoStudentPage, { set: { providers: [{ provide: StudentStore, useValue: lazni }] } });
+    await TestBed.compileComponents();
+    const f = TestBed.createComponent(UzivoStudentPage);
+    f.detectChanges();
+    for (const d of await f.getDeferBlocks()) {
+      await d.render(DeferBlockState.Complete);
+    }
+    return { f, http: TestBed.inject(HttpTestingController) };
+  }
+
+  it('sa ?sa=cas pita ankete studenta i crta list preko slajda; dodir na odgovor šalje glas', async () => {
+    const { f, http } = await pripremi({ sa: 'cas' });
+    http.expectOne('api/public/nalog/ankete').flush([ANKETA]);
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    const list = el.querySelector('[data-anketa-list]');
+    expect(list?.textContent).toContain('Da li vam treba pauza?');
+    expect(list?.textContent).toContain('anonimno');
+    el.querySelector<HTMLButtonElement>('[data-anketa-odgovor]')!.click();
+    const glas = http.expectOne('api/public/nalog/ankete/31/glas');
+    expect(glas.request.body).toEqual({ opcije: [0] });
+    glas.flush({ ...ANKETA, mojGlas: [0] });
+    await f.whenStable();
+    expect(el.querySelector('[data-anketa-stanje]')?.textContent).toContain('Glas je zabeležen');
+    http.verify();
+  });
+
+  it('bez ?sa=cas (gost, kod sa table) nema lista ni upita anketa', async () => {
+    const { f, http } = await pripremi({});
+    http.expectNone('api/public/nalog/ankete');
+    expect((f.nativeElement as HTMLElement).querySelector('app-anketa-list')).toBeNull();
   });
 });

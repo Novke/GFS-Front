@@ -5,10 +5,12 @@ import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router
 import { filter, Subscription } from 'rxjs';
 
 import { postaviManifest } from '../../../core/pwa/manifest';
+import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
 import { CasApi } from '../data-access/cas.api';
 import { CasIzvodjenje, CasUToku } from '../data-access/cas.models';
 import { opisUToku } from '../data-access/cas.pravila';
 import { jeTabCas, putanjaPrijave, sledeciUpitTrakeMs, status } from '../data-access/portal.pravila';
+import { AnketaListComponent } from '../ui/anketa-list.component';
 import { ZvonoNaloga } from '../ui/zvono-naloga.component';
 
 export type TabNaloga = 'pocetna' | 'cas' | 'predmeti' | 'ja';
@@ -38,13 +40,15 @@ export function tabIzUrla(url: string): TabNaloga {
  *   student usred vežbanja ili pregleda ne gubi rad (sam ulazi samo tab Čas).
  * - **"Predavanje je u toku · Čekiraj se"** dok traje današnje predavanje njegove grupe na kome nije čekiran (`uToku`);
  *   dugme vodi na tab Čas (QR).
- * Tab Čas tada nosi tačku. Ljuska pita na 10 s ± 2 s dok je student na času, 30 s dok je predavanje grupe u toku, inače na
+ * Tab Čas tada nosi tačku. Isti odgovor nosi i ankete studenta (`CasStanje.ankete`, `AnketeStudentaStore`): otvorena anketa na
+ * koju nije glasao iskače kao donji list (`AnketaListComponent`) iznad tabova, na svakom tabu (na tabu Čas store hrani sam Čas).
+ * Ljuska pita na 10 s ± 2 s dok je student na času, 30 s dok je predavanje grupe u toku, inače na
  * 60 s, i odmah kad se stranica vrati u prvi plan; skrivena stranica ne pita. Na tabu Čas ljuska ne pita i ne crta traku
  * (Čas pita sam). 401 vodi na prijavu sa povratkom na trenutnu stranu; 429 i greška mreže samo odlažu sledeći upit.
  */
 @Component({
   selector: 'app-nalog-tabovi',
-  imports: [MatButton, RouterLink, RouterOutlet, ZvonoNaloga],
+  imports: [AnketaListComponent, MatButton, RouterLink, RouterOutlet, ZvonoNaloga],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (traka(); as iz) {
@@ -62,6 +66,7 @@ export function tabIzUrla(url: string): TabNaloga {
       <div class="zvono-mesto"><app-zvono-naloga /></div>
       <router-outlet />
     </div>
+    <app-anketa-list izvor="nalog" />
     <nav class="tabovi" aria-label="Nalog">
       <a routerLink="/nalog/pocetna" [class.aktivan]="tab() === 'pocetna'"
          [attr.aria-current]="tab() === 'pocetna' ? 'page' : null" data-tab="pocetna">
@@ -119,6 +124,7 @@ export function tabIzUrla(url: string): TabNaloga {
 })
 export class NalogTabovi {
   private readonly api = inject(CasApi);
+  private readonly ankete = inject(AnketeStudentaStore);
   private readonly router = inject(Router);
   private readonly dokument = inject(DOCUMENT);
 
@@ -185,6 +191,7 @@ export class NalogTabovi {
         this.naCasu = !!p && !p.zavrseno;
         this.izvodjenje.set(this.naCasu && s?.izvodjenje?.kod ? s.izvodjenje : null);
         this.uToku.set(this.naCasu ? null : s?.uToku ?? null);
+        this.ankete.primi(s?.ankete);
         this.zakazi(sledeciUpitTrakeMs(this.naCasu, Math.random(), this.uToku() !== null));
       },
       error: (e: unknown) => {

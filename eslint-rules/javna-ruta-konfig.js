@@ -61,6 +61,11 @@ const DOZVOLJENO_PO_FEATURE = {
     'features/uzivo/ui/polja-zadatka',
     // "Izađi" i Nazad iz izvođenja (2026-10-29): pamti kod u sessionStorage da tab Čas naloga ne uđe sam ponovo. Bez uvoza.
     'features/uzivo/izlaz-iz-izvodjenja',
+    // Brza anketa preko slajda (spec brze ankete 6.3, 2026-11-23): donji list iz naloga, samo u lenjom bloku uz `?sa=cas`.
+    // Pregledano sa svim uvozima: zove samo `api/public/nalog/ankete*` (AnketeStudentaApi); uvozi nalog `data-access`
+    // (store anketa, `cas.pravila`, `portal.pravila`), `shared/util/ankete`, `shared/ui/anketa-trake.component`,
+    // `core/api/api-error`, `core/api/api-url` i `core/pwa/service-worker` (poruka push-a); bez nastavničkog API-ja i `core/state`.
+    'features/nalog/ui/anketa-list.component',
   ],
   // Nalog studenta (spec prijave 10, 2026-10-20): stranice `nalog` i `nalog/moodle` zovu samo api/public/nalog/*,
   // api/public/lti/povezi i api/public/lti/povezivanje (ime Moodle naloga). Oba modula su proverena sa svim uvozima: nijedan ne zove HTTP, ne uvozi store, nastavnički API
@@ -94,6 +99,10 @@ const DOZVOLJENO_PO_FEATURE = {
     'features/uzivo/ui/slajd-za-prikaz',
     // Tab Čas posle "Izađi" ili Nazad iz izvođenja nudi "Uđi u prezentaciju" umesto da sam uđe (isti modul kao uzivo/javno, bez uvoza).
     'features/uzivo/izlaz-iz-izvodjenja',
+    // Brza anketa (spec brze ankete 6.3, 2026-11-23): `shared/util/ankete` (odbrojavanje, rok, trake) uvozi samo
+    // `shared/util/termin` (gore); `shared/ui/anketa-trake.component` uvozi samo @angular/core i `shared/util/ankete`. Bez HTTP-a.
+    'shared/util/ankete',
+    'shared/ui/anketa-trake.component',
   ],
 };
 
