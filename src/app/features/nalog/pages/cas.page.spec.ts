@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { zapamtiIzlazak } from '../../uzivo/izlaz-iz-izvodjenja';
 import { CasPredavanje, CasStanje } from '../data-access/cas.models';
-import { KLJUC_CEKANJA } from '../data-access/cas.pravila';
+import { KLJUC_CEKANJA, PORUKA_SKENIRANJE_IZGUBLJENO, SKENIRANO_U } from '../data-access/cas.pravila';
 import { CasPage } from './cas.page';
 
 const CAS = 'api/public/nalog/cas';
@@ -40,6 +40,7 @@ describe('CasPage', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     sessionStorage.clear();
+    localStorage.removeItem(SKENIRANO_U);
     TestBed.configureTestingModule({ providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
     navigacija = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
@@ -51,6 +52,7 @@ describe('CasPage', () => {
     http.verify();
     vi.useRealTimers();
     sessionStorage.clear();
+    localStorage.removeItem(SKENIRANO_U);
   });
 
   async function otvori(token: string | null = null): Promise<void> {
@@ -90,18 +92,47 @@ describe('CasPage', () => {
     http.expectOne(SKENIRAJ).flush({ kljuc: KLJUC });
     await osvezi();
     expect(sessionStorage.getItem(KLJUC_CEKANJA)).toBe(KLJUC);
+    expect(Number(localStorage.getItem(SKENIRANO_U))).toBe(Date.now()); // samo vreme, ključ ne ide u localStorage
     expect(navigacija).toHaveBeenCalledWith('nalog?nazad=nalog/cas');
   });
 
   it('potvrdaPoslePrijave: ključ iz sessionStorage ide na potvrdu i briše se', async () => {
     sessionStorage.setItem(KLJUC_CEKANJA, KLJUC);
+    localStorage.setItem(SKENIRANO_U, String(Date.now()));
     await otvori();
     const r = http.expectOne(POTVRDI);
     expect(r.request.body).toEqual({ kljuc: KLJUC });
     r.flush(NA_CASU);
     await osvezi();
     expect(sessionStorage.getItem(KLJUC_CEKANJA)).toBeNull();
+    expect(localStorage.getItem(SKENIRANO_U)).toBeNull();
     expect(tekst()).toContain('Prisutan si');
+  });
+
+  it('ključ izgubljen usput (prijava u drugoj kartici): napomena da skenira ponovo, jednom', async () => {
+    localStorage.setItem(SKENIRANO_U, String(Date.now() - 60_000));
+    await otvori();
+    http.expectOne(CAS).flush({ uToku: { predmet: 'Uvod u primenu računara', tema: 'Petlje' } });
+    await osvezi();
+    expect(tekst()).toContain(PORUKA_SKENIRANJE_IZGUBLJENO);
+    expect(tekst()).toContain('Predavanje je u toku');
+    expect(localStorage.getItem(SKENIRANO_U)).toBeNull(); // sledeće otvaranje taba je opet obično
+    // ponovo skeniran (skener u aplikaciji vodi na novu stranicu); ovde: sledeći upit ga zatekne na času, napomena nestaje
+    await vi.advanceTimersByTimeAsync(30_000);
+    http.expectOne(CAS).flush(NA_CASU);
+    await osvezi();
+    expect(tekst()).toContain('Prisutan si');
+    expect(tekst()).not.toContain(PORUKA_SKENIRANJE_IZGUBLJENO);
+  });
+
+  it('stara oznaka skeniranja (posle 15 min): obično "Nisi na času", bez napomene', async () => {
+    localStorage.setItem(SKENIRANO_U, String(Date.now() - 16 * 60_000));
+    await otvori();
+    http.expectOne(CAS).flush({});
+    await osvezi();
+    expect(tekst()).toContain('Nisi na času');
+    expect(tekst()).not.toContain(PORUKA_SKENIRANJE_IZGUBLJENO);
+    expect(localStorage.getItem(SKENIRANO_U)).toBeNull();
   });
 
   it('potvrda bez sesije (401): ključ ostaje, ide na prijavu', async () => {
