@@ -192,9 +192,11 @@ describe('PredavanjeProjektor', () => {
     f.destroy();
   });
 
-  it('brza anketa: prozor preko projektora dok je predavanje živo, rezultat tek kad je pokazan', async () => {
+  it('brza anketa: stoji desno umesto QR-a dok je predavanje živo, rezultat tek kad je pokazan', async () => {
     const f = await otvori();
     odgovoriCekiranje();
+    f.detectChanges();
+    expect(qrTekst(f)).not.toBeNull();
     const anketa = {
       id: 7, sablonId: null, pitanje: 'Da li vam treba pauza?', opcije: ['Da', 'Ne'], viseOdgovora: false, publika: 'NA_CASU',
       predavanjeId: 5, grupaId: 4, grupaNaziv: 'GD-2025', predmetNaziv: 'UPR', otvoreno: '2025-10-14T10:40:00', rok: null, rokMs: null,
@@ -208,6 +210,9 @@ describe('PredavanjeProjektor', () => {
     expect(prozor()?.textContent).toContain('Da li vam treba pauza?');
     expect(prozor()?.textContent).toContain('4 glasa');
     expect(el(f).querySelector('[data-anketa-projektor-rezultat]')).toBeNull();
+    // anketa je stavka mreže ekrana (desna kolona), a QR se sklanja dok je ona tu
+    expect(prozor()?.parentElement?.closest('.ekran.sa-qr')).not.toBeNull();
+    expect(el(f).querySelector('app-qr-kod')).toBeNull();
 
     await vi.advanceTimersByTimeAsync(2_000);
     odgovoriCekiranje();
@@ -221,6 +226,7 @@ describe('PredavanjeProjektor', () => {
     odgovoriAnkete([{ ...anketa, otvorena: false }]);
     f.detectChanges();
     expect(prozor()).toBeNull();
+    expect(qrTekst(f)).not.toBeNull();
     f.destroy();
   });
 

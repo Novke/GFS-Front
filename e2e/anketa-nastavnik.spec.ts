@@ -131,6 +131,7 @@ test.describe('brza anketa na projektoru predavanja', () => {
     const projektor = await page.context().newPage();
     await mock.instaliraj(projektor);
     await projektor.goto('predavanja/1/projektor');
+    await expect(projektor.locator('app-qr-kod')).toBeVisible();
 
     await page.goto('predavanja/1');
     await page.locator('[data-anketa]').click();
@@ -144,6 +145,8 @@ test.describe('brza anketa na projektoru predavanja', () => {
 
     const prozor = projektor.locator('[data-anketa-projektor]');
     await expect(prozor).toContainText('Kakav je tempo?');
+    // anketa stoji desno na mestu QR-a (ne pokriva ga napola); QR se vraća kad anketa ode
+    await expect(projektor.locator('app-qr-kod')).toHaveCount(0);
     await expect(prozor.locator('li')).toHaveText(['Prebrzo', 'Taman', 'Presporo']);
     await expect(prozor.locator('[data-anketa-projektor-broj]')).toHaveText('7 glasova');
     await expect(prozor.locator('[data-anketa-projektor-rezultat]')).toHaveCount(0);
@@ -157,6 +160,7 @@ test.describe('brza anketa na projektoru predavanja', () => {
     await expect(prozor).toContainText('Anketa · zatvorena');
     await panel(page).locator('[data-anketa-rezultat]').click();
     await expect(prozor).toHaveCount(0);
+    await expect(projektor.locator('app-qr-kod')).toBeVisible();
     await projektor.close();
   });
 });
