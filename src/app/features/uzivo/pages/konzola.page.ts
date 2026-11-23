@@ -1,14 +1,14 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { distinctUntilChanged, filter, firstValueFrom, map } from 'rxjs';
+import { distinctUntilChanged, filter, map } from 'rxjs';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { pratiPovratak } from '../data-access/povratak';
 import { odgovorili, oznakaDalje, oznakaOtvoriZatvori, oznakaPolozaja } from '../data-access/izvodjenje-pravila';
@@ -17,8 +17,8 @@ import { TipKomande } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { kodSaRazmakom } from '../ui/format';
 import { preducitajFormule, preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
-import { EkranOpis, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
-import { QrKodComponent } from '../ui/qr-kod.component';
+import { izborEkrana } from '../ui/izbor-ekrana.dialog';
+import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
@@ -26,8 +26,9 @@ import { KrajIzvodjenjaComponent } from './kraj-izvodjenja.component';
 import { KomandaZahtev, KonzolaKontroleComponent } from './konzola-kontrole.component';
 import { FajloviKarticaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { otvoriPomoc } from './pomoc-precice.dialog';
-import { TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
+import { DvaputR, TastaturaIzvodjenja, prebaciCeoEkran, pustiFokusPosleKlika } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
+import { TelefonDialog, TelefonLinkovi } from './telefon.dialog';
 import { RangKonzolaComponent } from './rang-konzola.component';
 import { SledecePanelComponent } from './sledece-panel.component';
 import { TekstoviPanelComponent } from './tekstovi-panel.component';
@@ -40,71 +41,12 @@ import { RezimProjektora } from '../../../core/layout/rezim-projektora';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
-export interface TelefonLinkovi {
-  daljinski: string;
-  konzola: string;
-}
-
-/** QR za telefon: daljinski (podrazumevano) ili cela konzola (spec 1.7). */
-@Component({
-  selector: 'app-telefon-dialog',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule, QrKodComponent],
-  template: `
-    <h2 mat-dialog-title>Telefon</h2>
-    <mat-dialog-content class="uz-kon-telefon">
-      <div class="uz-kon-telefon-izbor" role="group" aria-label="Šta se otvara na telefonu">
-        <button mat-stroked-button type="button" [attr.aria-pressed]="izbor() === 'daljinski'" (click)="izbor.set('daljinski')">Daljinski</button>
-        <button mat-stroked-button type="button" [attr.aria-pressed]="izbor() === 'konzola'" (click)="izbor.set('konzola')">Cela konzola</button>
-      </div>
-      <p>{{ izbor() === 'daljinski' ? 'Skeniraj QR kod: telefon postaje daljinski (Nazad, Napred, beleške; ekran se ne gasi).'
-                                    : 'Skeniraj QR kod: cela konzola na telefonu (rezultati, učesnici, sve komande).' }}</p>
-      <app-qr-kod class="uz-kon-telefon-qr" [tekst]="link()" [velicina]="480" />
-      <p class="uz-kon-telefon-link">{{ link() }}</p>
-      <p class="uz-kon-telefon-napomena">Telefon jednom traži korisničko ime i lozinku sajta (kao laptop).</p>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-flat-button type="button" mat-dialog-close cdkFocusInitial>Zatvori</button>
-    </mat-dialog-actions>
-  `,
-})
-export class TelefonDialog {
-  private readonly linkovi = inject<TelefonLinkovi>(MAT_DIALOG_DATA);
-  protected readonly izbor = signal<'daljinski' | 'konzola'>('daljinski');
-  protected readonly link = computed(() => this.linkovi[this.izbor()]);
-}
-
-/** Izbor ekrana za prikaz publike (Window Management API, više ekrana). */
-@Component({
-  selector: 'app-izbor-ekrana-dialog',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatDialogModule, MatIconModule],
-  template: `
-    <h2 mat-dialog-title>Na kom ekranu?</h2>
-    <mat-dialog-content>
-      <div class="uz-kon-ekrani">
-        @for (e of ekrani; track $index) {
-          <button mat-stroked-button type="button" [mat-dialog-close]="e">
-            <mat-icon [svgIcon]="e.primarni ? 'computer' : 'tv'" />{{ e.oznaka }}
-          </button>
-        }
-      </div>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button type="button" [mat-dialog-close]="null" cdkFocusInitial>Otkaži</button>
-    </mat-dialog-actions>
-  `,
-})
-export class IzborEkranaDialog {
-  protected readonly ekrani = inject<EkranOpis[]>(MAT_DIALOG_DATA);
-}
-
 /**
  * Konzola za predavača (spec 6.4): zaglavlje (naziv, kod, povezani/ukupno, veza, publika, monitor, telefon, Završi),
  * levo trenutni (tačno ono što je na projektoru) i sledeći slajd, u sredini kontrole i tajmer, desno rezultati uživo
  * (privatno, uvek; na Zadatak slajdu panel zadatka: broj različitih pre otvaranja, izvučene varijante posle), tekstovi
- * sa "sakrij", beleške i učesnici. Ispod 600 px: tabovi i lepljiva donja traka. Iste prečice kao publika; `R` traži
- * potvrdu, `Shift+R` je rešenje zadatka, `P` otvara publiku. Posle završetka: završni ekran
+ * sa "sakrij", beleške i učesnici. Ispod 600 px: tabovi i lepljiva donja traka. Iste prečice kao publika (`R` dvaput u
+ * roku 2 s ponavlja pitanje, dugme "Ponovi" traži potvrdu), `Shift+R` je rešenje zadatka, `P` otvara publiku. Posle završetka: završni ekran
  * ({@link KrajIzvodjenjaComponent}: predlog sledeće prezentacije, povratak na predavanje).
  */
 @Component({
@@ -293,6 +235,8 @@ export class IzborEkranaDialog {
     }
     @if (tast.gotoUnos() !== null) {
       <p class="uz-kon-goto" role="status">Idi na: <strong>{{ tast.gotoUnos() || '_' }}</strong></p>
+    } @else if (ponoviTaster.ceka()) {
+      <p class="uz-kon-goto" role="status">Pritisni R ponovo da ponoviš pitanje</p>
     }
   `,
 })
@@ -302,6 +246,8 @@ export class KonzolaPage {
   private readonly obavestenja = inject(NotificationStore);
   protected readonly rute = UzivoPutanje;
   protected readonly tast = new TastaturaIzvodjenja();
+  /** `R` sa tastature: dvaput u roku 2 s (kao publika), bez dijaloga potvrde (dopune plana crtanja). */
+  protected readonly ponoviTaster = new DvaputR();
   protected readonly pustiFokus = pustiFokusPosleKlika;
 
   protected readonly usko = toSignal(
@@ -336,7 +282,10 @@ export class KonzolaPage {
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));
     const destroyRef = inject(DestroyRef);
-    destroyRef.onDestroy(() => this.tast.unisti());
+    destroyRef.onDestroy(() => {
+      this.tast.unisti();
+      this.ponoviTaster.unisti();
+    });
     // Laptop koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
     destroyRef.onDestroy(pratiPovratak(document, window, (ms) => this.store.posleVracanja(ms)));
 
@@ -392,7 +341,12 @@ export class KonzolaPage {
       return;
     }
     // U konzoli i nedozvoljena komanda ide serveru: njegov razlog ("Prvo zatvori pitanje.") vidi samo nastavnik.
-    this.komanda({ tip: a.komanda, vrednost: a.vrednost });
+    if (a.komanda === 'PONOVI' && this.ima('PONOVI')) {
+      if (this.ponoviTaster.pritisni()) this.store.komanda('PONOVI');
+      return;
+    }
+    this.ponoviTaster.prekini();
+    this.store.komanda(a.komanda, a.vrednost);
   }
 
   private ponovi(): void {
@@ -422,16 +376,9 @@ export class KonzolaPage {
   protected async naMonitor(): Promise<void> {
     const link = this.store.publikaLink();
     if (!link) return;
-    let otkazano = false;
-    const izbor = async (ekrani: EkranOpis[]) => {
-      const e = await firstValueFrom(
-        this.dialog.open<IzborEkranaDialog, EkranOpis[], EkranOpis | null>(IzborEkranaDialog, { data: ekrani, width: '420px', maxWidth: '95vw' })
-          .afterClosed());
-      otkazano = !e;
-      return e ?? null;
-    };
-    const w = await otvoriPublikuNaMonitoru(link, izbor);
-    if (!w && !otkazano) {
+    const izbor = izborEkrana(this.dialog);
+    const w = await otvoriPublikuNaMonitoru(link, izbor.izbor);
+    if (!w && !izbor.otkazano()) {
       this.obavestenja.greska(PORUKA_BLOKIRAN);
     }
   }

@@ -271,15 +271,39 @@ describe('KonzolaPage: Zadatak slajd i bodovan run', () => {
     expect(lista).toContain('V12');
   });
 
-  it('R na Zadatak slajdu traži potvrdu "Ponoviti zadatak?", Shift+R šalje RESENJE bez potvrde', async () => {
+  it('taster R dvaput u roku 2 s ponavlja bez potvrde (natpis posle prvog), Shift+R šalje RESENJE', async () => {
+    const f = await prikazi(naZadatku('ZATVORENO'));
+    const r = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
+    r();
+    f.detectChanges();
+    expect(lazniStore.komanda).not.toHaveBeenCalled();
+    expect(tekst(f)).toContain('Pritisni R ponovo da ponoviš pitanje');
+    r();
+    f.detectChanges();
+    expect(lazniStore.komanda).toHaveBeenCalledWith('PONOVI');
+    expect(otvoreno).not.toHaveBeenCalled();
+    expect(tekst(f)).not.toContain('Pritisni R ponovo');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(lazniStore.komanda).toHaveBeenCalledWith('RESENJE', undefined);
+    expect(otvoreno).not.toHaveBeenCalled();
+  });
+
+  it('R pa drugi taster: ponavljanje se prekida (drugi R opet samo najavljuje)', async () => {
     await prikazi(naZadatku('ZATVORENO'));
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true, cancelable: true }));
+    const taster = (key: string) => document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    taster('r');
+    taster('t');
+    taster('r');
+    expect(lazniStore.komanda).not.toHaveBeenCalledWith('PONOVI');
+  });
+
+  it('dugme "Ponovi zadatak" i dalje traži potvrdu "Ponoviti zadatak?"', async () => {
+    const f = await prikazi(naZadatku('ZATVORENO'));
+    const dugme = (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button[aria-keyshortcuts="R"]')!;
+    dugme.click();
     expect(otvoreno).toHaveBeenCalledTimes(1);
     expect((otvoreno.mock.calls[0][1] as { data: { naslov: string } }).data.naslov).toBe('Ponoviti zadatak?');
     expect(lazniStore.komanda).not.toHaveBeenCalled();
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', shiftKey: true, bubbles: true, cancelable: true }));
-    expect(lazniStore.komanda).toHaveBeenCalledWith('RESENJE', undefined);
-    expect(otvoreno).toHaveBeenCalledTimes(1);
   });
 
   it('zaglavlje: čip "Boduje se" samo za bodovan run', async () => {

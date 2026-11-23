@@ -15,11 +15,8 @@ import {
   fontoviZaPrikaz, preducitajFontove, preducitajFormule, preducitajSlike, sacekajFontove, slikeSlajda,
 } from '../ui/preducitavanje';
 import { otvoriPomoc } from './pomoc-precice.dialog';
-import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
+import { DvaputR, TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
-
-/** Drugi `R` u ovom roku ponavlja pitanje. */
-const PONOVI_ROK_MS = 2000;
 
 /**
  * Šta scena prikazuje: aktivno izvođenje uvek svoj snimak; posle "Završi" ostaje poslednji prikaz KRAJ (postolje ili
@@ -73,7 +70,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     }
     @if (tast.gotoUnos() !== null) {
       <p class="uz-pub-natpis" role="status">Idi na: <strong>{{ tast.gotoUnos() || '_' }}</strong></p>
-    } @else if (ponoviCeka()) {
+    } @else if (ponovi.ceka()) {
       <p class="uz-pub-natpis" role="status">Pritisni R ponovo da ponoviš pitanje</p>
     }
   `,
@@ -82,7 +79,7 @@ export class PublikaPage {
   protected readonly store = inject(IzvodjenjeStore);
   private readonly dialog = inject(MatDialog);
   protected readonly tast = new TastaturaIzvodjenja();
-  protected readonly ponoviCeka = signal(false);
+  protected readonly ponovi = new DvaputR();
   protected readonly scena = linkedSignal<NastavnickoStanje | null, NastavnickoStanje | null>({
     source: this.store.stanje,
     computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
@@ -94,7 +91,6 @@ export class PublikaPage {
   });
   /** Fontovi prvog snimka su stigli (ili je prošlo 3 s). Pregledač bez `document.fonts` ne čeka. */
   protected readonly fontoviSpremni = signal(typeof (document as { fonts?: { load?: unknown } }).fonts?.load !== 'function');
-  private ponoviTajmer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     window.name = PROZOR_PUBLIKE;
@@ -133,7 +129,7 @@ export class PublikaPage {
     destroyRef.onDestroy(pratiPovratak(document, window, ms => this.store.posleVracanja(ms)));
     destroyRef.onDestroy(() => {
       this.tast.unisti();
-      clearTimeout(this.ponoviTajmer);
+      this.ponovi.unisti();
     });
   }
 
@@ -155,17 +151,9 @@ export class PublikaPage {
     if (!this.store.dozvoljene().has(a.komanda)) return;
     if (a.komanda === 'IDI_NA' && !ispravanIndeks(a.vrednost, this.store.stanje()?.brojSlajdova ?? 0)) return;
     if (a.komanda === 'PONOVI') {
-      if (!this.ponoviCeka()) {
-        this.ponoviCeka.set(true);
-        clearTimeout(this.ponoviTajmer);
-        this.ponoviTajmer = setTimeout(() => this.ponoviCeka.set(false), PONOVI_ROK_MS);
-        return;
-      }
-      clearTimeout(this.ponoviTajmer);
-      this.ponoviCeka.set(false);
-    } else if (this.ponoviCeka()) {
-      clearTimeout(this.ponoviTajmer);
-      this.ponoviCeka.set(false);
+      if (!this.ponovi.pritisni()) return;
+    } else {
+      this.ponovi.prekini();
     }
     this.store.komanda(a.komanda, a.vrednost);
   }

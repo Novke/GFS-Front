@@ -93,8 +93,8 @@ export class KonzolaKontroleComponent {
       {
         naslov: 'Ekran i telefoni',
         dugmad: [
-          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'M', ikona: 'mobile', ukljuceno: null },
-          { tip: 'DETALJI', oznaka: 'Dozvoli „Detalje“', taster: 'D', ikona: 'description', ukljuceno: s.detaljiDozvoljeni },
+          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'Shift+M', ikona: 'mobile', ukljuceno: null },
+          { tip: 'DETALJI', oznaka: 'Dozvoli „Detalje“', taster: 'Shift+D', ikona: 'description', ukljuceno: s.detaljiDozvoljeni },
           { tip: 'QR', oznaka: 'QR preko ekrana', taster: 'Q', ikona: 'qr_code', ukljuceno: s.qrPrikazan },
           // link za fajlove na tabli (kasnioci); gasi se sam pri promeni slajda, onemogućen kad prezentacija nema fajlova
           { tip: 'FAJLOVI', oznaka: 'Link za fajlove', taster: 'K', ikona: 'download', ukljuceno: !!s.fajlovi && (s.fajloviNaTabli ?? true) },
