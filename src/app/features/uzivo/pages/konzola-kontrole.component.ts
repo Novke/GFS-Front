@@ -26,8 +26,14 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule],
   host: { class: 'uz-kon-kontrole' },
-  // na uključenom prekidaču (svetla podloga) prigušen taster (`.uz-kbd`, opacity 0.75) pada ispod 4.5:1
-  styles: `.uz-kon-dugme--ukljuceno .uz-kbd { opacity: 1; }`,
+  // na uključenom prekidaču (svetla podloga) prigušen taster (`.uz-kbd`, opacity 0.75) pada ispod 4.5:1; dugačak taster
+  // (`Shift+M`, `Space`) u uskoj koloni prelazi u novi red uz desnu ivicu umesto da prekrije reč oznake
+  styles: `
+    .uz-kon-dugme--ukljuceno .uz-kbd { opacity: 1; }
+    .uz-kon-dugme--dug-taster { flex-wrap: wrap; }
+    .uz-kon-dugme--dug-taster .uz-kon-dugme-tekst { min-width: min-content; }
+    .uz-kon-dugme--dug-taster .uz-kbd { margin-left: auto; }
+  `,
   template: `
     @for (g of grupe(); track g.naslov) {
       <section class="uz-kon-grupa" [attr.aria-label]="g.naslov">
@@ -35,7 +41,7 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
         <div class="uz-kon-dugmad">
           @for (d of g.dugmad; track $index) {
             <button type="button" class="uz-kon-dugme" [class.uz-kon-dugme--glavno]="d.glavno"
-                    [class.uz-kon-dugme--ukljuceno]="d.ukljuceno === true"
+                    [class.uz-kon-dugme--ukljuceno]="d.ukljuceno === true" [class.uz-kon-dugme--dug-taster]="d.taster.length > 4"
                     [attr.aria-pressed]="d.ukljuceno === null ? null : d.ukljuceno"
                     [attr.aria-keyshortcuts]="d.taster" [disabled]="!dozvoljene().has(d.tip)"
                     (click)="pustiFokus($event); komanda.emit({ tip: d.tip, vrednost: d.vrednost })">
