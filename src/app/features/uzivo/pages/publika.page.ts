@@ -11,6 +11,9 @@ import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
 import { UzivoPutanje } from '../uzivo-putanje';
+import { CrtanjeApi } from '../crtanje/crtanje.api';
+import { Gledalac } from '../crtanje/gledalac';
+import { kanalIzvodjenja } from '../crtanje/kanal-crtanja';
 import {
   fontoviZaPrikaz, preducitajFontove, preducitajFormule, preducitajSlike, sacekajFontove, slikeSlajda,
 } from '../ui/preducitavanje';
@@ -37,6 +40,9 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
  * Prvi snimak se crta tek kad stignu fontovi trenutnog i sledećeg slajda i teme (najviše 3 s, do tada "Učitavanje…"),
  * da prvi slajd ne "skoči"; posle svakog snimka se unapred učitavaju slike i fontovi sledećeg slajda. Animacije koraka
  * PLATNO slajda pušta samo ovaj prozor (`animiraj`).
+ * Crtež (spec crtanja 5.5, `Gledalac`): dok stiže puls konzole istog pregledača, samo iz kanala (i element u nastajanju,
+ * i traka alata kad je nastavnik uključi); bez pulsa sa servera, kad se u snimku promeni strana ili verzija, posle
+ * povezivanja i posle povratka iz sna. `D` ovde ne radi ništa (crta se samo u konzoli).
  */
 @Component({
   selector: 'app-publika',
@@ -54,7 +60,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     @if (store.stanje() && fontoviSpremni()) {
       @if (scena(); as sc) {
         <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [qrLink]="store.qrLink()" [sat]="store.sat()" [animiraj]="true"
-                            [epohaVeze]="epohaVeze()" />
+                            [epohaVeze]="epohaVeze()" [crtez]="gledalac()?.prikaz() ?? null" [alatiCrtanja]="gledalac()?.alati() ?? null" />
       } @else {
         <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
@@ -80,6 +86,8 @@ export class PublikaPage {
   private readonly dialog = inject(MatDialog);
   protected readonly tast = new TastaturaIzvodjenja();
   protected readonly ponovi = new DvaputR();
+  private readonly crtanjeApi = inject(CrtanjeApi);
+  protected readonly gledalac = signal<Gledalac | null>(null);
   protected readonly scena = linkedSignal<NastavnickoStanje | null, NastavnickoStanje | null>({
     source: this.store.stanje,
     computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
@@ -118,6 +126,24 @@ export class PublikaPage {
     ).subscribe(id => {
       izvodjenjeId = id;
       this.store.init(id);
+      this.gledalac()?.unisti();
+      this.gledalac.set(new Gledalac({ ucitaj: k => this.crtanjeApi.strana(id, k) }, kanalIzvodjenja(id)));
+    });
+    // Strana crteža iz snimka (kraj bez belog ekrana: nema strane).
+    effect(() => {
+      const g = this.gledalac();
+      const c = this.store.stanje()?.crtez ?? null;
+      if (g) untracked(() => g.postavi(c ? { slajdId: c.slajdId, pozadina: c.pozadina } : null, c?.verzija ?? 0));
+    });
+    // Posle (ponovnog) povezivanja crtež sa servera, ako konzola ovog pregledača ne šalje puls.
+    let veza: Veza | null = null;
+    effect(() => {
+      const v = this.store.veza();
+      const g = this.gledalac();
+      untracked(() => {
+        if (v === 'povezan' && veza !== 'povezan') g?.osvezi();
+        veza = v;
+      });
     });
     const destroyRef = inject(DestroyRef);
     // Konzola je posle kraja pokrenula novo izvođenje: ovaj prozor prelazi na njega (isti dokument, pa ostaje ceo ekran).
@@ -126,10 +152,14 @@ export class PublikaPage {
       if (p.staro === izvodjenjeId) void router.navigate(['/' + UzivoPutanje.izvodjenjePublika(p.novo)], { replaceUrl: true });
     }));
     // Projektor koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
-    destroyRef.onDestroy(pratiPovratak(document, window, ms => this.store.posleVracanja(ms)));
+    destroyRef.onDestroy(pratiPovratak(document, window, ms => {
+      this.store.posleVracanja(ms);
+      this.gledalac()?.osvezi();
+    }));
     destroyRef.onDestroy(() => {
       this.tast.unisti();
       this.ponovi.unisti();
+      this.gledalac()?.unisti();
     });
   }
 

@@ -1,3 +1,4 @@
+import type { CrtezTrenutni } from '../crtanje/crtanje.models';
 import type { Platno, Potez, Tema } from './platno.models';
 import type { VrstaPrezentacije } from '../../../core/api/redosled-prezentacija';
 import type { FajlKratko, FajloviSlajda } from '../../../shared/util/fajlovi';
@@ -190,6 +191,11 @@ export interface NastavnickoStanje {
    * prvom slajdu; `K` je pali ili gasi do sledeće promene slajda. Stari backend ga ne šalje (tada traka prati `fajlovi`).
    */
   fajloviNaTabli?: boolean;
+  /**
+   * Trenutna strana crteža (crtanje u izvođenju): slajd na ekranu (i na crnom ekranu, kad se sloj ne crta), na belom
+   * ekranu bela strana slajda na kom je uključen; `null` na prijavi i kraju bez belog ekrana. Stari backend ga ne šalje.
+   */
+  crtez?: CrtezTrenutni | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {
