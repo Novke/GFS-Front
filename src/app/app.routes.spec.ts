@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { routes } from './app.routes';
 import { NotFound } from './core/layout/not-found';
+import { ProjectorLayout } from './core/layout/projector-layout';
 import { PublicLayout } from './core/layout/public-layout';
 import { Shell } from './core/layout/shell';
 
@@ -55,6 +56,8 @@ describe('rute i sesija nastavnika', () => {
     ['/studenti/4/pregled', 'studenti/4/pregled'],
     ['/nepostoji', 'nepostoji'],
     ['/predavanja/5/projektor', 'predavanja/5/projektor'],
+    ['/predavanja/5/tabla', 'predavanja/5/tabla'],
+    ['/predavanja/5/tabla/publika', 'predavanja/5/tabla/publika'],
     ['/grupe/3/onboarding/7/qr', 'grupe/3/onboarding/7/qr'],
     ['/izvodjenja/7/publika', 'izvodjenja/7/publika'],
     ['/izvodjenja/7/konzola?telefon=1', 'izvodjenja/7/konzola?telefon=1'],
@@ -110,5 +113,22 @@ describe('rute i sesija nastavnika', () => {
     await router.navigateByUrl('/predavanja');
     http.expectNone('api/auth/ja');
     expect(router.url).toBe('/predavanja');
+  });
+
+  it.each([
+    ['/predavanja/5/tabla', 'Tabla', undefined],
+    ['/predavanja/5/tabla/publika', 'Tabla (publika)', true],
+  ])('%s je u ProjectorLayout-u (naslov %s, projekcija %s)', async (url, naslov, projekcija) => {
+    const nav = router.navigateByUrl(url);
+    await tick();
+    http.expectOne('api/auth/ja').flush({ uloga: 'NASTAVNIK', korisnik: 'nastavnik' });
+    await nav;
+    expect(router.url).toBe(url);
+    expect(layout(router)).toBe(ProjectorLayout);
+    let list = router.routerState.snapshot.root;
+    while (list.firstChild) list = list.firstChild;
+    expect(list.title).toBe(naslov);
+    expect(router.routerState.snapshot.root.firstChild?.params['id']).toBe('5');
+    expect(list.data['projekcija']).toBe(projekcija);
   });
 });

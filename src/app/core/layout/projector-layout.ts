@@ -5,7 +5,8 @@ import { Okruzenje } from './okruzenje';
 import { RezimProjektora } from './rezim-projektora';
 
 /**
- * Projektorski layout (`/predavanja/:id/projektor`, `/grupe/:id/onboarding/:sid/qr`, `/izvodjenja/:id/publika|konzola|daljinski`):
+ * Projektorski layout (`/predavanja/:id/projektor`, `/predavanja/:id/tabla[/publika]`, `/grupe/:id/onboarding/:sid/qr`,
+ * `/izvodjenja/:id/publika|konzola|daljinski`):
  * bez ljuske, ceo ekran, uvek svetao (`.rezim-dan`), osim kad ruta traži `pratiRezim` (daljinski: telefon u zamračenoj
  * sali prati dan/noć aplikacije) ili stranica privremeno to ne zatraži ({@link RezimProjektora}: završni ekran konzole).
  * Dugme "Pun ekran" i Esc su na samim stranicama.

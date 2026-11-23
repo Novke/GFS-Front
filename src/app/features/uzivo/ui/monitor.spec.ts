@@ -49,6 +49,17 @@ describe('otvoriPublikuNaMonitoru', () => {
     expect(open).toHaveBeenCalledWith(url, 'gfs-publika', 'popup,left=1920,top=0,width=1920,height=1040');
   });
 
+  it('tabla predavanja: svoje ime prozora (i bez Window Management API-ja)', async () => {
+    const glavni = ekran(0, true);
+    await otvoriPublikuNaMonitoru(url, undefined, {
+      open, screen: { isExtended: true },
+      getScreenDetails: () => Promise.resolve({ screens: [glavni, ekran(1920, false)], currentScreen: glavni }),
+    }, 'gfs-tabla');
+    expect(open).toHaveBeenCalledWith(url, 'gfs-tabla', 'popup,left=1920,top=0,width=1920,height=1040');
+    await otvoriPublikuNaMonitoru(url, undefined, { open }, 'gfs-tabla');
+    expect(open).toHaveBeenLastCalledWith(url, 'gfs-tabla', 'popup');
+  });
+
   it('konzola na drugom ekranu: kandidat je glavni (bez currentScreen: ne-primarni)', async () => {
     const drugi = ekran(1920, false);
     await otvoriPublikuNaMonitoru(url, undefined, {

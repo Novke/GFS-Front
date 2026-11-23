@@ -29,7 +29,7 @@ import { TasterAkcija } from '../tastatura';
 import { kodSaRazmakom } from '../ui/format';
 import { preducitajFormule, preducitajSlike, slikeSlajda } from '../ui/preducitavanje';
 import { izborEkrana } from '../ui/izbor-ekrana.dialog';
-import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
+import { PORUKA_BLOKIRAN, PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj, otvoriPublikuNaMonitoru } from '../ui/monitor';
 import { RezultatPrikazComponent } from '../ui/rezultat-prikaz.component';
 import { TajmerComponent } from '../ui/tajmer.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
@@ -49,8 +49,6 @@ import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { RezimProjektora } from '../../../core/layout/rezim-projektora';
-
-const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
 /**
  * Konzola za predavača (spec 6.4): zaglavlje (naziv, kod, povezani/ukupno, veza, publika, monitor, telefon, Završi),

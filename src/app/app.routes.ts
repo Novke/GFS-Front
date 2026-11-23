@@ -224,6 +224,15 @@ export const routes: Routes = [
       },
     ],
   },
+  // Tabla sa predavanja (spec crtanja 5.7) i njena publika: bez ljuske, uvek svetlo; deca su lenja (`TABLA_RUTE`), da ne
+  // opterete početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
+  {
+    matcher: putanjaSaId('predavanja/:id/tabla'),
+    canMatch: [nastavnikGuard],
+    component: ProjectorLayout,
+    data: { celaStrana: true },
+    loadChildren: () => import('./features/predavanja/tabla.routes').then(x => x.TABLA_RUTE),
+  },
   {
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),
     canMatch: [nastavnikGuard],
