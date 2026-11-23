@@ -18,6 +18,7 @@ import { NivoComponent } from '../../../shared/ui/nivo.component';
 import { RangTacnostiTabela } from '../../../shared/ui/rang-tacnosti-tabela';
 import { RangApi, RangTacnostiStavka } from '../../../core/api/rang.api';
 import { BreadcrumbService } from '../../../core/layout/breadcrumbs';
+import { CrteziIzvodjenjaComponent } from '../crtanje/crtezi-izvodjenja.component';
 
 /** "Odgovora 23 · tačnih 61 %"; bez procenta kad pitanje nema tačan odgovor ili niko nije odgovorio. */
 export function procenatTacnihTekst(p: Pick<RezultatPitanja, 'brojOdgovora' | 'procenatTacnih'>): string {
@@ -100,14 +101,17 @@ export function ishodUkupno(u: UcesnikZadatka): string {
   return u.tacno === true ? 'tačno' : u.tacno === false ? 'netačno' : '—';
 }
 
-/** Pregled sačuvanog izvođenja posle časa (spec 6.2): pitanja i zadaci po redu otvaranja sa rezultatima i rang-lista. */
+/**
+ * Pregled sačuvanog izvođenja posle časa (spec 6.2): pitanja i zadaci po redu otvaranja sa rezultatima i rang-lista, pa
+ * kartica „Crteži” (i kad rezultati nisu čuvani).
+ */
 @Component({
   selector: 'app-izvodjenje-pregled',
   changeDetection: ChangeDetectionStrategy.OnPush,
   // nastavnički prikaz: formula šira od okvira se smanjuje (telefon nema ovaj provajder: skrol u sebi)
   providers: [{ provide: MERA_FORMULE, useValue: meriFormule }],
   imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, RangListaComponent, RezultatPrikazComponent,
-    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent, RangTacnostiTabela],
+    TekstFormuleComponent, ZadatakRezultatComponent, NivoComponent, RangTacnostiTabela, CrteziIzvodjenjaComponent],
   template: `
     <div class="uz-ed-strana uz-pr">
       @if (greska(); as g) {
@@ -247,6 +251,8 @@ export function ishodUkupno(u: UcesnikZadatka): string {
             </section>
           }
         }
+        <!-- crteži se čuvaju i kad odgovori ne (spec crtanja 5.6) -->
+        <app-crtezi-izvodjenja [izvodjenjeId]="r.izvodjenje.id" [prezentacijaId]="r.izvodjenje.prezentacija.id" />
       } @else if (!greska()) {
         <mat-progress-bar mode="indeterminate" aria-label="Učitavanje pregleda" />
       }

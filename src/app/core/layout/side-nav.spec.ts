@@ -19,6 +19,7 @@ describe('SideNav: istaknuta stavka', () => {
           { path: 'izvodjenja/:id/pregled', component: Prazno },
           { path: 'predavanja', component: Prazno },
           { path: 'podesavanja/moodle', component: Prazno },
+          { path: 'podesavanja/uzivo', component: Prazno },
         ]),
       ],
     });
@@ -54,5 +55,12 @@ describe('SideNav: istaknuta stavka', () => {
     expect(stavka('Moodle').classList).toContain('aktivna');
     expect(stavka('Moodle').getAttribute('aria-current')).toBe('page');
     expect(stavka('Predavanja').classList).not.toContain('aktivna');
+  });
+
+  it('Podešavanja -> "Uživo" (/podesavanja/uzivo), istaknuta na toj stranici', async () => {
+    const { stavka } = await na('/podesavanja/uzivo');
+    expect(stavka('Uživo').getAttribute('href')).toBe('/podesavanja/uzivo');
+    expect(stavka('Uživo').classList).toContain('aktivna');
+    expect(stavka('Moodle').classList).not.toContain('aktivna');
   });
 });

@@ -20,8 +20,9 @@ export function oznakaRanijeg(r: Pick<RanijiCrtez, 'grupa' | 'pocetak'>): string
   imports: [IkonaCrtanjaComponent, SlicicaCrtezaComponent],
   host: { class: 'crt-ranije', role: 'region', 'aria-label': 'Ranije ovde' },
   styles: `
-    :host { width: 200px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex;
+    :host { width: 200px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex;
       flex-direction: column; gap: 10px; overflow: auto; }
+    :host-context(.crt-raspored--usko) { width: 100%; }
     h2 { font-size: 13px; margin: 0; display: flex; gap: 6px; align-items: center; }
     h2 app-ikona-crtanja { width: 16px; height: 16px; color: var(--warn); }
     button { padding: 0; border: 2px solid var(--line); border-radius: 6px; width: 100%; position: relative; display: block; text-align: left;
