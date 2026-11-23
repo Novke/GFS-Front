@@ -1557,7 +1557,9 @@ mockup `mockups/2026-11-23-brza-anketa/` next to it. Anonymous to the teacher: n
   constructor. The initial bundle sits at the 800 000 B budget (`e2e/lenji-editor.spec.ts`, ~5 B left after this feature); even a new
   import from `core/layout/icons` in a lazy file adds bytes to `main`, so measure (`ng build --stats-json`) before adding anything shared.
 - **Projectors:** `ui/anketa-projektor.component.ts` (uživo `publika` and `predavanja/:id/projektor`) polls `aktivne?predavanjeId=` every
-  2 s while visible, never shows an error; bars only when `rezultatPrikazan`, otherwise question, options and "N glasova".
+  2 s while visible, never shows an error; bars only when `rezultatPrikazan`, otherwise question, options and "N glasova". On `publika`
+  it is a window over the slide; the lecture projector uses `[ugradjen]="true"` (host `display: contents`, the card is a grid item) and
+  puts it in the right column instead of the check-in QR (`prikazana()` via `viewChild`), which comes back when the poll leaves.
 - **Student (`features/nalog`, public route):** `AnketeStudentaApi` = `GET public/nalog/ankete` and `POST public/nalog/ankete/{id}/glas`
   `{opcije}`. Root `AnketeStudentaStore` gets the list from `CasStanje.ankete` (tab shell and tab Čas call `primi`), refreshes on push
   (`naPushPoruku`) and decides which poll pops up (`zaIskakanje`; "Kasnije" hides it until a newer one). `ui/anketa-list.component.ts`
