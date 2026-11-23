@@ -22,7 +22,9 @@ interface PodaciDijaloga extends StranaPregleda { tema: Tema; }
   selector: 'app-crtez-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatDialogModule, SlicicaCrtezaComponent],
-  styles: `app-slicica-crteza { width: min(1100px, 82vw); border: 1px solid var(--line); }`,
+  // ceo prikaz staje u sadržaj dijaloga (najviše 65vh), pa nema skrola koji bi tražio fokus sa tastature
+  styles: `app-slicica-crteza { width: min(1100px, 82vw, calc((65vh - 40px) * 16 / 9)); border: 1px solid var(--line); }
+    mat-dialog-content { overflow: hidden; }`,
   template: `
     <h2 mat-dialog-title>{{ d.oznaka }}</h2>
     <mat-dialog-content><app-slicica-crteza [slajd]="d.slajd" [tema]="d.tema" [elementi]="d.elementi" /></mat-dialog-content>

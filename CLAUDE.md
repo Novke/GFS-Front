@@ -668,8 +668,9 @@ over STOMP; teacher commands are REST.
   (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
   `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
 - Layouts (paths unchanged since the first release, they may be printed as QR codes): `prezentacije`, `prezentacije/:id`,
-  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola|daljinski` in
-  `ProjectorLayout`; `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
+  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola|daljinski` and the
+  lecture board `predavanja/:id/tabla` and `predavanja/:id/tabla/publika` (see "Crtanje u izvođenju") in `ProjectorLayout`;
+  `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
   content frame), because these pages draw the whole screen themselves. `daljinski` also gets `pratiRezim: true`
   (`ProjectorLayout` then drops `.rezim-dan`, so the phone follows day/night); projector and console stay day.
 - `javno/` may import exactly: `uzivo-putanje`, `data-access/uzivo.models`, `data-access/stomp`, `data-access/sat`,
@@ -1142,7 +1143,7 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   the initial bundle (and the phone, which loads the global stylesheet) does not carry them. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the
   text colour, which is inherited as a computed value). The black/white screens (keys B/W) are deliberately pure black and
-  white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared
+  white (W is also the white board for drawing, see "Crtanje u izvođenju"). Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared
   `ConfirmDialog`, and the editor's leave guard is the shared `unsavedChangesGuard` (`tekstNapustanja` gives its text).
 - Zoneless: all state is signals (STOMP messages go through `patchState`, the timer interval sets a signal). Component
   specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
@@ -1295,6 +1296,66 @@ no imports, on the public allow-list). `NastavnickoStanje.fajlovi` and `JavnoSta
   closure does not grow (`e2e/lenji-formule.spec.ts`).
 - **E2E:** `e2e/fajlovi-cas.spec.ts` (`/f`, projector link, `fajloviNaTabli`, K and the Q overlay, PRIJAVA geometry, console button; network: nothing outside `/api/public/`), remote toggle in `e2e/uzivo-daljinski.spec.ts`, `e2e/fajlovi-nalog.spec.ts` (Materijali, review,
   phone, axe day/night).
+
+### Crtanje u izvođenju (drawing over slides, lecture board)
+
+Spec `docs/superpowers/specs/2026-11-23-crtanje-uzivo-design.md` and plan `docs/superpowers/plans/2026-11-23-crtanje-uzivo.md`
+(deploy repo; the plan's "Dopune" and contract win over the spec). Code in `features/uzivo/crtanje/` (no `data-access/`, so
+`features/predavanja` and `features/podesavanja` may import it under `gfs/granice-featurea`); **`javno/` imports none of it**.
+- **Model** (`crtanje.models.ts`): a drawing belongs to a page = slide + background (`KljucStrane {slajdId, pozadina: SLAJD | BELA}`;
+  the lecture board is `{null, BELA}`), elements `{tip, boja, debljina, tacke}` in scene units 960 x 540, 7 tools (`ALATI`, keys
+  `1`-`7`), 6 colours, 3 widths. `geometrija.ts`: SVG paths of every type (pencil as midpoint quadratics, arrow = shaft + filled head,
+  Shift = square/circle/45°), normalisation to one decimal and the server limits (2000 elements, 1 MB, pencil split above 5000
+  points); `istorija.ts`: undo/redo per page (100 steps, "Obriši sve" is one undoable step).
+- **Console side** (`crtac.ts`, `Crtac`): pages in memory, `upis-strana.ts` writes the whole page (`PUT izvodjenja/{id}/crtezi/strana`)
+  one request at a time, only the latest per page (400/404/410 final, others retried after 3 s; "Nije sačuvano" while pending).
+  `NastavnickoStanje.crtez` (`{slajdId, pozadina, verzija}`, optional, last field) says which page is on the projector: a new page
+  is loaded once (no drawing until it arrives), a higher server `verzija` without own pending write means another console (phone)
+  drew, so the page is reloaded and its history reset.
+- **Channel between windows** (`kanal-crtanja.ts`, `BroadcastChannel('gfs-crtanje-<id>')`, board `gfs-tabla-<id>`): console sends
+  `puls` every 2 s, `strana` (whole page + confirmed `verzija`), `uToku` (stroke in progress, once per frame), `alati`; audience
+  sends `trazi`. Audience side `gledalac.ts` (`Gledalac`): while a pulse arrived in the last 5 s the drawing comes only from the
+  channel (no flicker back while a PUT is in flight); without it from the server (snapshot `crtez` change, reconnect, return
+  from sleep); an older `verzija` never replaces a newer one.
+- **Scene** (`pages/publika-scena.component.ts`, inputs `crtez`, `alatiCrtanja`): `crtanje/sloj-crteza.component.ts` (SVG
+  over the slide wrapper, below the QR/rank layer and the B/W screens) only on `NORMALAN` + `SLAJD` for the current slide, and inside
+  the white screen for the `BELA` page (the "Beo ekran" label hides when the white page has a drawing); the outgoing slide of a
+  transition keeps its drawing. The audience tools strip (`[data-crt-pub-alati]`) shows only while the console draws and the
+  teacher turned on "Publika vidi alate" (eye; default off).
+- **Console** (`pages/konzola.page.ts`): header buttons "Bela pozadina" (`W`, `EKRAN_BEO`) and "Crtaj" (`D`; X while drawing).
+  Drawing replaces the body with `crtanje/raspored-crtanja.component.ts` (tools column, colours/undo/redo/clear/eye bar, the
+  largest 16:9 scene with `povrsina-crtanja.component.ts`: pointer events with coalesced points, one pointer, palm rejection,
+  pointer capture; "Ranije ovde" on the right); the header stays. Exit: `D`, `Esc` (first cancels a stroke in progress) or X.
+  No drawing on PRIJAVA/KRAJ (button `aria-disabled`; a console already drawing keeps the layout with an inactive surface and a
+  note); entering drawing or the first touch on a black screen turns `CRN` off. Narrow console (< 600 px): bar, scene, tools in a
+  row below it, then the usual bottom nav. Default colour red, width 6.
+- **Earlier drawings** (`ranije.ts`, `GET izvodjenja/{id}/crtezi/ranije?slajdId=`, once per slide): chip "Ranije si na ovom slajdu
+  crtao" under the console preview enters drawing; `ranije-panel.component.ts` thumbnails ("grupa · datum") add the old elements
+  to the current page as one undoable step. Settings → Uživo (`/podesavanja/uzivo`, `features/podesavanja/pages/uzivo-podesavanja.page.ts`)
+  switches it per browser (`ranije-podesavanje.ts`, `localStorage` `gfs.ranije-crteze.v1`, default on); off = no chip, no request.
+- **Run overview** (`/izvodjenja/:id/pregled`): card "Crteži" (`crtezi-izvodjenja.component.ts`, also when results were not kept)
+  with thumbnails of non-empty pages (`slicica-crteza.component.ts`: slide with all steps revealed, or white) in slide order,
+  "Slajd N" / "Slajd N, bela pozadina" / "Obrisan slajd"; click opens a large view dialog. No card without drawings.
+- **Lecture board** (`features/predavanja`): "Tabla" next to "Pokreni prezentaciju" on a live lecture opens `predavanja/:id/tabla` in a
+  new tab (`pages/tabla-predavanja.ts`, one lazy `loadChildren` entry `tabla.routes.ts` because of the initial budget): header
+  "Tabla · <predmet>, predavanje <datum>" (`ui/tabla.ts`), "Otvori publiku" (`P`, window `gfs-tabla`, so it never replaces a run's
+  audience window), "Otvori na monitoru", "Ceo ekran" (`F`); white page and drawing at once, keys `1`-`7`, `Ctrl+Z`/`Ctrl+Y`, `Esc`
+  cancels a stroke. No STOMP: `GET/PUT predavanja/{id}/tabla`. The audience `predavanja/:id/tabla/publika` (`pages/tabla-publika.ts`,
+  reads `:id` from the parent route) uses the channel while the board's pulse arrives, otherwise asks `GET ?posle=<verzija>` every
+  3 s while visible (204 = unchanged) and at once after sleep. The lecture page shows "Tabla sa ovog časa" (`ui/tabla-casa.ts`) when the
+  saved board is not empty (re-read when the tab is shown again); its link reopens the board, also on a finished lecture.
+- **Keys** (`tastatura.ts`, help `pages/pomoc-precice.dialog.ts`): `D` = drawing (console only; the audience ignores it),
+  `Shift+D` = Detalji (was `D`), `Shift+M` = phone view (was `M`; plain `M` does nothing), `R` = repeat question only when pressed
+  twice within 2 s, in the console too (`DvaputR`; a hint "Pritisni R ponovo…"); the console's "Ponovi" button keeps its confirm.
+  While drawing, `tasterCrtanja` (after the `G` mode) takes `1`-`7`, `Ctrl+Z`, `Ctrl+Y`/`Ctrl+Shift+Z` and `Esc`; other shortcuts work as before.
+- **Budgets:** new CSS lives in component styles (the `.uz-pomoc*`, phone-dialog and screen-choice rules moved out of the global
+  `uzivo-izvodjenje.css` to make room); initial closure 799 497 B after this feature (`e2e/lenji-editor.spec.ts`, limit 800 000).
+- **Tests:** Vitest for geometry, history, writer, `Crtac`, `Gledalac`, earlier drawings, scene, console, keys, board pages and the
+  setting; e2e `e2e/uzivo-crtanje.spec.ts` (console + audience in one context through the real `BroadcastChannel`, W and back,
+  chip and panel, setting, overview card, lecture board in a new tab with its audience popup and the 3 s poll). The mock keeps pages
+  in `MockIzvodjenje.crtezi`, the board in `MockApi.table`, earlier drawings in `MockApi.ranijiCrtezi`, and now supports
+  `EKRAN_BEO`/`EKRAN_CRN` with `bela_slajd_id`; `mock.instaliraj(page.context())` covers tabs and popups the page opens.
+  `pristupacnost.spec.ts` checks the drawing console, board, board audience, lecture thumbnail, overview card/dialog and Settings → Uživo.
 
 ## Banka zadataka (`features/banka`)
 
