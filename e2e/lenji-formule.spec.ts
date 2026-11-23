@@ -34,7 +34,14 @@ const RAST_ZADATKA = 1_300;
  * konzola i pregled; izmereno i posle nje 117 512 B), pa je ovo samo prostor za sledeće izmene telefona, ne nov rast.
  */
 const REZERVA_2026_10_28 = 4_000;
-const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28;
+/**
+ * Brza anketa preko slajda (`?sa=cas`): sam list je lenji chunk, ali ulaz u `@defer` (funkcija zavisnosti sa `import()`,
+ * šablon bloka, `@if (saCasa)`) stoji na stranici. Izmereno 2026-11-23: 121 385 -> 121 616 B (+231), a rezerva je bila 133 B.
+ * Jeftinijeg ulaza nema: `@defer (when saCasa)` štedi 8 B, ali uvlači `ɵɵdeferWhen` u početni paket (+130 B, a tamo je 5 B
+ * rezerve); rute `uzivo` su u početnom paketu. Rast je za ovu izmenu, uz malo prostora; nije nova opšta rezerva.
+ */
+const RAST_ANKETE = 300;
+const BUDZET_STUDENTA = OSNOVA_STUDENTA + 8_000 + RAST_ZADATKA + REZERVA_2026_10_28 + RAST_ANKETE;
 /**
  * Ekran zadatka (`app-zadatak-ekran` sa redom stanja i `app-zadatak-unos`: slika svoje varijante, polja, ishod, rešenje;
  * stilovi u komponentama, ne u globalnom CSS-u početnog paketa): samo dinamički uvoz iz studentske stranice, telefon ga

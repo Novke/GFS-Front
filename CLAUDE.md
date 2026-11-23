@@ -1201,7 +1201,8 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
   (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision.
+  a new decision. Brza anketa (2026-11-23): the sheet over the slide is a lazy chunk, but its `@defer` entry costs +231 B on the
+  page (121 385 -> 121 616 B), so `RAST_ANKETE = 300` B was added (pending Novica's review; cheaper entries cost initial bytes).
 
 ### Rang tačnosti (leaderboard)
 
@@ -1536,6 +1537,40 @@ and on the subject hub's Ocene tab): `OceneApi.objava/objavi/povuci` = `GET ocen
 ocenjivanje/predmet/{p}/objava/{grupa}` (all `tiho`). Until "Objavi predloge" students see nothing of the grade (not even test or
 homework points); publishing stores a snapshot per student, "Objavi ponovo" replaces it, "Povuci" removes it; each with a confirmation.
 Attendance and tasks from class are visible to students regardless.
+
+## Brza anketa (quick class poll)
+
+Branch `feature/brza-anketa`. Spec: deploy repo `docs/superpowers/specs/2026-11-23-brza-anketa-design.md` (API in section 5, UI in 6),
+mockup `mockups/2026-11-23-brza-anketa/` next to it. Anonymous to the teacher: no screen ever shows who voted what, only counts.
+- **Teacher (`features/ankete`):** `AnketeApi` = `api/ankete/*` (`sabloni`, `precice`, `folderi`, `folderi/redosled`, `POST ankete`,
+  `aktivne?predavanjeId=&grupaId=`, paged history, `{id}/zatvori`, `{id}/rezultat`), every call `tiho` (the panel, console and
+  projector show their own errors). `AnketePanelStore` (provided by the dialog) drives the left column (start screen with shortcut
+  tiles, folders, history, editing the shortcuts) and the right column (check before launch, then results polled every 2 s while
+  open). The panel is opened only through `ui/otvori-anketu.ts` (`otvoriAnketu`, dynamic `import()`, context as a signal); callers in
+  other features import nothing else. Two columns from `SIROK_PANEL` (900 px), full screen below it: the dialog sets
+  `--mat-dialog-container-shape` on its own overlay pane (no global class). Keys inside the panel: `1`-`9` launch a shortcut, `R`
+  shows/hides the result, `Enter` closes the poll, `Esc` the panel.
+- **Entry points:** console (button, menu item and key `A`, command `ANKETA`), remote (`data-anketa-otvori`), lecture page
+  (`data-anketa`). Console and remote build the context in `features/uzivo/pages/anketa-kontekst.ts` (lecture of the run + number of
+  checked-in students), the lecture page from its own lecture.
+  The icons `how_to_vote` and `folder` are **not** in `IKONE`: these three pages call `registrujIkoneAnkete()` first in their
+  constructor. The initial bundle sits at the 800 000 B budget (`e2e/lenji-editor.spec.ts`, ~5 B left after this feature); even a new
+  import from `core/layout/icons` in a lazy file adds bytes to `main`, so measure (`ng build --stats-json`) before adding anything shared.
+- **Projectors:** `ui/anketa-projektor.component.ts` (uživo `publika` and `predavanja/:id/projektor`) polls `aktivne?predavanjeId=` every
+  2 s while visible, never shows an error; bars only when `rezultatPrikazan`, otherwise question, options and "N glasova".
+- **Student (`features/nalog`, public route):** `AnketeStudentaApi` = `GET public/nalog/ankete` and `POST public/nalog/ankete/{id}/glas`
+  `{opcije}`. Root `AnketeStudentaStore` gets the list from `CasStanje.ankete` (tab shell and tab Čas call `primi`), refreshes on push
+  (`naPushPoruku`) and decides which poll pops up (`zaIskakanje`; "Kasnije" hides it until a newer one). `ui/anketa-list.component.ts`
+  is the non-modal bottom sheet (above the tabs; `izvor="uzivo"` on `/uzivo/<kod>?sa=cas`, behind `@defer`, polls itself every
+  10 s ± 2 s and on `visibilitychange`, stops on 401, backs off on 429); `ui/ankete-kartice.component.ts` is the card list on Čas
+  (all, shown results first) and Početna (group polls only). Ja → Obaveštenja has an "Ankete" row only when the server sends
+  `pushAnkete`. Allow-list additions (`eslint-rules/javna-ruta-konfig.js`): `shared/util/ankete` and `shared/ui/anketa-trake.component`
+  for `features/nalog`, the sheet for `features/uzivo/javno`; keep both files free of other imports.
+- **e2e:** `e2e/mock-ankete.ts` (`mock.ankete`, fixture `e2e/fixtures/ankete.json`) mirrors the server rules (eligibility by
+  check-in or group, effective close by hand/deadline/finished lecture, results only when shown, a new on-class poll closes the
+  previous one). Helpers for specs: `otvori`, `glasajDrugi`, `zatvori`, `prikaziRezultat`, `glasStudenta`, `brojMogucih`. Specs
+  `e2e/anketa-nastavnik.spec.ts` and `e2e/anketa-student.spec.ts`; student API regexes in the public-network specs include
+  `ankete|ankete/\d+/glas`.
 
 ## Releases and stale tabs (`core/izdanje`)
 
