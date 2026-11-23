@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { glasovaTekst, odbrojavanje, opisRoka, preostaloMs } from './vreme-ankete';
+import { glasovaTekst, odbrojavanje, opisRoka, preostaloMs } from './ankete';
 
-describe('vreme brze ankete', () => {
+describe('brza anketa (zajedničko)', () => {
   it('preostaloMs: po satu servera, pomereno za proteklo lokalno vreme; bez roka null, nikad ispod 0', () => {
     // server je rekao "sada = 1000" u lokalnom trenutku 50_000; posle 2 s lokalno ostaje rok - 3000
     expect(preostaloMs(6_000, 1_000, 50_000, 52_000)).toBe(3_000);

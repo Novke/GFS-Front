@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Subscription } from 'rxjs';
 
-import { glasovaTekst } from '../../../shared/util/vreme-ankete';
+import { glasovaTekst } from '../../../shared/util/ankete';
 import { AnketeApi } from '../data-access/ankete.api';
 import { AnketaDetails } from '../data-access/ankete.models';
 import { OSVEZAVANJE_ANKETE_MS, anketaZaProjektor } from '../data-access/ankete.pravila';
-import { AnketaTrakeComponent } from './anketa-trake.component';
+import { AnketaTrakeComponent } from '../../../shared/ui/anketa-trake.component';
 
 /**
  * Anketa na projektoru (spec 6.2, maketa H): prozor preko slajda (slajd ispod se ne menja) sa pitanjem i odgovorima, a trake

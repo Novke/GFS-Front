@@ -3,6 +3,9 @@ import {
   SablonAnketeCmd,
 } from './ankete.models';
 
+export { trake } from '../../../shared/util/ankete';
+export type { Traka } from '../../../shared/util/ankete';
+
 /*
  * Čista pravila brze ankete na strani nastavnika (spec 4 i 6.1): publike konteksta, nacrt iz šablona, provera pre
  * pokretanja (iste granice kao server), komande, trake rezultata, prečice i tastatura panela. Bez Angular servisa.
@@ -333,27 +336,6 @@ export function cmdPreciceIzAnkete(a: AnketaDetails, boja: BojaPrecice): SablonA
 /** Dodir prečice pokreće odmah samo kad šablon to traži i kontekst nudi njegovu publiku (inače ekran provere). */
 export function mozeOdmah(s: SablonAnkete, m: Mogucnosti): boolean {
   return s.pokreniOdmah && !imaPraznaMesta(s) && (s.publika === 'NA_CASU' ? m.naCasu : m.grupa);
-}
-
-/** Jedna traka rezultata: `udeo` (0..1) je od broja studenata koji su glasali. */
-export interface Traka {
-  tekst: string;
-  broj: number;
-  udeo: number;
-  procenat: number;
-  pobednik: boolean;
-}
-
-/** Trake po odgovoru; pobednik je jedini sa najviše glasova (nerešeno: nijedan, kao `AnketaInfo.pobednik`). */
-export function trake(opcije: readonly string[], glasovi: readonly number[], brojGlasalo: number): Traka[] {
-  const brojevi = opcije.map((_, i) => Math.max(0, glasovi[i] ?? 0));
-  const max = Math.max(0, ...brojevi);
-  const jedini = max > 0 && brojevi.filter(b => b === max).length === 1;
-  const od = Math.max(brojGlasalo, 1);
-  return opcije.map((tekst, i) => ({
-    tekst, broj: brojevi[i], udeo: Math.min(1, brojevi[i] / od), procenat: Math.round((brojevi[i] / od) * 100),
-    pobednik: jedini && brojevi[i] === max,
-  }));
 }
 
 /** `1 čekiran`, `3 čekirana`, `27 čekiranih`. */

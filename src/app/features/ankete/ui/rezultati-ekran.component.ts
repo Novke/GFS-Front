@@ -2,10 +2,10 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
-import { odbrojavanje, opisRoka, preostaloMs } from '../../../shared/util/vreme-ankete';
+import { odbrojavanje, opisRoka, preostaloMs } from '../../../shared/util/ankete';
 import { AnketePanelStore } from '../data-access/ankete-panel.store';
 import { nijeGlasalo } from '../data-access/ankete.pravila';
-import { AnketaTrakeComponent } from './anketa-trake.component';
+import { AnketaTrakeComponent } from '../../../shared/ui/anketa-trake.component';
 
 /**
  * Rezultati prikazane ankete (maketa C, desno u I): trake uživo (nastavnik ih vidi uvek), "N / M glasalo", koliko još nije,

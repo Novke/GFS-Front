@@ -1,3 +1,5 @@
+import type { AnketaStudentu } from './ankete-studenta.models';
+
 /** Predavanje na kome je student čekiran (`CasPredavanje`); `predmet` je naziv predmeta. */
 export interface CasPredavanje {
   id: number;
@@ -34,6 +36,8 @@ export interface CasStanje {
   cekiranU?: string | null;
   izvodjenje?: CasIzvodjenje | null;
   uToku?: CasUToku | null;
+  /** Brza anketa (otvorene i sa pokazanim rezultatom, najnovije prvo); stari backend ga nema. */
+  ankete?: AnketaStudentu[] | null;
 }
 
 /** `POST skeniraj`: neprijavljen dobija `kljuc` (čeka prijavu, 15 min), prijavljen `stanje` skeniranog časa. */

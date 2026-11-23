@@ -81,6 +81,23 @@ describe('CasPage', () => {
     expect(navigacija).not.toHaveBeenCalled();
   });
 
+  it('ankete iz stanja (i iz skeniranja): kartica rezultata pa otvorena anketa, iznad prikaza časa', async () => {
+    await otvori(TOKEN);
+    const ankete = [
+      { id: 2, pitanje: 'Tempo?', opcije: ['Brzo', 'Taman'], viseOdgovora: false, publika: 'NA_CASU', rokMs: null, otvorena: true,
+        mojGlas: null, rezultat: null, sadaMs: 0 },
+      { id: 1, pitanje: 'Pauza?', opcije: ['Da', 'Ne'], viseOdgovora: false, publika: 'NA_CASU', rokMs: null, otvorena: false,
+        mojGlas: [0], rezultat: { glasovi: [14, 9], brojGlasalo: 23 }, sadaMs: 0 },
+    ];
+    http.expectOne(SKENIRAJ).flush({ stanje: { ...NA_CASU, ankete } });
+    await osvezi();
+    const el = fixture.nativeElement as HTMLElement;
+    const kartice = [...el.querySelectorAll('[data-anketa-kartica]')];
+    expect(kartice.map(k => k.getAttribute('data-anketa-id'))).toEqual(['1', '2']);
+    expect(kartice[0].textContent).toContain('Da · 14 od 23 glasa');
+    expect(tekst()).toContain('Prisutan si');
+  });
+
   it('tokenSeBriseIzAdrese odmah, pre odgovora servera', async () => {
     await otvori(TOKEN);
     expect(zamena).toHaveBeenCalledWith('/nalog/cas');

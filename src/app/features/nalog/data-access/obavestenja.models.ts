@@ -1,5 +1,8 @@
-/** Vrste u zvonu studenta (spec „Aplikacija i obaveštenja“ 6.8); podsetnik dan pre časa u zvono ne ide. */
-export type VrstaObavestenjaStudenta = 'OTKAZAN_CAS' | 'ODRZAVA_SE' | 'OCENE' | 'POSLE_CASA';
+/**
+ * Vrste u zvonu studenta (spec „Aplikacija i obaveštenja“ 6.8); podsetnik dan pre časa u zvono ne ide. `ANKETA`: brza
+ * anketa za celu grupu ("Glasaj do ...", putanja `nalog/pocetna`); anketa na času ne ide u zvono.
+ */
+export type VrstaObavestenjaStudenta = 'OTKAZAN_CAS' | 'ODRZAVA_SE' | 'OCENE' | 'POSLE_CASA' | 'ANKETA';
 
 /** `GET api/public/nalog/obavestenja`: stavka zvona (bez ocena, imena i razloga; tekst piše server). */
 export interface StavkaZvona {

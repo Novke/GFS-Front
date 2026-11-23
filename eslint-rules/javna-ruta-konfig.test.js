@@ -220,6 +220,51 @@ describe('eslint.config.js: pravilo javna-ruta-uvozi', () => {
     }
   });
 
+  describe('brza anketa (spec brze ankete 6.3): list i trake na javnim rutama, nastavnički deo ostaje zabranjen', () => {
+    const uvozi = rel => {
+      const izvor = require('node:fs').readFileSync(path.join(KORENI, rel), 'utf8');
+      return [...izvor.matchAll(/^\s*import\b[^'"]*['"]([^'"]+)['"]/gm)].map(m => m[1]);
+    };
+
+    for (const [feature, dozvoljen] of [
+      ['features/nalog', 'shared/util/ankete'],
+      ['features/nalog', 'shared/ui/anketa-trake.component'],
+      ['features/uzivo/javno', 'features/nalog/ui/anketa-list.component'],
+    ]) {
+      it(`${feature} sme ${dozvoljen}`, async () => {
+        const kod = `import * as X from '${dubina(feature)}${dozvoljen}';\nexport const y = X;\n`;
+        assert.deepEqual(await poruke(feature, kod), []);
+      });
+    }
+
+    for (const [feature, zabranjen] of [
+      ['features/nalog', 'features/ankete/data-access/ankete.api'],
+      ['features/nalog', 'features/ankete/data-access/ankete-panel.store'],
+      ['features/nalog', 'features/ankete/ui/otvori-anketu'],
+      ['features/uzivo/javno', 'features/nalog/data-access/ankete-studenta.store'],
+      ['features/uzivo/javno', 'features/nalog/data-access/ankete-studenta.api'],
+      ['features/uzivo/javno', 'features/ankete/ui/anketa-projektor.component'],
+      ['features/uzivo/javno', 'shared/util/ankete'],
+      ['features/upis', 'features/nalog/ui/anketa-list.component'],
+    ]) {
+      it(`${feature} ne sme ${zabranjen}`, async () => {
+        const m = await poruke(feature, `import * as X from '${dubina(feature)}${zabranjen}';\nexport const y = X;\n`);
+        assert.equal(m.length, 1, JSON.stringify(m));
+      });
+    }
+
+    it('shared/util/ankete uvozi samo shared/util/termin, a trake samo @angular/core i shared/util/ankete', () => {
+      assert.deepEqual(uvozi('src/app/shared/util/ankete.ts'), ['./termin']);
+      assert.deepEqual(uvozi('src/app/shared/ui/anketa-trake.component.ts'), ['@angular/core', '../util/ankete']);
+    });
+
+    it('API anketa studenta zove samo api/public/nalog/ankete', () => {
+      const izvor = require('node:fs').readFileSync(path.join(KORENI, 'src/app/features/nalog/data-access/ankete-studenta.api.ts'), 'utf8');
+      assert.match(izvor, /\$\{API_URL\}\/public\/nalog\/ankete`/);
+      assert.doesNotMatch(izvor, /\$\{API_URL\}\/(?!public\/nalog\/ankete)/);
+    });
+  });
+
   describe('features/uzivo/javno: formule u tekstu (faza 5, odluka 4)', () => {
     const javni = 'features/uzivo/javno/x.ts';
     /** Poruke pravila za uvoz iz `src/app/features/uzivo/javno/x.ts`. */

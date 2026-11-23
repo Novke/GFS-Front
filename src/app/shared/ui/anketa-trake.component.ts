@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-import { trake } from '../data-access/ankete.pravila';
+import { trake } from '../util/ankete';
 
 /**
- * Trake rezultata ankete (panel nastavnika i projektor): po odgovoru tekst, broj i traka; pobednik (jedini sa najviše
- * glasova) je zelen. Udeo je od broja studenata koji su glasali, pa za više odgovora zbir prelazi 100 %. Čitač ekrana dobija
- * jedan red teksta po odgovoru, trake su ukras.
+ * Trake rezultata brze ankete (panel nastavnika, projektor, studentski nalog): po odgovoru tekst, broj i traka; pobednik
+ * (jedini sa najviše glasova) je zelen. Udeo je od broja studenata koji su glasali, pa za više odgovora zbir prelazi 100 %.
+ * Čitač ekrana dobija jedan red teksta po odgovoru, trake su ukras. Uvozi samo `@angular/core` i `shared/util/ankete`
+ * (allow-lista javnog naloga).
  */
 @Component({
   selector: 'app-anketa-trake',

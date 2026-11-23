@@ -14,7 +14,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTimepickerModule } from '@angular/material/timepicker';
 
 import { opcijeVremena, provideSrpskiDatum } from '../../../shared/forms/datum-vreme';
-import { opisRoka } from '../../../shared/util/vreme-ankete';
+import { opisRoka } from '../../../shared/util/ankete';
 import { AnketePanelStore, DesniEkran } from '../data-access/ankete-panel.store';
 import { PublikaAnkete, SablonAnketeCmd } from '../data-access/ankete.models';
 import {

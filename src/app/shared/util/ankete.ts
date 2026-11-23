@@ -1,8 +1,9 @@
 import { DANI, isoDatum, relativniDan } from './termin';
 
 /*
- * Vreme brze ankete (spec brze ankete 6.1 i 6.3): odbrojavanje do roka i opis roka. Deli ga panel nastavnika i studentski
- * nalog (javna ruta, allow-lista `gfs/javna-ruta-uvozi`): uvozi samo `shared/util/termin`, koji nema uvoza.
+ * Brza anketa, zajedničko za panel nastavnika, projektor i studentski nalog (spec brze ankete 6.1-6.3): odbrojavanje do
+ * roka, opis roka, množina glasova i trake rezultata. Nalog je javna ruta (allow-lista `gfs/javna-ruta-uvozi`), pa ovaj fajl
+ * uvozi samo `shared/util/termin`, koji nema uvoza.
  */
 
 /**
@@ -44,4 +45,25 @@ export function glasovaTekst(n: number): string {
   const dd = n % 100;
   const oblik = d === 1 && dd !== 11 ? 'glas' : d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? 'glasa' : 'glasova';
   return `${n} ${oblik}`;
+}
+
+/** Jedna traka rezultata: `udeo` (0..1) je od broja studenata koji su glasali. */
+export interface Traka {
+  tekst: string;
+  broj: number;
+  udeo: number;
+  procenat: number;
+  pobednik: boolean;
+}
+
+/** Trake po odgovoru; pobednik je jedini sa najviše glasova (nerešeno: nijedan, kao `AnketaInfo.pobednik`). */
+export function trake(opcije: readonly string[], glasovi: readonly number[], brojGlasalo: number): Traka[] {
+  const brojevi = opcije.map((_, i) => Math.max(0, glasovi[i] ?? 0));
+  const max = Math.max(0, ...brojevi);
+  const jedini = max > 0 && brojevi.filter(b => b === max).length === 1;
+  const od = Math.max(brojGlasalo, 1);
+  return opcije.map((tekst, i) => ({
+    tekst, broj: brojevi[i], udeo: Math.min(1, brojevi[i] / od), procenat: Math.round((brojevi[i] / od) * 100),
+    pobednik: jedini && brojevi[i] === max,
+  }));
 }
