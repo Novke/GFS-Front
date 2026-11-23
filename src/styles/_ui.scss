@@ -246,3 +246,8 @@
   padding: 16px 0;
   color: var(--muted);
 }
+
+// Panel brze ankete na telefonu: dijalog preko celog ekrana, bez zaobljenja (`features/ankete/ui/otvori-anketu.ts`).
+.gfs-anketa-pun-ekran {
+  --mat-dialog-container-shape: 0;
+}

@@ -1,0 +1,82 @@
+<h3 id="anketa-levo-naslov" class="up-naslov">Uredi prečice</h3>
+<p class="up-pod">Prevuci ili koristi strelice za redosled; dodirni prečicu za izgled.</p>
+<ol class="up-lista" aria-label="Prečice redom" cdkDropList (cdkDropListDropped)="spustena($event)">
+  @for (s of store.precice(); track s.id; let i = $index; let prvi = $first; let poslednji = $last) {
+    <li class="up-red" [class.up-red--izabrana]="izabrana()?.id === s.id" cdkDrag cdkDragLockAxis="y" [cdkDragDisabled]="store.radi()" data-uredi-precica>
+      <span class="up-hvataljka" cdkDragHandle aria-hidden="true"><mat-icon svgIcon="drag_indicator" /></span>
+      <span class="up-boja" [style.background]="boja(s.boja)" aria-hidden="true"></span>
+      <button type="button" class="up-glavno" [attr.aria-expanded]="izabrana()?.id === s.id" (click)="izaberi(s)">
+        <span class="up-ime">@if (s.ikonica) { <span aria-hidden="true">{{ s.ikonica }} </span> }{{ naziv(s) }}</span>
+        <span class="up-opis">{{ opis(s) }}</span>
+      </button>
+      <button mat-icon-button type="button" [disabled]="prvi || store.radi()" disabledInteractive [attr.aria-label]="'Pomeri gore: ' + naziv(s)"
+              (click)="pomeriPrecicu(i, i - 1)"><mat-icon svgIcon="arrow_upward" /></button>
+      <button mat-icon-button type="button" [disabled]="poslednji || store.radi()" disabledInteractive [attr.aria-label]="'Pomeri dole: ' + naziv(s)"
+              (click)="pomeriPrecicu(i, i + 1)"><mat-icon svgIcon="arrow_downward" /></button>
+    </li>
+  } @empty {
+    <li class="up-prazno">Nema prečica.</li>
+  }
+</ol>
+
+@if (izabrana(); as s) {
+  <section class="up-izgled" aria-labelledby="anketa-izgled-naslov" data-uredi-izgled>
+    <h4 id="anketa-izgled-naslov" class="up-sekcija">Prečica „{{ naziv(s) }}“</h4>
+    <mat-form-field class="up-pun" subscriptSizing="dynamic">
+      <mat-label>Kratak naziv na pločici</mat-label>
+      <input #ime matInput [attr.maxlength]="maxNaziv" [value]="s.kratakNaziv ?? ''" [disabled]="store.radi()"
+             (change)="kratakNaziv(s, ime)" (keydown.enter)="ime.blur()" data-uredi-naziv>
+    </mat-form-field>
+
+    <div class="up-ikonice" role="group" aria-label="Ikonica">
+      <button type="button" class="up-ikonica" [attr.aria-pressed]="s.ikonica === null" [disabled]="store.radi()"
+              (click)="izmeni(s, { ikonica: null })">bez</button>
+      @for (e of ikonice; track e) {
+        <button type="button" class="up-ikonica" [attr.aria-pressed]="s.ikonica === e" [attr.aria-label]="'Ikonica ' + e"
+                [disabled]="store.radi()" (click)="izmeni(s, { ikonica: e })">{{ e }}</button>
+      }
+    </div>
+    <mat-form-field class="up-pola" subscriptSizing="dynamic">
+      <mat-label>Ili upiši jedan emoji</mat-label>
+      <input #emoji matInput maxlength="16" [disabled]="store.radi()" (change)="slobodnaIkonica(s, emoji)" (keydown.enter)="emoji.blur()" data-uredi-emoji>
+      @if (greskaIkonice(); as g) { <mat-hint class="up-greska" role="alert">{{ g }}</mat-hint> }
+    </mat-form-field>
+
+    <div class="up-boje" role="group" aria-label="Boja pločice">
+      @for (b of boje; track b.boja) {
+        <button type="button" class="up-boja-izbor" [style.background]="boja(b.boja)" [attr.aria-pressed]="(s.boja ?? 'PLAVA') === b.boja"
+                [attr.aria-label]="b.naziv" [disabled]="store.radi()" (click)="izmeni(s, { boja: b.boja })" data-uredi-boja></button>
+      }
+    </div>
+
+    <mat-slide-toggle class="up-red-opc" [checked]="s.pokreniOdmah" [disabled]="store.radi()" (change)="izmeni(s, { pokreniOdmah: $event.checked })"
+                      data-uredi-odmah>Dodir pokreće odmah (bez provere)</mat-slide-toggle>
+
+    <h4 class="up-sekcija" id="anketa-uredi-publika">Ko glasa</h4>
+    <mat-button-toggle-group [value]="s.publika" [disabled]="store.radi()" aria-labelledby="anketa-uredi-publika" hideSingleSelectionIndicator
+                             (change)="publika(s, $event.value)">
+      <mat-button-toggle value="NA_CASU">Na času</mat-button-toggle>
+      <mat-button-toggle value="GRUPA">Cela grupa</mat-button-toggle>
+    </mat-button-toggle-group>
+
+    @if (s.publika === 'NA_CASU') {
+      <h4 class="up-sekcija" id="anketa-uredi-trajanje">Zatvori sama posle</h4>
+      <mat-button-toggle-group class="up-trajanje" [value]="s.trajanjeSekunde" [disabled]="store.radi()" aria-labelledby="anketa-uredi-trajanje"
+                               hideSingleSelectionIndicator (change)="izmeni(s, { trajanjeSekunde: $event.value })">
+        @for (t of trajanja; track t) { <mat-button-toggle [value]="t">{{ oznakaTrajanja(t) }}</mat-button-toggle> }
+      </mat-button-toggle-group>
+    } @else {
+      <mat-form-field class="up-pola" subscriptSizing="dynamic">
+        <mat-label>Podrazumevani rok</mat-label>
+        <mat-select [value]="s.rokSati" [disabled]="store.radi()" (selectionChange)="izmeni(s, { rokSati: $event.value })">
+          @for (r of rokovi; track r.sati) { <mat-option [value]="r.sati">{{ r.naziv }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <div class="up-dugmad">
+      <button mat-button type="button" (click)="store.izmeniSablon(s)"><mat-icon svgIcon="edit" />Pitanje i odgovori</button>
+      <button mat-button type="button" [disabled]="store.radi()" (click)="ukloni(s)" data-uredi-ukloni><mat-icon svgIcon="close" />Ukloni sa prečica</button>
+    </div>
+  </section>
+}
