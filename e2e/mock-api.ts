@@ -11,6 +11,7 @@ import type { LtiRegistracijaCmd, LtiRegistracijaInfo, LtiVrednostiZaMoodle } fr
 import { poVezbama, type VrstaPrezentacije } from '../src/app/core/api/redosled-prezentacija';
 import type { RasporedCmd, TerminCmd } from '../src/app/features/raspored/data-access/raspored.models';
 import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.models';
+import { MockAnkete } from './mock-ankete';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
 import { MockPortal } from './mock-portal';
@@ -395,6 +396,21 @@ export class MockApi {
         o.reseno ??= lokalnoVreme(new Date());
       }
     },
+  });
+  /**
+   * Brza anketa (`mock-ankete.ts`): sačuvana pitanja, prečice i folderi nastavnika, ankete i glasovi. Student sme da glasa
+   * kad je čekiran na predavanju ankete (`cekiranje.predavanjeId`) ili, za anketu grupe, kad je u grupi iz `nalogStudenta`.
+   */
+  readonly ankete = new MockAnkete({
+    studentPrijavljen: () => this.studentPrijavljen,
+    cekiranNa: () => this.cekiranje.predavanjeId,
+    grupaStudenta: () => this.podaci.grupe.find(g => g.naziv === this.podaci.nalogStudenta.grupa)?.id ?? null,
+    predavanje: id => {
+      const p = this.podaci.predavanja.find(x => x.id === id);
+      return p ? { grupaId: p.grupaId, zavrseno: p.zavrseno, predmetNaziv: this.predmet(p.predmetId)?.naziv ?? null } : null;
+    },
+    grupa: id => this.grupa(id),
+    brojCekiranih: () => this.cekiranje.cekirani.length,
   });
   /** Ključ obaveštenja (`MNOGO_NAJAVA:<stavka>:<datum>`) -> id; server ga drži u koloni `kljuc`, API ga ne vraća. */
   private readonly kljuceviObavestenja = new Map<string, number>();
@@ -1474,6 +1490,7 @@ export class MockApi {
     });
     get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
     this.portal.nastavnickeRute(get, put, del);
+    this.ankete.nastavnickeRute(get, post, put, del);
     put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
     del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
     post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
@@ -1599,11 +1616,13 @@ export class MockApi {
     const casStanje = () => {
       const c = this.cekiranje;
       const x = c.predavanjeId === null ? undefined : d.predavanja.find(q => q.id === c.predavanjeId);
+      // brza anketa: poslednje polje stanja, isti skup kao `GET public/nalog/ankete`
+      const ankete = this.ankete.zaStudenta();
       if (!x) {
-        return { predavanje: null, cekiranU: null, izvodjenje: null, uToku: c.uToku };
+        return { predavanje: null, cekiranU: null, izvodjenje: null, uToku: c.uToku, ankete };
       }
       const predavanje = { id: x.id, predmet: this.predmet(x.predmetId)?.naziv ?? null, datum: x.datum, rb: x.rb, tema: x.tema, zavrseno: x.zavrseno };
-      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje, uToku: x.zavrseno ? c.uToku : null };
+      return { predavanje, cekiranU: c.cekiranU, izvodjenje: x.zavrseno ? null : c.izvodjenje, uToku: x.zavrseno ? c.uToku : null, ankete };
     };
     const cekiraj = (x: Predavanje) => {
       this.cekiranje.predavanjeId = x.id;
@@ -1641,6 +1660,7 @@ export class MockApi {
     });
     get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
     this.portal.studentskeRute(get, post, put, del);
+    this.ankete.studentskeRute(get, post);
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));
