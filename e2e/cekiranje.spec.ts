@@ -118,6 +118,27 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     ]);
   });
 
+  test('cas: ključ izgubljen tokom prijave (druga kartica): napomena da skenira ponovo, bez potvrde', async ({ page, mock }) => {
+    mock.cekiranje.uToku = { predmet: 'Programiranje u građevinarstvu', tema: 'Petlje i nizovi' };
+    await page.goto(`nalog/cas/${TOKEN}`);
+    await ocekuj(page).toHaveURL(/\/nalog\?nazad=nalog(\/|%2F)cas$/);
+    // kao da se student prijavio u novoj kartici ili u aplikaciji: sessionStorage (ključ) je drugi, localStorage isti
+    ocekuj(await page.evaluate(() => localStorage.getItem('gfs-cas-skenirano'))).not.toBeNull();
+    await page.evaluate(() => sessionStorage.clear());
+    await page.getByLabel('Broj indeksa').fill('01');
+    await page.getByRole('button', { name: 'Pošalji kod' }).click();
+    await page.getByLabel('Kod iz mejla').fill(MockApi.KOD_NALOGA);
+    await page.getByRole('button', { name: 'Prijavi se' }).click();
+    await ocekuj(page).toHaveURL(/\/nalog\/cas$/);
+    await ocekuj(page.locator('[data-poruka]')).toHaveText(
+      'Skeniranje se izgubilo tokom prijave. Skeniraj QR ponovo: sad si prijavljen, pa ide odmah.',
+    );
+    await ocekuj(page.getByRole('heading', { level: 2, name: 'Predavanje je u toku' })).toBeVisible();
+    await ocekuj(page.locator('[data-skener-mesto]')).toBeAttached();
+    ocekuj(mock.zahteviZa('public/nalog/cas/potvrdi', 'POST')).toHaveLength(0);
+    ocekuj(await page.evaluate(() => localStorage.getItem('gfs-cas-skenirano'))).toBeNull();
+  });
+
   test('istekao QR i završen čas: poruka servera, bez praćenja', async ({ page, mock }) => {
     mock.studentPrijavljen = true;
     await page.goto('nalog/cas/1.kratak');

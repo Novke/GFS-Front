@@ -8,6 +8,25 @@ import { CasPredavanje, CasUToku } from './cas.models';
 /** `sessionStorage` (ne `localStorage`): ključ čekanja živi samo u kartici koja je skenirala QR. */
 export const KLJUC_CEKANJA = 'gfs-cas-kljuc';
 
+/**
+ * `localStorage`: samo vreme skeniranja (ms, bez ključa). Kad se student posle skeniranja prijavi u drugoj kartici ili u
+ * aplikaciji (ključ ostaje u kartici koja je skenirala) ili `sessionStorage` ne radi, tab Čas po ovome zna da je skeniranje
+ * izgubljeno i kaže mu da skenira ponovo, umesto običnog "Nisi na času".
+ */
+export const SKENIRANO_U = 'gfs-cas-skenirano';
+
+/** Ključ čekanja važi 15 min (server); starija oznaka skeniranja ništa ne znači. */
+const KLJUC_VAZI_MS = 15 * 60_000;
+
+/** Oznaka skeniranja (`Date.now()` kao tekst) je iz poslednjih 15 min; prazna, neispravna ili iz budućnosti nije. */
+export function skeniranoSkoro(oznaka: string | null, sadaMs: number): boolean {
+  const t = oznaka ? Number(oznaka) : NaN;
+  return Number.isFinite(t) && t <= sadaMs && sadaMs - t <= KLJUC_VAZI_MS;
+}
+
+/** Napomena na tabu Čas kad je skeniranje izgubljeno usput (`skeniranoSkoro`, a ključa nema). */
+export const PORUKA_SKENIRANJE_IZGUBLJENO = 'Skeniranje se izgubilo tokom prijave. Skeniraj QR ponovo: sad si prijavljen, pa ide odmah.';
+
 /** Upit stanja na 10 s ± 2 s (`slucajno` iz `[0, 1)`), da se 30 telefona iza jedne NAT adrese ne poravna. */
 export function sledeciUpitMs(slucajno: number): number {
   const r = Number.isFinite(slucajno) ? Math.min(Math.max(slucajno, 0), 1) : 0.5;
