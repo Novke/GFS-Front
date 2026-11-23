@@ -21,6 +21,9 @@
             <mat-icon svgIcon="slideshow" aria-hidden="true" />Pokreni prezentaciju
           </button>
         }
+        <button matButton="outlined" type="button" data-anketa (click)="anketa()">
+          <mat-icon svgIcon="how_to_vote" aria-hidden="true" />Anketa
+        </button>
         <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'projektor']" target="_blank" rel="noopener" data-projektor
            title="Projektor sa QR-om za čekiranje i brojem prisutnih">
           <mat-icon svgIcon="qr_code_2" aria-hidden="true" />Čekiranje<span class="sr-only"> (projektor, otvara se u novoj kartici)</span>

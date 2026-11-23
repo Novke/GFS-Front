@@ -24,6 +24,7 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
     [['w', 'W'], { komanda: 'EKRAN_BEO' }],
     [['f', 'F'], { lokalno: 'CEO_EKRAN' }],
     [['p', 'P'], { lokalno: 'KONZOLA' }],
+    [['a', 'A'], { lokalno: 'ANKETA' }],
     [['?'], { lokalno: 'POMOC' }],
   ];
 
@@ -109,6 +110,7 @@ describe('prečice na srpskoj ćirilici (e.key ćirilično, e.code latinični ta
     ['њ', 'KeyW', { komanda: 'EKRAN_BEO' }],
     ['ф', 'KeyF', { lokalno: 'CEO_EKRAN' }],
     ['п', 'KeyP', { lokalno: 'KONZOLA' }],
+    ['а', 'KeyA', { lokalno: 'ANKETA' }],
   ];
   for (const [key, code, akcija] of tabela) {
     it(`'${key}' (${code}) -> ${JSON.stringify(akcija)}`, () => {

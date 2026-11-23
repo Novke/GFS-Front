@@ -15,6 +15,7 @@ import { StudentiApi } from '../../../core/api/studenti.api';
 import { sviStudentiGrupe } from '../data-access/predavanje.store';
 import { PredavanjaApi } from '../../../core/api/predavanja.api';
 import { PredavanjeDetails } from '../../../core/api/predavanja.models';
+import { AnketaProjektorComponent } from '../../ankete/ui/anketa-projektor.component';
 
 /** Projektor osvežava broj prisutnih na 10 s (samo dok je tab vidljiv). */
 export const OSVEZAVANJE_MS = 10_000;
@@ -32,11 +33,12 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
  *
  * Dok je predavanje živo, desno je QR za čekiranje (`nalog/cas/<token>`): token sa servera (tajna ga ne napušta),
  * nov na 10 s, čita se na 3 s dok je tab vidljiv; ispod QR-a je ista adresa kao tekst i "Čekirano: N" (bez imena).
- * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR.
+ * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR. Dok je predavanje živo, brza anketa
+ * se vidi kao prozor preko ekrana (`app-anketa-projektor`, spec brze ankete 6.2).
  */
 @Component({
   selector: 'app-predavanje-projektor',
-  imports: [MatButton, MatIcon, RouterLink, QrKodComponent],
+  imports: [AnketaProjektorComponent, MatButton, MatIcon, RouterLink, QrKodComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'esc()',
@@ -85,6 +87,7 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
         <p class="poruka" role="status">Učitavanje…</p>
       }
     }
+    <app-anketa-projektor [predavanjeId]="zivoId()" />
   `,
   styles: `
     :host { display: flex; flex-direction: column; min-height: calc(100dvh - 48px); }
@@ -178,7 +181,7 @@ export class PredavanjeProjektor {
     return { izGrupe, stariji: prisutni.size - izGrupe, od: grupa.size as number | null };
   });
   /** Id živog predavanja (`null` = nije učitano ili je završeno): samo tada se čita token čekiranja. */
-  private readonly zivoId = computed(() => {
+  protected readonly zivoId = computed(() => {
     const p = this.predavanje();
     return p && !p.zavrseno ? p.id : null;
   });

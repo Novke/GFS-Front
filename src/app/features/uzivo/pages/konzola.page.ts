@@ -37,6 +37,8 @@ import { ZadatakPanelComponent } from './zadatak-panel.component';
 import { NotificationStore } from '../../../core/state/notification.store';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { RezimProjektora } from '../../../core/layout/rezim-projektora';
+import { otvoriAnketu } from '../../ankete/ui/otvori-anketu';
+import { istiKontekst, kontekstAnketeIzvodjenja } from './anketa-kontekst';
 
 const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
@@ -146,6 +148,7 @@ export class IzborEkranaDialog {
         @if (usko()) {
           <button mat-icon-button type="button" [matMenuTriggerFor]="meni" aria-label="Još radnji"><mat-icon svgIcon="more_vert" /></button>
           <mat-menu #meni="matMenu">
+            <button mat-menu-item type="button" (click)="anketa()" data-anketa-otvori><mat-icon svgIcon="how_to_vote" />Anketa</button>
             <button mat-menu-item type="button" (click)="telefon()"><mat-icon svgIcon="mobile" />Telefon</button>
             <button mat-menu-item type="button" (click)="otvoriPublikuProzor()"><mat-icon svgIcon="open_in_new" />Otvori publiku</button>
             <button mat-menu-item type="button" (click)="zavrsi()"><mat-icon svgIcon="stop_circle" />Završi</button>
@@ -154,6 +157,9 @@ export class IzborEkranaDialog {
           <div class="uz-kon-akcije">
             <button mat-stroked-button type="button" (click)="otvoriPublikuProzor()"><mat-icon svgIcon="open_in_new" />Otvori publiku</button>
             <button mat-stroked-button type="button" (click)="naMonitor()"><mat-icon svgIcon="tv" />Otvori na monitoru</button>
+            <button mat-stroked-button type="button" aria-keyshortcuts="A" (click)="anketa()" data-anketa-otvori>
+              <mat-icon svgIcon="how_to_vote" />Anketa <kbd class="uz-kbd">A</kbd>
+            </button>
             <button mat-stroked-button type="button" (click)="telefon()"><mat-icon svgIcon="mobile" />Telefon</button>
             <button mat-icon-button type="button" (click)="pomoc()" aria-label="Prečice"><mat-icon svgIcon="keyboard" /></button>
             <button mat-flat-button class="uz-opasno" type="button" (click)="zavrsi()"><mat-icon svgIcon="stop_circle" />Završi</button>
@@ -327,6 +333,8 @@ export class KonzolaPage {
     return s ? odgovorili(s) : null;
   });
 
+  private readonly kontekstAnkete = computed(() => kontekstAnketeIzvodjenja(this.store.stanje()), { equal: istiKontekst });
+
   /** Završni ekran: tastatura konzole tada ne šalje komande (server bi ih odbio sa 410). */
   protected readonly zavrseno = computed(() => this.store.stanje()?.izvodjenje.status === 'ZAVRSENO');
 
@@ -388,6 +396,7 @@ export class KonzolaPage {
         case 'CEO_EKRAN': prebaciCeoEkran(); break;
         case 'KONZOLA': this.otvoriPublikuProzor(); break;
         case 'POMOC': this.pomoc(); break;
+        case 'ANKETA': this.anketa(); break;
       }
       return;
     }
@@ -410,6 +419,11 @@ export class KonzolaPage {
 
   protected pomoc(): void {
     otvoriPomoc(this.dialog, 'konzola');
+  }
+
+  /** Brza anketa (dugme ili taster A): panel preko konzole; broj čekiranih se osvežava uživo. */
+  protected anketa(): void {
+    void otvoriAnketu(this.dialog, this.kontekstAnkete);
   }
 
   protected otvoriPublikuProzor(): void {

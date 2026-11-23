@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -17,6 +17,7 @@ import {
 import { otvoriPomoc } from './pomoc-precice.dialog';
 import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
+import { AnketaProjektorComponent } from '../../ankete/ui/anketa-projektor.component';
 
 /** Drugi `R` u ovom roku ponavlja pitanje. */
 const PONOVI_ROK_MS = 2000;
@@ -45,7 +46,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
   selector: 'app-publika',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
-  imports: [PublikaScenaComponent],
+  imports: [AnketaProjektorComponent, PublikaScenaComponent],
   host: {
     class: 'uz-pub',
     lang: 'sr-Latn',
@@ -66,6 +67,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     } @else {
       <div class="uz-pub-poruka rezim-dan uz-dan" role="status"><p>Učitavanje…</p></div>
     }
+    <app-anketa-projektor class="rezim-dan" [predavanjeId]="anketaPredavanje()" />
     @if (store.stanje() && store.veza() !== 'povezan') {
       <p class="uz-pub-veza" role="status">
         {{ store.veza() === 'prekinut' ? 'Veza prekinuta, povezujem…' : 'Povezivanje…' }}
@@ -91,6 +93,11 @@ export class PublikaPage {
   protected readonly epohaVeze = linkedSignal<Veza, number>({
     source: this.store.veza,
     computation: (v, pre) => (pre ? pre.value + (pre.source === 'povezan' && v !== 'povezan' ? 1 : 0) : 0),
+  });
+  /** Brza anketa preko slajda (spec brze ankete 6.2): samo dok izvođenje sa predavanjem traje. */
+  protected readonly anketaPredavanje = computed(() => {
+    const iz = this.store.stanje()?.izvodjenje;
+    return iz?.status === 'AKTIVNO' ? (iz.predavanje?.id ?? null) : null;
   });
   /** Fontovi prvog snimka su stigli (ili je prošlo 3 s). Pregledač bez `document.fonts` ne čeka. */
   protected readonly fontoviSpremni = signal(typeof (document as { fonts?: { load?: unknown } }).fonts?.load !== 'function');
@@ -149,6 +156,7 @@ export class PublikaPage {
         case 'CEO_EKRAN': prebaciCeoEkran(); break;
         case 'KONZOLA': otvoriIliFokusiraj(this.store.konzolaLink(), PROZOR_KONZOLE); break;
         case 'POMOC': otvoriPomoc(this.dialog, 'publika'); break;
+        case 'ANKETA': break; // panel ankete je u konzoli; projektor samo prikazuje anketu
       }
       return;
     }

@@ -1,6 +1,7 @@
 import { TipKomande } from './data-access/uzivo.models';
 
-export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC';
+/** `ANKETA` (taster A) otvara panel brze ankete samo u konzoli; prozor publike ga preskače. */
+export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC' | 'ANKETA';
 export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija };
 type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string; shiftKey?: boolean };
 
@@ -52,6 +53,7 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 'w': case 'W': return { komanda: 'EKRAN_BEO' };
     case 'f': case 'F': return { lokalno: 'CEO_EKRAN' };
     case 'p': case 'P': return { lokalno: 'KONZOLA' };
+    case 'a': case 'A': return { lokalno: 'ANKETA' };
     case '?': return { lokalno: 'POMOC' };
     default: return null;
   }
