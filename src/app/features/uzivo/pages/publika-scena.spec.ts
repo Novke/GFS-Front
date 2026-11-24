@@ -782,3 +782,104 @@ describe('PublikaScenaComponent (QR za čekiranje)', () => {
     expect(qr(el)).toBe('QR kod: http://localhost/uzivo/123456');
   });
 });
+
+describe('PublikaScenaComponent (fajlovi za vežbu)', () => {
+  const fajlovi = { kod: '1234', link: 'gfs.trif.rs/f/1234', fajlovi: [{ id: 1, naziv: 'vezba.docx', vrsta: 'DOCX' as const, velicina: 100 }] };
+
+  it('slajd sa fajlovima: traka sa krupnim linkom; bez polja (stari backend) i sa null ništa', async () => {
+    const sa = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi }));
+    expect(sa.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    const bezPolja = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd() }));
+    expect(bezPolja.querySelector('app-fajlovi-traka')).toBeNull();
+    const nula = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi: null }));
+    expect(nula.querySelector('app-fajlovi-traka')).toBeNull();
+  });
+
+  it('traka prati fajloviNaTabli: na slajdu i na prijavi, a ne na kraju', async () => {
+    const ugasena = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: false }));
+    expect(ugasena.querySelector('app-fajlovi-traka')).toBeNull();
+    expect(ugasena.classList.contains('uz-scena--fajlovi')).toBe(false);
+    const upaljena = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: true }));
+    expect(upaljena.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    expect(upaljena.classList.contains('uz-scena--fajlovi')).toBe(true);
+    const prijava = await prikazi(stanje({ fajlovi, fajloviNaTabli: true }));
+    expect(prijava.querySelector('app-prijava-ekran')).not.toBeNull();
+    expect(prijava.querySelector('app-fajlovi-traka [data-fajlovi-link]')?.textContent).toBe('gfs.trif.rs/f/1234');
+    // stari backend ne šalje fajlove na prijavi; i bez fajloviNaTabli prijava ostaje bez trake
+    const prijavaStari = await prikazi(stanje({ fajlovi }));
+    expect(prijavaStari.querySelector('app-fajlovi-traka')).toBeNull();
+    const kraj = await prikazi(stanje({ prikaz: 'KRAJ', indeks: 3, fajlovi, fajloviNaTabli: true }));
+    expect(kraj.querySelector('app-fajlovi-traka')).toBeNull();
+  });
+
+  it('Q ekran nosi link za fajlove kad postoji, i kad traka nije na tabli', async () => {
+    const sa = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: false, qrPrikazan: true }));
+    expect(sa.querySelector('[data-qr-fajlovi]')?.textContent).toContain('gfs.trif.rs/f/1234');
+    const bez = await prikazi(stanje({ prikaz: 'SLAJD', indeks: 1, trenutniSlajd: infoSlajd(), qrPrikazan: true }));
+    expect(bez.querySelector('.uz-scena-qr')).not.toBeNull();
+    expect(bez.querySelector('[data-qr-fajlovi]')).toBeNull();
+  });
+});
+
+describe('PublikaScenaComponent (crtež u izvođenju)', () => {
+  const linija = { tip: 'LINIJA' as const, boja: '#C62828', debljina: 6, tacke: [10, 10, 200, 100] };
+  async function saCrtezom(s: NastavnickoStanje, crtez: unknown, alati: unknown = null) {
+    const fixture = TestBed.createComponent(PublikaScenaComponent);
+    fixture.componentRef.setInput('stanje', s);
+    fixture.componentRef.setInput('joinLink', 'http://localhost/uzivo/123456');
+    fixture.componentRef.setInput('crtez', crtez);
+    fixture.componentRef.setInput('alatiCrtanja', alati);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.nativeElement as HTMLElement;
+  }
+  const slajd = infoSlajd();
+  const naSlajdu = (o: Partial<NastavnickoStanje> = {}) =>
+    stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: slajd, crtez: { slajdId: slajd.id, pozadina: 'SLAJD', verzija: 1 }, ...o });
+
+  it('crtež trenutnog slajda je sloj preko slajda (u omotaču slajda), SVG 960 × 540', async () => {
+    const el = await saCrtezom(naSlajdu(), { kljuc: { slajdId: slajd.id, pozadina: 'SLAJD' }, elementi: [linija], uToku: null });
+    const sloj = el.querySelector('.uz-scena-ulazni app-sloj-crteza');
+    expect(sloj).not.toBeNull();
+    expect(sloj!.querySelector('svg')!.getAttribute('viewBox')).toBe('0 0 960 540');
+    expect(sloj!.querySelector('path')!.getAttribute('d')).toBe('M10 10L200 100');
+  });
+
+  it('crtež drugog slajda (kašnjenje kanala) i crn ekran: bez sloja', async () => {
+    let el = await saCrtezom(naSlajdu(), { kljuc: { slajdId: 999, pozadina: 'SLAJD' }, elementi: [linija], uToku: null });
+    expect(el.querySelector('app-sloj-crteza')).toBeNull();
+    el = await saCrtezom(naSlajdu({ ekran: 'CRN' }), { kljuc: { slajdId: slajd.id, pozadina: 'SLAJD' }, elementi: [linija], uToku: null });
+    expect(el.querySelector('app-sloj-crteza')).toBeNull();
+  });
+
+  it('beli ekran: bela strana iz snimka (bela_slajd_id) preko belog ekrana, ne crtež slajda', async () => {
+    const s = naSlajdu({ ekran: 'BEO', crtez: { slajdId: 77, pozadina: 'BELA', verzija: 2 } });
+    let el = await saCrtezom(s, { kljuc: { slajdId: 77, pozadina: 'BELA' }, elementi: [linija], uToku: null });
+    expect(el.querySelector('.uz-scena-ekran--beo app-sloj-crteza')).not.toBeNull();
+    expect(el.querySelector('.uz-scena-ulazni app-sloj-crteza')).toBeNull();
+    el = await saCrtezom(s, { kljuc: { slajdId: slajd.id, pozadina: 'BELA' }, elementi: [linija], uToku: null });
+    expect(el.querySelector('app-sloj-crteza')).toBeNull();
+  });
+
+  it('umanjeno na belom ekranu: natpis "Beo ekran" samo dok bela strana nema crtež', async () => {
+    const s = naSlajdu({ ekran: 'BEO', crtez: { slajdId: 77, pozadina: 'BELA', verzija: 2 } });
+    const f = TestBed.createComponent(PublikaScenaComponent);
+    f.componentRef.setInput('stanje', s);
+    f.componentRef.setInput('joinLink', 'x');
+    f.componentRef.setInput('umanjeno', true);
+    f.componentRef.setInput('crtez', { kljuc: { slajdId: 77, pozadina: 'BELA' }, elementi: [], uToku: null });
+    f.detectChanges();
+    expect(tekst(f.nativeElement.querySelector('.uz-scena-ekran'))).toBe('Beo ekran');
+    f.componentRef.setInput('crtez', { kljuc: { slajdId: 77, pozadina: 'BELA' }, elementi: [linija], uToku: null });
+    f.detectChanges();
+    expect(tekst(f.nativeElement.querySelector('.uz-scena-ekran'))).toBe('');
+  });
+
+  it('element u nastajanju i traka alata (kad je konzola uključi)', async () => {
+    const el = await saCrtezom(naSlajdu(), { kljuc: { slajdId: slajd.id, pozadina: 'SLAJD' }, elementi: [], uToku: linija },
+      { ukljuceno: true, alat: 'STRELICA', boja: '#2456A6', publikaVidi: true });
+    expect(el.querySelectorAll('.uz-scena-ulazni app-sloj-crteza svg[viewBox="0 0 960 540"] path').length).toBe(1);
+    expect(el.querySelector('[data-crt-pub-alati]')).not.toBeNull();
+    expect(el.querySelectorAll('[data-crt-pub-alati] i.izabrana').length).toBe(1);
+  });
+});

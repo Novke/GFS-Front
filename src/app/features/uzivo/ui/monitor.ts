@@ -9,6 +9,11 @@ export interface EkranOpis { oznaka: string; levo: number; gore: number; sirina:
 /** Ime prozora publike (isti prozor se ponovo koristi, ne otvara se drugi). */
 export const PROZOR_PUBLIKE = 'gfs-publika';
 export const PROZOR_KONZOLE = 'gfs-konzola';
+/** Prozor publike table sa predavanja: drugo ime, da ne zameni publiku izvođenja koja je možda već na projektoru. */
+export const PROZOR_TABLE = 'gfs-tabla';
+
+/** Browser je blokirao iskačući prozor (konzola, tabla). */
+export const PORUKA_BLOKIRAN = 'Prozor nije otvoren: dozvoli iskačuće prozore za ovu stranicu i pokušaj ponovo.';
 
 /** Deo `ScreenDetailed` koji koristimo (tipovi Window Management API-ja još nisu u lib.dom). */
 interface EkranDetalji {
@@ -38,14 +43,15 @@ const isti = (a: EkranDetalji, b: EkranDetalji) =>
 /**
  * Otvara `url` u prozoru publike. Kandidati su ekrani osim onog na kom je konzola (bez podatka o tome: ne-primarni).
  * Jedan kandidat: prozor ide na njega bez pitanja; više: `izbor` (dijalog) bira, `null` = odustao (ništa se ne otvara).
- * Vraća otvoreni prozor ili `null` (odustao ili browser blokirao iskačući prozor).
+ * Vraća otvoreni prozor ili `null` (odustao ili browser blokirao iskačući prozor). `ime`: ime prozora (tabla ima svoje).
  */
 export async function otvoriPublikuNaMonitoru(
   url: string,
   izbor?: (ekrani: EkranOpis[]) => Promise<EkranOpis | null>,
   prozor: ProzorSaEkranima = window as unknown as ProzorSaEkranima,
+  ime: string = PROZOR_PUBLIKE,
 ): Promise<Window | null> {
-  const obicno = () => prozor.open(url, PROZOR_PUBLIKE, 'popup');
+  const obicno = () => prozor.open(url, ime, 'popup');
   if (typeof prozor.getScreenDetails !== 'function' || prozor.screen?.isExtended === false) {
     return obicno();
   }
@@ -68,7 +74,7 @@ export async function otvoriPublikuNaMonitoru(
     return null;
   }
   const osobine = `popup,left=${ekran.levo},top=${ekran.gore},width=${ekran.sirina},height=${ekran.visina}`;
-  return prozor.open(url, PROZOR_PUBLIKE, osobine);
+  return prozor.open(url, ime, osobine);
 }
 
 /**

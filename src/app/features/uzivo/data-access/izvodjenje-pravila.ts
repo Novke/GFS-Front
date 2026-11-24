@@ -61,6 +61,8 @@ export function dozvoljeneKomande(s: NastavnickoStanje | null): ReadonlySet<TipK
   // rang tačnosti izvođenja uvek (u takmičenju je to rang po poenima); rang predavanja kad predavanje ima još izvođenja
   d.add('RANG_LISTA');
   if (s.imaRangPredavanja || s.rangPrikaz === 'PREDAVANJE') d.add('RANG_PREDAVANJA');
+  // link postoji (prezentacija ima fajl i kod važi): K pali ili gasi traku na ovom mestu
+  if (s.fajlovi) d.add('FAJLOVI');
   if (runde && faza === 'OTVORENO' && s.runda) {
     d.add('TAJMER');
     if (s.runda.rokMs !== null || s.runda.preostaloMs !== null) {

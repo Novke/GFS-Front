@@ -1,0 +1,25 @@
+:host { display: block; }
+.pr { display: flex; flex-direction: column; gap: 8px; }
+.pr-zaglavlje { margin-bottom: 4px; }
+.pr-naslov { margin: 0; font-size: 18px; font-weight: 600; }
+.pr-pod { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.pr-pun { width: 100%; }
+.pr-sekcija { margin: 8px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--muted); text-transform: uppercase; }
+.pr-odgovori { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pr-odgovor { display: flex; align-items: center; gap: 2px; background: var(--surface); }
+.pr-odgovor.cdk-drag-preview { box-shadow: var(--shadow); border-radius: var(--radius-sm); }
+.pr-odgovor.cdk-drag-placeholder { opacity: .3; }
+.pr-hvataljka { display: inline-flex; color: var(--muted); cursor: grab; touch-action: none; }
+.pr-odgovor-polje { flex: 1; min-width: 0; }
+.pr-dodaj { align-self: flex-start; }
+.pr-red { margin: 4px 0; }
+.pr-publika, .pr-trajanje { flex-wrap: wrap; }
+.pr-publika { display: grid; grid-template-columns: 1fr 1fr; }
+.pr-izbor { display: flex; flex-direction: column; line-height: 1.3; padding: 6px 0; }
+.pr-izbor small { font-size: 12px; color: var(--muted); }
+.pr-rok { display: flex; flex-wrap: wrap; gap: 8px; }
+.pr-rok mat-form-field { flex: 1 1 160px; }
+.pr-cuvanje { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.pr-pola { flex: 1 1 200px; max-width: 320px; }
+.pr-greska { margin: 4px 0 0; padding: 8px 12px; border-left: 4px solid var(--danger); background: var(--danger-soft); border-radius: var(--radius-sm); }
+.pr-dugmad { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }

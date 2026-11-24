@@ -64,8 +64,12 @@ test.describe('konzola: Zadatak slajd (1280 x 800)', () => {
       await expect(p).toContainText('Rešenje prikazano');
       await expect(resenje(page)).toHaveAttribute('aria-pressed', 'true');
 
-      // R bez Shift-a je i dalje ponavljanje, uz potvrdu (Caps Lock ne pali rešenje)
+      // R bez Shift-a je i dalje ponavljanje (Caps Lock ne pali rešenje): taster traži drugi pritisak, bez dijaloga
       await page.keyboard.press('r');
+      await expect(page.getByRole('status').filter({ hasText: 'Pritisni R ponovo da ponoviš pitanje' })).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      // dugme "Ponovi zadatak" i dalje traži potvrdu
+      await page.getByRole('button', { name: /^Ponovi zadatak/ }).click();
       const dijalog = page.getByRole('alertdialog', { name: 'Ponoviti zadatak?' });
       await expect(dijalog).toBeVisible();
       await dijalog.getByRole('button', { name: 'Odustani' }).click();

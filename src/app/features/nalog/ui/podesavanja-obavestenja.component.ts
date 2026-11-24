@@ -15,6 +15,10 @@ interface Vrsta {
   /** `null`: u zvonu uvek (otkazan čas) ili nikad (podsetnik, `zvonoNikad`). */
   zvono: Prekidac | null;
   zvonoNikad?: boolean;
+  /** Objašnjenje "Zvono: uvek" (bez prekidača). */
+  zvonoUvek?: string;
+  /** Red postoji samo kad server zna za prekidač (stariji backend bez brze ankete nema `pushAnkete`). */
+  opciono?: boolean;
 }
 
 const VRSTE: readonly Vrsta[] = [
@@ -22,6 +26,8 @@ const VRSTE: readonly Vrsta[] = [
   { naziv: 'Čas otkazan / ipak se održava', telefon: 'pushOtkazanCas', zvono: null },
   { naziv: 'Ocene objavljene', telefon: 'pushOcene', zvono: 'zvonoOcene' },
   { naziv: 'Posle časa: prezentacija i vežbanje', telefon: 'pushPosleCasa', zvono: 'zvonoPosleCasa' },
+  // brza anketa (spec 6.3 i 7): na času i za grupu; anketa za grupu je u zvonu uvek, ona na času nikad
+  { naziv: 'Ankete', telefon: 'pushAnkete', zvono: null, zvonoUvek: 'Ankete za celu grupu su uvek u zvonu', opciono: true },
 ];
 
 /**
@@ -88,7 +94,7 @@ const VRSTE: readonly Vrsta[] = [
         @if (imaPush()) {
           <h4>Šta mi javljaš</h4>
           <ul class="vrste">
-            @for (v of vrste; track v.telefon) {
+            @for (v of vrste(); track v.telefon) {
               <li class="vrsta">
                 <span class="naziv">{{ v.naziv }}</span>
                 <label class="izbor">
@@ -103,7 +109,7 @@ const VRSTE: readonly Vrsta[] = [
                     <span>Zvono</span>
                   </label>
                 } @else if (!v.zvonoNikad) {
-                  <span class="izbor uvek" title="Otkazan čas je uvek u zvonu">Zvono: uvek</span>
+                  <span class="izbor uvek" [title]="v.zvonoUvek ?? 'Otkazan čas je uvek u zvonu'">Zvono: uvek</span>
                 }
               </li>
             }
@@ -159,7 +165,7 @@ const VRSTE: readonly Vrsta[] = [
 export class PodesavanjaObavestenja {
   private readonly api = inject(PortalApi);
 
-  protected readonly vrste = VRSTE;
+  protected readonly vrste = computed(() => VRSTE.filter(v => !v.opciono || this.stanje()?.[v.telefon] !== undefined));
   protected readonly push = new PushUredjaj(inject(ObavestenjaApi), inject(DOCUMENT), porukaGreske);
   protected readonly stanje = signal<PodesavanjaNaloga | null>(null);
   protected readonly greska = signal<string | null>(null);

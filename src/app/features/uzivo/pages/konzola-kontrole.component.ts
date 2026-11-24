@@ -17,6 +17,11 @@ interface Dugme {
 
 interface Grupa { naslov: string; dugmad: Dugme[]; }
 
+/** Taster kako piše na dugmetu: `Shift+R` -> `⇧R` (uže, staje pored kratke reči); `aria-keyshortcuts` ostaje pun naziv. */
+export function prikazTastera(taster: string): string {
+  return taster.replace(/^Shift\+/, '⇧');
+}
+
 /**
  * Velika dugmad za svaku komandu iz tabele prečica (spec 6.4), sa prečicom u oznaci. Onemogućena su kad server komandu
  * u ovoj fazi ne bi prihvatio (`dozvoljene`, ista pravila kao server); prekidači pokazuju stanje (`aria-pressed`).
@@ -26,22 +31,28 @@ interface Grupa { naslov: string; dugmad: Dugme[]; }
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonModule, MatIconModule],
   host: { class: 'uz-kon-kontrole' },
-  // na uključenom prekidaču (svetla podloga) prigušen taster (`.uz-kbd`, opacity 0.75) pada ispod 4.5:1
-  styles: `.uz-kon-dugme--ukljuceno .uz-kbd { opacity: 1; }`,
+  // na uključenom prekidaču (svetla podloga) prigušen taster (`.uz-kbd`, opacity 0.75) pada ispod 4.5:1. Dugačak taster
+  // (`Space`, `⇧R`) pluta u gornjem desnom uglu oznake: kratka prva reč staje pored njega, duža ide red niže, a ostale reči
+  // koriste celu širinu. Tako ne prekriva oznaku, a dugme ne raste više nego ranije (konzola 1366x768 bez skrola).
+  styles: `
+    .uz-kon-dugme--ukljuceno .uz-kbd { opacity: 1; }
+    .uz-kbd--ugao { float: right; margin: 0 0 2px 8px; line-height: 1.2; }
+  `,
   template: `
     @for (g of grupe(); track g.naslov) {
       <section class="uz-kon-grupa" [attr.aria-label]="g.naslov">
         <h3 class="uz-kon-grupa-naslov">{{ g.naslov }}</h3>
         <div class="uz-kon-dugmad">
           @for (d of g.dugmad; track $index) {
+            @let dug = d.taster.length > 4;
             <button type="button" class="uz-kon-dugme" [class.uz-kon-dugme--glavno]="d.glavno"
                     [class.uz-kon-dugme--ukljuceno]="d.ukljuceno === true"
                     [attr.aria-pressed]="d.ukljuceno === null ? null : d.ukljuceno"
                     [attr.aria-keyshortcuts]="d.taster" [disabled]="!dozvoljene().has(d.tip)"
                     (click)="pustiFokus($event); komanda.emit({ tip: d.tip, vrednost: d.vrednost })">
               <mat-icon aria-hidden="true" [svgIcon]="d.ikona" />
-              <span class="uz-kon-dugme-tekst">{{ d.oznaka }}</span>
-              <kbd class="uz-kbd" aria-hidden="true">{{ d.taster }}</kbd>
+              <span class="uz-kon-dugme-tekst">@if (dug) {<kbd class="uz-kbd uz-kbd--ugao" aria-hidden="true">{{ prikaz(d.taster) }}</kbd>}{{ d.oznaka }}</span>
+              @if (!dug) { <kbd class="uz-kbd" aria-hidden="true">{{ d.taster }}</kbd> }
             </button>
           }
         </div>
@@ -55,6 +66,7 @@ export class KonzolaKontroleComponent {
   readonly komanda = output<KomandaZahtev>();
 
   protected readonly pustiFokus = pustiFokusPosleKlika;
+  protected readonly prikaz = prikazTastera;
 
   protected readonly grupe = computed<Grupa[]>(() => {
     const s = this.stanje();
@@ -93,9 +105,11 @@ export class KonzolaKontroleComponent {
       {
         naslov: 'Ekran i telefoni',
         dugmad: [
-          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'M', ikona: 'mobile', ukljuceno: null },
-          { tip: 'DETALJI', oznaka: 'Dozvoli „Detalje“', taster: 'D', ikona: 'description', ukljuceno: s.detaljiDozvoljeni },
+          { tip: 'TELEFON_PRIKAZ', oznaka: s.telefonPrikaz === 'PITANJE' ? 'Telefon: celo pitanje' : 'Telefon: samo dugmad', taster: 'Shift+M', ikona: 'mobile', ukljuceno: null },
+          { tip: 'DETALJI', oznaka: 'Dozvoli „Detalje“', taster: 'Shift+D', ikona: 'description', ukljuceno: s.detaljiDozvoljeni },
           { tip: 'QR', oznaka: 'QR preko ekrana', taster: 'Q', ikona: 'qr_code', ukljuceno: s.qrPrikazan },
+          // link za fajlove na tabli (kasnioci); gasi se sam pri promeni slajda, onemogućen kad prezentacija nema fajlova
+          { tip: 'FAJLOVI', oznaka: 'Link za fajlove', taster: 'K', ikona: 'download', ukljuceno: !!s.fajlovi && (s.fajloviNaTabli ?? true) },
           { tip: 'EKRAN_CRN', oznaka: 'Crn ekran', taster: 'B', ikona: 'brightness_2', ukljuceno: s.ekran === 'CRN' },
           { tip: 'EKRAN_BEO', oznaka: 'Beo ekran', taster: 'W', ikona: 'brightness_7', ukljuceno: s.ekran === 'BEO' },
         ],

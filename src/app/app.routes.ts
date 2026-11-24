@@ -183,6 +183,17 @@ export const routes: Routes = [
     ]),
   },
 
+  // Fajlovi sa časa (računar u učionici, bez sesije i bez basic-auth-a): samo assets/* i api/public/fajlovi/*. Kod sa table
+  // (4 cifre) je u putanji (`/f/1234`) ili se ukuca na `/f`. Pogrešan link pod /f ostaje javni 404 (kao /upis).
+  {
+    path: 'f',
+    component: PublicLayout,
+    loadChildren: () => import('./features/fajlovi/fajlovi.routes').then(x => [
+      ...x.FAJLOVI_RUTE,
+      { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
+    ]),
+  },
+
   // Prijava nastavnika (bez ljuske, svetlo, bez čuvara): jedini zahtev je `POST api/auth/prijava`.
   {
     path: 'prijava',
@@ -197,7 +208,7 @@ export const routes: Routes = [
   },
 
   // Nastavničke rute (ljuska i ProjectorLayout ispod) imaju `canMatch: [nastavnikGuard]`, svaka posebno: bez sesije vode na
-  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `prijava`; kasnije `render/slajd`) su bez njega.
+  // `/prijava?nazad=...`. Javne rute (`upis`, `uzivo`, `nalog`, `f`, `prijava`; kasnije `render/slajd`) su bez njega.
 
   // Projektor (bez ljuske, uvek svetao). `projekcija`: ekran se gleda sa platna, bez trake novog izdanja (`IzdanjeTraka`).
   {
@@ -212,6 +223,15 @@ export const routes: Routes = [
         loadComponent: () => import('./features/predavanja/pages/predavanje-projektor').then(x => x.PredavanjeProjektor),
       },
     ],
+  },
+  // Tabla sa predavanja (spec crtanja 5.7) i njena publika: bez ljuske, uvek svetlo; deca su lenja (`TABLA_RUTE`), da ne
+  // opterete početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
+  {
+    matcher: putanjaSaId('predavanja/:id/tabla'),
+    canMatch: [nastavnikGuard],
+    component: ProjectorLayout,
+    data: { celaStrana: true },
+    loadChildren: () => import('./features/predavanja/tabla.routes').then(x => x.TABLA_RUTE),
   },
   {
     matcher: putanjaSaId('grupe/:id/onboarding/:sid/qr'),

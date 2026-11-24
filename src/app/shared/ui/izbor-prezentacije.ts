@@ -24,12 +24,15 @@ export const PRAG_PRETRAGE = 6;
 
 type FilterVrste = VrstaPrezentacije | 'SVE';
 
-/** "24 slajda · 6 zadataka" / "8 slajdova · 3 pitanja" (srpska množina). */
-export function opisSadrzaja(p: Pick<PrezentacijaZaIzbor, 'brojSlajdova' | 'brojPitanja' | 'brojZadataka' | 'vrsta'>): string {
+/** "24 slajda · 6 zadataka" / "8 slajdova · 3 pitanja · 2 fajla" (srpska množina; fajlovi samo kad ih ima). */
+export function opisSadrzaja(
+  p: Pick<PrezentacijaZaIzbor, 'brojSlajdova' | 'brojPitanja' | 'brojZadataka' | 'vrsta' | 'brojFajlova'>,
+): string {
   const delovi = [broj(p.brojSlajdova, 'slajd', 'slajda', 'slajdova')];
   if (p.brojZadataka) delovi.push(broj(p.brojZadataka, 'zadatak', 'zadatka', 'zadataka'));
   const pitanja = p.brojPitanja - (p.brojZadataka ?? 0);
   if (pitanja > 0) delovi.push(broj(pitanja, 'pitanje', 'pitanja', 'pitanja'));
+  if (p.brojFajlova) delovi.push(broj(p.brojFajlova, 'fajl', 'fajla', 'fajlova'));
   return delovi.join(' · ');
 }
 

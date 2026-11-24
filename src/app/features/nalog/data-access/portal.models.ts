@@ -1,5 +1,6 @@
 import type { OdgovorPolja, PoljeZadatka } from '../../uzivo/ui/polja-zadatka';
 import type { MedijInfo, PitanjeDetails, Platno, Tema, TipSlajda } from '../../uzivo/ui/slajd-za-prikaz';
+import type { FajlKratko } from '../../../shared/util/fajlovi';
 
 /*
  * DTO-i naloga studenta, faze 2 i 3 (`api/public/nalog/*`, spec studentskog dela 5, 6 i 12). Imena polja su kao na serveru
@@ -146,6 +147,8 @@ export interface PregledPrezentacije {
   tema: Tema | null;
   predmetId: number;
   slajdovi: SlajdPregleda[];
+  /** Svi fajlovi prezentacije (spec fajlova 4: pravilo naloga); stari backend ga ne šalje. */
+  fajlovi?: FajlKratko[];
 }
 
 export interface PoeniTesta {
@@ -183,4 +186,6 @@ export interface PodesavanjaNaloga {
   pushPosleCasa?: boolean;
   zvonoOcene?: boolean;
   zvonoPosleCasa?: boolean;
+  /** Push brze ankete (na času i za grupu; podrazumevano uključen). Stariji backend ga nema. */
+  pushAnkete?: boolean;
 }

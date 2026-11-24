@@ -476,48 +476,7 @@
   width: 100%;
 }
 
-.uz-kon-ekrani {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.uz-kon-telefon {
-  text-align: center;
-}
-
-.uz-kon-telefon-qr {
-  width: min(280px, 70vw);
-  margin: 0 auto;
-}
-
-.uz-kon-telefon-link {
-  overflow-wrap: anywhere;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.uz-pomoc {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.uz-pomoc :is(th, td) {
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-.uz-pomoc th {
-  white-space: nowrap;
-  font-weight: 400;
-}
-
-.uz-pomoc-napomena {
-  margin-top: 12px;
-  color: var(--muted);
-}
+/* Dijalozi telefona i izbora ekrana i pomoć sa prečicama imaju stilove u svojim komponentama (početni paket). */
 
 .uz-kon-poruka {
   display: grid;
@@ -675,31 +634,11 @@
   font-size: 14px;
 }
 
-.uz-kon-telefon-izbor {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-/* Izabrana opcija: tokeni dugmeta (Material ih čita posle ovog fajla) plus veća specifičnost od `.mat-mdc-outlined-button:not(:disabled)`. */
-.uz-kon-telefon-izbor .mat-mdc-outlined-button.mat-mdc-button-base[aria-pressed='true'] {
-  --mat-button-outlined-label-text-color: var(--primary-ink);
-  --mat-button-outlined-outline-color: var(--primary);
-  background-color: var(--primary);
-  color: var(--primary-ink);
-}
-
 /* Uska konzola: naslovi i dugme "više" u prvom redu, štoperica i sat u svom redu. */
 .uz-kon--usko .uz-kon-vreme {
   order: 3;
   flex-basis: 100%;
   margin-inline-start: 0;
-}
-
-.uz-kon-telefon-napomena {
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .uz-vreme-stoperica,

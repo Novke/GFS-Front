@@ -9,4 +9,31 @@ describe('precice (tabela pomoći)', () => {
       expect(redovi[r + 1]).toEqual({ tasteri: ['Shift', 'R'], opis: 'Rešenje zadatka (posle zatvaranja)' });
     }
   });
+
+  it('R se u oba prozora pritiska dvaput; Shift+M i Shift+D umesto M i D', () => {
+    for (const kontekst of ['publika', 'konzola'] as const) {
+      const redovi = precice(kontekst);
+      expect(redovi).toContainEqual({ tasteri: ['R'], opis: 'Ponovi pitanje (pritisni R dvaput)' });
+      expect(redovi.some(r => r.tasteri.join('+') === 'Shift+M')).toBe(true);
+      expect(redovi.some(r => r.tasteri.join('+') === 'Shift+D')).toBe(true);
+      expect(redovi.some(r => r.tasteri.join('+') === 'M')).toBe(false);
+      expect(redovi.find(r => r.tasteri.join('+') === 'W')?.opis).toContain('bela tabla');
+    }
+  });
+
+  it('D (crtanje, sa 1–7 i Ctrl+Z) postoji samo u konzoli', () => {
+    const d = precice('konzola').find(r => r.tasteri.join('+') === 'D');
+    expect(d?.opis).toContain('Crtanje');
+    expect(d?.opis).toContain('1–7');
+    expect(d?.opis).toContain('Ctrl+Z');
+    expect(precice('publika').some(r => r.tasteri.join('+') === 'D')).toBe(false);
+  });
+
+  it('A (brza anketa) samo u konzoli, pre pomoći', () => {
+    const konzola = precice('konzola');
+    const a = konzola.findIndex(red => red.tasteri.length === 1 && red.tasteri[0] === 'A');
+    expect(a).toBe(konzola.length - 2);
+    expect(konzola[a].opis).toContain('Brza anketa');
+    expect(precice('publika').some(red => red.tasteri[0] === 'A')).toBe(false);
+  });
 });

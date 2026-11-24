@@ -74,6 +74,14 @@ describe('dozvoljeneKomande', () => {
     expect(dozvoljeneKomande(stanje({ imaRangPredavanja: true })).has('RANG_PREDAVANJA')).toBe(true);
     expect(dozvoljeneKomande(stanje({ rangListaPrikazana: true, rangPrikaz: 'PREDAVANJE' })).has('RANG_PREDAVANJA')).toBe(true);
   });
+
+  it('FAJLOVI (K) samo kad link postoji (na prijavi i na slajdu, i sa praznim spiskom)', () => {
+    const fajlovi = { kod: '1234', link: 'gfs.trif.rs/f/1234', fajlovi: [] };
+    expect(dozvoljeneKomande(stanje()).has('FAJLOVI')).toBe(false);
+    expect(dozvoljeneKomande(stanje({ fajlovi: null })).has('FAJLOVI')).toBe(false);
+    expect(dozvoljeneKomande(stanje({ fajlovi })).has('FAJLOVI')).toBe(true);
+    expect(dozvoljeneKomande(stanje({ prikaz: 'SLAJD', indeks: 0, trenutniSlajd: infoSlajd(), fajlovi, fajloviNaTabli: true })).has('FAJLOVI')).toBe(true);
+  });
 });
 
 describe('dozvoljeneKomande na Zadatak slajdu', () => {

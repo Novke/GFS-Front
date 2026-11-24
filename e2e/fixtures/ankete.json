@@ -1,0 +1,33 @@
+{
+  "_napomena": "Brza anketa (spec 2026-11-23): izmišljena sačuvana pitanja nastavnika. Prečice su poređane po precicaRb; 'Kolokvijum' ima mesta za upis (Opcija N), pa nikad ne kreće odmah.",
+  "folderi": [
+    { "id": 1, "naziv": "Tok časa", "rb": 0 },
+    { "id": 2, "naziv": "Kolokvijumi", "rb": 1 }
+  ],
+  "sabloni": [
+    {
+      "id": 1, "folderId": 1, "pitanje": "Da li vam treba pauza?", "opcije": ["Da, 10 min", "Da, 15 min", "Ne, završimo ranije"],
+      "viseOdgovora": false, "publika": "NA_CASU", "trajanjeSekunde": 60, "rokSati": null, "precica": true, "precicaRb": 0,
+      "ikonica": "☕", "boja": "PLAVA", "kratakNaziv": "Pauza?", "pokreniOdmah": true, "rb": 0, "brojPokretanja": 12,
+      "poslednjePokretanje": "2026-11-18T10:45:00"
+    },
+    {
+      "id": 2, "folderId": 1, "pitanje": "Kakav je tempo?", "opcije": ["Prebrzo", "Taman", "Presporo"],
+      "viseOdgovora": false, "publika": "NA_CASU", "trajanjeSekunde": null, "rokSati": null, "precica": true, "precicaRb": 1,
+      "ikonica": "⏱️", "boja": "ZELENA", "kratakNaziv": "Tempo", "pokreniOdmah": true, "rb": 1, "brojPokretanja": 5,
+      "poslednjePokretanje": "2026-11-11T11:20:00"
+    },
+    {
+      "id": 3, "folderId": 2, "pitanje": "Kolokvijum 1: koji datum vam odgovara?", "opcije": ["Opcija 1", "Opcija 2"],
+      "viseOdgovora": false, "publika": "GRUPA", "trajanjeSekunde": null, "rokSati": null, "precica": true, "precicaRb": 2,
+      "ikonica": "📅", "boja": "VISNJA", "kratakNaziv": "Kolokvijum", "pokreniOdmah": false, "rb": 0, "brojPokretanja": 1,
+      "poslednjePokretanje": "2026-10-20T12:00:00"
+    },
+    {
+      "id": 4, "folderId": 1, "pitanje": "Da ponovim ovaj deo?", "opcije": ["Da", "Ne"],
+      "viseOdgovora": false, "publika": "NA_CASU", "trajanjeSekunde": null, "rokSati": null, "precica": false, "precicaRb": null,
+      "ikonica": null, "boja": null, "kratakNaziv": null, "pokreniOdmah": false, "rb": 2, "brojPokretanja": 0,
+      "poslednjePokretanje": null
+    }
+  ]
+}

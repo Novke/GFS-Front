@@ -2,8 +2,11 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
-import { Observable, Subscription, forkJoin } from 'rxjs';
+import { Observable, Subscription, catchError, forkJoin, of, throwError } from 'rxjs';
 
+import { FajloviSpisakComponent } from '../../../shared/ui/fajlovi-spisak.component';
+import { FajloviPrezentacije, urlFajlaNaloga } from '../../../shared/util/fajlovi';
+import { MejlFajlova } from '../../../shared/util/fajlovi-mejl';
 import { DatumPipe } from '../../../shared/util/datum.pipe';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { PortalApi } from '../data-access/portal.api';
@@ -16,7 +19,7 @@ import {
 import { MojZadatakKartica } from '../ui/moj-zadatak.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 
-interface Materijali { prezentacije: PrezentacijaStudenta[]; teme: TemaVezbanja[] }
+interface Materijali { prezentacije: PrezentacijaStudenta[]; fajlovi: FajloviPrezentacije[]; teme: TemaVezbanja[] }
 interface Istorija { prisustvo: PrisustvoStudenta; zadaci: MojZadatak[] }
 
 /** Stanje jedne kartice: `null` dok se učitava, greška ili podaci. */
@@ -40,7 +43,7 @@ const KARTICE: { id: KarticaPredmeta; naziv: string }[] = [
  */
 @Component({
   selector: 'app-predmet-page',
-  imports: [DatumPipe, MatButton, MatProgressSpinner, MojZadatakKartica, NalogOkvir, RouterLink],
+  imports: [DatumPipe, FajloviSpisakComponent, MatButton, MatProgressSpinner, MojZadatakKartica, NalogOkvir, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir [naslov]="predmet()?.naziv ?? 'Predmet'">
@@ -84,6 +87,16 @@ const KARTICE: { id: KarticaPredmeta; naziv: string }[] = [
                     </ul>
                   }
                 </section>
+                @if (m.podaci.fajlovi.length) {
+                  <section aria-labelledby="naslov-fajlovi" data-fajlovi>
+                    <h3 id="naslov-fajlovi">Fajlovi</h3>
+                    @for (fp of m.podaci.fajlovi; track fp.prezentacijaId) {
+                      <h4>{{ fp.naziv }}@if (fp.odrzana) { <span class="opis"> · {{ fp.odrzana | datum: 'kratko' }}</span> }</h4>
+                      <app-fajlovi-spisak [fajlovi]="fp.fajlovi" [hrefZa]="hrefFajla" [mejl]="true" [poruke]="mejl.poruke()"
+                                          (posaljiMejl)="mejl.posalji($event)" />
+                    }
+                  </section>
+                }
                 <section aria-labelledby="naslov-vezbanje">
                   <h3 id="naslov-vezbanje">Zadaci za vežbanje</h3>
                   @if (m.podaci.teme.length === 0) {
@@ -243,6 +256,8 @@ export class PredmetPage {
   protected readonly istorija = signal<Ucitano<Istorija>>(null);
   protected readonly ocena = signal<Ucitano<OcenaStudenta>>(null);
 
+  protected readonly hrefFajla = (f: { id: number }) => urlFajlaNaloga(f.id);
+  protected readonly mejl = new MejlFajlova(id => this.api.posaljiFajlMejlom(id), inject(DestroyRef));
   protected readonly zvezdice = zvezdice;
   protected readonly ucinak = ucinak;
   protected readonly aktivnost = opisAktivnosti;
@@ -300,7 +315,12 @@ export class PredmetPage {
     this.trazeno.add(k);
     switch (k) {
       case 'materijali':
-        this.ucitaj(forkJoin({ prezentacije: this.api.prezentacije(id), teme: this.api.vezbanje(id) }), this.materijali);
+        this.ucitaj(forkJoin({
+          prezentacije: this.api.prezentacije(id),
+          // fajlovi su dodatak: sve osim 401 (prijava) samo sakriva odeljak, ne kvari Materijale
+          fajlovi: this.api.fajlovi(id).pipe(catchError((e: unknown) => (status(e) === 401 ? throwError(() => e) : of([])))),
+          teme: this.api.vezbanje(id),
+        }), this.materijali);
         break;
       case 'istorija':
         this.ucitaj(forkJoin({ prisustvo: this.api.prisustvo(id), zadaci: this.api.mojiZadaci(id) }), this.istorija);

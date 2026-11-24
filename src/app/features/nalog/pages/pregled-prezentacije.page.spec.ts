@@ -75,6 +75,26 @@ describe('PregledPrezentacijePage', () => {
     expect(el().querySelector('app-slajd-prikaz')?.textContent).toContain('Uvod');
   });
 
+  it('fajlovi uz prezentaciju su na vrhu, iznad slajdova; slanje na mejl; bez fajlova nema odeljka', async () => {
+    await otvori();
+    http.expectOne(URL).flush({ ...PREGLED, fajlovi: [{ id: 7, naziv: 'Zadaci.docx', vrsta: 'DOCX', velicina: 20480 }] });
+    await stabilno();
+    const odeljak = el().querySelector('[data-fajlovi]')!;
+    expect(odeljak.textContent).toContain('Zadaci.docx');
+    expect(odeljak.compareDocumentPosition(el().querySelector('li.slajd')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(odeljak.querySelector('[data-preuzmi]')?.getAttribute('href')).toBe('api/public/nalog/fajlovi/7');
+    odeljak.querySelector<HTMLButtonElement>('[data-mejl]')!.click();
+    http.expectOne('api/public/nalog/fajlovi/7/mejl').flush({ poslatoNa: 'n•••@gmail.com' }, { status: 202, statusText: 'Accepted' });
+    await stabilno();
+    expect(odeljak.querySelector('[data-poruka]')?.textContent).toBe('Poslato na n•••@gmail.com.');
+
+    fixture.destroy();
+    await otvori();
+    http.expectOne(URL).flush({ ...PREGLED, fajlovi: [] });
+    await stabilno();
+    expect(el().querySelector('[data-fajlovi]')).toBeNull();
+  });
+
   it('PITANJE: "Tvoj odgovor" i prekidač tačnog odgovora (samo prikaz, bez zahteva)', async () => {
     await otvori();
     http.expectOne(URL).flush(PREGLED);

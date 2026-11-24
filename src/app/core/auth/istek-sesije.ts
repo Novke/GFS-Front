@@ -21,7 +21,7 @@ const jePrijava = (url: string) => url === '/prijava' || url.startsWith('/prijav
  * njeni store-ovi osvežavaju samo dok ljuska živi), ali zakasneli odgovor (npr. zahtev ljuske poslat pre odjave i prelaska
  * na `/nalog` u istoj kartici) ne sme studenta da odvede na `/prijava`.
  */
-const JAVNA_RUTA = /^\/(upis|uzivo|nalog)(?:[/?#]|$)/;
+const JAVNA_RUTA = /^\/(upis|uzivo|nalog|f)(?:[/?#]|$)/;
 
 /**
  * Šta se radi kad server odbije sesiju nastavnika (401 sa nastavničkog API-ja), jednom za sve paralelne zahteve:

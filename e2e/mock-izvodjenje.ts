@@ -115,7 +115,16 @@ export interface NastavnickoSnimak {
   takmicenje: boolean; tema: string; rezultat: Rezultat | null; brojOdgovora: number; brojPovezanih: number;
   ucesnici: Ucesnik[]; rangLista: unknown[]; javniRezultat: Rezultat | null; javnaRangLista: unknown[] | null;
   pocetakMs: number; zadatak: ZadatakSnimak | null;
+  /** Fajlovi uz prezentaciju (`FajloviSlajda`); `undefined` = stari backend bez polja. */
+  fajlovi?: unknown;
+  /** Trenutna strana crteža (`CrtezTrenutni`, plan crtanja): slajd, beli ekran ili `null` (prijava, kraj). */
+  crtez: CrtezTrenutni | null;
 }
+
+export type PozadinaCrteza = 'SLAJD' | 'BELA';
+export interface CrtezTrenutni { slajdId: number | null; pozadina: PozadinaCrteza; verzija: number }
+/** Strana crteža izvođenja (kao red `crtezi_izvodjenja`). */
+export interface StranaMoka { elementi: unknown[]; verzija: number; izmenjeno: string }
 
 export interface IshodKomande { status: number; telo: unknown }
 
@@ -180,6 +189,16 @@ export class MockIzvodjenje {
   private readonly f: FiksturaIzvodjenja;
   private readonly pocetakMs = Date.now() - (12 * 60 + 2) * 1000;
   private verzija = 1;
+  /** Test postavlja `fajlovi` (kao `NastavnickoStanje.fajlovi`); bez toga polja nema u snimku (stari backend). */
+  fajlovi: unknown;
+  /** `NastavnickoStanje.fajloviNaTabli`; bez vrednosti polja nema (stari backend). `FAJLOVI` (K) ga prebacuje. */
+  fajloviNaTabli: boolean | undefined;
+  private qrPrikazan = false;
+  /** `EKRAN_CRN` / `EKRAN_BEO` (prekidači, kao server); beli ekran pamti slajd na kom je uključen (`bela_slajd_id`). */
+  private ekran: 'NORMALAN' | 'CRN' | 'BEO' = 'NORMALAN';
+  private belaSlajdId: number | null = null;
+  /** Strane crteža po ključu `POZADINA:slajdId` (`GET/PUT izvodjenja/:id/crtezi/strana`). */
+  readonly crtezi = new Map<string, StranaMoka>();
   private prikaz: Prikaz = 'PRIJAVA';
   private indeks = -1;
   private korak = 0;
@@ -243,6 +262,47 @@ export class MockIzvodjenje {
     this.verzija++;
   }
 
+  /** Strana crteža kao `GET crtezi/strana`: prazna verzije 0 kad je nema; 404 za slajd van prezentacije. */
+  strana(slajdId: number | null, pozadina: PozadinaCrteza): IshodKomande {
+    if (slajdId !== null && !this.slajdPoId(slajdId)) return greska(404, 'Slajd nije iz ove prezentacije.');
+    const s = this.crtezi.get(`${pozadina}:${slajdId}`);
+    return { status: 200, telo: { elementi: s?.elementi ?? [], verzija: s?.verzija ?? 0 } };
+  }
+
+  /** `PUT crtezi/strana`: nova verzija strane (i snimka nastavnika); 410 posle kraja, 404 za tuđ slajd. */
+  upisiStranu(slajdId: number | null, pozadina: PozadinaCrteza, elementi: unknown[]): IshodKomande {
+    if (this.f.izvodjenje.status !== 'AKTIVNO') return greska(410, 'Izvođenje je završeno.');
+    if (slajdId !== null && !this.slajdPoId(slajdId)) return greska(404, 'Slajd nije iz ove prezentacije.');
+    const k = `${pozadina}:${slajdId}`;
+    const verzija = (this.crtezi.get(k)?.verzija ?? 0) + 1;
+    this.crtezi.set(k, { elementi, verzija, izmenjeno: '2026-10-07T10:30:00' });
+    this.verzija++;
+    return { status: 200, telo: { verzija } };
+  }
+
+  /** `GET izvodjenja/:id/crtezi`: ne-prazne strane redom slajdova, SLAJD pre BELA, obrisan slajd na kraju. */
+  sviCrtezi(): unknown[] {
+    const redni = (id: number | null) => {
+      const i = id === null ? -1 : this.f.slajdovi.findIndex(s => s.id === id);
+      return i < 0 ? null : i + 1;
+    };
+    return [...this.crtezi.entries()]
+      .map(([k, s]) => {
+        const [pozadina, id] = k.split(':');
+        const slajdId = id === 'null' ? null : Number(id);
+        return { slajdId, slajdBroj: redni(slajdId), pozadina, elementi: s.elementi, verzija: s.verzija, izmenjeno: s.izmenjeno };
+      })
+      .filter(c => c.elementi.length > 0)
+      .sort((a, b) => (a.slajdBroj ?? 1e9) - (b.slajdBroj ?? 1e9) || (a.pozadina === 'SLAJD' ? -1 : 1));
+  }
+
+  private crtezSnimka(trenutni: Slajd | null): CrtezTrenutni | null {
+    const k = this.ekran === 'BEO'
+      ? (this.belaSlajdId === null ? null : { slajdId: this.belaSlajdId, pozadina: 'BELA' as const })
+      : (trenutni ? { slajdId: trenutni.id, pozadina: 'SLAJD' as const } : null);
+    return k ? { ...k, verzija: this.crtezi.get(`${k.pozadina}:${k.slajdId}`)?.verzija ?? 0 } : null;
+  }
+
   stanje(): NastavnickoSnimak {
     const sl = this.f.slajdovi;
     const trenutni = this.trenutni();
@@ -261,11 +321,14 @@ export class MockIzvodjenje {
       korak: this.korak, brojStavki: brojKoraka(trenutni), indeks: this.indeks, brojSlajdova: sl.length,
       trenutniSlajd: zaSnimak(trenutni), sledeciSlajd: this.prikaz === 'KRAJ' ? null : zaSnimak(sl[this.indeks + 1] ?? null),
       faza: this.faza, runda: this.runda, rezultatiPrikazani: this.rezultatiPrikazani, tacanPrikazan: this.tacanPrikazan,
-      rangListaPrikazana: false, ekran: 'NORMALAN', qrPrikazan: false, telefonPrikaz: this.f.telefonPrikaz,
+      rangListaPrikazana: false, ekran: this.ekran, qrPrikazan: this.qrPrikazan, telefonPrikaz: this.f.telefonPrikaz,
       detaljiDozvoljeni: this.f.detaljiDozvoljeni, takmicenje: this.f.takmicenje, tema: this.f.tema, rezultat,
       brojOdgovora: this.odgovoriZadatka.size, brojPovezanih: this.f.ucesnici.filter(u => u.povezan).length,
       rangLista: [], javniRezultat: javni, javnaRangLista: null, pocetakMs: this.pocetakMs,
       ucesnici: this.ucesniciSnimka(), zadatak: this.zadatakSnimak(trenutni),
+      ...(this.fajlovi === undefined ? {} : { fajlovi: this.fajlovi }),
+      ...(this.fajloviNaTabli === undefined ? {} : { fajloviNaTabli: this.fajloviNaTabli }),
+      crtez: this.crtezSnimka(trenutni),
     };
   }
 
@@ -341,9 +404,31 @@ export class MockIzvodjenje {
         this.izmenaNivoa = n;
         break;
       }
+      case 'QR':
+        this.qrPrikazan = !this.qrPrikazan;
+        break;
+      case 'EKRAN_CRN':
+        this.ekran = this.ekran === 'CRN' ? 'NORMALAN' : 'CRN';
+        break;
+      case 'EKRAN_BEO':
+        // uključenje upisuje trenutni slajd (na prijavi `null`); isključenje ga ne briše (kao server)
+        if (this.ekran === 'BEO') {
+          this.ekran = 'NORMALAN';
+        } else {
+          this.ekran = 'BEO';
+          this.belaSlajdId = trenutni?.id ?? null;
+        }
+        break;
+      case 'FAJLOVI':
+        // kao server: bez linka 409; inače traka na ovom mestu u suprotno stanje (mok ne briše prekidač pri promeni slajda)
+        if (!this.fajlovi) return greska(409, 'Uz ovu prezentaciju nema fajlova za studente.');
+        this.fajloviNaTabli = !(this.fajloviNaTabli ?? true);
+        break;
       default:
         return greska(409, 'Mok: komanda nije podržana.');
     }
+    // beli ekran uključen na prijavi: prvi slajd do kog navigacija stigne postaje njegov
+    if (this.ekran === 'BEO' && this.belaSlajdId === null) this.belaSlajdId = this.trenutni()?.id ?? null;
     this.verzija++;
     return { status: 200, telo: this.stanje() };
   }

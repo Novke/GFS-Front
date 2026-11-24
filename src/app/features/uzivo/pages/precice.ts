@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { GotoBafer, TasterAkcija, kljucPrecice, tasterUAkciju, uPoljuZaUnos } from '../tastatura';
+import { GotoBafer, TasterAkcija, kljucPrecice, tasterCrtanja, tasterUAkciju, uPoljuZaUnos } from '../tastatura';
 
 /** Elementi koji sami koriste strelice, Enter ili Space (Material select, meni, tabovi, radio, klizač) i overlay-i. */
 const SVOJA_TASTATURA = [
@@ -51,8 +51,11 @@ export class TastaturaIzvodjenja {
   /** Space je na keydown postao prečica: na keyup se sprečava i klik fokusiranog dugmeta (Firefox klikće na keyup). */
   private spaceProgutan = false;
 
-  /** Akcija za taster ili `null`; kad je taster prečica, poziva `preventDefault` (Space ne skroluje, Enter ne klikne). */
-  akcija(e: KeyboardEvent, brojSlajdova: number, dijalogOtvoren: boolean): TasterAkcija | null {
+  /**
+   * Akcija za taster ili `null`; kad je taster prečica, poziva `preventDefault` (Space ne skroluje, Enter ne klikne).
+   * `crtanje` (konzola crta): posle `G` režima prvo tasteri crtanja (`tasterCrtanja`: `1`-`7`, `Ctrl+Z`/`Y`, `Esc`).
+   */
+  akcija(e: KeyboardEvent, brojSlajdova: number, dijalogOtvoren: boolean, crtanje = false): TasterAkcija | null {
     if (preskociPrecicu(e, dijalogOtvoren)) return null;
     const g = e.ctrlKey || e.metaKey || e.altKey ? null : this.goto.obradi(kljucPrecice(e));
     this.prikaziGoto();
@@ -60,7 +63,7 @@ export class TastaturaIzvodjenja {
       e.preventDefault();
       return null;
     }
-    const a = g ?? tasterUAkciju(e, brojSlajdova);
+    const a = g ?? (crtanje ? tasterCrtanja(e) : null) ?? tasterUAkciju(e, brojSlajdova);
     if (a) {
       e.preventDefault();
       if (e.key === ' ') this.spaceProgutan = true;
@@ -87,6 +90,40 @@ export class TastaturaIzvodjenja {
     if (unos !== null) {
       this.tajmer = setTimeout(() => this.gotoUnos.set(null), GOTO_PRIKAZ_MS);
     }
+  }
+}
+
+/** Drugi `R` u ovom roku ponavlja pitanje (publika i konzola). */
+export const PONOVI_ROK_MS = 2000;
+
+/**
+ * `R` ponavlja pitanje tek na drugi pritisak u roku od 2 s (isto u publici i konzoli; dugme „Ponovi” u konzoli i dalje
+ * traži potvrdu): `pritisni()` je `true` na drugi pritisak, a do tada `ceka` drži natpis „Pritisni R ponovo…”. Svaka
+ * druga komanda (`prekini`) poništava čekanje.
+ */
+export class DvaputR {
+  readonly ceka = signal(false);
+  private tajmer: ReturnType<typeof setTimeout> | undefined;
+
+  pritisni(): boolean {
+    clearTimeout(this.tajmer);
+    if (this.ceka()) {
+      this.ceka.set(false);
+      return true;
+    }
+    this.ceka.set(true);
+    this.tajmer = setTimeout(() => this.ceka.set(false), PONOVI_ROK_MS);
+    return false;
+  }
+
+  prekini(): void {
+    if (!this.ceka()) return;
+    clearTimeout(this.tajmer);
+    this.ceka.set(false);
+  }
+
+  unisti(): void {
+    clearTimeout(this.tajmer);
   }
 }
 

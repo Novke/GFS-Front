@@ -4,6 +4,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
+import { anketaStudentu } from '../data-access/ankete-studenta.testing';
 import { StudentJa } from '../data-access/nalog.models';
 import { PocetnaPage } from './pocetna.page';
 
@@ -53,6 +55,16 @@ describe('PocetnaPage', () => {
     expect(tekst()).toContain('Grupa GD-2026 · generacija 2026');
     expect(el().querySelector('[data-wa-grupa]')).toBeNull();
     expect(el().querySelector('[data-instalacija-mesto]')).not.toBeNull();
+  });
+
+  it('ankete za celu grupu iz store-a (puni ga ljuska): kartica sa "Glasaj"; anketa na času se ne vidi', async () => {
+    TestBed.inject(AnketeStudentaStore).primi([
+      anketaStudentu(1), anketaStudentu(2, { publika: 'GRUPA', pitanje: 'Kolokvijum 1: koji datum?' }),
+    ]);
+    await otvori(ja());
+    const k = [...el().querySelectorAll('[data-anketa-kartica]')];
+    expect(k.map(x => x.getAttribute('data-anketa-id'))).toEqual(['2']);
+    expect(k[0].querySelector('[data-anketa-glasaj]')?.textContent?.trim()).toBe('Glasaj');
   });
 
   it('WhatsApp grupa: link grupe u novoj kartici, bez opener-a', async () => {

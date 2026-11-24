@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -11,15 +11,16 @@ import { NastavnickoStanje } from '../data-access/uzivo.models';
 import { TasterAkcija } from '../tastatura';
 import { PROZOR_KONZOLE, PROZOR_PUBLIKE, otvoriIliFokusiraj } from '../ui/monitor';
 import { UzivoPutanje } from '../uzivo-putanje';
+import { CrtanjeApi } from '../crtanje/crtanje.api';
+import { Gledalac } from '../crtanje/gledalac';
+import { kanalIzvodjenja } from '../crtanje/kanal-crtanja';
 import {
   fontoviZaPrikaz, preducitajFontove, preducitajFormule, preducitajSlike, sacekajFontove, slikeSlajda,
 } from '../ui/preducitavanje';
 import { otvoriPomoc } from './pomoc-precice.dialog';
-import { TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
+import { DvaputR, TastaturaIzvodjenja, prebaciCeoEkran } from './precice';
 import { PublikaScenaComponent } from './publika-scena.component';
-
-/** Drugi `R` u ovom roku ponavlja pitanje. */
-const PONOVI_ROK_MS = 2000;
+import { AnketaProjektorComponent } from '../../ankete/ui/anketa-projektor.component';
 
 /**
  * Šta scena prikazuje: aktivno izvođenje uvek svoj snimak; posle "Završi" ostaje poslednji prikaz KRAJ (postolje ili
@@ -40,12 +41,15 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
  * Prvi snimak se crta tek kad stignu fontovi trenutnog i sledećeg slajda i teme (najviše 3 s, do tada "Učitavanje…"),
  * da prvi slajd ne "skoči"; posle svakog snimka se unapred učitavaju slike i fontovi sledećeg slajda. Animacije koraka
  * PLATNO slajda pušta samo ovaj prozor (`animiraj`).
+ * Crtež (spec crtanja 5.5, `Gledalac`): dok stiže puls konzole istog pregledača, samo iz kanala (i element u nastajanju,
+ * i traka alata kad je nastavnik uključi); bez pulsa sa servera, kad se u snimku promeni strana ili verzija, posle
+ * povezivanja i posle povratka iz sna. `D` ovde ne radi ništa (crta se samo u konzoli).
  */
 @Component({
   selector: 'app-publika',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
-  imports: [PublikaScenaComponent],
+  imports: [AnketaProjektorComponent, PublikaScenaComponent],
   host: {
     class: 'uz-pub',
     lang: 'sr-Latn',
@@ -57,7 +61,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     @if (store.stanje() && fontoviSpremni()) {
       @if (scena(); as sc) {
         <app-publika-scena class="uz-pub-scena" [stanje]="sc" [joinLink]="store.joinLink()" [qrLink]="store.qrLink()" [sat]="store.sat()" [animiraj]="true"
-                            [epohaVeze]="epohaVeze()" />
+                            [epohaVeze]="epohaVeze()" [crtez]="gledalac()?.prikaz() ?? null" [alatiCrtanja]="gledalac()?.alati() ?? null" />
       } @else {
         <div class="uz-pub-poruka rezim-dan uz-dan"><p>Izvođenje je završeno. Hvala!</p></div>
       }
@@ -66,6 +70,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     } @else {
       <div class="uz-pub-poruka rezim-dan uz-dan" role="status"><p>Učitavanje…</p></div>
     }
+    <app-anketa-projektor class="rezim-dan" [predavanjeId]="anketaPredavanje()" />
     @if (store.stanje() && store.veza() !== 'povezan') {
       <p class="uz-pub-veza" role="status">
         {{ store.veza() === 'prekinut' ? 'Veza prekinuta, povezujem…' : 'Povezivanje…' }}
@@ -73,7 +78,7 @@ export function scenaPosle(s: NastavnickoStanje | null, prethodna: NastavnickoSt
     }
     @if (tast.gotoUnos() !== null) {
       <p class="uz-pub-natpis" role="status">Idi na: <strong>{{ tast.gotoUnos() || '_' }}</strong></p>
-    } @else if (ponoviCeka()) {
+    } @else if (ponovi.ceka()) {
       <p class="uz-pub-natpis" role="status">Pritisni R ponovo da ponoviš pitanje</p>
     }
   `,
@@ -82,7 +87,9 @@ export class PublikaPage {
   protected readonly store = inject(IzvodjenjeStore);
   private readonly dialog = inject(MatDialog);
   protected readonly tast = new TastaturaIzvodjenja();
-  protected readonly ponoviCeka = signal(false);
+  protected readonly ponovi = new DvaputR();
+  private readonly crtanjeApi = inject(CrtanjeApi);
+  protected readonly gledalac = signal<Gledalac | null>(null);
   protected readonly scena = linkedSignal<NastavnickoStanje | null, NastavnickoStanje | null>({
     source: this.store.stanje,
     computation: (s, prethodno) => scenaPosle(s, prethodno?.value ?? null),
@@ -92,9 +99,13 @@ export class PublikaPage {
     source: this.store.veza,
     computation: (v, pre) => (pre ? pre.value + (pre.source === 'povezan' && v !== 'povezan' ? 1 : 0) : 0),
   });
+  /** Brza anketa preko slajda (spec brze ankete 6.2): samo dok izvođenje sa predavanjem traje. */
+  protected readonly anketaPredavanje = computed(() => {
+    const iz = this.store.stanje()?.izvodjenje;
+    return iz?.status === 'AKTIVNO' ? (iz.predavanje?.id ?? null) : null;
+  });
   /** Fontovi prvog snimka su stigli (ili je prošlo 3 s). Pregledač bez `document.fonts` ne čeka. */
   protected readonly fontoviSpremni = signal(typeof (document as { fonts?: { load?: unknown } }).fonts?.load !== 'function');
-  private ponoviTajmer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     window.name = PROZOR_PUBLIKE;
@@ -122,6 +133,24 @@ export class PublikaPage {
     ).subscribe(id => {
       izvodjenjeId = id;
       this.store.init(id);
+      this.gledalac()?.unisti();
+      this.gledalac.set(new Gledalac({ ucitaj: k => this.crtanjeApi.strana(id, k) }, kanalIzvodjenja(id)));
+    });
+    // Strana crteža iz snimka (kraj bez belog ekrana: nema strane).
+    effect(() => {
+      const g = this.gledalac();
+      const c = this.store.stanje()?.crtez ?? null;
+      if (g) untracked(() => g.postavi(c ? { slajdId: c.slajdId, pozadina: c.pozadina } : null, c?.verzija ?? 0));
+    });
+    // Posle (ponovnog) povezivanja crtež sa servera, ako konzola ovog pregledača ne šalje puls.
+    let veza: Veza | null = null;
+    effect(() => {
+      const v = this.store.veza();
+      const g = this.gledalac();
+      untracked(() => {
+        if (v === 'povezan' && veza !== 'povezan') g?.osvezi();
+        veza = v;
+      });
     });
     const destroyRef = inject(DestroyRef);
     // Konzola je posle kraja pokrenula novo izvođenje: ovaj prozor prelazi na njega (isti dokument, pa ostaje ceo ekran).
@@ -130,10 +159,14 @@ export class PublikaPage {
       if (p.staro === izvodjenjeId) void router.navigate(['/' + UzivoPutanje.izvodjenjePublika(p.novo)], { replaceUrl: true });
     }));
     // Projektor koji je spavao: stanje odmah, a posle dužeg skrivanja i nova STOMP veza.
-    destroyRef.onDestroy(pratiPovratak(document, window, ms => this.store.posleVracanja(ms)));
+    destroyRef.onDestroy(pratiPovratak(document, window, ms => {
+      this.store.posleVracanja(ms);
+      this.gledalac()?.osvezi();
+    }));
     destroyRef.onDestroy(() => {
       this.tast.unisti();
-      clearTimeout(this.ponoviTajmer);
+      this.ponovi.unisti();
+      this.gledalac()?.unisti();
     });
   }
 
@@ -149,23 +182,16 @@ export class PublikaPage {
         case 'CEO_EKRAN': prebaciCeoEkran(); break;
         case 'KONZOLA': otvoriIliFokusiraj(this.store.konzolaLink(), PROZOR_KONZOLE); break;
         case 'POMOC': otvoriPomoc(this.dialog, 'publika'); break;
+        case 'ANKETA': break; // panel ankete je u konzoli; projektor samo prikazuje anketu
       }
       return;
     }
     if (!this.store.dozvoljene().has(a.komanda)) return;
     if (a.komanda === 'IDI_NA' && !ispravanIndeks(a.vrednost, this.store.stanje()?.brojSlajdova ?? 0)) return;
     if (a.komanda === 'PONOVI') {
-      if (!this.ponoviCeka()) {
-        this.ponoviCeka.set(true);
-        clearTimeout(this.ponoviTajmer);
-        this.ponoviTajmer = setTimeout(() => this.ponoviCeka.set(false), PONOVI_ROK_MS);
-        return;
-      }
-      clearTimeout(this.ponoviTajmer);
-      this.ponoviCeka.set(false);
-    } else if (this.ponoviCeka()) {
-      clearTimeout(this.ponoviTajmer);
-      this.ponoviCeka.set(false);
+      if (!this.ponovi.pritisni()) return;
+    } else {
+      this.ponovi.prekini();
     }
     this.store.komanda(a.komanda, a.vrednost);
   }

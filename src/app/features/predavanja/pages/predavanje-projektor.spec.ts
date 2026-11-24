@@ -48,7 +48,12 @@ describe('PredavanjeProjektor', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => skriven });
   });
 
+  /** Brza anketa preko projektora (`app-anketa-projektor`) pita svoje; testovi projektora je ne gledaju. */
+  const odgovoriAnkete = (lista: unknown[] = []) =>
+    http.match(r => r.url === 'api/ankete/aktivne').filter(r => !r.cancelled).forEach(r => r.flush(lista));
+
   afterEach(() => {
+    odgovoriAnkete();
     http.verify();
     vi.useRealTimers();
     delete (document as unknown as Record<string, unknown>)['hidden'];
@@ -184,6 +189,50 @@ describe('PredavanjeProjektor', () => {
     skriven = false;
     await vi.advanceTimersByTimeAsync(CEKIRANJE_MS);
     http.expectOne('api/predavanja/5/cekiranje').flush(info('5.AAAAAAAAAAAAAAAAAAAAAA'));
+    f.destroy();
+  });
+
+  it('brza anketa: stoji desno umesto QR-a dok je predavanje živo, rezultat tek kad je pokazan', async () => {
+    const f = await otvori();
+    odgovoriCekiranje();
+    f.detectChanges();
+    expect(qrTekst(f)).not.toBeNull();
+    const anketa = {
+      id: 7, sablonId: null, pitanje: 'Da li vam treba pauza?', opcije: ['Da', 'Ne'], viseOdgovora: false, publika: 'NA_CASU',
+      predavanjeId: 5, grupaId: 4, grupaNaziv: 'GD-2025', predmetNaziv: 'UPR', otvoreno: '2025-10-14T10:40:00', rok: null, rokMs: null,
+      zatvoreno: null, otvorena: true, rezultatPrikazan: false, izvor: 'NASTAVNIK', glasovi: [3, 1], brojGlasalo: 4, brojMogucih: 9, sadaMs: 0,
+    };
+    const zahtev = http.expectOne(r => r.url === 'api/ankete/aktivne');
+    expect(zahtev.request.params.get('predavanjeId')).toBe('5');
+    zahtev.flush([anketa]);
+    f.detectChanges();
+    const prozor = () => el(f).querySelector('[data-anketa-projektor]');
+    expect(prozor()?.textContent).toContain('Da li vam treba pauza?');
+    expect(prozor()?.textContent).toContain('4 glasa');
+    expect(el(f).querySelector('[data-anketa-projektor-rezultat]')).toBeNull();
+    // anketa je stavka mreže ekrana (desna kolona), a QR se sklanja dok je ona tu
+    expect(prozor()?.parentElement?.closest('.ekran.sa-qr')).not.toBeNull();
+    expect(el(f).querySelector('app-qr-kod')).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    odgovoriCekiranje();
+    odgovoriAnkete([{ ...anketa, rezultatPrikazan: true }]);
+    f.detectChanges();
+    expect(el(f).querySelectorAll('[data-traka-ankete]').length).toBe(2);
+
+    // zatvorena bez prikazanog rezultata: prozor nestaje
+    await vi.advanceTimersByTimeAsync(2_000);
+    odgovoriCekiranje();
+    odgovoriAnkete([{ ...anketa, otvorena: false }]);
+    f.detectChanges();
+    expect(prozor()).toBeNull();
+    expect(qrTekst(f)).not.toBeNull();
+    f.destroy();
+  });
+
+  it('brza anketa: završeno predavanje ne pita za ankete', async () => {
+    const f = await otvori(true);
+    http.expectNone(r => r.url === 'api/ankete/aktivne');
     f.destroy();
   });
 });

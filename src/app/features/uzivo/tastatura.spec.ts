@@ -1,4 +1,4 @@
-import { GotoBafer, TasterAkcija, kljucPrecice, tasterUAkciju, uPoljuZaUnos } from './tastatura';
+import { GotoBafer, TasterAkcija, kljucPrecice, tasterCrtanja, tasterUAkciju, uPoljuZaUnos } from './tastatura';
 
 const taster = (key: string, mod: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {}) =>
   ({ key, ctrlKey: false, metaKey: false, altKey: false, ...mod });
@@ -16,13 +16,14 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
     [['t', 'T'], { komanda: 'TAJMER' }],
     [['+', '='], { komanda: 'TAJMER_PLUS' }],
     [['-'], { komanda: 'TAJMER_MINUS' }],
-    [['m', 'M'], { komanda: 'TELEFON_PRIKAZ' }],
-    [['d', 'D'], { komanda: 'DETALJI' }],
+    [['d', 'D'], { lokalno: 'CRTANJE' }],
     [['q', 'Q'], { komanda: 'QR' }],
+    [['k', 'K'], { komanda: 'FAJLOVI' }],
     [['b', 'B', '.'], { komanda: 'EKRAN_CRN' }],
     [['w', 'W'], { komanda: 'EKRAN_BEO' }],
     [['f', 'F'], { lokalno: 'CEO_EKRAN' }],
     [['p', 'P'], { lokalno: 'KONZOLA' }],
+    [['a', 'A'], { lokalno: 'ANKETA' }],
     [['?'], { lokalno: 'POMOC' }],
   ];
 
@@ -48,7 +49,9 @@ describe('tasterUAkciju (mapa iz spec-a 6.4)', () => {
     expect(tasterUAkciju(taster('ArrowLeft', { altKey: true }), 5)).toBeNull();
   });
 
-  it('nepoznat taster -> null', () => {
+  it('nepoznat taster -> null (i samo M, posle dopuna plana crtanja)', () => {
+    expect(tasterUAkciju(taster('m'), 5)).toBeNull();
+    expect(tasterUAkciju(taster('M'), 5)).toBeNull();
     expect(tasterUAkciju(taster('x'), 5)).toBeNull();
     expect(tasterUAkciju(taster('Escape'), 5)).toBeNull();
     expect(tasterUAkciju(taster('g'), 5)).toBeNull();
@@ -85,6 +88,16 @@ describe('Shift+R = RESENJE (rešenje zadatka), R bez Shift-a = PONOVI', () => {
     expect(tasterUAkciju(sa('L', false), 10)).toEqual({ komanda: 'RANG_LISTA' });
   });
 
+  it('Shift+M -> TELEFON_PRIKAZ, Shift+D -> DETALJI (i pod Caps Lock-om i na ćirilici)', () => {
+    expect(tasterUAkciju(sa('M', true), 10)).toEqual({ komanda: 'TELEFON_PRIKAZ' });
+    expect(tasterUAkciju(sa('m', true), 10)).toEqual({ komanda: 'TELEFON_PRIKAZ' });
+    expect(tasterUAkciju(sa('М', true, 'KeyM'), 10)).toEqual({ komanda: 'TELEFON_PRIKAZ' });
+    expect(tasterUAkciju(sa('D', true), 10)).toEqual({ komanda: 'DETALJI' });
+    expect(tasterUAkciju(sa('d', true), 10)).toEqual({ komanda: 'DETALJI' });
+    expect(tasterUAkciju(sa('Д', true, 'KeyD'), 10)).toEqual({ komanda: 'DETALJI' });
+    expect(tasterUAkciju(sa('D', false), 10)).toEqual({ lokalno: 'CRTANJE' });
+  });
+
   it('Ctrl+Shift+R se ne hvata (osvežavanje stranice)', () => {
     expect(tasterUAkciju({ ...sa('R', true), ctrlKey: true }, 10)).toBeNull();
   });
@@ -100,13 +113,14 @@ describe('prečice na srpskoj ćirilici (e.key ćirilično, e.code latinični ta
     ['о', 'KeyO', { komanda: 'OTVORI_ZATVORI' }],
     ['р', 'KeyR', { komanda: 'PONOVI' }],
     ['т', 'KeyT', { komanda: 'TAJMER' }],
-    ['м', 'KeyM', { komanda: 'TELEFON_PRIKAZ' }],
-    ['д', 'KeyD', { komanda: 'DETALJI' }],
+    ['д', 'KeyD', { lokalno: 'CRTANJE' }],
     ['љ', 'KeyQ', { komanda: 'QR' }],
+    ['к', 'KeyK', { komanda: 'FAJLOVI' }],
     ['б', 'KeyB', { komanda: 'EKRAN_CRN' }],
     ['њ', 'KeyW', { komanda: 'EKRAN_BEO' }],
     ['ф', 'KeyF', { lokalno: 'CEO_EKRAN' }],
     ['п', 'KeyP', { lokalno: 'KONZOLA' }],
+    ['а', 'KeyA', { lokalno: 'ANKETA' }],
   ];
   for (const [key, code, akcija] of tabela) {
     it(`'${key}' (${code}) -> ${JSON.stringify(akcija)}`, () => {
@@ -127,6 +141,34 @@ describe('prečice na srpskoj ćirilici (e.key ćirilično, e.code latinični ta
     expect(kljucPrecice({ key: 'š', code: 'BracketLeft' })).toBe('š');
     expect(kljucPrecice({ key: 'ArrowRight', code: 'ArrowRight' })).toBe('ArrowRight');
     expect(kljucPrecice({ key: 'ц' })).toBe('ц');
+  });
+});
+
+describe('tasterCrtanja (režim crtanja u konzoli)', () => {
+  const sa = (key: string, mod: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {}, code?: string) =>
+    ({ ...taster(key, mod), shiftKey: mod.shiftKey ?? false, ...(code ? { code } : {}) });
+
+  it('1–7 biraju alat (indeks 0–6), 0, 8 i 9 ne', () => {
+    for (let i = 1; i <= 7; i++) expect(tasterCrtanja(sa(String(i)))).toEqual({ lokalno: 'ALAT', vrednost: i - 1 });
+    expect(tasterCrtanja(sa('0'))).toBeNull();
+    expect(tasterCrtanja(sa('8'))).toBeNull();
+    expect(tasterCrtanja(sa('9'))).toBeNull();
+  });
+
+  it('Ctrl+Z poništi, Ctrl+Y i Ctrl+Shift+Z vrate (i Cmd na Mac-u, i na ćirilici)', () => {
+    expect(tasterCrtanja(sa('z', { ctrlKey: true }))).toEqual({ lokalno: 'PONISTI' });
+    expect(tasterCrtanja(sa('z', { metaKey: true }))).toEqual({ lokalno: 'PONISTI' });
+    expect(tasterCrtanja(sa('Z', { ctrlKey: true, shiftKey: true }))).toEqual({ lokalno: 'VRATI' });
+    expect(tasterCrtanja(sa('y', { ctrlKey: true }))).toEqual({ lokalno: 'VRATI' });
+    expect(tasterCrtanja(sa('з', { ctrlKey: true }, 'KeyZ'))).toEqual({ lokalno: 'PONISTI' });
+  });
+
+  it('Esc javlja ESC; ostali tasteri (i Alt kombinacije) nisu crtanje', () => {
+    expect(tasterCrtanja(sa('Escape'))).toEqual({ lokalno: 'ESC' });
+    expect(tasterCrtanja(sa('ArrowRight'))).toBeNull();
+    expect(tasterCrtanja(sa('d'))).toBeNull();
+    expect(tasterCrtanja(sa('c', { ctrlKey: true }))).toBeNull();
+    expect(tasterCrtanja(sa('1', { altKey: true }))).toBeNull();
   });
 });
 

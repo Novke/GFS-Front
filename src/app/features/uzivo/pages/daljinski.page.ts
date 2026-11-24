@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, computed, effect, inject, signal, untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute } from '@angular/router';
 import { distinctUntilChanged, filter, map } from 'rxjs';
 
@@ -11,8 +12,11 @@ import { odgovorili, oznakaDalje, oznakaOtvoriZatvori, oznakaPolozajaKratko } fr
 import { IzvodjenjeStore } from '../data-access/izvodjenje.store';
 import { pratiPovratak } from '../data-access/povratak';
 import { TipKomande } from '../data-access/uzivo.models';
+import { FajloviKarticaComponent } from '../ui/fajlovi-izvodjenja.component';
 import { BeleskePanelComponent } from './beleske-panel.component';
 import { VremeIzvodjenjaComponent } from './vreme-izvodjenja.component';
+import { otvoriAnketu, registrujIkoneAnkete } from '../../ankete/ui/otvori-anketu';
+import { istiKontekst, kontekstAnketeIzvodjenja } from './anketa-kontekst';
 
 /** Dok STOMP nije povezan, stanje se osvežava GET-om (komande sa laptopa se vide i bez WebSocket-a na telefonu). */
 export const OSVEZI_BEZ_VEZE_MS = 5_000;
@@ -34,8 +38,18 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
   selector: 'app-daljinski',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [IzvodjenjeStore],
-  imports: [BeleskePanelComponent, VremeIzvodjenjaComponent],
+  imports: [BeleskePanelComponent, FajloviKarticaComponent, VremeIzvodjenjaComponent],
   host: { class: 'uz-dalj', lang: 'sr-Latn' },
+  // red sa linkom za fajlove: kartica levo, prekidač trake na tabli (K) desno; u komponenti, ne u globalnom CSS-u (početni budžet)
+  styles: `
+    .uz-dalj-fajlovi { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+    .uz-dalj-fajlovi app-fajlovi-kartica { flex: 1 1 auto; min-width: 0; }
+    .uz-dalj-fajlovi-dugme { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--surface); color: var(--ink); font: 600 15px/1.2 var(--font); touch-action: manipulation; user-select: none; }
+    .uz-dalj-anketa { min-height: 40px; padding: 0 14px; border: 1px solid var(--primary); border-radius: 10px; background: var(--primary);
+      color: var(--primary-ink); font: 600 15px/1.2 var(--font); touch-action: manipulation; }
+    .uz-dalj-fajlovi-dugme[aria-pressed='true'] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-soft-ink); }
+  `,
   template: `
     @if (store.stanje(); as s) {
       @if (zavrseno()) {
@@ -46,6 +60,7 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
           <span class="uz-dalj-polozaj">{{ polozaj() }}</span>
           @if ((s.brojCekiranih ?? null) !== null) { <span class="uz-dalj-cekirano">čekirano {{ s.brojCekiranih }}</span> }
           <span class="uz-dalj-veza" [class.uz-dalj-veza--ok]="store.veza() === 'povezan'" role="status">{{ vezaTekst() }}</span>
+          <button type="button" class="uz-dalj-anketa" (click)="anketa()" data-anketa-otvori>Anketa</button>
         </header>
         <div class="uz-dalj-upozorenja">
           @if (prikazGreske(); as g) {
@@ -63,6 +78,13 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
             }
           }
         </div>
+        @if (s.fajlovi; as fajlovi) {
+          <div class="uz-dalj-fajlovi">
+            <app-fajlovi-kartica [fajlovi]="fajlovi" [kompaktno]="true" />
+            <button type="button" class="uz-dalj-fajlovi-dugme" [disabled]="!ima('FAJLOVI')" [attr.aria-pressed]="s.fajloviNaTabli ?? true"
+                    (click)="dodir('FAJLOVI')">{{ (s.fajloviNaTabli ?? true) ? 'Skloni link' : 'Link na tablu' }}</button>
+          </div>
+        }
         <app-beleske-panel class="uz-dalj-beleske" [tekst]="s.trenutniSlajd?.beleske ?? null"
                            [kljucSlajda]="s.trenutniSlajd?.id ?? s.prikaz" [prazno]="prazno()" />
         @if (runda(); as vrsta) {
@@ -101,6 +123,8 @@ const PRAZNO_SLAJD = 'Nema beležaka za ovaj slajd.';
 export class DaljinskiPage {
   protected readonly store = inject(IzvodjenjeStore);
   protected readonly budan = napraviBudanEkran();
+  private readonly dialog = inject(MatDialog);
+  private readonly kontekstAnkete = computed(() => kontekstAnketeIzvodjenja(this.store.stanje()), { equal: istiKontekst });
   private readonly doc = inject(DOCUMENT);
   private readonly poslednjiDodir = new Map<TipKomande, number>();
 
@@ -145,7 +169,13 @@ export class DaljinskiPage {
     povezan: 'Povezano', povezivanje: 'Povezivanje…', prekinut: 'Veza prekinuta, povezujem…',
   })[this.store.veza()]);
 
+  /** Brza anketa: panel preko celog ekrana; zatvaranje vraća daljinski. */
+  protected anketa(): void {
+    void otvoriAnketu(this.dialog, this.kontekstAnkete);
+  }
+
   constructor() {
+    registrujIkoneAnkete(); // ikone dugmeta "Anketa" i panela (van početnog paketa)
     inject(ActivatedRoute).paramMap.pipe(
       map(p => Number(p.get('id'))), filter(id => id > 0), distinctUntilChanged(), takeUntilDestroyed(),
     ).subscribe(id => this.store.init(id));

@@ -1,4 +1,5 @@
 import type { OtvorenoZaGrupu, StatistikaTipa } from '../src/app/features/banka/data-access/banka.models';
+import type { FajloviPrezentacije, FajlKratko } from '../src/app/shared/util/fajlovi';
 import type { StavkaZvona, Zvono } from '../src/app/features/nalog/data-access/obavestenja.models';
 import type {
   MojZadatak, OcenaStudenta, PoljeZadatka, PredmetStudenta, PregledPrezentacije, PrezentacijaStudenta, PrisustvoStudenta,
@@ -19,6 +20,14 @@ type Get = (sablon: string, h: (z: { telo: unknown; query: URLSearchParams }, p:
 const ok = (telo: unknown): Odgovor => ({ telo });
 const greska = (status: number, reason: string): Odgovor => ({ status, telo: { reason, time: new Date().toISOString() } });
 const NEMA = () => greska(404, 'Nije pronađeno.');
+
+/** Fajlovi uz prezentaciju {@link PREZENTACIJA} (fajlovi uz prezentaciju, spec 2026-11-20): izmišljeni nazivi. */
+export const FAJL_WORD = 41;
+export const FAJL_EXCEL = 42;
+const FAJLOVI_PREZENTACIJE: FajlKratko[] = [
+  { id: FAJL_WORD, naziv: 'Zadaci za vežbu.docx', vrsta: 'DOCX', velicina: 20_480 },
+  { id: FAJL_EXCEL, naziv: 'Podaci.xlsx', vrsta: 'XLSX', velicina: 1_468_006 },
+];
 
 /** Predmet sa časovima, otvorenim tipovima i neobjavljenom ocenom; drugi predmet ima objavljenu ocenu. */
 export const PREDMET = 1;
@@ -87,9 +96,15 @@ function prezentacije(predmet: number): PrezentacijaStudenta[] {
   return predmet === PREDMET ? [{ id: PREZENTACIJA, naziv: 'Konverzije – vežbe', odrzana: '2026-10-20T10:00:00', slajdova: 3 }] : [];
 }
 
+function fajloviPredmeta(predmet: number): FajloviPrezentacije[] {
+  return predmet === PREDMET
+    ? [{ prezentacijaId: PREZENTACIJA, naziv: 'Konverzije – vežbe', odrzana: '2026-10-20T10:00:00', fajlovi: FAJLOVI_PREZENTACIJE }]
+    : [];
+}
+
 function pregled(): PregledPrezentacije {
   return {
-    id: PREZENTACIJA, naziv: 'Konverzije – vežbe', tema: 'NACRT', predmetId: PREDMET, slajdovi: [
+    id: PREZENTACIJA, naziv: 'Konverzije – vežbe', tema: 'NACRT', predmetId: PREDMET, fajlovi: FAJLOVI_PREZENTACIJE, slajdovi: [
       {
         id: 71, rb: 1, tip: 'INFO', naslov: 'Pozicioni brojni sistemi', sadrzaj: 'Vrednost cifre zavisi od **mesta**.', slika: null,
         pitanje: null, platno: null, zadatak: null, mojOdgovor: null, tacanPoznat: false,
@@ -153,6 +168,10 @@ export class MockPortal {
   readonly zvono: Zvono = { novo: true, stavke: ZVONO };
   /** Push na ovom uređaju: server zna pretplatu samo posle `PUT push`. */
   pushPretplacen = false;
+  /** Fajlovi koje je student tražio mejlom (id-jevi, redom). */
+  readonly poslatiFajlovi: number[] = [];
+  /** `reason` za 429 na „Pošalji mi na mejl”; `null` = uspeh (202 sa maskom). */
+  mejlGreska: string | null = null;
   /** Stanje panela „Za vežbanje“ po čvoru banke (nastavnik); bez unosa: podrazumevano za predmet čvora. */
   readonly otvoreno = new Map<number, OtvorenoZaGrupu[]>();
   private sledeci = 500;
@@ -179,6 +198,18 @@ export class MockPortal {
     get('public/nalog/predmeti/:id/moji-zadaci', zaPredmet(mojiZadaci));
     get('public/nalog/predmeti/:id/prezentacije', zaPredmet(prezentacije));
     get('public/nalog/predmeti/:id/ocena', zaPredmet(ocena));
+    get('public/nalog/predmeti/:id/fajlovi', zaPredmet(id => fajloviPredmeta(id)));
+    post('public/nalog/fajlovi/:id/mejl', student((_z, p) => {
+      const id = Number(p['id']);
+      if (!FAJLOVI_PREZENTACIJE.some(f => f.id === id)) {
+        return NEMA();
+      }
+      if (this.mejlGreska) {
+        return greska(429, this.mejlGreska);
+      }
+      this.poslatiFajlovi.push(id);
+      return { status: 202, telo: { poslatoNa: 'n•••@gmail.com' } };
+    }));
     get('public/nalog/prezentacije/:id', student((_z, p) => (Number(p['id']) === PREZENTACIJA ? ok(pregled()) : NEMA())));
 
     get('public/nalog/podesavanja', student(() => ok({ ...this.podesavanja })));

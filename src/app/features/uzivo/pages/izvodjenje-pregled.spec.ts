@@ -1,10 +1,15 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RangTacnostiStavka } from '../../../core/api/rang.api';
+import { ApplicationRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { IzvodjenjeInfo, IzvodjenjeRezultati, PitanjeSnimak, PregledZadatka, RezultatPitanja } from '../data-access/uzivo.models';
 import { IzvodjenjePregledPage, ishodUkupno, oznakeRundi, procenatTacnihTekst, unetoUcesnika } from './izvodjenje-pregled.page';
+import { CrtezIzvodjenja } from '../crtanje/crtanje.models';
+import { oznakaStrane } from '../crtanje/crtezi-izvodjenja.component';
+import { infoSlajd } from '../data-access/izvodjenje-podaci.testing';
 
 function snimak(pitanjeId: number, slajdId: number | null, tekst = 'Koliko je 2 + 2?'): PitanjeSnimak {
   return {
@@ -114,7 +119,7 @@ describe('oznakeRundi', () => {
 describe('IzvodjenjePregledPage', () => {
   let http: HttpTestingController;
 
-  function otvori(rezultati: IzvodjenjeRezultati, rang: RangTacnostiStavka[] = []): HTMLElement {
+  function otvori(rezultati: IzvodjenjeRezultati, rang: RangTacnostiStavka[] = [], crtezi: CrtezIzvodjenja[] = []): HTMLElement {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
@@ -125,6 +130,8 @@ describe('IzvodjenjePregledPage', () => {
     const fixture = TestBed.createComponent(IzvodjenjePregledPage);
     http.expectOne('api/izvodjenja/5/rezultati').flush(rezultati);
     http.expectOne('api/izvodjenja/5/rang').flush(rang);
+    fixture.detectChanges();
+    http.expectOne('api/izvodjenja/5/crtezi').flush(crtezi);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -310,5 +317,47 @@ describe('IzvodjenjePregledPage', () => {
     http.expectOne('api/izvodjenja/5/rang').flush({ reason: 'Izvođenje nije pronađeno.' }, { status: 404, statusText: 'Not Found' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role=alert]')?.textContent).toContain('Izvođenje nije pronađeno.');
+  });
+
+  describe('kartica "Crteži"', () => {
+    const linija = { tip: 'LINIJA' as const, boja: '#C62828', debljina: 6, tacke: [0, 0, 100, 100] };
+    const strana = (slajdId: number | null, slajdBroj: number | null, pozadina: 'SLAJD' | 'BELA', elementi = [linija]): CrtezIzvodjenja =>
+      ({ slajdId, slajdBroj, pozadina, elementi, verzija: 1, izmenjeno: '2026-10-07T10:30:00' });
+    const bezCuvanja: IzvodjenjeRezultati = { izvodjenje: { ...INFO, cuvanje: false }, pitanja: [], rangLista: [], takmicenje: false };
+
+    it('oznake: "Slajd 5", "Slajd 5, bela pozadina", "Obrisan slajd"', () => {
+      expect(oznakaStrane({ slajdBroj: 5, pozadina: 'SLAJD' })).toBe('Slajd 5');
+      expect(oznakaStrane({ slajdBroj: 5, pozadina: 'BELA' })).toBe('Slajd 5, bela pozadina');
+      expect(oznakaStrane({ slajdBroj: null, pozadina: 'SLAJD' })).toBe('Obrisan slajd');
+    });
+
+    it('bez ne-praznih strana nema kartice (ni zahteva za prezentaciju)', () => {
+      const el = otvori(bezCuvanja, [], [strana(10, 1, 'SLAJD', [])]);
+      expect(el.querySelector('[data-crtezi]')).toBeNull();
+    });
+
+    it('i kad rezultati nisu čuvani: sličice redom, slajd iz prezentacije ispod crteža, bela strana bez slajda', () => {
+      const el = otvori(bezCuvanja, [], [strana(10, 1, 'SLAJD'), strana(10, 1, 'BELA'), strana(null, null, 'SLAJD')]);
+      const slajd = { ...infoSlajd(), id: 10 };
+      http.expectOne('api/prezentacije/3').flush({ id: 3, tema: 'NACRT', slajdovi: [slajd] });
+      TestBed.inject(ApplicationRef).tick();
+      expect(el.textContent).toContain('Rezultati ovog izvođenja nisu čuvani.');
+      const kartica = el.querySelector('[data-crtezi]')!;
+      expect(Array.from(kartica.querySelectorAll('button span')).map(s => s.textContent)).toEqual([
+        'Slajd 1', 'Slajd 1, bela pozadina', 'Obrisan slajd',
+      ]);
+      const slicice = kartica.querySelectorAll('app-slicica-crteza');
+      expect(slicice[0].querySelector('app-slajd-prikaz')).not.toBeNull();
+      expect(slicice[1].querySelector('app-slajd-prikaz')).toBeNull();
+      expect(slicice[2].querySelector('app-slajd-prikaz')).toBeNull();
+    });
+
+    it('klik na sličicu otvara veliki prikaz', () => {
+      const el = otvori(bezCuvanja, [], [strana(null, null, 'BELA')]);
+      const otvoreno = vi.spyOn(TestBed.inject(MatDialog), 'open');
+      el.querySelector<HTMLButtonElement>('[data-crtezi] button')!.click();
+      expect(otvoreno).toHaveBeenCalledTimes(1);
+      expect((otvoreno.mock.calls[0][1] as { data: { oznaka: string } }).data.oznaka).toBe('Obrisan slajd, bela pozadina');
+    });
   });
 });

@@ -548,7 +548,8 @@ over STOMP; teacher commands are REST.
   "Bez broja vežbe"; a multi-vežba deck takes the first number; the "Nova prezentacija" dialog proposes it from the name, `vezbaIzNaziva`,
   until the field is touched; the editor's Podešavanja saves it with `PATCH prezentacije/{id}/vezba`, `EditorStore.postaviVezbu`, optimistic
   with revert) and a server-derived `vrsta` (`GRADIVO` only slides, `PITANJA` questions without Zadatak, `ZADACI` at least one Zadatak slide;
-  `brojZadataka`, `kreirano`, `poslednjePustanje` next to it). Pure helpers in `core/api/redosled-prezentacija.ts` (labels, `poVezbama`,
+  `brojZadataka`, `kreirano`, `poslednjePustanje` next to it, and the optional `brojFajlova`: `opisSadrzaja` in
+  `shared/ui/izbor-prezentacije` adds "· N fajl/fajla/fajlova" only when it is above 0, in the list, the start dialog and the console end screen). Pure helpers in `core/api/redosled-prezentacija.ts` (labels, `poVezbama`,
   `grupisiPoVezbi`, `PORUKA_VEZBE` = the server text). The list page (`prezentacije`) groups by vežba (`?sort=` naziv | kreirano | izmenjeno |
   pustanje, default by vežba), filters `?predmet`, `?vrsta`, `?q` (URL is the source of truth, `upitIzUrla`, `sortirajListu`). The suggestion
   (`IzborPrezentacija.predlog`, at most 3 ids) comes only from the server (`GET prezentacije/izbor`: with `grupaId` owed zadaci of earlier
@@ -668,8 +669,9 @@ over STOMP; teacher commands are REST.
   (`publika`), console (`konzola`); `javno/`: the student pages (`uzivo-kod.page`, `uzivo-student.page`, `student.store`,
   `javno.api`); `uzivo-putanje.ts`: the only path builders; `uzivo.routes.ts`: route children.
 - Layouts (paths unchanged since the first release, they may be printed as QR codes): `prezentacije`, `prezentacije/:id`,
-  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola|daljinski` in
-  `ProjectorLayout`; `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
+  `prezentacije/:id/izvodjenja` and `izvodjenja/:id/pregled` in the shell; `izvodjenja/:id/publika|konzola|daljinski` and the
+  lecture board `predavanja/:id/tabla` and `predavanja/:id/tabla/publika` (see "Crtanje u izvođenju") in `ProjectorLayout`;
+  `uzivo`, `uzivo/:kod` in `PublicLayout`. The last two layouts get `data: { celaStrana: true }` (no
   content frame), because these pages draw the whole screen themselves. `daljinski` also gets `pratiRezim: true`
   (`ProjectorLayout` then drops `.rezim-dan`, so the phone follows day/night); projector and console stay day.
 - `javno/` may import exactly: `uzivo-putanje`, `data-access/uzivo.models`, `data-access/stomp`, `data-access/sat`,
@@ -1142,7 +1144,7 @@ raised by 5 kB for the teacher session, see "Prijava", and to 800 000 B for rele
   the initial bundle (and the phone, which loads the global stylesheet) does not carry them. Colours only through
   tokens; projector, console, editor preview and student pages are always day (`rezim-dan uz-dan`: `uz-dan` re-sets the
   text colour, which is inherited as a computed value). The black/white screens (keys B/W) are deliberately pure black and
-  white. Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared
+  white (W is also the white board for drawing, see "Crtanje u izvođenju"). Destructive Material buttons use `.uz-opasno` (M3 ignores `color="warn"`); confirmations use the shared
   `ConfirmDialog`, and the editor's leave guard is the shared `unsavedChangesGuard` (`tekstNapustanja` gives its text).
 - Zoneless: all state is signals (STOMP messages go through `patchState`, the timer interval sets a signal). Component
   specs that render Material form fields under `saLaznimSatom` provide `MATERIAL_ANIMATIONS` with
@@ -1201,7 +1203,8 @@ Slide type `ZADATAK`: every phone gets its own random variant of a bank task, th
   2026-10-28 Novica approved another `REZERVA_2026_10_28 = 4 000` B of headroom (the closure was 117 512 of 117 518 B; the
   free-entry chips did not change the student page, results are drawn only by teacher views). After `feature/portal-pocetna`
   (Izađi, own accuracy, exit marker) the closure is 120 983 of 121 518 B: the next growth of the phone page needs a lazy chunk or
-  a new decision.
+  a new decision. Brza anketa (2026-11-23): the sheet over the slide is a lazy chunk, but its `@defer` entry costs +231 B on the
+  page (121 385 -> 121 616 B), so `RAST_ANKETE = 300` B was added (pending Novica's review; cheaper entries cost initial bytes).
 
 ### Rang tačnosti (leaderboard)
 
@@ -1261,6 +1264,103 @@ Spec `docs/superpowers/specs/2026-11-18-moderacija-uzivo-design.md` (deploy repo
   section "Ponašanje na času", hidden when the student has no flags, list `[data-oznaka]` with kind, date, subject · presentation and the hidden
   text, delete `[data-obrisi]` through `ConfirmDialog` (a 404 also removes the row). API `data-access/oznake-ponasanja.api.ts`. Specs that render the
   profile flush `api/studenti/{id}/oznake-ponasanja`; the e2e mock answers it with `[]`.
+
+### Fajlovi uz prezentaciju (files for students)
+
+Spec `docs/superpowers/specs/2026-11-20-fajlovi-uz-prezentaciju-design.md` (deploy repo); backend V26. Types and pure helpers for every side are in
+`shared/util/fajlovi.ts` (`FajlKratko`, `FajloviSlajda`, `FajlPrezentacijeInfo`, `velicinaFajla`, `ispravanKod`, `urlFajlaCasa`, `urlFajlaNaloga`;
+no imports, on the public allow-list). `NastavnickoStanje.fajlovi` and `JavnoStanje.fajlovi` are optional (an older backend sends neither).
+- **Editor (teacher):** `pages/fajlovi-panel.component.ts` ("Fajlovi za studente": add with `accept=PRIHVACENI_FAJLOVI` and a 10 MB check, slide or
+  "Cela prezentacija", rename, up/down, delete through `ConfirmDialog`, download `api/fajlovi-prezentacije/<id>/sadrzaj`), state in
+  `data-access/fajlovi-editor.store.ts`, API `data-access/fajlovi-prezentacije.api.ts`; the slide list shows a file mark and count. Files may change
+  while the presentation runs (a file hung up mid-class shows at once).
+- **Projector, console, remote:** `ui/fajlovi-izvodjenja.component.ts` renders `stanje.fajlovi.link` (e.g. `gfs.trif.rs/f/1234`, host from the backend)
+  big in a bar **below** the slide or the join screen on the projector (never over the slide footer with the join code and answer count: the scene host
+  gets `uz-scena--fajlovi`, the bar is 5.4 % of the scene width high and the projector narrows the scene so slide plus bar fit; e2e checks 1920 x 1080
+  and 1280 x 720), and the link plus file names in the console and the remote. Nothing without `fajlovi`.
+- **Where the bar shows (`NastavnickoStanje.fajloviNaTabli`, server rule):** on a slide with its own files, and for files of the whole presentation only on
+  PRIJAVA and the first slide; `PublikaScenaComponent.trakaFajlova` follows the flag (an older backend without it: every slide with `fajlovi`, as before).
+  `fajlovi` itself is there on every slide and on PRIJAVA once the presentation has a file (the list may be empty), so key **`K`** (`FAJLOVI`, `tastatura.ts`,
+  allowed only with `fajlovi` in `dozvoljeneKomande`) can show the bar for latecomers; it switches off by itself on the next slide. The console has the
+  button "Link za fajlove" (K) in "Ekran i telefoni" and the card line "Link je / nije na tabli" (`FajloviKarticaComponent.naTabli`), the remote a toggle
+  "Link na tablu" / "Skloni link" next to the compact card (styles in the component, not in the global CSS: initial budget). The Q overlay
+  (`uz-scena-qr-info`) adds "Fajlovi za vežbu: <link>" under the join code whenever `fajlovi` is set.
+- **Public `/f` and `/f/:kod`** (`features/fajlovi/`, one lazy `loadChildren` entry in `app.routes.ts` because the initial bundle sits at the
+  800 kB warning, `PublicLayout`): code field, then subject, topic and download links `api/public/fajlovi/<kod>/<id>`; polls every 20 s while the tab is
+  visible; 404 "Kod ne važi…", 429 from the server. Calls only `api/public/fajlovi/*`. `features/fajlovi` is in `JAVNI_FEATURE`; `core/auth/istek-sesije`
+  treats `/f` as public; `e2e/javne-putanje.ts` mirrors the staging regex with `f(/|$)`.
+- **Account:** `shared/ui/fajlovi-spisak.component.ts` (presentational list: optional "Preuzmi" href builder, "Pošalji mi na mejl", per-file message,
+  optional sign-in link) and `shared/util/fajlovi-mejl.ts` (`MejlFajlova`: message state per file, 401/403 -> `trebaPrijava` on the phone); both on the
+  public allow-list. Subject page Materijali: section "Fajlovi" per presentation (`PortalApi.fajlovi`, a 404 = empty); presentation review: the list on
+  top. `PortalApi.posaljiFajlMejlom` = `POST api/public/nalog/fajlovi/<id>/mejl` (202 `{poslatoNa}`; 409/429/503 show `reason`).
+- **Phone live:** `javno/fajlovi-telefon.component.ts` inside `@defer (on immediate)` in `uzivo-student.page.ts` when `javno.fajlovi` is not empty: only
+  "Pošalji mi na mejl" (no download on the phone); a guest gets "Prijavi se da ti pošaljemo fajl" -> `nalog?nazad=uzivo/<kod>`. The initial phone
+  closure does not grow (`e2e/lenji-formule.spec.ts`).
+- **E2E:** `e2e/fajlovi-cas.spec.ts` (`/f`, projector link, `fajloviNaTabli`, K and the Q overlay, PRIJAVA geometry, console button; network: nothing outside `/api/public/`), remote toggle in `e2e/uzivo-daljinski.spec.ts`, `e2e/fajlovi-nalog.spec.ts` (Materijali, review,
+  phone, axe day/night).
+
+### Crtanje u izvođenju (drawing over slides, lecture board)
+
+Spec `docs/superpowers/specs/2026-11-23-crtanje-uzivo-design.md` and plan `docs/superpowers/plans/2026-11-23-crtanje-uzivo.md`
+(deploy repo; the plan's "Dopune" and contract win over the spec). Code in `features/uzivo/crtanje/` (no `data-access/`, so
+`features/predavanja` and `features/podesavanja` may import it under `gfs/granice-featurea`); **`javno/` imports none of it**.
+- **Model** (`crtanje.models.ts`): a drawing belongs to a page = slide + background (`KljucStrane {slajdId, pozadina: SLAJD | BELA}`;
+  the lecture board is `{null, BELA}`), elements `{tip, boja, debljina, tacke}` in scene units 960 x 540, 7 tools (`ALATI`, keys
+  `1`-`7`), 6 colours, 3 widths. `geometrija.ts`: SVG paths of every type (pencil as midpoint quadratics, arrow = shaft + filled head,
+  Shift = square/circle/45°), normalisation to one decimal and the server limits (2000 elements, 1 MB, pencil split above 5000
+  points); `istorija.ts`: undo/redo per page (100 steps, "Obriši sve" is one undoable step).
+- **Console side** (`crtac.ts`, `Crtac`): pages in memory, `upis-strana.ts` writes the whole page (`PUT izvodjenja/{id}/crtezi/strana`)
+  one request at a time, only the latest per page (400/404/410 final, others retried after 3 s; "Nije sačuvano" while pending).
+  `NastavnickoStanje.crtez` (`{slajdId, pozadina, verzija}`, optional, last field) says which page is on the projector: a new page
+  is loaded once (no drawing until it arrives), a higher server `verzija` without own pending write means another console (phone)
+  drew, so the page is reloaded and its history reset.
+- **Channel between windows** (`kanal-crtanja.ts`, `BroadcastChannel('gfs-crtanje-<id>')`, board `gfs-tabla-<id>`): console sends
+  `puls` every 2 s, `strana` (whole page + confirmed `verzija`), `uToku` (stroke in progress, once per frame), `alati`; audience
+  sends `trazi`. Audience side `gledalac.ts` (`Gledalac`): while a pulse arrived in the last 5 s the drawing comes only from the
+  channel (no flicker back while a PUT is in flight); without it from the server (snapshot `crtez` change, reconnect, return
+  from sleep); an older `verzija` never replaces a newer one.
+- **Scene** (`pages/publika-scena.component.ts`, inputs `crtez`, `alatiCrtanja`): `crtanje/sloj-crteza.component.ts` (SVG
+  over the slide wrapper, below the QR/rank layer and the B/W screens) only on `NORMALAN` + `SLAJD` for the current slide, and inside
+  the white screen for the `BELA` page (the "Beo ekran" label hides when the white page has a drawing); the outgoing slide of a
+  transition keeps its drawing. The audience tools strip (`[data-crt-pub-alati]`) shows only while the console draws and the
+  teacher turned on "Publika vidi alate" (eye; default off).
+- **Console** (`pages/konzola.page.ts`): header buttons "Bela pozadina" (`W`, `EKRAN_BEO`) and "Crtaj" (`D`; X while drawing).
+  Drawing replaces the body with `crtanje/raspored-crtanja.component.ts` (tools column, colours/undo/redo/clear/eye bar, the
+  largest 16:9 scene with `povrsina-crtanja.component.ts`: pointer events with coalesced points, one pointer, palm rejection,
+  pointer capture; "Ranije ovde" on the right); the header stays. Exit: `D`, `Esc` (first cancels a stroke in progress) or X.
+  No drawing on PRIJAVA/KRAJ (button `aria-disabled`; a console already drawing keeps the layout with an inactive surface and a
+  note); entering drawing or the first touch on a black screen turns `CRN` off. Narrow console (< 600 px): bar, scene, tools in a
+  row below it, then the usual bottom nav. Default colour red, width 6.
+- **Earlier drawings** (`ranije.ts`, `GET izvodjenja/{id}/crtezi/ranije?slajdId=`, once per slide): chip "Ranije si na ovom slajdu
+  crtao" under the console preview enters drawing; `ranije-panel.component.ts` thumbnails ("grupa · datum") add the old elements
+  to the current page as one undoable step. Settings → Uživo (`/podesavanja/uzivo`, `features/podesavanja/pages/uzivo-podesavanja.page.ts`)
+  switches it per browser (`ranije-podesavanje.ts`, `localStorage` `gfs.ranije-crteze.v1`, default on); off = no chip, no request.
+- **Run overview** (`/izvodjenja/:id/pregled`): card "Crteži" (`crtezi-izvodjenja.component.ts`, also when results were not kept)
+  with thumbnails of non-empty pages (`slicica-crteza.component.ts`: slide with all steps revealed, or white) in slide order,
+  "Slajd N" / "Slajd N, bela pozadina" / "Obrisan slajd"; click opens a large view dialog. No card without drawings.
+- **Lecture board** (`features/predavanja`): "Tabla" next to "Pokreni prezentaciju" on a live lecture opens `predavanja/:id/tabla` in a
+  new tab (`pages/tabla-predavanja.ts`, one lazy `loadChildren` entry `tabla.routes.ts` because of the initial budget): header
+  "Tabla · <predmet>, predavanje <datum>" (`ui/tabla.ts`), "Otvori publiku" (`P`, window `gfs-tabla`, so it never replaces a run's
+  audience window), "Otvori na monitoru", "Ceo ekran" (`F`); white page and drawing at once, keys `1`-`7`, `Ctrl+Z`/`Ctrl+Y`, `Esc`
+  cancels a stroke. No STOMP: `GET/PUT predavanja/{id}/tabla`. The audience `predavanja/:id/tabla/publika` (`pages/tabla-publika.ts`,
+  reads `:id` from the parent route) uses the channel while the board's pulse arrives, otherwise asks `GET ?posle=<verzija>` every
+  3 s while visible (204 = unchanged) and at once after sleep. The lecture page shows "Tabla sa ovog časa" (`ui/tabla-casa.ts`) when the
+  saved board is not empty (re-read when the tab is shown again); its link reopens the board, also on a finished lecture.
+- **Keys** (`tastatura.ts`, help `pages/pomoc-precice.dialog.ts`): `D` = drawing (console only; the audience ignores it),
+  `Shift+D` = Detalji (was `D`), `Shift+M` = phone view (was `M`; plain `M` does nothing), `R` = repeat question only when pressed
+  twice within 2 s, in the console too (`DvaputR`; a hint "Pritisni R ponovo…"); the console's "Ponovi" button keeps its confirm.
+  Console buttons with a long key (`Space`, `Shift+…`) show it as `⇧R` (`prikazTastera`; `aria-keyshortcuts` keeps the full name)
+  floated in the label's top-right corner, so it never covers the label and buttons do not grow: the console at 1366x768 must not
+  scroll, otherwise the classic scrollbar narrows the columns and `e2e/uzivo-formule-tekst.spec.ts` (konzola 1366) fails.
+  While drawing, `tasterCrtanja` (after the `G` mode) takes `1`-`7`, `Ctrl+Z`, `Ctrl+Y`/`Ctrl+Shift+Z` and `Esc`; other shortcuts work as before.
+- **Budgets:** new CSS lives in component styles (the `.uz-pomoc*`, phone-dialog and screen-choice rules moved out of the global
+  `uzivo-izvodjenje.css` to make room); initial closure 799 497 B after this feature (`e2e/lenji-editor.spec.ts`, limit 800 000).
+- **Tests:** Vitest for geometry, history, writer, `Crtac`, `Gledalac`, earlier drawings, scene, console, keys, board pages and the
+  setting; e2e `e2e/uzivo-crtanje.spec.ts` (console + audience in one context through the real `BroadcastChannel`, W and back,
+  chip and panel, setting, overview card, lecture board in a new tab with its audience popup and the 3 s poll). The mock keeps pages
+  in `MockIzvodjenje.crtezi`, the board in `MockApi.table`, earlier drawings in `MockApi.ranijiCrtezi`, and now supports
+  `EKRAN_BEO`/`EKRAN_CRN` with `bela_slajd_id`; `mock.instaliraj(page.context())` covers tabs and popups the page opens.
+  `pristupacnost.spec.ts` checks the drawing console, board, board audience, lecture thumbnail, overview card/dialog and Settings → Uživo.
 
 ## Banka zadataka (`features/banka`)
 
@@ -1502,6 +1602,42 @@ and on the subject hub's Ocene tab): `OceneApi.objava/objavi/povuci` = `GET ocen
 ocenjivanje/predmet/{p}/objava/{grupa}` (all `tiho`). Until "Objavi predloge" students see nothing of the grade (not even test or
 homework points); publishing stores a snapshot per student, "Objavi ponovo" replaces it, "Povuci" removes it; each with a confirmation.
 Attendance and tasks from class are visible to students regardless.
+
+## Brza anketa (quick class poll)
+
+Branch `feature/brza-anketa`. Spec: deploy repo `docs/superpowers/specs/2026-11-23-brza-anketa-design.md` (API in section 5, UI in 6),
+mockup `mockups/2026-11-23-brza-anketa/` next to it. Anonymous to the teacher: no screen ever shows who voted what, only counts.
+- **Teacher (`features/ankete`):** `AnketeApi` = `api/ankete/*` (`sabloni`, `precice`, `folderi`, `folderi/redosled`, `POST ankete`,
+  `aktivne?predavanjeId=&grupaId=`, paged history, `{id}/zatvori`, `{id}/rezultat`), every call `tiho` (the panel, console and
+  projector show their own errors). `AnketePanelStore` (provided by the dialog) drives the left column (start screen with shortcut
+  tiles, folders, history, editing the shortcuts) and the right column (check before launch, then results polled every 2 s while
+  open). The panel is opened only through `ui/otvori-anketu.ts` (`otvoriAnketu`, dynamic `import()`, context as a signal); callers in
+  other features import nothing else. Two columns from `SIROK_PANEL` (900 px), full screen below it: the dialog sets
+  `--mat-dialog-container-shape` on its own overlay pane (no global class). Keys inside the panel: `1`-`9` launch a shortcut, `R`
+  shows/hides the result, `Enter` closes the poll, `Esc` the panel.
+- **Entry points:** console (button, menu item and key `A`, command `ANKETA`), remote (`data-anketa-otvori`), lecture page
+  (`data-anketa`). Console and remote build the context in `features/uzivo/pages/anketa-kontekst.ts` (lecture of the run + number of
+  checked-in students), the lecture page from its own lecture.
+  The icons `how_to_vote` and `folder` are **not** in `IKONE`: these three pages call `registrujIkoneAnkete()` first in their
+  constructor. The initial bundle sits at the 800 000 B budget (`e2e/lenji-editor.spec.ts`, ~5 B left after this feature); even a new
+  import from `core/layout/icons` in a lazy file adds bytes to `main`, so measure (`ng build --stats-json`) before adding anything shared.
+- **Projectors:** `ui/anketa-projektor.component.ts` (uživo `publika` and `predavanja/:id/projektor`) polls `aktivne?predavanjeId=` every
+  2 s while visible, never shows an error; bars only when `rezultatPrikazan`, otherwise question, options and "N glasova". On `publika`
+  it is a window over the slide; the lecture projector uses `[ugradjen]="true"` (host `display: contents`, the card is a grid item) and
+  puts it in the right column instead of the check-in QR (`prikazana()` via `viewChild`), which comes back when the poll leaves.
+- **Student (`features/nalog`, public route):** `AnketeStudentaApi` = `GET public/nalog/ankete` and `POST public/nalog/ankete/{id}/glas`
+  `{opcije}`. Root `AnketeStudentaStore` gets the list from `CasStanje.ankete` (tab shell and tab Čas call `primi`), refreshes on push
+  (`naPushPoruku`) and decides which poll pops up (`zaIskakanje`; "Kasnije" hides it until a newer one). `ui/anketa-list.component.ts`
+  is the non-modal bottom sheet (above the tabs; `izvor="uzivo"` on `/uzivo/<kod>?sa=cas`, behind `@defer`, polls itself every
+  10 s ± 2 s and on `visibilitychange`, stops on 401, backs off on 429); `ui/ankete-kartice.component.ts` is the card list on Čas
+  (all, shown results first) and Početna (group polls only). Ja → Obaveštenja has an "Ankete" row only when the server sends
+  `pushAnkete`. Allow-list additions (`eslint-rules/javna-ruta-konfig.js`): `shared/util/ankete` and `shared/ui/anketa-trake.component`
+  for `features/nalog`, the sheet for `features/uzivo/javno`; keep both files free of other imports.
+- **e2e:** `e2e/mock-ankete.ts` (`mock.ankete`, fixture `e2e/fixtures/ankete.json`) mirrors the server rules (eligibility by
+  check-in or group, effective close by hand/deadline/finished lecture, results only when shown, a new on-class poll closes the
+  previous one). Helpers for specs: `otvori`, `glasajDrugi`, `zatvori`, `prikaziRezultat`, `glasStudenta`, `brojMogucih`. Specs
+  `e2e/anketa-nastavnik.spec.ts` and `e2e/anketa-student.spec.ts`; student API regexes in the public-network specs include
+  `ankete|ankete/\d+/glas`.
 
 ## Releases and stale tabs (`core/izdanje`)
 

@@ -20,7 +20,7 @@ import { MockApi, tekucaSkolskaGodina } from './mock-api';
  */
 // `podesavanja`: kartica "Obaveštenja" na tabu Ja (mejl, push i zvono) čita svoje stanje, `push` stanje uređaja;
 // `obavestenja`: zvono u zaglavlju svakog taba (`otvoreno` kad ga student otvori)
-const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi|podesavanja|obavestenja|obavestenja\/otvoreno|push)$/;
+const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(stanje|kod|prijava|ja|odjava|odjava-svuda|pomoc|cas|casovi|podesavanja|obavestenja|obavestenja\/otvoreno|push|ankete|ankete\/\d+\/glas)$/;
 const INDEKS = 'GD1';
 /** Godina koju forma predlaže bez `?godina=` (fikstura nema svoju, pa mock prihvata istu). */
 const GODINA = tekucaSkolskaGodina();

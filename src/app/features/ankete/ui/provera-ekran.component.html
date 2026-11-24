@@ -1,0 +1,115 @@
+@let forma = f();
+@let v = forma.controls;
+<form class="pr" [formGroup]="forma" (submit)="$event.preventDefault(); posalji()" novalidate data-anketa-provera>
+  <div class="pr-zaglavlje">
+    <h3 id="anketa-desno-naslov" class="pr-naslov">{{ naslov() }}</h3>
+    @if (podnaslov()) { <p class="pr-pod">{{ podnaslov() }}</p> }
+  </div>
+
+  <mat-form-field class="pr-pun" subscriptSizing="dynamic">
+    <mat-label>Pitanje</mat-label>
+    <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="1" cdkAutosizeMaxRows="5" [maxlength]="maxPitanje"
+              formControlName="pitanje" data-anketa-pitanje></textarea>
+  </mat-form-field>
+
+  <h4 class="pr-sekcija" id="anketa-odgovori">Odgovori</h4>
+  <ol class="pr-odgovori" aria-labelledby="anketa-odgovori" cdkDropList (cdkDropListDropped)="spusten($event)" formArrayName="opcije">
+    @for (c of v.opcije.controls; track c; let i = $index; let prvi = $first; let poslednji = $last) {
+      <li class="pr-odgovor" cdkDrag cdkDragLockAxis="y" data-anketa-odgovor>
+        <span class="pr-hvataljka" cdkDragHandle aria-hidden="true"><mat-icon svgIcon="drag_indicator" /></span>
+        <mat-form-field class="pr-odgovor-polje" subscriptSizing="dynamic">
+          <mat-label>Odgovor {{ i + 1 }}</mat-label>
+          <input matInput [formControlName]="i" [maxlength]="maxOdgovor">
+        </mat-form-field>
+        <button mat-icon-button type="button" [disabled]="prvi" disabledInteractive [attr.aria-label]="'Pomeri gore: odgovor ' + (i + 1)"
+                (click)="pomeriOdgovor(i, i - 1)"><mat-icon svgIcon="arrow_upward" /></button>
+        <button mat-icon-button type="button" [disabled]="poslednji" disabledInteractive [attr.aria-label]="'Pomeri dole: odgovor ' + (i + 1)"
+                (click)="pomeriOdgovor(i, i + 1)"><mat-icon svgIcon="arrow_downward" /></button>
+        <button mat-icon-button type="button" [disabled]="v.opcije.length <= minOdgovora" disabledInteractive
+                [attr.aria-label]="'Ukloni odgovor ' + (i + 1)" (click)="ukloniOdgovor(i)"><mat-icon svgIcon="close" /></button>
+      </li>
+    }
+  </ol>
+  @if (v.opcije.length < maxOdgovora) {
+    <button mat-button type="button" class="pr-dodaj" (click)="dodajOdgovor()" data-anketa-dodaj-odgovor><mat-icon svgIcon="add" />Dodaj odgovor</button>
+  }
+
+  <mat-slide-toggle class="pr-red" formControlName="viseOdgovora" data-anketa-vise>Više odgovora (student bira jedan ili više)</mat-slide-toggle>
+
+  <h4 class="pr-sekcija" id="anketa-ko-glasa">Ko glasa</h4>
+  <mat-button-toggle-group class="pr-publika" formControlName="publika" aria-labelledby="anketa-ko-glasa" hideSingleSelectionIndicator data-anketa-publika>
+    <mat-button-toggle value="NA_CASU" [disabled]="!naCasu()" data-publika-na-casu>
+      <span class="pr-izbor">Na času<small>{{ sablonRezim() ? 'čekirani na predavanju' : cekirani() }}</small></span>
+    </mat-button-toggle>
+    <mat-button-toggle value="GRUPA" [disabled]="!grupa()" data-publika-grupa>
+      <span class="pr-izbor">Cela grupa<small>{{ opisRokaGrupe() }}</small></span>
+    </mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (v.publika.value === 'NA_CASU') {
+    <h4 class="pr-sekcija" id="anketa-trajanje">Zatvori sama posle</h4>
+    <mat-button-toggle-group class="pr-trajanje" formControlName="trajanje" aria-labelledby="anketa-trajanje" hideSingleSelectionIndicator>
+      @for (t of trajanja(); track t) {
+        <mat-button-toggle [value]="t">{{ oznakaTrajanja(t) }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+  } @else if (sablonRezim()) {
+    <mat-form-field class="pr-pola" subscriptSizing="dynamic">
+      <mat-label>Podrazumevani rok</mat-label>
+      <mat-select formControlName="rokSati">
+        @for (r of rokovi; track r.sati) { <mat-option [value]="r.sati">{{ r.naziv }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+  } @else {
+    <div class="pr-rok">
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Rok: dan</mat-label>
+        <input matInput [matDatepicker]="kalendar" [min]="danas" formControlName="rokDatum" placeholder="d. m. gggg." data-anketa-rok-dan>
+        <mat-datepicker-toggle matIconSuffix [for]="kalendar" aria-label="Otvori kalendar: rok" />
+        <mat-datepicker #kalendar />
+      </mat-form-field>
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Rok: vreme</mat-label>
+        <input matInput [matTimepicker]="sat" formControlName="rokVreme" placeholder="hh:mm" data-anketa-rok-vreme>
+        <mat-timepicker-toggle matIconSuffix [for]="sat" aria-label="Izaberi vreme roka" />
+        <mat-timepicker #sat [options]="vremena" />
+      </mat-form-field>
+    </div>
+  }
+
+  @if (sablonRezim()) {
+    <div class="pr-cuvanje">
+      <mat-checkbox formControlName="precica" data-anketa-kao-precica>Prečica na početnom ekranu</mat-checkbox>
+      <mat-form-field class="pr-pola" subscriptSizing="dynamic">
+        <mat-label>Folder</mat-label>
+        <mat-select formControlName="folderId">
+          <mat-option [value]="null">Bez foldera</mat-option>
+          @for (fo of folderi(); track fo.id) { <mat-option [value]="fo.id">{{ fo.naziv }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+    </div>
+  } @else {
+    <mat-slide-toggle class="pr-red" formControlName="sacuvaj" data-anketa-sacuvaj>
+      {{ ekran().sablon ? 'Sačuvaj izmene u sačuvano pitanje' : 'Sačuvaj za kasnije' }}
+    </mat-slide-toggle>
+    @if (v.sacuvaj.value && !ekran().sablon) {
+      <div class="pr-cuvanje">
+        <mat-checkbox formControlName="precica" data-anketa-kao-precica>Kao prečica</mat-checkbox>
+        <mat-form-field class="pr-pola" subscriptSizing="dynamic">
+          <mat-label>Folder</mat-label>
+          <mat-select formControlName="folderId">
+            <mat-option [value]="null">Bez foldera</mat-option>
+            @for (fo of folderi(); track fo.id) { <mat-option [value]="fo.id">{{ fo.naziv }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    }
+  }
+
+  @if (greska(); as g) { <p class="pr-greska" role="alert" data-anketa-provera-greska>{{ g }}</p> }
+
+  <div class="pr-dugmad">
+    <button mat-button type="button" (click)="store.zatvoriDesno()">Otkaži</button>
+    <button mat-flat-button type="submit" [disabled]="store.radi()" data-anketa-pokreni>{{ sablonRezim() ? 'Sačuvaj' : 'Pokreni' }}</button>
+  </div>
+</form>

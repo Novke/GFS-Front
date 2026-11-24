@@ -1,5 +1,7 @@
+import type { CrtezTrenutni } from '../crtanje/crtanje.models';
 import type { Platno, Potez, Tema } from './platno.models';
 import type { VrstaPrezentacije } from '../../../core/api/redosled-prezentacija';
+import type { FajlKratko, FajloviSlajda } from '../../../shared/util/fajlovi';
 
 export type { Tema } from './platno.models';
 export type TipSlajda = 'INFO' | 'PITANJE' | 'PLATNO' | 'ZADATAK';
@@ -29,7 +31,9 @@ export type TipKomande = 'SLEDECI' | 'PRETHODNI' | 'IDI_NA' | 'OTVORI_ZATVORI' |
    * Rang tačnosti celog predavanja na projektoru (Shift+L; `RANG_LISTA` (L) je rang ovog izvođenja) i koliko redova
    * projektor prikazuje (`RANG_BROJ`, `vrednost` 0 ili `null` = svi, 1-30).
    */
-  | 'RANG_PREDAVANJA' | 'RANG_BROJ';
+  | 'RANG_PREDAVANJA' | 'RANG_BROJ'
+  /** Traka sa linkom fajlova na trenutnom slajdu ili prijavi (K): pali ili gasi do sledeće promene slajda. */
+  | 'FAJLOVI';
 
 export interface MedijInfo { id: string; naziv: string; mime: string; velicina: number; }
 export interface PredmetKratko { id: number; naziv: string; }
@@ -66,6 +70,8 @@ export interface PrezentacijaInfo {
   vrsta: VrstaPrezentacije; brojZadataka: number; kreirano: string;
   /** Početak najnovijeg izvođenja (bilo koje grupe) ili `null`. */
   poslednjePustanje: string | null;
+  /** Fajlovi uz prezentaciju (uz celu i uz slajdove); stariji backend ga ne šalje. */
+  brojFajlova?: number;
 }
 export interface PrezentacijaDetails extends PrezentacijaInfo { slajdovi: SlajdDetails[]; }
 export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; vezba?: number | null; }
@@ -176,6 +182,22 @@ export interface NastavnickoStanje {
   imaRangPredavanja?: boolean;
   /** Koliko redova ranga projektor prikazuje (`RANG_BROJ`); `null` = svi. */
   rangBroj?: number | null;
+  /**
+   * Kratak link `gfs.trif.rs/f/1234` i fajlovi trenutnog mesta (na slajdu njegovi i oni uz celu prezentaciju, na prijavi
+   * samo oni uz celu prezentaciju; spisak može biti prazan). `null` kad prezentacija nema fajlova, kod ne važi ili je kraj;
+   * stari backend ga ne šalje.
+   */
+  fajlovi?: FajloviSlajda | null;
+  /**
+   * Traka sa linkom na projektoru: sama na slajdu sa svojim fajlovima, a za fajlove uz celu prezentaciju na prijavi i
+   * prvom slajdu; `K` je pali ili gasi do sledeće promene slajda. Stari backend ga ne šalje (tada traka prati `fajlovi`).
+   */
+  fajloviNaTabli?: boolean;
+  /**
+   * Trenutna strana crteža (crtanje u izvođenju): slajd na ekranu (i na crnom ekranu, kad se sloj ne crta), na belom
+   * ekranu bela strana slajda na kom je uključen; `null` na prijavi i kraju bez belog ekrana. Stari backend ga ne šalje.
+   */
+  crtez?: CrtezTrenutni | null;
 }
 export interface JavnaOpcija { id: number; tekst: string | null; }
 export interface JavnoPitanje {
@@ -189,6 +211,8 @@ export interface JavnoStanje {
   prikaz: Prikaz; slajdTip: TipSlajda | null; ekran: Ekran; takmicenje: boolean; telefonPrikaz: TelefonPrikaz;
   detaljiDozvoljeni: boolean; brojUcesnika: number; pitanje: JavnoPitanje | null; rezultat: Rezultat | null;
   rangLista: RangStavka[] | null; zadatak?: JavniZadatak | null;
+  /** Fajlovi trenutnog slajda (za „Pošalji mi na mejl”); prazno ili bez polja kod starog backenda. */
+  fajlovi?: FajlKratko[];
 }
 export interface LicniOdgovor { rundaId: number; primljen: boolean; tacno: boolean | null; poeni: number | null; }
 /**
