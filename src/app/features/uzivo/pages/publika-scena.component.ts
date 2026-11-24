@@ -17,6 +17,9 @@ import { RangListaComponent } from '../ui/rang-lista.component';
 import { RangTacnostiProjektorComponent } from '../ui/rang-tacnosti-projektor.component';
 import { KodTraka, SlajdPrikazComponent, TajmerUlaz } from '../ui/slajd-prikaz.component';
 import { vazecaTema } from '../ui/teme';
+import type { ElementCrteza, StanjeAlata } from '../crtanje/crtanje.models';
+import type { PrikazCrteza } from '../crtanje/crtac';
+import { SlojCrtezaComponent } from '../crtanje/sloj-crteza.component';
 
 /** `<host><base>` bez protokola i kose crte na kraju (za traku "host/uzivo · kod"). */
 export function hostAplikacije(base: string = document.baseURI): string {
@@ -63,7 +66,12 @@ interface PrelazSlajda { kljuc: number; prelaz: Prelaz; odlazni: UlaziSlajda | n
 interface Omotac {
   id: number | null; odlazni: boolean; pokret: PokretPrelaza | null;
   animacija: { kljuc: number; grupa: number } | null; u: UlaziSlajda | null;
+  /** Odlazni slajd nosi svoj crtež (zapamćen dok je bio na ekranu). */
+  crtez: readonly ElementCrteza[] | null;
 }
+
+/** Koliko poslednjih crteža slajdova scena pamti za odlazni slajd prelaza. */
+const PAMTI_CRTEZA = 4;
 
 /**
  * Ono što projektor prikazuje, na 16:9 platnu (širinu daje roditelj): prijava, slajd, kraj (postolje ili "Hvala!"),
@@ -81,11 +89,17 @@ interface Omotac {
  * drugog u `uz-scena-slajdovi`, a omotači se animiraju (`PrelazDirective`, `kadroviPrelaza`). Grupa 0 PLATNO slajda
  * kreće tek posle prelaza: dok traje, ulazni se crta na koraku -1. Snimak koji ne menja prikaz, slajd ni korak prelaz ne
  * prekida; svaki drugi ga prekida (krajnje stanje), a nov prelaz ne počinje dok prethodni traje (brzo prelistavanje).
+ * Crtež (`crtez`, crtanje u izvođenju, spec 5.2): sloj preko slajda (i rezultata), ispod QR-a, ranga i crnog/belog ekrana,
+ * samo kad je ključ strane baš trenutni slajd; na crnom ekranu se ne vidi, a beli ekran crta belu stranu (`stanje.crtez`).
+ * Odlazni slajd prelaza nosi crtež koji je imao dok je bio na ekranu.
  */
 @Component({
   selector: 'app-publika-scena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FajloviTrakaComponent, PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent, RangTacnostiProjektorComponent, SlajdPrikazComponent],
+  imports: [
+    FajloviTrakaComponent, PostoljeComponent, PrelazDirective, PrijavaEkranComponent, QrKodComponent, RangListaComponent,
+    RangTacnostiProjektorComponent, SlajdPrikazComponent, SlojCrtezaComponent,
+  ],
   host: { class: 'uz-scena rezim-dan uz-dan', '[class.uz-scena--fajlovi]': '!!trakaFajlova()' },
   // Prelaz slajda (faza 5): odlazni i ulazni u istoj ćeliji, ulazni iznad; bez prelaza samo ulazni (izgled isti). U
   // komponenti, ne u globalnom `uzivo-izvodjenje.css`: početni paket (i telefon) ga ne dobija (recenzija F17, Minor 3;
@@ -96,6 +110,9 @@ interface Omotac {
     :host(.uz-pub-scena.uz-scena--fajlovi) { width: min(100vw, calc(100dvh / (9 / 16 + 0.054))); }
     .uz-scena-slajdovi > * { grid-area: 1 / 1; min-width: 0; }
     .uz-scena-ulazni { position: relative; z-index: 1; }
+    .uz-scena-odlazni { position: relative; }
+    /* bela strana: 16:9 od vrha (i kad je ispod trake fajlova) */
+    .uz-scena-bela-strana { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 16 / 9; }
     /* rang tačnosti (L / Shift+L): cela širina, od vrha; slova postavlja komponenta, natpis u gornjem desnom uglu */
     .uz-scena-rang--tacnost { justify-content: flex-start; gap: 1.2cqw; }
     .uz-scena-rang--tacnost .uz-scena-naslov { font-size: 3.4cqw; }
@@ -127,6 +144,11 @@ interface Omotac {
                                   [tema]="tema()" [animacija]="o.animacija" />
               } @else {
                 <div class="uz-okvir"><section class="uz-platno uz-scena-poruka"><p>Slajd više ne postoji.</p></section></div>
+              }
+              @if (o.odlazni) {
+                @if (o.crtez) { <app-sloj-crteza [elementi]="o.crtez" /> }
+              } @else if (crtezSlajda(); as c) {
+                <app-sloj-crteza [elementi]="c.elementi" [uToku]="c.uToku" [alati]="alatiCrtanja()" />
               }
             </div>
           }
@@ -182,7 +204,12 @@ interface Omotac {
     @if (s.ekran !== 'NORMALAN') {
       <div class="uz-scena-ekran" [class.uz-scena-ekran--beo]="s.ekran === 'BEO'"
            [attr.aria-label]="s.ekran === 'BEO' ? 'Beo ekran' : 'Crn ekran'" role="img">
-        @if (umanjeno()) { <span>{{ s.ekran === 'BEO' ? 'Beo ekran' : 'Crn ekran' }}</span> }
+        @if (crtezBele(); as c) {
+          <div class="uz-scena-bela-strana"><app-sloj-crteza [elementi]="c.elementi" [uToku]="c.uToku" [alati]="alatiCrtanja()" /></div>
+        }
+        @if (umanjeno() && !(crtezBele()?.elementi?.length || crtezBele()?.uToku)) {
+          <span>{{ s.ekran === 'BEO' ? 'Beo ekran' : 'Crn ekran' }}</span>
+        }
       </div>
     }
   `,
@@ -211,6 +238,27 @@ export class PublikaScenaComponent {
    * korak ili slajd napred tokom prekida crta se kao krajnje stanje, bez animacije (spec 5).
    */
   readonly epohaVeze = input<number>(0);
+  /** Crtež trenutne strane (konzola: svoj, publika: iz kanala ili sa servera); `null` = bez sloja. */
+  readonly crtez = input<PrikazCrteza | null>(null);
+  /** Traka alata na projektoru (konzola crta i nastavnik je uključio „oko”). */
+  readonly alatiCrtanja = input<StanjeAlata | null>(null);
+
+  /** Crtež slajda: samo strana baš ovog slajda, i ne na crnom ekranu. */
+  protected readonly crtezSlajda = computed(() => {
+    const c = this.crtez();
+    const s = this.stanje();
+    return c && c.kljuc.pozadina === 'SLAJD' && s.ekran === 'NORMALAN' && s.prikaz === 'SLAJD' && c.kljuc.slajdId === s.trenutniSlajd?.id
+      ? c : null;
+  });
+  /** Crtež bele strane na belom ekranu: strana (`bela_slajd_id`, BELA) iz snimka. */
+  protected readonly crtezBele = computed(() => {
+    const c = this.crtez();
+    const s = this.stanje();
+    return c && s.ekran === 'BEO' && c.kljuc.pozadina === 'BELA' && s.crtez?.pozadina === 'BELA' && s.crtez.slajdId === c.kljuc.slajdId
+      ? c : null;
+  });
+  /** Poslednji crteži slajdova (id slajda -> elementi), za odlazni slajd prelaza. */
+  private readonly zapamceniCrtezi = new Map<number, readonly ElementCrteza[]>();
 
   private readonly potezi = inject(PoteziCrteza);
   /** Trenutni slajd sa potezima crteža iz keša; `prelaz`/`animacijaPrelaza` i dalje čitaju snimak (treba im id i tip). */
@@ -290,9 +338,11 @@ export class PublikaScenaComponent {
     const ulazni: Omotac = {
       id: sl?.id ?? null, odlazni: false, pokret: this.ulazniPokret(), animacija: this.animacija(),
       u: sl && u ? { ...u, slajd: sl, korak: this.korakPrikaza(), postepeno: sl.postepeno, kodTraka: this.kodTraka() } : null,
+      crtez: null,
     };
     const o = this.odlazni();
-    return o ? [{ id: o.slajd.id, odlazni: true, pokret: o.pokret, animacija: null, u: o }, ulazni] : [ulazni];
+    const crtez = o ? this.zapamceniCrtezi.get(o.slajd.id) ?? null : null;
+    return o ? [{ id: o.slajd.id, odlazni: true, pokret: o.pokret, animacija: null, u: o, crtez }, ulazni] : [ulazni];
   });
   protected readonly tema = computed(() => vazecaTema(this.stanje().tema));
 
@@ -322,6 +372,14 @@ export class PublikaScenaComponent {
     // novom snimku ili epohi, bez obzira na prikaz.
     effect(() => {
       this.prelaz();
+    });
+    // Crtež slajda koji je na ekranu: kad krene prelaz, odlazni slajd ga nosi.
+    effect(() => {
+      const c = this.crtezSlajda();
+      if (!c || c.kljuc.slajdId === null) return;
+      this.zapamceniCrtezi.delete(c.kljuc.slajdId);
+      this.zapamceniCrtezi.set(c.kljuc.slajdId, c.elementi);
+      if (this.zapamceniCrtezi.size > PAMTI_CRTEZA) this.zapamceniCrtezi.delete(this.zapamceniCrtezi.keys().next().value!);
     });
     // Konzola ima i umanjenu scenu i panel "Sledeće": ovde se traže trenutni i sledeći, panel samo čita keš.
     effect(() => {

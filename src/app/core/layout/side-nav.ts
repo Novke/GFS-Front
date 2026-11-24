@@ -37,6 +37,7 @@ export const LJUDI: readonly NavStavka[] = [
 
 export const PODESAVANJA: readonly NavStavka[] = [
   { label: 'Moodle', url: '/podesavanja/moodle', ikona: 'settings' },
+  { label: 'Uživo', url: '/podesavanja/uzivo', ikona: 'slideshow' },
 ];
 
 const OPIS_BROJACA: Record<keyof DashboardCounts, string> = {

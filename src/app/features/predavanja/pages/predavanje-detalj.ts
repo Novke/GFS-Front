@@ -27,6 +27,7 @@ import { PokreniPrezentacijuDialog } from '../ui/pokreni-prezentaciju.dialog';
 import { PredavanjeZaglavlje } from '../ui/predavanje-zaglavlje';
 import { PrezentacijeNaPredavanju } from '../ui/prezentacije-na-predavanju';
 import { StudentskaPlocica } from '../ui/studentska-plocica';
+import { TablaCasa } from '../ui/tabla-casa';
 
 /** Dok je predavanje živo i tab vidljiv: pločice (čekiranja sa telefona) i panel "Čekirani" se osvežavaju na 5 s. */
 export const OSVEZAVANJE_DETALJA_MS = 5_000;
@@ -66,6 +67,7 @@ export function brojAktivnosti(n: number): string {
     RouterLink,
     SkeletonRows,
     StudentskaPlocica,
+    TablaCasa,
   ],
   providers: [PredavanjeStore, PrezentacijePredavanjaStore],
   changeDetection: ChangeDetectionStrategy.OnPush,

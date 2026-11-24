@@ -1,8 +1,12 @@
 import { TipKomande } from './data-access/uzivo.models';
 
-/** `ANKETA` (taster A) otvara panel brze ankete samo u konzoli; prozor publike ga preskače. */
-export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC' | 'ANKETA';
-export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija };
+/**
+ * Lokalne akcije prozora (server ih ne zna). `CRTANJE` (`D`) uključuje ili gasi crtanje (samo konzola; publika ga
+ * preskače); `ALAT` (`1`-`7`, `vrednost` 0-6), `PONISTI` (Ctrl+Z), `VRATI` (Ctrl+Y, Ctrl+Shift+Z) i `ESC` važe samo dok
+ * konzola crta ({@link tasterCrtanja}). `ANKETA` (taster A) otvara panel brze ankete samo u konzoli; publika ga preskače.
+ */
+export type LokalnaAkcija = 'CEO_EKRAN' | 'KONZOLA' | 'POMOC' | 'ANKETA' | 'CRTANJE' | 'ALAT' | 'PONISTI' | 'VRATI' | 'ESC';
+export type TasterAkcija = { komanda: TipKomande; vrednost?: number } | { lokalno: LokalnaAkcija; vrednost?: number };
 type Taster = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'> & { code?: string; shiftKey?: boolean };
 
 export function uPoljuZaUnos(t: EventTarget | null): boolean {
@@ -29,6 +33,8 @@ export function kljucPrecice(e: Pick<Taster, 'key' | 'code'>): string {
 /**
  * Mapa iz spec-a 6.4. `G` + cifre + Enter vodi `GotoBafer`; ovde ga ne obrađujemo. Slova i na ćirilici (`kljucPrecice`).
  * `Shift+R` je rešenje zadatka; `R` bez Shift-a (i veliko pod Caps Lock-om) ostaje ponavljanje, pa Caps Lock ne pali rešenje.
+ * Crtanje (plan crtanja, dopune): `D` je crtanje (lokalno), `Shift+D` dozvola „Detalja”, `Shift+M` prikaz na telefonu;
+ * samo `M` (i `M` pod Caps Lock-om) ne radi ništa.
  */
 export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
@@ -45,8 +51,8 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case 't': case 'T': return { komanda: 'TAJMER' };
     case '+': case '=': return { komanda: 'TAJMER_PLUS' };
     case '-': return { komanda: 'TAJMER_MINUS' };
-    case 'm': case 'M': return { komanda: 'TELEFON_PRIKAZ' };
-    case 'd': case 'D': return { komanda: 'DETALJI' };
+    case 'm': case 'M': return e.shiftKey ? { komanda: 'TELEFON_PRIKAZ' } : null;
+    case 'd': case 'D': return e.shiftKey ? { komanda: 'DETALJI' } : { lokalno: 'CRTANJE' };
     case 'q': case 'Q': return { komanda: 'QR' };
     case 'k': case 'K': return { komanda: 'FAJLOVI' };
     case 'b': case 'B': case '.': return { komanda: 'EKRAN_CRN' };
@@ -57,6 +63,24 @@ export function tasterUAkciju(e: Taster, brojSlajdova: number): TasterAkcija | n
     case '?': return { lokalno: 'POMOC' };
     default: return null;
   }
+}
+
+/**
+ * Tasteri samo dok konzola crta: `1`-`7` alat (redom `ALATI_CRTANJA`), `Ctrl+Z` poništi, `Ctrl+Y` i `Ctrl+Shift+Z` vrati
+ * (i `Cmd` na Mac-u, i na ćirilici), `Esc` (prekid oblika u nastajanju ili kraj crtanja). `G` + cifre ima prednost
+ * (`TastaturaIzvodjenja` prvo pita `GotoBafer`).
+ */
+export function tasterCrtanja(e: Taster): TasterAkcija | null {
+  if (e.altKey) return null;
+  if (e.ctrlKey || e.metaKey) {
+    const k = kljucPrecice(e).toLowerCase();
+    if (k === 'z') return { lokalno: e.shiftKey ? 'VRATI' : 'PONISTI' };
+    if (k === 'y') return { lokalno: 'VRATI' };
+    return null;
+  }
+  if (/^[1-7]$/.test(e.key)) return { lokalno: 'ALAT', vrednost: Number(e.key) - 1 };
+  if (e.key === 'Escape') return { lokalno: 'ESC' };
+  return null;
 }
 
 /** `G`, pa cifre, pa `Enter` -> IDI_NA (broj - 1). Esc ili 3 s bez tastera poništava. */

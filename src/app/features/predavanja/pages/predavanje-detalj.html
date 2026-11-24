@@ -21,6 +21,10 @@
             <mat-icon svgIcon="slideshow" aria-hidden="true" />Pokreni prezentaciju
           </button>
         }
+        <a matButton="outlined" [routerLink]="['/predavanja', p.id, 'tabla']" target="_blank" rel="noopener" data-tabla
+           title="Bela tabla za crtanje, bez prezentacije">
+          <mat-icon svgIcon="edit" aria-hidden="true" />Tabla<span class="sr-only"> (otvara se u novoj kartici)</span>
+        </a>
         <button matButton="outlined" type="button" data-anketa (click)="anketa()">
           <mat-icon svgIcon="how_to_vote" aria-hidden="true" />Anketa
         </button>
@@ -71,6 +75,8 @@
   }
 
   <app-prezentacije-na-predavanju [predavanjeId]="p.id" [zavrseno]="store.zavrseno() === true" />
+
+  <app-tabla-casa [predavanjeId]="p.id" />
 
   @if (store.zavrseno()) {
     <section class="aktivnosti" aria-labelledby="naslov-aktivnosti">

@@ -303,6 +303,10 @@ export class MockApi {
   readonly podaci = ucitajPodatke();
   /** Nastavničko izvođenje 7 (daljinski, konzola): mašina stanja iz `mock-izvodjenje.ts`; STOMP (`api/ws`) mokuje spec. */
   readonly izvodjenje = new MockIzvodjenje(ucitaj<FiksturaIzvodjenja>('uzivo-izvodjenje.json'));
+  /** `GET izvodjenja/:id/crtezi/ranije?slajdId=` po slajdu (`RanijiCrtez[]`); bez unosa prazno. */
+  readonly ranijiCrtezi = new Map<number, unknown[]>();
+  /** Table predavanja po id-ju predavanja (`GET/PUT predavanja/:id/tabla`); bez unosa prazna strana verzije 0. */
+  readonly table = new Map<number, { elementi: unknown[]; verzija: number }>();
   /** Svi zahtevi ka `api/` redom kojim su stigli. */
   readonly zahtevi: Zahtev[] = [];
   /** Zahtevi za koje mok nema rutu (test ih proverava u `afterEach`). */
@@ -461,7 +465,8 @@ export class MockApi {
     return this.zahteviZa(`slajdovi/${slajdId}/potezi`, 'GET').length;
   }
 
-  async instaliraj(page: Page): Promise<void> {
+  /** Rute moka na stranici, ili na celom kontekstu (kartice i iskačući prozori koje stranica sama otvori). */
+  async instaliraj(page: Pick<Page, 'route'>): Promise<void> {
     // okruženje (Dockerfile ga pravi u slici; lokalni dist ga nema): bez oznake STAGING
     await page.route('**/assets/env.json', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"env":"prod"}' }));
     await page.route('**/api/**', (route, request) => this.obradi(route, request));
@@ -1760,6 +1765,40 @@ export class MockApi {
       return ok(slojevi.filter(x => x['tip'] === 'CRTEZ').map(x => ({
         slojId: x['id'], medijId: x['medijId'], sirina: x['sirina'], visina: x['visina'], potezi: x['potezi'] ?? null,
       })));
+    });
+
+    // crtanje u izvođenju (plan crtanja): strane izvođenja 7 u `MockIzvodjenje.crtezi`, ranije po slajdu iz
+    // `ranijiCrtezi` (test ih puni), pregled: druga izvođenja nemaju crteža
+    const kljucStrane = (z: Zahtev) => {
+      const id = z.query.get('slajdId');
+      return { slajdId: id === null || id === 'null' ? null : Number(id), pozadina: z.query.get('pozadina') === 'BELA' ? 'BELA' as const : 'SLAJD' as const };
+    };
+    get('izvodjenja/:id/crtezi', (_z, p) => ok(izvodjenje(p['id']) ? this.izvodjenje.sviCrtezi() : []));
+    get('izvodjenja/:id/crtezi/strana', (z, p) => {
+      if (!izvodjenje(p['id'])) return greska(404, 'Izvođenje ne postoji.');
+      const k = kljucStrane(z);
+      return this.izvodjenje.strana(k.slajdId, k.pozadina);
+    });
+    put('izvodjenja/:id/crtezi/strana', (z, p) => {
+      if (!izvodjenje(p['id'])) return greska(404, 'Izvođenje ne postoji.');
+      const k = kljucStrane(z);
+      return this.izvodjenje.upisiStranu(k.slajdId, k.pozadina, (z.telo as { elementi: unknown[] }).elementi);
+    });
+    get('izvodjenja/:id/crtezi/ranije', z => ok(this.ranijiCrtezi.get(Number(z.query.get('slajdId'))) ?? []));
+    // tabla predavanja: 204 kad `verzija <= posle`
+    get('predavanja/:id/tabla', (z, p) => {
+      const x = nadji(d.predavanja, p['id'], 'Predavanje');
+      if (jeOdgovor(x)) return x;
+      const t = this.table.get(x.id) ?? { elementi: [], verzija: 0 };
+      const posle = z.query.get('posle');
+      return posle !== null && t.verzija <= Number(posle) ? { status: 204 } : ok(t);
+    });
+    put('predavanja/:id/tabla', (z, p) => {
+      const x = nadji(d.predavanja, p['id'], 'Predavanje');
+      if (jeOdgovor(x)) return x;
+      const verzija = (this.table.get(x.id)?.verzija ?? 0) + 1;
+      this.table.set(x.id, { elementi: (z.telo as { elementi: unknown[] }).elementi, verzija });
+      return ok({ verzija });
     });
 
     return r;

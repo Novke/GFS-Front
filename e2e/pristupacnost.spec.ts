@@ -39,6 +39,8 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   { putanja: 'prijava?nazad=studenti', spremno: p => p.getByRole('button', { name: 'Prijavi se' }) },
   // podešavanja -> Moodle: registracije (aktivna i isključena), vrednosti sa "Kopiraj", uputstvo
   { putanja: 'podesavanja/moodle', spremno: p => p.locator('[data-vrednosti] code').first() },
+  // podešavanja -> Uživo: prekidač ranijih crteža (crtanje u izvođenju)
+  { putanja: 'podesavanja/uzivo', spremno: p => p.locator('[data-ranije-crteze]') },
   // banka zadataka: list sa karticama (i greškom rendera), ispod stabla isključene teme i Klodove serije; unutrašnji čvor sa
   // zbirom; Klodova grupa (bedž "Klod: N", oznake "Claude", prigušen isključen čvor u stablu)
   { putanja: 'banka?predmet=1', spremno: p => p.locator('app-varijanta-kartica').first() },
@@ -379,6 +381,73 @@ for (const rezim of ['dan', 'noc'] as const) {
       await expect(page.locator('app-projector-layout')).toHaveClass(/\brezim-dan\b/);
       await page.waitForLoadState('networkidle');
       expect(await ozbiljnaKrsenja(page), `axe: /izvodjenja/7/konzola (${rezim})`).toEqual([]);
+    });
+
+    // Crtanje u izvođenju: čip „Ranije si na ovom slajdu crtao”, pa režim crtanja (alati, boje, scena sa crtežom, „Ranije
+    // ovde”); tabla sa predavanja i njena publika; sličica „Tabla sa ovog časa” i kartica „Crteži” sa velikim prikazom
+    test('/izvodjenja/7/konzola (crtanje: ranije čip, alati, boje, „Ranije ovde”): bez serious/critical kršenja', async ({ page, mock }) => {
+      const linija = { tip: 'LINIJA', boja: '#C62828', debljina: 6, tacke: [100, 100, 500, 300] };
+      mock.izvodjenje.primeni('SLEDECI');
+      mock.izvodjenje.crtezi.set('SLAJD:101', { elementi: [linija], verzija: 1, izmenjeno: '2026-10-07T10:05:00' });
+      mock.ranijiCrtezi.set(101, [{ izvodjenjeId: 3, pocetak: '2026-10-01T10:00:00', grupa: 'GD-2024', pozadina: 'SLAJD', elementi: [linija] }]);
+      await nastavnickiBroker(page, mock);
+      await page.goto('izvodjenja/7/konzola');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.getByRole('button', { name: 'Ranije si na ovom slajdu crtao' })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola sa čipom ranijih crteža (${rezim})`).toEqual([]);
+
+      await page.getByRole('button', { name: 'Ranije si na ovom slajdu crtao' }).click();
+      await expect(page.getByRole('region', { name: 'Ranije ovde' })).toBeVisible();
+      await expect(page.locator('[data-crt-scena] app-sloj-crteza path')).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: konzola u režimu crtanja (${rezim})`).toEqual([]);
+    });
+
+    test('/predavanja/1/tabla i /predavanja/1/tabla/publika: bez serious/critical kršenja', async ({ page, mock }) => {
+      mock.table.set(1, { elementi: [{ tip: 'KRUG', boja: '#2456A6', debljina: 6, tacke: [300, 150, 500, 350] }], verzija: 1 });
+      await page.goto('predavanja/1/tabla');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-naslov-table]')).toContainText('Tabla · ');
+      await expect(page.locator('[data-tabla] app-sloj-crteza path')).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: /predavanja/1/tabla (${rezim})`).toEqual([]);
+
+      await page.goto('predavanja/1/tabla/publika');
+      await expect(page.locator('[data-tabla-publika] app-sloj-crteza path')).toHaveCount(1);
+      expect(await ozbiljnaKrsenja(page), `axe: /predavanja/1/tabla/publika (${rezim})`).toEqual([]);
+    });
+
+    test('/predavanja/1 („Tabla sa ovog časa”) i pregled izvođenja (kartica „Crteži”, veliki prikaz): bez serious/critical kršenja', async ({ page, mock }) => {
+      const linija = { tip: 'LINIJA', boja: '#C62828', debljina: 6, tacke: [100, 100, 500, 300] };
+      mock.table.set(1, { elementi: [linija], verzija: 1 });
+      await page.goto('predavanja/1');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', rezim);
+      await expect(page.locator('[data-tabla-casa] app-sloj-crteza path')).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: /predavanja/1 sa tablom (${rezim})`).toEqual([]);
+
+      mock.na('GET', 'izvodjenja/:id/crtezi', () => ({
+        telo: [{ slajdId: null, slajdBroj: null, pozadina: 'BELA', elementi: [linija], verzija: 1, izmenjeno: '2026-10-07T10:14:00' }],
+      }));
+      mock.na('GET', 'izvodjenja/:id/rezultati', () => ({
+        telo: {
+          izvodjenje: {
+            id: 7, prezentacija: { id: 5, naziv: 'Statika · nosači', predmetId: 1 }, kod: null, status: 'ZAVRSENO', cuvanje: false,
+            grupa: null, predavanje: null, pocetak: '2026-10-07T10:00:00', kraj: '2026-10-07T10:30:00', brojUcesnika: 0, brojPitanja: 0,
+            takmicenje: false, boduje: false,
+          },
+          takmicenje: false, rangLista: [], pitanja: [],
+        },
+      }));
+      await page.goto('izvodjenja/7/pregled');
+      await expect(page.locator('[data-crtezi] app-sloj-crteza path')).toHaveCount(1);
+      await page.waitForLoadState('networkidle');
+      expect(await ozbiljnaKrsenja(page), `axe: pregled izvođenja sa crtežima (${rezim})`).toEqual([]);
+      await page.getByRole('button', { name: 'Otvori crtež: Obrisan slajd, bela pozadina' }).click();
+      const dijalog = page.getByRole('dialog', { name: 'Obrisan slajd, bela pozadina' });
+      await posleOtvaranjaDijaloga(page, dijalog);
+      expect(await ozbiljnaKrsenja(page), `axe: veliki prikaz crteža (${rezim})`).toEqual([]);
     });
 
     // Zadatak slajd (106): panel sa izborom broja različitih (CEKA), pa zatvorena runda sa karticama varijanti, varijantom i
