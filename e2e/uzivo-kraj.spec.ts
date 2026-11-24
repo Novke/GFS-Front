@@ -26,6 +26,7 @@ const kraj = (page: Page) => page.locator('app-kraj-izvodjenja');
 test.describe('konzola posle kraja izvođenja', () => {
   test('predlog za grupu, "Pokreni" u istoj kartici i projektor prelazi na novo izvođenje', async ({ page, mock }) => {
     await zavrsenoNaPredavanju(page, mock);
+    mock.podaci.prezentacije.find(x => x.id === 6)!['brojFajlova'] = 1;
     const publika = await page.context().newPage();
     await mock.instaliraj(publika);
     await lazniBroker(publika, 'api/ws', () => undefined);
@@ -36,6 +37,8 @@ test.describe('konzola posle kraja izvođenja', () => {
     await expect(kraj(page)).toContainText('2 učesnika');
     await expect(kraj(page).locator('[data-predlog] h3')).toHaveText('Sledeće za GD-2025');
     await expect(kraj(page).locator('[data-predlog-stavka]')).toHaveCount(1);
+    // uz broj slajdova i pitanja piše i koliko fajlova prezentacija ima
+    await expect(kraj(page).locator('[data-predlog-stavka="6"]')).toContainText('· 1 fajl');
     expect(mock.zahteviZa('prezentacije/izbor', 'GET')[0].query.get('grupaId')).toBe('1');
     await expect(kraj(page).locator('[data-nazad-predavanje]')).toBeVisible();
 
@@ -67,7 +70,11 @@ test.describe('konzola posle kraja izvođenja', () => {
 
   test('"Nazad na predavanje" zatvara karticu konzole otvorenu sa predavanja', async ({ page, mock }) => {
     await zavrsenoNaPredavanju(page, mock);
+    mock.podaci.prezentacije.find(x => x.id === 6)!['brojFajlova'] = 3;
     await page.goto('prezentacije');
+    // lista prezentacija: kolona sadržaja piše i fajlove, samo kad ih ima
+    await expect(page.locator('tr[data-prezentacija="6"]')).toContainText('· 3 fajla');
+    await expect(page.locator('tr[data-prezentacija="5"]')).not.toContainText('fajl');
     const [konzola] = await Promise.all([
       page.waitForEvent('popup'),
       page.evaluate(() => window.open('izvodjenja/7/konzola', '_blank')),

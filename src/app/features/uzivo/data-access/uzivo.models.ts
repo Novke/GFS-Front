@@ -69,6 +69,8 @@ export interface PrezentacijaInfo {
   vrsta: VrstaPrezentacije; brojZadataka: number; kreirano: string;
   /** Početak najnovijeg izvođenja (bilo koje grupe) ili `null`. */
   poslednjePustanje: string | null;
+  /** Fajlovi uz prezentaciju (uz celu i uz slajdove); stariji backend ga ne šalje. */
+  brojFajlova?: number;
 }
 export interface PrezentacijaDetails extends PrezentacijaInfo { slajdovi: SlajdDetails[]; }
 export interface CreatePrezentacijaCmd { predmetId: number; naziv: string; opis?: string | null; tema?: Tema | null; vezba?: number | null; }

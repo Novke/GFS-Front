@@ -794,6 +794,8 @@ export class MockApi {
       vezba: (x['vezba'] as number | null | undefined) ?? null, vrsta, brojZadataka: zadaci,
       kreirano: (x['kreirano'] as string | undefined) ?? (x['izmenjeno'] as string | undefined) ?? '2026-10-01T10:00:00',
       poslednjePustanje: (x['poslednjePustanje'] as string | null | undefined) ?? pocetci.at(-1) ?? null,
+      // kao server: broj fajlova uz prezentaciju; fiksture ga nemaju (0), spec ga postavi na prezentaciji
+      brojFajlova: (x['brojFajlova'] as number | undefined) ?? 0,
     };
   }
 
