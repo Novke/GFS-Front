@@ -104,6 +104,21 @@
   text-decoration: underline;
 }
 
+.uz-ed-tabela td:has(> .uz-ed-naziv-red),
+.uz-ed-tabela td:has(> .uz-ed-naziv-red) ~ td {
+  vertical-align: middle;
+}
+
+.uz-ed-naziv-red {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.uz-ed-naziv-red > div {
+  min-width: 0;
+}
+
 .uz-ed-opis-red {
   margin-top: 2px;
   color: var(--muted);

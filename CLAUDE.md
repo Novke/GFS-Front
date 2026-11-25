@@ -549,7 +549,10 @@ over STOMP; teacher commands are REST.
   until the field is touched; the editor's Podešavanja saves it with `PATCH prezentacije/{id}/vezba`, `EditorStore.postaviVezbu`, optimistic
   with revert) and a server-derived `vrsta` (`GRADIVO` only slides, `PITANJA` questions without Zadatak, `ZADACI` at least one Zadatak slide;
   `brojZadataka`, `kreirano`, `poslednjePustanje` next to it, and the optional `brojFajlova`: `opisSadrzaja` in
-  `shared/ui/izbor-prezentacije` adds "· N fajl/fajla/fajlova" only when it is above 0, in the list, the start dialog and the console end screen). Pure helpers in `core/api/redosled-prezentacija.ts` (labels, `poVezbama`,
+  `shared/ui/izbor-prezentacije` adds "· N fajl/fajla/fajlova" only when it is above 0, in the list, the start dialog and the console end screen). In the same three places each presentation starts with
+  `app-plocica-prezentacije` (`shared/ui/plocica-prezentacije.ts`, replaces the former kind chip/column): colour = `vrsta` (PITANJA `--primary`,
+  ZADACI `--accent`, GRADIVO `--surface`), vežba number in the middle, corner mark `?` / pencil (ZADACI wins, GRADIVO none; without a number the
+  mark is in the middle) and, independent of the kind, a download arrow when `brojFajlova > 0`; text for screen readers = `opisPlocice`. Pure helpers in `core/api/redosled-prezentacija.ts` (labels, `poVezbama`,
   `grupisiPoVezbi`, `PORUKA_VEZBE` = the server text). The list page (`prezentacije`) groups by vežba (`?sort=` naziv | kreirano | izmenjeno |
   pustanje, default by vežba), filters `?predmet`, `?vrsta`, `?q` (URL is the source of truth, `upitIzUrla`, `sortirajListu`). The suggestion
   (`IzborPrezentacija.predlog`, at most 3 ids) comes only from the server (`GET prezentacije/izbor`: with `grupaId` owed zadaci of earlier

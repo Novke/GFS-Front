@@ -43,6 +43,11 @@ test.describe('prezentacije na predavanju', () => {
     await expect(dijalog.locator('[data-predlog-stavka="6"] .meta').first()).toContainText('· 2 fajla');
     await expect(dijalog.locator('li[data-prezentacija="6"] .meta').first()).toContainText('· 2 fajla');
     await expect(dijalog.locator('li[data-prezentacija="5"] .meta').first()).not.toContainText('fajl');
+    // pločica: broj vežbe, znak vrste i strelica samo kad ima fajlova
+    await expect(dijalog.locator('li[data-prezentacija="6"] app-plocica-prezentacije'))
+      .toHaveAccessibleName(/^Vežbe 1 · .* · ima fajlove za skidanje$/);
+    await expect(dijalog.locator('li[data-prezentacija="6"] [data-znak="FAJL"]')).toBeVisible();
+    await expect(dijalog.locator('li[data-prezentacija="5"] [data-znak="FAJL"]')).toHaveCount(0);
     expect(mock.zahteviZa('prezentacije/izbor', 'GET')[0].query.get('grupaId')).toBe('1');
     await expect(dijalog.locator('[data-pretraga]')).toHaveCount(0);
 

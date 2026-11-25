@@ -23,6 +23,8 @@ const STRANICE: { putanja: string; spremno: (page: Page) => ReturnType<Page['loc
   // kartica studenta sa sekcijom "Nalog" (uređaji i Moodle) i student bez mejla (objašnjenje, onemogućeno "Pošalji kod")
   { putanja: 'studenti/1', spremno: p => p.locator('[data-nalog] [data-uredjaj]').first() },
   { putanja: 'studenti/2', spremno: p => p.locator('[data-nalog] [data-bez-mejla]') },
+  // lista prezentacija sa pločicama (broj vežbe, znak vrste)
+  { putanja: 'prezentacije', spremno: p => p.locator('tr[data-prezentacija] app-plocica-prezentacije').first() },
   // editor prezentacije sa izabranim PLATNO slajdom (izbor drugog slajda u listi; platno je uvek dnevnih boja)
   {
     putanja: 'prezentacije/5',

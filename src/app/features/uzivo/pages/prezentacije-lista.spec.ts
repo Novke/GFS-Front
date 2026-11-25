@@ -126,6 +126,16 @@ describe('PrezentacijeListaPage: redosled, grupe i filteri', () => {
     expect(el.querySelector('[data-prezentacija="1"]')?.textContent).toContain('nikad');
   });
 
+  it('red ima pločicu: broj vežbe, znak vrste i strelicu kad ima fajlova', () => {
+    const el = prikazi({ predmet: '7' }, [
+      info(1, 'Vežbe 5 – zadaci', 5, { vrsta: 'ZADACI', brojZadataka: 2, brojPitanja: 4, brojFajlova: 1 }), info(2, 'Vežbe 5', 5),
+    ]);
+    const plocica = (id: number) => el.querySelector(`[data-prezentacija="${id}"] app-plocica-prezentacije`)!;
+    expect(plocica(1).getAttribute('aria-label')).toBe('Vežbe 5 · zadaci · ima fajlove za skidanje');
+    expect(plocica(2).getAttribute('aria-label')).toBe('Vežbe 5 · gradivo');
+    expect(el.querySelector('[data-grupa-vezbe]')?.getAttribute('colspan')).toBe(String(el.querySelectorAll('thead th').length));
+  });
+
   it('adresa u opisu je link, ostatak opisa je tekst', () => {
     const drive = 'https://drive.google.com/drive/folders/abc';
     const el = prikazi({ predmet: '7' }, [info(1, 'Vežbe 6', 6, { opis: `Fajlovi: ${drive}.` })]);
