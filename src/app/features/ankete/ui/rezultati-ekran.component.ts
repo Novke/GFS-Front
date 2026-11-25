@@ -43,7 +43,7 @@ import { AnketaTrakeComponent } from '../../../shared/ui/anketa-trake.component'
             ★ Sačuvaj
           </button>
         }
-        @if (!a.otvorena) {
+        @if (!a.otvorena && !store.samoIstorija()) {
           <button mat-button type="button" [disabled]="store.radi()" (click)="klik($event); store.pokreniPonovo()" data-anketa-ponovo>
             <mat-icon svgIcon="replay" />Pokreni ponovo
           </button>

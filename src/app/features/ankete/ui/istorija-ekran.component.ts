@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,8 +6,8 @@ import { MatMenuModule } from '@angular/material/menu';
 
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { AnketePanelStore } from '../data-access/ankete-panel.store';
-import { AnketaInfo } from '../data-access/ankete.models';
-import { kratkoVreme } from '../data-access/ankete.pravila';
+import { AnketaInfo, OpsegIstorije } from '../data-access/ankete.models';
+import { kratkoVreme, opsegDozvoljen } from '../data-access/ankete.pravila';
 
 /** Ishod reda istorije: otvorena, pobednik ili nerešeno, sa brojem glasalih. */
 export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojGlasalo' | 'brojMogucih'>): string {
@@ -21,6 +21,13 @@ export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojG
   return `${a.pobednik ?? 'nerešeno'} · ${broj}`;
 }
 
+/** Izbori istorije redom; `kontekst` odlučuje koji su isključeni. */
+export const OPSEZI_ISTORIJE: readonly { opseg: OpsegIstorije; naziv: string; prazno: string }[] = [
+  { opseg: 'grupa', naziv: 'Ova grupa', prazno: 'Ova grupa još nema pokrenutih anketa.' },
+  { opseg: 'predavanje', naziv: 'Ovo predavanje', prazno: 'Na ovom predavanju nije bilo anketa.' },
+  { opseg: 'sve', naziv: 'Sve', prazno: 'Još nema pokrenutih anketa.' },
+];
+
 /** Istorija pokrenutih anketa (najnovije prvo, "Još"): klik otvara rezultate, meni "Pokreni ponovo" i brisanje uz potvrdu. */
 @Component({
   selector: 'app-anketa-istorija',
@@ -28,6 +35,12 @@ export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojG
   imports: [MatButtonModule, MatIconModule, MatMenuModule],
   template: `
     <h3 id="anketa-levo-naslov" class="ie-naslov">Istorija</h3>
+    <div class="ie-opseg" role="group" aria-label="Koje ankete prikazati">
+      @for (o of opsezi; track o.opseg) {
+        <button type="button" class="ie-opseg-dugme" [attr.aria-pressed]="store.opsegIstorije() === o.opseg"
+                [disabled]="!dozvoljen(o.opseg)" (click)="store.izaberiOpseg(o.opseg)" [attr.data-opseg]="o.opseg">{{ o.naziv }}</button>
+      }
+    </div>
     <ul class="ie" aria-label="Pokrenute ankete">
       @for (a of store.istorija(); track a.id) {
         <li class="ie-red" data-istorija-red>
@@ -41,7 +54,7 @@ export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojG
           </button>
         </li>
       } @empty {
-        @if (!store.istorijaUcitava()) { <li class="ie-prazno">Još nema pokrenutih anketa.</li> }
+        @if (!store.istorijaUcitava()) { <li class="ie-prazno">{{ praznoTekst() }}</li> }
       }
     </ul>
     @if (store.istorijaUcitava()) { <p class="ie-prazno" role="status">Učitavanje…</p> }
@@ -52,13 +65,23 @@ export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojG
     }
     <mat-menu #meni="matMenu">
       <ng-template matMenuContent let-a="a">
-        <button mat-menu-item type="button" (click)="store.pokreniPonovoIzIstorije(a.id)"><mat-icon svgIcon="replay" />Pokreni ponovo</button>
+        @if (!store.samoIstorija()) {
+          <button mat-menu-item type="button" (click)="store.pokreniPonovoIzIstorije(a.id)"><mat-icon svgIcon="replay" />Pokreni ponovo</button>
+        }
         <button mat-menu-item type="button" (click)="obrisi(a)"><mat-icon svgIcon="delete" />Obriši iz istorije</button>
       </ng-template>
     </mat-menu>
   `,
   styles: `
     .ie-naslov { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+    .ie-opseg { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+    .ie-opseg-dugme {
+      min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
+      color: var(--ink); font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .ie-opseg-dugme[aria-pressed='true'] { background: var(--primary-soft); border-color: var(--primary-soft-ink); color: var(--primary-soft-ink); font-weight: 600; }
+    .ie-opseg-dugme:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
+    .ie-opseg-dugme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .ie { list-style: none; margin: 0; padding: 0; }
     .ie-red { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
     .ie-glavno {
@@ -78,6 +101,12 @@ export function ishodAnkete(a: Pick<AnketaInfo, 'otvorena' | 'pobednik' | 'brojG
 export class IstorijaEkranComponent {
   protected readonly store = inject(AnketePanelStore);
   private readonly dialog = inject(MatDialog);
+  protected readonly opsezi = OPSEZI_ISTORIJE;
+  protected readonly praznoTekst = computed(() => OPSEZI_ISTORIJE.find(o => o.opseg === this.store.opsegIstorije())?.prazno ?? '');
+
+  protected dozvoljen(opseg: OpsegIstorije): boolean {
+    return opsegDozvoljen(this.store.kontekst(), opseg);
+  }
 
   protected meta(a: AnketaInfo): string {
     return [a.publika === 'NA_CASU' ? 'na času' : 'cela grupa', a.predmetNaziv, a.grupaNaziv, kratkoVreme(a.otvoreno)]

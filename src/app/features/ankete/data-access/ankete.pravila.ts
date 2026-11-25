@@ -1,5 +1,5 @@
 import {
-  AnketaDetails, AnketeSabloniInfo, BojaPrecice, KontekstAnkete, PokreniAnketuCmd, PublikaAnkete, SablonAnkete,
+  AnketaDetails, AnketeSabloniInfo, BojaPrecice, KontekstAnkete, OpsegIstorije, PokreniAnketuCmd, PublikaAnkete, SablonAnkete,
   SablonAnketeCmd,
 } from './ankete.models';
 
@@ -46,6 +46,7 @@ export const BOJE_PRECICA: readonly { boja: BojaPrecice; naziv: string }[] = [
 ];
 
 export const PORUKA_BEZ_PREDAVANJA = 'Anketa radi uz predavanje: pokreni prezentaciju sa stranice predavanja.';
+export const PORUKA_SAMO_ISTORIJA = 'Predavanje je završeno: ovde se samo pregledaju rezultati.';
 export const PORUKA_BEZ_GRUPE = 'Predavanje nema grupu, pa anketa nema kome da ode.';
 
 /** Koje publike kontekst nudi; `poruka` kad nijednu (dugme panela tada samo objašnjava). */
@@ -57,10 +58,32 @@ export interface Mogucnosti {
 
 /** "Na času" traži predavanje sa grupom; "Cela grupa" samo grupu (izvođenje bez predavanja sa grupom). */
 export function mogucnosti(k: KontekstAnkete): Mogucnosti {
+  if (k.samoIstorija) {
+    return { naCasu: false, grupa: false, poruka: PORUKA_SAMO_ISTORIJA };
+  }
   const naCasu = k.predavanjeId !== null && k.grupaId !== null;
   const grupa = k.grupaId !== null;
   const poruka = naCasu || grupa ? null : k.predavanjeId !== null ? PORUKA_BEZ_GRUPE : PORUKA_BEZ_PREDAVANJA;
   return { naCasu, grupa, poruka };
+}
+
+/** Koji izbori istorije postoje u kontekstu: "Ova grupa" traži grupu, "Ovo predavanje" predavanje, "Sve" uvek. */
+export function opsegDozvoljen(k: KontekstAnkete, o: OpsegIstorije): boolean {
+  return o === 'sve' || (o === 'grupa' ? k.grupaId !== null : k.predavanjeId !== null);
+}
+
+/** Podrazumevano "Ova grupa" (obuhvata i ankete vezane samo za grupu); bez grupe predavanje, bez oba "Sve". */
+export function podrazumevaniOpseg(k: KontekstAnkete): OpsegIstorije {
+  return k.grupaId !== null ? 'grupa' : k.predavanjeId !== null ? 'predavanje' : 'sve';
+}
+
+/** Filter `GET ankete` za izabrani opseg (nedozvoljen izbor ne filtrira po onome čega nema, nego pada na podrazumevani). */
+export function filterIstorije(k: KontekstAnkete, o: OpsegIstorije): { predavanjeId?: number; grupaId?: number } {
+  const opseg = opsegDozvoljen(k, o) ? o : podrazumevaniOpseg(k);
+  if (opseg === 'grupa') {
+    return { grupaId: k.grupaId! };
+  }
+  return opseg === 'predavanje' ? { predavanjeId: k.predavanjeId! } : {};
 }
 
 /** Prečice redom (`precicaRb`, pa id). */

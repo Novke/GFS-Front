@@ -166,4 +166,37 @@ describe('AnketaPanelDialog', () => {
     await crtaj();
     expect(overlay().querySelector('#anketa-desno-naslov')?.textContent).toContain('Tempo?');
   });
+  it('završeno predavanje: samo istorija sa tri izbora, bez pokretanja i bez "Pokreni ponovo"', async () => {
+    await otvoriAnketu(dialog, signal({ ...K, samoIstorija: true }));
+    await tick();
+    http.expectOne(r => r.url === 'api/ankete' && r.params.get('grupaId') === '4').flush({
+      content: [{ id: 9, pitanje: 'Tempo?', publika: 'GRUPA', otvoreno: '2026-11-24T10:40:00', zatvoreno: '2026-11-24T10:41:00',
+        otvorena: false, brojGlasalo: 20, brojMogucih: 25, pobednik: 'Taman', predmetNaziv: 'UPR', grupaNaziv: 'GD-2026' }],
+      page: { size: 20, number: 0, totalElements: 1, totalPages: 1 },
+    });
+    await crtaj();
+    const o = overlay();
+    expect(o.querySelector('[data-anketa-istorija]')).toBeNull();
+    expect(o.querySelector('[data-anketa-nazad]')).toBeNull();
+    const izbori = [...o.querySelectorAll<HTMLButtonElement>('[data-opseg]')];
+    expect(izbori.map(b => b.textContent?.trim())).toEqual(['Ova grupa', 'Ovo predavanje', 'Sve']);
+    expect(izbori.every(b => !b.disabled)).toBe(true);
+    expect(izbori[0].getAttribute('aria-pressed')).toBe('true');
+
+    izbori[1].click();
+    http.expectOne(r => r.url === 'api/ankete' && r.params.get('predavanjeId') === '5' && !r.params.has('grupaId')).flush({
+      content: [], page: { size: 20, number: 0, totalElements: 0, totalPages: 0 } });
+    await crtaj();
+    expect(o.querySelector('.ie-prazno')?.textContent).toContain('Na ovom predavanju nije bilo anketa.');
+  });
+
+  it('istorija bez grupe: "Ova grupa" je isključena', async () => {
+    await otvoriAnketu(dialog, signal({ ...K, grupaId: null, grupaNaziv: null, samoIstorija: true }));
+    await tick();
+    http.expectOne(r => r.url === 'api/ankete' && r.params.get('predavanjeId') === '5').flush({
+      content: [], page: { size: 20, number: 0, totalElements: 0, totalPages: 0 } });
+    await crtaj();
+    expect(overlay().querySelector<HTMLButtonElement>('[data-opseg="grupa"]')!.disabled).toBe(true);
+    expect(overlay().querySelector('[data-opseg="predavanje"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
 });

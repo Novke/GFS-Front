@@ -1621,6 +1621,14 @@ mockup `mockups/2026-11-23-brza-anketa/` next to it. Anonymous to the teacher: n
   The icons `how_to_vote` and `folder` are **not** in `IKONE`: these three pages call `registrujIkoneAnkete()` first in their
   constructor. The initial bundle sits at the 800 000 B budget (`e2e/lenji-editor.spec.ts`, ~5 B left after this feature); even a new
   import from `core/layout/icons` in a lazy file adds bytes to `main`, so measure (`ng build --stats-json`) before adding anything shared.
+- **History filter (`feature/istorija-anketa`, front only, backend `GET /ankete` already takes `predavanjeId` and `grupaId`):** the Istorija
+  screen has three choices, "Ova grupa" (default), "Ovo predavanje", "Sve" (`OpsegIstorije`, store state `istorijaOpseg`, rules
+  `opsegDozvoljen` / `podrazumevaniOpseg` / `filterIstorije` in `ankete.pravila.ts`). A choice the context cannot satisfy (no group or no lecture)
+  is disabled; the default falls back group -> lecture -> all. Changing it cancels the in-flight request and reloads from page 0. A poll
+  of a later-deleted lecture keeps its group, so it stays under "Ova grupa" and "Sve". "Pokreni ponovo" and "Obriši iz istorije" do not
+  depend on the filter. **`KontekstAnkete.samoIstorija`** (lecture page of a **finished** lecture, button `data-ankete-istorija` "Ankete"):
+  the panel opens straight on Istorija, there is no start screen, no shortcuts and no launching (`mogucnosti` returns nothing and a message,
+  "Pokreni ponovo" is hidden, on a phone Back goes only from results to the list).
 - **Projectors:** `ui/anketa-projektor.component.ts` (uživo `publika` and `predavanja/:id/projektor`) polls `aktivne?predavanjeId=` every
   2 s while visible, never shows an error; bars only when `rezultatPrikazan`, otherwise question, options and "N glasova". On `publika`
   it is a window over the slide; the lecture projector uses `[ugradjen]="true"` (host `display: contents`, the card is a grid item) and

@@ -175,6 +175,61 @@ describe('AnketePanelStore', () => {
     expect(store.istorija().map(a => a.id)).toEqual([5, 3]);
   });
 
+  const prazna = { content: [], page: { size: 20, number: 0, totalElements: 0, totalPages: 0 } };
+  const istorijaZahtev = () => http.expectOne(r => r.url === 'api/ankete' && r.method === 'GET');
+
+  it('istorija: podrazumevano "Ova grupa", pa "Ovo predavanje" i "Sve" menjaju filter i kreću od strane 0', () => {
+    otvori();
+    store.otvoriLevo({ ekran: 'istorija' });
+    let z = istorijaZahtev();
+    expect([z.request.params.get('grupaId'), z.request.params.get('predavanjeId')]).toEqual(['4', null]);
+    z.flush(prazna);
+    expect(store.opsegIstorije()).toBe('grupa');
+
+    store.izaberiOpseg('predavanje');
+    z = istorijaZahtev();
+    expect([z.request.params.get('grupaId'), z.request.params.get('predavanjeId'), z.request.params.get('page')]).toEqual([null, '5', '0']);
+    z.flush(prazna);
+
+    store.izaberiOpseg('sve');
+    z = istorijaZahtev();
+    expect([z.request.params.get('grupaId'), z.request.params.get('predavanjeId')]).toEqual([null, null]);
+    z.flush(prazna);
+    expect(store.opsegIstorije()).toBe('sve');
+  });
+
+  it('istorija: promena opsega prekida zahtev u toku i prethodna lista se ne meša', () => {
+    otvori();
+    store.otvoriLevo({ ekran: 'istorija' });
+    const prvi = istorijaZahtev();
+    store.izaberiOpseg('sve');
+    expect(prvi.cancelled).toBe(true);
+    const drugi = istorijaZahtev();
+    drugi.flush({ ...prazna, content: [{ id: 1, pitanje: 'P1', publika: 'GRUPA', otvoreno: '2026-11-24T10:00:00', zatvoreno: null, otvorena: false,
+      brojGlasalo: 0, brojMogucih: 1, pobednik: null, predmetNaziv: null, grupaNaziv: null }] });
+    expect(store.istorija().map(a => a.id)).toEqual([1]);
+  });
+
+  it('istorija: bez grupe je podrazumevano "Ovo predavanje", a "Ova grupa" se ne može izabrati', () => {
+    otvori({ ...K, grupaId: null, grupaNaziv: null });
+    expect(store.opsegIstorije()).toBe('predavanje');
+    store.otvoriLevo({ ekran: 'istorija' });
+    istorijaZahtev().flush(prazna);
+    store.izaberiOpseg('grupa'); // isključeno: ništa ne šalje
+    expect(store.opsegIstorije()).toBe('predavanje');
+  });
+
+  it('završeno predavanje: odmah istorija, bez šablona i otvorene ankete, bez pokretanja i bez povratka na početni', () => {
+    store.init(signal({ ...K, samoIstorija: true }));
+    expect(store.levo()).toEqual({ ekran: 'istorija' });
+    istorijaZahtev().flush(prazna);
+    expect(store.mogucnosti().poruka).toBeTruthy();
+    expect(store.mogucnosti().naCasu).toBe(false);
+    store.dodir(sablon(10, { pokreniOdmah: true }));
+    store.nazad();
+    expect(store.levo()).toEqual({ ekran: 'istorija' });
+  });
+
   it('uređivanje prečica: redosled, uklanjanje i izmena izgleda', () => {
     otvori();
     store.poredjajPrecice([11, 10]);
