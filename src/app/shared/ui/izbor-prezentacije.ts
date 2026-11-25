@@ -6,8 +6,9 @@ import { MatInput } from '@angular/material/input';
 
 import { PrezentacijaZaIzbor } from '../../core/api/prezentacije-predavanja.api';
 import {
-  FILTER_VRSTE, grupisiPoVezbi, OZNAKA_VRSTE, VRSTE_PREZENTACIJE, VrstaPrezentacije, zaPretragu,
+  FILTER_VRSTE, grupisiPoVezbi, VRSTE_PREZENTACIJE, VrstaPrezentacije, zaPretragu,
 } from '../../core/api/redosled-prezentacija';
+import { PlocicaPrezentacije } from './plocica-prezentacije';
 
 /** Stanje reda: slobodna ("Pokreni"), u toku ovde ("Nastavi", link) ili u toku drugde (zaključana). */
 export type StanjeStavke = { vrsta: 'slobodna' } | { vrsta: 'nastavi'; izvodjenjeId: number } | { vrsta: 'zauzeta' };
@@ -57,7 +58,7 @@ export function jeDanas(iso: string, danas: Date = new Date()): boolean {
 @Component({
   selector: 'app-izbor-prezentacije',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet, MatButton, MatFormField, MatInput, MatLabel],
+  imports: [DatePipe, NgTemplateOutlet, MatButton, MatFormField, MatInput, MatLabel, PlocicaPrezentacije],
   template: `
     @if (predlogRedovi().length) {
       <section class="predlog" aria-labelledby="izbor-predlog-naslov" data-predlog>
@@ -108,10 +109,10 @@ export function jeDanas(iso: string, danas: Date = new Date()): boolean {
     }
 
     <ng-template #opisTpl let-r>
+      <app-plocica-prezentacije [prezentacija]="r.p" />
       <div class="tekst">
         <span class="naziv">{{ r.p.naziv }}</span>
         <span class="meta">
-          <span [class]="'vrsta vrsta-' + r.p.vrsta">{{ oznakaVrste(r.p) }}</span>
           {{ sadrzaj(r.p) }} ·
           @if (r.pusteno) {
             <span class="pusteno">✓ puštano {{ jeDanas(r.pusteno) ? 'danas' : (r.pusteno | date: 'd.M.') }}</span>
@@ -145,19 +146,15 @@ export function jeDanas(iso: string, danas: Date = new Date()): boolean {
     :host { display: grid; gap: 16px; }
     .naslov { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
     .kartice, .redovi { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-    .kartica, .red { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line);
+    .kartica, .red { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--line);
       border-radius: var(--radius); background: var(--surface); }
-    .red { padding: 6px 10px; }
+    .red { padding: 8px 10px; }
     .kartica.prva { border: 2px solid var(--primary); }
     .tekst { display: grid; gap: 2px; min-width: 0; flex: 1; }
     .naziv { font-weight: 600; overflow-wrap: anywhere; }
     .meta { font-size: 12.5px; color: var(--muted); }
     .uzbuna { color: var(--ink); }
     .pusteno { color: var(--ok-ink); }
-    .vrsta { display: inline-block; padding: 0 7px; margin-right: 4px; border-radius: 10px; font-size: 11.5px; font-weight: 600; }
-    .vrsta-GRADIVO { background: var(--primary-soft); color: var(--primary-soft-ink); }
-    .vrsta-PITANJA { background: var(--ok-soft); color: var(--ok-ink); }
-    .vrsta-ZADACI { background: var(--warn-soft); color: var(--ink); }
     .filteri { display: flex; flex-wrap: wrap; gap: 6px; }
     .filter { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--line);
       background: var(--surface); color: var(--ink); cursor: pointer; }
@@ -183,7 +180,6 @@ export class IzborPrezentacije {
   readonly pokreni = output<PrezentacijaZaIzbor>();
 
   protected readonly prag = PRAG_PRETRAGE;
-  protected readonly oznakaVrste = (p: PrezentacijaZaIzbor) => OZNAKA_VRSTE[p.vrsta];
   protected readonly jeDanas = jeDanas;
   protected readonly sadrzaj = opisSadrzaja;
   protected readonly filteri: { vrednost: FilterVrste; labela: string }[] = [

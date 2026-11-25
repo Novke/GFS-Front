@@ -12,10 +12,10 @@ import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { catchError, distinctUntilChanged, from, map, of, startWith, Subject, switchMap, tap } from 'rxjs';
 
 import {
-  FILTER_VRSTE, nazivVezbe, OZNAKA_VRSTE, porediPoVezbi, VRSTE_PREZENTACIJE, VrstaPrezentacije, zaPretragu,
+  FILTER_VRSTE, nazivVezbe, porediPoVezbi, VRSTE_PREZENTACIJE, VrstaPrezentacije, zaPretragu,
 } from '../../../core/api/redosled-prezentacija';
 import { opisSadrzaja } from '../../../shared/ui/izbor-prezentacije';
-import { StatusChip, TonStatusa } from '../../../shared/ui/status-chip';
+import { PlocicaPrezentacije } from '../../../shared/ui/plocica-prezentacije';
 import { TekstSaLinkovima } from '../../../shared/ui/tekst-sa-linkovima';
 import { UzivoPutanje } from '../uzivo-putanje';
 import { PrezentacijeApi } from '../data-access/prezentacije.api';
@@ -34,8 +34,6 @@ export const SORTIRANJA: readonly { vrednost: SortListe; labela: string }[] = [
   { vrednost: 'izmenjeno', labela: 'Poslednje izmenjene' },
   { vrednost: 'pustanje', labela: 'Poslednje puštane' },
 ];
-
-const TON_VRSTE: Record<VrstaPrezentacije, TonStatusa> = { GRADIVO: 'neutral', PITANJA: 'info', ZADACI: 'warn' };
 
 export interface UpitListe {
   predmet: number | null;
@@ -95,7 +93,7 @@ interface GrupaListe {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressBarModule,
-    MatSelectModule, StatusChip, TekstSaLinkovima,
+    MatSelectModule, PlocicaPrezentacije, TekstSaLinkovima,
   ],
   template: `
     <div class="uz-ed-strana">
@@ -150,7 +148,6 @@ interface GrupaListe {
               <thead>
                 <tr>
                   <th scope="col">Naziv</th>
-                  <th scope="col">Vrsta</th>
                   @if (!upit().predmet) {
                     <th scope="col">Predmet</th>
                   }
@@ -169,15 +166,19 @@ interface GrupaListe {
                   @for (p of g.stavke; track p.id) {
                     <tr [attr.data-prezentacija]="p.id">
                       <td>
-                        <a class="uz-ed-veza" [routerLink]="'/' + rute.prezentacija(p.id)">{{ p.naziv }}</a>
-                        @if (p.aktivnoIzvodjenjeId) {
-                          <span class="uz-cip uz-ed-u-toku">U toku</span>
-                        }
-                        @if (p.opis) {
-                          <div class="uz-ed-opis-red"><app-tekst-sa-linkovima [tekst]="p.opis" /></div>
-                        }
+                        <div class="uz-ed-naziv-red">
+                          <app-plocica-prezentacije [prezentacija]="p" />
+                          <div>
+                            <a class="uz-ed-veza" [routerLink]="'/' + rute.prezentacija(p.id)">{{ p.naziv }}</a>
+                            @if (p.aktivnoIzvodjenjeId) {
+                              <span class="uz-cip uz-ed-u-toku">U toku</span>
+                            }
+                            @if (p.opis) {
+                              <div class="uz-ed-opis-red"><app-tekst-sa-linkovima [tekst]="p.opis" /></div>
+                            }
+                          </div>
+                        </div>
                       </td>
-                      <td><app-status-chip [tekst]="oznakaVrste[p.vrsta]" [ton]="tonVrste[p.vrsta]" [ikona]="null" /></td>
                       @if (!upit().predmet) {
                         <td>{{ p.predmet.naziv }}</td>
                       }
@@ -228,8 +229,6 @@ export class PrezentacijeListaPage {
   protected readonly rute = UzivoPutanje;
   protected readonly vrste = VRSTE_PREZENTACIJE;
   protected readonly filterVrste = FILTER_VRSTE;
-  protected readonly oznakaVrste = OZNAKA_VRSTE;
-  protected readonly tonVrste = TON_VRSTE;
   protected readonly sortiranja = SORTIRANJA;
   protected readonly sadrzaj = opisSadrzaja;
 
@@ -240,7 +239,7 @@ export class PrezentacijeListaPage {
   protected readonly lista = signal<PrezentacijaInfo[] | null>(null);
   protected readonly greska = signal<string | null>(null);
   private readonly predmetiUcitani = computed(() => this.predmeti().length > 0);
-  protected readonly brojKolona = computed(() => (this.upit().predmet ? 5 : 6));
+  protected readonly brojKolona = computed(() => (this.upit().predmet ? 4 : 5));
 
   protected readonly grupe = computed<GrupaListe[]>(() => {
     const { predmet, vrsta, sort, q } = this.upit();
