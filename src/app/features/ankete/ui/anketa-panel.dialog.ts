@@ -71,8 +71,13 @@ import { UrediPreciceComponent } from './uredi-precice.component';
             <app-anketa-rezultati [siroko]="siroko()" />
           } @else {
             <div class="ap-uputstvo">
-              <h3 id="anketa-desno-naslov" class="ap-uputstvo-naslov">Izaberi prečicu ili „Nova anketa“</h3>
-              <p>Tasteri 1–9 pokreću prečice redom. Dok je anketa otvorena: Enter je zatvara, R pokazuje ili sakriva rezultat.</p>
+              @if (store.samoIstorija()) {
+                <h3 id="anketa-desno-naslov" class="ap-uputstvo-naslov">Izaberi anketu iz istorije</h3>
+                <p>Predavanje je završeno, pa se ovde samo pregledaju rezultati.</p>
+              } @else {
+                <h3 id="anketa-desno-naslov" class="ap-uputstvo-naslov">Izaberi prečicu ili „Nova anketa“</h3>
+                <p>Tasteri 1–9 pokreću prečice redom. Dok je anketa otvorena: Enter je zatvara, R pokazuje ili sakriva rezultat.</p>
+              }
             </div>
           }
         </section>
@@ -112,7 +117,11 @@ export class AnketaPanelDialog {
     return l.ekran === 'folder' ? l.folderId : null;
   });
   /** Laptop: strelica vraća levu kolonu na početni; telefon: i sa desnog ekrana. */
-  protected readonly mozeNazad = computed(() => this.store.levo().ekran !== 'pocetni' || (!this.siroko() && this.store.desno() !== null));
+  protected readonly mozeNazad = computed(() => {
+    const desnoNaTelefonu = !this.siroko() && this.store.desno() !== null;
+    // završeno predavanje: istorija je jedini levi ekran, pa nazad ima smisla samo sa rezultata na telefonu
+    return this.store.samoIstorija() ? desnoNaTelefonu : this.store.levo().ekran !== 'pocetni' || desnoNaTelefonu;
+  });
 
   constructor() {
     this.store.init(inject<Signal<KontekstAnkete>>(MAT_DIALOG_DATA));

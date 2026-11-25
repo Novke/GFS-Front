@@ -5,10 +5,12 @@ import { Observable, Subscription, concatMap, map, of } from 'rxjs';
 
 import { PORUKA_SISTEM, toApiError } from '../../../core/api/api-error';
 import { AnketeApi } from './ankete.api';
-import { AnketaDetails, AnketaInfo, AnketeSabloniInfo, KontekstAnkete, SablonAnkete, SablonAnketeCmd } from './ankete.models';
 import {
-  Mogucnosti, Nacrt, OSVEZAVANJE_ANKETE_MS, cmdIzSablona, cmdPokretanja, cmdPreciceIzAnkete, cmdSablonaIzNacrta, mogucnosti,
-  mozeOdmah, nacrtIzAnkete, nacrtIzSablona, prazanNacrt, precice, sledecaBoja,
+  AnketaDetails, AnketaInfo, AnketeSabloniInfo, KontekstAnkete, OpsegIstorije, SablonAnkete, SablonAnketeCmd,
+} from './ankete.models';
+import {
+  Mogucnosti, Nacrt, OSVEZAVANJE_ANKETE_MS, cmdIzSablona, cmdPokretanja, cmdPreciceIzAnkete, cmdSablonaIzNacrta, filterIstorije,
+  mogucnosti, mozeOdmah, nacrtIzAnkete, nacrtIzSablona, opsegDozvoljen, podrazumevaniOpseg, prazanNacrt, precice, sledecaBoja,
 } from './ankete.pravila';
 
 /** Leva kolona (na telefonu prvi ekran): početni, folder (`null` = bez foldera), istorija, uređivanje prečica. */
@@ -66,12 +68,14 @@ interface PanelState {
   istorijaStrana: number;
   istorijaIma: boolean;
   istorijaUcitava: boolean;
+  /** Izbor na ekranu Istorija; važi samo dok ga kontekst dozvoljava (`opsegIstorije`). */
+  istorijaOpseg: OpsegIstorije;
 }
 
 const POCETNO: PanelState = {
   info: null, ucitava: false, greskaUcitavanja: null, levo: { ekran: 'pocetni' }, desno: null, upit: '', anketa: null,
   primljenoMs: 0, sacuvanaKaoPrecica: false, radi: false, poruka: null, istorija: [], istorijaStrana: -1, istorijaIma: false,
-  istorijaUcitava: false,
+  istorijaUcitava: false, istorijaOpseg: 'sve',
 };
 
 const razlog = (e: unknown): string => (e instanceof HttpErrorResponse ? toApiError(e).reason : PORUKA_SISTEM);
@@ -93,7 +97,9 @@ export const AnketePanelStore = signalStore(
     _api: inject(AnketeApi),
     _dokument: inject(DOCUMENT),
     _kontekst: signal<Signal<KontekstAnkete>>(signal(BEZ_KONTEKSTA)),
-    _veze: { osvezavanje: null as Subscription | null, tajmer: null as ReturnType<typeof setInterval> | null },
+    _veze: {
+      osvezavanje: null as Subscription | null, istorija: null as Subscription | null, tajmer: null as ReturnType<typeof setInterval> | null,
+    },
   })),
   withComputed(store => ({
     kontekst: computed(() => store._kontekst()()),
@@ -102,6 +108,10 @@ export const AnketePanelStore = signalStore(
   })),
   withComputed(store => ({
     mogucnosti: computed<Mogucnosti>(() => mogucnosti(store.kontekst())),
+    samoIstorija: computed(() => store.kontekst().samoIstorija === true),
+    /** Izabrani opseg istorije, ili podrazumevani kad ga kontekst više ne dozvoljava (konzola je promenila predavanje). */
+    opsegIstorije: computed<OpsegIstorije>(() =>
+      opsegDozvoljen(store.kontekst(), store.istorijaOpseg()) ? store.istorijaOpseg() : podrazumevaniOpseg(store.kontekst())),
     bezFoldera: computed(() => (store.info()?.sabloni ?? []).filter(s => s.folderId === null).length),
     /** Broj šablona po folderu iz samih šablona (premeštanje menja samo šablon, ne i `brojSablona` foldera). */
     brojPoFolderu: computed(() => {
@@ -167,8 +177,13 @@ export const AnketePanelStore = signalStore(
       /** Panel se otvara: šabloni, pa otvorena anketa konteksta (ako je ima) odmah na ekranu rezultata. */
       init(kontekst: Signal<KontekstAnkete>): void {
         store._kontekst.set(kontekst);
-        ucitajSablone();
         const k = kontekst();
+        patchState(store, { istorijaOpseg: podrazumevaniOpseg(k) });
+        if (k.samoIstorija) {
+          this.otvoriLevo({ ekran: 'istorija' }); // završeno predavanje: samo pregled, bez šablona i otvorene ankete
+          return;
+        }
+        ucitajSablone();
         if (k.predavanjeId === null && k.grupaId === null) {
           return;
         }
@@ -195,7 +210,7 @@ export const AnketePanelStore = signalStore(
       nazad(): void {
         if (store.desno()) {
           patchState(store, { desno: null, poruka: null });
-        } else {
+        } else if (!store.samoIstorija()) {
           patchState(store, { levo: { ekran: 'pocetni' }, poruka: null });
         }
       },
@@ -331,19 +346,29 @@ export const AnketePanelStore = signalStore(
         });
       },
 
+      /** Strana istorije za izabrani opseg; nova strana 0 (otvaranje, promena opsega) prekida zahtev koji još traje. */
       ucitajIstoriju(jos = false): void {
-        if (store.istorijaUcitava()) {
+        if (jos && store.istorijaUcitava()) {
           return;
         }
+        store._veze.istorija?.unsubscribe();
         const strana = jos ? store.istorijaStrana() + 1 : 0;
-        patchState(store, { istorijaUcitava: true, poruka: null });
-        api.istorija({}, strana, VELICINA_ISTORIJE).subscribe({
+        patchState(store, { istorijaUcitava: true, poruka: null, ...(jos ? {} : { istorija: [], istorijaIma: false }) });
+        store._veze.istorija = api.istorija(filterIstorije(store.kontekst(), store.opsegIstorije()), strana, VELICINA_ISTORIJE).subscribe({
           next: s => patchState(store, {
             istorija: jos ? [...store.istorija(), ...s.content] : s.content, istorijaStrana: strana,
             istorijaIma: s.page.number + 1 < s.page.totalPages, istorijaUcitava: false,
           }),
           error: e => patchState(store, { istorijaUcitava: false, poruka: razlog(e) }),
         });
+      },
+
+      /** "Ova grupa" / "Ovo predavanje" / "Sve": izbor koji kontekst ne dozvoljava se ignoriše. */
+      izaberiOpseg(opseg: OpsegIstorije): void {
+        if (opsegDozvoljen(store.kontekst(), opseg) && opseg !== store.opsegIstorije()) {
+          patchState(store, { istorijaOpseg: opseg });
+          this.ucitajIstoriju();
+        }
       },
 
       obrisiIzIstorije(id: number): void {
@@ -424,6 +449,7 @@ export const AnketePanelStore = signalStore(
         clearInterval(store._veze.tajmer);
       }
       store._veze.osvezavanje?.unsubscribe();
+      store._veze.istorija?.unsubscribe();
     },
   }),
 );

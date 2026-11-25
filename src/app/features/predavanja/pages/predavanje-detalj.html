@@ -42,6 +42,11 @@
     <p class="uputstvo" data-samo-citanje>
       <mat-icon svgIcon="info" aria-hidden="true" />Predavanje je završeno; prisustvo i aktivnosti su samo za čitanje.
     </p>
+    <div class="traka">
+      <button matButton="outlined" type="button" data-ankete-istorija (click)="anketa()">
+        <mat-icon svgIcon="how_to_vote" aria-hidden="true" />Ankete
+      </button>
+    </div>
   }
 
   @if (store.studenti().length === 0) {

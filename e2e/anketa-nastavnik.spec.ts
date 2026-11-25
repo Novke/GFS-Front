@@ -164,3 +164,32 @@ test.describe('brza anketa na projektoru predavanja', () => {
     await projektor.close();
   });
 });
+
+test.describe('brza anketa: istorija na završenom predavanju', () => {
+  test('dugme "Ankete" otvara samo istoriju; Ova grupa / Ovo predavanje / Sve filtriraju, bez pokretanja', async ({ page, mock }) => {
+    mock.ankete.brojMogucih = 20;
+    const naPredavanju2 = mock.ankete.otvori({ pitanje: 'Sa ovog predavanja?', predavanjeId: 2, grupaId: 1 });
+    mock.ankete.otvori({ pitanje: 'Samo za grupu?', publika: 'GRUPA', predavanjeId: null, grupaId: 1 });
+    mock.ankete.otvori({ pitanje: 'Tuđa grupa?', publika: 'GRUPA', predavanjeId: null, grupaId: 2 });
+    mock.ankete.zatvori(naPredavanju2);
+
+    await page.goto('predavanja/2');
+    await expect(page.locator('[data-samo-citanje]')).toBeVisible();
+    await expect(page.locator('[data-anketa]')).toHaveCount(0);
+    await page.locator('[data-ankete-istorija]').click();
+
+    const redovi = panel(page).locator('[data-istorija-red] .ie-pitanje');
+    await expect(redovi).toHaveText(['Samo za grupu?', 'Sa ovog predavanja?']);
+    await expect(panel(page).locator('[data-opseg="grupa"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(panel(page).locator('[data-anketa-istorija], [data-precica], [data-anketa-nazad]')).toHaveCount(0);
+
+    await panel(page).locator('[data-opseg="predavanje"]').click();
+    await expect(redovi).toHaveText(['Sa ovog predavanja?']);
+    await panel(page).locator('[data-opseg="sve"]').click();
+    await expect(redovi).toHaveText(['Tuđa grupa?', 'Samo za grupu?', 'Sa ovog predavanja?']);
+
+    await redovi.first().click();
+    await expect(panel(page).locator('#anketa-desno-naslov')).toHaveText('Tuđa grupa?');
+    await expect(panel(page).locator('[data-anketa-ponovo]')).toHaveCount(0);
+  });
+});

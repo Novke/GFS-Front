@@ -134,4 +134,9 @@ export interface KontekstAnkete {
   predmetNaziv: string | null;
   /** Broj čekiranih na predavanju (`null` = nepoznato ili nema predavanja). */
   brojCekiranih: number | null;
+  /** Završeno predavanje: panel je samo pregled istorije (nema pokretanja nove ankete, ni "Pokreni ponovo"). */
+  samoIstorija?: boolean;
 }
+
+/** Šta istorija prikazuje: ankete grupe (i bez predavanja), ankete jednog predavanja ili sve. */
+export type OpsegIstorije = 'grupa' | 'predavanje' | 'sve';

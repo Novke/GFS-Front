@@ -200,15 +200,17 @@ export class PredavanjeDetalj {
       return {
         predavanjeId: p?.id ?? null, grupaId: p?.grupa?.id ?? null, grupaNaziv: p?.grupa?.naziv ?? null,
         predmetNaziv: p?.predmet?.naziv ?? null, brojCekiranih: this.cekirani()?.length ?? null,
+        samoIstorija: p?.zavrseno === true,
       };
     },
     {
       equal: (a, b) => a.predavanjeId === b.predavanjeId && a.grupaId === b.grupaId && a.grupaNaziv === b.grupaNaziv
-        && a.predmetNaziv === b.predmetNaziv && a.brojCekiranih === b.brojCekiranih,
+        && a.predmetNaziv === b.predmetNaziv && a.brojCekiranih === b.brojCekiranih
+        && a.samoIstorija === b.samoIstorija,
     },
   );
 
-  /** Brza anketa sa stranice živog predavanja (spec brze ankete 6.1). */
+  /** Brza anketa sa stranice predavanja (spec brze ankete 6.1); na završenom predavanju samo istorija (dugme "Ankete"). */
   protected anketa(): void {
     void otvoriAnketu(this.dialog, this.kontekstAnkete);
   }

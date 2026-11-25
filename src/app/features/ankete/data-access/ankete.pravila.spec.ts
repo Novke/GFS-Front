@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { KontekstAnkete } from './ankete.models';
 import { anketa, sablon } from './ankete.testing';
 import {
-  PORUKA_BEZ_GRUPE, PORUKA_BEZ_PREDAVANJA, akcijaPanela, anketaZaProjektor, bojaPrecice, cekiranihTekst, cmdPokretanja,
+  PORUKA_BEZ_GRUPE, PORUKA_BEZ_PREDAVANJA, PORUKA_SAMO_ISTORIJA, akcijaPanela, anketaZaProjektor, bojaPrecice, cekiranihTekst, cmdPokretanja,
   cmdPreciceIzAnkete, cmdSablonaIzNacrta, imaPraznaMesta, jedanEmoji, kratkoVreme, lokalnoVreme, mogucnosti, mozeOdmah,
   nacrtIzSablona, nazivPrecice, opisKonteksta, opisPrecice, podrazumevaniRok, pomeri, precice, pretrazi, prazanNacrt, proveriNacrt,
-  sledecaBoja, trake,
+  sledecaBoja, trake, filterIstorije, opsegDozvoljen, podrazumevaniOpseg,
 } from './ankete.pravila';
 
 const K: KontekstAnkete = { predavanjeId: 5, grupaId: 4, grupaNaziv: 'GD-2026', predmetNaziv: 'UPR', brojCekiranih: 27 };
@@ -25,6 +25,31 @@ describe('mogucnosti konteksta (spec 6.1)', () => {
     expect(opisKonteksta({ ...K, predmetNaziv: null, brojCekiranih: 1 })).toBe('GD-2026 · 1 čekiran');
     expect(cekiranihTekst(3)).toBe('3 čekirana');
     expect(cekiranihTekst(12)).toBe('12 čekiranih');
+  });
+});
+
+describe('istorija po grupi i predavanju', () => {
+  it('samoIstorija: ništa se ne pokreće, poruka objašnjava zašto', () => {
+    expect(mogucnosti({ ...K, samoIstorija: true })).toEqual({ naCasu: false, grupa: false, poruka: PORUKA_SAMO_ISTORIJA });
+  });
+
+  it('opseg: "sve" uvek, "grupa" traži grupu, "predavanje" traži predavanje', () => {
+    expect(['grupa', 'predavanje', 'sve'].map(o => opsegDozvoljen(K, o as 'sve'))).toEqual([true, true, true]);
+    const bez = { ...K, grupaId: null, predavanjeId: null };
+    expect(['grupa', 'predavanje', 'sve'].map(o => opsegDozvoljen(bez, o as 'sve'))).toEqual([false, false, true]);
+  });
+
+  it('podrazumevano: grupa, pa predavanje, pa sve', () => {
+    expect(podrazumevaniOpseg(K)).toBe('grupa');
+    expect(podrazumevaniOpseg({ ...K, grupaId: null })).toBe('predavanje');
+    expect(podrazumevaniOpseg({ ...K, grupaId: null, predavanjeId: null })).toBe('sve');
+  });
+
+  it('filter za server; nedozvoljen izbor pada na podrazumevani', () => {
+    expect(filterIstorije(K, 'grupa')).toEqual({ grupaId: 4 });
+    expect(filterIstorije(K, 'predavanje')).toEqual({ predavanjeId: 5 });
+    expect(filterIstorije(K, 'sve')).toEqual({});
+    expect(filterIstorije({ ...K, grupaId: null }, 'grupa')).toEqual({ predavanjeId: 5 });
   });
 });
 
