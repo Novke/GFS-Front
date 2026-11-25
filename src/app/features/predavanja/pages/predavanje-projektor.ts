@@ -32,7 +32,8 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
  * Esc van punog ekrana vraća na predavanje.
  *
  * Dok je predavanje živo, desno je QR za čekiranje (`nalog/cas/<token>`): token sa servera (tajna ga ne napušta),
- * nov na 10 s, čita se na 3 s dok je tab vidljiv; ispod QR-a je ista adresa kao tekst i "Čekirano: N" (bez imena).
+ * nov na 10 s, čita se na 3 s dok je tab vidljiv. QR zauzima celu visinu ekrana (da ga skeniraju i iz poslednje klupe); uputstvo,
+ * "Čekirano: N" (bez imena) i ista adresa kao tekst stoje u levoj koloni, ispod broja prisutnih.
  * Neuspeo upit ostavlja poslednji QR. Završeno predavanje i `token: null` nemaju QR. Dok je predavanje živo, brza anketa
  * (`app-anketa-projektor`, spec brze ankete 6.2) stoji desno na mestu QR-a, koji se vraća kad anketa ode sa ekrana.
  */
@@ -68,13 +69,15 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
               @if (drugiDatum(); as d) {
                 <p class="drugi-datum" role="alert" data-drugi-datum>Ovo predavanje je od {{ d }} Da li si hteo novo predavanje?</p>
               }
+              @if (!anketaNaEkranu() && qr(); as q) {
+                <p class="uputstvo">Skeniraj telefonom da potvrdiš prisustvo</p>
+                <p class="cekirano" data-cekirano>Čekirano: {{ q.broj }}</p>
+                <p class="adresa" data-adresa-cekiranja>{{ q.link }}</p>
+              }
             </section>
             @if (!anketaNaEkranu() && qr(); as q) {
               <section class="cekiranje" aria-label="Čekiranje">
-                <p class="uputstvo">Skeniraj telefonom da potvrdiš prisustvo</p>
-                <app-qr-kod [tekst]="q.link" [velicina]="720" />
-                <p class="adresa" data-adresa-cekiranja>{{ q.link }}</p>
-                <p class="cekirano" data-cekirano>Čekirano: {{ q.broj }}</p>
+                <app-qr-kod [tekst]="q.link" [velicina]="1080" />
               </section>
             }
             <app-anketa-projektor [predavanjeId]="zivoId()" [ugradjen]="true" />
@@ -93,12 +96,12 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
     :host { display: flex; flex-direction: column; min-height: calc(100dvh - 48px); }
     .alati { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
     .ekran { flex: 1; display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center; }
-    .ekran.sa-qr { grid-template-columns: minmax(0, 1fr) minmax(280px, min(42vw, 72dvh)); }
+    .ekran.sa-qr { grid-template-columns: minmax(0, 1fr) minmax(280px, min(60vw, calc(100dvh - 120px))); }
     @media (max-width: 899px) { .ekran.sa-qr { grid-template-columns: 1fr; } }
     .sadrzaj { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
-    .cekiranje { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+    .cekiranje { display: flex; justify-content: center; }
     .cekiranje app-qr-kod { width: 100%; }
-    .uputstvo { margin: 0; font-size: clamp(20px, 2.2vw, 30px); font-weight: 600; color: var(--ink); }
+    .uputstvo { margin: 16px 0 0; font-size: clamp(20px, 2.2vw, 30px); font-weight: 600; color: var(--ink); }
     .adresa { margin: 0; font-family: var(--font-mono); font-size: clamp(13px, 1.1vw, 18px); color: var(--ink-2); overflow-wrap: anywhere; }
     .cekirano { margin: 0; font-size: clamp(24px, 2.6vw, 36px); font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
     .drugi-datum { margin: 16px 0 0; padding: 8px 16px; border-radius: 8px; font-size: clamp(18px, 1.8vw, 26px); color: var(--warn); border: 2px solid currentColor; }
@@ -107,6 +110,10 @@ type Ucitano = { tip: 'ok'; p: PredavanjeDetails; grupa: ReadonlySet<number> | n
     .broj { display: flex; flex-direction: column; align-items: center; margin-top: 24px; }
     .vrednost { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: clamp(96px, 18vw, 240px); line-height: 1; color: var(--primary); }
     .labela { font-size: clamp(28px, 3vw, 40px); color: var(--muted); }
+    /* Uz QR leva kolona deli visinu ekrana sa njim: slova prate i visinu, da ništa ne iscuri ispod ruba. */
+    .sa-qr .vrednost { font-size: clamp(72px, min(11vw, 19dvh), 240px); }
+    .sa-qr .tema { font-size: clamp(32px, min(4.5vw, 8dvh), 80px); }
+    .sa-qr .broj { margin-top: 8px; }
     .stariji { margin-top: 8px; font-size: clamp(22px, 2.4vw, 32px); color: var(--warn); font-weight: 600; }
     .poruka { margin: auto; font-size: 32px; color: var(--ink-2); text-align: center; }
   `,

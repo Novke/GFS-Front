@@ -354,8 +354,8 @@ lecture not finished) and writes the PRISUSTVO activity; the front only shows th
   is `null` for a finished lecture. `linkCekiranja(token)` = `new URL('nalog/cas/' + token, document.baseURI)`. The secret never
   reaches the front. `CekiranjeApi` is in `core` because the lecture projector, the lecture page and Uživo share it.
 - **Teacher screens:** the lecture projector (`predavanja/:id/projektor`, link "Čekiranje" on the lecture page) polls every 3 s
-  (`CEKIRANJE_MS`, only while the tab is visible, `exhaustMap`, an error keeps the last QR) and shows the QR (720 px), the
-  address, "Čekirano: N" (count only, never names on the projector) and, when `datumNijeDanas`, "Ovo predavanje je od … Da li si
+  (`CEKIRANJE_MS`, only while the tab is visible, `exhaustMap`, an error keeps the last QR) and shows the QR as large as the screen height allows (right column `min(60vw, 100dvh - 120px)`, canvas 1080 px), and in the left column under the attendance number the
+  instruction, "Čekirano: N" (count only, never names on the projector) and the address and, when `datumNijeDanas`, "Ovo predavanje je od … Da li si
   hteo novo predavanje?". The lecture page polls every 5 s (`OSVEZAVANJE_DETALJA_MS`) while live: the "Čekirani" panel
   (`ui/cekirani-panel`: time, "kasnio" after 15 min, "isti telefon kao X") and `PredavanjeStore.osvezi()`, which merges server
   activities only into rows without pending saves (per-student confirmation counters snapshotted at request time), so a check-in
