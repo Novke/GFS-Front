@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DatumPipe, formatDatum } from '../../../shared/util/datum.pipe';
 import { formatBroja } from '../data-access/test.store';
-import { brojIspitanika, TestListItem } from '../../../core/api/testovi.models';
+import { brojIspitanika, NAZIV_STANJA_ONLINE, StanjeOnlineTesta, TestListItem } from '../../../core/api/testovi.models';
 
 /** Kolone koje ruta može da zaključa (hub grupe zaključava `grupa`, hub predmeta `predmet`). */
 export type ZakljucanaKolona = 'predmet' | 'grupa';
@@ -76,6 +76,12 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
               <td class="samo-desktop mono broj">{{ prosekBroj(t) }}</td>
               <td class="samo-desktop mono broj">{{ prolaz(t) }}</td>
               <td class="c-st">
+                @if (t.nacin === 'ONLINE') {
+                  <app-status-chip tekst="Online" ton="info" data-online />
+                  @if (t.stanjeOnline && t.pregledan !== true) {
+                    <app-status-chip [tekst]="stanjeOnline(t.stanjeOnline)" [ton]="t.stanjeOnline === 'U_TOKU' ? 'uToku' : 'neutral'" data-stanje-online />
+                  }
+                }
                 @if (t.pregledan === true) {
                   <app-status-chip tekst="Evidentiran" ton="ok" />
                 } @else {
@@ -92,6 +98,7 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
   styles: `
     :host { display: block; }
     .broj { text-align: right; }
+    .c-st app-status-chip + app-status-chip { margin-left: 4px; }
     th.broj .sortiraj { margin-left: auto; }
     @media (max-width: 599.98px) {
       table.lista-tabela.testovi tr { grid-template-columns: 1fr auto; }
@@ -103,6 +110,7 @@ export function prolazPrikaz(t: Pick<TestListItem, 'procenatProlaznosti'>): stri
 })
 export class TestoviTabela {
   readonly stavke = input.required<readonly TestListItem[]>();
+  protected readonly stanjeOnline = (s: StanjeOnlineTesta) => NAZIV_STANJA_ONLINE[s];
   readonly zakljucano = input<readonly ZakljucanaKolona[]>([]);
   /** Aktivni sort `polje,(asc|desc)`; `null` = zaglavlja bez oznake. */
   readonly sort = input<string | null>(null);

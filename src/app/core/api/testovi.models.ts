@@ -32,7 +32,22 @@ export interface TestListItem {
   brojPolaganja: number;
   prosek: number | null;
   procenatProlaznosti: number | null;
+  /** Online testovi: `PAPIR` (podrazumevano; stari backend ga ne šalje) ili `ONLINE`. */
+  nacin?: NacinTesta;
+  /** Samo za ONLINE: stanje toka testa (priprema, ulaz, u toku, završen). */
+  stanjeOnline?: StanjeOnlineTesta | null;
 }
+
+/** Način testa (online testovi, plan odeljak 4.2): papir je današnji unos poena. */
+export type NacinTesta = 'PAPIR' | 'ONLINE';
+export type StanjeOnlineTesta = 'PRIPREMA' | 'ULAZ' | 'U_TOKU' | 'ZAVRSEN';
+/** Oznaka stanja online testa u spisku i zaglavlju. */
+export const NAZIV_STANJA_ONLINE: Record<StanjeOnlineTesta, string> = {
+  PRIPREMA: 'priprema',
+  ULAZ: 'ulaz otvoren',
+  U_TOKU: 'u toku',
+  ZAVRSEN: 'završen',
+};
 
 /** Status liste: `za-evidentiranje` -> `pregledan=false`, `evidentiran` -> `pregledan=true`, `null` = svi. */
 export type StatusTesta = 'za-evidentiranje' | 'evidentiran';
@@ -118,6 +133,15 @@ export interface TestDetails {
   grupe: TestGrupa[] | null;
   polaganja: TestPolaganjeInfo[] | null;
   statistika: TestStatistikaInfo | null;
+  /** Online testovi: `ONLINE` test ima svoju stranu (`OnlineTestStrana`); bez polja (stari backend) papir. */
+  nacin?: NacinTesta;
+  stanjeOnline?: StanjeOnlineTesta | null;
+  /**
+   * Objava rezultata (`POST test/{id}/objava`, radi i za papir). Ugovor ih ne navodi u `TestDetails`; front ih čita kad ih server
+   * pošalje, a bez njih papirni test nudi samo „Objavi rezultate“ (stanje posle objave pamti lokalno).
+   */
+  objavljeno?: string | null;
+  objavaTacni?: boolean;
 }
 
 /** Ogleda `TestInfo` (odgovor `POST test`). */

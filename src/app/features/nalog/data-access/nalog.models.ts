@@ -24,11 +24,14 @@ export interface StanjeNaloga {
   prijavljen: boolean;
 }
 
-/** Prijavljeni uređaj studenta (`KOD` = kod na mejl, `LTI` = Moodle). Datumi su `LocalDateTime` bez zone. */
+/** Način prijave uređaja: `KOD` kod na mejl, `LTI` Moodle, `RACUNAR` računar u učionici (QR ili „Imam kod“ na `/r`, 4 h). */
+export type NacinPrijave = 'KOD' | 'LTI' | 'RACUNAR';
+
+/** Prijavljeni uređaj studenta. Datumi su `LocalDateTime` bez zone. */
 export interface UredjajInfo {
   id: number;
   opis: string;
-  nacin: 'KOD' | 'LTI';
+  nacin: NacinPrijave;
   prviUlaz: string;
   poslednjiUlaz: string;
   /** Ovaj pregledač. */
@@ -51,6 +54,11 @@ export interface StudentJa {
   generacija?: number | null;
   /** Link WhatsApp grupe sopstvene grupe (Početna); prikazuje se samo kanonski (`waLinkZaPrikaz`). */
   waLink?: string | null;
+  /**
+   * Način prijave **ovog** uređaja (online testovi, faza 2): na `RACUNAR` sesiji nema ponude instalacije ni push-a, a ljuska
+   * stalno piše „Prijavljen: Ime · Nisi ti? Odjavi“. Stari backend ga ne šalje.
+   */
+  nacin?: NacinPrijave;
 }
 
 /** `POST api/public/nalog/pomoc`: uvek "Javili smo nastavniku." (stvarno obaveštenje najviše 1/h po indeksu). */

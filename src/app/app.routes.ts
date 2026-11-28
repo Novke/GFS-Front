@@ -15,7 +15,6 @@ import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
 import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
-import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
 import { IZVODJENJA_RUTE, PREZENTACIJE_RUTE, UZIVO_JAVNE_RUTE } from './features/uzivo/uzivo.routes';
 
 /*
@@ -62,12 +61,13 @@ const nastavnickeRute: Routes = [
     children: DOMACI_RUTE,
   },
 
-  // Testovi (Task 21: lista, nov, detalj sa unosom poena, statistika)
+  // Testovi (Task 21: lista, nov, detalj sa unosom poena, statistika; online testovi: šabloni, test, konzola). Deca su
+  // lenja (`loadChildren`), da tabela ruta testova ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'testovi',
     title: 'Testovi',
     data: stalne(m('Nastava'), m('Testovi')),
-    children: TESTOVI_RUTE,
+    loadChildren: () => import('./features/testovi/testovi.routes').then(x => x.TESTOVI_RUTE),
   },
 
   // Ocene (Task 24: predlog ocena; koeficijenti su u hubu predmeta)
