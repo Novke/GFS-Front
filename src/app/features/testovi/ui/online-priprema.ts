@@ -35,11 +35,11 @@ const KLJUC = (g: string | null, z: ZadatakIzbora) => `${g ?? '-'}:${z.stavkaId}
             @let k = kljuc(g.grupaTesta, z);
             <article class="zadatak" [attr.data-zadatak]="k">
               <header class="glava">
-                <strong>{{ s?.rb }}.{{ z.mesto }} {{ s?.naziv }}</strong>
+                <strong>{{ oznaka(s?.rb, s?.broj, z.mesto) }} {{ s?.naziv }}</strong>
                 <span class="tiho">{{ z.tip }} · <span [attr.aria-label]="'nivo ' + z.nivo">{{ zvezdice(z.nivo) }}</span> · {{ formatPoena(z.maxPoena) }} p.
                   @if (t.rezim === 'POJEDINACNO') { · {{ z.studenata }} stud. }</span>
               </header>
-              <img class="slika" [src]="svg(z.svgId)" [alt]="'Zadatak ' + (s?.rb ?? '') + '.' + z.mesto" loading="lazy" />
+              <img class="slika" [src]="svg(z.svgId)" [alt]="'Zadatak ' + oznaka(s?.rb, s?.broj, z.mesto)" loading="lazy" />
               @if (resenja().has(k) && z.resenjeSvgId) {
                 <img class="slika" [src]="svg(z.resenjeSvgId)" alt="Rešenje" loading="lazy" data-resenje />
               }
@@ -54,14 +54,14 @@ const KLJUC = (g: string | null, z: ZadatakIzbora) => `${g ?? '-'}:${z.stavkaId}
                   @if (s && s.tipovi.length > 1) {
                     <label class="izbor">Tip
                       <select [value]="z.tipId" (change)="izvuci(z, g.grupaTesta, { tipId: +$any($event.target).value })" [disabled]="radi()" data-izaberi-tip>
-                        @for (tp of s.tipovi; track tp.tipId) { <option [value]="tp.tipId">{{ tp.naziv }}</option> }
+                        @for (tp of s.tipovi; track tp.tipId) { <option [value]="tp.tipId" [selected]="(tp.tipId) === (z.tipId)">{{ tp.naziv }}</option> }
                       </select>
                     </label>
                   }
                   <label class="izbor">Nivo
                     <select [value]="s?.izabraniNivo ?? 0" (change)="nivo(z, +$any($event.target).value)" [disabled]="radi()" data-izaberi-nivo>
-                      <option [value]="0">po šablonu</option>
-                      @for (n of [1, 2, 3]; track n) { <option [value]="n">{{ zvezdice(n) }}</option> }
+                      <option [value]="0" [selected]="(0) === (s?.izabraniNivo ?? 0)">po šablonu</option>
+                      @for (n of [1, 2, 3]; track n) { <option [value]="n" [selected]="(n) === (s?.izabraniNivo ?? 0)">{{ zvezdice(n) }}</option> }
                     </select>
                   </label>
                   @if (t.rezim === 'GRUPE') {
@@ -154,6 +154,12 @@ export class OnlinePriprema {
       void this.test().studenti;
       untracked(() => this.ucitajStudente());
     });
+  }
+
+  /** Oznaka zadatka: broj stavke, a kad stavka izvlači više zadataka i redni broj mesta (`mesto` je od 0): 2.1, 2.2, … */
+  protected oznaka(rb: number | undefined, broj: number | undefined, mesto: number): string {
+    if (rb === undefined) return '';
+    return (broj ?? 1) > 1 ? `${rb}.${mesto + 1}` : `${rb}.`;
   }
 
   protected stavka(id: number): StavkaTesta | undefined {

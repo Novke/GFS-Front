@@ -68,14 +68,14 @@ const izDetalja = (s: StavkaSablona): StavkaForme => ({
       <section class="kartica osnovno">
         <label class="polje">Predmet
           <select [value]="predmetId() ?? ''" (change)="postaviPredmet($any($event.target).value)" data-predmet>
-            <option value="" disabled>Izaberi predmet</option>
-            @for (p of reference.predmeti(); track p.id) { <option [value]="p.id">{{ p.naziv }}</option> }
+            <option value="" [selected]="'' === (predmetId() ?? '')" disabled>Izaberi predmet</option>
+            @for (p of reference.predmeti(); track p.id) { <option [value]="p.id" [selected]="(p.id) === (predmetId() ?? '')">{{ p.naziv }}</option> }
           </select>
         </label>
         <label class="polje">Tip testa
           <select [value]="tipTestaId() ?? ''" (change)="tipTestaId.set($any($event.target).value ? +$any($event.target).value : null); izmena()" data-tip>
-            <option value="">Bez tipa</option>
-            @for (t of tipovi(); track t.id) { <option [value]="t.id">{{ t.naziv }}</option> }
+            <option value="" [selected]="'' === (tipTestaId() ?? '')">Bez tipa</option>
+            @for (t of tipovi(); track t.id) { <option [value]="t.id" [selected]="(t.id) === (tipTestaId() ?? '')">{{ t.naziv }}</option> }
           </select>
         </label>
         <label class="polje siroko">Naziv
@@ -89,14 +89,14 @@ const izDetalja = (s: StavkaSablona): StavkaForme => ({
         </label>
         <label class="polje">Raspodela
           <select [value]="rezim()" (change)="rezim.set($any($event.target).value); izmena()" data-rezim>
-            <option value="GRUPE">Po grupama (A, B, …)</option>
-            <option value="POJEDINACNO">Svako svoj primerak</option>
+            <option value="GRUPE" [selected]="'GRUPE' === (rezim())">Po grupama (A, B, …)</option>
+            <option value="POJEDINACNO" [selected]="'POJEDINACNO' === (rezim())">Svako svoj primerak</option>
           </select>
         </label>
         @if (rezim() === 'GRUPE') {
           <label class="polje">Broj grupa
             <select [value]="brojGrupa()" (change)="brojGrupa.set(+$any($event.target).value); izmena()" data-broj-grupa>
-              @for (n of [1, 2, 3, 4]; track n) { <option [value]="n">{{ n }}</option> }
+              @for (n of [1, 2, 3, 4]; track n) { <option [value]="n" [selected]="(n) === (brojGrupa())">{{ n }}</option> }
             </select>
           </label>
         }

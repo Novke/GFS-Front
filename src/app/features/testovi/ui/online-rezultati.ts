@@ -31,7 +31,7 @@ import { PrimerakDialog } from './primerak-dialog';
             @for (s of r.studenti; track s.primerakId) {
               <tr [attr.data-rezultat-studenta]="s.primerakId">
                 <td><button type="button" class="link" (click)="otvori(s)" data-otvori-primerak>{{ s.prezime }} {{ s.ime }}</button>
-                  <span class="tiho">{{ s.indeks }}</span></td>
+                  <span class="tiho">&nbsp;· {{ s.indeks }}</span></td>
                 <td>{{ s.grupaTesta ?? '—' }}</td>
                 <td><app-status-chip [tekst]="stanje(s)" [ton]="ton(s)" />@if (s.prepisivao) { <app-status-chip tekst="Prepisivao" ton="danger" /> }</td>
                 @for (z of s.zadaci; track z.rb) {

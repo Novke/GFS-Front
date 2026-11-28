@@ -37,8 +37,8 @@ import { NAZIV_REZIMA, formatPoena } from '../data-access/online.pravila';
     <div class="filteri">
       <label class="izbor">Predmet
         <select [value]="predmetId() ?? ''" (change)="promeniPredmet($any($event.target).value)" data-filter-predmet>
-          <option value="">Svi predmeti</option>
-          @for (p of reference.predmeti(); track p.id) { <option [value]="p.id">{{ p.naziv }}</option> }
+          <option value="" [selected]="'' === (predmetId() ?? '')">Svi predmeti</option>
+          @for (p of reference.predmeti(); track p.id) { <option [value]="p.id" [selected]="(p.id) === (predmetId() ?? '')">{{ p.naziv }}</option> }
         </select>
       </label>
       <mat-checkbox [checked]="arhivirani()" (change)="arhivirani.set($event.checked)" data-filter-arhivirani>Arhivirani</mat-checkbox>

@@ -75,6 +75,9 @@ const TABOVI: { id: TabOnline; naziv: string }[] = [
               </button>
             }
             @case ('ZAVRSEN') {
+              <button matButton type="button" [disabled]="radi()" (click)="obrisi()" data-obrisi>
+                <mat-icon svgIcon="delete" aria-hidden="true" />Obriši
+              </button>
               @if (!t.pregledan) {
                 <button matButton="filled" type="button" [disabled]="radi()" (click)="zavrsiEvidentiranje()" data-zavrsi-evidentiranje>
                   <mat-icon svgIcon="check" aria-hidden="true" />Završi evidentiranje
@@ -224,7 +227,13 @@ export class OnlineTestPrikaz {
 
   /** Brisanje (iz zaglavlja papirnog testa ga nema): samo pre ulaza. */
   protected obrisi(): void {
-    ConfirmDialog.otvori(this.dialog, { naslov: 'Obrisati test?', tekst: 'Test i izvučeni zadaci se brišu.', potvrdi: 'Obriši', destruktivno: true })
+    ConfirmDialog.otvori(this.dialog, {
+      naslov: 'Obrisati test?',
+      tekst: this.test()?.stanje === 'ZAVRSEN'
+        ? 'Brišu se test, radovi studenata i njihovi poeni (i iz predloga ocene). Ovo se ne može vratiti.'
+        : 'Test i izvučeni zadaci se brišu.',
+      potvrdi: 'Obriši', destruktivno: true,
+    })
       .pipe(filter(Boolean), switchMap(() => this.api.obrisiTest(this.testId())))
       .subscribe(() => void this.router.navigate(['/testovi']));
   }

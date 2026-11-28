@@ -35,26 +35,26 @@ function danas(d = new Date()): string {
       <div class="polja">
         <label class="polje">Predmet
           <select [value]="predmetId() ?? ''" (change)="postaviPredmet($any($event.target).value)" data-o-predmet>
-            <option value="" disabled>Izaberi predmet</option>
-            @for (p of reference.predmeti(); track p.id) { <option [value]="p.id">{{ p.naziv }}</option> }
+            <option value="" [selected]="'' === (predmetId() ?? '')" disabled>Izaberi predmet</option>
+            @for (p of reference.predmeti(); track p.id) { <option [value]="p.id" [selected]="(p.id) === (predmetId() ?? '')">{{ p.naziv }}</option> }
           </select>
         </label>
         <label class="polje">Grupa
           <select [value]="grupaId() ?? ''" (change)="grupaId.set($any($event.target).value ? +$any($event.target).value : null)" data-o-grupa>
-            <option value="" disabled>Izaberi grupu</option>
-            @for (g of reference.grupe(); track g.id) { <option [value]="g.id">{{ g.naziv }}</option> }
+            <option value="" [selected]="'' === (grupaId() ?? '')" disabled>Izaberi grupu</option>
+            @for (g of reference.grupe(); track g.id) { <option [value]="g.id" [selected]="(g.id) === (grupaId() ?? '')">{{ g.naziv }}</option> }
           </select>
         </label>
         <label class="polje">Tip testa
           <select [value]="tipId() ?? ''" (change)="postaviTip($any($event.target).value)" [disabled]="predmetId() === null" data-o-tip>
-            <option value="" disabled>Izaberi tip</option>
-            @for (t of tipovi(); track t.id) { <option [value]="t.id">{{ t.naziv }}</option> }
+            <option value="" [selected]="'' === (tipId() ?? '')" disabled>Izaberi tip</option>
+            @for (t of tipovi(); track t.id) { <option [value]="t.id" [selected]="(t.id) === (tipId() ?? '')">{{ t.naziv }}</option> }
           </select>
         </label>
         <label class="polje">Šablon
           <select [value]="sablonId() ?? ''" (change)="postaviSablon($any($event.target).value)" [disabled]="!sabloni().length" data-o-sablon>
-            <option value="" disabled>{{ sabloni().length ? 'Izaberi šablon' : 'Predmet nema šablona' }}</option>
-            @for (s of sabloni(); track s.id) { <option [value]="s.id">{{ s.naziv }} ({{ poeni(s.maxPoena) }} p.)</option> }
+            <option value="" [selected]="'' === (sablonId() ?? '')" disabled>{{ sabloni().length ? 'Izaberi šablon' : 'Predmet nema šablona' }}</option>
+            @for (s of sabloni(); track s.id) { <option [value]="s.id" [selected]="(s.id) === (sablonId() ?? '')">{{ s.naziv }} ({{ poeni(s.maxPoena) }} p.)</option> }
           </select>
         </label>
         <label class="polje">Datum
@@ -65,14 +65,14 @@ function danas(d = new Date()): string {
         </label>
         <label class="polje">Raspodela
           <select [value]="rezim()" (change)="rezim.set($any($event.target).value)" data-o-rezim>
-            <option value="GRUPE">{{ nazivRezima.GRUPE }}</option>
-            <option value="POJEDINACNO">{{ nazivRezima.POJEDINACNO }}</option>
+            <option value="GRUPE" [selected]="'GRUPE' === (rezim())">{{ nazivRezima.GRUPE }}</option>
+            <option value="POJEDINACNO" [selected]="'POJEDINACNO' === (rezim())">{{ nazivRezima.POJEDINACNO }}</option>
           </select>
         </label>
         @if (rezim() === 'GRUPE') {
           <label class="polje">Broj grupa
             <select [value]="brojGrupa()" (change)="brojGrupa.set(+$any($event.target).value)" data-o-broj-grupa>
-              @for (n of [1, 2, 3, 4]; track n) { <option [value]="n">{{ n }}</option> }
+              @for (n of [1, 2, 3, 4]; track n) { <option [value]="n" [selected]="(n) === (brojGrupa())">{{ n }}</option> }
             </select>
           </label>
         }

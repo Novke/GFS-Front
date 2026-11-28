@@ -157,19 +157,28 @@ export class RacunarPage {
       this.zahtevSub?.unsubscribe();
       this.cekanjeSub?.unsubscribe();
     });
-    this.nalog.ja().subscribe({
-      next: ja => {
-        this.ja.set(ja);
-        this.sesija.ja.set(ja);
-        this.korak.set('prijavljen');
+    // `stanje` je javno (bez 401 na javnoj strani); `ja` se pita samo kad je neko već prijavljen na ovom računaru
+    this.nalog.stanje().subscribe({
+      next: st => {
+        if (!st.prijavljen) {
+          this.noviZahtev(true);
+          return;
+        }
+        this.nalog.ja().subscribe({
+          next: ja => {
+            this.ja.set(ja);
+            this.sesija.ja.set(ja);
+            this.korak.set('prijavljen');
+          },
+          error: (e: unknown) => {
+            if (status(e) !== 401) this.greska.set(porukaGreske(e));
+            this.noviZahtev(true);
+          },
+        });
       },
       error: (e: unknown) => {
-        if (status(e) === 401) {
-          this.noviZahtev(true);
-        } else {
-          this.greska.set(porukaGreske(e));
-          this.noviZahtev(true);
-        }
+        this.greska.set(porukaGreske(e));
+        this.noviZahtev(true);
       },
     });
   }
