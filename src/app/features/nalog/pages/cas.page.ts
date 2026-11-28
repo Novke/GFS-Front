@@ -104,7 +104,10 @@ const POKUSAJA_429 = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
-      <app-test-kartica />
+      @if (stanje()) {
+        <!-- kartica testa pita tek kad je student poznat (stanje časa je stiglo) -->
+        <app-test-kartica />
+      }
       <app-ankete-kartice mesto="cas" />
       @switch (faza()) {
         @case ('ucitavanje') {

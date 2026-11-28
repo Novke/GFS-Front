@@ -60,7 +60,10 @@ import { SesijaStudenta } from '../data-access/sesija-studenta';
           <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
         </p>
       }
-      <app-test-kartica />
+      @if (ja()) {
+        <!-- kartica testa pita tek kad je student poznat (bez 401 pre preusmerenja na prijavu) -->
+        <app-test-kartica />
+      }
       <app-ankete-kartice mesto="pocetna" />
       <div class="naredni"><app-naredni-casovi /></div>
       @if (!sesija.racunar()) {

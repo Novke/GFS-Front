@@ -61,6 +61,12 @@ import { IzmenaPolja, TestZadatak } from '../ui/test-zadatak.component';
           <p><a routerLink="/nalog/pocetna" class="dugme">Nazad na nalog</a></p>
         }
       } @else {
+        @if (store.zakljucano() && (p.faza === 'ULAZ' || p.faza === 'U_TOKU')) {
+          <div class="baner upozorenje" role="alert" data-drugi-uredjaj>
+            <p>Test je otvoren na drugom uređaju. Ovde ništa ne može da se sačuva.</p>
+            <button type="button" class="dugme glavno" [disabled]="salje()" (click)="nastaviOvde()" data-nastavi-ovde>Nastavi ovde</button>
+          </div>
+        }
         @switch (p.faza) {
           @case ('ULAZ') {
             <section class="kartica" data-ulaz>
@@ -84,12 +90,6 @@ import { IzmenaPolja, TestZadatak } from '../ui/test-zadatak.component';
             </section>
           }
           @case ('U_TOKU') {
-            @if (store.zakljucano()) {
-              <div class="baner upozorenje" role="alert" data-drugi-uredjaj>
-                <p>Test je otvoren na drugom uređaju. Ovde ništa ne može da se sačuva.</p>
-                <button type="button" class="dugme glavno" [disabled]="salje()" (click)="nastaviOvde()" data-nastavi-ovde>Nastavi ovde</button>
-              </div>
-            }
             @if (store.imaGresku() && !store.zakljucano()) {
               <p class="baner greska" role="alert" data-nesacuvano>
                 Neki odgovori nisu sačuvani. Ne zatvaraj stranu; pokušavam ponovo, a uneto ostaje i ako se strana osveži.
@@ -323,7 +323,8 @@ export class TestPage {
     this.salje.set(true);
     const g = await this.store.udji(this.trebaKod() ? this.kod().trim() || null : null, false);
     this.salje.set(false);
-    if (g) patchGreska(this.store, g);
+    // drugi uređaj ima svoju traku sa „Nastavi ovde“
+    if (g && !this.store.zakljucano()) patchGreska(this.store, g);
   }
 
   protected async nastaviOvde(): Promise<void> {
