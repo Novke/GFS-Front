@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, signal, untracked, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
@@ -22,6 +22,7 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { PORUKA_PRAGA } from '../data-access/test.store';
 import { TestoviApi } from '../../../core/api/testovi.api';
 import { VARIJANTE } from '../../../core/api/testovi.models';
+import { NoviOnlineTest } from '../ui/novi-online-test';
 
 /** Vrednost izbora tipa za "Nov tip…" (pravi id je uvek pozitivan). */
 export const NOV_TIP = -1;
@@ -76,13 +77,26 @@ const LABELE: Record<ImeKontrole, string> = {
     MatOption,
     MatProgressSpinner,
     MatSelect,
+    NoviOnlineTest,
     PageHeader,
     ReactiveFormsModule,
     RouterLink,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-page-header naslov="Nov test" podnaslov="Posle čuvanja dodaješ ispitanike i unosiš poene u tabelu." />
+    <app-page-header naslov="Nov test" [podnaslov]="online() ? 'Studenti rade test na računaru; zadaci se izvlače iz banke po šablonu.' : 'Posle čuvanja dodaješ ispitanike i unosiš poene u tabelu.'" />
+
+    <div class="nacin">
+      <mat-button-toggle-group [value]="online() ? 'ONLINE' : 'PAPIR'" (change)="promeniNacin($event.value)" aria-label="Način testa"
+                               [hideSingleSelectionIndicator]="true" data-nacin>
+        <mat-button-toggle value="PAPIR" data-nacin-papir>Na papiru</mat-button-toggle>
+        <mat-button-toggle value="ONLINE" data-nacin-online>Online</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+
+    @if (online()) {
+      <app-novi-online-test [pocetniPredmet]="idPredmeta()" [pocetnaGrupa]="idGrupe()" />
+    } @else {
 
     @if (reference.imaGresku() && !referencePodaci()) {
       <app-error-panel [poruka]="reference.greska()" (ponovo)="reference.ucitaj()" />
@@ -195,9 +209,11 @@ const LABELE: Record<ImeKontrole, string> = {
         </button>
       </div>
     </form>
+    }
   `,
   styles: `
     :host { display: block; }
+    .nacin { margin: 0 0 12px; --mat-button-toggle-height: 40px; }
     .forma { display: flex; flex-direction: column; gap: 4px; max-width: 640px; padding: 20px 16px 8px; border: 1px solid var(--line);
       border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
     .dva { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
@@ -224,6 +240,13 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
   /** Predizbor iz linka (`?predmet=&grupa=`); neispravna ili nepostojeća vrednost se ignoriše. */
   readonly predmet = input<string>();
   readonly grupa = input<string>();
+  /** `?nacin=online` otvara online formu (podrazumevano papir). */
+  readonly nacin = input<string>();
+
+  protected readonly online = signal(false);
+  protected readonly idPredmeta = computed(() => idIzParametra(this.predmet()));
+  protected readonly idGrupe = computed(() => idIzParametra(this.grupa()));
+  private readonly onlineForma = viewChild(NoviOnlineTest);
 
   protected readonly novTipVrednost = NOV_TIP;
   protected readonly maxNaziv = MAX_NAZIV_TIPA;
@@ -270,6 +293,10 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
   protected readonly referencePodaci = computed(() => this.reference.predmeti().length > 0 || this.reference.grupe().length > 0);
 
   constructor() {
+    effect(() => {
+      const n = this.nacin();
+      untracked(() => this.online.set(n === 'online'));
+    });
     this.forma.controls.novTip.disable();
     effect(() => {
       const predmeti = this.reference.predmeti();
@@ -309,7 +336,15 @@ export class NoviTest implements OnInit, NemaNesacuvanih {
   }
 
   imaNesacuvanihIzmena(): boolean {
+    if (this.online()) {
+      return this.onlineForma()?.dirnuto ?? false;
+    }
     return this.forma.dirty && !this.poslato;
+  }
+
+  protected promeniNacin(v: 'PAPIR' | 'ONLINE'): void {
+    this.online.set(v === 'ONLINE');
+    void this.router.navigate([], { queryParams: { nacin: v === 'ONLINE' ? 'online' : null }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private predizbor(kontrola: FormControl<number | null>, id: number | null, postojeci: number[]): void {

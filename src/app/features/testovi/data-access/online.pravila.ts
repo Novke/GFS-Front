@@ -98,3 +98,25 @@ export function prikazUnetog(v: unknown, opcije: { id: number; tekst: string }[]
   }
   return String(v);
 }
+
+/** Slika zadatka ili rešenja (render banke, `RENDER_SVG`). */
+export function svgUrl(id: string): string {
+  return `api/public/mediji/${encodeURIComponent(id)}`;
+}
+
+export type TabOnline = 'priprema' | 'uzivo' | 'studenti' | 'zadaci';
+
+/** Tab koji se otvara kad nastavnik dođe na test: priprema pre ulaza, konzola dok traje, rezultati posle. */
+export function podrazumevaniTab(stanje: StanjeOnline): TabOnline {
+  return stanje === 'PRIPREMA' ? 'priprema' : stanje === 'ZAVRSEN' ? 'studenti' : 'uzivo';
+}
+
+export function tabIzUpita(v: string | null | undefined): TabOnline | null {
+  return v === 'priprema' || v === 'uzivo' || v === 'studenti' || v === 'zadaci' ? v : null;
+}
+
+/** `★★☆` za nivo 1-3. */
+export function zvezdice(nivo: number): string {
+  const n = Math.max(0, Math.min(3, Math.round(nivo)));
+  return '★'.repeat(n) + '☆'.repeat(3 - n);
+}
