@@ -12,7 +12,7 @@ import type { MockApi } from './mock-api';
  */
 
 const API = new RegExp(
-  '^(GET|POST) /api/public/nalog/(stanje|ja|cas|casovi|cas/skeniraj|obavestenja|ankete|ankete/\\d+/glas)$'
+  '^(GET|POST) /api/public/nalog/(testovi|stanje|ja|cas|casovi|cas/skeniraj|obavestenja|ankete|ankete/\\d+/glas)$'
   + '|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$',
 );
 

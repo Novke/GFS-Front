@@ -11,7 +11,7 @@ import { FAJL_EXCEL, FAJL_WORD, PREDMET, PREZENTACIJA } from './mock-portal';
  * smeju da zovu samo `api/public/*`, bez 401 (osim namerno mokovanog 401 na slanju mejla gostu).
  */
 
-const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|fajlovi|ocena))?|prezentacije\/\d+|fajlovi\/\d+\/mejl|ankete|ankete\/\d+\/glas)$|^GET \/api\/public\/nalog\/(obavestenja|push)$|^GET \/api\/public\/mediji\/[\w-]+$/;
+const API_NALOGA = /^(GET|POST) \/api\/public\/nalog\/(testovi|ja|cas|casovi|predmeti(\/\d+\/(prisustvo|vezbanje|moji-zadaci|prezentacije|fajlovi|ocena))?|prezentacije\/\d+|fajlovi\/\d+\/mejl|ankete|ankete\/\d+\/glas)$|^GET \/api\/public\/nalog\/(obavestenja|push)$|^GET \/api\/public\/mediji\/[\w-]+$/;
 
 async function bezOzbiljnihKrsenja(page: Page): Promise<void> {
   await expect
