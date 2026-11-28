@@ -291,6 +291,11 @@ export const PolaganjeStore = signalStore(
         }));
       },
 
+      /** Poruka u baneru strane (ulaz, predaja). */
+      postaviGresku(poruka: string | null): void {
+        patchState(store, { greska: poruka });
+      },
+
       /** Ponovno čitanje bez prekidanja (čekaonica na 5 s, posle isteka roka). */
       osvezi(): void {
         ucitajTiho();
