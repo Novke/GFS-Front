@@ -1639,6 +1639,67 @@ mockup `mockups/2026-11-23-brza-anketa/` next to it. Anonymous to the teacher: n
   `e2e/anketa-nastavnik.spec.ts` and `e2e/anketa-student.spec.ts`; student API regexes in the public-network specs include
   `ankete|ankete/\d+/glas`.
 
+## Online testovi (faze 1 i 2)
+
+Branch `feature/online-testovi`. Contract: deploy repo `docs/superpowers/plans/2026-11-28-online-testovi-faze-1-2.md` (teacher API section 4,
+student API section 5, front section 6), spec `docs/superpowers/specs/2026-11-28-online-testovi-design.md` (7, 8, 11-14, 17), mockup
+`docs/superpowers/mockups/2026-11-28-online-testovi/`. Models mirror the contract field for field: `features/testovi/data-access/online.models.ts`
+and `features/nalog/data-access/testovi-studenta.models.ts`.
+- **Routes (teacher, behind `nastavnikGuard`):** `testovi` is now `loadChildren` (`testovi.routes.ts`): `sabloni`, `sabloni/novo` and
+  `sabloni/:id` (editor, `unsavedChangesGuard`) sit before the `:id` matcher. `testovi/novo?nacin=online` opens the online form
+  (toggle "Na papiru / Online"; the paper form is unchanged and stays the default). `testovi/:id` renders `ui/online-test` (behind
+  `@defer`) when `TestDetails.nacin === 'ONLINE'`, else the old paper page. `testovi/:id/projektor` is a top-level route in
+  `app.routes.ts` (ProjectorLayout, `projekcija: true`): clock, `<base>/r`, entry code, "Predalo X od Y", no names.
+- **Teacher pieces:** `OnlineTestoviApi` (all of section 4, plus `banka/stablo?namena=TEST` and `banka/grupe/{id}/varijante` read here
+  because `gfs/granice-featurea` forbids importing banka `data-access`), `online.pravila.ts` (clock, labels, tabs, points; duplicated from
+  the student side on purpose for the same reason), `online-ispravke.ts` (`kljucIzTeksta`: "Ispravi ključ" text -> `OdgovorPolja`).
+  `pages/sabloni-lista`, `pages/sablon-editor` (stavke with sources from `ui/izvor-dialog`, at most 10; `POST sabloni-testa/provera`
+  500 ms after every change once each stavka has a source, shows candidates and warnings), `ui/novi-online-test` (latest template of the
+  type by `izmenjeno`; group students checked, older ones unchecked, "Dodaj studenta" = `StudentPicker` on tab "Stariji"; "Generiši"),
+  `ui/online-test` (flow buttons per state and the tabs Priprema / Uživo / Studenti / Po zadacima; default tab by state),
+  `ui/online-priprema`, `ui/online-konzola` (polls `konzola` every 3 s while visible), `ui/online-rezultati` + `ui/primerak-dialog`
+  (manual points with a note), `ui/online-odgovori` (Prihvati, Poništi polje, Ispravi ključ, Vrati), `ui/objava-testa` (also on an
+  evaluated paper test; the checkbox "Pokaži tačne odgovore" only for online), `ui/unos-dialog` (one-field dialog, no `prompt()`).
+  Online tests have no "Nov tip…": the type is one of the subject's existing types.
+- **Student routes (public, lazy):** `nalog/test/:id` is a top-level matcher in `app.routes.ts` with its own `PublicLayout` and
+  `celaStrana: true` (the account shell is 640 px wide), before `nalog`; `nalog/test/:id/rezultat` is a child of the account shell;
+  `nalog/racunar/:token` (phone confirms a computer) is outside the shell; `/r` is top-level (`PublicLayout`, own `**`). `JAVNI_IZRAZ`
+  in `e2e/javne-putanje.ts` has `r(/|$)` after `f(/|$)`; the server regex gets the same branch at release.
+- **Student pieces (`features/nalog`):** `TestoviStudentaApi` (section 5 and 5.1), `testovi-studenta.pravila.ts` (timings: save debounce
+  800 ms, waiting room 5 s, test card 20 s, self logout on RACUNAR 2 min, refresh 11 s after the deadline; retry 2/4/8/15 s; copy key
+  `gfs-test-<test>-<zadatak>` in `sessionStorage`), `PolaganjeStore` (provided by `pages/test.page`): every field goes to memory and the
+  copy at once, then `PUT` with `rev`; 409 `Zastarela izmena.` = `GET`, keep the local value, take the server `rev`, resend (3 tries);
+  409 other device = locked with "Nastavi ovde" (`ulaz` with `preuzmi: true`); 401 = logged out; 400/404/413 shown without retry;
+  429 and network errors retry with backoff and nothing is lost. A copy that differs from the server wins on load and is sent at once.
+  `pages/test.page` (ULAZ with entry code, CEKANJE polls, U_TOKU list/strip of tasks with `ui/test-zadatak`, clock from `rokMs` and
+  `serverVremeMs`, "Predaj" with the empty-field count, PREDATO/ZAVRSEN with logout; soft signals `NAPUSTIO`/`VRATIO` on
+  `visibilitychange`/`blur`; never a correct/incorrect hint), `pages/rezultat-testa.page`, tab "Testovi" on `pages/predmet.page`
+  (`?k=testovi`), `ui/test-kartica.component` (Početna and Čas, `GET testovi` every 20 s while visible), `pages/racunar.page` (`/r`:
+  QR of `nalog/racunar/<token>` with `qrcode`, the 4-digit number, renewal 15 s before expiry at most 5 times then a button, `GET zahtev`
+  every 3 s only while the QR is visible, "Imam kod" = `prijava` with `racunar: true`, "Odjavi i prijavi mene"), `pages/racunar-odobri.page`.
+  `SesijaStudenta` (root) holds `ja` so the RACUNAR session hides the install card and push settings and shows the strip
+  "Prijavljen: Ime · Nisi ti? Odjavi" (`data-racunar-traka`) in the tab shell.
+- **Allow-list:** nothing new. The new public files import only `core/api/api-error`, `core/api/api-url`, `shared/ui/confirm-dialog`,
+  `shared/util/{datum.pipe,indeks}`, `features/uzivo/ui/{polja-zadatka,tekst-formule,tekst-formule.component}`, all already allowed.
+- **Budgets:** the student Uživo page is unchanged (121 447 B, `e2e/lenji-formule.spec.ts`). The initial total grew by about 200 B
+  (799 505 -> 799 708 B, measured against `origin/staging`) in the shared Angular chunk (core APIs now used by the new lazy code). It is
+  still under the 800 000 B limit, which was not raised. The next shared import will likely hit the limit, so measure first.
+  The presentation review page itself did not change. Its closure still grew from 96 670 to 96 720 B (34 027 -> 34 077 B gzip):
+  `/r` and `nalog/test/:id` also import `nalog.pravila`, so rollup split it into its own chunk of about 0.4 kB. That put the gzip
+  total 15 B over the +10 % limit. `e2e/lenji-pregled.spec.ts` now carries `RAST_ONLINE_TESTOVA_GZIP = 100`, a one-off allowance
+  with a dated comment; the raw size stays within its budget.
+- **Test card only for a known student:** Početna renders `<app-test-kartica />` only inside `@if (ja())`, and Čas only once `stanje()`
+  arrived, so an anonymous visitor never sends `GET testovi` (that would be a 401 on a public route before the redirect to login).
+- **Deviations from the contract (chosen as closest):** `PolaganjeStudenta` has no `trebaKod`/`trajanjeMin`, so the test page takes them
+  from `GET testovi`; `TestDetails.nacin`, `stanjeOnline`, `objavljeno`, `objavaTacni` are optional (an older backend omits them = paper);
+  `StudentJa.nacin` is optional (missing = not RACUNAR).
+- **e2e:** `e2e/mock-online-testovi.ts` (`mock.online`, no online tests by default; helpers `napravi(stanje)`, `pokreniTest`,
+  `izmenaSaStrane`, `unetoStudenta`, `predaoStudent`, `odobriZahtev`, `drugiUredjaj`), specs `e2e/online-test-student.spec.ts` (network
+  guard on `nalog/test/:id`, `nalog/racunar/:token` and `/r`, no answer key in any student response, stale 409, other device, result,
+  axe day/night) and `e2e/online-test-nastavnik.spec.ts` (template, generate, flow, console, results, publish, projector, axe day/night).
+  The student API regexes of the public-network specs include `testovi` (the card asks on Početna and Čas); unit specs of Početna and
+  Čas flush `GET api/public/nalog/testovi` in `afterEach`.
+
 ## Releases and stale tabs (`core/izdanje`)
 
 A tab opened before a deploy keeps running the old build. It breaks the moment it asks for a lazy chunk the new build no longer
