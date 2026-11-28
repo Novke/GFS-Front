@@ -21,6 +21,8 @@ function ja(izmene: Partial<StudentJa> = {}): StudentJa {
 }
 
 /** Tab Početna: pozdrav, WhatsApp grupa (samo kanonski link), "Naredni časovi" i mesto za instalaciju; 401 vodi na prijavu. */
+const TESTOVI = 'api/public/nalog/testovi';
+
 describe('PocetnaPage', () => {
   let fixture: ComponentFixture<PocetnaPage>;
   let http: HttpTestingController;
@@ -35,6 +37,8 @@ describe('PocetnaPage', () => {
 
   afterEach(() => {
     http.match(CASOVI).filter(r => !r.cancelled).forEach(r => r.flush({ termini: [] }));
+    // kartica testa (online testovi) pita svoje na Početnoj; ovi testovi je ne gledaju
+    http.match(TESTOVI).filter(r => !r.cancelled).forEach(r => r.flush([]));
     fixture?.destroy();
     http.verify();
   });

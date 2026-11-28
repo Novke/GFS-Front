@@ -16,7 +16,7 @@ import { MockApi } from './mock-api';
 
 const API = new RegExp(
   // `casovi`: kartica "Naredni časovi" na Početnoj (najava odsustva; bez rasporeda u moku prazna); `obavestenja`: zvono ljuske
-  '^(GET|POST) /api/public/nalog/(stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi|obavestenja|ankete|ankete/\\d+/glas)$'
+  '^(GET|POST) /api/public/nalog/(testovi|stanje|kod|prijava|ja|cas|casovi|cas/skeniraj|cas/potvrdi|obavestenja|ankete|ankete/\\d+/glas)$'
   + '|^GET /api/public/uzivo/123456(/ja)?$|^POST /api/public/uzivo/123456/prijava$',
 );
 /** Token oblika servera (`<predavanjeId>.<22 znaka>`) za živo predavanje 1 iz fiksture. */
@@ -107,9 +107,9 @@ test.describe('čekiranje (telefon, bez sesije nastavnika)', () => {
     ocekuj(mock.zahteviZa('public/nalog/cas/potvrdi', 'POST')).toHaveLength(1);
     ocekuj(await page.evaluate(() => sessionStorage.getItem('gfs-cas-kljuc'))).toBeNull();
     // tab Čas je samo uživo: "Naredni časovi" su na Početnoj, pa ih ovaj tok nikad ne čita; zvono ljuske čita svoj API
-    // nezavisno od toka čekiranja, pa se ne broji
+    // nezavisno od toka čekiranja, pa se ne broji; isto važi za karticu online testa (čita ga tek kad je stanje časa stiglo)
     ocekuj(mock.zahteviZa('public/nalog/casovi', 'GET')).toHaveLength(0);
-    ocekuj(javnaMreza.api.filter(z => z !== 'GET /api/public/nalog/obavestenja')).toEqual([
+    ocekuj(javnaMreza.api.filter(z => z !== 'GET /api/public/nalog/obavestenja' && z !== 'GET /api/public/nalog/testovi')).toEqual([
       'POST /api/public/nalog/cas/skeniraj',
       'GET /api/public/nalog/stanje',
       'POST /api/public/nalog/kod',

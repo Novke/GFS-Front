@@ -6,7 +6,8 @@ import { Route } from '@angular/router';
  * (`NotFound` je u `core/layout`, van allow-liste javnog feature-a).
  *
  * Prijavljen student (spec studentskog dela 12.1) je u ljusci tabova Početna · Čas · Predmeti · Ja (`NalogTabovi`, lenja);
- * strana prijave (`''`) i `moodle` su van nje. Pregled prezentacije je zaseban lenji chunk (projektorski renderer slajda).
+ * strana prijave (`''`), `moodle` i `racunar/:token` su van nje. Polaganje testa (`nalog/test/:id`, cela širina) je ruta u
+ * `app.routes.ts` (svoj `PublicLayout` sa `celaStrana`). Pregled prezentacije je zaseban lenji chunk (projektorski renderer slajda).
  */
 export const NALOG_RUTE: Route[] = [
   {
@@ -20,6 +21,12 @@ export const NALOG_RUTE: Route[] = [
     path: 'moodle',
     title: 'Moodle',
     loadComponent: () => import('./pages/moodle.page').then(x => x.MoodlePage),
+  },
+  {
+    // telefon odobrava prijavu računara (QR sa `/r`); neprijavljen ide na `nalog?nazad=nalog/racunar/<token>`
+    path: 'racunar/:token',
+    title: 'Prijava računara',
+    loadComponent: () => import('./pages/racunar-odobri.page').then(x => x.RacunarOdobriPage),
   },
   {
     path: '',
@@ -64,6 +71,12 @@ export const NALOG_RUTE: Route[] = [
         path: 'prezentacija/:id',
         title: 'Prezentacija',
         loadComponent: () => import('./pages/pregled-prezentacije.page').then(x => x.PregledPrezentacijePage),
+      },
+      {
+        // objavljen rezultat testa (link iz taba Testovi na strani predmeta)
+        path: 'test/:id/rezultat',
+        title: 'Rezultat testa',
+        loadComponent: () => import('./pages/rezultat-testa.page').then(x => x.RezultatTestaPage),
       },
       {
         path: 'ja',

@@ -13,6 +13,8 @@ import { AnketeKarticeComponent } from '../ui/ankete-kartice.component';
 import { InstalacijaKartica } from '../ui/instalacija-kartica.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { NaredniCasovi } from '../ui/naredni-casovi.component';
+import { TestKarticaComponent } from '../ui/test-kartica.component';
+import { SesijaStudenta } from '../data-access/sesija-studenta';
 
 /**
  * Tab **Početna** (`/nalog/pocetna`, prvi tab posle prijave): pozdrav po imenu sa grupom i generacijom
@@ -26,7 +28,7 @@ import { NaredniCasovi } from '../ui/naredni-casovi.component';
  */
 @Component({
   selector: 'app-pocetna-page',
-  imports: [AnketeKarticeComponent, InstalacijaKartica, MatButton, MatProgressSpinner, NalogOkvir, NaredniCasovi],
+  imports: [AnketeKarticeComponent, InstalacijaKartica, TestKarticaComponent, MatButton, MatProgressSpinner, NalogOkvir, NaredniCasovi],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Studentski portal">
@@ -58,9 +60,15 @@ import { NaredniCasovi } from '../ui/naredni-casovi.component';
           <mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...
         </p>
       }
+      @if (ja()) {
+        <!-- kartica testa pita tek kad je student poznat (bez 401 pre preusmerenja na prijavu) -->
+        <app-test-kartica />
+      }
       <app-ankete-kartice mesto="pocetna" />
       <div class="naredni"><app-naredni-casovi /></div>
-      <div class="instalacija" data-instalacija-mesto><app-instalacija-kartica mesto="pocetna" /></div>
+      @if (!sesija.racunar()) {
+        <div class="instalacija" data-instalacija-mesto><app-instalacija-kartica mesto="pocetna" /></div>
+      }
     </app-nalog-okvir>
   `,
   styles: `
@@ -100,6 +108,7 @@ export class PocetnaPage {
   private readonly router = inject(Router);
 
   protected readonly ja = signal<StudentJa | null>(null);
+  protected readonly sesija = inject(SesijaStudenta);
   protected readonly greska = signal<string | null>(null);
   protected readonly waLink = computed(() => waLinkZaPrikaz(this.ja()?.waLink));
   /** `Grupa GD-2026 · generacija 2026`; bez grupe i generacije (stari backend) ništa. */
@@ -119,7 +128,10 @@ export class PocetnaPage {
     this.zahtev?.unsubscribe();
     this.greska.set(null);
     this.zahtev = this.api.ja().subscribe({
-      next: ja => this.ja.set(ja),
+      next: ja => {
+        this.ja.set(ja);
+        this.sesija.ja.set(ja);
+      },
       error: (e: unknown) => {
         if (status(e) === 401) {
           void this.router.navigateByUrl(putanjaPrijave(this.router.url));

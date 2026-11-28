@@ -82,6 +82,7 @@ describe('portal.pravila', () => {
   it('kartica, id i nivo iz rute/upita: samo poznate vrednosti', () => {
     expect(karticaIzUpita('istorija')).toBe('istorija');
     expect(karticaIzUpita('ocena')).toBe('ocena');
+    expect(karticaIzUpita('testovi')).toBe('testovi');
     expect(karticaIzUpita('x')).toBe('materijali');
     expect(karticaIzUpita(null)).toBe('materijali');
     expect(idIzRute('12')).toBe(12);

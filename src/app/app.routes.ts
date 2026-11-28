@@ -15,7 +15,6 @@ import { OCENE_RUTE } from './features/ocene/ocene.routes';
 import { PREDAVANJA_RUTE } from './features/predavanja/predavanja.routes';
 import { PREDMETI_RUTE } from './features/predmeti/predmeti.routes';
 import { STUDENTI_RUTE } from './features/studenti/studenti.routes';
-import { TESTOVI_RUTE } from './features/testovi/testovi.routes';
 import { IZVODJENJA_RUTE, PREZENTACIJE_RUTE, UZIVO_JAVNE_RUTE } from './features/uzivo/uzivo.routes';
 
 /*
@@ -62,12 +61,13 @@ const nastavnickeRute: Routes = [
     children: DOMACI_RUTE,
   },
 
-  // Testovi (Task 21: lista, nov, detalj sa unosom poena, statistika)
+  // Testovi (Task 21: lista, nov, detalj sa unosom poena, statistika; online testovi: šabloni, test, konzola). Deca su
+  // lenja (`loadChildren`), da tabela ruta testova ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
   {
     path: 'testovi',
     title: 'Testovi',
     data: stalne(m('Nastava'), m('Testovi')),
-    children: TESTOVI_RUTE,
+    loadChildren: () => import('./features/testovi/testovi.routes').then(x => x.TESTOVI_RUTE),
   },
 
   // Ocene (Task 24: predlog ocena; koeficijenti su u hubu predmeta)
@@ -171,6 +171,25 @@ export const routes: Routes = [
     children: UZIVO_JAVNE_RUTE,
   },
 
+  // Online test studenta (`nalog/test/:id`): ista pravila kao nalog (samo api/public/nalog/* i api/public/mediji/*), ali cela
+  // širina ekrana (spisak zadataka levo, zadatak desno), pa svoj `PublicLayout` sa `celaStrana`. Nebrojni id pada u nalog (404).
+  {
+    matcher: putanjaSaId('nalog/test/:id'),
+    component: PublicLayout,
+    data: { celaStrana: true },
+    children: [{ path: '', title: 'Test', loadComponent: () => import('./features/nalog/pages/test.page').then(x => x.TestPage) }],
+  },
+
+  // Prijava računara u laboratoriji (`/r`, online testovi faza 2): QR + broj, anonimno; samo api/public/nalog/*.
+  {
+    path: 'r',
+    component: PublicLayout,
+    children: [
+      { path: '', title: 'Prijava na računaru', loadComponent: () => import('./features/nalog/pages/racunar.page').then(x => x.RacunarPage) },
+      { path: '**', title: 'Stranica nije pronađena', data: { javna: true }, component: NotFound },
+    ],
+  },
+
   // Nalog studenta (telefon, bez sesije nastavnika i bez čuvara): samo assets/*, api/public/nalog/* i (nalog/moodle)
   // api/public/lti/povezi i api/public/lti/povezivanje. Pogrešan link pod /nalog ostaje javni 404 u javnom layoutu (kao /upis).
   // Tabela ruta je lenja (`loadChildren`, kao banka), da ne ide u početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).
@@ -223,6 +242,14 @@ export const routes: Routes = [
         loadComponent: () => import('./features/predavanja/pages/predavanje-projektor').then(x => x.PredavanjeProjektor),
       },
     ],
+  },
+  // Projektor online testa: sat, adresa za prijavu računara, ulazni kod, „predalo 9 od 14“, bez imena.
+  {
+    matcher: putanjaSaId('testovi/:id/projektor'),
+    canMatch: [nastavnikGuard],
+    component: ProjectorLayout,
+    data: { projekcija: true },
+    children: [{ path: '', title: 'Projektor testa', loadComponent: () => import('./features/testovi/pages/test-projektor').then(x => x.TestProjektor) }],
   },
   // Tabla sa predavanja (spec crtanja 5.7) i njena publika: bez ljuske, uvek svetlo; deca su lenja (`TABLA_RUTE`), da ne
   // opterete početni paket (budžet 800 000 B, `e2e/lenji-editor.spec.ts`).

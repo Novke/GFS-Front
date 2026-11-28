@@ -99,10 +99,10 @@ export function predlogOcene(o: OcenaStudenta): string {
 }
 
 /** Kartice strane predmeta (`?k=`): nepoznata vrednost je Materijali. */
-export type KarticaPredmeta = 'materijali' | 'istorija' | 'ocena';
+export type KarticaPredmeta = 'materijali' | 'istorija' | 'ocena' | 'testovi';
 
 export function karticaIzUpita(v: string | null | undefined): KarticaPredmeta {
-  return v === 'istorija' || v === 'ocena' ? v : 'materijali';
+  return v === 'istorija' || v === 'ocena' || v === 'testovi' ? v : 'materijali';
 }
 
 /** Id iz rute (`predmet/:id`): samo pozitivan ceo broj, inače `null` (stranica tada kaže "nije pronađeno" bez zahteva). */

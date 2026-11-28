@@ -64,6 +64,9 @@ export function brojTestova(n: number): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-page-header naslov="Testovi" podnaslov="Kolokvijumi, testovi i popravni, svih predmeta i grupa">
+      <a akcije matButton="outlined" routerLink="/testovi/sabloni" data-sabloni>
+        <mat-icon svgIcon="description" aria-hidden="true" />Šabloni testova
+      </a>
       <a akcije matButton="filled" routerLink="/testovi/novo" [queryParams]="novoParametri()" data-novo>
         <mat-icon svgIcon="add" aria-hidden="true" />Nov test
       </a>

@@ -145,4 +145,41 @@ describe('NoviTest', () => {
     await posalji();
     expect(http.expectOne('api/test').request.body).toMatchObject({ maxPoena: 30, pragProlaza: 25 });
   });
+
+  it('online: šablon tipa se bira sam, grupa čekirana, stariji nisu; Generiši šalje izabrane i vodi na test', async () => {
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/testovi/novo?predmet=1&grupa=4&nacin=online');
+    http.expectOne('api/predmeti').flush([{ id: 1, naziv: 'UPR' }]);
+    http.expectOne('api/grupe').flush([{ id: 4, naziv: 'GD-2025', godinaUpisa: 2025, brojStudenata: 30 }]);
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    http.expectOne('api/predmeti/1/tipovi').flush([{ id: 2, naziv: 'Kolokvijum 1', aktivan: true }]);
+    http.expectOne(r => r.url === 'api/sabloni-testa' && r.params.get('predmetId') === '1').flush([
+      { id: 8, predmetId: 1, tipTestaId: null, tipTesta: null, naziv: 'Stari', trajanjeMin: 30, rezim: 'POJEDINACNO', brojGrupa: 1,
+        maxPoena: 10, brojStavki: 1, arhiviran: false, izmenjeno: '2026-10-01T10:00:00' },
+      { id: 9, predmetId: 1, tipTestaId: 2, tipTesta: 'Kolokvijum 1', naziv: 'K1 online', trajanjeMin: 60, rezim: 'GRUPE', brojGrupa: 3,
+        maxPoena: 30, brojStavki: 4, arhiviran: false, izmenjeno: '2026-11-20T10:00:00' },
+    ]);
+    http.expectOne(r => r.url === 'api/test/online/kandidati-studenti' && r.params.get('grupaId') === '4').flush({
+      grupa: [{ id: 11, ime: 'Ana', prezime: 'Anić', indeks: 'GD1', godina: 2025, stariji: false }],
+      stariji: [{ id: 12, ime: 'Bora', prezime: 'Borić', indeks: 'GD7', godina: 2024, stariji: true }],
+    });
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+    expect(el().querySelector('[data-online-forma]')).not.toBeNull();
+    expect(el().querySelector('[data-sacuvaj]')).toBeNull();
+    expect(el().querySelector<HTMLSelectElement>('[data-o-sablon]')!.value).toBe('9');
+    expect(el().querySelector<HTMLInputElement>('[data-o-trajanje]')!.value).toBe('60');
+    expect(el().textContent).toContain('Studenti (1)');
+    expect(el().textContent).toContain('stariji');
+
+    el().querySelector<HTMLButtonElement>('button[data-generisi]')!.click();
+    harness.detectChanges();
+    const req = http.expectOne('api/test/online');
+    expect(req.request.context.get(LOCAL_ERRORS)).toBe(true);
+    expect(req.request.body).toMatchObject({ sablonId: 9, grupaId: 4, tipTestaId: 2, trajanjeMin: 60, rezim: 'GRUPE', brojGrupa: 3, studentIds: [11] });
+    req.flush({ testId: 90 });
+    await vi.waitFor(() => expect(TestBed.inject(Router).url).toBe('/testovi/90'));
+  });
 });

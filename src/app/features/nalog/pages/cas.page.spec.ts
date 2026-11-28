@@ -29,6 +29,8 @@ const greska = (status: number, reason?: string) => ({ body: reason ? { reason }
  * "Uđi u prezentaciju") i van časa "Predavanje je u toku" (30 s) ili "Nisi na času" (60 s). Zove samo
  * `api/public/nalog/cas*`; "Naredni časovi" su na Početnoj.
  */
+const TESTOVI = 'api/public/nalog/testovi';
+
 describe('CasPage', () => {
   let fixture: ComponentFixture<CasPage>;
   let http: HttpTestingController;
@@ -48,6 +50,8 @@ describe('CasPage', () => {
   });
 
   afterEach(() => {
+    // kartica testa (online testovi) pita svoje na svakom prikazu Časa; ovi testovi je ne gledaju
+    http.match(TESTOVI).filter(r => !r.cancelled).forEach(r => r.flush([]));
     fixture?.destroy();
     http.verify();
     vi.useRealTimers();

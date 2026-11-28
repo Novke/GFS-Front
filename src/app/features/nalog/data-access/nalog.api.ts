@@ -22,9 +22,13 @@ export class NalogApi {
     return this.http.post<KodOdgovor>(`${this.koren}/kod`, { indeks: s.indeks, godina: s.godina }, { context: this.lokalneGreske });
   }
 
-  /** 204 + kolačić `gfs_student` (365 dana); 401 "Kod nije ispravan ili je istekao.", 429. */
-  prijavi(s: IndeksIGodina, kod: string): Observable<void> {
-    return this.http.post<void>(`${this.koren}/prijava`, { indeks: s.indeks, godina: s.godina, kod }, { context: this.lokalneGreske });
+  /**
+   * 204 + kolačić `gfs_student` (365 dana); 401 "Kod nije ispravan ili je istekao.", 429. `racunar: true` (strana `/r`, „Imam
+   * kod“) daje kratku sesiju računara (`RACUNAR`, 4 h) umesto uređaja od 365 dana; bez njega telo je kao ranije.
+   */
+  prijavi(s: IndeksIGodina, kod: string, racunar = false): Observable<void> {
+    const telo = racunar ? { indeks: s.indeks, godina: s.godina, kod, racunar: true } : { indeks: s.indeks, godina: s.godina, kod };
+    return this.http.post<void>(`${this.koren}/prijava`, telo, { context: this.lokalneGreske });
   }
 
   stanje(): Observable<StanjeNaloga> {

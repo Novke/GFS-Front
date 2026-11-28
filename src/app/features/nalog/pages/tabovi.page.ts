@@ -7,6 +7,8 @@ import { filter, Subscription } from 'rxjs';
 import { postaviManifest } from '../../../core/pwa/manifest';
 import { AnketeStudentaStore } from '../data-access/ankete-studenta.store';
 import { CasApi } from '../data-access/cas.api';
+import { NalogApi } from '../data-access/nalog.api';
+import { SesijaStudenta } from '../data-access/sesija-studenta';
 import { CasIzvodjenje, CasUToku } from '../data-access/cas.models';
 import { opisUToku } from '../data-access/cas.pravila';
 import { jeTabCas, putanjaPrijave, sledeciUpitTrakeMs, status } from '../data-access/portal.pravila';
@@ -51,6 +53,12 @@ export function tabIzUrla(url: string): TabNaloga {
   imports: [AnketaListComponent, MatButton, RouterLink, RouterOutlet, ZvonoNaloga],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (sesija.racunar()) {
+      <div class="racunar" role="status" data-racunar-traka>
+        <span class="traka-tekst">Prijavljen: <strong>{{ sesija.ja()?.ime }} {{ sesija.ja()?.prezime }}</strong> · Nisi ti?</span>
+        <button type="button" mat-stroked-button class="traka-dugme" [disabled]="odjavljuje()" (click)="odjaviRacunar()" data-racunar-odjavi>Odjavi</button>
+      </div>
+    }
     @if (traka(); as iz) {
       <div class="traka" role="status" data-traka>
         <span class="traka-tekst"><strong>Prezentacija je počela</strong>@if (iz.naziv) { · {{ iz.naziv }}}</span>
@@ -94,6 +102,8 @@ export function tabIzUrla(url: string): TabNaloga {
       padding: 10px 12px 10px 16px; border: 1px solid var(--ok); border-radius: var(--radius-sm); background: var(--ok-soft);
       color: var(--ink); box-shadow: var(--shadow);
     }
+    .racunar { display: flex; align-items: center; gap: 12px; max-width: 480px; margin: 0 auto 12px; padding: 8px 12px 8px 16px;
+      border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
     .traka.u-toku { border-color: var(--warn); background: var(--warn-soft); }
     .traka-tekst { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     /* zvono stoji u desnom uglu zaglavlja kartice naloga (NalogOkvir: max 480 px, razmak odozgo clamp(0, 4vh, 48px)) */
@@ -124,6 +134,9 @@ export function tabIzUrla(url: string): TabNaloga {
 })
 export class NalogTabovi {
   private readonly api = inject(CasApi);
+  private readonly nalog = inject(NalogApi);
+  protected readonly sesija = inject(SesijaStudenta);
+  protected readonly odjavljuje = signal(false);
   private readonly ankete = inject(AnketeStudentaStore);
   private readonly router = inject(Router);
   private readonly dokument = inject(DOCUMENT);
@@ -176,6 +189,19 @@ export class NalogTabovi {
     if (this.tab() !== 'cas') {
       this.upit();
     }
+  }
+
+  /** RACUNAR sesija: „Nisi ti? Odjavi“ odjavljuje ovaj računar i vraća na `/r` za sledećeg studenta. */
+  protected odjaviRacunar(): void {
+    if (this.odjavljuje()) {
+      return;
+    }
+    this.odjavljuje.set(true);
+    const kraj = () => {
+      this.sesija.ja.set(null);
+      void this.router.navigateByUrl('r', { replaceUrl: true });
+    };
+    this.nalog.odjavi().subscribe({ next: kraj, error: kraj });
   }
 
   private upit(): void {

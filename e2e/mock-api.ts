@@ -14,6 +14,7 @@ import type { ZadatakSlajda } from '../src/app/features/uzivo/data-access/uzivo.
 import { MockAnkete } from './mock-ankete';
 import { type BankaGrupa, type BankaPodaci, type BankaTema, type BankaVarijanta, MockBanka } from './mock-banka';
 import { type FiksturaIzvodjenja, MockIzvodjenje } from './mock-izvodjenje';
+import { MockOnlineTestovi } from './mock-online-testovi';
 import { MockPortal } from './mock-portal';
 import { MockRaspored } from './mock-raspored';
 
@@ -48,6 +49,8 @@ interface Polaganje {
 interface Test {
   id: number; datum: string | null; tipTestaId: number; predmetId: number; grupaId: number | null; maxPoena: number;
   pragProlaza: number | null; pregledan: boolean; grupe: string[]; polaganja: Polaganje[];
+  /** Online test (`mock-online-testovi.ts`); test na papiru nema ova polja (stari backend ih ne šalje). */
+  nacin?: 'PAPIR' | 'ONLINE'; stanjeOnline?: string | null; objavljeno?: string | null; objavaTacni?: boolean;
 }
 interface Uradjen { id: number; studentId: number; bodovi: number | null; napomene: string; prepisivanje: boolean; oslobodjen: boolean }
 interface Domaci {
@@ -117,11 +120,13 @@ interface Obavestenje {
 /** `SesijaInfo` (`GET api/auth/sesije`): prijavljeni uređaji nastavnika. */
 interface SesijaNastavnika { id: number; opis: string; kreirano: string; poslednjiUlaz: string; trenutna: boolean }
 /** `UredjajInfo` i `StudentJaInfo` naloga studenta (`api/public/nalog/*`). */
-interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
+interface UredjajStudenta { id: number; opis: string; nacin: 'KOD' | 'LTI' | 'RACUNAR'; prviUlaz: string; poslednjiUlaz: string; trenutni: boolean }
 interface NalogStudenta {
   indeks: string; ime: string; prezime: string; maskaMejla: string | null; moodlePovezan: boolean; uredjaji: UredjajStudenta[];
   /** Grupa i generacija (tab Ja). */
   grupa?: string | null; generacija?: number | null;
+  /** Način trenutnog uređaja (`ja.nacin`, plan online testova 5.1); bez polja `KOD`. */
+  nacin?: 'KOD' | 'LTI' | 'RACUNAR';
   /** Godina upisa; bez nje u fiksturi važi početna godina tekuće školske godine (ono što forma predlaže). */
   godina?: number;
   /** Link WhatsApp grupe sopstvene grupe (Početna); fikstura ga nema, test ga postavlja. */
@@ -416,6 +421,33 @@ export class MockApi {
     grupa: id => this.grupa(id),
     brojCekiranih: () => this.cekiranje.cekirani.length,
   });
+  /**
+   * Online testovi (`mock-online-testovi.ts`): šabloni, test, konzola i rezultati (nastavnik), polaganje, rezultat i prijava računara
+   * (student = `nalogStudenta`, u `studenti` po indeksu). Podrazumevano nema online testova; test ih pravi kroz `online.napravi`.
+   */
+  readonly online = new MockOnlineTestovi({
+    studentPrijavljen: () => this.studentPrijavljen,
+    prijaviStudenta: nacin => {
+      this.studentPrijavljen = true;
+      this.podaci.nalogStudenta.nacin = nacin;
+    },
+    nacinStudenta: () => this.podaci.nalogStudenta.nacin ?? 'KOD',
+    idStudenta: () => this.podaci.studenti.find(x => x.indeks === this.podaci.nalogStudenta.indeks)?.id ?? 1,
+    student: id => this.podaci.studenti.find(x => x.id === id) ?? null,
+    studentiGrupe: grupaId => this.podaci.studenti.filter(x => x.grupaId === grupaId).map(x => x.id),
+    predmet: id => this.predmet(id)?.naziv ?? '?',
+    grupa: id => this.grupa(id)?.naziv ?? '?',
+    tipTesta: id => this.podaci.tipoviTesta.find(x => x.id === id)?.naziv ?? '?',
+    dodajTest: t => this.podaci.testovi.push({
+      id: t.id, datum: t.datum, tipTestaId: t.tipTestaId, predmetId: t.predmetId, grupaId: t.grupaId, maxPoena: 5, pragProlaza: null,
+      pregledan: false, grupe: [], nacin: 'ONLINE', stanjeOnline: 'PRIPREMA', objavljeno: null, objavaTacni: false,
+      polaganja: t.studentIds.map((studentId, i) => ({ id: t.id * 100 + i, studentId, grupa: null, ostvareniPoeni: null, prepisivao: false, napomene: null })),
+    }),
+    azurirajTest: (id, izmena) => {
+      const t = this.podaci.testovi.find(x => x.id === id);
+      if (t) Object.assign(t, izmena);
+    },
+  });
   /** Ključ obaveštenja (`MNOGO_NAJAVA:<stavka>:<datum>`) -> id; server ga drži u koloni `kljuc`, API ga ne vraća. */
   private readonly kljuceviObavestenja = new Map<string, number>();
   private readonly zamene: Ruta[] = [];
@@ -596,6 +628,7 @@ export class MockApi {
       procenatProlaznosti: t.pragProlaza === null || !saPoenima.length
         ? null
         : (saPoenima.filter(p => this.prolazi(t, p)).length * 100) / saPoenima.length,
+      ...(t.nacin ? { nacin: t.nacin, stanjeOnline: t.stanjeOnline ?? null } : {}),
     };
   }
 
@@ -606,6 +639,7 @@ export class MockApi {
     return {
       id: t.id, tipTesta: this.tipTesta(t.tipTestaId), predmet: this.predmet(t.predmetId), grupa: this.grupa(t.grupaId),
       datum: t.datum, maxPoena: t.maxPoena, pragProlaza: t.pragProlaza, pregledan: t.pregledan, grupe: t.grupe,
+      ...(t.nacin ? { nacin: t.nacin, stanjeOnline: t.stanjeOnline ?? null, objavljeno: t.objavljeno ?? null, objavaTacni: t.objavaTacni ?? false } : {}),
       polaganja: t.polaganja.map(p => {
         const s = this.student(p.studentId);
         return {
@@ -1498,6 +1532,7 @@ export class MockApi {
     get('banka/grupe/:id', (_z, p) => b.grupaDetalji(Number(p['id'])));
     this.portal.nastavnickeRute(get, put, del);
     this.ankete.nastavnickeRute(get, post, put, del);
+    this.online.nastavnickeRute(get, post, put, patch, del);
     put('banka/grupe/:id', (z, p) => b.izmeniGrupu(Number(p['id']), z.telo as GrupaCmd));
     del('banka/grupe/:id', (_z, p) => b.obrisiGrupu(Number(p['id'])));
     post('banka/grupe/:id/premesti', (z, p) => b.premesti(Number(p['id']), z.telo as PremestiCmd));
@@ -1590,8 +1625,10 @@ export class MockApi {
       }
       this.studentPrijavljen = true;
       const n = d.nalogStudenta;
+      // „Imam kod“ na strani `/r` (plan online testova 5.1): ista prijava, ali sesija RACUNAR
+      n.nacin = (telo as { racunar?: unknown }).racunar === true ? 'RACUNAR' : 'KOD';
       n.uredjaji = [
-        { id: this.sledeciId++, opis: 'Linux · Chrome', nacin: 'KOD', prviUlaz: lokalnoVreme(new Date()), poslednjiUlaz: lokalnoVreme(new Date()), trenutni: true },
+        { id: this.sledeciId++, opis: 'Linux · Chrome', nacin: n.nacin, prviUlaz: lokalnoVreme(new Date()), poslednjiUlaz: lokalnoVreme(new Date()), trenutni: true },
         ...n.uredjaji.filter(u => !u.trenutni),
       ];
       return { status: 204 };
@@ -1603,6 +1640,7 @@ export class MockApi {
       }
       this.studentPrijavljen = false;
       d.nalogStudenta.uredjaji = d.nalogStudenta.uredjaji.filter(u => !u.trenutni);
+      delete d.nalogStudenta.nacin;
       return { status: 204 };
     });
     post('public/nalog/odjava-svuda', () => {
@@ -1668,6 +1706,7 @@ export class MockApi {
     get('public/nalog/cas', () => (this.studentPrijavljen ? ok(casStanje()) : bezSesijeStudenta()));
     this.portal.studentskeRute(get, post, put, del);
     this.ankete.studentskeRute(get, post);
+    this.online.studentskeRute(get, post, put);
     // ime Moodle naloga iz ulaska (R17): samo čita (par se ne troši), 410 bez `__Host-gfs_lti_par`; ne traži sesiju studenta
     get('public/lti/povezivanje', () =>
       this.moodlePar ? ok({ ime: this.moodleIme }) : greska(410, 'Povezivanje je isteklo. Otvori GFS ponovo iz Moodle-a.'));

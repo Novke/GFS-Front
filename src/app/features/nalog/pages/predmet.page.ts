@@ -16,6 +16,9 @@ import {
 import {
   KarticaPredmeta, idIzRute, karticaIzUpita, opisAktivnosti, poeni, predlogOcene, putanjaPrijave, status, ucinak, zvezdice,
 } from '../data-access/portal.pravila';
+import { TestoviStudentaApi } from '../data-access/testovi-studenta.api';
+import { RezultatTestaKratko } from '../data-access/testovi-studenta.models';
+import { formatPoena } from '../data-access/testovi-studenta.pravila';
 import { MojZadatakKartica } from '../ui/moj-zadatak.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 
@@ -29,10 +32,11 @@ const KARTICE: { id: KarticaPredmeta; naziv: string }[] = [
   { id: 'materijali', naziv: 'Materijali' },
   { id: 'istorija', naziv: 'Istorija' },
   { id: 'ocena', naziv: 'Ocena' },
+  { id: 'testovi', naziv: 'Testovi' },
 ];
 
 /**
- * Strana predmeta (`/nalog/predmet/:id[?k=materijali|istorija|ocena]`, spec studentskog dela 12.2): sve što student sme da
+ * Strana predmeta (`/nalog/predmet/:id[?k=materijali|istorija|ocena|testovi]`, spec studentskog dela 12.2): sve što student sme da
  * vidi, u tri kartice. Kartica se učitava tek kad se otvori (i jednom po poseti strane).
  * - **Materijali:** prezentacije održane grupama studenta (samo videni slajdovi, posle kraja izvođenja; strana pregleda) i
  *   "Zadaci za vežbanje" (tipovi otvoreni grupi, po temi; broj po nivou i sopstveni učinak).
@@ -194,6 +198,36 @@ const KARTICE: { id: KarticaPredmeta; naziv: string }[] = [
               <p class="stanje" role="status"><mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...</p>
             }
           }
+          @case ('testovi') {
+            <h2>Testovi</h2>
+            @if (testovi(); as t) {
+              @if ('greska' in t) {
+                <p class="poruka opasnost" role="alert">{{ t.greska }}</p>
+              } @else if (t.podaci.length === 0) {
+                <p class="prazno" data-nema-testova>Još nema objavljenih rezultata testova.</p>
+              } @else {
+                <ul class="lista">
+                  @for (r of t.podaci; track r.testId) {
+                    <li>
+                      @if (r.online) {
+                        <a class="stavka" [routerLink]="['/nalog/test', r.testId, 'rezultat']" [attr.data-test]="r.testId">
+                          <span class="naziv">{{ r.tipTesta }} · {{ r.datum | datum: 'kratko' }}</span>
+                          <span class="opis">{{ poeniTesta(r.poeni) }} od {{ poeniTesta(r.maxPoena) }}@if (r.polozio !== null) { · {{ r.polozio ? 'položeno' : 'nije položeno' }} }@if (!r.racunaSe) { · ne računa se }</span>
+                        </a>
+                      } @else {
+                        <div class="stavka" [attr.data-test]="r.testId">
+                          <span class="naziv">{{ r.tipTesta }} · {{ r.datum | datum: 'kratko' }} · na papiru</span>
+                          <span class="opis">{{ poeniTesta(r.poeni) }} od {{ poeniTesta(r.maxPoena) }}@if (r.polozio !== null) { · {{ r.polozio ? 'položeno' : 'nije položeno' }} }@if (!r.racunaSe) { · ne računa se }</span>
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            } @else {
+              <p class="stanje" role="status"><mat-progress-spinner mode="indeterminate" diameter="20" aria-hidden="true" />Učitavanje...</p>
+            }
+          }
         }
       } @else {
         <h2>Predmet</h2>
@@ -206,7 +240,7 @@ const KARTICE: { id: KarticaPredmeta; naziv: string }[] = [
     h3 { margin: 18px 0 8px; font-size: 16px; }
     h4 { margin: 12px 0 6px; font-size: 15px; color: var(--ink-2); }
     .nazad { display: inline-flex; align-items: center; min-height: 44px; margin: -8px 0 4px; color: var(--primary); font-weight: 600; }
-    .kartice { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0 0 16px; border: 1px solid var(--line);
+    .kartice { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0 0 16px; border: 1px solid var(--line);
       border-radius: 999px; overflow: hidden; }
     .kartice a { display: flex; align-items: center; justify-content: center; min-height: 44px; color: var(--ink);
       font-weight: 600; text-decoration: none; }
@@ -255,6 +289,9 @@ export class PredmetPage {
   protected readonly materijali = signal<Ucitano<Materijali>>(null);
   protected readonly istorija = signal<Ucitano<Istorija>>(null);
   protected readonly ocena = signal<Ucitano<OcenaStudenta>>(null);
+  protected readonly testovi = signal<Ucitano<RezultatTestaKratko[]>>(null);
+  protected readonly poeniTesta = formatPoena;
+  private readonly testoviApi = inject(TestoviStudentaApi);
 
   protected readonly hrefFajla = (f: { id: number }) => urlFajlaNaloga(f.id);
   protected readonly mejl = new MejlFajlova(id => this.api.posaljiFajlMejlom(id), inject(DestroyRef));
@@ -292,6 +329,7 @@ export class PredmetPage {
     this.materijali.set(null);
     this.istorija.set(null);
     this.ocena.set(null);
+    this.testovi.set(null);
     this.greskaPredmeta.set(null);
     const id = this.predmetId();
     this.nemaPredmeta.set(id === null);
@@ -327,6 +365,9 @@ export class PredmetPage {
         break;
       case 'ocena':
         this.ucitaj(this.api.ocena(id), this.ocena);
+        break;
+      case 'testovi':
+        this.ucitaj(this.testoviApi.testoviPredmeta(id), this.testovi);
         break;
     }
   }

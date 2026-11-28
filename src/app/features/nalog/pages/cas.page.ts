@@ -16,6 +16,7 @@ import {
 } from '../data-access/cas.pravila';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { AnketeKarticeComponent } from '../ui/ankete-kartice.component';
+import { TestKarticaComponent } from '../ui/test-kartica.component';
 import { NalogOkvir } from '../ui/nalog-okvir.component';
 import { SkenerQr } from '../ui/skener-qr.component';
 
@@ -99,10 +100,14 @@ const POKUSAJA_429 = 5;
  */
 @Component({
   selector: 'app-cas-page',
-  imports: [AnketeKarticeComponent, MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
+  imports: [AnketeKarticeComponent, TestKarticaComponent, MatButton, MatProgressSpinner, NalogOkvir, RouterLink, SkenerQr],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-nalog-okvir naslov="Čas">
+      @if (stanje()) {
+        <!-- kartica testa pita tek kad je student poznat (stanje časa je stiglo) -->
+        <app-test-kartica />
+      }
       <app-ankete-kartice mesto="cas" />
       @switch (faza()) {
         @case ('ucitavanje') {

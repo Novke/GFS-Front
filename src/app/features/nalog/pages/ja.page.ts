@@ -9,6 +9,7 @@ import { finalize, Subscription } from 'rxjs';
 import { FormErrorBanner } from '../../../shared/forms/form-error-banner';
 import { ConfirmDialog } from '../../../shared/ui/confirm-dialog';
 import { NalogApi } from '../data-access/nalog.api';
+import { SesijaStudenta } from '../data-access/sesija-studenta';
 import { StudentJa } from '../data-access/nalog.models';
 import { porukaGreske } from '../data-access/nalog.pravila';
 import { putanjaPrijave, status } from '../data-access/portal.pravila';
@@ -38,8 +39,10 @@ const uredjaja = (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'uređa
       @if (ja(); as s) {
         <app-form-error-banner [poruka]="greska()" />
         <app-nalog-pregled [ja]="s" [salje]="salje()" (odjavi)="odjavi()" (odjaviSvuda)="odjaviSvuda()" />
-        <app-podesavanja-obavestenja />
-        <app-instalacija-kartica mesto="ja" />
+        @if (s.nacin !== 'RACUNAR') {
+          <app-podesavanja-obavestenja />
+          <app-instalacija-kartica mesto="ja" />
+        }
       } @else if (greskaUcitavanja(); as g) {
         <p class="poruka opasnost" role="alert">{{ g }}</p>
         <button type="button" mat-flat-button class="dugme" (click)="ucitaj()">Pokušaj ponovo</button>
@@ -65,6 +68,7 @@ export class JaPage {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly ja = signal<StudentJa | null>(null);
+  private readonly sesija = inject(SesijaStudenta);
   protected readonly greskaUcitavanja = signal<string | null>(null);
   protected readonly greska = signal<string | null>(null);
   protected readonly salje = signal(false);
@@ -81,7 +85,10 @@ export class JaPage {
     this.zahtev?.unsubscribe();
     this.greskaUcitavanja.set(null);
     this.zahtev = this.api.ja().subscribe({
-      next: ja => this.ja.set(ja),
+      next: ja => {
+        this.ja.set(ja);
+        this.sesija.ja.set(ja);
+      },
       error: (e: unknown) => {
         if (status(e) === 401) {
           void this.router.navigateByUrl(putanjaPrijave(this.router.url));
@@ -147,6 +154,7 @@ export class JaPage {
   /** Strana prijave (van ljuske tabova) sa porukom; prethodni student ne ostaje u istoriji (`replaceUrl`). */
   private odjavljen(poruka: string): void {
     this.ja.set(null);
+    this.sesija.ja.set(null);
     void this.router.navigateByUrl('nalog', { replaceUrl: true, state: { info: poruka } });
   }
 }

@@ -20,6 +20,8 @@ import { brojIspitanika } from '../../../core/api/testovi.models';
 import { TestZaglavlje } from '../ui/test-zaglavlje';
 import { obrisiTestUzPotvrdu } from './obrisi-test';
 import { UnosPoenaRed } from '../ui/unos-poena-red';
+import { ObjavaTesta } from '../ui/objava-testa';
+import { OnlineTestPrikaz } from '../ui/online-test';
 
 /** `Kolokvijum 1 · 16. 10. 2025.` (mrvice, "Nedavno"). */
 export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: string | null } | null): string | null {
@@ -34,16 +36,21 @@ export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: stri
  * Test (`/testovi/:id`): zaglavlje sa izmenom tipa, datuma i max poena, statistika uživo (iz unetih poena), "Dodaj
  * ispitanike" (zajednički birač, i stariji studenti), tabela unosa (varijanta, poeni 0-max, prepisivao, napomena; svaki
  * red se čuva sam) i "Završi evidentiranje". Evidentiran test je samo za čitanje (backend ga ne vraća u unos).
- * Uneti poeni se šalju i kad se ekran napusti pre isteka debounce-a (`TestStore`).
+ * Uneti poeni se šalju i kad se ekran napusti pre isteka debounce-a (`TestStore`). Evidentiran test ima objavu rezultata
+ * studentima (`ObjavaTesta`). Online test (`nacin: 'ONLINE'`) crta svoj prikaz (`OnlineTestPrikaz`, lenj `@defer`).
  */
 @Component({
   selector: 'app-test-detalj',
-  imports: [EmptyState, ErrorPanel, MatButton, MatIcon, RouterLink, SkeletonRows, StatTile, TestZaglavlje, UnosPoenaRed],
+  imports: [
+    EmptyState, ErrorPanel, MatButton, MatIcon, ObjavaTesta, OnlineTestPrikaz, RouterLink, SkeletonRows, StatTile, TestZaglavlje, UnosPoenaRed,
+  ],
   providers: [TestStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:beforeunload)': 'preZatvaranja($event)' },
   template: `
-    @if (store.test(); as t) {
+    @if (store.test()?.nacin === 'ONLINE') {
+      @defer (on immediate) { <app-online-test [testId]="store.test()!.id" /> } @placeholder { <app-skeleton-rows [redovi]="6" /> }
+    } @else if (store.test(); as t) {
       <app-test-zaglavlje [test]="t" [tipovi]="tipovi()" [izmenljivo]="!store.evidentiran()" [najviseUneto]="store.statistikaUzivo().max"
         [sacuvaj]="sacuvajZaglavlje" [cuvajPrag]="cuvajPrag" (obrisi)="obrisi()">
         @if (!store.evidentiran()) {
@@ -61,6 +68,9 @@ export function naslovTesta(t: { tipTesta: { naziv: string } | null; datum: stri
         }
       </app-test-zaglavlje>
 
+      @if (store.evidentiran()) {
+        <app-objava-testa [testId]="t.id" [objavljeno]="t.objavljeno ?? null" (promena)="ponovo()" />
+      }
       <div class="kpi" role="group" aria-label="Statistika uživo" aria-live="polite">
         <app-stat-tile labela="uneto" [vrednost]="s().broj" [podtekst]="'od ' + s().ukupno" data-kpi-uneto />
         <app-stat-tile labela="prosek" [vrednost]="prosek()" [podtekst]="t.maxPoena ? '/ ' + t.maxPoena : null" data-kpi-prosek />

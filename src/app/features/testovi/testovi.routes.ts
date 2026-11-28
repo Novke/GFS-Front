@@ -6,7 +6,7 @@ import { unsavedChangesGuard } from '../../shared/forms/unsaved-changes.guard';
 
 /**
  * Rute testova (deca rute `testovi` u `app.routes.ts`): lista, nov, detalj (unos poena; evidentiran test je pregled) i
- * statistika. `novo` je ispred `:id` matchera; `:id` mora biti broj (`putanjaSaId`), inače 404.
+ * statistika, plus šabloni online testova (`sabloni`, `sabloni/novo`, `sabloni/:id`). `novo` i `sabloni` su ispred `:id` matchera; `:id` mora biti broj (`putanjaSaId`), inače 404.
  */
 export const TESTOVI_RUTE: Route[] = [
   {
@@ -20,6 +20,27 @@ export const TESTOVI_RUTE: Route[] = [
     data: { mrvice: () => [m('Testovi', '/testovi'), m('Nov test')] },
     canDeactivate: [unsavedChangesGuard],
     loadComponent: () => import('./pages/novi-test').then(x => x.NoviTest),
+  },
+  {
+    path: 'sabloni',
+    pathMatch: 'full',
+    title: 'Šabloni testova',
+    data: { mrvice: () => [m('Testovi', '/testovi'), m('Šabloni')] },
+    loadComponent: () => import('./pages/sabloni-lista').then(x => x.SabloniLista),
+  },
+  {
+    path: 'sabloni/novo',
+    title: 'Nov šablon',
+    data: { mrvice: () => [m('Testovi', '/testovi'), m('Šabloni', '/testovi/sabloni'), m('Nov šablon')] },
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () => import('./pages/sablon-editor').then(x => x.SablonEditor),
+  },
+  {
+    matcher: putanjaSaId('sabloni/:id'),
+    title: 'Šablon testa',
+    data: { mrvice: () => [m('Testovi', '/testovi'), m('Šabloni', '/testovi/sabloni'), m('Šablon')] },
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () => import('./pages/sablon-editor').then(x => x.SablonEditor),
   },
   {
     matcher: putanjaSaId(':id/statistika'),
